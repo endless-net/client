@@ -1,0 +1,7 @@
+/dist/
+/.artifacts/
+/.ci-private.mod
+/.ci-private.sum
+/.private-modules/
+*.exe
+*.test

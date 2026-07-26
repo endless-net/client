@@ -1,0 +1,17 @@
+Third-party components
+======================
+
+This distribution includes Go dependencies under the following licenses:
+
+- github.com/Microsoft/go-winio — MIT
+- github.com/tailscale/wireguard-go — MIT
+- github.com/unng-lab/endlessnet-relay — Apache-2.0
+- github.com/unng-lab/endlessnet/clientapi — Apache-2.0
+- golang.org/x/crypto — BSD-3-Clause
+- golang.org/x/net — BSD-3-Clause
+- golang.org/x/sys — BSD-3-Clause
+- golang.zx2c4.com/wintun — MIT
+
+Authoritative license texts and attribution are available in each dependency's
+source distribution. CI regenerates and validates the dependency license report
+for every public change.

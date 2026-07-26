@@ -1,0 +1,220 @@
+name: Publish APT repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Debian package version. Defaults to tag name without v or 0.0.0+<sha>.
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  PACKAGE_NAME: endlessnet-client
+  APT_REPOSITORY: unng-lab/apt
+  APT_DISTRIBUTION: stable
+  APT_COMPONENT: main
+  APT_ORIGIN: UNNG
+  APT_LABEL: UNNG
+  APT_KEYRING_NAME: unng.gpg
+  APT_KEYRING_PACKAGE: unng-archive-keyring
+  APT_KEY_BUNDLE: packaging/apt/unng-archive-keyring.asc
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check required secrets
+        env:
+          APT_REPO_DEPLOY_KEY: ${{ secrets.APT_REPO_DEPLOY_KEY }}
+          APT_SIGNING_PRIVATE_KEY: ${{ secrets.APT_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$APT_REPO_DEPLOY_KEY" ] || { echo "::error::APT_REPO_DEPLOY_KEY is required"; exit 1; }
+          [ -n "$APT_SIGNING_PRIVATE_KEY" ] || { echo "::error::APT_SIGNING_PRIVATE_KEY is required"; exit 1; }
+
+      - name: Checkout source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Checkout APT Pages repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ env.APT_REPOSITORY }}
+          ssh-key: ${{ secrets.APT_REPO_DEPLOY_KEY }}
+          path: apt-pages
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check preinstalled packaging tools
+        run: |
+          set -euo pipefail
+          for tool in apt-ftparchive cmp dpkg-deb dpkg-scanpackages gpg gzip; do
+            command -v "$tool" >/dev/null || {
+              echo "::error::$tool is required to publish the APT repository"
+              exit 1
+            }
+          done
+
+      - name: Resolve package version
+        id: version
+        env:
+          REQUESTED_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "$REQUESTED_VERSION" ]; then
+            version="$REQUESTED_VERSION"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.0.0+${GITHUB_SHA::12}"
+          fi
+          case "$version" in
+            [0-9]*) ;;
+            *) echo "::error::Debian package version must start with a digit: $version"; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Import APT signing key
+        id: signing
+        env:
+          APT_SIGNING_PRIVATE_KEY: ${{ secrets.APT_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 ~/.gnupg
+          printf '%s\n' "$APT_SIGNING_PRIVATE_KEY" | gpg --batch --import
+          key_fpr="$(gpg --batch --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')"
+          [ -n "$key_fpr" ] || { echo "::error::No secret signing key imported"; exit 1; }
+          gpg --batch --show-keys --with-colons "$APT_KEY_BUNDLE" \
+            | awk -F: '/^fpr:/ {print $10}' \
+            | grep -Fxq "$key_fpr" \
+            || { echo "::error::The active APT signing key is not present in $APT_KEY_BUNDLE"; exit 1; }
+          echo "key_fpr=$key_fpr" >> "$GITHUB_OUTPUT"
+
+      - name: Build Debian packages
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          OUTPUT_DIR: dist/deb
+        run: bash scripts/build-deb.sh amd64 arm64
+
+      - name: Build APT keyring package
+        run: |
+          set -euo pipefail
+          keyring_version="$(tr -d '[:space:]' < packaging/apt/keyring-version)"
+          [ -n "$keyring_version" ] || { echo "::error::packaging/apt/keyring-version is empty"; exit 1; }
+          PACKAGE_NAME="$APT_KEYRING_PACKAGE" \
+          VERSION="$keyring_version" \
+          KEY_BUNDLE="$APT_KEY_BUNDLE" \
+          OUTPUT_DIR=dist/deb \
+            bash scripts/build-apt-keyring-deb.sh
+
+      - name: Refresh APT Pages repository
+        run: |
+          set -euo pipefail
+          cd apt-pages
+          git pull --ff-only
+
+      - name: Update repository metadata
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          KEY_FPR: ${{ steps.signing.outputs.key_fpr }}
+          APT_SIGNING_PASSPHRASE: ${{ secrets.APT_SIGNING_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+
+          repo_dir="$GITHUB_WORKSPACE/apt-pages"
+          apt_dir="$repo_dir/apt"
+          package_prefix="${PACKAGE_NAME:0:1}"
+          keyring_prefix="${APT_KEYRING_PACKAGE:0:1}"
+          package_pool_dir="$apt_dir/pool/main/$package_prefix/$PACKAGE_NAME"
+          keyring_pool_dir="$apt_dir/pool/main/$keyring_prefix/$APT_KEYRING_PACKAGE"
+          dist_dir="$apt_dir/dists/$APT_DISTRIBUTION/$APT_COMPONENT"
+
+          mkdir -p "$package_pool_dir" "$keyring_pool_dir"
+          package_artifacts=(dist/deb/"${PACKAGE_NAME}"_*.deb)
+          ((${#package_artifacts[@]} > 0)) || { echo "::error::client packages were not built"; exit 1; }
+          cp -- "${package_artifacts[@]}" "$package_pool_dir/"
+          keyring_artifacts=(dist/deb/"${APT_KEYRING_PACKAGE}"_*.deb)
+          ((${#keyring_artifacts[@]} == 1)) || { echo "::error::expected exactly one APT keyring package"; exit 1; }
+          keyring_artifact="${keyring_artifacts[0]}"
+          keyring_target="$keyring_pool_dir/$(basename "$keyring_artifact")"
+          if [ -f "$keyring_target" ]; then
+            if ! cmp -s \
+                <(dpkg-deb --ctrl-tarfile "$keyring_artifact") \
+                <(dpkg-deb --ctrl-tarfile "$keyring_target") \
+              || ! cmp -s \
+                <(dpkg-deb --fsys-tarfile "$keyring_artifact") \
+                <(dpkg-deb --fsys-tarfile "$keyring_target"); then
+              echo "::error::APT keyring package contents changed without a keyring package version bump"
+              exit 1
+            fi
+          else
+            cp "$keyring_artifact" "$keyring_target"
+          fi
+
+          for arch in amd64 arm64; do
+            binary_dir="$dist_dir/binary-$arch"
+            mkdir -p "$binary_dir"
+            (
+              cd "$apt_dir"
+              dpkg-scanpackages -a "$arch" pool /dev/null > "dists/$APT_DISTRIBUTION/$APT_COMPONENT/binary-$arch/Packages"
+              gzip -9n -c "dists/$APT_DISTRIBUTION/$APT_COMPONENT/binary-$arch/Packages" > "dists/$APT_DISTRIBUTION/$APT_COMPONENT/binary-$arch/Packages.gz"
+            )
+          done
+
+          cat > "$apt_dir/apt-release.conf" <<EOF
+          APT::FTPArchive::Release {
+            Origin "$APT_ORIGIN";
+            Label "$APT_LABEL";
+            Suite "$APT_DISTRIBUTION";
+            Codename "$APT_DISTRIBUTION";
+            Architectures "amd64 arm64";
+            Components "$APT_COMPONENT";
+            Description "UNNG APT repository";
+          };
+          EOF
+
+          (
+            cd "$apt_dir"
+            apt-ftparchive -c apt-release.conf release "dists/$APT_DISTRIBUTION" > "dists/$APT_DISTRIBUTION/Release"
+            rm -f "dists/$APT_DISTRIBUTION/InRelease" "dists/$APT_DISTRIBUTION/Release.gpg"
+            if [ -n "$APT_SIGNING_PASSPHRASE" ]; then
+              gpg --batch --yes --pinentry-mode loopback --passphrase "$APT_SIGNING_PASSPHRASE" --local-user "$KEY_FPR" --clearsign -o "dists/$APT_DISTRIBUTION/InRelease" "dists/$APT_DISTRIBUTION/Release"
+              gpg --batch --yes --pinentry-mode loopback --passphrase "$APT_SIGNING_PASSPHRASE" --local-user "$KEY_FPR" --armor --detach-sign -o "dists/$APT_DISTRIBUTION/Release.gpg" "dists/$APT_DISTRIBUTION/Release"
+            else
+              gpg --batch --yes --local-user "$KEY_FPR" --clearsign -o "dists/$APT_DISTRIBUTION/InRelease" "dists/$APT_DISTRIBUTION/Release"
+              gpg --batch --yes --local-user "$KEY_FPR" --armor --detach-sign -o "dists/$APT_DISTRIBUTION/Release.gpg" "dists/$APT_DISTRIBUTION/Release"
+            fi
+            rm -f "$APT_KEYRING_NAME"
+            gpg --batch --yes --dearmor \
+              --output "$APT_KEYRING_NAME" \
+              "$GITHUB_WORKSPACE/$APT_KEY_BUNDLE"
+            rm -f apt-release.conf
+          )
+
+          touch "$repo_dir/.nojekyll"
+
+      - name: Publish APT Pages repository
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd apt-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .nojekyll apt
+          if git diff --cached --quiet; then
+            echo "APT repository is already up to date."
+            exit 0
+          fi
+          git commit -m "Publish EndlessNet APT $VERSION"
+          git push

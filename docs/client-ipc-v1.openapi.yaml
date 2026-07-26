@@ -1,0 +1,1416 @@
+# Status: active
+# Owner: client
+openapi: 3.1.0
+info:
+  title: EndlessNet Client Local Service IPC
+  version: 1.0.0
+  description: >
+    Versioned local IPC contract between the EndlessNet background service and
+    unprivileged local client processes. The HTTP shape is transported over a
+    protected local channel; it is not a network listener. Every request must
+    send the protocol, current-version, and minimum-supported-version headers.
+    The server negotiates the highest overlapping version and returns it in the
+    response envelope. This contract supports only version 1. Observer
+    operations are available to every identified local peer. Owner operations
+    are available to the SID/UID that first enrolls the device and to local
+    administrators/root; initial enrollment claims an owner when none exists.
+    An existing ownerless enrollment requires an administrator/root peer to
+    claim ownership. Administrator operations always require such a peer.
+servers:
+  - url: http://endlessnet.local
+    description: Placeholder authority used by local IPC clients.
+x-endlessnet-transports:
+  - platform: windows
+    kind: windows_named_pipe
+    endpoint: "\\\\.\\pipe\\endlessnet-service"
+    default: true
+  - platform: linux
+    kind: unix_socket
+    endpoint: "/run/endlessnet/client.sock"
+  - platform: macos
+    kind: unix_socket
+    endpoint: "/var/run/endlessnet/client.sock"
+paths:
+  /status:
+    parameters: &ipcVersionHeaders
+      - $ref: "#/components/parameters/IPCProtocol"
+      - $ref: "#/components/parameters/IPCCurrentVersion"
+      - $ref: "#/components/parameters/IPCMinimumVersion"
+    get:
+      operationId: status
+      x-endlessnet-required-privilege: observer
+      summary: Read current service state.
+      responses:
+        "200":
+          description: Current service-visible state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /events:
+    parameters: *ipcVersionHeaders
+    get:
+      operationId: events
+      x-endlessnet-required-privilege: observer
+      summary: Stream service events as newline-delimited JSON.
+      description: >
+        The service sends a hello event first, then a status_changed event for
+        the current status, then additional status_changed events only when the
+        service-visible status changes. Clients should reconnect after EOF.
+      x-ndjson: true
+      responses:
+        "200":
+          description: Newline-delimited ServiceEvent values.
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/ServiceEvent"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /enroll:
+    parameters: *ipcVersionHeaders
+    post:
+      operationId: enroll
+      x-endlessnet-required-privilege: owner
+      summary: Enroll this device using a one-time token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollRequest"
+      responses:
+        "200":
+          description: Enrollment accepted and local state updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /connect:
+    parameters: *ipcVersionHeaders
+    post:
+      operationId: connect
+      x-endlessnet-required-privilege: owner
+      summary: Clear local disconnect intent and bring the tunnel up.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Connect command result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /server-identity:
+    parameters: *ipcVersionHeaders
+    get:
+      operationId: server_identity
+      x-endlessnet-required-privilege: observer
+      summary: Compare the pinned and currently announced server signing identities.
+      responses:
+        "200":
+          description: Server signing identity comparison.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerIdentityResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /server-identity/trust:
+    parameters: *ipcVersionHeaders
+    post:
+      operationId: server_identity.trust
+      x-endlessnet-required-privilege: administrator
+      summary: Explicitly trust a confirmed server signing identity, recover the node credential, and connect.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrustServerRequest"
+      responses:
+        "200":
+          description: Trust recovery and connection result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustServerResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /disconnect:
+    parameters: *ipcVersionHeaders
+    post:
+      operationId: disconnect
+      x-endlessnet-required-privilege: owner
+      summary: Persist local disconnect intent and bring the tunnel down.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Disconnect command result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DisconnectResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /logout:
+    parameters: *ipcVersionHeaders
+    post:
+      operationId: logout
+      x-endlessnet-required-privilege: owner
+      summary: Revoke/remove local enrollment and clear generated tunnel state.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Logout command result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogoutResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /networks:
+    parameters: *ipcVersionHeaders
+    get:
+      operationId: networks
+      x-endlessnet-required-privilege: observer
+      summary: List service-visible networks for this enrollment.
+      responses:
+        "200":
+          description: Networks known to the local service.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworksResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /network/select:
+    parameters: *ipcVersionHeaders
+    post:
+      operationId: network.select
+      x-endlessnet-required-privilege: owner
+      summary: Select the already-enrolled network.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelectNetworkRequest"
+      responses:
+        "200":
+          description: Selected network result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SelectNetworkResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /diagnostics:
+    parameters: *ipcVersionHeaders
+    get:
+      operationId: diagnostics
+      x-endlessnet-required-privilege: owner
+      summary: Read a redacted diagnostics snapshot without filesystem side effects.
+      responses:
+        "200":
+          description: Redacted diagnostics snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiagnosticsResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /diagnostics/bundle:
+    parameters: *ipcVersionHeaders
+    post:
+      operationId: diagnostics.bundle
+      x-endlessnet-required-privilege: owner
+      summary: Create or reuse a bounded redacted diagnostics bundle.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                log_limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+      responses:
+        "200":
+          description: Diagnostics bundle metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiagnosticsBundleResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /logs/recent:
+    parameters: *ipcVersionHeaders
+    get:
+      operationId: logs.recent
+      x-endlessnet-required-privilege: owner
+      summary: Read recent redacted service log entries.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+      responses:
+        "200":
+          description: Recent service logs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogsRecentResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+components:
+  parameters:
+    IPCProtocol:
+      name: X-EndlessNet-IPC-Protocol
+      in: header
+      required: true
+      schema:
+        type: string
+        const: endlessnet-client-ipc
+    IPCCurrentVersion:
+      name: X-EndlessNet-IPC-Version
+      in: header
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    IPCMinimumVersion:
+      name: X-EndlessNet-IPC-Min-Supported-Version
+      in: header
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    IPCError:
+      description: Stable JSON IPC error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    TrustServerRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - confirmed
+        - confirmed_key_id
+      properties:
+        confirmed:
+          type: boolean
+          const: true
+        confirmed_key_id:
+          type: string
+          minLength: 1
+    ServerIdentityResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - control_plane_url
+            - trusted_key_id
+            - announced_key_id
+            - changed
+          properties:
+            control_plane_url:
+              type: string
+              format: uri
+            trusted_key_id:
+              type: string
+            announced_key_id:
+              type: string
+            changed:
+              type: boolean
+    ProtocolEnvelope:
+      type: object
+      required:
+        - ipc_protocol
+        - ipc_version
+        - ipc_min_supported_version
+      properties:
+        ipc_protocol:
+          type: string
+          const: endlessnet-client-ipc
+        ipc_version:
+          type: integer
+          const: 1
+        ipc_min_supported_version:
+          type: integer
+          const: 1
+        ipc_negotiated_version:
+          type: integer
+          minimum: 1
+          description: Highest overlapping version; absent when negotiation fails before an overlap exists.
+        service_version:
+          type: string
+        service_commit:
+          type: string
+        service_build_date:
+          type: string
+    ServiceState:
+      type: string
+      enum:
+        - Connected
+        - Disconnected
+        - Degraded
+        - Error
+        - NeedsEnrollment
+        - NeedsApproval
+        - ServerIdentityChanged
+    ControlState:
+      type: string
+      enum:
+        - pending_approval
+        - degraded
+        - offline_cache
+        - ready
+        - registered
+        - cache_invalid
+        - error
+        - not_registered
+        - disconnected
+        - server_identity_changed
+    DesiredState:
+      type: string
+      enum:
+        - connected
+        - disconnected
+    ConnectionIntent:
+      type: object
+      required:
+        - desired_state
+      properties:
+        desired_state:
+          $ref: "#/components/schemas/DesiredState"
+        reason:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+    StatusResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - state
+            - control_state
+            - desired_state
+            - cached_map_present
+            - cached_map_valid
+            - map_signing_trust_present
+            - token_present
+            - node_credential_present
+            - device_fingerprint_present
+            - identity_private_key_present
+            - private_key_present
+          properties:
+            state:
+              $ref: "#/components/schemas/ServiceState"
+            control_state:
+              $ref: "#/components/schemas/ControlState"
+            desired_state:
+              $ref: "#/components/schemas/DesiredState"
+            user_disconnected:
+              type: boolean
+            connection_intent:
+              $ref: "#/components/schemas/ConnectionIntent"
+            control_plane_urls:
+              type: array
+              items:
+                type: string
+            account_id:
+              type: string
+            node_id:
+              type: string
+            hostname:
+              type: string
+            network_id:
+              type: string
+            network_name:
+              type: string
+            node_approval_state:
+              type: string
+            enrollment_request_id:
+              type: string
+            approval_url:
+              type: string
+              format: uri
+            overlay_ip:
+              type: string
+            overlay_ipv6:
+              type: string
+            overlay_cidr:
+              type: string
+            overlay_ipv6_cidr:
+              type: string
+            map_revision:
+              type: integer
+              minimum: 0
+            peer_count:
+              type: integer
+              minimum: 0
+            stun_endpoints:
+              type: array
+              items:
+                $ref: "#/components/schemas/EndpointAddress"
+            relay_endpoints:
+              type: array
+              items:
+                $ref: "#/components/schemas/RelayEndpoint"
+            map_signing_trust_present:
+              type: boolean
+            token_present:
+              type: boolean
+            cached_map_present:
+              type: boolean
+            cached_map_valid:
+              type: boolean
+            node_credential_present:
+              type: boolean
+            device_fingerprint_present:
+              type: boolean
+            identity_private_key_present:
+              type: boolean
+            private_key_present:
+              type: boolean
+            route_table:
+              type: string
+            local_state_error:
+              type: string
+            approval_error:
+              type: string
+            cached_map_error:
+              type: string
+            connection_intent_error:
+              type: string
+            recovery_required:
+              type: string
+            agent:
+              $ref: "#/components/schemas/AgentStatus"
+            control:
+              $ref: "#/components/schemas/ControlProbe"
+            wireguard:
+              $ref: "#/components/schemas/WireGuardInspection"
+    EndpointAddress:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - addr
+      properties:
+        id:
+          type: string
+        addr:
+          type: string
+    RelayEndpoint:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - addr
+      properties:
+        id:
+          type: string
+        addr:
+          type: string
+        protocol:
+          type: string
+        priority:
+          type: integer
+          minimum: 0
+    AgentSnapshotState:
+      type: string
+      description: |
+        Relationship between the attached agent snapshot and the authoritative
+        cached map exposed by the enclosing status. `previous` keeps the last
+        coherent runtime snapshot visible after the cached map advances; its
+        fields retain their own `map_revision`.
+      enum:
+        - absent
+        - current
+        - previous
+    AgentStatus:
+      type: object
+      required:
+        - state_present
+        - snapshot_state
+      additionalProperties: false
+      properties:
+        state_present:
+          type: boolean
+          description: True when snapshot fields are populated, including a previous-revision snapshot.
+        snapshot_state:
+          $ref: "#/components/schemas/AgentSnapshotState"
+        target_map_revision:
+          type: integer
+          minimum: 0
+          description: Authoritative cached map revision to reconcile when snapshot_state is previous.
+        connection_paused:
+          type: boolean
+        generated_at:
+          type: string
+          format: date-time
+        node_id:
+          type: string
+        network_id:
+          type: string
+        network_name:
+          type: string
+        overlay_ip:
+          type: string
+        overlay_ipv6:
+          type: string
+        map_revision:
+          type: integer
+          minimum: 0
+        peer_count:
+          type: integer
+          minimum: 0
+        stun_ok:
+          type: boolean
+        relay_ok:
+          type: boolean
+        selected_relay:
+          $ref: "#/components/schemas/RelayEndpoint"
+        relay_attempt_count:
+          type: integer
+        path_count:
+          type: integer
+        selected_path_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        peers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PeerPathStatus"
+        last_error:
+          type: string
+    PeerPathStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - peer_id
+        - hostname
+        - direct
+        - relay
+        - selected_path
+      properties:
+        peer_id:
+          type: string
+        hostname:
+          type: string
+        direct:
+          $ref: "#/components/schemas/PathCandidateStatus"
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/PathCandidateStatus"
+        relay:
+          $ref: "#/components/schemas/PathCandidateStatus"
+        selected_path:
+          type: string
+        selected_endpoint:
+          type: string
+        last_transition_at:
+          type: string
+          format: date-time
+        selection_reason:
+          type: string
+    PathCandidateStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - state
+      properties:
+        type:
+          type: string
+        tier:
+          type: string
+        priority:
+          type: integer
+        state:
+          type: string
+        endpoint:
+          type: string
+        relay_id:
+          type: string
+        protocol:
+          type: string
+        rtt_ms:
+          type: number
+        checked_at:
+          type: string
+          format: date-time
+        last_reachable_at:
+          type: string
+          format: date-time
+        consecutive_failures:
+          type: integer
+        reason:
+          type: string
+    ControlProbe:
+      type: object
+      required:
+        - ok
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        url:
+          type: string
+        http_status:
+          type: integer
+        error:
+          type: string
+        attempts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ControlProbe"
+    ConnectResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - state
+            - wireguard
+          properties:
+            state:
+              $ref: "#/components/schemas/ServiceState"
+            control_state:
+              $ref: "#/components/schemas/ControlState"
+            desired_state:
+              $ref: "#/components/schemas/DesiredState"
+            user_disconnected:
+              type: boolean
+            node_id:
+              type: string
+            network_id:
+              type: string
+            map_revision:
+              type: integer
+              minimum: 0
+            reenrollment_required:
+              type: boolean
+            wireguard:
+              $ref: "#/components/schemas/WireGuardApplyResult"
+    EnrollResponse:
+      allOf:
+        - $ref: "#/components/schemas/StatusResponse"
+        - type: object
+          properties:
+            wireguard_apply:
+              $ref: "#/components/schemas/WireGuardApplyResult"
+              description: Present only after enrollment has synchronously brought up the local tunnel.
+    TrustServerResponse:
+      allOf:
+        - $ref: "#/components/schemas/ConnectResponse"
+        - type: object
+          required:
+            - server_identity_updated
+          properties:
+            server_identity_updated:
+              type: boolean
+            trusted_key_id:
+              type: string
+    DisconnectResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - state
+            - desired_state
+            - user_disconnected
+            - wireguard
+          properties:
+            state:
+              $ref: "#/components/schemas/ServiceState"
+            desired_state:
+              $ref: "#/components/schemas/DesiredState"
+            user_disconnected:
+              type: boolean
+            wireguard:
+              $ref: "#/components/schemas/WireGuardApplyResult"
+    LogoutResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - state
+          properties:
+            state:
+              $ref: "#/components/schemas/ServiceState"
+    SelectNetworkResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - state
+            - desired_state
+            - selected_network_id
+            - selected_network
+            - node_id
+            - map_revision
+          properties:
+            state:
+              $ref: "#/components/schemas/ServiceState"
+            desired_state:
+              $ref: "#/components/schemas/DesiredState"
+            selected_network_id:
+              type: string
+            selected_network:
+              $ref: "#/components/schemas/NetworkSummary"
+            node_id:
+              type: string
+            map_revision:
+              type: integer
+              minimum: 0
+    WireGuardApplyResult:
+      type: object
+      required:
+        - ok
+        - method
+        - changed
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        method:
+          type: string
+          const: wireguard-go
+        interface:
+          type: string
+        changed:
+          type: boolean
+        skipped:
+          type: boolean
+        reason:
+          type: string
+        down_error:
+          type: string
+        up_error:
+          type: string
+        sync_error:
+          type: string
+        route_error:
+          type: string
+    WireGuardInspection:
+      type: object
+      required:
+        - ok
+        - interface
+        - peer_count
+        - peers
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        interface:
+          type: string
+        mtu:
+          type: integer
+        listen_port:
+          type: integer
+        peer_count:
+          type: integer
+          minimum: 0
+        peers:
+          type: array
+          items:
+            $ref: "#/components/schemas/WireGuardPeerInspection"
+        routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/WireGuardRouteInspection"
+        error:
+          type: string
+    WireGuardPeerInspection:
+      type: object
+      additionalProperties: false
+      required:
+        - public_key
+        - allowed_ips
+        - transfer_rx_bytes
+        - transfer_tx_bytes
+      properties:
+        public_key:
+          type: string
+        endpoint:
+          type: string
+        allowed_ips:
+          type: array
+          items:
+            type: string
+        latest_handshake_unix:
+          type: integer
+        transfer_rx_bytes:
+          type: integer
+          minimum: 0
+        transfer_tx_bytes:
+          type: integer
+          minimum: 0
+        persistent_keepalive_seconds:
+          type: integer
+          minimum: 0
+    WireGuardRouteInspection:
+      type: object
+      additionalProperties: false
+      required:
+        - target
+        - uses_interface
+      properties:
+        target:
+          type: string
+        interface:
+          type: string
+        uses_interface:
+          type: boolean
+        error:
+          type: string
+    EnrollRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        enroll_token:
+          type: string
+          minLength: 1
+          writeOnly: true
+        server:
+          type: string
+        mode:
+          type: string
+          enum:
+            - workstation
+            - server
+            - subnet-router
+            - interactive
+        hostname:
+          type: string
+        idempotency_key:
+          type: string
+    SelectNetworkRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        network_id:
+          type: string
+        network_name:
+          type: string
+      anyOf:
+        - required:
+            - network_id
+        - required:
+            - network_name
+    NetworkSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        cidr:
+          type: string
+        ipv6_cidr:
+          type: string
+        account_id:
+          type: string
+      additionalProperties: true
+    NetworksResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - networks
+            - selected_network_id
+          properties:
+            networks:
+              type: array
+              items:
+                $ref: "#/components/schemas/NetworkSummary"
+            selected_network_id:
+              type: string
+    DiagnosticsResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - diagnostics
+          properties:
+            diagnostics:
+              $ref: "#/components/schemas/Diagnostics"
+    DiagnosticsBundleResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - path
+            - created_at
+            - expires_at
+            - size_bytes
+            - reused
+          properties:
+            path:
+              type: string
+            created_at:
+              type: string
+              format: date-time
+            expires_at:
+              type: string
+              format: date-time
+            size_bytes:
+              type: integer
+              minimum: 1
+              maximum: 5242880
+            reused:
+              type: boolean
+    Diagnostics:
+      type: object
+      additionalProperties: false
+      required:
+        - generated_at
+        - client
+        - runtime
+        - status
+        - last_errors
+        - config
+        - recent_logs
+        - interfaces
+        - route_conflict_count
+        - route_conflicts
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        client:
+          $ref: "#/components/schemas/DiagnosticsClientInfo"
+        runtime:
+          $ref: "#/components/schemas/DiagnosticsRuntimeInfo"
+        status:
+          $ref: "#/components/schemas/StatusResponse"
+        last_errors:
+          type: array
+          items:
+            type: string
+        config:
+          $ref: "#/components/schemas/DiagnosticsConfig"
+        dns_summary:
+          $ref: "#/components/schemas/DiagnosticsDNSSummary"
+        route_summary:
+          $ref: "#/components/schemas/DiagnosticsRouteSummary"
+        recent_logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogEntry"
+        interfaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/NetworkInterfaceStatus"
+        route_conflict_count:
+          type: integer
+          minimum: 0
+        route_conflicts:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteConflict"
+    DiagnosticsClientInfo:
+      type: object
+      additionalProperties: false
+      required:
+        - product
+        - version
+        - commit
+        - build_date
+        - target_os
+        - target_arch
+      properties:
+        product:
+          type: string
+        version:
+          type: string
+        commit:
+          type: string
+        build_date:
+          type: string
+        target_os:
+          type: string
+        target_arch:
+          type: string
+    DiagnosticsRuntimeInfo:
+      type: object
+      additionalProperties: false
+      required:
+        - goos
+        - goarch
+        - go_version
+        - os
+      properties:
+        goos:
+          type: string
+        goarch:
+          type: string
+        go_version:
+          type: string
+        os:
+          $ref: "#/components/schemas/DiagnosticsOSInfo"
+    DiagnosticsOSInfo:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        major:
+          type: integer
+          minimum: 0
+        minor:
+          type: integer
+          minimum: 0
+        build:
+          type: integer
+          minimum: 0
+        platform_id:
+          type: integer
+          minimum: 0
+        product_type:
+          type: integer
+          minimum: 0
+        suite_mask:
+          type: integer
+          minimum: 0
+        service_pack:
+          type: string
+        service_pack_major:
+          type: integer
+          minimum: 0
+        service_pack_minor:
+          type: integer
+          minimum: 0
+    DiagnosticsConfig:
+      type: object
+      additionalProperties: false
+      required:
+        - map_signing_trust_present
+        - token_present
+        - identity_private_key_present
+        - private_key_present
+        - node_credential_present
+        - device_fingerprint_present
+        - cached_map_present
+      properties:
+        control_plane_urls:
+          type: array
+          items:
+            type: string
+        node_id:
+          type: string
+        map_revision:
+          type: integer
+          minimum: 0
+        map_signing_trust_present:
+          type: boolean
+        token_present:
+          type: boolean
+        identity_private_key_present:
+          type: boolean
+        private_key_present:
+          type: boolean
+        node_credential_present:
+          type: boolean
+        device_fingerprint_present:
+          type: boolean
+        wireguard_route_table:
+          type: string
+        cached_map_present:
+          type: boolean
+    DiagnosticsDNSSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - search_domain
+        - ttl_seconds
+        - network_dns_servers
+        - record_count
+        - records
+      properties:
+        search_domain:
+          type: string
+        ttl_seconds:
+          type: integer
+          minimum: 0
+        network_dns_servers:
+          type: array
+          items:
+            type: string
+        record_count:
+          type: integer
+          minimum: 0
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiagnosticsDNSRecord"
+    DiagnosticsDNSRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - node_id
+        - hostname
+        - label
+        - fqdn
+      properties:
+        node_id:
+          type: string
+        hostname:
+          type: string
+        label:
+          type: string
+        fqdn:
+          type: string
+        ipv4:
+          type: string
+        ipv6:
+          type: string
+    DiagnosticsRouteSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - overlay_cidr
+        - peer_count
+        - allowed_ip_count
+        - peer_route_targets
+        - subnet_route_count
+        - subnet_routes
+        - default_route_present
+      properties:
+        overlay_cidr:
+          type: string
+        overlay_ipv6_cidr:
+          type: string
+        peer_count:
+          type: integer
+          minimum: 0
+        allowed_ip_count:
+          type: integer
+          minimum: 0
+        peer_route_targets:
+          type: array
+          items:
+            type: string
+        subnet_route_count:
+          type: integer
+          minimum: 0
+        subnet_routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiagnosticsSubnetRoute"
+        default_route_present:
+          type: boolean
+        wireguard_route_table:
+          type: string
+    DiagnosticsSubnetRoute:
+      type: object
+      additionalProperties: false
+      required:
+        - peer_id
+        - hostname
+        - cidr
+      properties:
+        peer_id:
+          type: string
+        hostname:
+          type: string
+        cidr:
+          type: string
+    NetworkInterfaceStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - index
+        - mtu
+        - address_count
+      properties:
+        name:
+          type: string
+        index:
+          type: integer
+        mtu:
+          type: integer
+        flags:
+          type: array
+          items:
+            type: string
+        address_count:
+          type: integer
+          minimum: 0
+        addresses:
+          type: array
+          items:
+            type: string
+        prefixes:
+          type: array
+          items:
+            type: string
+        error:
+          type: string
+    RouteConflict:
+      type: object
+      additionalProperties: false
+      required:
+        - overlay_cidr
+        - local_prefix
+        - interface
+        - address_family
+        - reason
+      properties:
+        overlay_cidr:
+          type: string
+        local_prefix:
+          type: string
+        interface:
+          type: string
+        address_family:
+          type: string
+        reason:
+          type: string
+    LogsRecentResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - logs
+          properties:
+            logs:
+              type: array
+              items:
+                $ref: "#/components/schemas/LogEntry"
+    LogEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - timestamp
+        - message
+      properties:
+        timestamp:
+          type: string
+        message:
+          type: string
+    ServiceEvent:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - event_type
+            - sequence
+            - generated_at
+          properties:
+            event_type:
+              type: string
+              enum:
+                - hello
+                - status_changed
+                - error
+            sequence:
+              type: integer
+              minimum: 1
+            generated_at:
+              type: string
+              format: date-time
+            status:
+              $ref: "#/components/schemas/StatusResponse"
+            error_code:
+              $ref: "#/components/schemas/ErrorCode"
+            error:
+              type: string
+    ErrorCode:
+      type: string
+      enum:
+        - invalid_json
+        - method_not_allowed
+        - not_implemented
+        - not_found
+        - request_too_large
+        - request_failed
+        - response_too_large
+        - unauthorized
+        - owner_required
+        - administrator_required
+        - ipc_version_required
+        - ipc_protocol_unsupported
+        - ipc_version_unsupported
+        - invalid_ipc_version_range
+        - network_ref_required
+        - config_unavailable
+        - client_state_format_unsupported
+        - client_state_version_unsupported
+        - approval_required
+        - approval_rejected
+        - network_map_unavailable
+        - node_identity_missing
+        - device_fingerprint_mismatch
+        - wireguard_unavailable
+        - connect_failed
+        - connect_sync_failed
+        - disconnect_failed
+        - logout_failed
+        - enrollment_failed
+        - diagnostics_bundle_failed
+        - diagnostics_bundle_unavailable
+        - diagnostics_snapshot_failed
+        - connection_intent_update_failed
+        - reenrollment_cleanup_failed
+        - network_selection_requires_enrollment
+        - server_identity_changed
+        - server_identity_unavailable
+        - server_identity_confirmation_required
+        - server_identity_confirmation_mismatch
+        - server_identity_invalid
+        - server_identity_update_failed
+        - server_identity_reenrollment_cleanup_failed
+        - server_identity_recovery_failed
+    ErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProtocolEnvelope"
+        - type: object
+          required:
+            - error_code
+            - error
+          properties:
+            error_code:
+              $ref: "#/components/schemas/ErrorCode"
+            error:
+              type: string

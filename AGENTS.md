@@ -1,0 +1,10 @@
+# Agents
+
+- Run `git status --short` before reading or changing files and preserve existing user changes.
+- Never read or print environment files, credentials, private keys, client identity keys or node credentials.
+- Keep control-plane DTOs and cryptographic wire verification in the pinned `github.com/unng-lab/endlessnet/clientapi` module; do not copy backend-internal packages.
+- Do not add compatibility fallbacks for superseded CLI, IPC, state or release behavior.
+- Client releases, APT packaging, Windows core artifacts and cross-platform client CI belong to this repository.
+- GitHub Actions runner-unit installation, registration, systemd policy, host inventory, recovery/rollback and guarded rollout belong to `unng-lab/endlessnet-observability`; keep only job logic and `runs-on` selectors here.
+- Local verification is limited to `goimports -w .`, `go vet ./...`, `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m`, and `go test -short ./...`.
+- E2E, installer, privileged networking, release and system validation runs in GitHub pull-request or release CI.

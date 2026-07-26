@@ -1,0 +1,169 @@
+name: Publish client core
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  attestations: write
+  contents: write
+  id-token: write
+
+concurrency:
+  group: client-core-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Check GitHub CLI availability
+        run: |
+          set -euo pipefail
+          command -v gh >/dev/null || {
+            echo "::error::gh is required to publish client releases"
+            exit 1
+          }
+          gh --version
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate tag
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::invalid client release tag"; exit 1; }
+
+      - name: Test client packages
+        run: go test ./internal/client ./cmd/endlessnet-client
+
+      - name: Build immutable client artifacts
+        id: build
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          build_date="$(git show -s --format=%cI "$GITHUB_SHA")"
+          output_dir="$GITHUB_WORKSPACE/dist/client-core"
+          mkdir -p "$output_dir"
+          exe_name="endlessnet-client_windows_amd64.exe"
+          linux_name="endlessnet-client_linux_amd64"
+          contract_name="client-ipc-v1.openapi.yaml"
+          manifest_name="endlessnet-client_windows_amd64.manifest.json"
+          linux_manifest_name="endlessnet-client_linux_amd64.manifest.json"
+          linux_manifest_checksum_name="endlessnet-client_linux_amd64.manifest.json.sha256"
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath \
+            -ldflags "-s -w -X main.version=$version -X main.commit=$GITHUB_SHA -X main.buildDate=$build_date" \
+            -o "$output_dir/$exe_name" ./cmd/endlessnet-client
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+            -ldflags "-s -w -X main.version=$version -X main.commit=$GITHUB_SHA -X main.buildDate=$build_date" \
+            -o "$output_dir/$linux_name" ./cmd/endlessnet-client
+          cp docs/client-ipc-v1.openapi.yaml "$output_dir/$contract_name"
+          cp LICENSE NOTICE THIRD_PARTY_NOTICES "$output_dir/"
+          exe_sha="$(sha256sum "$output_dir/$exe_name" | awk '{print $1}')"
+          linux_sha="$(sha256sum "$output_dir/$linux_name" | awk '{print $1}')"
+          contract_sha="$(sha256sum "$output_dir/$contract_name" | awk '{print $1}')"
+          base_url="https://github.com/unng-lab/endlessnet-client/releases/download/$GITHUB_REF_NAME"
+          cat > "$output_dir/$manifest_name" <<EOF
+          {
+            "schema_version": 1,
+            "repository": "unng-lab/endlessnet-client",
+            "version": "$version",
+            "commit": "$GITHUB_SHA",
+            "target": "windows/amd64",
+            "ipc_version": "v1",
+            "artifacts": {
+              "client": {
+                "name": "$exe_name",
+                "url": "$base_url/$exe_name",
+                "sha256": "$exe_sha"
+              },
+              "ipc_contract": {
+                "name": "$contract_name",
+                "url": "$base_url/$contract_name",
+                "sha256": "$contract_sha"
+              }
+            }
+          }
+          EOF
+          cat > "$output_dir/$linux_manifest_name" <<EOF
+          {
+            "schema_version": 1,
+            "repository": "unng-lab/endlessnet-client",
+            "version": "$version",
+            "commit": "$GITHUB_SHA",
+            "target": "linux/amd64",
+            "artifact": {
+              "name": "$linux_name",
+              "url": "$base_url/$linux_name",
+              "sha256": "$linux_sha"
+            }
+          }
+          EOF
+          linux_manifest_sha="$(sha256sum "$output_dir/$linux_manifest_name" | awk '{print $1}')"
+          printf '%s  %s\n' "$exe_sha" "$exe_name" > "$output_dir/$exe_name.sha256"
+          printf '%s  %s\n' "$linux_sha" "$linux_name" > "$output_dir/$linux_name.sha256"
+          printf '%s  %s\n' "$linux_manifest_sha" "$linux_manifest_name" > "$output_dir/$linux_manifest_checksum_name"
+          {
+            echo "output_dir=$output_dir"
+            echo "linux_manifest_name=$linux_manifest_name"
+            echo "linux_manifest_sha=$linux_manifest_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/client-core/source-sbom.spdx.json
+
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        if: ${{ github.event.repository.visibility == 'public' }}
+        with:
+          subject-path: dist/client-core/endlessnet-client_*
+
+      - name: Publish or verify immutable GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTPUT_DIR: ${{ steps.build.outputs.output_dir }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" --repo unng-lab/endlessnet-client >/dev/null 2>&1; then
+            release_target="$(gh api "/repos/unng-lab/endlessnet-client/releases/tags/$GITHUB_REF_NAME" --jq '.target_commitish')"
+            [ "$release_target" = "$GITHUB_SHA" ] || {
+              echo "::error::release $GITHUB_REF_NAME targets $release_target instead of $GITHUB_SHA"
+              exit 1
+            }
+            existing="$RUNNER_TEMP/existing-core"
+            mkdir -p "$existing"
+            gh release view "$GITHUB_REF_NAME" \
+              --repo unng-lab/endlessnet-client \
+              --json assets \
+              --jq '.assets[].name' >"$existing/assets.txt"
+            for asset_path in "$OUTPUT_DIR"/*; do
+              asset_name="$(basename "$asset_path")"
+              if grep -Fx "$asset_name" "$existing/assets.txt" >/dev/null; then
+                gh release download "$GITHUB_REF_NAME" \
+                  --repo unng-lab/endlessnet-client \
+                  --pattern "$asset_name" \
+                  --dir "$existing"
+                if ! cmp -s "$asset_path" "$existing/$asset_name"; then
+                  echo "::error::immutable release asset conflict: $asset_name"
+                  exit 1
+                fi
+              else
+                gh release upload "$GITHUB_REF_NAME" \
+                  --repo unng-lab/endlessnet-client \
+                  "$asset_path"
+              fi
+            done
+          else
+            gh release create "$GITHUB_REF_NAME" --repo unng-lab/endlessnet-client \
+              --target "$GITHUB_SHA" \
+              --title "EndlessNet $GITHUB_REF_NAME" \
+              --notes "Automated release artifacts for $GITHUB_REF_NAME." \
+              "$OUTPUT_DIR"/*
+          fi
