@@ -1,5 +1,11 @@
 # Agents
 
+## Git workflow
+
+- Work directly on `main`. Do not create feature branches or pull requests.
+- After completing and validating a change, commit only its intended files and
+  push the commit directly to `main` immediately.
+
 - Run `git status --short` before reading or changing files and preserve existing user changes.
 - Never read or print environment files, credentials, private keys, client identity keys or node credentials.
 - Keep control-plane DTOs and cryptographic wire verification in the pinned `github.com/unng-lab/endlessnet/clientapi` module; do not copy backend-internal packages.
