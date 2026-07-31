@@ -104,6 +104,44 @@ func TestResolveNetworkFlagDefaultsToDefaultNetwork(t *testing.T) {
 	}
 }
 
+func TestCmdJoinTokenForwardsLifecycleOptions(t *testing.T) {
+	var received clientapi.CreateJoinTokenRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/nodes/join-tokens" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer session-token" {
+			t.Fatalf("authorization = %q", got)
+		}
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&received); err != nil {
+			t.Fatal(err)
+		}
+		_ = json.NewEncoder(w).Encode(clientapi.CreateJoinTokenResponse{
+			ID: "jtk_1", Token: "join-secret", NetworkID: received.NetworkID, ExpiresAt: time.Now().Add(time.Hour),
+		})
+	}))
+	defer server.Close()
+	configPath := filepath.Join(t.TempDir(), "client.json")
+	if err := client.SaveConfig(configPath, client.Config{Token: "session-token", ControlPlaneURLs: []string{server.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdJoinToken([]string{
+		"create", "--config", configPath, "--network", "net_1", "--ttl", "2h",
+		"--idempotency-key", "command-1", "--reusable", "--ephemeral", "--preauthorized",
+		"--tag", "role:test", "--tag", "env:system",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if received.NetworkID != "net_1" || received.TTL != "2h" || !received.Reusable || !received.Ephemeral || !received.Preauthorized {
+		t.Fatalf("join token request = %#v", received)
+	}
+	if got, want := strings.Join(received.Tags, ","), "role:test,env:system"; got != want {
+		t.Fatalf("tags = %q, want %q", got, want)
+	}
+}
+
 func TestUpdateWireGuardMTUFromFlag(t *testing.T) {
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
 	mtu := fs.Int("mtu", 0, "")

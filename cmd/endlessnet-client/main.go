@@ -517,7 +517,12 @@ func cmdJoinToken(args []string) error {
 	network := fs.String("network", defaultNetworkName, "network name or ID")
 	ttl := fs.String("ttl", "1h", "join token TTL")
 	idempotencyKey := fs.String("idempotency-key", "", "confidential retry key (base64url encoding 32 random bytes)")
+	reusable := fs.Bool("reusable", false, "allow the join token to enroll more than one node")
+	ephemeral := fs.Bool("ephemeral", false, "mark nodes enrolled with this token as ephemeral")
+	preauthorized := fs.Bool("preauthorized", false, "approve nodes enrolled with this token without a separate admin action")
+	tags := multiFlag{}
 	configPath := fs.String("config", "", "client config path")
+	fs.Var(&tags, "tag", "node tag granted by this token; repeatable")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -525,7 +530,10 @@ func cmdJoinToken(args []string) error {
 	if err != nil {
 		return err
 	}
-	req := clientapi.CreateJoinTokenRequest{TTL: *ttl, IdempotencyKey: *idempotencyKey}
+	req := clientapi.CreateJoinTokenRequest{
+		TTL: *ttl, IdempotencyKey: *idempotencyKey, Reusable: *reusable,
+		Ephemeral: *ephemeral, Preauthorized: *preauthorized, Tags: append([]string(nil), tags...),
+	}
 	setJoinTokenNetworkRef(&req, resolveNetworkFlag(*network))
 	token, err := api.CreateJoinToken(req)
 	if err != nil {
