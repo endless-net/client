@@ -249,4 +249,12 @@ func TestClientCoreReleasePublishesCurrentIPCContract(t *testing.T) {
 	if strings.Contains(text, "client-ipc-v1.openapi.yaml") {
 		t.Fatalf("client-core release workflow still references the superseded IPC v1 contract")
 	}
+	for _, subject := range []string{
+		"dist/client-core/endlessnet-client_*",
+		"dist/client-core/endlessnet-client-recovery-helper_*",
+	} {
+		if !strings.Contains(text, subject) {
+			t.Fatalf("client-core provenance omits release subject %q", subject)
+		}
+	}
 }
