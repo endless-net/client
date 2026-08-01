@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
 
 type wireGuardEngineRouter interface {

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	ipc "github.com/unng-lab/endlessnet-client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v1"
 )
 
 const (

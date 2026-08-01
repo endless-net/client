@@ -104,7 +104,7 @@ jobs:
       - name: Check out pinned STUN source
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          repository: unng-lab/endlessnet-stun
+          repository: endless-net/stun
           ref: v1.0.10
           path: .external/endlessnet-stun
           persist-credentials: false

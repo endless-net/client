@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	wgkeys "github.com/unng-lab/endlessnet/clientapi/wireguard"
+	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 )
 
 func TestDeviceFingerprintUsesHostLocalInstallationID(t *testing.T) {

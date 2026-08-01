@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	relay "github.com/unng-lab/endlessnet-relay/protocol/v1"
+	relay "github.com/endless-net/relay/protocol/v1"
 )
 
 const (

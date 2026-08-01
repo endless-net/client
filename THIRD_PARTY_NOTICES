@@ -5,8 +5,8 @@ This distribution includes Go dependencies under the following licenses:
 
 - github.com/Microsoft/go-winio — MIT
 - github.com/tailscale/wireguard-go — MIT
-- github.com/unng-lab/endlessnet-relay — Apache-2.0
-- github.com/unng-lab/endlessnet/clientapi — Apache-2.0
+- github.com/endless-net/relay — Apache-2.0
+- github.com/endless-net/client-api/clientapi — Apache-2.0
 - golang.org/x/crypto — BSD-3-Clause
 - golang.org/x/net — BSD-3-Clause
 - golang.org/x/sys — BSD-3-Clause

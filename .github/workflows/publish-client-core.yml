@@ -67,11 +67,11 @@ jobs:
           exe_sha="$(sha256sum "$output_dir/$exe_name" | awk '{print $1}')"
           linux_sha="$(sha256sum "$output_dir/$linux_name" | awk '{print $1}')"
           contract_sha="$(sha256sum "$output_dir/$contract_name" | awk '{print $1}')"
-          base_url="https://github.com/unng-lab/endlessnet-client/releases/download/$GITHUB_REF_NAME"
+          base_url="https://github.com/endless-net/client/releases/download/$GITHUB_REF_NAME"
           cat > "$output_dir/$manifest_name" <<EOF
           {
             "schema_version": 1,
-            "repository": "unng-lab/endlessnet-client",
+            "repository": "endless-net/client",
             "version": "$version",
             "commit": "$GITHUB_SHA",
             "target": "windows/amd64",
@@ -93,7 +93,7 @@ jobs:
           cat > "$output_dir/$linux_manifest_name" <<EOF
           {
             "schema_version": 1,
-            "repository": "unng-lab/endlessnet-client",
+            "repository": "endless-net/client",
             "version": "$version",
             "commit": "$GITHUB_SHA",
             "target": "linux/amd64",
@@ -131,8 +131,8 @@ jobs:
           OUTPUT_DIR: ${{ steps.build.outputs.output_dir }}
         run: |
           set -euo pipefail
-          if gh release view "$GITHUB_REF_NAME" --repo unng-lab/endlessnet-client >/dev/null 2>&1; then
-            release_target="$(gh api "/repos/unng-lab/endlessnet-client/releases/tags/$GITHUB_REF_NAME" --jq '.target_commitish')"
+          if gh release view "$GITHUB_REF_NAME" --repo endless-net/client >/dev/null 2>&1; then
+            release_target="$(gh api "/repos/endless-net/client/releases/tags/$GITHUB_REF_NAME" --jq '.target_commitish')"
             [ "$release_target" = "$GITHUB_SHA" ] || {
               echo "::error::release $GITHUB_REF_NAME targets $release_target instead of $GITHUB_SHA"
               exit 1
@@ -140,14 +140,14 @@ jobs:
             existing="$RUNNER_TEMP/existing-core"
             mkdir -p "$existing"
             gh release view "$GITHUB_REF_NAME" \
-              --repo unng-lab/endlessnet-client \
+              --repo endless-net/client \
               --json assets \
               --jq '.assets[].name' >"$existing/assets.txt"
             for asset_path in "$OUTPUT_DIR"/*; do
               asset_name="$(basename "$asset_path")"
               if grep -Fx "$asset_name" "$existing/assets.txt" >/dev/null; then
                 gh release download "$GITHUB_REF_NAME" \
-                  --repo unng-lab/endlessnet-client \
+                  --repo endless-net/client \
                   --pattern "$asset_name" \
                   --dir "$existing"
                 if ! cmp -s "$asset_path" "$existing/$asset_name"; then
@@ -156,12 +156,12 @@ jobs:
                 fi
               else
                 gh release upload "$GITHUB_REF_NAME" \
-                  --repo unng-lab/endlessnet-client \
+                  --repo endless-net/client \
                   "$asset_path"
               fi
             done
           else
-            gh release create "$GITHUB_REF_NAME" --repo unng-lab/endlessnet-client \
+            gh release create "$GITHUB_REF_NAME" --repo endless-net/client \
               --target "$GITHUB_SHA" \
               --title "EndlessNet $GITHUB_REF_NAME" \
               --notes "Automated release artifacts for $GITHUB_REF_NAME." \

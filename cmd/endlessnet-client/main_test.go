@@ -21,14 +21,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/unng-lab/endlessnet-client/internal/client"
-	ipc "github.com/unng-lab/endlessnet-client/ipc/v1"
+	"github.com/endless-net/client/internal/client"
+	ipc "github.com/endless-net/client/ipc/v1"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
-	wgkeys "github.com/unng-lab/endlessnet/clientapi/wireguard"
+	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 
-	relayauth "github.com/unng-lab/endlessnet-relay/protocol/v1"
+	relayauth "github.com/endless-net/relay/protocol/v1"
 )
 
 func testWireGuardPublicKey(label string) string {
@@ -101,6 +101,44 @@ func TestResolveNetworkFlagDefaultsToDefaultNetwork(t *testing.T) {
 	}
 	if got := resolveNetworkFlag(" office "); got != "office" {
 		t.Fatalf("resolveNetworkFlag trims value to %q", got)
+	}
+}
+
+func TestCmdJoinTokenForwardsLifecycleOptions(t *testing.T) {
+	var received clientapi.CreateJoinTokenRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/nodes/join-tokens" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer session-token" {
+			t.Fatalf("authorization = %q", got)
+		}
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&received); err != nil {
+			t.Fatal(err)
+		}
+		_ = json.NewEncoder(w).Encode(clientapi.CreateJoinTokenResponse{
+			ID: "jtk_1", Token: "join-secret", NetworkID: received.NetworkID, ExpiresAt: time.Now().Add(time.Hour),
+		})
+	}))
+	defer server.Close()
+	configPath := filepath.Join(t.TempDir(), "client.json")
+	if err := client.SaveConfig(configPath, client.Config{Token: "session-token", ControlPlaneURLs: []string{server.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdJoinToken([]string{
+		"create", "--config", configPath, "--network", "net_1", "--ttl", "2h",
+		"--idempotency-key", "command-1", "--reusable", "--ephemeral", "--preauthorized",
+		"--tag", "role:test", "--tag", "env:system",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if received.NetworkID != "net_1" || received.TTL != "2h" || !received.Reusable || !received.Ephemeral || !received.Preauthorized {
+		t.Fatalf("join token request = %#v", received)
+	}
+	if got, want := strings.Join(received.Tags, ","), "role:test,env:system"; got != want {
+		t.Fatalf("tags = %q, want %q", got, want)
 	}
 }
 
@@ -879,21 +917,14 @@ func TestAgentOnlineNetworkMapRefreshesSnapshotOnIdleStream(t *testing.T) {
 			mu.Lock()
 			streamQueries = append(streamQueries, query)
 			mu.Unlock()
-			switch r.URL.Query().Get("from_revision") {
+			switch r.URL.Query().Get("from_network_revision") {
 			case "7":
 				w.Header().Set("Content-Type", "application/x-ndjson")
 				return
 			case "0":
-				_ = json.NewEncoder(w).Encode(clientapi.MapStreamEvent{
-					Type:            "snapshot",
-					ProtocolVersion: clientapi.MapStreamProtocolVersion,
-					Capabilities:    clientapi.MapStreamSupportedCapabilities(),
-					FromRevision:    0,
-					ToRevision:      networkMap.Network.Revision,
-					Map:             &networkMap,
-				})
+				_ = json.NewEncoder(w).Encode(testMapStreamSnapshotEvent(t, networkMap))
 			default:
-				http.Error(w, fmt.Sprintf("unexpected from_revision %q", r.URL.Query().Get("from_revision")), http.StatusBadRequest)
+				http.Error(w, fmt.Sprintf("unexpected from_network_revision %q", r.URL.Query().Get("from_network_revision")), http.StatusBadRequest)
 			}
 		default:
 			http.NotFound(w, r)
@@ -936,7 +967,7 @@ func TestAgentOnlineNetworkMapRefreshesSnapshotOnIdleStream(t *testing.T) {
 	mu.Lock()
 	queries := append([]string(nil), streamQueries...)
 	mu.Unlock()
-	if len(queries) != 2 || !strings.Contains(queries[0], "from_revision=7") || !strings.Contains(queries[1], "from_revision=0") {
+	if len(queries) != 2 || !strings.Contains(queries[0], "from_network_revision=7") || !strings.Contains(queries[1], "from_network_revision=0") {
 		t.Fatalf("stream queries = %#v, want current revision followed by resnapshot", queries)
 	}
 	saved, err := client.LoadConfig(configPath)
@@ -988,14 +1019,7 @@ func TestAgentOnlineNetworkMapFailsOverToConfiguredCoordinator(t *testing.T) {
 				return
 			}
 			w.Header().Set("Content-Type", "application/x-ndjson")
-			_ = json.NewEncoder(w).Encode(clientapi.MapStreamEvent{
-				Type:            "snapshot",
-				ProtocolVersion: clientapi.MapStreamProtocolVersion,
-				Capabilities:    clientapi.MapStreamSupportedCapabilities(),
-				FromRevision:    0,
-				ToRevision:      networkMap.Network.Revision,
-				Map:             &networkMap,
-			})
+			_ = json.NewEncoder(w).Encode(testMapStreamSnapshotEvent(t, networkMap))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1059,14 +1083,7 @@ func TestCmdSyncRejectsTamperedStreamUpdateWithoutCacheMutation(t *testing.T) {
 				return
 			}
 			w.Header().Set("Content-Type", "application/x-ndjson")
-			_ = json.NewEncoder(w).Encode(clientapi.MapStreamEvent{
-				Type:            "snapshot",
-				ProtocolVersion: clientapi.MapStreamProtocolVersion,
-				Capabilities:    clientapi.MapStreamSupportedCapabilities(),
-				FromRevision:    7,
-				ToRevision:      8,
-				Map:             &tampered,
-			})
+			_ = json.NewEncoder(w).Encode(testMapStreamSnapshotEventWithSignature(tampered, base.MapSignature))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1153,14 +1170,7 @@ func TestCmdAgentWritesFailureStateForTamperedMapWithoutReplacingOutput(t *testi
 				return
 			}
 			w.Header().Set("Content-Type", "application/x-ndjson")
-			_ = json.NewEncoder(w).Encode(clientapi.MapStreamEvent{
-				Type:            "snapshot",
-				ProtocolVersion: clientapi.MapStreamProtocolVersion,
-				Capabilities:    clientapi.MapStreamSupportedCapabilities(),
-				FromRevision:    7,
-				ToRevision:      8,
-				Map:             &tampered,
-			})
+			_ = json.NewEncoder(w).Encode(testMapStreamSnapshotEventWithSignature(tampered, base.MapSignature))
 		default:
 			http.NotFound(w, r)
 		}
@@ -2335,14 +2345,7 @@ func TestAgentOnlineNetworkMapActivatesPendingEnrollmentAfterApproval(t *testing
 				return
 			}
 			w.Header().Set("Content-Type", "application/x-ndjson")
-			_ = json.NewEncoder(w).Encode(clientapi.MapStreamEvent{
-				Type:            "snapshot",
-				ProtocolVersion: clientapi.MapStreamProtocolVersion,
-				Capabilities:    clientapi.MapStreamSupportedCapabilities(),
-				FromRevision:    0,
-				ToRevision:      approvedMap.Network.Revision,
-				Map:             &approvedMap,
-			})
+			_ = json.NewEncoder(w).Encode(testMapStreamSnapshotEvent(t, approvedMap))
 		default:
 			http.NotFound(w, r)
 		}
@@ -3363,289 +3366,62 @@ func TestCacheNetworkMapCheckedRejectsStaleRevision(t *testing.T) {
 	}
 }
 
-func TestCacheNetworkMapFromEventAppliesVerifiedDelta(t *testing.T) {
-	expiresAt := time.Date(2026, time.July, 24, 12, 0, 0, 0, time.UTC)
-	updatedExpiresAt := expiresAt.Add(time.Minute)
+func TestCacheNetworkMapFromEventAppliesSignedDelta(t *testing.T) {
+	mapKey := testMapSigningKey(t)
 	base := clientapi.RegisterNodeResponse{
 		Network: clientapi.Network{ID: "net-1", Name: "default", CIDR: "100.64.0.0/24", Revision: 7},
 		Node:    clientapi.Node{ID: "node-1", NetworkID: "net-1", Hostname: "node-a", PublicKey: testWireGuardPublicKey("pub-a"), AssignedIP: "100.64.0.2"},
 		Peers: []clientapi.Peer{
-			{
-				ID:                 "peer-a",
-				Hostname:           "peer-a",
-				PublicKey:          testWireGuardPublicKey("pub-peer-a"),
-				Endpoint:           "peer-a.example.test:51820",
-				EndpointGeneration: 7,
-				EndpointCandidates: []string{"peer-a.example.test:51820", "peer-a-relay.example.test:51820"},
-				EndpointExpiresAt:  &expiresAt,
-				Status:             clientapi.NodeStatusOnline,
-				AllowedIPs:         []string{"100.64.0.3/32"},
-			},
-			{ID: "peer-b", Hostname: "peer-b", PublicKey: testWireGuardPublicKey("pub-peer-b"), Endpoint: "peer-b.example.test:51820", AllowedIPs: []string{"100.64.0.4/32"}},
+			{ID: "peer-a", Hostname: "peer-a", PublicKey: testWireGuardPublicKey("pub-peer-a"), AllowedIPs: []string{"100.64.0.3/32"}},
+			{ID: "peer-b", Hostname: "peer-b", PublicKey: testWireGuardPublicKey("pub-peer-b"), AllowedIPs: []string{"100.64.0.4/32"}},
 		},
 		Relays: []relayauth.Endpoint{
 			{ID: "relay-a", Addr: "relay-a.example.test:443", Protocol: relayauth.EndpointProtocolTLS},
 			{ID: "relay-b", Addr: "relay-b.example.test:443", Protocol: relayauth.EndpointProtocolTLS},
 		},
 	}
-	updatedPeer := clientapi.Peer{
-		ID:                 "peer-a",
-		Hostname:           "peer-a",
-		PublicKey:          testWireGuardPublicKey("pub-peer-a"),
-		Endpoint:           "peer-a.example.test:51820",
-		EndpointGeneration: 8,
-		EndpointCandidates: []string{"peer-a-relay.example.test:51820", "peer-a.example.test:51820"},
-		EndpointExpiresAt:  &updatedExpiresAt,
-		Status:             clientapi.NodeStatusOffline,
-		AllowedIPs:         []string{"100.64.0.3/32"},
+	baseSnapshot := networkMapSnapshotFromResponse(base)
+	baseSnapshot.Revision = clientapi.MapRevision{Network: 7}
+	baseSignature, err := clientapi.SignNetworkMapSnapshot(mapKey, baseSnapshot)
+	if err != nil {
+		t.Fatal(err)
 	}
+	base.MapSignature = baseSignature
+
+	updatedPeer := clientapi.Peer{ID: "peer-a", Hostname: "peer-a", PublicKey: testWireGuardPublicKey("pub-peer-a"), Endpoint: "peer-a.example.test:51820", AllowedIPs: []string{"100.64.0.3/32"}}
 	addedPeer := clientapi.Peer{ID: "peer-c", Hostname: "peer-c", PublicKey: testWireGuardPublicKey("pub-peer-c"), Endpoint: "peer-c.example.test:51820", AllowedIPs: []string{"100.64.0.5/32"}}
 	updatedRelay := relayauth.Endpoint{ID: "relay-a", Addr: "relay-a-new.example.test:443", Protocol: relayauth.EndpointProtocolTLS}
 	addedRelay := relayauth.Endpoint{ID: "relay-c", Addr: "relay-c.example.test:443", Protocol: relayauth.EndpointProtocolTLS}
-	full := base
-	full.Network.Revision = 8
-	full.Peers = []clientapi.Peer{updatedPeer, addedPeer}
-	full.Relays = []relayauth.Endpoint{updatedRelay, addedRelay}
-	full.RelayCredential = &relayauth.Credential{NetworkID: "net-1", NodeID: "node-1", Signature: "relay-signature"}
-	cfg := client.Config{
-		NodeID:      "node-1",
-		NetworkID:   "net-1",
-		MapRevision: 7,
-		CachedMap:   &base,
+	resultSnapshot := baseSnapshot
+	resultSnapshot.Revision = clientapi.MapRevision{Network: 8}
+	resultSnapshot.Network.Revision = 8
+	resultSnapshot.Peers = []clientapi.Peer{updatedPeer, addedPeer}
+	resultSnapshot.Relays = []relayauth.Endpoint{updatedRelay, addedRelay}
+	resultSignature, err := clientapi.SignNetworkMapSnapshot(mapKey, resultSnapshot)
+	if err != nil {
+		t.Fatal(err)
 	}
 
+	cfg := client.Config{NodeID: "node-1", NetworkID: "net-1", MapRevision: 7, MapSigningTrust: testSigningTrustBundle(t, testMapSigningPublicKey(t, baseSignature)), CachedMap: &base}
 	got, action, err := cacheNetworkMapFromEvent(&cfg, clientapi.MapStreamEvent{
-		Type:         "snapshot",
-		FromRevision: 7,
-		ToRevision:   8,
-		Map:          &full,
-		Delta: &clientapi.MapDelta{
-			Added:   []clientapi.Peer{addedPeer},
-			Updated: []clientapi.Peer{updatedPeer},
-			Removed: []clientapi.Peer{{ID: "peer-b", Hostname: "peer-b"}},
-			Relays: &clientapi.RelayEndpointDelta{
-				Added:   []relayauth.Endpoint{addedRelay},
-				Updated: []relayauth.Endpoint{updatedRelay},
-				Removed: []relayauth.Endpoint{{ID: "relay-b"}},
-			},
-		},
+		Type: "delta", ProtocolVersion: clientapi.MapStreamProtocolVersion, Capabilities: clientapi.MapStreamSupportedCapabilities(), EventID: "event-8",
+		From: clientapi.MapRevision{Network: 7}, To: clientapi.MapRevision{Network: 8}, BaseHash: baseSignature.PayloadHash,
+		Delta:           &clientapi.MapDelta{Network: &resultSnapshot.Network, PeerUpserts: []clientapi.Peer{updatedPeer, addedPeer}, PeerRemoveIDs: []string{"peer-b"}, RelayUpserts: []relayauth.Endpoint{updatedRelay, addedRelay}, RelayRemoveIDs: []string{"relay-b"}},
+		ResultSignature: resultSignature,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if action != "delta" || got.Network.Revision != 8 || len(got.Peers) != 2 || got.Peers[0].EndpointGeneration != 8 || got.Peers[0].Status != clientapi.NodeStatusOffline || got.Peers[1].ID != "peer-c" {
+	if action != "delta" || got.Network.Revision != 8 || len(got.Peers) != 2 || got.Peers[0].ID != "peer-a" || got.Peers[1].ID != "peer-c" {
 		t.Fatalf("delta cache result action=%s map=%#v", action, got)
-	}
-	if got.RelayCredential == nil || got.RelayCredential.Signature != "relay-signature" {
-		t.Fatalf("returned map lost relay credential: %#v", got.RelayCredential)
 	}
 	if len(got.Relays) != 2 || got.Relays[0].Addr != "relay-a-new.example.test:443" || got.Relays[1].ID != "relay-c" {
 		t.Fatalf("delta cache relays = %#v", got.Relays)
 	}
-	if cfg.MapRevision != 8 || cfg.CachedMap == nil || cfg.CachedMap.RelayCredential != nil {
+	if cfg.MapRevision != 8 || cfg.MapGlobalRevision != 0 || cfg.MapHash != resultSignature.PayloadHash || cfg.CachedMap == nil || cfg.CachedMap.RelayCredential != nil {
 		t.Fatalf("cached config after delta = %#v", cfg)
 	}
-	if cfg.CachedMap.Peers[0].EndpointGeneration != 8 || cfg.CachedMap.Peers[0].Status != clientapi.NodeStatusOffline || cfg.CachedMap.Peers[1].ID != "peer-c" {
-		t.Fatalf("cached peers after delta = %#v", cfg.CachedMap.Peers)
-	}
-	if len(cfg.CachedMap.Relays) != 2 || cfg.CachedMap.Relays[0].Addr != "relay-a-new.example.test:443" || cfg.CachedMap.Relays[1].ID != "relay-c" {
-		t.Fatalf("cached relays after delta = %#v", cfg.CachedMap.Relays)
-	}
 }
-
-func TestCacheNetworkMapFromEventDuplicateSnapshotIsIdempotent(t *testing.T) {
-	base := clientapi.RegisterNodeResponse{
-		Network: clientapi.Network{ID: "net-1", Name: "default", CIDR: "100.64.0.0/24", Revision: 7},
-		Node:    clientapi.Node{ID: "node-1", NetworkID: "net-1", Hostname: "node-a", PublicKey: testWireGuardPublicKey("pub-a"), AssignedIP: "100.64.0.2"},
-		Peers: []clientapi.Peer{
-			{ID: "peer-a", Hostname: "peer-a", PublicKey: testWireGuardPublicKey("pub-peer-a"), Endpoint: "peer-a.example.test:51820", AllowedIPs: []string{"100.64.0.3/32"}},
-			{ID: "peer-b", Hostname: "peer-b", PublicKey: testWireGuardPublicKey("pub-peer-b"), Endpoint: "peer-b.example.test:51820", AllowedIPs: []string{"100.64.0.4/32"}},
-		},
-	}
-	updatedPeer := clientapi.Peer{ID: "peer-a", Hostname: "peer-a", PublicKey: testWireGuardPublicKey("pub-peer-a"), Endpoint: "peer-a-new.example.test:51820", AllowedIPs: []string{"100.64.0.3/32"}}
-	addedPeer := clientapi.Peer{ID: "peer-c", Hostname: "peer-c", PublicKey: testWireGuardPublicKey("pub-peer-c"), Endpoint: "peer-c.example.test:51820", AllowedIPs: []string{"100.64.0.5/32"}}
-	full := base
-	full.Network.Revision = 8
-	full.Peers = []clientapi.Peer{updatedPeer, addedPeer}
-	event := clientapi.MapStreamEvent{
-		Type:         "snapshot",
-		FromRevision: 7,
-		ToRevision:   8,
-		Map:          &full,
-		Delta: &clientapi.MapDelta{
-			Added:   []clientapi.Peer{addedPeer},
-			Updated: []clientapi.Peer{updatedPeer},
-			Removed: []clientapi.Peer{{ID: "peer-b", Hostname: "peer-b"}},
-		},
-	}
-	cfg := client.Config{
-		NodeID:      "node-1",
-		NetworkID:   "net-1",
-		MapRevision: 7,
-		CachedMap:   &base,
-	}
-
-	first, firstAction, err := cacheNetworkMapFromEvent(&cfg, event)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstAction != "delta" || len(first.Peers) != 2 {
-		t.Fatalf("first event action=%s map=%#v", firstAction, first)
-	}
-	second, secondAction, err := cacheNetworkMapFromEvent(&cfg, event)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if second.Network.Revision != 8 || len(second.Peers) != 2 || cfg.CachedMap == nil || len(cfg.CachedMap.Peers) != 2 {
-		t.Fatalf("duplicate event action=%s map=%#v cfg=%#v", secondAction, second, cfg)
-	}
-	if second.Peers[0].ID != "peer-a" || second.Peers[1].ID != "peer-c" {
-		t.Fatalf("duplicate event peers = %#v", second.Peers)
-	}
-	rendered, err := client.RenderWireGuardWithOptionsChecked("private-key", *cfg.CachedMap, client.WireGuardRenderOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Count(rendered, "[Peer]") != 2 || strings.Count(rendered, "AllowedIPs = ") != 2 {
-		t.Fatalf("duplicate event rendered duplicate peers/routes:\n%s", rendered)
-	}
-}
-
-func TestCacheNetworkMapFromEventRejectsOutOfOrderRevision(t *testing.T) {
-	newer := clientapi.RegisterNodeResponse{
-		Network: clientapi.Network{ID: "net-1", Name: "default", CIDR: "100.64.0.0/24", Revision: 9},
-		Node:    clientapi.Node{ID: "node-1", NetworkID: "net-1", Hostname: "node-a", PublicKey: testWireGuardPublicKey("pub-a"), AssignedIP: "100.64.0.2"},
-		Peers:   []clientapi.Peer{{ID: "peer-new", Hostname: "peer-new", PublicKey: testWireGuardPublicKey("pub-new"), AllowedIPs: []string{"100.64.0.9/32"}}},
-	}
-	older := clientapi.RegisterNodeResponse{
-		Network: clientapi.Network{ID: "net-1", Name: "default", CIDR: "100.64.0.0/24", Revision: 8},
-		Node:    clientapi.Node{ID: "node-1", NetworkID: "net-1", Hostname: "node-a", PublicKey: testWireGuardPublicKey("pub-a"), AssignedIP: "100.64.0.2"},
-		Peers:   []clientapi.Peer{{ID: "peer-old", Hostname: "peer-old", PublicKey: testWireGuardPublicKey("pub-old"), AllowedIPs: []string{"100.64.0.8/32"}}},
-	}
-	cfg := client.Config{
-		NodeID:      "node-1",
-		NetworkID:   "net-1",
-		MapRevision: 9,
-		CachedMap:   &newer,
-	}
-
-	_, _, err := cacheNetworkMapFromEvent(&cfg, clientapi.MapStreamEvent{
-		Type:       "snapshot",
-		ToRevision: 8,
-		Map:        &older,
-	})
-	if err == nil || !strings.Contains(err.Error(), "stale network map revision") {
-		t.Fatalf("out-of-order map event error = %v, want stale revision rejection", err)
-	}
-	if cfg.MapRevision != 9 || cfg.CachedMap == nil || cfg.CachedMap.Network.Revision != 9 {
-		t.Fatalf("out-of-order map event mutated cached revision: %#v", cfg)
-	}
-	if len(cfg.CachedMap.Peers) != 1 || cfg.CachedMap.Peers[0].ID != "peer-new" {
-		t.Fatalf("out-of-order map event replaced newer peers: %#v", cfg.CachedMap.Peers)
-	}
-}
-
-func TestCacheNetworkMapFromEventIgnoresOldDeltaWithoutMutation(t *testing.T) {
-	newer := clientapi.RegisterNodeResponse{
-		Network: clientapi.Network{ID: "net-1", Name: "default", CIDR: "100.64.0.0/24", Revision: 9},
-		Node:    clientapi.Node{ID: "node-1", NetworkID: "net-1", Hostname: "node-a", PublicKey: testWireGuardPublicKey("pub-a"), AssignedIP: "100.64.0.2"},
-		Peers:   []clientapi.Peer{{ID: "peer-new", Hostname: "peer-new", PublicKey: testWireGuardPublicKey("pub-new"), Endpoint: "peer-new.example.test:51820", AllowedIPs: []string{"100.64.0.9/32"}}},
-	}
-	oldBase := clientapi.RegisterNodeResponse{
-		Network: clientapi.Network{ID: "net-1", Name: "default", CIDR: "100.64.0.0/24", Revision: 7},
-		Node:    clientapi.Node{ID: "node-1", NetworkID: "net-1", Hostname: "node-a", PublicKey: testWireGuardPublicKey("pub-a"), AssignedIP: "100.64.0.2"},
-		Peers:   []clientapi.Peer{{ID: "peer-old", Hostname: "peer-old", PublicKey: testWireGuardPublicKey("pub-old"), Endpoint: "peer-old.example.test:51820", AllowedIPs: []string{"100.64.0.7/32"}}},
-	}
-	oldFull := oldBase
-	oldFull.Network.Revision = 8
-	oldFull.Peers = append(oldFull.Peers, clientapi.Peer{ID: "peer-added", Hostname: "peer-added", PublicKey: testWireGuardPublicKey("pub-added"), Endpoint: "peer-added.example.test:51820", AllowedIPs: []string{"100.64.0.8/32"}})
-	cfg := client.Config{
-		NodeID:      "node-1",
-		NetworkID:   "net-1",
-		MapRevision: 9,
-		CachedMap:   &newer,
-	}
-
-	_, _, err := cacheNetworkMapFromEvent(&cfg, clientapi.MapStreamEvent{
-		Type:         "snapshot",
-		FromRevision: 7,
-		ToRevision:   8,
-		Map:          &oldFull,
-		Delta:        &clientapi.MapDelta{Added: []clientapi.Peer{oldFull.Peers[1]}},
-	})
-	if err == nil || !strings.Contains(err.Error(), "stale network map revision") {
-		t.Fatalf("old delta error = %v, want stale revision rejection", err)
-	}
-	if cfg.MapRevision != 9 || cfg.CachedMap == nil || cfg.CachedMap.Network.Revision != 9 {
-		t.Fatalf("old delta mutated cached revision: %#v", cfg)
-	}
-	if len(cfg.CachedMap.Peers) != 1 || cfg.CachedMap.Peers[0].ID != "peer-new" {
-		t.Fatalf("old delta replaced current peers: %#v", cfg.CachedMap.Peers)
-	}
-}
-
-func TestCacheNetworkMapFromEventRejectsDeltaMismatch(t *testing.T) {
-	base := clientapi.RegisterNodeResponse{
-		Network: clientapi.Network{ID: "net-1", Name: "default", CIDR: "100.64.0.0/24", Revision: 7},
-		Node:    clientapi.Node{ID: "node-1", NetworkID: "net-1", Hostname: "node-a", PublicKey: testWireGuardPublicKey("pub-a"), AssignedIP: "100.64.0.2"},
-		Peers:   []clientapi.Peer{{ID: "peer-a", Hostname: "peer-a", PublicKey: testWireGuardPublicKey("pub-peer-a"), AllowedIPs: []string{"100.64.0.3/32"}}},
-	}
-	full := base
-	full.Network.Revision = 8
-	full.Peers = append(full.Peers, clientapi.Peer{ID: "peer-b", Hostname: "peer-b", PublicKey: testWireGuardPublicKey("pub-peer-b"), AllowedIPs: []string{"100.64.0.4/32"}})
-	cfg := client.Config{
-		NodeID:      "node-1",
-		NetworkID:   "net-1",
-		MapRevision: 7,
-		CachedMap:   &base,
-	}
-
-	_, _, err := cacheNetworkMapFromEvent(&cfg, clientapi.MapStreamEvent{
-		Type:         "snapshot",
-		FromRevision: 7,
-		ToRevision:   8,
-		Map:          &full,
-		Delta:        &clientapi.MapDelta{},
-	})
-	if err == nil || !strings.Contains(err.Error(), "delta does not reproduce") {
-		t.Fatalf("delta mismatch error = %v", err)
-	}
-	if cfg.MapRevision != 7 || cfg.CachedMap.Network.Revision != 7 {
-		t.Fatalf("mismatched delta mutated cache: %#v", cfg)
-	}
-}
-
-func TestCacheNetworkMapFromEventRejectsRelayDeltaMismatch(t *testing.T) {
-	base := clientapi.RegisterNodeResponse{
-		Network: clientapi.Network{ID: "net-1", Name: "default", CIDR: "100.64.0.0/24", Revision: 7},
-		Node:    clientapi.Node{ID: "node-1", NetworkID: "net-1", Hostname: "node-a", PublicKey: testWireGuardPublicKey("pub-a"), AssignedIP: "100.64.0.2"},
-		Relays:  []relayauth.Endpoint{{ID: "relay-a", Addr: "relay-a.example.test:443", Protocol: relayauth.EndpointProtocolTLS}},
-	}
-	full := base
-	full.Network.Revision = 8
-	full.Relays = []relayauth.Endpoint{{ID: "relay-a", Addr: "relay-a-new.example.test:443", Protocol: relayauth.EndpointProtocolTLS}}
-	cfg := client.Config{
-		NodeID:      "node-1",
-		NetworkID:   "net-1",
-		MapRevision: 7,
-		CachedMap:   &base,
-	}
-
-	_, _, err := cacheNetworkMapFromEvent(&cfg, clientapi.MapStreamEvent{
-		Type:         "snapshot",
-		FromRevision: 7,
-		ToRevision:   8,
-		Map:          &full,
-		Delta:        &clientapi.MapDelta{},
-	})
-	if err == nil || !strings.Contains(err.Error(), "delta does not reproduce") {
-		t.Fatalf("relay delta mismatch error = %v", err)
-	}
-	if cfg.MapRevision != 7 || cfg.CachedMap.Network.Revision != 7 || cfg.CachedMap.Relays[0].Addr != "relay-a.example.test:443" {
-		t.Fatalf("mismatched relay delta mutated cache: %#v", cfg)
-	}
-}
-
 func TestVerifiedCachedNetworkMapRejectsUnsafeCache(t *testing.T) {
 	valid := signedTestNetworkMap(t, "net-1", "node-1", 3)
 	cfg := client.Config{
@@ -5322,7 +5098,10 @@ func testNetworkMapWithRevision(t *testing.T, privateKey ed25519.PrivateKey, net
 	return response
 }
 
-var testMapSigningPublicKeyRegistry sync.Map
+var (
+	testMapSigningPublicKeyRegistry  sync.Map
+	testMapSigningPrivateKeyRegistry sync.Map
+)
 
 func testMapSigningKey(t *testing.T) ed25519.PrivateKey {
 	t.Helper()
@@ -5336,6 +5115,7 @@ func testMapSigningKey(t *testing.T) ed25519.PrivateKey {
 		t.Fatal(err)
 	}
 	testMapSigningPublicKeyRegistry.Store(keyID, publicKey)
+	testMapSigningPrivateKeyRegistry.Store(keyID, privateKey)
 	return privateKey
 }
 
@@ -5368,6 +5148,43 @@ func testServerKeyResponse(t *testing.T, publicKey string) clientapi.ServerKeyRe
 func setTestMapStreamResponseHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-EndlessNet-Map-Protocol", fmt.Sprint(clientapi.MapStreamProtocolVersion))
 	w.Header().Set("X-EndlessNet-Map-Capabilities", strings.Join(clientapi.MapStreamSupportedCapabilities(), ","))
+}
+
+func testMapStreamSnapshotEvent(t *testing.T, response clientapi.RegisterNodeResponse) clientapi.MapStreamEvent {
+	t.Helper()
+	snapshot := networkMapSnapshotFromResponse(response)
+	snapshot.Revision = clientapi.MapRevision{Network: response.Network.Revision}
+	privateKey, ok := testMapSigningPrivateKeyRegistry.Load(response.MapSignature.KeyID)
+	if !ok {
+		t.Fatalf("map signing fixture key %q is not registered", response.MapSignature.KeyID)
+	}
+	signature, err := clientapi.SignNetworkMapSnapshot(privateKey.(ed25519.PrivateKey), snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return clientapi.MapStreamEvent{
+		Type:            "snapshot",
+		ProtocolVersion: clientapi.MapStreamProtocolVersion,
+		Capabilities:    clientapi.MapStreamSupportedCapabilities(),
+		EventID:         "test-snapshot",
+		To:              snapshot.Revision,
+		Snapshot:        &snapshot,
+		ResultSignature: signature,
+	}
+}
+
+func testMapStreamSnapshotEventWithSignature(response clientapi.RegisterNodeResponse, signature *clientapi.MapSignature) clientapi.MapStreamEvent {
+	snapshot := networkMapSnapshotFromResponse(response)
+	snapshot.Revision = clientapi.MapRevision{Network: response.Network.Revision}
+	return clientapi.MapStreamEvent{
+		Type:            "snapshot",
+		ProtocolVersion: clientapi.MapStreamProtocolVersion,
+		Capabilities:    clientapi.MapStreamSupportedCapabilities(),
+		EventID:         "test-snapshot",
+		To:              snapshot.Revision,
+		Snapshot:        &snapshot,
+		ResultSignature: signature,
+	}
 }
 
 func testServerKeyResponseFromBundle(bundle clientapi.SigningTrustBundle) clientapi.ServerKeyResponse {
