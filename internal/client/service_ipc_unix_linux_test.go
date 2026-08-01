@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 func TestUnixServiceSocketIPCContract(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 const (
@@ -175,6 +175,7 @@ type ServiceIPCHandlers struct {
 	TrustServer       func(context.Context, ipc.TrustServerRequest) (ipc.TrustServerResponse, error)
 	Disconnect        func(context.Context, ipc.DisconnectRequest) (ipc.DisconnectResponse, error)
 	Logout            func(context.Context, ipc.LogoutRequest) (ipc.LogoutResponse, error)
+	LocalForget       func(context.Context, ipc.LocalForgetRequest) (ipc.LocalForgetResponse, error)
 	Networks          func(context.Context, ipc.NetworksRequest) (ipc.NetworksResponse, error)
 	SelectNetwork     func(context.Context, ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error)
 	Diagnostics       func(context.Context, ipc.DiagnosticsRequest) (ipc.DiagnosticsResponse, error)
@@ -193,6 +194,7 @@ func NewServiceIPCHandler(handlers ServiceIPCHandlers) http.Handler {
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathTrustServer, ipc.OperationTrustServer, ServiceIPCPrivilegeAdministrator, true), handlers.TrustServer, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathDisconnect, ipc.OperationDisconnect, ServiceIPCPrivilegeOwner, true), handlers.Disconnect, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathLogout, ipc.OperationLogout, ServiceIPCPrivilegeOwner, true), handlers.Logout, handlers.Authorize, handlers.MutationLock)
+	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathLocalForget, ipc.OperationLocalForget, ServiceIPCPrivilegeAdministrator, true), handlers.LocalForget, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodGet, ipc.PathNetworks, ipc.OperationNetworks, ServiceIPCPrivilegeObserver, false), handlers.Networks, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathSelectNetwork, ipc.OperationSelectNetwork, ServiceIPCPrivilegeOwner, true), handlers.SelectNetwork, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodGet, ipc.PathDiagnostics, ipc.OperationDiagnostics, ServiceIPCPrivilegeOwner, false), handlers.Diagnostics, handlers.Authorize, handlers.MutationLock)
@@ -421,12 +423,13 @@ func writeServiceIPCError(w http.ResponseWriter, ctx context.Context, ipcErr ipc
 	payload := ipc.ErrorResponse{
 		ErrorCode: ipcErr.Code,
 		Error:     boundedServiceIPCErrorMessage(ipcErr.Error()),
+		RequestID: strings.TrimSpace(ipcErr.RequestID),
 	}
 	version, _ := ServiceIPCNegotiatedVersionFromContext(ctx)
 	payload.Metadata = ipc.NewMetadata(version)
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		raw = []byte(`{"ipc_protocol":"endlessnet-client-ipc","ipc_version":1,"ipc_min_supported_version":1,"error_code":"request_failed","error":"service IPC error encoding failed"}`)
+		raw = []byte(`{"ipc_protocol":"endlessnet-client-ipc","ipc_version":2,"ipc_min_supported_version":2,"error_code":"request_failed","error":"service IPC error encoding failed"}`)
 		ipcErr.Status = http.StatusInternalServerError
 	}
 	w.Header().Set("Content-Type", "application/json")

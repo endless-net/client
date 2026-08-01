@@ -1,4 +1,4 @@
-package v1
+package v2
 
 import (
 	"bytes"
@@ -11,16 +11,16 @@ import (
 
 func TestClientRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get(ProtocolHeader) != Protocol || r.Header.Get(VersionHeader) != "1" || r.Header.Get(MinVersionHeader) != "1" {
+		if r.Header.Get(ProtocolHeader) != Protocol || r.Header.Get(VersionHeader) != "2" || r.Header.Get(MinVersionHeader) != "2" {
 			t.Fatalf("request IPC headers = %#v", r.Header)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == PathDisconnect {
 			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte(`{"ipc_protocol":"endlessnet-client-ipc","ipc_version":1,"ipc_min_supported_version":1,"error_code":"unauthorized","error":"denied"}`))
+			_, _ = w.Write([]byte(`{"ipc_protocol":"endlessnet-client-ipc","ipc_version":2,"ipc_min_supported_version":2,"error_code":"unauthorized","error":"denied"}`))
 			return
 		}
-		_, _ = w.Write([]byte(`{"ipc_protocol":"endlessnet-client-ipc","ipc_version":1,"ipc_min_supported_version":1,"ipc_negotiated_version":1,"state":"Connected","control_state":"ready"}`))
+		_, _ = w.Write([]byte(`{"ipc_protocol":"endlessnet-client-ipc","ipc_version":2,"ipc_min_supported_version":2,"ipc_negotiated_version":2,"state":"Connected","control_state":"ready"}`))
 	}))
 	defer server.Close()
 
@@ -64,8 +64,8 @@ func TestClientDecodesEnrollmentApplyResult(t *testing.T) {
 func TestClientStream(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-ndjson")
-		_, _ = w.Write([]byte(`{"ipc_protocol":"endlessnet-client-ipc","ipc_version":1,"ipc_min_supported_version":1,"ipc_negotiated_version":1,"event_type":"hello","sequence":1,"generated_at":"2026-07-21T00:00:00Z"}` + "\n"))
-		_, _ = w.Write([]byte(`{"ipc_protocol":"endlessnet-client-ipc","ipc_version":1,"ipc_min_supported_version":1,"ipc_negotiated_version":1,"event_type":"status_changed","sequence":2,"generated_at":"2026-07-21T00:00:01Z","status":{"ipc_protocol":"endlessnet-client-ipc","ipc_version":1,"ipc_min_supported_version":1,"ipc_negotiated_version":1,"state":"Connected","control_state":"ready"}}` + "\n"))
+		_, _ = w.Write([]byte(`{"ipc_protocol":"endlessnet-client-ipc","ipc_version":2,"ipc_min_supported_version":2,"ipc_negotiated_version":2,"event_type":"hello","sequence":1,"generated_at":"2026-07-21T00:00:00Z"}` + "\n"))
+		_, _ = w.Write([]byte(`{"ipc_protocol":"endlessnet-client-ipc","ipc_version":2,"ipc_min_supported_version":2,"ipc_negotiated_version":2,"event_type":"status_changed","sequence":2,"generated_at":"2026-07-21T00:00:01Z","status":{"ipc_protocol":"endlessnet-client-ipc","ipc_version":2,"ipc_min_supported_version":2,"ipc_negotiated_version":2,"state":"Connected","control_state":"ready"}}` + "\n"))
 	}))
 	defer server.Close()
 

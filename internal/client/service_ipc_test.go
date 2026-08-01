@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 func TestServiceIPCHandlerStatusAndActions(t *testing.T) {
@@ -462,13 +462,14 @@ func TestServiceIPCVersionNegotiation(t *testing.T) {
 		negotiated                             bool
 	}{
 		{name: "missing", status: http.StatusUpgradeRequired, code: ipc.ErrorVersionRequired},
-		{name: "protocol", protocol: "other", current: "1", minimum: "1", status: http.StatusUpgradeRequired, code: ipc.ErrorProtocolUnsupported},
-		{name: "malformed", protocol: ipc.Protocol, current: "x", minimum: "1", status: http.StatusBadRequest, code: ipc.ErrorInvalidVersionRange},
-		{name: "nonpositive", protocol: ipc.Protocol, current: "1", minimum: "0", status: http.StatusBadRequest, code: ipc.ErrorInvalidVersionRange},
-		{name: "reversed", protocol: ipc.Protocol, current: "1", minimum: "2", status: http.StatusBadRequest, code: ipc.ErrorInvalidVersionRange},
-		{name: "v1", protocol: ipc.Protocol, current: "1", minimum: "1", status: http.StatusOK, negotiated: true},
-		{name: "future disjoint", protocol: ipc.Protocol, current: "2", minimum: "2", status: http.StatusUpgradeRequired, code: ipc.ErrorVersionUnsupported},
-		{name: "overlap", protocol: ipc.Protocol, current: "3", minimum: "1", status: http.StatusOK, negotiated: true},
+		{name: "protocol", protocol: "other", current: "2", minimum: "2", status: http.StatusUpgradeRequired, code: ipc.ErrorProtocolUnsupported},
+		{name: "malformed", protocol: ipc.Protocol, current: "x", minimum: "2", status: http.StatusBadRequest, code: ipc.ErrorInvalidVersionRange},
+		{name: "nonpositive", protocol: ipc.Protocol, current: "2", minimum: "0", status: http.StatusBadRequest, code: ipc.ErrorInvalidVersionRange},
+		{name: "reversed", protocol: ipc.Protocol, current: "2", minimum: "3", status: http.StatusBadRequest, code: ipc.ErrorInvalidVersionRange},
+		{name: "superseded v1", protocol: ipc.Protocol, current: "1", minimum: "1", status: http.StatusUpgradeRequired, code: ipc.ErrorVersionUnsupported},
+		{name: "v2", protocol: ipc.Protocol, current: "2", minimum: "2", status: http.StatusOK, negotiated: true},
+		{name: "future disjoint", protocol: ipc.Protocol, current: "3", minimum: "3", status: http.StatusUpgradeRequired, code: ipc.ErrorVersionUnsupported},
+		{name: "overlap", protocol: ipc.Protocol, current: "3", minimum: "2", status: http.StatusOK, negotiated: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, ipc.PathStatus, nil)
@@ -507,7 +508,7 @@ func TestServiceIPCVersionNegotiation(t *testing.T) {
 	}
 
 	duplicate := newServiceIPCTestRequest(http.MethodGet, ipc.PathStatus, nil)
-	duplicate.Header.Add(ipc.VersionHeader, "1")
+	duplicate.Header.Add(ipc.VersionHeader, fmt.Sprintf("%d", ipc.Version))
 	duplicateResult := httptest.NewRecorder()
 	handler.ServeHTTP(duplicateResult, duplicate)
 	if duplicateResult.Code != http.StatusBadRequest || !bytes.Contains(duplicateResult.Body.Bytes(), []byte(ipc.ErrorInvalidVersionRange)) {
@@ -575,6 +576,7 @@ func TestServiceIPCEndpointPrivilegeMatrix(t *testing.T) {
 		{http.MethodPost, ipc.PathTrustServer, ServiceIPCPrivilegeAdministrator, true},
 		{http.MethodPost, ipc.PathDisconnect, ServiceIPCPrivilegeOwner, true},
 		{http.MethodPost, ipc.PathLogout, ServiceIPCPrivilegeOwner, true},
+		{http.MethodPost, ipc.PathLocalForget, ServiceIPCPrivilegeAdministrator, true},
 		{http.MethodGet, ipc.PathNetworks, ServiceIPCPrivilegeObserver, false},
 		{http.MethodPost, ipc.PathSelectNetwork, ServiceIPCPrivilegeOwner, true},
 		{http.MethodGet, ipc.PathDiagnostics, ServiceIPCPrivilegeOwner, false},
@@ -643,8 +645,8 @@ func newServiceIPCTestRequest(method, path string, body io.Reader) *http.Request
 
 func setTestServiceIPCRequestHeaders(req *http.Request) {
 	req.Header.Set(ipc.ProtocolHeader, ipc.Protocol)
-	req.Header.Set(ipc.VersionHeader, "1")
-	req.Header.Set(ipc.MinVersionHeader, "1")
+	req.Header.Set(ipc.VersionHeader, fmt.Sprintf("%d", ipc.Version))
+	req.Header.Set(ipc.MinVersionHeader, fmt.Sprintf("%d", ipc.MinSupportedVersion))
 }
 
 type errUnauthorizedForTest struct{}

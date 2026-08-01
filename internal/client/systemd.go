@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 type SystemdServiceOptions struct {

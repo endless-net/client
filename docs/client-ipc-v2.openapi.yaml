@@ -3,14 +3,14 @@
 openapi: 3.1.0
 info:
   title: EndlessNet Client Local Service IPC
-  version: 1.0.0
+  version: 2.0.0
   description: >
     Versioned local IPC contract between the EndlessNet background service and
     unprivileged local client processes. The HTTP shape is transported over a
     protected local channel; it is not a network listener. Every request must
     send the protocol, current-version, and minimum-supported-version headers.
     The server negotiates the highest overlapping version and returns it in the
-    response envelope. This contract supports only version 1. Observer
+    response envelope. This contract supports only version 2. Observer
     operations are available to every identified local peer. Owner operations
     are available to the SID/UID that first enrolls the device and to local
     administrators/root; initial enrollment claims an owner when none exists.
@@ -30,6 +30,36 @@ x-endlessnet-transports:
   - platform: macos
     kind: unix_socket
     endpoint: "/var/run/endlessnet/client.sock"
+x-endlessnet-recovery-helper:
+  security: >
+    The installed helper accepts only the closed operations and fixed
+    arguments below. It never accepts an executable, arbitrary command,
+    credential, token, state path, or IPC endpoint.
+  windows:
+    executable: "C:\\Program Files\\EndlessNet\\endlessnet-client-recovery-helper.exe"
+    elevation: shell_execute_runas
+  linux:
+    executable: "/usr/libexec/endlessnet/endlessnet-client-recovery-helper"
+    desktop_authorization: "polkit:ru.endlessnet.client.recovery"
+    headless_authorization: sudo_or_root
+  macos:
+    executable: "/Library/PrivilegedHelperTools/ru.endlessnet.client.recovery-helper"
+    desktop_authorization: "authorization_services_xpc:ru.endlessnet.client.recovery-helper"
+    headless_authorization: root
+  operations:
+    - operation: trust_server_identity
+      arguments:
+        - --operation
+        - trust-server-identity
+        - --confirmed-control-origin
+        - "{control_origin}"
+        - --confirmed-key-id
+        - "{announced_key_id}"
+    - operation: forget_local_enrollment
+      arguments:
+        - --operation
+        - forget-local-enrollment
+        - --confirmed-local-forget
 paths:
   /status:
     parameters: &ipcVersionHeaders
@@ -58,7 +88,9 @@ paths:
       description: >
         The service sends a hello event first, then a status_changed event for
         the current status, then additional status_changed events only when the
-        service-visible status changes. Clients should reconnect after EOF.
+        service-visible status changes. Sequence numbers are stream-local and
+        are not resume cursors. Clients should reconnect after EOF, then use
+        the immediate snapshot rather than replaying an earlier sequence.
       x-ndjson: true
       responses:
         "200":
@@ -173,7 +205,7 @@ paths:
     post:
       operationId: logout
       x-endlessnet-required-privilege: owner
-      summary: Revoke/remove local enrollment and clear generated tunnel state.
+      summary: Attempt bounded remote revocation, then clear local enrollment only after confirmation.
       requestBody:
         content:
           application/json:
@@ -183,6 +215,27 @@ paths:
       responses:
         "200":
           description: Logout command result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogoutResponse"
+        default:
+          $ref: "#/components/responses/IPCError"
+  /logout/local:
+    parameters: *ipcVersionHeaders
+    post:
+      operationId: logout.local_forget
+      x-endlessnet-required-privilege: administrator
+      summary: Explicitly forget local enrollment when remote cleanup could not be confirmed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocalForgetRequest"
+      responses:
+        "200":
+          description: Local enrollment was atomically cleared; remote credential status is unconfirmed.
           content:
             application/json:
               schema:
@@ -304,14 +357,14 @@ components:
       required: true
       schema:
         type: integer
-        minimum: 1
+        minimum: 2
     IPCMinimumVersion:
       name: X-EndlessNet-IPC-Min-Supported-Version
       in: header
       required: true
       schema:
         type: integer
-        minimum: 1
+        minimum: 2
   responses:
     IPCError:
       description: Stable JSON IPC error.
@@ -324,26 +377,35 @@ components:
       type: object
       additionalProperties: false
       required:
-        - confirmed
+        - confirmed_control_origin
         - confirmed_key_id
+      properties:
+        confirmed_control_origin:
+          type: string
+          format: uri
+        confirmed_key_id:
+          type: string
+          minLength: 1
+    LocalForgetRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - confirmed
       properties:
         confirmed:
           type: boolean
           const: true
-        confirmed_key_id:
-          type: string
-          minLength: 1
     ServerIdentityResponse:
       allOf:
         - $ref: "#/components/schemas/ProtocolEnvelope"
         - type: object
           required:
-            - control_plane_url
+            - control_origin
             - trusted_key_id
             - announced_key_id
             - changed
           properties:
-            control_plane_url:
+            control_origin:
               type: string
               format: uri
             trusted_key_id:
@@ -364,13 +426,13 @@ components:
           const: endlessnet-client-ipc
         ipc_version:
           type: integer
-          const: 1
+          const: 2
         ipc_min_supported_version:
           type: integer
-          const: 1
+          const: 2
         ipc_negotiated_version:
           type: integer
-          minimum: 1
+          minimum: 2
           description: Highest overlapping version; absent when negotiation fails before an overlap exists.
         service_version:
           type: string
@@ -388,6 +450,10 @@ components:
         - NeedsEnrollment
         - NeedsApproval
         - ServerIdentityChanged
+        - Recovering
+        - RecoveryBlocked
+        - PolicyBlocked
+        - NeedsLogin
     ControlState:
       type: string
       enum:
@@ -401,6 +467,42 @@ components:
         - not_registered
         - disconnected
         - server_identity_changed
+        - recovering
+        - recovery_blocked
+        - policy_blocked
+        - needs_login
+    RecoveryOperation:
+      type: string
+      enum:
+        - trust_server_identity
+        - forget_local_enrollment
+    RecoveryOperationOutcome:
+      type: string
+      enum:
+        - accepted
+        - already_applied
+        - completed
+    LogoutOutcome:
+      type: string
+      enum:
+        - remote_cleanup_confirmed
+        - remote_cleanup_unconfirmed
+    RecoveryStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - state
+      properties:
+        operation_id:
+          type: string
+        state:
+          $ref: "#/components/schemas/ServiceState"
+        error_code:
+          type: string
+        request_id:
+          type: string
+        retryable:
+          type: boolean
     DesiredState:
       type: string
       enum:
@@ -514,8 +616,8 @@ components:
               type: string
             connection_intent_error:
               type: string
-            recovery_required:
-              type: string
+            recovery:
+              $ref: "#/components/schemas/RecoveryStatus"
             agent:
               $ref: "#/components/schemas/AgentStatus"
             control:
@@ -722,8 +824,6 @@ components:
             map_revision:
               type: integer
               minimum: 0
-            reenrollment_required:
-              type: boolean
             wireguard:
               $ref: "#/components/schemas/WireGuardApplyResult"
     EnrollResponse:
@@ -736,13 +836,26 @@ components:
               description: Present only after enrollment has synchronously brought up the local tunnel.
     TrustServerResponse:
       allOf:
-        - $ref: "#/components/schemas/ConnectResponse"
+        - $ref: "#/components/schemas/ProtocolEnvelope"
         - type: object
           required:
-            - server_identity_updated
+            - operation_id
+            - operation
+            - outcome
+            - state
+            - control_state
+            - trusted_key_id
           properties:
-            server_identity_updated:
-              type: boolean
+            operation_id:
+              type: string
+            operation:
+              $ref: "#/components/schemas/RecoveryOperation"
+            outcome:
+              $ref: "#/components/schemas/RecoveryOperationOutcome"
+            state:
+              $ref: "#/components/schemas/ServiceState"
+            control_state:
+              $ref: "#/components/schemas/ControlState"
             trusted_key_id:
               type: string
     DisconnectResponse:
@@ -769,9 +882,17 @@ components:
         - type: object
           required:
             - state
+            - control_state
+            - outcome
           properties:
             state:
               $ref: "#/components/schemas/ServiceState"
+            control_state:
+              $ref: "#/components/schemas/ControlState"
+            outcome:
+              $ref: "#/components/schemas/LogoutOutcome"
+            remote_request_id:
+              type: string
     SelectNetworkResponse:
       allOf:
         - $ref: "#/components/schemas/ProtocolEnvelope"
@@ -1356,6 +1477,10 @@ components:
               $ref: "#/components/schemas/ErrorCode"
             error:
               type: string
+              description: Bounded diagnostic for logs/support; consumers localize by error_code and never display this value directly.
+            request_id:
+              type: string
+              description: Control-plane correlation ID when the typed failure supplied one; remote_cleanup_required uses this source for the post-forget warning.
     ErrorCode:
       type: string
       enum:
@@ -1373,6 +1498,9 @@ components:
         - ipc_protocol_unsupported
         - ipc_version_unsupported
         - invalid_ipc_version_range
+        - remote_cleanup_required
+        - local_forget_confirmation_required
+        - recovery_operation_invalid
         - network_ref_required
         - config_unavailable
         - client_state_format_unsupported
@@ -1392,15 +1520,12 @@ components:
         - diagnostics_bundle_unavailable
         - diagnostics_snapshot_failed
         - connection_intent_update_failed
-        - reenrollment_cleanup_failed
         - network_selection_requires_enrollment
         - server_identity_changed
         - server_identity_unavailable
-        - server_identity_confirmation_required
         - server_identity_confirmation_mismatch
         - server_identity_invalid
         - server_identity_update_failed
-        - server_identity_reenrollment_cleanup_failed
         - server_identity_recovery_failed
     ErrorResponse:
       allOf:

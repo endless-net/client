@@ -1,6 +1,6 @@
 //go:build windows
 
-package v1
+package v2
 
 import (
 	"context"

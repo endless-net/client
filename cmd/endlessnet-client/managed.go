@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/client"
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )

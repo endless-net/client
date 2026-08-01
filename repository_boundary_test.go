@@ -183,11 +183,11 @@ func TestWorkflowRunnerSelectors(t *testing.T) {
 }
 
 func TestOnlyIPCContractIsPublic(t *testing.T) {
-	if _, err := os.Stat("ipc/v1/contract.go"); err != nil {
+	if _, err := os.Stat("ipc/v2/contract.go"); err != nil {
 		t.Fatalf("public IPC contract is missing: %v", err)
 	}
-	if _, err := os.Stat("ipc/v2/contract.go"); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("retired IPC v2 contract still exists")
+	if _, err := os.Stat("ipc/v1/contract.go"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("superseded IPC v1 contract still exists")
 	}
 	for _, path := range []string{
 		"config/config.go",
@@ -207,12 +207,12 @@ func TestClientCoreReleasePublishesCurrentIPCContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(workflow)
-	if !strings.Contains(text, `contract_name="client-ipc-v1.openapi.yaml"`) ||
-		!strings.Contains(text, `cp docs/client-ipc-v1.openapi.yaml "$output_dir/$contract_name"`) ||
-		!strings.Contains(text, `"ipc_version": "v1"`) {
-		t.Fatalf("client-core release workflow does not publish the IPC v1 contract")
+	if !strings.Contains(text, `contract_name="client-ipc-v2.openapi.yaml"`) ||
+		!strings.Contains(text, `cp docs/client-ipc-v2.openapi.yaml "$output_dir/$contract_name"`) ||
+		!strings.Contains(text, `"ipc_version": "v2"`) {
+		t.Fatalf("client-core release workflow does not publish the IPC v2 contract")
 	}
-	if strings.Contains(text, "client-ipc-v2.openapi.yaml") {
-		t.Fatalf("client-core release workflow still references the retired IPC v2 contract")
+	if strings.Contains(text, "client-ipc-v1.openapi.yaml") {
+		t.Fatalf("client-core release workflow still references the superseded IPC v1 contract")
 	}
 }

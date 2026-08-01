@@ -1,6 +1,6 @@
 //go:build !windows && !linux && !darwin
 
-package v1
+package v2
 
 import (
 	"fmt"

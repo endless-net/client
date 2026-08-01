@@ -1,11 +1,11 @@
-package v1
+package v2
 
 import clientapi "github.com/endless-net/client-api/clientapi/v1"
 
 const (
 	Protocol             = "endlessnet-client-ipc"
-	Version              = 1
-	MinSupportedVersion  = 1
+	Version              = 2
+	MinSupportedVersion  = 2
 	ProtocolHeader       = "X-EndlessNet-IPC-Protocol"
 	VersionHeader        = "X-EndlessNet-IPC-Version"
 	MinVersionHeader     = "X-EndlessNet-IPC-Min-Supported-Version"
@@ -24,6 +24,7 @@ const (
 	PathTrustServer       = "/server-identity/trust"
 	PathDisconnect        = "/disconnect"
 	PathLogout            = "/logout"
+	PathLocalForget       = "/logout/local"
 	PathNetworks          = "/networks"
 	PathSelectNetwork     = "/network/select"
 	PathDiagnostics       = "/diagnostics"
@@ -40,6 +41,7 @@ const (
 	OperationTrustServer       = "server_identity.trust"
 	OperationDisconnect        = "disconnect"
 	OperationLogout            = "logout"
+	OperationLocalForget       = "logout.local_forget"
 	OperationNetworks          = "networks"
 	OperationSelectNetwork     = "network.select"
 	OperationDiagnostics       = "diagnostics"
@@ -65,6 +67,10 @@ const (
 	StateNeedsEnrollment       ServiceState = "NeedsEnrollment"
 	StateNeedsApproval         ServiceState = "NeedsApproval"
 	StateServerIdentityChanged ServiceState = "ServerIdentityChanged"
+	StateRecovering            ServiceState = "Recovering"
+	StateRecoveryBlocked       ServiceState = "RecoveryBlocked"
+	StatePolicyBlocked         ServiceState = "PolicyBlocked"
+	StateNeedsLogin            ServiceState = "NeedsLogin"
 )
 
 type ControlState string
@@ -80,6 +86,32 @@ const (
 	ControlStateNotRegistered         ControlState = "not_registered"
 	ControlStateDisconnected          ControlState = "disconnected"
 	ControlStateServerIdentityChanged ControlState = "server_identity_changed"
+	ControlStateRecovering            ControlState = "recovering"
+	ControlStateRecoveryBlocked       ControlState = "recovery_blocked"
+	ControlStatePolicyBlocked         ControlState = "policy_blocked"
+	ControlStateNeedsLogin            ControlState = "needs_login"
+)
+
+type RecoveryOperation string
+
+const (
+	RecoveryOperationTrustServerIdentity RecoveryOperation = "trust_server_identity"
+	RecoveryOperationForgetEnrollment    RecoveryOperation = "forget_local_enrollment"
+)
+
+type RecoveryOperationOutcome string
+
+const (
+	RecoveryOutcomeAccepted       RecoveryOperationOutcome = "accepted"
+	RecoveryOutcomeAlreadyApplied RecoveryOperationOutcome = "already_applied"
+	RecoveryOutcomeCompleted      RecoveryOperationOutcome = "completed"
+)
+
+type LogoutOutcome string
+
+const (
+	LogoutOutcomeRemoteCleanupConfirmed   LogoutOutcome = "remote_cleanup_confirmed"
+	LogoutOutcomeRemoteCleanupUnconfirmed LogoutOutcome = "remote_cleanup_unconfirmed"
 )
 
 type DesiredState string
@@ -114,6 +146,7 @@ type ErrorResponse struct {
 	Metadata
 	ErrorCode string `json:"error_code"`
 	Error     string `json:"error"`
+	RequestID string `json:"request_id,omitempty"`
 }
 
 type StatusRequest struct{}
@@ -122,6 +155,14 @@ type ConnectionIntentStatus struct {
 	DesiredState DesiredState `json:"desired_state"`
 	Reason       string       `json:"reason,omitempty"`
 	UpdatedAt    string       `json:"updated_at,omitempty"`
+}
+
+type RecoveryStatus struct {
+	OperationID string       `json:"operation_id,omitempty"`
+	State       ServiceState `json:"state"`
+	ErrorCode   string       `json:"error_code,omitempty"`
+	RequestID   string       `json:"request_id,omitempty"`
+	Retryable   bool         `json:"retryable,omitempty"`
 }
 
 type EndpointAddress struct {
@@ -299,7 +340,7 @@ type StatusResponse struct {
 	ApprovalError             string                  `json:"approval_error,omitempty"`
 	CachedMapError            string                  `json:"cached_map_error,omitempty"`
 	ConnectionIntentError     string                  `json:"connection_intent_error,omitempty"`
-	RecoveryRequired          string                  `json:"recovery_required,omitempty"`
+	Recovery                  *RecoveryStatus         `json:"recovery,omitempty"`
 	Control                   *ControlProbe           `json:"control,omitempty"`
 	Agent                     *AgentStatus            `json:"agent,omitempty"`
 	WireGuard                 *WireGuardInspection    `json:"wireguard,omitempty"`
@@ -322,36 +363,39 @@ type ConnectRequest struct{}
 
 type ConnectResponse struct {
 	Metadata
-	State                ServiceState         `json:"state"`
-	ControlState         ControlState         `json:"control_state,omitempty"`
-	DesiredState         DesiredState         `json:"desired_state,omitempty"`
-	UserDisconnected     bool                 `json:"user_disconnected,omitempty"`
-	NodeID               string               `json:"node_id,omitempty"`
-	NetworkID            string               `json:"network_id,omitempty"`
-	MapRevision          uint64               `json:"map_revision,omitempty"`
-	WireGuard            WireGuardApplyResult `json:"wireguard"`
-	ReenrollmentRequired bool                 `json:"reenrollment_required,omitempty"`
+	State            ServiceState         `json:"state"`
+	ControlState     ControlState         `json:"control_state,omitempty"`
+	DesiredState     DesiredState         `json:"desired_state,omitempty"`
+	UserDisconnected bool                 `json:"user_disconnected,omitempty"`
+	NodeID           string               `json:"node_id,omitempty"`
+	NetworkID        string               `json:"network_id,omitempty"`
+	MapRevision      uint64               `json:"map_revision,omitempty"`
+	WireGuard        WireGuardApplyResult `json:"wireguard"`
 }
 
 type ServerIdentityRequest struct{}
 
 type ServerIdentityResponse struct {
 	Metadata
-	ControlPlaneURL string `json:"control_plane_url"`
-	TrustedKeyID    string `json:"trusted_key_id"`
-	AnnouncedKeyID  string `json:"announced_key_id"`
-	Changed         bool   `json:"changed"`
+	ControlOrigin  string `json:"control_origin"`
+	TrustedKeyID   string `json:"trusted_key_id"`
+	AnnouncedKeyID string `json:"announced_key_id"`
+	Changed        bool   `json:"changed"`
 }
 
 type TrustServerRequest struct {
-	Confirmed      bool   `json:"confirmed"`
-	ConfirmedKeyID string `json:"confirmed_key_id"`
+	ConfirmedControlOrigin string `json:"confirmed_control_origin"`
+	ConfirmedKeyID         string `json:"confirmed_key_id"`
 }
 
 type TrustServerResponse struct {
-	ConnectResponse
-	ServerIdentityUpdated bool   `json:"server_identity_updated"`
-	TrustedKeyID          string `json:"trusted_key_id,omitempty"`
+	Metadata
+	OperationID  string                   `json:"operation_id"`
+	Operation    RecoveryOperation        `json:"operation"`
+	Outcome      RecoveryOperationOutcome `json:"outcome"`
+	State        ServiceState             `json:"state"`
+	ControlState ControlState             `json:"control_state"`
+	TrustedKeyID string                   `json:"trusted_key_id"`
 }
 
 type DisconnectRequest struct{}
@@ -368,7 +412,24 @@ type LogoutRequest struct{}
 
 type LogoutResponse struct {
 	Metadata
-	State ServiceState `json:"state"`
+	State           ServiceState  `json:"state"`
+	ControlState    ControlState  `json:"control_state"`
+	Outcome         LogoutOutcome `json:"outcome"`
+	RemoteRequestID string        `json:"remote_request_id,omitempty"`
+}
+
+type LocalForgetRequest struct {
+	Confirmed bool `json:"confirmed"`
+}
+
+type LocalForgetResponse = LogoutResponse
+
+type RecoveryHelperResult struct {
+	Metadata
+	Operation RecoveryOperation        `json:"operation"`
+	Outcome   RecoveryOperationOutcome `json:"outcome"`
+	State     ServiceState             `json:"state"`
+	ErrorCode string                   `json:"error_code,omitempty"`
 }
 
 type NetworksRequest struct{}

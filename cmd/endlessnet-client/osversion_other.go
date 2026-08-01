@@ -5,7 +5,7 @@ package main
 import (
 	"runtime"
 
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 func diagnosticsOSVersion() map[string]any {

@@ -52,7 +52,7 @@ jobs:
           mkdir -p "$output_dir"
           exe_name="endlessnet-client_windows_amd64.exe"
           linux_name="endlessnet-client_linux_amd64"
-          contract_name="client-ipc-v1.openapi.yaml"
+          contract_name="client-ipc-v2.openapi.yaml"
           manifest_name="endlessnet-client_windows_amd64.manifest.json"
           linux_manifest_name="endlessnet-client_linux_amd64.manifest.json"
           linux_manifest_checksum_name="endlessnet-client_linux_amd64.manifest.json.sha256"
@@ -62,7 +62,7 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
             -ldflags "-s -w -X main.version=$version -X main.commit=$GITHUB_SHA -X main.buildDate=$build_date" \
             -o "$output_dir/$linux_name" ./cmd/endlessnet-client
-          cp docs/client-ipc-v1.openapi.yaml "$output_dir/$contract_name"
+          cp docs/client-ipc-v2.openapi.yaml "$output_dir/$contract_name"
           cp LICENSE NOTICE THIRD_PARTY_NOTICES "$output_dir/"
           exe_sha="$(sha256sum "$output_dir/$exe_name" | awk '{print $1}')"
           linux_sha="$(sha256sum "$output_dir/$linux_name" | awk '{print $1}')"
@@ -75,7 +75,7 @@ jobs:
             "version": "$version",
             "commit": "$GITHUB_SHA",
             "target": "windows/amd64",
-            "ipc_version": "v1",
+            "ipc_version": "v2",
             "artifacts": {
               "client": {
                 "name": "$exe_name",

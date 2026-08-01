@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	client "github.com/endless-net/client/internal/client"
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
@@ -22,8 +22,11 @@ func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
 		ipc.PathEvents,
 		ipc.PathEnroll,
 		ipc.PathConnect,
+		ipc.PathServerIdentity,
+		ipc.PathTrustServer,
 		ipc.PathDisconnect,
 		ipc.PathLogout,
+		ipc.PathLocalForget,
 		ipc.PathNetworks,
 		ipc.PathSelectNetwork,
 		ipc.PathDiagnostics,
@@ -38,8 +41,11 @@ func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
 		ipc.OperationEvents,
 		ipc.OperationEnroll,
 		ipc.OperationConnect,
+		ipc.OperationServerIdentity,
+		ipc.OperationTrustServer,
 		ipc.OperationDisconnect,
 		ipc.OperationLogout,
+		ipc.OperationLocalForget,
 		ipc.OperationNetworks,
 		ipc.OperationSelectNetwork,
 		ipc.OperationDiagnostics,
@@ -57,6 +63,10 @@ func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
 		string(ipc.StateNeedsEnrollment),
 		string(ipc.StateNeedsApproval),
 		string(ipc.StateServerIdentityChanged),
+		string(ipc.StateRecovering),
+		string(ipc.StateRecoveryBlocked),
+		string(ipc.StatePolicyBlocked),
+		string(ipc.StateNeedsLogin),
 	} {
 		requireOpenAPIEnumValue(t, spec, state)
 	}
@@ -72,6 +82,10 @@ func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
 		string(ipc.ControlStateNotRegistered),
 		string(ipc.ControlStateDisconnected),
 		string(ipc.ControlStateServerIdentityChanged),
+		string(ipc.ControlStateRecovering),
+		string(ipc.ControlStateRecoveryBlocked),
+		string(ipc.ControlStatePolicyBlocked),
+		string(ipc.ControlStateNeedsLogin),
 	} {
 		requireOpenAPIEnumValue(t, spec, state)
 	}
@@ -139,8 +153,34 @@ func TestClientIPCOpenAPIDocumentsVersionedRealtimeContract(t *testing.T) {
 		ipc.ErrorVersionUnsupported,
 		ipc.ErrorInvalidVersionRange,
 		ipc.ErrorResponseTooLarge,
+		ipc.ErrorRemoteCleanupRequired,
+		ipc.ErrorLocalForgetConfirmationRequired,
+		ipc.ErrorRecoveryOperationInvalid,
 	} {
 		requireOpenAPIEnumValue(t, spec, errorCode)
+	}
+
+	for _, value := range []string{
+		string(ipc.RecoveryOperationTrustServerIdentity),
+		string(ipc.RecoveryOperationForgetEnrollment),
+		string(ipc.RecoveryOutcomeAccepted),
+		string(ipc.RecoveryOutcomeAlreadyApplied),
+		string(ipc.RecoveryOutcomeCompleted),
+		string(ipc.LogoutOutcomeRemoteCleanupConfirmed),
+		string(ipc.LogoutOutcomeRemoteCleanupUnconfirmed),
+	} {
+		requireOpenAPIEnumValue(t, spec, value)
+	}
+
+	for _, want := range []string{
+		`C:\\Program Files\\EndlessNet\\endlessnet-client-recovery-helper.exe`,
+		`--confirmed-control-origin`,
+		`--confirmed-key-id`,
+		`--confirmed-local-forget`,
+		`polkit:ru.endlessnet.client.recovery`,
+		`authorization_services_xpc:ru.endlessnet.client.recovery-helper`,
+	} {
+		requireOpenAPILine(t, spec, want)
 	}
 }
 
@@ -179,7 +219,7 @@ func requireOpenAPILine(t *testing.T, spec, line string) {
 
 func readOpenAPISpec(t *testing.T) string {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "client-ipc-v1.openapi.yaml"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "client-ipc-v2.openapi.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,7 +7,7 @@ import (
 	"errors"
 	"net"
 
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 func DefaultLocalServiceSocketPath() string {

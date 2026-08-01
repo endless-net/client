@@ -1,4 +1,4 @@
-package v1
+package v2
 
 import (
 	"bufio"
@@ -78,11 +78,12 @@ func (c *Client) Request(ctx context.Context, method, path string, in any, out a
 		var payload struct {
 			ErrorCode string `json:"error_code"`
 			Error     string `json:"error"`
+			RequestID string `json:"request_id"`
 		}
 		if err := json.Unmarshal(raw, &payload); err != nil {
 			return NewError(resp.StatusCode, ErrorRequestFailed, fmt.Errorf("%s %s failed: %s", method, path, resp.Status))
 		}
-		return NewError(resp.StatusCode, payload.ErrorCode, fmt.Errorf("%s", firstNonEmptyIPCString(payload.Error, resp.Status)))
+		return NewErrorWithRequestID(resp.StatusCode, payload.ErrorCode, payload.RequestID, fmt.Errorf("%s", firstNonEmptyIPCString(payload.Error, resp.Status)))
 	}
 	if out == nil || len(bytes.TrimSpace(raw)) == 0 {
 		return nil
@@ -143,11 +144,12 @@ func (c *Client) Stream(ctx context.Context, method, path string, in any, onEven
 		var payload struct {
 			ErrorCode string `json:"error_code"`
 			Error     string `json:"error"`
+			RequestID string `json:"request_id"`
 		}
 		if err := json.Unmarshal(raw, &payload); err != nil {
 			return NewError(resp.StatusCode, ErrorRequestFailed, fmt.Errorf("%s %s failed: %s", method, path, resp.Status))
 		}
-		return NewError(resp.StatusCode, payload.ErrorCode, fmt.Errorf("%s", firstNonEmptyIPCString(payload.Error, resp.Status)))
+		return NewErrorWithRequestID(resp.StatusCode, payload.ErrorCode, payload.RequestID, fmt.Errorf("%s", firstNonEmptyIPCString(payload.Error, resp.Status)))
 	}
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxResponseBodyBytes)

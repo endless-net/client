@@ -265,7 +265,7 @@ service только после успешной миграции.
 plaintext и неизвестные protected-форматы отклоняются; см.
 [`internal/client/config_protection_windows.go`](../../internal/client/config_protection_windows.go).
 
-Локальный IPC использует protocol v1 (`current = min = 1`) и работает через
+Локальный IPC использует protocol v2 (`current = min = 2`) и работает через
 защищенный OS-local transport. Клиент обязательно передает protocol/current/min
 headers; сервер выбирает максимальную версию пересечения диапазонов:
 
@@ -274,7 +274,7 @@ headers; сервер выбирает максимальную версию п�
 - macOS: `/var/run/endlessnet/client.sock`.
 
 Контракт описан в
-[`docs/client-ipc-v1.openapi.yaml`](../client-ipc-v1.openapi.yaml),
+[`docs/client-ipc-v2.openapi.yaml`](../client-ipc-v2.openapi.yaml),
 реализация — в
 [`internal/client/service_ipc.go`](../../internal/client/service_ipc.go),
 [`service_ipc_windows.go`](../../internal/client/service_ipc_windows.go) и
@@ -286,13 +286,19 @@ state как локальный владелец по Windows SID или Unix UI
 administrator/root могут выполнять enroll, connect, disconnect, logout и выбор
 сети, читать redacted diagnostics и recent logs, а также создавать bounded
 diagnostics bundle; другому обычному пользователю IPC возвращает
-`owner_required`. Только доверие новому server identity всегда требует
-administrator/root. Logout очищает enrollment, но сохраняет локального владельца;
+`owner_required`. Доверие новому server identity и явный `POST /logout/local`
+всегда требуют administrator/root. Обычный `POST /logout` сначала выполняет
+bounded remote cleanup; если сервер не подтвердил revoke/delete, enrollment
+сохраняется и UI может предложить отдельный local forget. Успешный ответ имеет
+typed outcome `remote_cleanup_confirmed` или `remote_cleanup_unconfirmed`.
+Обе logout-операции сохраняют device/WireGuard keys, локального владельца,
+control origin и подтверждённый trust, но очищают session и node-bound state и
+устанавливают intent `disconnected`;
 administrator/root может выполнять owner-операции независимо от него.
 Существующий enrollment без владельца не может быть захвачен обычным локальным
 пользователем: первый claim для такого state требует administrator/root.
 Pending-ответ `/enroll` не содержит `wireguard_apply`; после синхронного запуска
-туннеля IPC v1 возвращает `wireguard_apply.ok = true`.
+туннеля IPC v2 возвращает `wireguard_apply.ok = true`.
 `GET /diagnostics` не пишет файлы; bounded bundle создается отдельным
 `POST /diagnostics/bundle`. На Windows service defaults используют `C:\Program Files\EndlessNet`
 для бинаря и `C:\ProgramData\EndlessNet` для state/config/diagnostics.

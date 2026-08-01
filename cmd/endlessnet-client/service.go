@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/client"
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
@@ -80,6 +80,7 @@ func cmdService(args []string) error {
 		ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)
 		timeoutValue := fs.String("timeout", "2m", "maximum time to wait for trust recovery and connection")
 		confirmedKeyID := fs.String("confirmed-key-id", "", "server signing key ID confirmed by the operator")
+		confirmedControlOrigin := fs.String("confirmed-control-origin", "", "control-plane origin confirmed by the operator")
 		yes := fs.Bool("yes", false, "confirm replacement of the pinned server signing identity")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
@@ -95,8 +96,8 @@ func cmdService(args []string) error {
 		defer cancel()
 		var payload ipc.TrustServerResponse
 		if err := newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket).Request(ctx, http.MethodPost, ipc.PathTrustServer, ipc.TrustServerRequest{
-			Confirmed:      true,
-			ConfirmedKeyID: strings.TrimSpace(*confirmedKeyID),
+			ConfirmedControlOrigin: strings.TrimSpace(*confirmedControlOrigin),
+			ConfirmedKeyID:         strings.TrimSpace(*confirmedKeyID),
 		}, &payload); err != nil {
 			return err
 		}
@@ -966,11 +967,11 @@ func inspectServerIdentity(configPath string) (ipc.ServerIdentityResponse, clien
 		return ipc.ServerIdentityResponse{}, clientapi.SigningTrustBundle{}, fmt.Errorf("invalid server signing trust bundle: %w", err)
 	}
 	return ipc.ServerIdentityResponse{
-		Metadata:        serviceIPCMetadata(),
-		ControlPlaneURL: firstControlPlaneURL(cfg),
-		TrustedKeyID:    trusted.ActiveKeyID,
-		AnnouncedKeyID:  announced.ActiveKeyID,
-		Changed:         trusted.ActiveKeyID != announced.ActiveKeyID,
+		Metadata:       serviceIPCMetadata(),
+		ControlOrigin:  firstControlPlaneURL(cfg),
+		TrustedKeyID:   trusted.ActiveKeyID,
+		AnnouncedKeyID: announced.ActiveKeyID,
+		Changed:        trusted.ActiveKeyID != announced.ActiveKeyID,
 	}, announced, nil
 }
 
@@ -1085,7 +1086,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 						return ipc.ConnectResponse{}, ipc.NewError(http.StatusInternalServerError, "reenrollment_cleanup_failed", resetErr)
 					}
 					response := connectResponseFromStatus(payload)
-					response.ReenrollmentRequired = true
 					return response, nil
 				}
 				return ipc.ConnectResponse{}, ipc.NewError(http.StatusBadGateway, "connect_sync_failed", err)
@@ -1108,17 +1108,23 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 			return payload, nil
 		},
 		TrustServer: func(ctx context.Context, req ipc.TrustServerRequest) (ipc.TrustServerResponse, error) {
-			if !req.Confirmed {
-				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusBadRequest, "server_identity_confirmation_required", errors.New("explicit server identity confirmation is required"))
-			}
 			identity, announced, err := inspectServerIdentity(opts.ConfigPath)
 			if err != nil {
 				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusBadGateway, "server_identity_unavailable", err)
 			}
 			confirmedKeyID := strings.TrimSpace(req.ConfirmedKeyID)
 			announcedKeyID := strings.TrimSpace(identity.AnnouncedKeyID)
-			if confirmedKeyID == "" || confirmedKeyID != announcedKeyID {
+			confirmedOrigin := strings.TrimSpace(req.ConfirmedControlOrigin)
+			if confirmedOrigin == "" || confirmedOrigin != strings.TrimSpace(identity.ControlOrigin) || confirmedKeyID == "" || confirmedKeyID != announcedKeyID {
 				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusConflict, "server_identity_confirmation_mismatch", errors.New("confirmed server signing key ID does not match the currently announced key"))
+			}
+			outcome := ipc.RecoveryOutcomeAccepted
+			if !identity.Changed {
+				outcome = ipc.RecoveryOutcomeAlreadyApplied
+			}
+			operationID, err := clientapi.NewCreateIdempotencyKey()
+			if err != nil {
+				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, "recovery_operation_id_failed", err)
 			}
 			cfg, err := client.LoadConfig(opts.ConfigPath)
 			if err != nil {
@@ -1133,21 +1139,20 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 			if err := client.SaveConfig(opts.ConfigPath, cfg); err != nil {
 				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, "server_identity_update_failed", err)
 			}
-			if err := agentConnectionIntentStore(opts).Clear(); err != nil {
-				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, "connection_intent_update_failed", err)
-			}
 			if err := syncAgentForConnect(opts); err != nil {
 				if isInvalidNodeCredentialServerError(err) {
 					payload, resetErr := resetAgentEnrollmentAfterServerReset(ctx, opts)
 					if resetErr != nil {
 						return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, "server_identity_reenrollment_cleanup_failed", resetErr)
 					}
-					connectResponse := connectResponseFromStatus(payload)
-					connectResponse.ReenrollmentRequired = true
 					return ipc.TrustServerResponse{
-						ConnectResponse:       connectResponse,
-						ServerIdentityUpdated: true,
-						TrustedKeyID:          announcedKeyID,
+						Metadata:     serviceIPCMetadata(),
+						OperationID:  operationID,
+						Operation:    ipc.RecoveryOperationTrustServerIdentity,
+						Outcome:      outcome,
+						State:        payload.State,
+						ControlState: payload.ControlState,
+						TrustedKeyID: announcedKeyID,
 					}, nil
 				}
 				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusBadGateway, "server_identity_recovery_failed", err)
@@ -1159,9 +1164,13 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 			invalidateAgentSnapshot(opts)
 			requestAgentSync(opts)
 			return ipc.TrustServerResponse{
-				ConnectResponse:       payload,
-				ServerIdentityUpdated: true,
-				TrustedKeyID:          announcedKeyID,
+				Metadata:     serviceIPCMetadata(),
+				OperationID:  operationID,
+				Operation:    ipc.RecoveryOperationTrustServerIdentity,
+				Outcome:      outcome,
+				State:        payload.State,
+				ControlState: ipc.ControlStateReady,
+				TrustedKeyID: announcedKeyID,
 			}, nil
 		},
 		Disconnect: func(ctx context.Context, req ipc.DisconnectRequest) (ipc.DisconnectResponse, error) {
@@ -1195,7 +1204,12 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 			if err := agentConnectionIntentStore(opts).Clear(); err != nil {
 				return ipc.LogoutResponse{}, ipc.NewError(http.StatusInternalServerError, "connection_intent_update_failed", err)
 			}
-			return ipc.LogoutResponse{Metadata: serviceIPCMetadata(), State: ipc.StateNeedsEnrollment}, nil
+			return ipc.LogoutResponse{
+				Metadata:     serviceIPCMetadata(),
+				State:        ipc.StateNeedsEnrollment,
+				ControlState: ipc.ControlStateNotRegistered,
+				Outcome:      ipc.LogoutOutcomeRemoteCleanupConfirmed,
+			}, nil
 		},
 		Networks: func(ctx context.Context, req ipc.NetworksRequest) (ipc.NetworksResponse, error) {
 			cfg, err := client.LoadConfig(opts.ConfigPath)

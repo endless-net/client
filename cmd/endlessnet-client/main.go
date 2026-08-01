@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/client"
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
@@ -2936,7 +2936,7 @@ func attachAgentStatus(payload map[string]any, snapshot client.AgentSnapshot) {
 		agent["last_error"] = lastError
 		if strings.Contains(strings.ToLower(lastError), serverMapSigningTrustChangedError) {
 			payload["control_state"] = ipc.ControlStateServerIdentityChanged
-			payload["recovery_required"] = "server_identity"
+			payload["recovery"] = map[string]any{"state": ipc.StateServerIdentityChanged}
 		} else if fmt.Sprint(payload["control_state"]) == string(ipc.ControlStatePendingApproval) {
 			// A pending enrollment is expected to receive authorization errors
 			// until an administrator approves it. Preserve the actionable state.
@@ -3002,7 +3002,7 @@ func attachServiceIPCAgentStatus(status *ipc.StatusResponse, snapshot client.Age
 	}
 	if strings.Contains(strings.ToLower(status.Agent.LastError), serverMapSigningTrustChangedError) {
 		status.ControlState = ipc.ControlStateServerIdentityChanged
-		status.RecoveryRequired = "server_identity"
+		status.Recovery = &ipc.RecoveryStatus{State: ipc.StateServerIdentityChanged}
 		return
 	}
 	if status.ControlState == ipc.ControlStatePendingApproval {

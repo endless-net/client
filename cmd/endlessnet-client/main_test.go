@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/client"
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
@@ -4405,7 +4405,7 @@ func TestAgentIPCStatusReportsServerIdentityChangeRecoveryState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if payload.ControlState != ipc.ControlStateServerIdentityChanged || payload.State != ipc.StateServerIdentityChanged || payload.RecoveryRequired != "server_identity" {
+	if payload.ControlState != ipc.ControlStateServerIdentityChanged || payload.State != ipc.StateServerIdentityChanged || payload.Recovery == nil || payload.Recovery.State != ipc.StateServerIdentityChanged {
 		t.Fatalf("IPC server identity recovery state = %#v", payload)
 	}
 }
@@ -4466,13 +4466,13 @@ func TestTrustServerRequiresReenrollmentWhenServerLostNodeState(t *testing.T) {
 			return errors.New("POST /nodes/register failed: 400 Bad Request: invalid node credential")
 		},
 	}).TrustServer(context.Background(), ipc.TrustServerRequest{
-		Confirmed:      true,
-		ConfirmedKeyID: newTrust.ActiveKeyID,
+		ConfirmedControlOrigin: server.URL,
+		ConfirmedKeyID:         newTrust.ActiveKeyID,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if payload.State != ipc.StateNeedsEnrollment || payload.ControlState != ipc.ControlStateNotRegistered || !payload.ReenrollmentRequired {
+	if payload.State != ipc.StateNeedsEnrollment || payload.ControlState != ipc.ControlStateNotRegistered {
 		t.Fatalf("trust-server reset status = %#v", payload)
 	}
 	updated, err := client.LoadConfig(configPath)
@@ -4549,7 +4549,7 @@ func TestConnectRequiresReenrollmentAfterNodeDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if payload.State != ipc.StateNeedsEnrollment || payload.ControlState != ipc.ControlStateNotRegistered || !payload.ReenrollmentRequired {
+	if payload.State != ipc.StateNeedsEnrollment || payload.ControlState != ipc.ControlStateNotRegistered {
 		t.Fatalf("deleted-node connect status = %#v", payload)
 	}
 	updated, err := client.LoadConfig(configPath)

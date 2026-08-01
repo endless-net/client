@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/Microsoft/go-winio"
-	ipc "github.com/endless-net/client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v2"
 	"golang.org/x/sys/windows"
 )
 
