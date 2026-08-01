@@ -93,6 +93,20 @@ jobs:
       - name: Build client
         run: go build ./cmd/endlessnet-client
 
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    needs: [verify-linux, verify-windows, verify-macos]
+    if: ${{ always() }}
+    steps:
+      - name: Require platform verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "${{ needs.verify-linux.result }}" = "success" ]
+          [ "${{ needs.verify-windows.result }}" = "success" ]
+          [ "${{ needs.verify-macos.result }}" = "success" ]
+
   external-stun-compatibility:
     name: External STUN compatibility
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.external_stun_compatibility }}
