@@ -44,7 +44,7 @@ Multi-Arch: foreign
 Maintainer: EndlessNet <support@endlessnet.ru>
 Description: OpenPGP keys for the UNNG APT repository
  This package contains the trusted public keys used to verify metadata from
- the UNNG APT repository at https://apt.unng.ru/apt.
+ the UNNG APT repository at https://apt.endlessnet.ru/apt.
 EOF
 
 dpkg-deb --build --root-owner-group \
