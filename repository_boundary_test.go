@@ -63,6 +63,9 @@ func TestClientRepositoryPinsProducerContractWithoutReplace(t *testing.T) {
 	for _, expected := range []string{
 		"endless-net/client",
 		"endlessnet-client_linux_amd64.manifest.json.sha256",
+		`"recovery_helper"`,
+		"endlessnet-client-recovery-helper_windows_amd64.exe",
+		`"installed_name": "endlessnet-client-recovery-helper.exe"`,
 	} {
 		if !strings.Contains(workflowText, expected) {
 			t.Fatalf("client release workflow does not contain %q", expected)
@@ -146,6 +149,37 @@ func TestAPTPackageMigratesLegacyStateBeforeRestart(t *testing.T) {
 	}
 	if strings.Index(text, "$package_name state migrate") > strings.Index(text, "systemctl start $package_name.service") {
 		t.Fatal("APT package restarts the client before migrating legacy state")
+	}
+}
+
+func TestAPTPackageInstallsClosedRecoveryHelperOperation(t *testing.T) {
+	script, err := os.ReadFile("scripts/build-deb.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(script)
+	for _, expected := range []string{
+		`$libexec_dir/endlessnet-client-recovery-helper`,
+		"packaging/polkit/ru.endlessnet.client.recovery.policy",
+		"chmod 0755",
+	} {
+		if !strings.Contains(text, expected) {
+			t.Fatalf("APT recovery helper package does not contain %q", expected)
+		}
+	}
+	policy, err := os.ReadFile("packaging/polkit/ru.endlessnet.client.recovery.policy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policyText := string(policy)
+	for _, expected := range []string{
+		"ru.endlessnet.client.recovery",
+		"/usr/libexec/endlessnet/endlessnet-client-recovery-helper",
+		"auth_admin",
+	} {
+		if !strings.Contains(policyText, expected) {
+			t.Fatalf("polkit recovery policy does not contain %q", expected)
+		}
 	}
 }
 

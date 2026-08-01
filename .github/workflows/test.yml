@@ -46,7 +46,7 @@ jobs:
         run: go test -short ./...
 
       - name: Build client
-        run: go build ./cmd/endlessnet-client
+        run: go build ./cmd/endlessnet-client ./cmd/endlessnet-client-recovery-helper
 
   verify-windows:
     name: Verify (Windows)
@@ -67,7 +67,7 @@ jobs:
         run: go test -short ./...
 
       - name: Build client
-        run: go build ./cmd/endlessnet-client
+        run: go build ./cmd/endlessnet-client ./cmd/endlessnet-client-recovery-helper
 
   verify-macos:
     name: Verify (macOS)
@@ -91,7 +91,7 @@ jobs:
         run: go test -short ./...
 
       - name: Build client
-        run: go build ./cmd/endlessnet-client
+        run: go build ./cmd/endlessnet-client ./cmd/endlessnet-client-recovery-helper
 
   verify:
     name: verify

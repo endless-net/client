@@ -462,7 +462,6 @@ func cmdAgent(args []string) error {
 		for {
 			var snapshot client.AgentSnapshot
 			var mapUnchanged bool
-			var reenrollmentRequired bool
 			var err error
 			if intent, disconnected, intentErr := agentConnectionIntentStore(ipcOpts).Disconnected(); intentErr != nil {
 				err = intentErr
@@ -508,13 +507,40 @@ func cmdAgent(args []string) error {
 			}
 			operationMu.Lock()
 			skipForDisconnected := false
+			skipForRecovery := false
 			if _, disconnected, intentErr := agentConnectionIntentStore(ipcOpts).Disconnected(); intentErr != nil {
 				err = intentErr
 			} else if disconnected {
 				skipForDisconnected = true
 			}
+			if err == nil && !skipForDisconnected {
+				cfg := configStore.Read()
+				if recovery := cfg.EnrollmentRecovery; recovery != nil {
+					if recovery.Phase == client.RecoveryPhaseRecovering || recovery.Retryable {
+						if _, downErr := downAgentWireGuard(ctx, ipcOpts); downErr != nil {
+							skipForRecovery = true
+							err = fmt.Errorf("tear down tunnel before recovery: %w", downErr)
+						} else {
+							progress, _ := continueEnrollmentRecovery(ctx, *configPath)
+							if !progress.Completed {
+								skipForRecovery = true
+								err = fmt.Errorf("recovery pending: %s", firstNonEmpty(progress.ErrorCode, recoveryErrorProtocol))
+							} else if progress.Terminal {
+								skipForRecovery = true
+								if statePath := strings.TrimSpace(*stateOutput); statePath != "" {
+									if removeErr := os.Remove(statePath); removeErr != nil && !os.IsNotExist(removeErr) {
+										err = fmt.Errorf("remove terminal recovery state: %w", removeErr)
+									}
+								}
+							}
+						}
+					} else {
+						skipForRecovery = true
+					}
+				}
+			}
 			manualEndpoint := strings.TrimSpace(*endpoint) != "" || strings.TrimSpace(*endpointFile) != ""
-			if err == nil && !skipForDisconnected && !*offline && manualEndpoint {
+			if err == nil && !skipForDisconnected && !skipForRecovery && !*offline && manualEndpoint {
 				candidates, generated, candidateErr := agentEndpointCandidates(*endpoint, *endpointFile, *listenPort)
 				if candidateErr != nil {
 					err = candidateErr
@@ -522,7 +548,7 @@ func cmdAgent(args []string) error {
 					_, err = updatePublishedEndpoint(*configPath, timeout, candidates, generated, endpointTTL, &endpointState, endpointUpdateDebounce, time.Now().UTC())
 				}
 			}
-			if err == nil && !skipForDisconnected {
+			if err == nil && !skipForDisconnected && !skipForRecovery {
 				snapshot, mapUnchanged, err = runAgentIteration(ctx, agentIterationOptions{
 					ConfigPath:     *configPath,
 					StateOutput:    *stateOutput,
@@ -538,18 +564,10 @@ func cmdAgent(args []string) error {
 					FromRevision:   streamFromRevision,
 				})
 			}
-			if err == nil && !skipForDisconnected && !*offline && !manualEndpoint {
+			if err == nil && !skipForDisconnected && !skipForRecovery && !*offline && !manualEndpoint {
 				discovery := wireGuard.LastEndpointDiscovery()
 				if len(discovery.Candidates) > 0 {
 					_, err = updatePublishedEndpoint(*configPath, timeout, discovery.Candidates, true, endpointTTL, &endpointState, endpointUpdateDebounce, time.Now().UTC())
-				}
-			}
-			if isInvalidNodeCredentialServerError(err) {
-				if resetErr := clearAgentEnrollmentAfterServerReset(ctx, ipcOpts); resetErr != nil {
-					err = fmt.Errorf("clear invalid server enrollment: %w", resetErr)
-				} else {
-					reenrollmentRequired = true
-					err = nil
 				}
 			}
 			operationMu.Unlock()
@@ -563,6 +581,18 @@ func cmdAgent(args []string) error {
 				}
 				continue
 			}
+			if skipForRecovery {
+				if err != nil {
+					if failureErr := writeAgentFailureSnapshot(*stateOutput, *configPath, err); failureErr != nil {
+						log.Printf("agent recovery state write failed: %v", failureErr)
+					}
+				}
+				proceed, _ := waitForAgentSync(ctx, interval, syncWake)
+				if !proceed {
+					return nil
+				}
+				continue
+			}
 			if *once {
 				if err != nil {
 					_ = writeAgentFailureSnapshot(*stateOutput, *configPath, err)
@@ -570,10 +600,7 @@ func cmdAgent(args []string) error {
 				return err
 			}
 			nextDelay := interval
-			if reenrollmentRequired {
-				consecutiveFailures = 0
-				log.Printf("agent credential is no longer recognized by the server; enrollment is required")
-			} else if err != nil {
+			if err != nil {
 				if failureErr := writeAgentFailureSnapshot(*stateOutput, *configPath, err); failureErr != nil {
 					log.Printf("agent failure state write failed: %v", failureErr)
 				}

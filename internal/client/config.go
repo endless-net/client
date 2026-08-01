@@ -59,6 +59,7 @@ type Config struct {
 	CachedMap           *clientapi.RegisterNodeResponse `json:"cached_map,omitempty"`
 	CachedMapSavedAt    *time.Time                      `json:"cached_map_saved_at,omitempty"`
 	ConnectionIntent    *ConnectionIntent               `json:"connection_intent,omitempty"`
+	EnrollmentRecovery  *EnrollmentRecovery             `json:"enrollment_recovery,omitempty"`
 
 	storeMetadata *configStoreMetadata
 }

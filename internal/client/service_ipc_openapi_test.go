@@ -156,6 +156,8 @@ func TestClientIPCOpenAPIDocumentsVersionedRealtimeContract(t *testing.T) {
 		ipc.ErrorRemoteCleanupRequired,
 		ipc.ErrorLocalForgetConfirmationRequired,
 		ipc.ErrorRecoveryOperationInvalid,
+		ipc.ErrorRecoveryOperationIDFailed,
+		ipc.ErrorLocalForgetFailed,
 	} {
 		requireOpenAPIEnumValue(t, spec, errorCode)
 	}

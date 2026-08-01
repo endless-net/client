@@ -13,9 +13,13 @@ wire contracts are consumed from the producer-owned, versioned
 ## Build and verify
 
 ```text
-go build ./cmd/endlessnet-client
+go build ./cmd/endlessnet-client ./cmd/endlessnet-client-recovery-helper
 go test -short ./...
 ```
+
+The versioned local service and ownership-recovery contracts are documented in
+[`docs/client-ipc-v2.openapi.yaml`](docs/client-ipc-v2.openapi.yaml) and
+[`docs/client-ownership-recovery.md`](docs/client-ownership-recovery.md).
 
 The repository owns the client binary, Linux service assets, APT package,
 immutable Windows core manifest and the producer side of the versioned local IPC

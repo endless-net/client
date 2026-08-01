@@ -7,6 +7,7 @@ output_dir="${OUTPUT_DIR:-dist/deb}"
 commit="${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
 build_date="${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 prebuilt_binary="${ENDLESSNET_DEB_PREBUILT_BINARY:-}"
+prebuilt_recovery_helper="${ENDLESSNET_DEB_PREBUILT_RECOVERY_HELPER:-}"
 prebuilt_systemd_dir="${ENDLESSNET_DEB_PREBUILT_SYSTEMD_DIR:-}"
 
 mkdir -p "$output_dir"
@@ -31,10 +32,12 @@ build_one() {
   usr_bin_dir="$pkg_root/usr/bin"
   systemd_dir="$pkg_root/lib/systemd/system"
   tmpfiles_dir="$pkg_root/usr/lib/tmpfiles.d"
+  libexec_dir="$pkg_root/usr/libexec/endlessnet"
+  polkit_dir="$pkg_root/usr/share/polkit-1/actions"
   doc_dir="$pkg_root/usr/share/doc/$package_name"
   control_dir="$pkg_root/DEBIAN"
 
-  mkdir -p "$opt_bin_dir" "$usr_bin_dir" "$systemd_dir" "$tmpfiles_dir" "$doc_dir" "$control_dir"
+  mkdir -p "$opt_bin_dir" "$usr_bin_dir" "$systemd_dir" "$tmpfiles_dir" "$libexec_dir" "$polkit_dir" "$doc_dir" "$control_dir"
 
   if [ -n "$prebuilt_binary" ]; then
     cp "$prebuilt_binary" "$opt_bin_dir/$package_name"
@@ -46,6 +49,17 @@ build_one() {
       ./cmd/endlessnet-client
   fi
   chmod 0755 "$opt_bin_dir/$package_name"
+  if [ -n "$prebuilt_recovery_helper" ]; then
+    cp "$prebuilt_recovery_helper" "$libexec_dir/endlessnet-client-recovery-helper"
+  else
+    CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
+      -trimpath \
+      -ldflags "-s -w" \
+      -o "$libexec_dir/endlessnet-client-recovery-helper" \
+      ./cmd/endlessnet-client-recovery-helper
+  fi
+  chmod 0755 "$libexec_dir/endlessnet-client-recovery-helper"
+  install -m 0644 packaging/polkit/ru.endlessnet.client.recovery.policy "$polkit_dir/ru.endlessnet.client.recovery.policy"
   ln -s "../../opt/endlessnet/bin/$package_name" "$usr_bin_dir/$package_name"
   ln -s "../../opt/endlessnet/bin/$package_name" "$usr_bin_dir/endlessnet"
 

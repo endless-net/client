@@ -20,11 +20,12 @@ import (
 	ipc "github.com/endless-net/client/ipc/v2"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
+	clientapiv2 "github.com/endless-net/client-api/clientapi/v2"
 )
 
 func cmdService(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, events, connect, server-identity, trust-server, disconnect, logout, networks, select-network, diagnostics, diagnostics-bundle, or logs-recent")
+		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, events, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, diagnostics, diagnostics-bundle, or logs-recent")
 	}
 	switch args[0] {
 	case "enroll":
@@ -106,6 +107,28 @@ func cmdService(args []string) error {
 		return cmdServiceIPCRequest(args[0], args[1:], http.MethodPost, ipc.PathDisconnect, ipc.DisconnectRequest{}, &ipc.DisconnectResponse{})
 	case "logout":
 		return cmdServiceIPCRequest(args[0], args[1:], http.MethodPost, ipc.PathLogout, ipc.LogoutRequest{}, &ipc.LogoutResponse{})
+	case "local-forget":
+		fs := flag.NewFlagSet("service local-forget", flag.ExitOnError)
+		ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)
+		timeoutValue := fs.String("timeout", "2m", "maximum time to wait for local enrollment cleanup")
+		confirmed := fs.Bool("confirm-local-forget", false, "confirm local cleanup when remote credential revocation is unconfirmed")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if !*confirmed {
+			return errors.New("local-forget requires --confirm-local-forget")
+		}
+		timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
+		if err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		var payload ipc.LocalForgetResponse
+		if err := newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket).Request(ctx, http.MethodPost, ipc.PathLocalForget, ipc.LocalForgetRequest{Confirmed: true}, &payload); err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(payload)
 	case "networks":
 		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathNetworks, nil, &ipc.NetworksResponse{})
 	case "select-network":
@@ -505,6 +528,7 @@ type agentIPCOptions struct {
 	WireGuard        agentWireGuard
 	SyncForConnect   func() error
 	SyncWake         chan struct{}
+	Now              func() time.Time
 }
 
 func requestAgentSync(opts agentIPCOptions) {
@@ -883,47 +907,45 @@ func syncAgentForConnect(opts agentIPCOptions) error {
 	if opts.SyncForConnect != nil {
 		return opts.SyncForConnect()
 	}
+	if cfg, err := client.LoadConfig(opts.ConfigPath); err != nil {
+		return err
+	} else if cfg.EnrollmentRecovery != nil {
+		if opts.WireGuard != nil {
+			if _, err := downAgentWireGuard(context.Background(), opts); err != nil {
+				return err
+			}
+		}
+		progress, attemptErr := continueEnrollmentRecovery(context.Background(), opts.ConfigPath)
+		if progress.Completed {
+			return nil
+		}
+		if attemptErr != nil {
+			return fmt.Errorf("recovery %s", firstNonEmpty(progress.ErrorCode, recoveryErrorProtocol))
+		}
+		return fmt.Errorf("recovery %s", firstNonEmpty(progress.ErrorCode, recoveryErrorProtocol))
+	}
 	args := []string{"--config", opts.ConfigPath}
 	return cmdUp(args)
 }
 
-func isInvalidNodeCredentialServerError(err error) bool {
-	if err == nil {
-		return false
+func forgetAgentEnrollmentLocally(ctx context.Context, opts agentIPCOptions) error {
+	if opts.WireGuard != nil {
+		if _, err := downAgentWireGuard(ctx, opts); err != nil {
+			return fmt.Errorf("tear down WireGuard tunnel before local forget: %w", err)
+		}
 	}
-	message := strings.ToLower(strings.TrimSpace(err.Error()))
-	if !strings.Contains(message, "invalid node credential") {
-		return false
-	}
-	return strings.Contains(message, "failed: 400 bad request:") ||
-		strings.Contains(message, "failed: 401 unauthorized:") ||
-		strings.Contains(message, "failed: 403 forbidden:")
-}
-
-func clearAgentEnrollmentAfterServerReset(ctx context.Context, opts agentIPCOptions) error {
-	cfg, err := client.LoadConfig(opts.ConfigPath)
+	store, err := agentServiceIPCConfigStore(opts)
 	if err != nil {
 		return err
 	}
-	cfg.Token = ""
-	cfg.ActiveAccountID = ""
-	cfg.NodeID = ""
-	cfg.NetworkID = ""
-	cfg.NodeCredential = ""
-	cfg.NodeApprovalState = ""
-	cfg.EnrollmentRequestID = ""
-	cfg.EnrollmentPollToken = ""
-	cfg.ApprovalURL = ""
-	cfg.MapRevision = 0
-	cfg.CachedMap = nil
-	cfg.CachedMapSavedAt = nil
-	if err := client.SaveConfig(opts.ConfigPath, cfg); err != nil {
-		return err
+	now := time.Now()
+	if opts.Now != nil {
+		now = opts.Now()
 	}
-	if opts.WireGuard != nil {
-		if _, err := downAgentWireGuard(ctx, opts); err != nil {
-			return fmt.Errorf("tear down stale WireGuard tunnel: %w", err)
-		}
+	if err := store.Update(func(cfg *client.Config) error {
+		return client.ApplyLocalLogoutCleanup(cfg, now)
+	}); err != nil {
+		return err
 	}
 	if statePath := strings.TrimSpace(opts.StateOutput); statePath != "" {
 		if err := os.Remove(statePath); err != nil && !os.IsNotExist(err) {
@@ -931,19 +953,6 @@ func clearAgentEnrollmentAfterServerReset(ctx context.Context, opts agentIPCOpti
 		}
 	}
 	return nil
-}
-
-func resetAgentEnrollmentAfterServerReset(ctx context.Context, opts agentIPCOptions) (ipc.StatusResponse, error) {
-	if err := clearAgentEnrollmentAfterServerReset(ctx, opts); err != nil {
-		return ipc.StatusResponse{}, err
-	}
-	payload, err := agentIPCStatus(ctx, opts)
-	if err != nil {
-		return ipc.StatusResponse{}, err
-	}
-	payload.State = ipc.StateNeedsEnrollment
-	payload.ControlState = ipc.ControlStateNotRegistered
-	return payload, nil
 }
 
 func inspectServerIdentity(configPath string) (ipc.ServerIdentityResponse, clientapi.SigningTrustBundle, error) {
@@ -1080,15 +1089,17 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 				return ipc.ConnectResponse{}, ipc.NewError(http.StatusInternalServerError, "connection_intent_update_failed", err)
 			}
 			if err := syncAgentForConnect(opts); err != nil {
-				if isInvalidNodeCredentialServerError(err) {
-					payload, resetErr := resetAgentEnrollmentAfterServerReset(ctx, opts)
-					if resetErr != nil {
-						return ipc.ConnectResponse{}, ipc.NewError(http.StatusInternalServerError, "reenrollment_cleanup_failed", resetErr)
-					}
-					response := connectResponseFromStatus(payload)
-					return response, nil
+				if status, statusErr := agentIPCStatus(ctx, opts); statusErr == nil && status.Recovery != nil {
+					return connectResponseFromStatus(status), nil
 				}
 				return ipc.ConnectResponse{}, ipc.NewError(http.StatusBadGateway, "connect_sync_failed", err)
+			}
+			if cfg, loadErr := client.LoadConfig(opts.ConfigPath); loadErr == nil && strings.TrimSpace(cfg.NodeCredential) == "" {
+				status, statusErr := agentIPCStatus(ctx, opts)
+				if statusErr != nil {
+					return ipc.ConnectResponse{}, statusErr
+				}
+				return connectResponseFromStatus(status), nil
 			}
 			payload, err := connectAgentTunnel(ctx, opts)
 			if err != nil {
@@ -1118,58 +1129,95 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 			if confirmedOrigin == "" || confirmedOrigin != strings.TrimSpace(identity.ControlOrigin) || confirmedKeyID == "" || confirmedKeyID != announcedKeyID {
 				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusConflict, "server_identity_confirmation_mismatch", errors.New("confirmed server signing key ID does not match the currently announced key"))
 			}
-			outcome := ipc.RecoveryOutcomeAccepted
-			if !identity.Changed {
-				outcome = ipc.RecoveryOutcomeAlreadyApplied
-			}
-			operationID, err := clientapi.NewCreateIdempotencyKey()
+			candidateOperationID, err := clientapi.NewCreateIdempotencyKey()
 			if err != nil {
-				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, "recovery_operation_id_failed", err)
+				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, ipc.ErrorRecoveryOperationIDFailed, err)
 			}
-			cfg, err := client.LoadConfig(opts.ConfigPath)
+			candidateIdempotencyID, err := clientapiv2.NewRegistrationIdempotencyID()
+			if err != nil {
+				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, ipc.ErrorRecoveryOperationIDFailed, err)
+			}
+			configStore, err := agentServiceIPCConfigStore(opts)
 			if err != nil {
 				return ipc.TrustServerResponse{}, serviceIPCConfigError(err)
 			}
-			if err := client.ReplaceSigningTrustBundle(&cfg, announced); err != nil {
-				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusBadGateway, "server_identity_invalid", err)
+			operationID := candidateOperationID
+			outcome := ipc.RecoveryOutcomeAccepted
+			needsRecovery := false
+			now := time.Now()
+			if opts.Now != nil {
+				now = opts.Now()
 			}
-			cfg.CachedMap = nil
-			cfg.CachedMapSavedAt = nil
-			cfg.MapRevision = 0
-			if err := client.SaveConfig(opts.ConfigPath, cfg); err != nil {
+			if err := configStore.Update(func(current *client.Config) error {
+				if strings.TrimSpace(firstControlPlaneURL(*current)) != confirmedOrigin {
+					return errors.New("confirmed control origin is no longer current")
+				}
+				if current.EnrollmentRecovery != nil {
+					recovery := current.EnrollmentRecovery
+					if recovery.ConfirmedControlOrigin != confirmedOrigin || recovery.ConfirmedKeyID != confirmedKeyID {
+						return errors.New("a different recovery operation is already active")
+					}
+					operationID = recovery.OperationID
+					outcome = ipc.RecoveryOutcomeAlreadyApplied
+					needsRecovery = true
+					return nil
+				}
+				trusted, trustErr := client.SigningTrustBundle(*current)
+				if trustErr == nil && trusted.ActiveKeyID == announced.ActiveKeyID {
+					outcome = ipc.RecoveryOutcomeAlreadyApplied
+					return nil
+				}
+				if err := client.ReplaceSigningTrustBundle(current, announced); err != nil {
+					return err
+				}
+				if strings.TrimSpace(current.NodeCredential) == "" {
+					return nil
+				}
+				recovery, err := client.NewEnrollmentRecovery(candidateOperationID, candidateIdempotencyID, confirmedOrigin, confirmedKeyID, now)
+				if err != nil {
+					return err
+				}
+				current.EnrollmentRecovery = &recovery
+				needsRecovery = true
+				return nil
+			}); err != nil {
 				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, "server_identity_update_failed", err)
 			}
-			if err := syncAgentForConnect(opts); err != nil {
-				if isInvalidNodeCredentialServerError(err) {
-					payload, resetErr := resetAgentEnrollmentAfterServerReset(ctx, opts)
-					if resetErr != nil {
-						return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, "server_identity_reenrollment_cleanup_failed", resetErr)
+			progress := recoveryAttemptResult{Completed: true}
+			if needsRecovery {
+				if opts.WireGuard != nil {
+					if _, downErr := downAgentWireGuard(ctx, opts); downErr != nil {
+						return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, "server_identity_recovery_failed", downErr)
 					}
-					return ipc.TrustServerResponse{
-						Metadata:     serviceIPCMetadata(),
-						OperationID:  operationID,
-						Operation:    ipc.RecoveryOperationTrustServerIdentity,
-						Outcome:      outcome,
-						State:        payload.State,
-						ControlState: payload.ControlState,
-						TrustedKeyID: announcedKeyID,
-					}, nil
 				}
-				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusBadGateway, "server_identity_recovery_failed", err)
+				progress, err = continueEnrollmentRecovery(ctx, opts.ConfigPath)
+				if err != nil && progress.OperationID == "" {
+					return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, "server_identity_recovery_failed", err)
+				}
 			}
-			payload, err := connectAgentTunnel(ctx, opts)
+			if progress.Completed && !progress.Terminal {
+				if cfg := configStore.Read(); strings.TrimSpace(cfg.NodeCredential) != "" {
+					if _, connectErr := connectAgentTunnel(ctx, opts); connectErr != nil {
+						return ipc.TrustServerResponse{}, connectErr
+					}
+					invalidateAgentSnapshot(opts)
+				}
+			}
+			if progress.Terminal {
+				invalidateAgentSnapshot(opts)
+			}
+			status, err := agentIPCStatus(ctx, opts)
 			if err != nil {
 				return ipc.TrustServerResponse{}, err
 			}
-			invalidateAgentSnapshot(opts)
 			requestAgentSync(opts)
 			return ipc.TrustServerResponse{
 				Metadata:     serviceIPCMetadata(),
 				OperationID:  operationID,
 				Operation:    ipc.RecoveryOperationTrustServerIdentity,
 				Outcome:      outcome,
-				State:        payload.State,
-				ControlState: ipc.ControlStateReady,
+				State:        status.State,
+				ControlState: status.ControlState,
 				TrustedKeyID: announcedKeyID,
 			}, nil
 		},
@@ -1199,16 +1247,31 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 				args = append(args, "--state-output", opts.StateOutput)
 			}
 			if err := cmdLogout(args); err != nil {
+				var remoteErr remoteCleanupError
+				if errors.As(err, &remoteErr) {
+					return ipc.LogoutResponse{}, ipc.NewErrorWithRequestID(http.StatusConflict, ipc.ErrorRemoteCleanupRequired, remoteErr.RequestID, err)
+				}
 				return ipc.LogoutResponse{}, ipc.NewError(http.StatusInternalServerError, "logout_failed", err)
-			}
-			if err := agentConnectionIntentStore(opts).Clear(); err != nil {
-				return ipc.LogoutResponse{}, ipc.NewError(http.StatusInternalServerError, "connection_intent_update_failed", err)
 			}
 			return ipc.LogoutResponse{
 				Metadata:     serviceIPCMetadata(),
 				State:        ipc.StateNeedsEnrollment,
 				ControlState: ipc.ControlStateNotRegistered,
 				Outcome:      ipc.LogoutOutcomeRemoteCleanupConfirmed,
+			}, nil
+		},
+		LocalForget: func(ctx context.Context, req ipc.LocalForgetRequest) (ipc.LocalForgetResponse, error) {
+			if !req.Confirmed {
+				return ipc.LocalForgetResponse{}, ipc.NewError(http.StatusBadRequest, ipc.ErrorLocalForgetConfirmationRequired, errors.New("explicit local-forget confirmation is required"))
+			}
+			if err := forgetAgentEnrollmentLocally(ctx, opts); err != nil {
+				return ipc.LocalForgetResponse{}, ipc.NewError(http.StatusInternalServerError, ipc.ErrorLocalForgetFailed, err)
+			}
+			return ipc.LocalForgetResponse{
+				Metadata:     serviceIPCMetadata(),
+				State:        ipc.StateNeedsEnrollment,
+				ControlState: ipc.ControlStateNotRegistered,
+				Outcome:      ipc.LogoutOutcomeRemoteCleanupUnconfirmed,
 			}, nil
 		},
 		Networks: func(ctx context.Context, req ipc.NetworksRequest) (ipc.NetworksResponse, error) {
@@ -1464,6 +1527,14 @@ func serviceStateFromControlState(controlState ipc.ControlState, cachedMapInvali
 		return ipc.StateDegraded
 	case ipc.ControlStateServerIdentityChanged:
 		return ipc.StateServerIdentityChanged
+	case ipc.ControlStateRecovering:
+		return ipc.StateRecovering
+	case ipc.ControlStateRecoveryBlocked:
+		return ipc.StateRecoveryBlocked
+	case ipc.ControlStatePolicyBlocked:
+		return ipc.StatePolicyBlocked
+	case ipc.ControlStateNeedsLogin:
+		return ipc.StateNeedsLogin
 	case ipc.ControlStateReady, ipc.ControlStateRegistered:
 		return ipc.StateConnected
 	case ipc.ControlStateCacheInvalid, ipc.ControlStateError:

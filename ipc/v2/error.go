@@ -24,6 +24,8 @@ const (
 	ErrorRemoteCleanupRequired           = "remote_cleanup_required"
 	ErrorLocalForgetConfirmationRequired = "local_forget_confirmation_required"
 	ErrorRecoveryOperationInvalid        = "recovery_operation_invalid"
+	ErrorRecoveryOperationIDFailed       = "recovery_operation_id_failed"
+	ErrorLocalForgetFailed               = "local_forget_failed"
 )
 
 type Error struct {

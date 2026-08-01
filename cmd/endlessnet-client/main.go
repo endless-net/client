@@ -1350,7 +1350,7 @@ func cmdLogout(args []string) error {
 	}
 	api := apiFromConfig(cfg)
 	if strings.TrimSpace(cfg.NodeID) != "" {
-		if err := api.DeleteNode(cfg.NodeID); err != nil {
+		if err := revokeNodeV2(context.Background(), api, cfg.NodeID); err != nil {
 			return err
 		}
 	}
@@ -1360,20 +1360,24 @@ func cmdLogout(args []string) error {
 			return err
 		}
 		if err := managementAPI.Logout(); err != nil {
-			return err
+			return remoteCleanupError{cause: err}
 		}
 	}
+	var stateErr error
 	if strings.TrimSpace(*stateOutput) != "" {
-		if err := removeLogoutFile(*stateOutput); err != nil {
-			saveErr := client.SaveConfig(*configPath, client.Config{LocalOwnerID: cfg.LocalOwnerID})
-			if saveErr != nil {
-				return fmt.Errorf("%v; additionally failed to clear local config: %w", err, saveErr)
-			}
-			return err
-		}
+		stateErr = removeLogoutFile(*stateOutput)
 	}
-	if err := client.SaveConfig(*configPath, client.Config{LocalOwnerID: cfg.LocalOwnerID}); err != nil {
+	store, err := client.OpenConfigStore(*configPath)
+	if err != nil {
 		return err
+	}
+	if err := store.Update(func(current *client.Config) error {
+		return client.ApplyLocalLogoutCleanup(current, time.Now())
+	}); err != nil {
+		return err
+	}
+	if stateErr != nil {
+		return stateErr
 	}
 	fmt.Println("logout completed")
 	return nil
@@ -2665,6 +2669,19 @@ func serviceIPCStatusForConfig(cfg client.Config) (response ipc.StatusResponse) 
 	if strings.TrimSpace(cfg.NodeID) != "" || strings.TrimSpace(cfg.NodeCredential) != "" {
 		response.ControlState = ipc.ControlStateRegistered
 	}
+	if recovery := cfg.EnrollmentRecovery; recovery != nil {
+		recoveryState, recoveryControl := ipcRecoveryState(recovery.Phase)
+		response.State = recoveryState
+		response.ControlState = recoveryControl
+		response.Recovery = &ipc.RecoveryStatus{
+			OperationID: recovery.OperationID,
+			State:       recoveryState,
+			ErrorCode:   recovery.ErrorCode,
+			RequestID:   recovery.RequestID,
+			Retryable:   recovery.Retryable,
+		}
+		return response
+	}
 	if err := client.ValidateConfigCurrentDevice(cfg); err != nil {
 		response.ControlState = ipc.ControlStateError
 		response.LocalStateError = err.Error()
@@ -2724,6 +2741,19 @@ func serviceIPCStatusForConfig(cfg client.Config) (response ipc.StatusResponse) 
 		response.ControlState = ipc.ControlStateReady
 	}
 	return response
+}
+
+func ipcRecoveryState(phase client.RecoveryPhase) (ipc.ServiceState, ipc.ControlState) {
+	switch phase {
+	case client.RecoveryPhasePolicyBlocked:
+		return ipc.StatePolicyBlocked, ipc.ControlStatePolicyBlocked
+	case client.RecoveryPhaseNeedsLogin:
+		return ipc.StateNeedsLogin, ipc.ControlStateNeedsLogin
+	case client.RecoveryPhaseBlocked:
+		return ipc.StateRecoveryBlocked, ipc.ControlStateRecoveryBlocked
+	default:
+		return ipc.StateRecovering, ipc.ControlStateRecovering
+	}
 }
 
 func statusPayload(cfg client.Config) map[string]any {
@@ -2996,6 +3026,9 @@ func attachServiceIPCAgentStatus(status *ipc.StatusResponse, snapshot client.Age
 	}
 	if snapshotState == ipc.AgentSnapshotPrevious {
 		status.Agent.TargetMapRevision = status.MapRevision
+	}
+	if status.Recovery != nil && strings.TrimSpace(status.Recovery.OperationID) != "" {
+		return
 	}
 	if status.Agent.LastError == "" {
 		return

@@ -1824,6 +1824,65 @@ func TestAgentIPCConnectClearsDisconnectedConnectionIntent(t *testing.T) {
 	}
 }
 
+func TestAgentIPCLocalForgetCompletesWithoutRemoteCleanup(t *testing.T) {
+	tmp := t.TempDir()
+	configPath := filepath.Join(tmp, "client.json")
+	statePath := filepath.Join(tmp, "agent-state.json")
+	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	if err := client.SaveConfig(configPath, client.Config{
+		LocalOwnerID:       "uid:1000",
+		ControlPlaneURLs:   []string{"https://unavailable.example.test"},
+		Token:              "session-token",
+		ActiveAccountID:    "account-1",
+		IdentityPrivateKey: "identity-private-key",
+		PrivateKey:         "wireguard-private-key",
+		NodeID:             "node-1",
+		NetworkID:          "network-1",
+		NodeCredential:     "node-credential",
+		DeviceFingerprint:  "installation-fingerprint",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, []byte(`{"node_id":"node-1"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wireGuard := &testAgentWireGuard{}
+	handler := agentIPCHandlers(agentIPCOptions{
+		ConfigPath: configPath, StateOutput: statePath, WireGuard: wireGuard,
+		Now: func() time.Time { return now },
+	})
+	if _, err := handler.LocalForget(context.Background(), ipc.LocalForgetRequest{}); err == nil {
+		t.Fatal("local forget accepted missing explicit confirmation")
+	}
+	payload, err := handler.LocalForget(context.Background(), ipc.LocalForgetRequest{Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload.Outcome != ipc.LogoutOutcomeRemoteCleanupUnconfirmed || payload.State != ipc.StateNeedsEnrollment || payload.ControlState != ipc.ControlStateNotRegistered {
+		t.Fatalf("local-forget response = %#v", payload)
+	}
+	if wireGuard.downCalls != 1 {
+		t.Fatalf("WireGuard down calls = %d, want 1", wireGuard.downCalls)
+	}
+	stored, err := client.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.NodeID != "" || stored.NetworkID != "" || stored.NodeCredential != "" || stored.Token != "" || stored.ActiveAccountID != "" {
+		t.Fatal("local forget retained enrollment or session state")
+	}
+	if stored.LocalOwnerID != "uid:1000" || stored.IdentityPrivateKey != "identity-private-key" || stored.PrivateKey != "wireguard-private-key" ||
+		len(stored.ControlPlaneURLs) != 1 || stored.DeviceFingerprint != "installation-fingerprint" {
+		t.Fatal("local forget removed retained owner/key/trust/control material")
+	}
+	if stored.ConnectionIntent == nil || stored.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected {
+		t.Fatalf("local forget intent = %#v", stored.ConnectionIntent)
+	}
+	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+		t.Fatalf("agent state still present: %v", err)
+	}
+}
+
 func TestCmdUpPersistsPendingEnrollmentWithoutRenderingWireGuard(t *testing.T) {
 	tmp := t.TempDir()
 	setInstallationStateDirForTest(t, filepath.Join(tmp, "installation-state"))
@@ -3066,8 +3125,11 @@ func TestCmdLogoutRevokesSessionThroughManagementAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Token != "" || stored.ManagementURL != "" {
+	if stored.Token != "" || stored.ActiveAccountID != "" || stored.ManagementURL != management.URL+"/" {
 		t.Fatalf("logout retained session state: %#v", stored)
+	}
+	if stored.ConnectionIntent == nil || stored.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected || stored.ConnectionIntent.Reason != "local_logout" {
+		t.Fatalf("logout connection intent = %#v, want explicit disconnected local_logout", stored.ConnectionIntent)
 	}
 }
 
@@ -3124,8 +3186,8 @@ func TestAgentIPCLogoutRemovesAgentState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.ConnectionIntent != nil {
-		t.Fatalf("connection intent = %#v, want cleared", stored.ConnectionIntent)
+	if stored.ConnectionIntent == nil || stored.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected || stored.ConnectionIntent.Reason != "local_logout" {
+		t.Fatalf("connection intent = %#v, want disconnected local_logout", stored.ConnectionIntent)
 	}
 	if stored.LocalOwnerID != "uid:1000" {
 		t.Fatalf("IPC logout local owner = %q, want preserved", stored.LocalOwnerID)
@@ -4407,160 +4469,6 @@ func TestAgentIPCStatusReportsServerIdentityChangeRecoveryState(t *testing.T) {
 	}
 	if payload.ControlState != ipc.ControlStateServerIdentityChanged || payload.State != ipc.StateServerIdentityChanged || payload.Recovery == nil || payload.Recovery.State != ipc.StateServerIdentityChanged {
 		t.Fatalf("IPC server identity recovery state = %#v", payload)
-	}
-}
-
-func TestTrustServerRequiresReenrollmentWhenServerLostNodeState(t *testing.T) {
-	oldPrivate := testMapSigningKey(t)
-	newPrivate := testMapSigningKey(t)
-	oldPublic := base64.RawURLEncoding.EncodeToString(oldPrivate.Public().(ed25519.PublicKey))
-	newPublic := base64.RawURLEncoding.EncodeToString(newPrivate.Public().(ed25519.PublicKey))
-	oldTrust, err := clientapi.NewSigningTrustBundle(oldPublic)
-	if err != nil {
-		t.Fatal(err)
-	}
-	newTrust, err := clientapi.NewSigningTrustBundle(newPublic)
-	if err != nil {
-		t.Fatal(err)
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/server-key":
-			_ = json.NewEncoder(w).Encode(testServerKeyResponse(t, newPublic))
-		case "/client/readyz":
-			_, _ = w.Write([]byte("ok"))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-
-	tmp := t.TempDir()
-	configPath := filepath.Join(tmp, "client.json")
-	statePath := filepath.Join(tmp, "agent-state.json")
-	cfg := client.Config{
-		ControlPlaneURLs:   []string{server.URL},
-		IdentityPrivateKey: "identity-private-key",
-		PrivateKey:         "wireguard-private-key",
-		NodeID:             "old-node",
-		NetworkID:          "old-network",
-		NodeCredential:     "enc_old-credential",
-		NodeApprovalState:  clientapi.NodeApprovalApproved,
-		DeviceFingerprint:  "stable-device-fingerprint",
-		MapRevision:        7,
-	}
-	if err := client.SetSigningTrustBundle(&cfg, oldTrust); err != nil {
-		t.Fatal(err)
-	}
-	if err := client.SaveConfig(configPath, cfg); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(statePath, []byte(`{"last_error":"stale error"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	payload, err := agentIPCHandlers(agentIPCOptions{
-		ConfigPath:  configPath,
-		StateOutput: statePath,
-		SyncForConnect: func() error {
-			return errors.New("POST /nodes/register failed: 400 Bad Request: invalid node credential")
-		},
-	}).TrustServer(context.Background(), ipc.TrustServerRequest{
-		ConfirmedControlOrigin: server.URL,
-		ConfirmedKeyID:         newTrust.ActiveKeyID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if payload.State != ipc.StateNeedsEnrollment || payload.ControlState != ipc.ControlStateNotRegistered {
-		t.Fatalf("trust-server reset status = %#v", payload)
-	}
-	updated, err := client.LoadConfig(configPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updated.NodeID != "" || updated.NetworkID != "" || updated.NodeCredential != "" || updated.NodeApprovalState != "" || updated.MapRevision != 0 || updated.CachedMap != nil {
-		t.Fatal("stale enrollment was not cleared")
-	}
-	if updated.IdentityPrivateKey != cfg.IdentityPrivateKey || updated.PrivateKey != cfg.PrivateKey || updated.DeviceFingerprint != cfg.DeviceFingerprint {
-		t.Fatal("local device identity was not preserved")
-	}
-	if updated.MapSigningTrust == nil || updated.MapSigningTrust.ActiveKeyID != newTrust.ActiveKeyID {
-		t.Fatalf("new server trust was not preserved: %#v", updated.MapSigningTrust)
-	}
-	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
-		t.Fatalf("stale agent state stat error = %v, want absent", err)
-	}
-}
-
-func TestInvalidNodeCredentialServerError(t *testing.T) {
-	if !isInvalidNodeCredentialServerError(errors.New("POST /nodes/register failed: 400 Bad Request: invalid node credential")) {
-		t.Fatal("expected invalid node credential registration error to match")
-	}
-	if !isInvalidNodeCredentialServerError(errors.New("PUT /nodes/old-node/endpoint failed: 401 Unauthorized: invalid node credential")) {
-		t.Fatal("expected revoked node endpoint credential error to match")
-	}
-	if isInvalidNodeCredentialServerError(errors.New("POST /nodes/register failed: 503 Service Unavailable")) {
-		t.Fatal("transient registration failure must not require reenrollment")
-	}
-	if isInvalidNodeCredentialServerError(errors.New("invalid node credential signing trust bundle")) {
-		t.Fatal("local credential validation failure must not be treated as server revocation")
-	}
-}
-
-func TestConnectRequiresReenrollmentAfterNodeDeletion(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/client/readyz" {
-			http.NotFound(w, r)
-			return
-		}
-		_, _ = w.Write([]byte("ok"))
-	}))
-	defer server.Close()
-
-	tmp := t.TempDir()
-	configPath := filepath.Join(tmp, "client.json")
-	statePath := filepath.Join(tmp, "agent-state.json")
-	cfg := client.Config{
-		ControlPlaneURLs:   []string{server.URL},
-		IdentityPrivateKey: "identity-private-key",
-		PrivateKey:         "wireguard-private-key",
-		NodeID:             "deleted-node",
-		NetworkID:          "old-network",
-		NodeCredential:     "enc_revoked-credential",
-		NodeApprovalState:  clientapi.NodeApprovalApproved,
-		DeviceFingerprint:  "stable-device-fingerprint",
-		MapRevision:        9,
-	}
-	if err := client.SaveConfig(configPath, cfg); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(statePath, []byte(`{"last_error":"stale error"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	payload, err := agentIPCHandlers(agentIPCOptions{
-		ConfigPath:  configPath,
-		StateOutput: statePath,
-		SyncForConnect: func() error {
-			return errors.New("PUT /nodes/deleted-node/endpoint failed: 401 Unauthorized: invalid node credential")
-		},
-	}).Connect(context.Background(), ipc.ConnectRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if payload.State != ipc.StateNeedsEnrollment || payload.ControlState != ipc.ControlStateNotRegistered {
-		t.Fatalf("deleted-node connect status = %#v", payload)
-	}
-	updated, err := client.LoadConfig(configPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updated.NodeID != "" || updated.NetworkID != "" || updated.NodeCredential != "" || updated.NodeApprovalState != "" || updated.MapRevision != 0 {
-		t.Fatal("deleted node enrollment was not cleared")
-	}
-	if updated.IdentityPrivateKey != cfg.IdentityPrivateKey || updated.PrivateKey != cfg.PrivateKey || updated.DeviceFingerprint != cfg.DeviceFingerprint {
-		t.Fatal("local device identity was not preserved after node deletion")
 	}
 }
 

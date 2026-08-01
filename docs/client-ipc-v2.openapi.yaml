@@ -1501,6 +1501,8 @@ components:
         - remote_cleanup_required
         - local_forget_confirmation_required
         - recovery_operation_invalid
+        - recovery_operation_id_failed
+        - local_forget_failed
         - network_ref_required
         - config_unavailable
         - client_state_format_unsupported

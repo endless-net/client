@@ -40,7 +40,7 @@ jobs:
           [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::invalid client release tag"; exit 1; }
 
       - name: Test client packages
-        run: go test ./internal/client ./cmd/endlessnet-client
+        run: go test ./internal/client ./cmd/endlessnet-client ./cmd/endlessnet-client-recovery-helper
 
       - name: Build immutable client artifacts
         id: build
@@ -51,7 +51,9 @@ jobs:
           output_dir="$GITHUB_WORKSPACE/dist/client-core"
           mkdir -p "$output_dir"
           exe_name="endlessnet-client_windows_amd64.exe"
+          recovery_helper_name="endlessnet-client-recovery-helper_windows_amd64.exe"
           linux_name="endlessnet-client_linux_amd64"
+          linux_recovery_helper_name="endlessnet-client-recovery-helper_linux_amd64"
           contract_name="client-ipc-v2.openapi.yaml"
           manifest_name="endlessnet-client_windows_amd64.manifest.json"
           linux_manifest_name="endlessnet-client_linux_amd64.manifest.json"
@@ -59,18 +61,26 @@ jobs:
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath \
             -ldflags "-s -w -X main.version=$version -X main.commit=$GITHUB_SHA -X main.buildDate=$build_date" \
             -o "$output_dir/$exe_name" ./cmd/endlessnet-client
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath \
+            -ldflags "-s -w" \
+            -o "$output_dir/$recovery_helper_name" ./cmd/endlessnet-client-recovery-helper
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
             -ldflags "-s -w -X main.version=$version -X main.commit=$GITHUB_SHA -X main.buildDate=$build_date" \
             -o "$output_dir/$linux_name" ./cmd/endlessnet-client
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+            -ldflags "-s -w" \
+            -o "$output_dir/$linux_recovery_helper_name" ./cmd/endlessnet-client-recovery-helper
           cp docs/client-ipc-v2.openapi.yaml "$output_dir/$contract_name"
           cp LICENSE NOTICE THIRD_PARTY_NOTICES "$output_dir/"
           exe_sha="$(sha256sum "$output_dir/$exe_name" | awk '{print $1}')"
+          recovery_helper_sha="$(sha256sum "$output_dir/$recovery_helper_name" | awk '{print $1}')"
           linux_sha="$(sha256sum "$output_dir/$linux_name" | awk '{print $1}')"
+          linux_recovery_helper_sha="$(sha256sum "$output_dir/$linux_recovery_helper_name" | awk '{print $1}')"
           contract_sha="$(sha256sum "$output_dir/$contract_name" | awk '{print $1}')"
           base_url="https://github.com/endless-net/client/releases/download/$GITHUB_REF_NAME"
           cat > "$output_dir/$manifest_name" <<EOF
           {
-            "schema_version": 1,
+            "schema_version": 2,
             "repository": "endless-net/client",
             "version": "$version",
             "commit": "$GITHUB_SHA",
@@ -79,8 +89,15 @@ jobs:
             "artifacts": {
               "client": {
                 "name": "$exe_name",
+                "installed_name": "endlessnet-client.exe",
                 "url": "$base_url/$exe_name",
                 "sha256": "$exe_sha"
+              },
+              "recovery_helper": {
+                "name": "$recovery_helper_name",
+                "installed_name": "endlessnet-client-recovery-helper.exe",
+                "url": "$base_url/$recovery_helper_name",
+                "sha256": "$recovery_helper_sha"
               },
               "ipc_contract": {
                 "name": "$contract_name",
@@ -92,21 +109,32 @@ jobs:
           EOF
           cat > "$output_dir/$linux_manifest_name" <<EOF
           {
-            "schema_version": 1,
+            "schema_version": 2,
             "repository": "endless-net/client",
             "version": "$version",
             "commit": "$GITHUB_SHA",
             "target": "linux/amd64",
-            "artifact": {
-              "name": "$linux_name",
-              "url": "$base_url/$linux_name",
-              "sha256": "$linux_sha"
+            "artifacts": {
+              "client": {
+                "name": "$linux_name",
+                "installed_name": "endlessnet-client",
+                "url": "$base_url/$linux_name",
+                "sha256": "$linux_sha"
+              },
+              "recovery_helper": {
+                "name": "$linux_recovery_helper_name",
+                "installed_name": "endlessnet-client-recovery-helper",
+                "url": "$base_url/$linux_recovery_helper_name",
+                "sha256": "$linux_recovery_helper_sha"
+              }
             }
           }
           EOF
           linux_manifest_sha="$(sha256sum "$output_dir/$linux_manifest_name" | awk '{print $1}')"
           printf '%s  %s\n' "$exe_sha" "$exe_name" > "$output_dir/$exe_name.sha256"
+          printf '%s  %s\n' "$recovery_helper_sha" "$recovery_helper_name" > "$output_dir/$recovery_helper_name.sha256"
           printf '%s  %s\n' "$linux_sha" "$linux_name" > "$output_dir/$linux_name.sha256"
+          printf '%s  %s\n' "$linux_recovery_helper_sha" "$linux_recovery_helper_name" > "$output_dir/$linux_recovery_helper_name.sha256"
           printf '%s  %s\n' "$linux_manifest_sha" "$linux_manifest_name" > "$output_dir/$linux_manifest_checksum_name"
           {
             echo "output_dir=$output_dir"
