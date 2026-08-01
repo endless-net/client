@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
-	relayauth "github.com/unng-lab/endlessnet-relay/protocol/v1"
+	relayauth "github.com/endless-net/relay/protocol/v1"
 )
 
 func TestBuildAgentSnapshotReportsStateWithoutSecrets(t *testing.T) {

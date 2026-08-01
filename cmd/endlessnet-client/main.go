@@ -17,20 +17,18 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"reflect"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/unng-lab/endlessnet-client/internal/client"
-	ipc "github.com/unng-lab/endlessnet-client/ipc/v1"
+	"github.com/endless-net/client/internal/client"
+	ipc "github.com/endless-net/client/ipc/v1"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
-	wgkeys "github.com/unng-lab/endlessnet/clientapi/wireguard"
+	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 
-	relayauth "github.com/unng-lab/endlessnet-relay/protocol/v1"
+	relayauth "github.com/endless-net/relay/protocol/v1"
 )
 
 var (
@@ -1045,11 +1043,8 @@ func cmdSync(args []string) error {
 			return nil
 		}
 	}
-	event, err := api.ReadMapStreamEvent(cfg.NodeID, streamFromRevision, timeout)
+	event, err := api.ReadMapStreamEvent(cfg.NodeID, mapStreamCursor(cfg, streamFromRevision), timeout)
 	if err != nil {
-		return err
-	}
-	if err := verifyMapStreamEvent(&cfg, event); err != nil {
 		return err
 	}
 	networkMap, cacheAction, err := cacheNetworkMapFromEvent(&cfg, event)
@@ -1601,13 +1596,6 @@ func verifyNetworkMap(cfg *client.Config, response clientapi.RegisterNodeRespons
 	return clientapi.VerifyNetworkMapSignatureWithTrustBundle(response, trust)
 }
 
-func verifyMapStreamEvent(cfg *client.Config, event clientapi.MapStreamEvent) error {
-	if !event.HasFullMap() {
-		return errors.New("map stream event omitted the required full map")
-	}
-	return verifyNetworkMap(cfg, *event.Map)
-}
-
 func updatePublishedEndpointFromConfig(cfg *client.Config, api *clientapi.API, endpoint string) (clientapi.RegisterNodeResponse, bool, error) {
 	endpoint = strings.TrimSpace(endpoint)
 	if endpoint == "" {
@@ -1685,158 +1673,74 @@ func cacheNetworkMapChecked(cfg *client.Config, response clientapi.RegisterNodeR
 }
 
 func cacheNetworkMapFromEvent(cfg *client.Config, event clientapi.MapStreamEvent) (clientapi.RegisterNodeResponse, string, error) {
-	if !event.HasFullMap() {
-		return clientapi.RegisterNodeResponse{}, "", fmt.Errorf("map stream event omitted the required full map")
+	current := clientapi.NetworkMapSnapshot{}
+	if cfg.CachedMap != nil {
+		current = networkMapSnapshotFromResponse(*cfg.CachedMap)
+		current.Revision.Network = cfg.MapRevision
+		current.Revision.Global = cfg.MapGlobalRevision
+		current.MapSignature = mapSignatureForHash(current.MapSignature, cfg.MapHash)
 	}
-	if event.Type == "snapshot" && event.Delta != nil && cfg.CachedMap != nil && event.FromRevision != 0 && cfg.CachedMap.Network.Revision == event.FromRevision {
-		merged, err := applyMapDeltaToCached(*cfg.CachedMap, event)
-		if err != nil {
-			return clientapi.RegisterNodeResponse{}, "", err
-		}
-		if !networkMapEquivalentForCache(merged, *event.Map) {
-			return clientapi.RegisterNodeResponse{}, "", fmt.Errorf("map stream delta does not reproduce signed revision %d", event.Map.Network.Revision)
-		}
-		if err := cacheNetworkMapChecked(cfg, merged); err != nil {
-			return clientapi.RegisterNodeResponse{}, "", err
-		}
-		return merged, "delta", nil
-	}
-	if err := cacheNetworkMapChecked(cfg, *event.Map); err != nil {
+	trust, err := client.SigningTrustBundle(*cfg)
+	if err != nil {
 		return clientapi.RegisterNodeResponse{}, "", err
 	}
-	return *event.Map, "full", nil
+	next, err := clientapi.ApplyMapStreamEvent(current, event, trust, time.Now().UTC())
+	if errors.Is(err, clientapi.ErrMapStreamEventAlreadyApplied) {
+		return networkMapResponseFromSnapshot(next), "unchanged", nil
+	}
+	if err != nil {
+		return clientapi.RegisterNodeResponse{}, "", err
+	}
+	response := networkMapResponseFromSnapshot(next)
+	if err := cacheNetworkMapChecked(cfg, response); err != nil {
+		return clientapi.RegisterNodeResponse{}, "", err
+	}
+	cfg.MapRevision = next.Revision.Network
+	cfg.MapGlobalRevision = next.Revision.Global
+	cfg.MapHash = ""
+	if next.MapSignature != nil {
+		cfg.MapHash = next.MapSignature.PayloadHash
+	}
+	action := "full"
+	if event.Type == "delta" {
+		action = "delta"
+	}
+	return response, action, nil
 }
 
-func applyMapDeltaToCached(cached clientapi.RegisterNodeResponse, event clientapi.MapStreamEvent) (clientapi.RegisterNodeResponse, error) {
-	if event.Delta == nil {
-		return clientapi.RegisterNodeResponse{}, fmt.Errorf("map stream delta is missing")
-	}
-	if event.Map == nil {
-		return clientapi.RegisterNodeResponse{}, fmt.Errorf("map stream delta is missing the required full map")
-	}
-	metadata := *event.Map
-	peersByID := make(map[string]clientapi.Peer, len(cached.Peers)+len(event.Delta.Added)+len(event.Delta.Updated))
-	for _, peer := range cached.Peers {
-		if strings.TrimSpace(peer.ID) == "" {
-			return clientapi.RegisterNodeResponse{}, fmt.Errorf("cached peer id is missing")
-		}
-		peersByID[peer.ID] = peer
-	}
-	for _, peer := range event.Delta.Removed {
-		if strings.TrimSpace(peer.ID) == "" {
-			return clientapi.RegisterNodeResponse{}, fmt.Errorf("removed peer id is missing")
-		}
-		delete(peersByID, peer.ID)
-	}
-	for _, peer := range event.Delta.Updated {
-		if strings.TrimSpace(peer.ID) == "" {
-			return clientapi.RegisterNodeResponse{}, fmt.Errorf("updated peer id is missing")
-		}
-		if _, ok := peersByID[peer.ID]; !ok {
-			return clientapi.RegisterNodeResponse{}, fmt.Errorf("updated peer %s was not present in cached map", peer.ID)
-		}
-		peersByID[peer.ID] = peer
-	}
-	for _, peer := range event.Delta.Added {
-		if strings.TrimSpace(peer.ID) == "" {
-			return clientapi.RegisterNodeResponse{}, fmt.Errorf("added peer id is missing")
-		}
-		if _, ok := peersByID[peer.ID]; ok {
-			return clientapi.RegisterNodeResponse{}, fmt.Errorf("added peer %s is already present in cached map", peer.ID)
-		}
-		peersByID[peer.ID] = peer
-	}
-	peers := make([]clientapi.Peer, 0, len(peersByID))
-	for _, peer := range peersByID {
-		peers = append(peers, peer)
-	}
-	sort.Slice(peers, func(i, j int) bool {
-		if peers[i].Hostname == peers[j].Hostname {
-			return peers[i].ID < peers[j].ID
-		}
-		return peers[i].Hostname < peers[j].Hostname
-	})
-	relays := append([]relayauth.Endpoint(nil), cached.Relays...)
-	if event.Delta.Relays != nil {
-		var err error
-		relays, err = applyRelayEndpointDeltaToCached(cached.Relays, *event.Delta.Relays)
-		if err != nil {
-			return clientapi.RegisterNodeResponse{}, err
+func mapStreamCursor(cfg client.Config, networkRevision uint64) clientapi.MapCursor {
+	cursor := clientapi.MapCursor{Revision: clientapi.MapRevision{Network: networkRevision}}
+	if cfg.CachedMap != nil && cfg.CachedMap.Network.Revision == networkRevision {
+		cursor.Revision.Global = cfg.MapGlobalRevision
+		cursor.MapHash = cfg.MapHash
+		if cursor.MapHash == "" && cfg.CachedMap.MapSignature != nil {
+			cursor.MapHash = cfg.CachedMap.MapSignature.PayloadHash
 		}
 	}
-	merged := cached
-	merged.Network = metadata.Network
-	merged.Node = metadata.Node
-	merged.Peers = peers
-	merged.RegistrationBinding = metadata.RegistrationBinding
-	merged.NodeCredential = metadata.NodeCredential
-	merged.STUNEndpoints = metadata.STUNEndpoints
-	merged.Relays = relays
-	merged.RelayCredential = metadata.RelayCredential
-	merged.MapSignature = metadata.MapSignature
-	return merged, nil
+	return cursor
 }
 
-func applyRelayEndpointDeltaToCached(cached []relayauth.Endpoint, delta clientapi.RelayEndpointDelta) ([]relayauth.Endpoint, error) {
-	relaysByID := make(map[string]relayauth.Endpoint, len(cached)+len(delta.Added)+len(delta.Updated))
-	order := make([]string, 0, len(cached)+len(delta.Added))
-	for _, relay := range cached {
-		if strings.TrimSpace(relay.ID) == "" {
-			return nil, fmt.Errorf("cached relay endpoint id is missing")
-		}
-		if _, ok := relaysByID[relay.ID]; ok {
-			return nil, fmt.Errorf("cached relay endpoint %s is duplicated", relay.ID)
-		}
-		relaysByID[relay.ID] = relay
-		order = append(order, relay.ID)
-	}
-	for _, relay := range delta.Removed {
-		if strings.TrimSpace(relay.ID) == "" {
-			return nil, fmt.Errorf("removed relay endpoint id is missing")
-		}
-		if _, ok := relaysByID[relay.ID]; !ok {
-			return nil, fmt.Errorf("removed relay endpoint %s was not present in cached map", relay.ID)
-		}
-		delete(relaysByID, relay.ID)
-	}
-	for _, relay := range delta.Updated {
-		if strings.TrimSpace(relay.ID) == "" {
-			return nil, fmt.Errorf("updated relay endpoint id is missing")
-		}
-		if _, ok := relaysByID[relay.ID]; !ok {
-			return nil, fmt.Errorf("updated relay endpoint %s was not present in cached map", relay.ID)
-		}
-		relaysByID[relay.ID] = relay
-	}
-	for _, relay := range delta.Added {
-		if strings.TrimSpace(relay.ID) == "" {
-			return nil, fmt.Errorf("added relay endpoint id is missing")
-		}
-		if _, ok := relaysByID[relay.ID]; ok {
-			return nil, fmt.Errorf("added relay endpoint %s is already present in cached map", relay.ID)
-		}
-		relaysByID[relay.ID] = relay
-		order = append(order, relay.ID)
-	}
-	relays := make([]relayauth.Endpoint, 0, len(relaysByID))
-	for _, id := range order {
-		if relay, ok := relaysByID[id]; ok {
-			relays = append(relays, relay)
-		}
-	}
-	return relays, nil
+func networkMapSnapshotFromResponse(response clientapi.RegisterNodeResponse) clientapi.NetworkMapSnapshot {
+	return clientapi.NetworkMapSnapshot{Revision: clientapi.MapRevision{Network: response.Network.Revision}, Network: response.Network, Node: response.Node, Peers: append([]clientapi.Peer(nil), response.Peers...), RegistrationBinding: response.RegistrationBinding, STUNEndpoints: append([]clientapi.STUNEndpoint(nil), response.STUNEndpoints...), Relays: append([]relayauth.Endpoint(nil), response.Relays...), RelayCredential: response.RelayCredential, MapSignature: response.MapSignature}
 }
 
-func networkMapEquivalentForCache(a, b clientapi.RegisterNodeResponse) bool {
-	return reflect.DeepEqual(a.Network, b.Network) &&
-		reflect.DeepEqual(a.Node, b.Node) &&
-		reflect.DeepEqual(a.Peers, b.Peers) &&
-		a.RegistrationBinding == b.RegistrationBinding &&
-		reflect.DeepEqual(a.STUNEndpoints, b.STUNEndpoints) &&
-		reflect.DeepEqual(a.Relays, b.Relays) &&
-		reflect.DeepEqual(a.MapSignature, b.MapSignature)
+func networkMapResponseFromSnapshot(snapshot clientapi.NetworkMapSnapshot) clientapi.RegisterNodeResponse {
+	return clientapi.RegisterNodeResponse{Revision: snapshot.Revision, Network: snapshot.Network, Node: snapshot.Node, Peers: append([]clientapi.Peer(nil), snapshot.Peers...), RegistrationBinding: snapshot.RegistrationBinding, STUNEndpoints: append([]clientapi.STUNEndpoint(nil), snapshot.STUNEndpoints...), Relays: append([]relayauth.Endpoint(nil), snapshot.Relays...), RelayCredential: snapshot.RelayCredential, MapSignature: snapshot.MapSignature}
 }
 
+func mapSignatureForHash(signature *clientapi.MapSignature, hash string) *clientapi.MapSignature {
+	if signature == nil && hash == "" {
+		return nil
+	}
+	if signature == nil {
+		return &clientapi.MapSignature{PayloadHash: hash}
+	}
+	copy := *signature
+	if copy.PayloadHash == "" {
+		copy.PayloadHash = hash
+	}
+	return &copy
+}
 func verifiedCachedNetworkMap(cfg *client.Config) (clientapi.RegisterNodeResponse, error) {
 	return verifiedCachedNetworkMapWithMaxAge(cfg, 0)
 }
@@ -2713,11 +2617,8 @@ func freshNodeNetworkMapFromRevision(configPath string, timeout time.Duration, f
 	if err := refreshMapSigningTrust(&cfg, api); err != nil {
 		return cfg, clientapi.RegisterNodeResponse{}, err
 	}
-	event, err := api.ReadMapStreamEvent(cfg.NodeID, fromRevision, timeout)
+	event, err := api.ReadMapStreamEvent(cfg.NodeID, mapStreamCursor(cfg, fromRevision), timeout)
 	if err != nil {
-		return cfg, clientapi.RegisterNodeResponse{}, err
-	}
-	if err := verifyMapStreamEvent(&cfg, event); err != nil {
 		return cfg, clientapi.RegisterNodeResponse{}, err
 	}
 	networkMap, _, err := cacheNetworkMapFromEvent(&cfg, event)

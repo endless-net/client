@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unng-lab/endlessnet-client/internal/stunclient"
+	"github.com/endless-net/client/internal/stunclient"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
 
 type STUNCheckResult struct {

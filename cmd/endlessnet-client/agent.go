@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/unng-lab/endlessnet-client/internal/client"
-	ipc "github.com/unng-lab/endlessnet-client/ipc/v1"
+	"github.com/endless-net/client/internal/client"
+	ipc "github.com/endless-net/client/ipc/v1"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
 
 func agentReconnectDelay(baseDelay, maxDelay time.Duration, consecutiveFailures int, jitterRatio, jitterUnit float64) time.Duration {
@@ -781,16 +781,13 @@ func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevisio
 			}
 		}
 	}
-	event, err := api.ReadMapStreamEvent(cfg.NodeID, fromRevision, timeout)
+	event, err := api.ReadMapStreamEvent(cfg.NodeID, mapStreamCursor(cfg, fromRevision), timeout)
 	mapUnchanged := false
 	if errors.Is(err, clientapi.ErrMapStreamNoEvent) {
 		mapUnchanged = true
-		event, err = api.ReadMapStreamEvent(cfg.NodeID, 0, timeout)
+		event, err = api.ReadMapStreamEvent(cfg.NodeID, clientapi.MapCursor{}, timeout)
 	}
 	if err != nil {
-		return cfg, clientapi.RegisterNodeResponse{}, false, err
-	}
-	if err := verifyMapStreamEvent(&cfg, event); err != nil {
 		return cfg, clientapi.RegisterNodeResponse{}, false, err
 	}
 	networkMap, _, err := cacheNetworkMapFromEvent(&cfg, event)

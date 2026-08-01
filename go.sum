@@ -1,13 +1,13 @@
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
+github.com/endless-net/client-api/clientapi v1.2.0 h1:/bHn9FMqm0DWQSusBA1wqO2d87V3J6D232bk4RgfyLI=
+github.com/endless-net/client-api/clientapi v1.2.0/go.mod h1:WfCT8T23ZlNR2M4og4e3HFMo4l1EAveSj5xXQUTgvNU=
+github.com/endless-net/relay v1.1.4 h1:1Oh+AU4iab/83yNDA3YY3ekBFzjvLzEEQuB1b5cY70k=
+github.com/endless-net/relay v1.1.4/go.mod h1:N7ZQeRUH5TJE5FxsvcdTn0SNFT82YFmgO1Su1GXaAj0=
 github.com/google/btree v1.0.1 h1:gK4Kx5IaGY9CD5sPJ36FHiBJ6ZXl0kilRiiCj+jdYp4=
 github.com/google/btree v1.0.1/go.mod h1:xXMiIv4Fb/0kKde4SpL7qlzvu5cMJDRkFDxJfI9uaxA=
 github.com/tailscale/wireguard-go v0.0.0-20260622164646-ae172d45f0f7 h1:u/nUghv4ajOqL+HelhnXtYifN4NHN3NuvQPeZRAds3s=
 github.com/tailscale/wireguard-go v0.0.0-20260622164646-ae172d45f0f7/go.mod h1:6SerzcvHWQchKO2BfNdmquA77CHSECZuFl+D9fp4RnI=
-github.com/unng-lab/endlessnet-relay v1.1.2 h1:SpjwmsM2z3WE9CNWIdQhnJJX2uuh8Bd5YYKlPwmnmrk=
-github.com/unng-lab/endlessnet-relay v1.1.2/go.mod h1:s+Z09bqvyIpwjZflqCuMBMNVDqEjD95NzkDqmQmWRr0=
-github.com/unng-lab/endlessnet/clientapi v1.1.0 h1:7yL5oJiMGQ/Z3MqpPmZoF0QVxbagnlNcOwaxyCIPRXQ=
-github.com/unng-lab/endlessnet/clientapi v1.1.0/go.mod h1:H4Y4NueCnKq/Yh8Wi2FckQ+Seb4RWx78Ud/PMWY3ucg=
 golang.org/x/crypto v0.53.0 h1:QZ4Muo8THX6CizN2vPPd5fBGHyogrdK9fG4wLPFUsto=
 golang.org/x/crypto v0.53.0/go.mod h1:DNLU434OwVakk9PzuwV8w62mAJpRJL3vsgcfp4Qnsio=
 golang.org/x/net v0.55.0 h1:bcvxaJn3e1U6InsFWt1JUq1aSjnRxLzT2rtD2KfkDF8=

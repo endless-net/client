@@ -16,7 +16,7 @@ permissions:
 
 env:
   PACKAGE_NAME: endlessnet-client
-  APT_REPOSITORY: unng-lab/apt
+  APT_REPOSITORY: endless-net/apt
   APT_DISTRIBUTION: stable
   APT_COMPONENT: main
   APT_ORIGIN: UNNG
