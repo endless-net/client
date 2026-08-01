@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
 
 const LegacyConfigStateVersion = 2

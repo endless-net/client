@@ -8,7 +8,7 @@ The maintained Russian client architecture and operations guide starts at
 
 Client source is imported through pull requests. Control-plane HTTP and signed
 wire contracts are consumed from the producer-owned, versioned
-`github.com/unng-lab/endlessnet/clientapi` module.
+`github.com/endless-net/client-api/clientapi` module.
 
 ## Build and verify
 
@@ -20,7 +20,7 @@ go test -short ./...
 The repository owns the client binary, Linux service assets, APT package,
 immutable Windows core manifest and the producer side of the versioned local IPC
 contract. Browser UI and signed Windows installer packaging remain owned by
-`unng-lab/endlessnet-client-ui`.
+`endless-net/front`.
 
 ## Release boundary
 
@@ -45,4 +45,4 @@ runners; release and APT credentials are restricted to their dedicated jobs.
 local service IPC v1 contract and transport clients. Persisted state, identity,
 diagnostics implementation, and STUN implementation are internal details.
 Control-plane DTOs and signed wire verification remain in the pinned
-`github.com/unng-lab/endlessnet/clientapi` module.
+`github.com/endless-net/client-api/clientapi` module.

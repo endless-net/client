@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/unng-lab/endlessnet-client/internal/client"
+	"github.com/endless-net/client/internal/client"
 )
 
 func cmdState(args []string) error {

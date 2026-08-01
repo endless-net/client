@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
-	relay "github.com/unng-lab/endlessnet-relay/protocol/v1"
-	"github.com/unng-lab/endlessnet-relay/relaytest"
+	relay "github.com/endless-net/relay/protocol/v1"
+	"github.com/endless-net/relay/relaytest"
 )
 
 func TestDialRelayFallsBackToNextEndpoint(t *testing.T) {

@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
-	relay "github.com/unng-lab/endlessnet-relay/protocol/v1"
+	relay "github.com/endless-net/relay/protocol/v1"
 )
 
 type RelayDataplaneBridgeOptions struct {

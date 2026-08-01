@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	stun "github.com/unng-lab/endlessnet-client/internal/stunclient"
+	stun "github.com/endless-net/client/internal/stunclient"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
 
 func TestCheckSTUNQueriesReachableEndpoint(t *testing.T) {

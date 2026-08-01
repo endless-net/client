@@ -17,9 +17,9 @@ import (
 	"time"
 
 	"github.com/Microsoft/go-winio"
-	client "github.com/unng-lab/endlessnet-client/internal/client"
-	ipc "github.com/unng-lab/endlessnet-client/ipc/v1"
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
+	client "github.com/endless-net/client/internal/client"
+	ipc "github.com/endless-net/client/ipc/v1"
 )
 
 func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {

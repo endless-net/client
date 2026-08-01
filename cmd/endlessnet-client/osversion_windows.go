@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"runtime"
 
-	ipc "github.com/unng-lab/endlessnet-client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v1"
 
 	"golang.org/x/sys/windows"
 )

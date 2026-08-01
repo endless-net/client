@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
-	wgkeys "github.com/unng-lab/endlessnet/clientapi/wireguard"
+	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 )
 
 const wireGuardACLFirewallChainPrefix = "ENACL-"

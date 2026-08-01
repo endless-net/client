@@ -29,7 +29,7 @@ func TestClientRepositoryHasNoBackendInternalDependency(t *testing.T) {
 		}
 		for _, forbidden := range []string{
 			`"endlessnet/` + `internal/`,
-			`"github.com/unng-lab/endlessnet/` + `internal/`,
+			`"github.com/endless-net/` + `internal/`,
 		} {
 			if strings.Contains(string(raw), forbidden) {
 				t.Errorf("%s imports backend internals via %q", filepath.ToSlash(path), forbidden)
@@ -48,10 +48,10 @@ func TestClientRepositoryPinsProducerContractWithoutReplace(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(goMod)
-	if !strings.Contains(text, "github.com/unng-lab/endlessnet/clientapi v") {
+	if !strings.Contains(text, "github.com/endless-net/client-api/clientapi v") {
 		t.Fatal("go.mod does not pin the producer-owned clientapi module")
 	}
-	if strings.Contains(text, "replace github.com/unng-lab/endlessnet/clientapi") {
+	if strings.Contains(text, "replace github.com/endless-net/client-api/clientapi") {
 		t.Fatal("go.mod uses a local clientapi replacement")
 	}
 
@@ -61,7 +61,7 @@ func TestClientRepositoryPinsProducerContractWithoutReplace(t *testing.T) {
 	}
 	workflowText := string(workflow)
 	for _, expected := range []string{
-		"unng-lab/endlessnet-client",
+		"endless-net/client",
 		"endlessnet-client_linux_amd64.manifest.json.sha256",
 	} {
 		if !strings.Contains(workflowText, expected) {
