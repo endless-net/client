@@ -1,6 +1,6 @@
 package v1
 
-import clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+import clientapi "github.com/endless-net/client-api/clientapi/v1"
 
 const (
 	Protocol             = "endlessnet-client-ipc"

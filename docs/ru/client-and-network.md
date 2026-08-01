@@ -71,7 +71,7 @@ control-plane client — в
 5. Coordinator возвращает network map и отдельный node credential. Перед
    применением клиент валидирует структуру карты, registration binding,
    срок действия и Ed25519-подпись; реализация подписи находится в
-   [`clientapi/v1/mapsign.go`](https://github.com/unng-lab/endlessnet/blob/main/clientapi/v1/mapsign.go).
+   [`clientapi/v1/mapsign.go`](https://github.com/endless-net/blob/main/clientapi/v1/mapsign.go).
 6. Проверенная карта преобразуется в WireGuard peers, routes, DNS и локальные
    policy-настройки и транзакционно применяется прямо к долгоживущему
    wireguard-go engine. Промежуточный конфигурационный файл в agent iteration
@@ -85,7 +85,7 @@ control-plane client — в
 Node credential версии 3 подписан Ed25519, связан с `network_id` и `node_id`,
 имеет срок действия и scopes `node:register`, `node:map`, `node:endpoint`,
 `node:delete`; см.
-[`clientapi/v1/nodecredential.go`](https://github.com/unng-lab/endlessnet/blob/main/clientapi/v1/nodecredential.go).
+[`clientapi/v1/nodecredential.go`](https://github.com/endless-net/blob/main/clientapi/v1/nodecredential.go).
 Он содержит `key_id`, но не public key: проверяющая сторона разрешает ключ
 только из node credential trust bundle. Credential передается в заголовке
 `X-EndlessNet-Node-Credential`, а пользовательская session — как bearer token.
@@ -134,7 +134,7 @@ Client-only Binding protocol реализован в
 [`internal/stunclient`](../../internal/stunclient). Он проверяет тип сообщения,
 magic cookie, transaction ID, длины атрибутов и разбирает
 `XOR-MAPPED-ADDRESS`. STUN listeners разрабатываются и выпускаются из отдельного
-репозитория `unng-lab/endlessnet-stun`; EndlessNet хранит только endpoint list и
+репозитория `endless-net/stun`; EndlessNet хранит только endpoint list и
 клиентский Binding.
 
 В automatic discovery публикуются:
@@ -192,7 +192,7 @@ endpoint для каждого peer и пересылает WireGuard datagrams 
 [`internal/client/relaybridge.go`](../../internal/client/relaybridge.go).
 
 Relay runtime и `protocol/v1` находятся во внешнем private-репозитории
-[`unng-lab/endlessnet-relay`](https://github.com/unng-lab/endlessnet-relay):
+[`endless-net/relay`](https://github.com/endless-net/relay):
 
 - relay credential связывает node и network и имеет срок действия;
 - coordinator повторно подтверждает active-node state и допустимость peer

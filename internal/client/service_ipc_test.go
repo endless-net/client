@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	ipc "github.com/unng-lab/endlessnet-client/ipc/v1"
+	ipc "github.com/endless-net/client/ipc/v1"
 )
 
 func TestServiceIPCHandlerStatusAndActions(t *testing.T) {

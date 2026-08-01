@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
 
 const atomicTempFileMaxAge = 24 * time.Hour
@@ -50,6 +50,8 @@ type Config struct {
 	DeviceFingerprint   string                          `json:"device_fingerprint,omitempty"`
 	MapSigningTrust     *clientapi.SigningTrustBundle   `json:"map_signing_trust_bundle,omitempty"`
 	MapRevision         uint64                          `json:"map_revision,omitempty"`
+	MapGlobalRevision   uint64                          `json:"map_global_revision,omitempty"`
+	MapHash             string                          `json:"map_hash,omitempty"`
 	SubnetRouterSNAT    bool                            `json:"subnet_router_snat,omitempty"`
 	ExitLANPolicy       string                          `json:"exit_lan_policy,omitempty"`
 	WireGuardMTU        int                             `json:"wireguard_mtu,omitempty"`

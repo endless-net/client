@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/unng-lab/endlessnet-client/internal/client"
-	ipc "github.com/unng-lab/endlessnet-client/ipc/v1"
+	"github.com/endless-net/client/internal/client"
+	ipc "github.com/endless-net/client/ipc/v1"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
 
 func cmdService(args []string) error {

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	relay "github.com/unng-lab/endlessnet-relay/protocol/v1"
+	relay "github.com/endless-net/relay/protocol/v1"
 )
 
 const DefaultRelayDialTimeout = 2 * time.Second

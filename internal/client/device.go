@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	wgkeys "github.com/unng-lab/endlessnet/clientapi/wireguard"
+	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 )
 
 type installationState struct {

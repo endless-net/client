@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	clientapi "github.com/unng-lab/endlessnet/clientapi/v1"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
 	"golang.org/x/crypto/curve25519"
 )
