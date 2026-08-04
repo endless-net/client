@@ -17,6 +17,7 @@
 - Run `git status --short` before reading or changing files and preserve existing user changes.
 - Never read or print environment files, credentials, private keys, client identity keys or node credentials.
 - Keep control-plane DTOs and cryptographic wire verification in the pinned `github.com/endless-net/client-api/clientapi` module; do not copy backend-internal packages.
+- Do not preserve legacy behavior, deprecated interfaces, or backward compatibility.
 - Do not add compatibility fallbacks for superseded CLI, IPC, state or release behavior.
 - Client releases, APT packaging, Windows core artifacts and cross-platform client CI belong to this repository.
 - GitHub Actions runner-unit installation, registration, systemd policy, host inventory, recovery/rollback and guarded rollout belong to `endless-net/observability`; keep only job logic and `runs-on` selectors here.
