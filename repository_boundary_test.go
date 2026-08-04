@@ -129,7 +129,7 @@ func TestAPTReleaseUsesRepositoryScopedDeployKey(t *testing.T) {
 	}
 }
 
-func TestAPTPackageMigratesLegacyStateBeforeRestart(t *testing.T) {
+func TestAPTPackageRestartsServiceWithoutStateMigration(t *testing.T) {
 	script, err := os.ReadFile("scripts/build-deb.sh")
 	if err != nil {
 		t.Fatal(err)
@@ -138,8 +138,6 @@ func TestAPTPackageMigratesLegacyStateBeforeRestart(t *testing.T) {
 	for _, expected := range []string{
 		`cat > "$control_dir/preinst"`,
 		"systemctl stop $package_name.service",
-		"$package_name state migrate",
-		`--backup "\$state_path.pre-migration-v2.bak"`,
 		"systemctl start $package_name.service",
 		`chmod 0755 "$control_dir/preinst"`,
 	} {
@@ -147,8 +145,10 @@ func TestAPTPackageMigratesLegacyStateBeforeRestart(t *testing.T) {
 			t.Fatalf("APT package lifecycle does not contain %q", expected)
 		}
 	}
-	if strings.Index(text, "$package_name state migrate") > strings.Index(text, "systemctl start $package_name.service") {
-		t.Fatal("APT package restarts the client before migrating legacy state")
+	for _, removed := range []string{"state migrate", "pre-migration-v2.bak"} {
+		if strings.Contains(text, removed) {
+			t.Fatalf("APT package still contains removed state migration token %q", removed)
+		}
 	}
 }
 

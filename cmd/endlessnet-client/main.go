@@ -136,8 +136,6 @@ func main() {
 		err = cmdAgent(os.Args[2:])
 	case "service":
 		err = cmdService(os.Args[2:])
-	case "state":
-		err = cmdState(os.Args[2:])
 	case "down":
 		err = cmdDown(os.Args[2:])
 	case "diagnostics":

@@ -101,14 +101,7 @@ EOF
 #!/bin/sh
 set -e
 
-state_path=/var/lib/endlessnet/client.json
 restart_marker=/var/lib/endlessnet/.restart-after-upgrade
-
-if [ -x /opt/endlessnet/bin/$package_name ] && [ -s "\$state_path" ]; then
-  /opt/endlessnet/bin/$package_name state migrate \
-    --config "\$state_path" \
-    --backup "\$state_path.pre-migration-v2.bak"
-fi
 
 if command -v systemd-tmpfiles >/dev/null 2>&1; then
   systemd-tmpfiles --create /usr/lib/tmpfiles.d/$package_name.conf >/dev/null 2>&1 || true

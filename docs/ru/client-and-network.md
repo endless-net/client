@@ -239,29 +239,14 @@ connection intent находятся в том же state. Рабочие CLI, I
 поддерживают прежние схемы и возвращают `client_state_format_unsupported` или
 `client_state_version_unsupported`.
 
-Для точной legacy-схемы `state_version: 2` без `state_format` предусмотрена
-отдельная offline-миграция:
+State с иным форматом или версией не поддерживается и не преобразуется. После
+архивирования такого state оператор повторяет login и enrollment/join. APT upgrade
+сохраняет обычное поведение остановки и возобновления активного service, но не
+обрабатывает содержимое client state.
 
-```text
-systemctl stop endlessnet-client
-endlessnet-client state migrate --config /var/lib/endlessnet/client.json
-systemctl start endlessnet-client
-endlessnet-client service status
-```
-
-Мигратор требует свободный agent lock, строго декодирует известные поля,
-переносит control-plane URLs и enrollment approval URL, сохраняет identity,
-credentials, signing trust и cached map, создаёт защищённую побайтовую backup
-копию и атомарно записывает state v1. Повторный запуск для уже актуального state
-является no-op. Неизвестные legacy-поля, версии и форматы не преобразуются: после
-архивирования такого state оператор повторяет login и enrollment/join. APT
-upgrade останавливает активный agent, запускает этот мигратор и возобновляет
-service только после успешной миграции.
-
-На Unix файл и миграционная backup-копия с token, private keys или credentials
-должны иметь режим `0600` или строже. На Windows legacy DPAPI envelope
-`endlessnet-client-state-v1` принимается только мигратором, а state v1 хранится
-только в machine-scoped DPAPI envelope `endlessnet-client-state-dpapi-v1`;
+На Unix файл с token, private keys или credentials должен иметь режим `0600` или
+строже. На Windows state хранится только в machine-scoped DPAPI envelope
+`endlessnet-client-state-dpapi-v1`;
 plaintext и неизвестные protected-форматы отклоняются; см.
 [`internal/client/config_protection_windows.go`](../../internal/client/config_protection_windows.go).
 

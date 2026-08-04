@@ -463,32 +463,6 @@ func TestCmdVersionIncludesTargetMetadata(t *testing.T) {
 	}
 }
 
-func TestCmdStateMigrateCurrentStateIsNoOp(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "client.json")
-	if err := client.SaveConfig(path, client.Config{
-		ControlPlaneURLs: []string{"https://api.example.test"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	out, err := captureStdout(t, func() error {
-		return cmdState([]string{"migrate", "--config", path, "--json"})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var result client.ConfigStateMigrationResult
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
-		t.Fatalf("decode state migration result: %v\n%s", err, out)
-	}
-	if result.Migrated ||
-		result.SourceFormat != client.CurrentConfigStateFormat ||
-		result.SourceVersion != client.CurrentConfigStateVersion ||
-		result.TargetFormat != client.CurrentConfigStateFormat ||
-		result.TargetVersion != client.CurrentConfigStateVersion {
-		t.Fatalf("state migration result = %#v", result)
-	}
-}
-
 func TestFriendlyCLIExecutable(t *testing.T) {
 	for _, path := range []string{"endlessnet", "/usr/bin/endlessnet", `C:\Program Files\EndlessNet\endlessnet.exe`} {
 		if !isFriendlyCLIExecutable(path) {
