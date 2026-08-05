@@ -40,17 +40,17 @@ jobs:
           [ -n "$APT_SIGNING_PRIVATE_KEY" ] || { echo "::error::APT_SIGNING_PRIVATE_KEY is required"; exit 1; }
 
       - name: Checkout source
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@v7
 
       - name: Checkout APT Pages repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.APT_REPOSITORY }}
           ssh-key: ${{ secrets.APT_REPO_DEPLOY_KEY }}
           path: apt-pages
 
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: false
