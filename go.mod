@@ -1,6 +1,6 @@
 module github.com/endless-net/client
 
-go 1.26.5
+go 1.27.0
 
 require (
 	github.com/Microsoft/go-winio v0.6.2
