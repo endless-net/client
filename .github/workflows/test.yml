@@ -101,7 +101,7 @@ jobs:
     name: verify
     runs-on: ubuntu-latest
     needs: [verify-linux, verify-windows, verify-macos]
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     steps:
       - name: Require platform verification
         shell: bash
