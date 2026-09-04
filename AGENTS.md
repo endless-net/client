@@ -23,3 +23,12 @@
 - GitHub Actions runner-unit installation, registration, systemd policy, host inventory, recovery/rollback and guarded rollout belong to `endless-net/observability`; keep only job logic and `runs-on` selectors here.
 - Local verification is limited to `goimports -w .`, `go vet ./...`, `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m`, and `go test -short ./...`.
 - E2E, installer, privileged networking, release and system validation runs in GitHub pull-request or release CI.
+
+## Version increases
+
+- Never increase any version or generation number, including schema, configuration,
+  API, protocol, contract, manifest, migration, artifact, or rollout versions,
+  without the user's direct explicit permission for that exact increase.
+- A request to implement, refactor, fix, remove compatibility, or make a breaking
+  change does not authorize a version increase. Without explicit permission, keep
+  the current version number.
