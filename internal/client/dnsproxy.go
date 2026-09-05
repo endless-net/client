@@ -105,11 +105,11 @@ func DNSProxyResponse(ctx context.Context, request []byte, opts DNSProxyOptions,
 	if dnsNameInDomain(question.Name, searchDomain) {
 		return dnsPeerResponse(request, question, opts.NetworkMap, searchDomain), nil
 	}
-	if upstream := splitDNSUpstream(question.Name, opts.SplitRules); upstream != "" {
+	if upstream, matched := selectSplitDNSUpstream(question.Name, opts.SplitRules); matched {
+		if upstream == "" {
+			return dnsErrorResponse(request, dnsRCodeFail), nil
+		}
 		return forwardDNSQuery(ctx, upstream, request, timeout)
-	}
-	if splitDNSDomainMatches(question.Name, opts.SplitRules) {
-		return dnsErrorResponse(request, dnsRCodeFail), nil
 	}
 	upstream := strings.TrimSpace(opts.UpstreamAddr)
 	if upstream == "" {
@@ -240,24 +240,21 @@ func forwardDNSQuery(ctx context.Context, upstream string, request []byte, timeo
 	return append([]byte(nil), buf[:n]...), nil
 }
 
-func splitDNSUpstream(name string, rules []SplitDNSRule) string {
+// The most specific suffix owns the query, including an unavailable (empty)
+// upstream. Never fall through to a parent or global resolver for that name.
+// Equal-specificity empty rules fail closed; otherwise declaration order wins.
+func selectSplitDNSUpstream(name string, rules []SplitDNSRule) (string, bool) {
+	selected := ""
+	specificity := 0
 	for _, rule := range rules {
 		domain := normalizeDNSName(rule.Domain)
 		upstream := strings.TrimSpace(rule.Upstream)
-		if upstream != "" && dnsNameInDomain(name, domain) {
-			return upstream
+		if dnsNameInDomain(name, domain) && (len(domain) > specificity || (len(domain) == specificity && upstream == "")) {
+			selected = upstream
+			specificity = len(domain)
 		}
 	}
-	return ""
-}
-
-func splitDNSDomainMatches(name string, rules []SplitDNSRule) bool {
-	for _, rule := range rules {
-		if strings.TrimSpace(rule.Upstream) == "" && dnsNameInDomain(name, normalizeDNSName(rule.Domain)) {
-			return true
-		}
-	}
-	return false
+	return selected, specificity > 0
 }
 
 func dnsNameInDomain(name, domain string) bool {
