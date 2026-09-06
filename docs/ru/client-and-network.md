@@ -326,6 +326,14 @@ Conntrack-исключение теперь ограничено `REPLY` на т
 разрешений на удалённом peer. Unit-тест проверяет форму правил IPv4/IPv6;
 привилегированный Linux CI должен проверить реальный established TCP/UDP
 трафик после замены policy и сохранность ответного трафика.
+Для TCP эта проверка выполнена на `64d2018`:
+[Linux CI](https://github.com/endless-net/client/actions/runs/34040950638/job/101507484804)
+6 сентября 2026 года в 15:01 UTC успешно запустил
+`TestACLKernelEstablishedTCPRevocation` в отдельном network namespace для
+IPv4 и IPv6. Проверен обмен до отзыва и запрет дальнейшего обмена на том же
+соединении после удаления grant. Это kernel/loopback acceptance с теми же
+сгенерированными правилами, не проверка WireGuard-туннеля между хостами,
+UDP/RELATED traffic, получения policy от Coordinator или production rollout.
 Unit-тесты моделируют новые исходящие пакеты; conntrack, реальные Linux hooks
 и Windows/macOS enforcement ими не подтверждаются. Coordinator ещё должен
 производить и коммитить эти grants; production activation не выполнялась.
