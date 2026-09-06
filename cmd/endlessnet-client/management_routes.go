@@ -31,15 +31,19 @@ func loadManagementRouteAPI(configPath string) (*managementRouteAPI, error) {
 	if strings.TrimSpace(cfg.Token) == "" {
 		return nil, errors.New("not logged in; run endlessnet-client login first")
 	}
-	managementURL := strings.TrimRight(strings.TrimSpace(cfg.ManagementURL), "/")
-	parsed, err := url.Parse(managementURL)
+	controlURLs := cfg.ControlURLs()
+	if len(controlURLs) == 0 {
+		return nil, errors.New("control URL is required; run endlessnet-client login")
+	}
+	controlURL := strings.TrimRight(strings.TrimSpace(controlURLs[0]), "/")
+	parsed, err := url.Parse(controlURL)
 	if err != nil || !isSecureOriginURL(parsed) {
-		return nil, errors.New("management_url is required and must be a secure origin; run endlessnet-client login")
+		return nil, errors.New("control URL must be a secure origin; run endlessnet-client login")
 	}
 	return &managementRouteAPI{
 		client: managementapiconnect.NewManagementAdminServiceClient(
 			clientapi.NewControlPlaneHTTPClient(15*time.Second, nil),
-			managementURL+"/api/v1",
+			controlURL+"/api/v1",
 		),
 		token:     cfg.Token,
 		accountID: strings.TrimSpace(cfg.ActiveAccountID),
