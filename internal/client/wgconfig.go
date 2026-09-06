@@ -311,6 +311,7 @@ type aclFirewallTarget struct {
 	tool   string
 	target string
 	ports  []clientapi.ACLPort
+	grants []clientapi.ACLGrant
 	deny   bool
 }
 
@@ -333,6 +334,20 @@ func renderACLFirewallHooks(peers []clientapi.Peer) []string {
 		hooks = append(hooks, fmt.Sprintf("PostUp = %s -N %s%%i 2>/dev/null || true; %s -F %s%%i; %s -C OUTPUT -j %s%%i 2>/dev/null || %s -I OUTPUT -j %s%%i", tool, wireGuardACLFirewallChainPrefix, tool, wireGuardACLFirewallChainPrefix, tool, wireGuardACLFirewallChainPrefix, tool, wireGuardACLFirewallChainPrefix))
 		hooks = append(hooks, fmt.Sprintf("PostUp = %s -A %s%%i -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN", tool, wireGuardACLFirewallChainPrefix))
 		for _, target := range byTool[tool] {
+			for _, grant := range target.grants {
+				for _, destination := range grant.DestinationCIDRs {
+					if len(grant.AllowedPorts) == 0 {
+						hooks = append(hooks, fmt.Sprintf("PostUp = %s -A %s%%i -o %%i -d %s -j RETURN", tool, wireGuardACLFirewallChainPrefix, destination))
+					}
+					for _, port := range grant.AllowedPorts {
+						command := fmt.Sprintf("PostUp = %s -A %s%%i -o %%i -d %s -p %s", tool, wireGuardACLFirewallChainPrefix, destination, aclFirewallProtocolForTool(tool, port.Protocol))
+						if port.Protocol != "icmp" {
+							command += fmt.Sprintf(" --dport %d", port.Port)
+						}
+						hooks = append(hooks, command+" -j RETURN")
+					}
+				}
+			}
 			for _, port := range target.ports {
 				if port.Protocol == "icmp" {
 					hooks = append(hooks, fmt.Sprintf("PostUp = %s -A %s%%i -o %%i -d %s -p %s -j RETURN", tool, wireGuardACLFirewallChainPrefix, target.target, aclFirewallProtocolForTool(tool, port.Protocol)))
@@ -341,6 +356,7 @@ func renderACLFirewallHooks(peers []clientapi.Peer) []string {
 				hooks = append(hooks, fmt.Sprintf("PostUp = %s -A %s%%i -o %%i -d %s -p %s --dport %d -j RETURN", tool, wireGuardACLFirewallChainPrefix, target.target, port.Protocol, port.Port))
 			}
 			if !target.deny {
+				hooks = append(hooks, fmt.Sprintf("PostUp = %s -A %s%%i -o %%i -d %s -j RETURN", tool, wireGuardACLFirewallChainPrefix, target.target))
 				continue
 			}
 			hooks = append(hooks, fmt.Sprintf("PostUp = %s -A %s%%i -o %%i -d %s -j REJECT", tool, wireGuardACLFirewallChainPrefix, target.target))
@@ -352,13 +368,20 @@ func renderACLFirewallHooks(peers []clientapi.Peer) []string {
 }
 
 func aclFirewallTargets(peers []clientapi.Peer) []aclFirewallTarget {
+	anyRestricted := false
+	for _, peer := range peers {
+		if peer.ACLRestricted || len(peer.AllowedPorts) > 0 || len(peer.ACLGrants) > 0 {
+			anyRestricted = true
+			break
+		}
+	}
+	if !anyRestricted {
+		return nil
+	}
 	byTarget := map[string]aclFirewallTarget{}
 	for _, peer := range peers {
 		ports := normalizeACLPorts(peer.AllowedPorts)
-		deny := peer.ACLRestricted || len(ports) > 0
-		if !deny {
-			continue
-		}
+		deny := peer.ACLRestricted || len(ports) > 0 || len(peer.ACLGrants) > 0
 		for _, allowed := range peer.AllowedIPs {
 			prefix, ok := normalizeFirewallTarget(allowed)
 			if !ok {
@@ -374,6 +397,25 @@ func aclFirewallTargets(peers []clientapi.Peer) []aclFirewallTarget {
 			target.target = prefix.String()
 			target.deny = target.deny || deny
 			target.ports = mergeACLPorts(target.ports, ports)
+			for _, grant := range peer.ACLGrants {
+				for _, destination := range grant.DestinationCIDRs {
+					grantPrefix, ok := normalizeFirewallTarget(destination)
+					if !ok || grantPrefix.Addr().BitLen() != prefix.Addr().BitLen() {
+						continue
+					}
+					intersection := grantPrefix
+					if grantPrefix.Bits() <= prefix.Bits() && grantPrefix.Contains(prefix.Addr()) {
+						intersection = prefix
+					} else if !prefix.Contains(grantPrefix.Addr()) {
+						continue
+					}
+					grantPorts := normalizeACLPorts(grant.AllowedPorts)
+					if len(grant.AllowedPorts) > 0 && len(grantPorts) == 0 {
+						continue
+					}
+					target.grants = append(target.grants, clientapi.ACLGrant{DestinationCIDRs: []string{intersection.String()}, AllowedPorts: grantPorts})
+				}
+			}
 			byTarget[key] = target
 		}
 	}

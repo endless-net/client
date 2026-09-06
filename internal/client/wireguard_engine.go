@@ -686,6 +686,11 @@ func cloneRegisterNodeResponse(value clientapi.RegisterNodeResponse) clientapi.R
 		value.Peers[index].EndpointCandidates = append([]string(nil), value.Peers[index].EndpointCandidates...)
 		value.Peers[index].AllowedIPs = append([]string(nil), value.Peers[index].AllowedIPs...)
 		value.Peers[index].AllowedPorts = append([]clientapi.ACLPort(nil), value.Peers[index].AllowedPorts...)
+		value.Peers[index].ACLGrants = append([]clientapi.ACLGrant(nil), value.Peers[index].ACLGrants...)
+		for grant := range value.Peers[index].ACLGrants {
+			value.Peers[index].ACLGrants[grant].DestinationCIDRs = append([]string(nil), value.Peers[index].ACLGrants[grant].DestinationCIDRs...)
+			value.Peers[index].ACLGrants[grant].AllowedPorts = append([]clientapi.ACLPort(nil), value.Peers[index].ACLGrants[grant].AllowedPorts...)
+		}
 		value.Peers[index].Tags = append([]string(nil), value.Peers[index].Tags...)
 		value.Peers[index].EndpointExpiresAt = cloneTimePointer(value.Peers[index].EndpointExpiresAt)
 	}

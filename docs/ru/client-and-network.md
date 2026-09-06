@@ -314,6 +314,15 @@ SNAT и exit policy, но выполняет их только Linux router.
 порядка peers. Это покрыто unit-тестом генерации; проверка реального трафика
 и обновления уже установленных соединений требует Linux CI/System Tests.
 
+Client API v1.4.0/v2.1.0-rc.1 добавляет destination-scoped ACLGrants.
+Генератор hooks сохраняет связь CIDR с портами и объединяет разрешения одного
+peer до завершающего запрета для его маршрута. Пересекающиеся маршруты разных
+peer рассматриваются от более узкого к широкому, включая явно неограниченный
+peer. Вложенные grants копируются независимо при создании снимка движка.
+Unit-тесты моделируют новые исходящие пакеты; conntrack, реальные Linux hooks
+и Windows/macOS enforcement ими не подтверждаются. Coordinator ещё должен
+производить и коммитить эти grants; production activation не выполнялась.
+
 Peer visibility и allowed routes по-прежнему фильтруются coordinator для всех
 платформ. Ограничение относится к локальным port-level firewall rules, SNAT и
 exit-LAN enforcement; их нельзя документировать как кроссплатформенную
