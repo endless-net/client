@@ -52,6 +52,14 @@ jobs:
       - name: Build client
         run: go build ./cmd/endlessnet-client ./cmd/endlessnet-client-recovery-helper
 
+      - name: Verify established TCP ACL revocation in isolated namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -c -o "$RUNNER_TEMP/acl-kernel.test" ./internal/client
+          sudo env ENDLESSNET_REQUIRE_KERNEL_ACL_TEST=1 unshare --net -- \
+            "$RUNNER_TEMP/acl-kernel.test" -test.run '^TestACLKernelEstablishedTCPRevocation$' -test.v -test.timeout 30s
+
   verify-windows:
     name: Verify (Windows)
     runs-on: windows-2025
