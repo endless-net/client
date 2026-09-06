@@ -511,7 +511,7 @@ func TestRenderWireGuardIncludesACLPortFirewallHooks(t *testing.T) {
 
 	for _, want := range []string{
 		"PostUp = iptables -N ENACL-%i",
-		"PostUp = iptables -A ENACL-%i -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN",
+		"PostUp = iptables -A ENACL-%i -o %i -m conntrack --ctstate ESTABLISHED,RELATED --ctdir REPLY -j RETURN",
 		"PostUp = iptables -A ENACL-%i -o %i -d 100.91.0.3/32 -p tcp --dport 443 -j RETURN",
 		"PostUp = iptables -A ENACL-%i -o %i -d 100.91.0.3/32 -p udp --dport 18132 -j RETURN",
 		"PostUp = iptables -A ENACL-%i -o %i -d 100.91.0.3/32 -j REJECT",

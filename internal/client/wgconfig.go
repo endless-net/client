@@ -332,7 +332,10 @@ func renderACLFirewallHooks(peers []clientapi.Peer) []string {
 	hooks := []string{}
 	for _, tool := range tools {
 		hooks = append(hooks, fmt.Sprintf("PostUp = %s -N %s%%i 2>/dev/null || true; %s -F %s%%i; %s -C OUTPUT -j %s%%i 2>/dev/null || %s -I OUTPUT -j %s%%i", tool, wireGuardACLFirewallChainPrefix, tool, wireGuardACLFirewallChainPrefix, tool, wireGuardACLFirewallChainPrefix, tool, wireGuardACLFirewallChainPrefix))
-		hooks = append(hooks, fmt.Sprintf("PostUp = %s -A %s%%i -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN", tool, wireGuardACLFirewallChainPrefix))
+		// Only replies bypass destination-port ACLs: their destination is the
+		// caller's ephemeral port. Locally initiated established traffic must
+		// still match the current grants after a policy revocation.
+		hooks = append(hooks, fmt.Sprintf("PostUp = %s -A %s%%i -o %%i -m conntrack --ctstate ESTABLISHED,RELATED --ctdir REPLY -j RETURN", tool, wireGuardACLFirewallChainPrefix))
 		for _, target := range byTool[tool] {
 			for _, grant := range target.grants {
 				for _, destination := range grant.DestinationCIDRs {
