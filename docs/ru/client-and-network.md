@@ -308,6 +308,12 @@ Pending-ответ `/enroll` не содержит `wireguard_apply`; после
 `buildWireGuardEngineRouterConfig` формирует правила ACL,
 SNAT и exit policy, но выполняет их только Linux router.
 
+Генератор ACL hooks обрабатывает более длинные IP-префиксы раньше широких
+подсетей: разрешающий RETURN родительской подсети не должен обходить REJECT
+ограниченной дочерней подсети. Порядок одинаков для IPv4/IPv6 и не зависит от
+порядка peers. Это покрыто unit-тестом генерации; проверка реального трафика
+и обновления уже установленных соединений требует Linux CI/System Tests.
+
 Peer visibility и allowed routes по-прежнему фильтруются coordinator для всех
 платформ. Ограничение относится к локальным port-level firewall rules, SNAT и
 exit-LAN enforcement; их нельзя документировать как кроссплатформенную

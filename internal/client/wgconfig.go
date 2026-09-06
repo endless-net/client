@@ -385,6 +385,13 @@ func aclFirewallTargets(peers []clientapi.Peer) []aclFirewallTarget {
 		if targets[i].tool != targets[j].tool {
 			return targets[i].tool < targets[j].tool
 		}
+		// First-match firewall evaluation must follow route specificity: a
+		// parent subnet's RETURN must not bypass a restricted child subnet.
+		left := netip.MustParsePrefix(targets[i].target)
+		right := netip.MustParsePrefix(targets[j].target)
+		if left.Bits() != right.Bits() {
+			return left.Bits() > right.Bits()
+		}
 		return targets[i].target < targets[j].target
 	})
 	return targets
