@@ -547,11 +547,11 @@ func cmdBilling(args []string) error {
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		_, api, err := loadAPI(*configPath)
+		api, err := loadManagementRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
-		plans, err := api.BillingPlans()
+		plans, err := api.ListBillingPlans(context.Background())
 		if err != nil {
 			return err
 		}
@@ -563,10 +563,10 @@ func cmdBilling(args []string) error {
 				continue
 			}
 			price := "custom"
-			if plan.MonthlyPrice >= 0 {
-				price = amountLabel(plan.MonthlyPrice, plan.Currency) + "/month"
+			if plan.MonthlyPrice != nil {
+				price = amountLabel(plan.GetMonthlyPrice(), plan.GetCurrency()) + "/month"
 			}
-			fmt.Printf("%s\t%s\t%s\t%s\n", plan.ID, plan.Name, price, plan.BillingProvider)
+			fmt.Printf("%s\t%s\t%s\t%s\n", plan.GetPlanId(), plan.GetName(), price, plan.GetBillingProvider())
 		}
 	case "accounts":
 		fs := flag.NewFlagSet("billing accounts", flag.ExitOnError)
@@ -576,18 +576,22 @@ func cmdBilling(args []string) error {
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		cfg, api, err := loadAPI(*configPath)
+		cfg, err := client.LoadConfig(*configPath)
 		if err != nil {
 			return err
 		}
-		accounts, err := api.ListAccounts()
+		api, err := loadManagementRouteAPI(*configPath)
+		if err != nil {
+			return err
+		}
+		accounts, err := api.ListBillingAccounts(context.Background())
 		if err != nil {
 			return err
 		}
 		if strings.TrimSpace(*useAccount) != "" {
 			found := false
 			for _, account := range accounts {
-				if account.ID == strings.TrimSpace(*useAccount) {
+				if account.GetAccountId() == strings.TrimSpace(*useAccount) {
 					found = true
 					break
 				}
@@ -605,10 +609,10 @@ func cmdBilling(args []string) error {
 		}
 		for _, account := range accounts {
 			active := ""
-			if account.ID == cfg.ActiveAccountID {
+			if account.GetAccountId() == cfg.ActiveAccountID {
 				active = "*"
 			}
-			fmt.Printf("%s\t%s\t%s\t%s\t%s\n", active, account.ID, account.Name, account.Type, account.Status)
+			fmt.Printf("%s\t%s\t%s\t%s\t%s\n", active, account.GetAccountId(), account.GetName(), account.GetAccountType(), account.GetStatus())
 		}
 	case "summary":
 		fs := flag.NewFlagSet("billing summary", flag.ExitOnError)
@@ -618,40 +622,40 @@ func cmdBilling(args []string) error {
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		cfg, api, err := loadAPI(*configPath)
+		cfg, err := client.LoadConfig(*configPath)
 		if err != nil {
 			return err
 		}
-		resolved, err := resolveBillingAccount(cfg, api, *accountID)
+		api, err := loadManagementRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
-		subscription, err := api.AccountSubscription(resolved)
+		resolved, err := resolveBillingAccount(context.Background(), cfg, api, *accountID)
 		if err != nil {
 			return err
 		}
-		entitlements, err := api.AccountEntitlements(resolved)
+		subscription, err := api.GetBillingSubscription(context.Background(), resolved)
 		if err != nil {
 			return err
 		}
-		usage, err := api.AccountUsage(resolved)
+		usage, err := api.GetBillingUsage(context.Background(), resolved)
 		if err != nil {
 			return err
 		}
-		summary := map[string]any{"account_id": resolved, "subscription": subscription, "entitlements": entitlements, "usage": usage}
+		summary := map[string]any{"account_id": resolved, "subscription": subscription, "usage": usage}
 		if *jsonOutput {
 			return printJSON(summary)
 		}
 		fmt.Printf("account\t%s\nplan\t%s\nstatus\t%s\nusers\t%d/%d\nnodes\t%d/%d\nnetworks\t%d/%d\n",
 			resolved,
-			entitlements.PlanID,
-			entitlements.PlanStatus,
-			usage.Users,
-			entitlements.Limits["users"],
-			usage.Nodes,
-			entitlements.Limits["nodes"],
-			usage.Networks,
-			entitlements.Limits["networks"],
+			subscription.GetPlanId(),
+			subscription.GetStatus(),
+			usage.GetUsers(),
+			usage.GetUserLimit(),
+			usage.GetNodes(),
+			usage.GetNodeLimit(),
+			usage.GetNetworks(),
+			usage.GetNetworkLimit(),
 		)
 	case "checkout":
 		fs := flag.NewFlagSet("billing checkout", flag.ExitOnError)
@@ -659,6 +663,7 @@ func cmdBilling(args []string) error {
 		accountID := fs.String("account", "", "account id")
 		planID := fs.String("plan", "", "plan id")
 		period := fs.String("period", "monthly", "billing period")
+		idempotencyKey := fs.String("idempotency-key", "", "confidential retry key; generated when omitted")
 		jsonOutput := fs.Bool("json", false, "write JSON output")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
@@ -666,22 +671,26 @@ func cmdBilling(args []string) error {
 		if strings.TrimSpace(*planID) == "" {
 			return fmt.Errorf("--plan is required")
 		}
-		cfg, api, err := loadAPI(*configPath)
+		cfg, err := client.LoadConfig(*configPath)
 		if err != nil {
 			return err
 		}
-		resolved, err := resolveBillingAccount(cfg, api, *accountID)
+		api, err := loadManagementRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
-		checkout, err := api.CreateCheckout(resolved, clientapi.BillingCheckoutRequest{PlanID: *planID, BillingPeriod: *period})
+		resolved, err := resolveBillingAccount(context.Background(), cfg, api, *accountID)
+		if err != nil {
+			return err
+		}
+		checkout, err := api.CreateBillingCheckout(context.Background(), resolved, *planID, *period, *idempotencyKey)
 		if err != nil {
 			return err
 		}
 		if *jsonOutput {
 			return printJSON(checkout)
 		}
-		fmt.Printf("%s\t%s\t%s\t%s\n", checkout.ID, checkout.Status, checkout.Provider, checkout.ConfirmationURL)
+		fmt.Printf("%s\t%s\t%s\t%s\n", checkout.GetCheckoutId(), checkout.GetStatus(), checkout.GetProvider(), checkout.GetConfirmationUrl())
 	case "invoices":
 		fs := flag.NewFlagSet("billing invoices", flag.ExitOnError)
 		configPath := fs.String("config", "", "client config path")
@@ -690,15 +699,19 @@ func cmdBilling(args []string) error {
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		cfg, api, err := loadAPI(*configPath)
+		cfg, err := client.LoadConfig(*configPath)
 		if err != nil {
 			return err
 		}
-		resolved, err := resolveBillingAccount(cfg, api, *accountID)
+		api, err := loadManagementRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
-		invoices, err := api.ListInvoices(resolved)
+		resolved, err := resolveBillingAccount(context.Background(), cfg, api, *accountID)
+		if err != nil {
+			return err
+		}
+		invoices, err := api.ListBillingInvoices(context.Background(), resolved)
 		if err != nil {
 			return err
 		}
@@ -706,7 +719,7 @@ func cmdBilling(args []string) error {
 			return printJSON(invoices)
 		}
 		for _, invoice := range invoices {
-			fmt.Printf("%s\t%s\t%s\t%s\n", invoice.ID, invoice.Status, amountLabel(invoice.Amount, invoice.Currency), invoice.Number)
+			fmt.Printf("%s\t%s\t%s\t%s\n", invoice.GetInvoiceId(), invoice.GetStatus(), amountLabel(invoice.GetAmount(), invoice.GetCurrency()), invoice.GetNumber())
 		}
 	default:
 		return fmt.Errorf("unknown billing command %q", args[0])
@@ -3448,19 +3461,19 @@ func managementAPIFromConfig(cfg client.Config) (*clientapi.API, error) {
 	return clientapi.NewAPI(managementURL+"/api/v1", cfg.Token), nil
 }
 
-func resolveBillingAccount(cfg client.Config, api *clientapi.API, explicit string) (string, error) {
+func resolveBillingAccount(ctx context.Context, cfg client.Config, api *managementRouteAPI, explicit string) (string, error) {
 	if strings.TrimSpace(explicit) != "" {
 		return strings.TrimSpace(explicit), nil
 	}
 	if strings.TrimSpace(cfg.ActiveAccountID) != "" {
 		return strings.TrimSpace(cfg.ActiveAccountID), nil
 	}
-	accounts, err := api.ListAccounts()
+	accounts, err := api.ListBillingAccounts(ctx)
 	if err != nil {
 		return "", err
 	}
 	if len(accounts) == 1 {
-		return accounts[0].ID, nil
+		return accounts[0].GetAccountId(), nil
 	}
 	if len(accounts) == 0 {
 		return "", fmt.Errorf("no billing accounts are available")
@@ -3477,10 +3490,7 @@ func printJSON(value any) error {
 	return nil
 }
 
-func amountLabel(amount int64, currency string) string {
-	if amount < 0 {
-		return "custom"
-	}
+func amountLabel(amount uint64, currency string) string {
 	return fmt.Sprintf("%d.%02d %s", amount/100, amount%100, strings.ToUpper(strings.TrimSpace(currency)))
 }
 

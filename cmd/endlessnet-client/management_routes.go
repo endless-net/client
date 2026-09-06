@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/url"
@@ -80,6 +82,85 @@ func (api *managementRouteAPI) ListAdvertisedRoutes(ctx context.Context, network
 	}
 }
 
+func (api *managementRouteAPI) ListBillingPlans(ctx context.Context) ([]*managementapi.Plan, error) {
+	request := connect.NewRequest(&managementapi.ListBillingPlansRequest{})
+	api.authorize(request.Header())
+	response, err := api.client.ListBillingPlans(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("list billing plans: %w", err)
+	}
+	return response.Msg.GetPlans(), nil
+}
+
+func (api *managementRouteAPI) ListBillingAccounts(ctx context.Context) ([]*managementapi.Account, error) {
+	return api.fetchAccounts(ctx)
+}
+
+func (api *managementRouteAPI) GetBillingSubscription(ctx context.Context, accountID string) (*managementapi.Subscription, error) {
+	request := connect.NewRequest(&managementapi.GetBillingSubscriptionRequest{AccountId: strings.TrimSpace(accountID)})
+	api.authorize(request.Header())
+	response, err := api.client.GetBillingSubscription(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("get billing subscription: %w", err)
+	}
+	if response.Msg.GetSubscription() == nil {
+		return nil, errors.New("get billing subscription returned an incomplete response")
+	}
+	return response.Msg.GetSubscription(), nil
+}
+
+func (api *managementRouteAPI) GetBillingUsage(ctx context.Context, accountID string) (*managementapi.Usage, error) {
+	request := connect.NewRequest(&managementapi.GetBillingUsageRequest{AccountId: strings.TrimSpace(accountID)})
+	api.authorize(request.Header())
+	response, err := api.client.GetBillingUsage(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("get billing usage: %w", err)
+	}
+	if response.Msg.GetUsage() == nil {
+		return nil, errors.New("get billing usage returned an incomplete response")
+	}
+	return response.Msg.GetUsage(), nil
+}
+
+func (api *managementRouteAPI) CreateBillingCheckout(ctx context.Context, accountID, planID, period, idempotencyKey string) (*managementapi.Checkout, error) {
+	key := strings.TrimSpace(idempotencyKey)
+	if key == "" {
+		random := make([]byte, 32)
+		if _, err := rand.Read(random); err != nil {
+			return nil, fmt.Errorf("generate checkout idempotency key: %w", err)
+		}
+		key = base64.RawURLEncoding.EncodeToString(random)
+	}
+	request := connect.NewRequest(&managementapi.CreateBillingCheckoutRequest{
+		AccountId: strings.TrimSpace(accountID), PlanId: strings.TrimSpace(planID), BillingPeriod: strings.TrimSpace(period),
+		Operation: &managementapi.OperationMetadata{IdempotencyKey: key},
+	})
+	api.authorize(request.Header())
+	response, err := api.client.CreateBillingCheckout(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("create billing checkout: %w", err)
+	}
+	if response.Msg.GetCheckout() == nil {
+		return nil, errors.New("create billing checkout returned an incomplete response")
+	}
+	return response.Msg.GetCheckout(), nil
+}
+
+func (api *managementRouteAPI) ListBillingInvoices(ctx context.Context, accountID string) ([]*managementapi.Invoice, error) {
+	items := make([]*managementapi.Invoice, 0)
+	err := api.readPages(ctx, func(token string) (string, error) {
+		request := connect.NewRequest(&managementapi.ListBillingInvoicesRequest{AccountId: strings.TrimSpace(accountID), Page: &managementapi.PageRequest{PageSize: managementRoutePageSize, PageToken: token}})
+		api.authorize(request.Header())
+		response, err := api.client.ListBillingInvoices(ctx, request)
+		if err != nil {
+			return "", fmt.Errorf("list billing invoices: %w", err)
+		}
+		items = append(items, response.Msg.GetInvoices()...)
+		return response.Msg.GetPage().GetNextPageToken(), nil
+	})
+	return items, err
+}
+
 func (api *managementRouteAPI) SetAdvertisedRouteApproval(ctx context.Context, networkRef, nodeID, cidr string, approved bool) (*managementapi.SetAdvertisedRouteApprovalResponse, error) {
 	routes, err := api.ListAdvertisedRoutes(ctx, networkRef)
 	if err != nil {
@@ -147,6 +228,10 @@ func (api *managementRouteAPI) listAccounts(ctx context.Context) ([]*managementa
 	if api.accountID != "" {
 		return []*managementapi.Account{{AccountId: api.accountID}}, nil
 	}
+	return api.fetchAccounts(ctx)
+}
+
+func (api *managementRouteAPI) fetchAccounts(ctx context.Context) ([]*managementapi.Account, error) {
 	items := make([]*managementapi.Account, 0)
 	err := api.readPages(ctx, func(token string) (string, error) {
 		request := connect.NewRequest(&managementapi.ListAccountsRequest{Page: &managementapi.PageRequest{PageSize: managementRoutePageSize, PageToken: token}})
