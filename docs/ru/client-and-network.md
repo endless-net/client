@@ -334,6 +334,14 @@ IPv4 и IPv6. Проверен обмен до отзыва и запрет да
 соединении после удаления grant. Это kernel/loopback acceptance с теми же
 сгенерированными правилами, не проверка WireGuard-туннеля между хостами,
 UDP/RELATED traffic, получения policy от Coordinator или production rollout.
+Расширение `9cfbb8e` добавляет UDP к тому же kernel-тесту:
+[Linux CI](https://github.com/endless-net/client/actions/runs/34041172994/job/101508085784)
+6 сентября в 15:05 UTC успешно выполнил все четыре случая
+`TestACLKernelEstablishedRevocation` (TCP/UDP, IPv4/IPv6) без пропусков.
+Для UDP сохраняется один connected socket до и после отзыва; проверяется
+разрешённый ответ перед изменением и отсутствие успешного обмена после него.
+RELATED traffic, межхостовой туннель и доставка политики от Coordinator этим
+расширением не проверяются.
 Unit-тесты моделируют новые исходящие пакеты; conntrack, реальные Linux hooks
 и Windows/macOS enforcement ими не подтверждаются. Coordinator ещё должен
 производить и коммитить эти grants; production activation не выполнялась.
