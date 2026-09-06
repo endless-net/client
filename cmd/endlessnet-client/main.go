@@ -451,20 +451,20 @@ func cmdNetwork(args []string) error {
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		_, api, err := loadAPI(*configPath)
+		api, err := loadManagementRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
-		routes, err := api.ListAdvertisedRoutes(resolveNetworkFlag(*network))
+		routes, err := api.ListAdvertisedRoutes(context.Background(), resolveNetworkFlag(*network))
 		if err != nil {
 			return err
 		}
 		for _, route := range routes {
 			status := "pending"
-			if route.Approved {
+			if route.GetApproved() {
 				status = "approved"
 			}
-			fmt.Printf("%s\t%s\t%s\t%s\n", route.NodeID, route.Hostname, route.CIDR, status)
+			fmt.Printf("%s\t%s\t%s\t%s\n", route.GetNodeId(), route.GetHostname(), route.GetCidr(), status)
 		}
 	case "approve-route", "revoke-route":
 		approved := args[0] == "approve-route"
@@ -482,23 +482,19 @@ func cmdNetwork(args []string) error {
 		if strings.TrimSpace(*cidr) == "" {
 			return fmt.Errorf("--cidr is required")
 		}
-		_, api, err := loadAPI(*configPath)
+		api, err := loadManagementRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
-		response, err := api.SetAdvertisedRouteApproval(resolveNetworkFlag(*network), clientapi.SetAdvertisedRouteApprovalRequest{
-			NodeID:   *nodeID,
-			CIDR:     *cidr,
-			Approved: approved,
-		})
+		response, err := api.SetAdvertisedRouteApproval(context.Background(), resolveNetworkFlag(*network), *nodeID, *cidr, approved)
 		if err != nil {
 			return err
 		}
 		status := "pending"
-		if response.Route.Approved {
+		if response.GetRoute().GetApproved() {
 			status = "approved"
 		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%d\n", response.Route.NodeID, response.Route.Hostname, response.Route.CIDR, status, response.Network.Revision)
+		fmt.Printf("%s\t%s\t%s\t%s\t%d\n", response.GetRoute().GetNodeId(), response.GetRoute().GetHostname(), response.GetRoute().GetCidr(), status, response.GetNetwork().GetRevision())
 	default:
 		return fmt.Errorf("unknown network command %q", args[0])
 	}
