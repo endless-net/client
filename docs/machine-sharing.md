@@ -72,8 +72,10 @@ evidence and invokes the production CLI/agent cache consumer. It checks grant,
 withdrawal, idempotent cache replay and unchanged cache after signature tampering.
 It skips local short runs. The unchanged fixture captured by Coordinator run
 34140193587 is checked in with its provenance and SHA-256 under
-`cmd/endlessnet-client/testdata/`. A successful consumer CI run is still required; it does
-not yet establish engine configuration from backend events. Recorded events are
+`cmd/endlessnet-client/testdata/`. At `9a5c44b`,
+[job 101801802273](https://github.com/endless-net/management/actions/runs/34140701613/job/101801802273)
+explicitly passed the consumer replay and the separate encrypted test on
+7 September 2026. This does not yet establish engine configuration from backend events. Recorded events are
 validated at their Coordinator-observed timestamps through the same cache helper;
 normal runtime still supplies the current time. Historical replay does not claim
 that a captured lease remains valid at the later CI execution time.
