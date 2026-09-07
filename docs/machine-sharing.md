@@ -11,6 +11,9 @@ Reverse packets require matching flow state. TCP checks SYN/SYN-ACK/ACK order
 and rejects reverse SYN even when a flow already exists. UDP and echo use a
 30-second idle window; TCP uses two minutes. Every packet also checks its
 current grant expiry, so established traffic stops without a stream update.
+Flow state cannot outlive the lease under which it was accepted. Shortening a
+lease also caps existing state; renewing after expiry requires a fresh handshake
+and cannot resurrect an expired established TCP flow.
 Fragmented packets, IPv6 extension headers and non-echo ICMP are currently
 denied for shared hosts; related ICMP error support remains follow-up work.
 
@@ -47,7 +50,12 @@ The next extension shortens the signed lease, proves traffic still passes,
 waits for expiry without removing peers or keys, and requires both directions
 to stop. A new signed lease must restore a fresh TCP handshake on the same
 transport before the existing withdrawal checks. This extension needs its own
-CI evidence; local short tests skip it.
+CI evidence; local short tests skip it. Its first run at `b4ae115` failed on the
+fresh handshake after renewal in
+[job 101790199433](https://github.com/endless-net/management/actions/runs/34137001624/job/101790199433).
+The filter retained established flow state past the old lease, rejecting the
+new SYN. A component regression test now covers the lease-bound state fix;
+encrypted verification must be repeated with that fix.
 
 The first encrypted-test CI attempt at `890236a` did not execute the scenario:
 [Linux job 101766343601](https://github.com/endless-net/client/actions/runs/34129622991/job/101766343601)

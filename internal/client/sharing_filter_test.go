@@ -69,6 +69,16 @@ func TestSharingTCPDirectionStateExpiryAndWithdrawal(t *testing.T) {
 		if f.allows(shareTCP(true, 16), !source, m.Network.SharePeerGrants[0].ExpiresAt) {
 			t.Fatal("established reply outlived grant")
 		}
+		expiredAt := m.Network.SharePeerGrants[0].ExpiresAt
+		m.Network.SharePeerGrants[0].IssuedAt = expiredAt
+		m.Network.SharePeerGrants[0].ExpiresAt = expiredAt.Add(time.Minute)
+		f.updateAt(m, expiredAt)
+		if f.allows(shareTCP(true, 24), !source, expiredAt) {
+			t.Fatal("renewed lease resurrected expired established flow")
+		}
+		if !f.allows(shareTCP(false, 2), source, expiredAt) || !f.allows(shareTCP(true, 18), !source, expiredAt) || !f.allows(shareTCP(false, 16), source, expiredAt) {
+			t.Fatal("fresh handshake after lease expiry denied")
+		}
 		m.Network.SharePeerGrants = nil
 		m.Peers = nil
 		f.update(m)

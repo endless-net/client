@@ -18,9 +18,10 @@ type sharingFlowKey struct {
 }
 
 type sharingFlow struct {
-	binding  [32]byte
-	until    time.Time
-	tcpState byte
+	binding    [32]byte
+	until      time.Time
+	leaseUntil time.Time
+	tcpState   byte
 }
 
 type sharingPacketGrant struct {
@@ -90,15 +91,19 @@ func (f *sharingPacketFilter) suspend(m clientapi.RegisterNodeResponse) {
 }
 
 func (f *sharingPacketFilter) update(m clientapi.RegisterNodeResponse) {
+	f.updateAt(m, time.Now())
+}
+
+func (f *sharingPacketFilter) updateAt(m clientapi.RegisterNodeResponse, now time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.grants = nil
-	if clientapi.ValidateSharePeerGrantsAt(m.Snapshot(), time.Now()) != nil {
+	if clientapi.ValidateSharePeerGrantsAt(m.Snapshot(), now) != nil {
 		clear(f.flows)
 		f.saturated = true
 		return
 	}
-	bindings := map[[32]byte]bool{}
+	bindings := map[[32]byte]time.Time{}
 	for _, grant := range m.Network.SharePeerGrants {
 		grant.Rights = append([]clientapi.ShareTraffic(nil), grant.Rights...)
 		grant.SourceAllowedIPs = append([]string(nil), grant.SourceAllowedIPs...)
@@ -124,12 +129,16 @@ func (f *sharingPacketFilter) update(m clientapi.RegisterNodeResponse) {
 			continue
 		}
 		binding := sha256.Sum256(raw)
-		bindings[binding] = true
+		bindings[binding] = grant.ExpiresAt
 		f.grants = append(f.grants, sharingPacketGrant{value: grant, binding: binding, localSource: localSource})
 	}
 	for key, flow := range f.flows {
-		if !bindings[flow.binding] {
+		deadline, present := bindings[flow.binding]
+		if !present || !now.Before(flow.leaseUntil) {
 			delete(f.flows, key)
+		} else {
+			flow.leaseUntil = deadline
+			f.flows[key] = flow
 		}
 	}
 }
@@ -223,7 +232,7 @@ func (f *sharingPacketFilter) allows(raw []byte, inbound bool, now time.Time) bo
 			key.destinationPort = binary.BigEndian.Uint16(raw[offset+6 : offset+8])
 		}
 		flow, exists := f.flows[key]
-		exists = exists && flow.binding == grant.binding && now.Before(flow.until)
+		exists = exists && flow.binding == grant.binding && now.Before(flow.until) && now.Before(flow.leaseUntil)
 		if !exists {
 			flow = sharingFlow{binding: grant.binding}
 		}
@@ -271,6 +280,7 @@ func (f *sharingPacketFilter) allows(raw []byte, inbound bool, now time.Time) bo
 			idle = 2 * time.Minute
 		}
 		flow.until = now.Add(idle)
+		flow.leaseUntil = grant.value.ExpiresAt
 		f.flows[key] = flow
 		if protocol == "tcp" && raw[offset+13]&4 != 0 {
 			delete(f.flows, key)
