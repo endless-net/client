@@ -58,15 +58,11 @@ func ServeDNSProxy(ctx context.Context, opts DNSProxyOptions) error {
 	if listenAddr == "" {
 		listenAddr = "127.0.0.1:5353"
 	}
-	udpConn, err := net.ListenPacket("udp", listenAddr)
+	tcpListener, udpConn, err := listenDNSProxyPair(listenAddr)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = udpConn.Close() }()
-	tcpListener, err := net.Listen("tcp", udpConn.LocalAddr().String())
-	if err != nil {
-		return err
-	}
 	defer func() { _ = tcpListener.Close() }()
 	if opts.Ready != nil {
 		opts.Ready(udpConn.LocalAddr().String())
@@ -90,6 +86,30 @@ func ServeDNSProxy(ctx context.Context, opts DNSProxyOptions) error {
 		return nil
 	}
 	return err
+}
+
+// TCP and UDP have independent port availability. In particular, Windows can
+// assign UDP an ephemeral port excluded from TCP. Let TCP choose first and try
+// another ephemeral pair if UDP cannot bind it; explicit ports never move.
+func listenDNSProxyPair(address string) (net.Listener, net.PacketConn, error) {
+	attempts := 1
+	if _, port, err := net.SplitHostPort(address); err == nil && port == "0" {
+		attempts = 16
+	}
+	var lastErr error
+	for range attempts {
+		tcp, err := net.Listen("tcp", address)
+		if err != nil {
+			return nil, nil, err
+		}
+		udp, err := net.ListenPacket("udp", tcp.Addr().String())
+		if err == nil {
+			return tcp, udp, nil
+		}
+		_ = tcp.Close()
+		lastErr = err
+	}
+	return nil, nil, lastErr
 }
 
 func serveDNSProxyUDP(ctx context.Context, conn net.PacketConn, opts DNSProxyOptions, timeout time.Duration) error {

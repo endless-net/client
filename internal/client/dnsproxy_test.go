@@ -132,6 +132,7 @@ func TestDNSProxyFailsOverToTheNextGlobalUpstream(t *testing.T) {
 
 func TestDNSProxyServesTCPOnTheUDPAddress(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 	ready := make(chan string, 1)
 	done := make(chan error, 1)
 	networkMap := clientapi.RegisterNodeResponse{
@@ -147,9 +148,20 @@ func TestDNSProxyServesTCPOnTheUDPAddress(t *testing.T) {
 			Ready:        func(addr string) { ready <- addr },
 		})
 	}()
-	addr := <-ready
+	var addr string
+	select {
+	case addr = <-ready:
+	case err := <-done:
+		t.Fatalf("DNS proxy exited before readiness: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("DNS proxy did not become ready")
+	}
 	conn, err := net.DialTimeout("tcp", addr, time.Second)
 	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	query := dnsTestQuery(t, 0x1005, "node-b.default.endlessnet", dnsTypeA)
@@ -171,8 +183,13 @@ func TestDNSProxyServesTCPOnTheUDPAddress(t *testing.T) {
 		t.Fatalf("TCP A answer = %s", got)
 	}
 	cancel()
-	if err := <-done; err != nil {
-		t.Fatal(err)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("DNS proxy did not stop after cancellation")
 	}
 }
 
