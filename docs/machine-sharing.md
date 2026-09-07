@@ -109,3 +109,23 @@ The separate Management release job above supplies the first encrypted result
 without configuring this missing Client secret. Client release workflows still
 need private-module access before release
 validation; the change here configures the Test workflow only.
+
+## Live backend to encrypted engines, 2026-09-07
+
+[Coordinator CI 34152276174](https://github.com/endless-net/coordinator/actions/runs/34152276174)
+passed with Client `55b7b0bff296d78a58104068930a15334c6869b5`, Coordinator
+`7f57d3bb215a08f641acd0e131b152155ae1648a`, Management
+`530528283ad4cdbbc1113154e26f1111c870e721` and Identity
+`58ba0e7da33e60357d0c2d92c2fff97c775626ed` (41.94 seconds overall).
+`TestSharingLiveBackendEngines` passed in 41.06 seconds. Two real WireGuard
+engines apply unchanged signed snapshots committed by Coordinator after real
+TOTP user/group sharing and Management reconciliation. Recipient TCP handshake
+and reply succeed; source initiation and traffic after withdrawal are denied.
+The same engines stay alive throughout both acceptance/withdrawal cycles.
+
+Channel TUN and OS routing are test adapters; node provisioning, Billing and
+Signing credentials are fixtures. Snapshot handoff uses test-process stdin,
+not production map streaming. The transport is direct UDP. Separate real gRPC
+upstream probes check Relay pair authorization against the same YDB state,
+but no Relay dataplane carries these packets. Expiry and key rotation remain
+separate component evidence until joined to this scenario.
