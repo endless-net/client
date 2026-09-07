@@ -60,6 +60,11 @@ encrypted scenario in
 on 7 September 2026 (explicit PASS, 5.07 seconds). This verifies expiry and fresh
 handshake recovery with signed fixture maps, not backend map delivery or Relay.
 
+The next encrypted extension exercises UDP and ICMP echo on the same live
+engines: unsolicited replies deny, recipient requests and matched replies pass,
+expiry blocks both directions, renewal requires fresh request state and
+withdrawal blocks both again. This extension still requires its own CI result.
+
 The first encrypted-test CI attempt at `890236a` did not execute the scenario:
 [Linux job 101766343601](https://github.com/endless-net/client/actions/runs/34129622991/job/101766343601)
 failed downloading private Coordinator and Management Go SDKs during vet. The

@@ -89,6 +89,11 @@ func TestSharingEncryptedWireGuardDirectionAndWithdrawal(t *testing.T) {
 	exchange(1, shareTCP(true, 18), true)
 	exchange(0, shareTCP(false, 16), true)
 	exchange(1, shareTCP(true, 24), true)
+	for _, protocol := range []byte{17, 1} {
+		exchange(1, sharingDatagram(protocol, true), false)
+		exchange(0, sharingDatagram(protocol, false), true)
+		exchange(1, sharingDatagram(protocol, true), true)
+	}
 	// Expiry must revoke packets while peers, keys and encrypted transport stay
 	// configured. A missing WireGuard peer cannot explain these denials.
 	leaseDeadline := time.Now().Add(2 * time.Second)
@@ -105,6 +110,10 @@ func TestSharingEncryptedWireGuardDirectionAndWithdrawal(t *testing.T) {
 	time.Sleep(time.Until(leaseDeadline.Add(50 * time.Millisecond)))
 	exchange(0, shareTCP(false, 24), false)
 	exchange(1, shareTCP(true, 24), false)
+	for _, protocol := range []byte{17, 1} {
+		exchange(0, sharingDatagram(protocol, false), false)
+		exchange(1, sharingDatagram(protocol, true), false)
+	}
 	// A fresh signed lease can establish a new flow on the same live transport.
 	for i := range maps {
 		maps[i].Network.SharePeerGrants[0].ExpiresAt = time.Now().Add(time.Minute)
@@ -119,6 +128,11 @@ func TestSharingEncryptedWireGuardDirectionAndWithdrawal(t *testing.T) {
 	exchange(1, shareTCP(true, 18), true)
 	exchange(0, shareTCP(false, 16), true)
 	exchange(1, shareTCP(true, 2), false)
+	for _, protocol := range []byte{17, 1} {
+		exchange(1, sharingDatagram(protocol, true), false)
+		exchange(0, sharingDatagram(protocol, false), true)
+		exchange(1, sharingDatagram(protocol, true), true)
+	}
 	wrongPort := shareTCP(false, 2)
 	binary.BigEndian.PutUint16(wrongPort[22:24], 22)
 	exchange(0, wrongPort, false)
@@ -135,4 +149,50 @@ func TestSharingEncryptedWireGuardDirectionAndWithdrawal(t *testing.T) {
 	}
 	exchange(0, shareTCP(false, 24), false)
 	exchange(1, shareTCP(true, 24), false)
+	for _, protocol := range []byte{17, 1} {
+		exchange(0, sharingDatagram(protocol, false), false)
+		exchange(1, sharingDatagram(protocol, true), false)
+	}
+}
+
+// Valid IPv4 UDP (zero UDP checksum is permitted) or ICMP echo packet.
+func sharingDatagram(protocol byte, reply bool) []byte {
+	packet := make([]byte, 28)
+	packet[0], packet[8], packet[9] = 0x45, 64, protocol
+	binary.BigEndian.PutUint16(packet[2:4], uint16(len(packet)))
+	copy(packet[12:16], []byte{100, 64, 0, 1})
+	copy(packet[16:20], []byte{100, 65, 0, 1})
+	if reply {
+		copy(packet[12:16], []byte{100, 65, 0, 1})
+		copy(packet[16:20], []byte{100, 64, 0, 1})
+	}
+	if protocol == 17 {
+		source, destination := uint16(50000), uint16(53)
+		if reply {
+			source, destination = destination, source
+		}
+		binary.BigEndian.PutUint16(packet[20:22], source)
+		binary.BigEndian.PutUint16(packet[22:24], destination)
+		binary.BigEndian.PutUint16(packet[24:26], 8)
+	} else {
+		if !reply {
+			packet[20] = 8
+		}
+		binary.BigEndian.PutUint16(packet[24:26], 9)
+		binary.BigEndian.PutUint16(packet[26:28], 1)
+		binary.BigEndian.PutUint16(packet[22:24], sharingChecksum(packet[20:]))
+	}
+	binary.BigEndian.PutUint16(packet[10:12], sharingChecksum(packet[:20]))
+	return packet
+}
+
+func sharingChecksum(raw []byte) uint16 {
+	var sum uint32
+	for i := 0; i < len(raw); i += 2 {
+		sum += uint32(binary.BigEndian.Uint16(raw[i : i+2]))
+	}
+	for sum>>16 != 0 {
+		sum = sum&0xffff + sum>>16
+	}
+	return ^uint16(sum)
 }
