@@ -127,6 +127,10 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 				}
 			case <-time.After(timeout):
 				if allowed {
+					for i, engine := range engines {
+						_, ready, relayErr := engine.RelayStatus()
+						t.Logf("endpoint %d Relay ready=%t error=%v paths=%+v", i, ready, relayErr, engine.PathStatus())
+					}
 					t.Fatal("backend-authorized packet did not reach the other engine")
 				}
 			}
