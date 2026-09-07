@@ -112,6 +112,7 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 		}
 		exchange := func(sender int, packet []byte, allowed bool) {
 			t.Helper()
+			started := time.Now()
 			select {
 			case tuns[sender].Outbound <- packet:
 			case <-time.After(3 * time.Second):
@@ -119,12 +120,18 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			}
 			timeout := 500 * time.Millisecond
 			if allowed {
-				timeout = 5 * time.Second
+				// Engines connect sequentially. A keepalive handshake can reach
+				// Relay before the other session exists; WireGuard retries after
+				// five seconds plus jitter. Allow those real retries to finish.
+				timeout = 15 * time.Second
 			}
 			select {
 			case got := <-tuns[1-sender].Inbound:
 				if !allowed || !bytes.Equal(got, packet) {
 					t.Fatal("backend grant failed encrypted packet enforcement")
+				}
+				if elapsed := time.Since(started); elapsed > 5*time.Second {
+					t.Logf("authorized backend packet arrived after transport recovery in %s", elapsed)
 				}
 			case <-time.After(timeout):
 				if allowed {
