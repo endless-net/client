@@ -363,23 +363,34 @@ exit-LAN enforcement; их нельзя документировать как к
 - `diagnostics` — атомарный redacted bundle без session token, private keys и
   node credential.
 
+### 11. DNS из подписанной карты
+
+Штатный agent читает типизированный effective DNS из подписанной network map,
+запускает локальный DNS proxy вместе с userspace WireGuard runtime и применяет
+маршрутизацию доменов через `resolvectl` на Linux, NRPT на Windows и
+supplemental resolvers на macOS. Proxy обслуживает UDP и TCP, повторяет
+усечённый UDP-ответ по TCP и использует все global и split upstream в порядке
+приоритета. Остановка и rollback WireGuard runtime также останавливают или
+восстанавливают proxy.
+
+MagicDNS включается только явным флагом карты. Split rule выбирается по наиболее
+специфичному совпадающему DNS-суффиксу с проверкой границы label; недоступное
+правило завершается SERVFAIL без утечки запроса в родительский или global
+resolver. Несколько resolver одного домена образуют последовательность
+failover. Статический экспорт WireGuard не подменяет split DNS глобальной
+настройкой: сложная DNS-конфигурация требует штатного agent runtime.
+
+Unit tests и сборка platform-specific кода подтверждают формирование настроек,
+но production activation и System Tests в эту проверку не входят.
+
 ## Задел, но не полный продуктовый lifecycle
 
 | Задел | Что уже есть | Чего нет в штатном lifecycle |
 | --- | --- | --- |
-| DNS proxy | отдельная CLI-команда, overlay A/AAAA и split rules | agent не управляет его lifecycle; только UDP, без TCP fallback |
 | UPnP | ручной mapping API | нет автоматического SSDP discovery; auto path использует PCP/NAT-PMP |
 
 Наличие этих типов или функций нельзя описывать как готовую пользовательскую
 возможность.
-
-В DNS proxy split rule выбирается по наиболее специфичному совпадающему
-доменному суффиксу, с проверкой границы DNS label. Если у выбранного правила
-нет upstream, запрос завершается SERVFAIL и не передаётся родительскому или
-общему resolver. При одинаковом домене пустой upstream имеет fail-closed
-приоритет; для нескольких доступных upstream одного домена сохраняется порядок
-объявления. Это проверено unit tests, но не означает подключения правил из
-Management к агенту или ОС.
 
 ## Честные ограничения текущей реализации
 

@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/binary"
+	"io"
 	"net"
 	"net/netip"
 	"strings"
@@ -22,7 +23,8 @@ func TestDNSProxyAnswersPeerFromSignedMap(t *testing.T) {
 		}},
 	}
 	response, err := DNSProxyResponse(context.Background(), dnsTestQuery(t, 0x1001, "node-b.default.endlessnet", dnsTypeA), DNSProxyOptions{
-		NetworkMap: networkMap,
+		NetworkMap:   networkMap,
+		ServePeerDNS: true,
 	}, time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -35,11 +37,29 @@ func TestDNSProxyAnswersPeerFromSignedMap(t *testing.T) {
 	}
 }
 
+func TestDNSProxyDoesNotServePeerNamesWhenMagicDNSIsDisabled(t *testing.T) {
+	networkMap := clientapi.RegisterNodeResponse{
+		Network: clientapi.Network{Name: "default"},
+		Peers: []clientapi.Peer{{
+			ID: "node-b", Hostname: "node-b", AllowedIPs: []string{"100.64.0.3/32"},
+		}},
+	}
+	response, err := DNSProxyResponse(context.Background(), dnsTestQuery(t, 0x1007, "node-b.default.endlessnet", dnsTypeA), DNSProxyOptions{
+		NetworkMap: networkMap,
+	}, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rcode := dnsTestRCode(response); rcode != dnsRCodeFail {
+		t.Fatalf("rcode = %d, want SERVFAIL", rcode)
+	}
+}
+
 func TestDNSProxyForwardsPublicNamesToDefaultUpstream(t *testing.T) {
 	upstream := startDNSProxyTestUpstream(t, "203.0.113.10")
 	response, err := DNSProxyResponse(context.Background(), dnsTestQuery(t, 0x1002, "public.example", dnsTypeA), DNSProxyOptions{
-		UpstreamAddr: upstream.addr,
-		NetworkMap:   clientapi.RegisterNodeResponse{Network: clientapi.Network{Name: "default"}},
+		UpstreamAddrs: []string{upstream.addr},
+		NetworkMap:    clientapi.RegisterNodeResponse{Network: clientapi.Network{Name: "default"}},
 	}, time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -56,9 +76,9 @@ func TestDNSProxyForwardsSplitNamesOnlyToSplitUpstream(t *testing.T) {
 	public := startDNSProxyTestUpstream(t, "203.0.113.10")
 	split := startDNSProxyTestUpstream(t, "10.10.0.53")
 	response, err := DNSProxyResponse(context.Background(), dnsTestQuery(t, 0x1003, "db.corp.example", dnsTypeA), DNSProxyOptions{
-		UpstreamAddr: public.addr,
-		SplitRules:   []SplitDNSRule{{Domain: "corp.example", Upstream: split.addr}},
-		NetworkMap:   clientapi.RegisterNodeResponse{Network: clientapi.Network{Name: "default"}},
+		UpstreamAddrs: []string{public.addr},
+		SplitRules:    []SplitDNSRule{{Domain: "corp.example", Upstreams: []string{split.addr}}},
+		NetworkMap:    clientapi.RegisterNodeResponse{Network: clientapi.Network{Name: "default"}},
 	}, time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -79,9 +99,9 @@ func TestDNSProxyForwardsSplitNamesOnlyToSplitUpstream(t *testing.T) {
 func TestDNSProxySplitDomainWithoutUpstreamFailsClosed(t *testing.T) {
 	public := startDNSProxyTestUpstream(t, "203.0.113.10")
 	response, err := DNSProxyResponse(context.Background(), dnsTestQuery(t, 0x1004, "db.corp.example", dnsTypeA), DNSProxyOptions{
-		UpstreamAddr: public.addr,
-		SplitRules:   []SplitDNSRule{{Domain: "corp.example"}},
-		NetworkMap:   clientapi.RegisterNodeResponse{Network: clientapi.Network{Name: "default"}},
+		UpstreamAddrs: []string{public.addr},
+		SplitRules:    []SplitDNSRule{{Domain: "corp.example"}},
+		NetworkMap:    clientapi.RegisterNodeResponse{Network: clientapi.Network{Name: "default"}},
 	}, time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -93,6 +113,66 @@ func TestDNSProxySplitDomainWithoutUpstreamFailsClosed(t *testing.T) {
 	case got := <-public.queries:
 		t.Fatalf("fail-closed split query leaked to public upstream as %s", got)
 	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestDNSProxyFailsOverToTheNextGlobalUpstream(t *testing.T) {
+	upstream := startDNSProxyTestUpstream(t, "203.0.113.20")
+	response, err := DNSProxyResponse(context.Background(), dnsTestQuery(t, 0x1006, "public.example", dnsTypeA), DNSProxyOptions{
+		UpstreamAddrs: []string{"127.0.0.1:1", upstream.addr},
+		NetworkMap:    clientapi.RegisterNodeResponse{Network: clientapi.Network{Name: "default"}},
+	}, 50*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := dnsTestAAnswer(t, response); got != "203.0.113.20" {
+		t.Fatalf("A answer = %s, want failover response", got)
+	}
+}
+
+func TestDNSProxyServesTCPOnTheUDPAddress(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	ready := make(chan string, 1)
+	done := make(chan error, 1)
+	networkMap := clientapi.RegisterNodeResponse{
+		Network: clientapi.Network{Name: "default"},
+		Peers: []clientapi.Peer{{
+			ID: "node-b", Hostname: "node-b", AllowedIPs: []string{"100.64.0.3/32"},
+		}},
+	}
+	go func() {
+		done <- ServeDNSProxy(ctx, DNSProxyOptions{
+			ListenAddr: "127.0.0.1:0", NetworkMap: networkMap,
+			ServePeerDNS: true,
+			Ready:        func(addr string) { ready <- addr },
+		})
+	}()
+	addr := <-ready
+	conn, err := net.DialTimeout("tcp", addr, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := dnsTestQuery(t, 0x1005, "node-b.default.endlessnet", dnsTypeA)
+	framed := binary.BigEndian.AppendUint16(nil, uint16(len(query)))
+	framed = append(framed, query...)
+	if _, err := conn.Write(framed); err != nil {
+		t.Fatal(err)
+	}
+	var size [2]byte
+	if _, err := io.ReadFull(conn, size[:]); err != nil {
+		t.Fatal(err)
+	}
+	response := make([]byte, int(binary.BigEndian.Uint16(size[:])))
+	if _, err := io.ReadFull(conn, response); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.Close()
+	if got := dnsTestAAnswer(t, response); got != "100.64.0.3" {
+		t.Fatalf("TCP A answer = %s", got)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 

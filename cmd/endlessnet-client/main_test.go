@@ -3871,6 +3871,15 @@ func TestDiagnosticsPayloadIncludesSupportSummaries(t *testing.T) {
 	networkMap.Network.Name = "prod"
 	networkMap.Network.IPv6CIDR = "fd7a:115c:a1e0::/64"
 	networkMap.Network.DNS = []string{"100.64.0.1", "fd7a:115c:a1e0::1"}
+	networkMap.Network.DNSConfig = &clientapi.DNSConfig{
+		MagicDNSEnabled: true,
+		Suffix:          "nodes.prod.example",
+		SearchDomains:   []string{"nodes.prod.example", "corp.example"},
+		Nameservers: []clientapi.DNSNameserver{
+			{ID: "global", Address: "100.64.0.1", Scope: "global", Priority: 10},
+			{ID: "split", Address: "100.64.0.53", Scope: "split", Priority: 20, SplitDomains: []string{"corp.example"}},
+		},
+	}
 	networkMap.Node.AssignedIPv6 = "fd7a:115c:a1e0::2"
 	networkMap.Peers = []clientapi.Peer{
 		{
@@ -3903,7 +3912,7 @@ func TestDiagnosticsPayloadIncludesSupportSummaries(t *testing.T) {
 
 	payload := diagnosticsPayload(cfg)
 	dnsSummary, ok := payload["dns_summary"].(map[string]any)
-	if !ok || dnsSummary["search_domain"] != "prod.endlessnet" || dnsSummary["record_count"] != 2 {
+	if !ok || dnsSummary["search_domain"] != "nodes.prod.example" || dnsSummary["record_count"] != 2 || dnsSummary["config_present"] != true {
 		t.Fatalf("diagnostics DNS summary = %#v", payload["dns_summary"])
 	}
 	routeSummary, ok := payload["route_summary"].(map[string]any)
@@ -3921,7 +3930,7 @@ func TestDiagnosticsPayloadIncludesSupportSummaries(t *testing.T) {
 		t.Fatalf("diagnostics last_errors = %#v, want empty []string", payload["last_errors"])
 	}
 	typed := serviceIPCDiagnosticsPayload(cfg, serviceIPCStatusForConfig(cfg), nil)
-	if typed.DNSSummary == nil || typed.DNSSummary.SearchDomain != "prod.endlessnet" || typed.DNSSummary.RecordCount != 2 {
+	if typed.DNSSummary == nil || typed.DNSSummary.SearchDomain != "nodes.prod.example" || typed.DNSSummary.RecordCount != 2 || !typed.DNSSummary.ConfigPresent || !typed.DNSSummary.MagicDNSEnabled || len(typed.DNSSummary.SplitDomains) != 1 {
 		t.Fatalf("typed diagnostics DNS summary = %#v", typed.DNSSummary)
 	}
 	if typed.RouteSummary == nil || typed.RouteSummary.AllowedIPCount != 4 || typed.RouteSummary.SubnetRouteCount != 2 || !typed.RouteSummary.DefaultRoutePresent {
@@ -3932,7 +3941,7 @@ func TestDiagnosticsPayloadIncludesSupportSummaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := string(raw)
-	for _, want := range []string{"prod.endlessnet", "100.64.0.1", "10.8.0.0/24", "0.0.0.0/0"} {
+	for _, want := range []string{"nodes.prod.example", "corp.example", "100.64.0.1", "100.64.0.53", "10.8.0.0/24", "0.0.0.0/0"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("diagnostics payload missing %q: %s", want, out)
 		}

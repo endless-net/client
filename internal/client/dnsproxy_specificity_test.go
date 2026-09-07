@@ -2,31 +2,31 @@ package client
 
 import (
 	"encoding/binary"
+	"slices"
 	"testing"
 	"time"
 )
 
 func TestSplitDNSSelectsMostSpecificDomainIncludingUnavailableUpstreams(t *testing.T) {
 	for _, test := range []struct {
-		name     string
-		rules    []SplitDNSRule
-		upstream string
-		matched  bool
+		name      string
+		rules     []SplitDNSRule
+		upstreams []string
+		matched   bool
 	}{
-		{"specific first", []SplitDNSRule{{"corp.example", "private"}, {"example", "parent"}}, "private", true},
-		{"parent first", []SplitDNSRule{{"example", "parent"}, {"corp.example", "private"}}, "private", true},
-		{"unavailable specific", []SplitDNSRule{{"example", "parent"}, {"corp.example", ""}}, "", true},
-		{"unavailable first", []SplitDNSRule{{"corp.example", ""}, {"example", "parent"}}, "", true},
-		{"unavailable parent", []SplitDNSRule{{"example", ""}, {"corp.example", "private"}}, "private", true},
-		{"equal unavailable first", []SplitDNSRule{{"corp.example", ""}, {"CORP.EXAMPLE.", "private"}}, "", true},
-		{"equal unavailable last", []SplitDNSRule{{"corp.example", "private"}, {"CORP.EXAMPLE.", ""}}, "", true},
-		{"label boundary", []SplitDNSRule{{"orp.example", "wrong"}}, "", false},
-		{"empty domain", []SplitDNSRule{{"", "wrong"}}, "", false},
+		{"specific first", []SplitDNSRule{{"corp.example", []string{"private"}}, {"example", []string{"parent"}}}, []string{"private"}, true},
+		{"parent first", []SplitDNSRule{{"example", []string{"parent"}}, {"corp.example", []string{"private"}}}, []string{"private"}, true},
+		{"unavailable specific", []SplitDNSRule{{"example", []string{"parent"}}, {"corp.example", nil}}, nil, true},
+		{"unavailable first", []SplitDNSRule{{"corp.example", nil}, {"example", []string{"parent"}}}, nil, true},
+		{"unavailable parent", []SplitDNSRule{{"example", nil}, {"corp.example", []string{"private"}}}, []string{"private"}, true},
+		{"equal priorities", []SplitDNSRule{{"corp.example", []string{"private"}}, {"CORP.EXAMPLE.", []string{"backup"}}}, []string{"private", "backup"}, true},
+		{"label boundary", []SplitDNSRule{{"orp.example", []string{"wrong"}}}, nil, false},
+		{"empty domain", []SplitDNSRule{{"", []string{"wrong"}}}, nil, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			upstream, matched := selectSplitDNSUpstream("DB.CORP.EXAMPLE.", test.rules)
-			if upstream != test.upstream || matched != test.matched {
-				t.Fatalf("selected %q/%v", upstream, matched)
+			upstreams, matched := selectSplitDNSUpstreams("DB.CORP.EXAMPLE.", test.rules)
+			if !slices.Equal(upstreams, test.upstreams) || matched != test.matched {
+				t.Fatalf("selected %#v/%v", upstreams, matched)
 			}
 		})
 	}
@@ -34,9 +34,12 @@ func TestSplitDNSSelectsMostSpecificDomainIncludingUnavailableUpstreams(t *testi
 
 func TestUnavailableSpecificSplitDNSDoesNotForwardToParentOrGlobal(t *testing.T) {
 	response, err := DNSProxyResponse(t.Context(), dnsTestQuery(t, 0x1234, "db.corp.example", dnsTypeA), DNSProxyOptions{
-		SearchDomain: "peers.internal",
-		UpstreamAddr: "invalid-global-address",
-		SplitRules:   []SplitDNSRule{{Domain: "example", Upstream: "invalid-parent-address"}, {Domain: "corp.example"}},
+		SearchDomain:  "peers.internal",
+		UpstreamAddrs: []string{"invalid-global-address"},
+		SplitRules: []SplitDNSRule{
+			{Domain: "example", Upstreams: []string{"invalid-parent-address"}},
+			{Domain: "corp.example"},
+		},
 	}, time.Millisecond)
 	// An attempted forward would return an address error instead of a DNS reply.
 	if err != nil || len(response) < 12 || binary.BigEndian.Uint16(response[2:4])&0xf != dnsRCodeFail {

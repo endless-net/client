@@ -24,7 +24,7 @@ func runCommandInput(ctx context.Context, input string, name string, args ...str
 	return cmd.CombinedOutput()
 }
 
-func newWireGuardEngineRouter(interfaceName string, runner CommandRunner, inputRunner commandInputRunner) (wireGuardEngineRouter, error) {
+func newPlatformWireGuardEngineRouter(interfaceName string, runner CommandRunner, inputRunner commandInputRunner) (wireGuardEngineRouter, error) {
 	if runner == nil {
 		runner = runCommand
 	}
@@ -65,7 +65,7 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 			return fail(fmt.Errorf("configure darwin TUN route: %s", commandError(err, out)))
 		}
 	}
-	if len(cfg.DNS) > 0 {
+	if darwinShouldConfigureDNS(cfg) {
 		if out, err := r.inputRunner(ctx, darwinUserspaceDNSCommands(cfg), "scutil"); err != nil {
 			return fail(fmt.Errorf("configure darwin wireguard-go DNS: %s", commandError(err, out)))
 		}
@@ -86,7 +86,7 @@ func (r *darwinWireGuardEngineRouter) Down(ctx context.Context) error {
 }
 
 func (r *darwinWireGuardEngineRouter) cleanup(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
-	if len(cfg.DNS) > 0 {
+	if darwinShouldConfigureDNS(cfg) {
 		_, _ = r.inputRunner(ctx, darwinUserspaceDNSRemoveCommands(cfg.Interface), "scutil")
 	}
 	for _, route := range cfg.Routes {
@@ -109,17 +109,34 @@ func darwinUserspaceDNSCommands(cfg wireGuardEngineRouterConfig) string {
 	for _, server := range cfg.DNS {
 		servers = append(servers, server.String())
 	}
-	return strings.Join([]string{
+	domains := append([]string(nil), cfg.DNSDomains...)
+	if cfg.DNSOverride || !cfg.DNSConfigPresent {
+		domains = []string{"."}
+	}
+	if len(domains) == 0 {
+		domains = append(domains, cfg.SearchDomains...)
+	}
+	commands := []string{
 		"open",
 		"d.init",
 		"d.add ServerAddresses * " + strings.Join(servers, " "),
 		"d.add InterfaceName " + cfg.Interface,
-		"d.add SupplementalMatchDomains * .",
+		"d.add SupplementalMatchDomains * " + strings.Join(domains, " "),
 		"d.add SupplementalMatchDomainsNoSearch # 1",
-		"set " + darwinUserspaceDNSKey(cfg.Interface),
+	}
+	if len(cfg.SearchDomains) > 0 {
+		commands = append(commands, "d.add SearchDomains * "+strings.Join(cfg.SearchDomains, " "))
+	}
+	commands = append(commands,
+		"set "+darwinUserspaceDNSKey(cfg.Interface),
 		"quit",
 		"",
-	}, "\n")
+	)
+	return strings.Join(commands, "\n")
+}
+
+func darwinShouldConfigureDNS(cfg wireGuardEngineRouterConfig) bool {
+	return len(cfg.DNS) > 0 && (!cfg.DNSConfigPresent || cfg.DNSOverride || len(cfg.DNSDomains) > 0 || len(cfg.SearchDomains) > 0)
 }
 
 func darwinUserspaceDNSRemoveCommands(interfaceName string) string {

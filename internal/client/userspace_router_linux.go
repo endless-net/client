@@ -19,7 +19,7 @@ type linuxWireGuardEngineRouter struct {
 	configured    bool
 }
 
-func newWireGuardEngineRouter(interfaceName string, runner CommandRunner, _ commandInputRunner) (wireGuardEngineRouter, error) {
+func newPlatformWireGuardEngineRouter(interfaceName string, runner CommandRunner, _ commandInputRunner) (wireGuardEngineRouter, error) {
 	if runner == nil {
 		runner = runCommand
 	}
@@ -71,7 +71,7 @@ func (r *linuxWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuar
 			return fail(err)
 		}
 	}
-	if len(cfg.DNS) > 0 {
+	if linuxShouldConfigureDNS(cfg) {
 		args := []string{"dns", cfg.Interface}
 		for _, server := range cfg.DNS {
 			args = append(args, server.String())
@@ -79,8 +79,11 @@ func (r *linuxWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuar
 		if err := r.run(ctx, "resolvectl", args...); err != nil {
 			return fail(err)
 		}
-		if err := r.run(ctx, "resolvectl", "domain", cfg.Interface, "~."); err != nil {
-			return fail(err)
+		domains := linuxResolvedDomains(cfg)
+		if len(domains) > 0 {
+			if err := r.run(ctx, "resolvectl", append([]string{"domain", cfg.Interface}, domains...)...); err != nil {
+				return fail(err)
+			}
 		}
 	}
 	for _, command := range cfg.PostUp {
@@ -89,6 +92,22 @@ func (r *linuxWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuar
 		}
 	}
 	return nil
+}
+
+func linuxResolvedDomains(cfg wireGuardEngineRouterConfig) []string {
+	if cfg.DNSOverride || (!cfg.DNSConfigPresent && len(cfg.DNS) > 0) {
+		return []string{"~."}
+	}
+	result := make([]string, 0, len(cfg.DNSDomains)+len(cfg.SearchDomains))
+	for _, domain := range cfg.DNSDomains {
+		result = append(result, "~"+domain)
+	}
+	result = append(result, cfg.SearchDomains...)
+	return result
+}
+
+func linuxShouldConfigureDNS(cfg wireGuardEngineRouterConfig) bool {
+	return len(cfg.DNS) > 0 && (!cfg.DNSConfigPresent || cfg.DNSOverride || len(cfg.DNSDomains) > 0 || len(cfg.SearchDomains) > 0)
 }
 
 func (r *linuxWireGuardEngineRouter) addRoute(ctx context.Context, cfg wireGuardEngineRouterConfig, route netip.Prefix) error {
@@ -142,7 +161,7 @@ func (r *linuxWireGuardEngineRouter) cleanup(ctx context.Context, cfg wireGuardE
 	for _, command := range cfg.PreDown {
 		_, _ = r.runner(ctx, "sh", "-c", command)
 	}
-	if len(cfg.DNS) > 0 {
+	if linuxShouldConfigureDNS(cfg) {
 		_, _ = r.runner(ctx, "resolvectl", "revert", cfg.Interface)
 	}
 	for _, route := range cfg.Routes {

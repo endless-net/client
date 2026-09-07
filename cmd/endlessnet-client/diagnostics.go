@@ -397,6 +397,7 @@ func serviceIPCDiagnosticsLastErrors(status ipc.StatusResponse, agentState *clie
 }
 
 func serviceIPCDiagnosticsDNSSummary(networkMap clientapi.RegisterNodeResponse) ipc.DiagnosticsDNSSummary {
+	dns := diagnosticsDNSConfiguration(networkMap)
 	records := []ipc.DiagnosticsDNSRecord{}
 	addRecord := func(nodeID, hostname, ipv4, ipv6 string) {
 		label := client.DNSLabel(hostname)
@@ -407,7 +408,7 @@ func serviceIPCDiagnosticsDNSSummary(networkMap clientapi.RegisterNodeResponse) 
 			NodeID:   strings.TrimSpace(nodeID),
 			Hostname: strings.TrimSpace(hostname),
 			Label:    label,
-			FQDN:     label + "." + client.DefaultDNSDomain(networkMap.Network.Name),
+			FQDN:     label + "." + dns.searchDomain,
 			IPv4:     strings.TrimSpace(ipv4),
 			IPv6:     strings.TrimSpace(ipv6),
 		})
@@ -418,9 +419,14 @@ func serviceIPCDiagnosticsDNSSummary(networkMap clientapi.RegisterNodeResponse) 
 		addRecord(peer.ID, peer.Hostname, ipv4, ipv6)
 	}
 	return ipc.DiagnosticsDNSSummary{
-		SearchDomain:      client.DefaultDNSDomain(networkMap.Network.Name),
+		SearchDomain:      dns.searchDomain,
+		SearchDomains:     dns.searchDomains,
+		SplitDomains:      dns.splitDomains,
 		TTLSeconds:        client.DefaultDNSTTLSeconds,
-		NetworkDNSServers: append([]string{}, networkMap.Network.DNS...),
+		NetworkDNSServers: dns.servers,
+		ConfigPresent:     dns.present,
+		MagicDNSEnabled:   dns.magicDNS,
+		OverrideLocalDNS:  dns.override,
 		RecordCount:       len(records),
 		Records:           records,
 	}
@@ -587,6 +593,7 @@ func diagnosticsLastErrors(status map[string]any, agentState *client.AgentSnapsh
 }
 
 func diagnosticsDNSSummary(networkMap clientapi.RegisterNodeResponse) map[string]any {
+	dns := diagnosticsDNSConfiguration(networkMap)
 	records := []map[string]string{}
 	addRecord := func(nodeID, hostname, ipv4, ipv6 string) {
 		label := client.DNSLabel(hostname)
@@ -597,7 +604,7 @@ func diagnosticsDNSSummary(networkMap clientapi.RegisterNodeResponse) map[string
 			"node_id":  strings.TrimSpace(nodeID),
 			"hostname": strings.TrimSpace(hostname),
 			"label":    label,
-			"fqdn":     label + "." + client.DefaultDNSDomain(networkMap.Network.Name),
+			"fqdn":     label + "." + dns.searchDomain,
 		}
 		if strings.TrimSpace(ipv4) != "" {
 			record["ipv4"] = strings.TrimSpace(ipv4)
@@ -613,12 +620,66 @@ func diagnosticsDNSSummary(networkMap clientapi.RegisterNodeResponse) map[string
 		addRecord(peer.ID, peer.Hostname, ipv4, ipv6)
 	}
 	return map[string]any{
-		"search_domain":       client.DefaultDNSDomain(networkMap.Network.Name),
+		"search_domain":       dns.searchDomain,
+		"search_domains":      dns.searchDomains,
+		"split_domains":       dns.splitDomains,
 		"ttl_seconds":         client.DefaultDNSTTLSeconds,
-		"network_dns_servers": append([]string(nil), networkMap.Network.DNS...),
+		"network_dns_servers": dns.servers,
+		"config_present":      dns.present,
+		"magic_dns_enabled":   dns.magicDNS,
+		"override_local_dns":  dns.override,
 		"record_count":        len(records),
 		"records":             records,
 	}
+}
+
+type diagnosticsDNSConfig struct {
+	searchDomain  string
+	searchDomains []string
+	splitDomains  []string
+	servers       []string
+	present       bool
+	magicDNS      bool
+	override      bool
+}
+
+func diagnosticsDNSConfiguration(networkMap clientapi.RegisterNodeResponse) diagnosticsDNSConfig {
+	result := diagnosticsDNSConfig{
+		searchDomain: client.DefaultDNSDomain(networkMap.Network.Name),
+		servers:      append([]string(nil), networkMap.Network.DNS...),
+	}
+	dns := networkMap.Network.DNSConfig
+	if dns == nil {
+		return result
+	}
+	result.present = true
+	result.magicDNS = dns.MagicDNSEnabled
+	result.override = dns.OverrideLocalDNS
+	result.searchDomains = append([]string(nil), dns.SearchDomains...)
+	result.servers = nil
+	if dns.MagicDNSEnabled && strings.TrimSpace(dns.Suffix) != "" {
+		result.searchDomain = strings.TrimSuffix(strings.TrimSpace(dns.Suffix), ".")
+	}
+	for _, nameserver := range dns.Nameservers {
+		result.servers = appendUniqueDiagnosticString(result.servers, nameserver.Address)
+		for _, domain := range nameserver.SplitDomains {
+			result.splitDomains = appendUniqueDiagnosticString(result.splitDomains, domain)
+		}
+	}
+	return result
+}
+
+func appendUniqueDiagnosticString(values []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func diagnosticsRouteSummary(networkMap clientapi.RegisterNodeResponse, cfg client.Config) map[string]any {

@@ -652,6 +652,19 @@ func cloneWireGuardEngineRouterConfig(value wireGuardEngineRouterConfig) wireGua
 	value.Addresses = append([]netip.Prefix(nil), value.Addresses...)
 	value.Routes = append([]netip.Prefix(nil), value.Routes...)
 	value.DNS = append([]netip.Addr(nil), value.DNS...)
+	value.DNSDomains = append([]string(nil), value.DNSDomains...)
+	value.SearchDomains = append([]string(nil), value.SearchDomains...)
+	if value.DNSProxy != nil {
+		proxy := *value.DNSProxy
+		proxy.UpstreamAddrs = append([]string(nil), value.DNSProxy.UpstreamAddrs...)
+		proxy.SplitRules = make([]SplitDNSRule, len(value.DNSProxy.SplitRules))
+		for index, rule := range value.DNSProxy.SplitRules {
+			proxy.SplitRules[index] = SplitDNSRule{Domain: rule.Domain, Upstreams: append([]string(nil), rule.Upstreams...)}
+		}
+		proxy.NetworkMap = cloneRegisterNodeResponse(value.DNSProxy.NetworkMap)
+		proxy.Ready = nil
+		value.DNSProxy = &proxy
+	}
 	value.PostUp = append([]string(nil), value.PostUp...)
 	value.PreDown = append([]string(nil), value.PreDown...)
 	return value
@@ -675,6 +688,15 @@ func wireGuardEngineRouterConfigForInterface(value wireGuardEngineRouterConfig, 
 
 func cloneRegisterNodeResponse(value clientapi.RegisterNodeResponse) clientapi.RegisterNodeResponse {
 	value.Network.DNS = append([]string(nil), value.Network.DNS...)
+	if value.Network.DNSConfig != nil {
+		dns := *value.Network.DNSConfig
+		dns.SearchDomains = append([]string(nil), value.Network.DNSConfig.SearchDomains...)
+		dns.Nameservers = append([]clientapi.DNSNameserver(nil), value.Network.DNSConfig.Nameservers...)
+		for index := range dns.Nameservers {
+			dns.Nameservers[index].SplitDomains = append([]string(nil), value.Network.DNSConfig.Nameservers[index].SplitDomains...)
+		}
+		value.Network.DNSConfig = &dns
+	}
 	value.Node.EndpointCandidates = append([]string(nil), value.Node.EndpointCandidates...)
 	value.Node.AdvertisedIPs = append([]string(nil), value.Node.AdvertisedIPs...)
 	value.Node.RequestedTags = append([]string(nil), value.Node.RequestedTags...)

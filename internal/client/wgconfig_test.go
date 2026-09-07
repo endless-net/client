@@ -44,6 +44,43 @@ func TestRenderWireGuardListenPort(t *testing.T) {
 	}
 }
 
+func TestRenderWireGuardDoesNotFlattenSplitDNSIntoGlobalOverride(t *testing.T) {
+	rendered := renderWireGuardValidated("private-key", clientapi.RegisterNodeResponse{
+		Network: clientapi.Network{
+			DNS: []string{"192.0.2.53"},
+			DNSConfig: &clientapi.DNSConfig{
+				OverrideLocalDNS: false,
+				Nameservers: []clientapi.DNSNameserver{
+					{ID: "global", Address: "192.0.2.53", Scope: "global"},
+					{ID: "split", Address: "198.51.100.53", Scope: "split", SplitDomains: []string{"corp.example"}},
+				},
+			},
+		},
+		Node: clientapi.Node{AssignedIP: "100.91.0.2"},
+	}, WireGuardRenderOptions{})
+	if strings.Contains(rendered, "DNS =") {
+		t.Fatalf("static config flattened split DNS into a global override:\n%s", rendered)
+	}
+}
+
+func TestRenderWireGuardIncludesTypedGlobalOverride(t *testing.T) {
+	rendered := renderWireGuardValidated("private-key", clientapi.RegisterNodeResponse{
+		Network: clientapi.Network{
+			DNSConfig: &clientapi.DNSConfig{
+				OverrideLocalDNS: true,
+				Nameservers: []clientapi.DNSNameserver{
+					{ID: "primary", Address: "192.0.2.53", Scope: "global"},
+					{ID: "backup", Address: "192.0.2.54", Scope: "global"},
+				},
+			},
+		},
+		Node: clientapi.Node{AssignedIP: "100.91.0.2"},
+	}, WireGuardRenderOptions{})
+	if !strings.Contains(rendered, "DNS = 192.0.2.53, 192.0.2.54") {
+		t.Fatalf("static config omitted typed global override:\n%s", rendered)
+	}
+}
+
 func TestRenderWireGuardOmitsListenPortWhenUnset(t *testing.T) {
 	rendered := renderWireGuardValidated("private-key", clientapi.RegisterNodeResponse{
 		Node: clientapi.Node{

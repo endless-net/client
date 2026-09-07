@@ -8,6 +8,8 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -631,6 +633,40 @@ func TestBuildWireGuardEngineRouterConfig(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(append(cfg.PostUp, cfg.PreDown...), "\n"), "%i") {
 		t.Fatalf("userspace firewall hooks retain interface placeholder: %#v / %#v", cfg.PostUp, cfg.PreDown)
+	}
+}
+
+func TestBuildWireGuardEngineRouterConfigRestoresEffectiveDNS(t *testing.T) {
+	networkMap := clientapi.RegisterNodeResponse{
+		Revision: clientapi.MapRevision{Network: 7},
+		Node:     clientapi.Node{AssignedIP: "100.64.0.2"},
+		Network: clientapi.Network{
+			Name: "prod",
+			DNS:  []string{"192.0.2.53"},
+			DNSConfig: &clientapi.DNSConfig{
+				MagicDNSEnabled: true, OverrideLocalDNS: false, Suffix: "prod.endlessnet",
+				Nameservers: []clientapi.DNSNameserver{
+					{ID: "global", Address: "192.0.2.53", Scope: "global", Priority: 100},
+					{ID: "global-backup", Address: "192.0.2.54", Scope: "global", Priority: 110},
+					{ID: "split", Address: "198.51.100.53", Scope: "split", Priority: 10, SplitDomains: []string{"corp.example"}},
+					{ID: "split-backup", Address: "198.51.100.54", Scope: "split", Priority: 20, SplitDomains: []string{"corp.example"}},
+				},
+				SearchDomains: []string{"prod.endlessnet", "corp.example"},
+			},
+		},
+	}
+	cfg, err := buildWireGuardEngineRouterConfig("endlessnet", 1280, Config{}, networkMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.DNSConfigPresent || cfg.DNSOverride || len(cfg.DNS) != 1 || cfg.DNS[0].String() != "127.0.0.1" || cfg.DNSProxy == nil {
+		t.Fatalf("effective DNS router config = %#v", cfg)
+	}
+	if !cfg.DNSProxy.ServePeerDNS || !slices.Equal(cfg.DNSProxy.UpstreamAddrs, []string{"192.0.2.53:53", "192.0.2.54:53"}) || cfg.DNSProxy.SearchDomain != "prod.endlessnet" || len(cfg.DNSProxy.SplitRules) != 1 || !reflect.DeepEqual(cfg.DNSProxy.SplitRules[0], SplitDNSRule{Domain: "corp.example", Upstreams: []string{"198.51.100.53:53", "198.51.100.54:53"}}) {
+		t.Fatalf("DNS proxy config = %#v", cfg.DNSProxy)
+	}
+	if !slices.Equal(cfg.DNSDomains, []string{"corp.example", "prod.endlessnet"}) || !slices.Equal(cfg.SearchDomains, []string{"prod.endlessnet", "corp.example"}) {
+		t.Fatalf("DNS domains = routes %#v search %#v", cfg.DNSDomains, cfg.SearchDomains)
 	}
 }
 

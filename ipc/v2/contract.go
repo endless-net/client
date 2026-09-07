@@ -514,8 +514,13 @@ type DiagnosticsDNSRecord struct {
 
 type DiagnosticsDNSSummary struct {
 	SearchDomain      string                 `json:"search_domain"`
+	SearchDomains     []string               `json:"search_domains,omitempty"`
+	SplitDomains      []string               `json:"split_domains,omitempty"`
 	TTLSeconds        int                    `json:"ttl_seconds"`
 	NetworkDNSServers []string               `json:"network_dns_servers"`
+	ConfigPresent     bool                   `json:"config_present"`
+	MagicDNSEnabled   bool                   `json:"magic_dns_enabled"`
+	OverrideLocalDNS  bool                   `json:"override_local_dns"`
 	RecordCount       int                    `json:"record_count"`
 	Records           []DiagnosticsDNSRecord `json:"records"`
 }

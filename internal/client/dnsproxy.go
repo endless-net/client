@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,18 +27,19 @@ const (
 )
 
 type SplitDNSRule struct {
-	Domain   string
-	Upstream string
+	Domain    string
+	Upstreams []string
 }
 
 type DNSProxyOptions struct {
-	ListenAddr   string
-	UpstreamAddr string
-	SplitRules   []SplitDNSRule
-	NetworkMap   clientapi.RegisterNodeResponse
-	SearchDomain string
-	Timeout      time.Duration
-	Ready        func(addr string)
+	ListenAddr    string
+	UpstreamAddrs []string
+	SplitRules    []SplitDNSRule
+	NetworkMap    clientapi.RegisterNodeResponse
+	ServePeerDNS  bool
+	SearchDomain  string
+	Timeout       time.Duration
+	Ready         func(addr string)
 }
 
 type dnsQuestion struct {
@@ -48,22 +50,47 @@ type dnsQuestion struct {
 }
 
 func ServeDNSProxy(ctx context.Context, opts DNSProxyOptions) error {
+	serveCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	listenAddr := strings.TrimSpace(opts.ListenAddr)
 	if listenAddr == "" {
 		listenAddr = "127.0.0.1:5353"
 	}
-	conn, err := net.ListenPacket("udp", listenAddr)
+	udpConn, err := net.ListenPacket("udp", listenAddr)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() { _ = udpConn.Close() }()
+	tcpListener, err := net.Listen("tcp", udpConn.LocalAddr().String())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tcpListener.Close() }()
 	if opts.Ready != nil {
-		opts.Ready(conn.LocalAddr().String())
+		opts.Ready(udpConn.LocalAddr().String())
 	}
 	timeout := opts.Timeout
 	if timeout <= 0 {
 		timeout = 2 * time.Second
 	}
+	errC := make(chan error, 2)
+	go func() { errC <- serveDNSProxyUDP(serveCtx, udpConn, opts, timeout) }()
+	go func() { errC <- serveDNSProxyTCP(serveCtx, tcpListener, opts, timeout) }()
+	go func() {
+		<-serveCtx.Done()
+		_ = udpConn.Close()
+		_ = tcpListener.Close()
+	}()
+	err = <-errC
+	parentCanceled := ctx.Err() != nil
+	cancel()
+	if parentCanceled || errors.Is(err, net.ErrClosed) {
+		return nil
+	}
+	return err
+}
+
+func serveDNSProxyUDP(ctx context.Context, conn net.PacketConn, opts DNSProxyOptions, timeout time.Duration) error {
 	buf := make([]byte, dnsMaxUDPBytes)
 	for {
 		if ctx.Err() != nil {
@@ -93,29 +120,66 @@ func ServeDNSProxy(ctx context.Context, opts DNSProxyOptions) error {
 	}
 }
 
+func serveDNSProxyTCP(ctx context.Context, listener net.Listener, opts DNSProxyOptions, timeout time.Duration) error {
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
+				return nil
+			}
+			return err
+		}
+		go func() {
+			defer func() { _ = conn.Close() }()
+			_ = conn.SetDeadline(time.Now().Add(timeout))
+			var size [2]byte
+			if _, err := io.ReadFull(conn, size[:]); err != nil {
+				return
+			}
+			request := make([]byte, int(binary.BigEndian.Uint16(size[:])))
+			if len(request) == 0 {
+				return
+			}
+			if _, err := io.ReadFull(conn, request); err != nil {
+				return
+			}
+			response, err := DNSProxyResponse(ctx, request, opts, timeout)
+			if err != nil {
+				response = dnsErrorResponse(request, dnsRCodeFail)
+			}
+			if len(response) == 0 || len(response) > 65535 {
+				return
+			}
+			binary.BigEndian.PutUint16(size[:], uint16(len(response)))
+			_, _ = conn.Write(append(size[:], response...))
+		}()
+	}
+}
+
 func DNSProxyResponse(ctx context.Context, request []byte, opts DNSProxyOptions, timeout time.Duration) ([]byte, error) {
 	question, err := parseDNSQuestion(request)
 	if err != nil {
 		return dnsErrorResponse(request, dnsRCodeForm), nil
 	}
-	searchDomain := normalizeDNSName(opts.SearchDomain)
-	if searchDomain == "" {
-		searchDomain = DefaultDNSDomain(opts.NetworkMap.Network.Name)
+	if opts.ServePeerDNS {
+		searchDomain := normalizeDNSName(opts.SearchDomain)
+		if searchDomain == "" {
+			searchDomain = DefaultDNSDomain(opts.NetworkMap.Network.Name)
+		}
+		if dnsNameInDomain(question.Name, searchDomain) {
+			return dnsPeerResponse(request, question, opts.NetworkMap, searchDomain), nil
+		}
 	}
-	if dnsNameInDomain(question.Name, searchDomain) {
-		return dnsPeerResponse(request, question, opts.NetworkMap, searchDomain), nil
-	}
-	if upstream, matched := selectSplitDNSUpstream(question.Name, opts.SplitRules); matched {
-		if upstream == "" {
+	if upstreams, matched := selectSplitDNSUpstreams(question.Name, opts.SplitRules); matched {
+		if len(upstreams) == 0 {
 			return dnsErrorResponse(request, dnsRCodeFail), nil
 		}
-		return forwardDNSQuery(ctx, upstream, request, timeout)
+		return forwardDNSQueryAny(ctx, upstreams, request, timeout)
 	}
-	upstream := strings.TrimSpace(opts.UpstreamAddr)
-	if upstream == "" {
+	if len(opts.UpstreamAddrs) == 0 {
 		return dnsErrorResponse(request, dnsRCodeFail), nil
 	}
-	return forwardDNSQuery(ctx, upstream, request, timeout)
+	return forwardDNSQueryAny(ctx, opts.UpstreamAddrs, request, timeout)
 }
 
 func dnsPeerResponse(request []byte, question dnsQuestion, networkMap clientapi.RegisterNodeResponse, searchDomain string) []byte {
@@ -237,21 +301,81 @@ func forwardDNSQuery(ctx context.Context, upstream string, request []byte, timeo
 	if err != nil {
 		return nil, err
 	}
-	return append([]byte(nil), buf[:n]...), nil
+	response := append([]byte(nil), buf[:n]...)
+	if len(response) >= 4 && binary.BigEndian.Uint16(response[2:4])&0x0200 != 0 {
+		return forwardDNSQueryTCP(ctx, upstream, request, timeout)
+	}
+	return response, nil
+}
+
+func forwardDNSQueryAny(ctx context.Context, upstreams []string, request []byte, timeout time.Duration) ([]byte, error) {
+	var lastErr error
+	for _, upstream := range upstreams {
+		upstream = strings.TrimSpace(upstream)
+		if upstream == "" {
+			continue
+		}
+		response, err := forwardDNSQuery(ctx, upstream, request, timeout)
+		if err == nil {
+			return response, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+	}
+	if lastErr == nil {
+		lastErr = errors.New("no DNS upstream is available")
+	}
+	return nil, lastErr
+}
+
+func forwardDNSQueryTCP(ctx context.Context, upstream string, request []byte, timeout time.Duration) ([]byte, error) {
+	dialer := net.Dialer{Timeout: timeout}
+	conn, err := dialer.DialContext(ctx, "tcp", strings.TrimSpace(upstream))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(timeout))
+	if len(request) > 65535 {
+		return nil, errors.New("DNS query exceeds TCP framing limit")
+	}
+	framed := make([]byte, 2, len(request)+2)
+	binary.BigEndian.PutUint16(framed, uint16(len(request)))
+	framed = append(framed, request...)
+	if _, err := conn.Write(framed); err != nil {
+		return nil, err
+	}
+	if _, err := io.ReadFull(conn, framed[:2]); err != nil {
+		return nil, err
+	}
+	response := make([]byte, int(binary.BigEndian.Uint16(framed[:2])))
+	if _, err := io.ReadFull(conn, response); err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 // The most specific suffix owns the query, including an unavailable (empty)
-// upstream. Never fall through to a parent or global resolver for that name.
-// Equal-specificity empty rules fail closed; otherwise declaration order wins.
-func selectSplitDNSUpstream(name string, rules []SplitDNSRule) (string, bool) {
-	selected := ""
+// upstreams. Never fall through to a parent or global resolver for that name.
+// Equal-specificity declarations are combined in priority order.
+func selectSplitDNSUpstreams(name string, rules []SplitDNSRule) ([]string, bool) {
+	var selected []string
 	specificity := 0
 	for _, rule := range rules {
 		domain := normalizeDNSName(rule.Domain)
-		upstream := strings.TrimSpace(rule.Upstream)
-		if dnsNameInDomain(name, domain) && (len(domain) > specificity || (len(domain) == specificity && upstream == "")) {
-			selected = upstream
+		if !dnsNameInDomain(name, domain) || len(domain) < specificity {
+			continue
+		}
+		if len(domain) > specificity {
+			selected = nil
 			specificity = len(domain)
+		}
+		for _, upstream := range rule.Upstreams {
+			if upstream = strings.TrimSpace(upstream); upstream != "" && !slices.Contains(selected, upstream) {
+				selected = append(selected, upstream)
+			}
 		}
 	}
 	return selected, specificity > 0

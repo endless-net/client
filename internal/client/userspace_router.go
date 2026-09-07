@@ -2,11 +2,15 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/netip"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
@@ -14,6 +18,79 @@ import (
 type wireGuardEngineRouter interface {
 	Configure(context.Context, wireGuardEngineRouterConfig) error
 	Down(context.Context) error
+}
+
+type dnsAwareWireGuardEngineRouter struct {
+	base      wireGuardEngineRouter
+	dnsCancel context.CancelFunc
+	dnsDone   chan error
+}
+
+func newWireGuardEngineRouter(interfaceName string, runner CommandRunner, inputRunner commandInputRunner) (wireGuardEngineRouter, error) {
+	base, err := newPlatformWireGuardEngineRouter(interfaceName, runner, inputRunner)
+	if err != nil {
+		return nil, err
+	}
+	return &dnsAwareWireGuardEngineRouter{base: base}, nil
+}
+
+func (r *dnsAwareWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
+	r.stopDNSProxy()
+	if cfg.DNSProxy != nil {
+		if err := r.startDNSProxy(ctx, *cfg.DNSProxy); err != nil {
+			return err
+		}
+	}
+	if err := r.base.Configure(ctx, cfg); err != nil {
+		r.stopDNSProxy()
+		return err
+	}
+	return nil
+}
+
+func (r *dnsAwareWireGuardEngineRouter) Down(ctx context.Context) error {
+	err := r.base.Down(ctx)
+	r.stopDNSProxy()
+	return err
+}
+
+func (r *dnsAwareWireGuardEngineRouter) startDNSProxy(ctx context.Context, opts DNSProxyOptions) error {
+	proxyCtx, cancel := context.WithCancel(context.Background())
+	ready := make(chan struct{}, 1)
+	done := make(chan error, 1)
+	opts.Ready = func(string) { ready <- struct{}{} }
+	go func() { done <- ServeDNSProxy(proxyCtx, opts) }()
+	select {
+	case <-ready:
+		r.dnsCancel = cancel
+		r.dnsDone = done
+		return nil
+	case err := <-done:
+		cancel()
+		if err == nil {
+			err = errors.New("DNS proxy stopped before becoming ready")
+		}
+		return fmt.Errorf("start DNS proxy: %w", err)
+	case <-ctx.Done():
+		cancel()
+		return ctx.Err()
+	case <-time.After(3 * time.Second):
+		cancel()
+		return errors.New("start DNS proxy: readiness timeout")
+	}
+}
+
+func (r *dnsAwareWireGuardEngineRouter) stopDNSProxy() {
+	if r.dnsCancel == nil {
+		return
+	}
+	r.dnsCancel()
+	select {
+	case <-r.dnsDone:
+	case <-time.After(3 * time.Second):
+	}
+	r.dnsCancel = nil
+	r.dnsDone = nil
 }
 
 func wireGuardEngineRouterConfigsEqual(a, b wireGuardEngineRouterConfig) bool {
@@ -24,20 +101,30 @@ func wireGuardEngineRouterConfigsEqual(a, b wireGuardEngineRouterConfig) bool {
 		slices.Equal(a.Addresses, b.Addresses) &&
 		slices.Equal(a.Routes, b.Routes) &&
 		slices.Equal(a.DNS, b.DNS) &&
+		slices.Equal(a.DNSDomains, b.DNSDomains) &&
+		slices.Equal(a.SearchDomains, b.SearchDomains) &&
+		a.DNSOverride == b.DNSOverride &&
+		a.DNSConfigPresent == b.DNSConfigPresent &&
+		dnsProxyOptionsEqual(a.DNSProxy, b.DNSProxy) &&
 		slices.Equal(a.PostUp, b.PostUp) &&
 		slices.Equal(a.PreDown, b.PreDown)
 }
 
 type wireGuardEngineRouterConfig struct {
-	Interface    string
-	MTU          int
-	Addresses    []netip.Prefix
-	Routes       []netip.Prefix
-	DNS          []netip.Addr
-	RouteTable   string
-	FirewallMark uint32
-	PostUp       []string
-	PreDown      []string
+	Interface        string
+	MTU              int
+	Addresses        []netip.Prefix
+	Routes           []netip.Prefix
+	DNS              []netip.Addr
+	DNSDomains       []string
+	SearchDomains    []string
+	DNSOverride      bool
+	DNSConfigPresent bool
+	DNSProxy         *DNSProxyOptions
+	RouteTable       string
+	FirewallMark     uint32
+	PostUp           []string
+	PreDown          []string
 }
 
 func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config, networkMap clientapi.RegisterNodeResponse) (wireGuardEngineRouterConfig, error) {
@@ -85,6 +172,65 @@ func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config,
 		}
 		out.DNS = append(out.DNS, addr)
 	}
+	if dns := networkMap.Network.DNSConfig; dns != nil {
+		out.DNSConfigPresent = true
+		out.DNSOverride = dns.OverrideLocalDNS
+		out.SearchDomains = append([]string(nil), dns.SearchDomains...)
+		splitRulesByDomain := make(map[string][]string)
+		globalUpstreams := make([]string, 0)
+		globalDNS := make([]netip.Addr, 0)
+		for _, nameserver := range dns.Nameservers {
+			address, err := netip.ParseAddr(nameserver.Address)
+			if err != nil {
+				return out, fmt.Errorf("parse effective DNS server %q: %w", nameserver.Address, err)
+			}
+			upstream := net.JoinHostPort(address.String(), "53")
+			if nameserver.Scope == "global" {
+				if !slices.Contains(globalUpstreams, upstream) {
+					globalUpstreams = append(globalUpstreams, upstream)
+				}
+				if !slices.Contains(globalDNS, address) {
+					globalDNS = append(globalDNS, address)
+				}
+			}
+			if nameserver.Scope == "split" {
+				for _, domain := range nameserver.SplitDomains {
+					domain = normalizeDNSName(domain)
+					if !slices.Contains(out.DNSDomains, domain) {
+						out.DNSDomains = append(out.DNSDomains, domain)
+					}
+					if !slices.Contains(splitRulesByDomain[domain], upstream) {
+						splitRulesByDomain[domain] = append(splitRulesByDomain[domain], upstream)
+					}
+				}
+			}
+		}
+		splitDomains := make([]string, 0, len(splitRulesByDomain))
+		for domain := range splitRulesByDomain {
+			splitDomains = append(splitDomains, domain)
+		}
+		sort.Strings(splitDomains)
+		splitRules := make([]SplitDNSRule, 0, len(splitDomains))
+		for _, domain := range splitDomains {
+			splitRules = append(splitRules, SplitDNSRule{Domain: domain, Upstreams: splitRulesByDomain[domain]})
+		}
+		out.DNS = globalDNS
+		searchDomain := ""
+		if dns.MagicDNSEnabled {
+			searchDomain = dns.Suffix
+			if searchDomain == "" {
+				searchDomain = DefaultDNSDomain(networkMap.Network.Name)
+			}
+			out.DNSDomains = append(out.DNSDomains, searchDomain)
+		}
+		if searchDomain != "" || len(splitRules) > 0 {
+			out.DNS = []netip.Addr{netip.MustParseAddr("127.0.0.1")}
+			out.DNSProxy = &DNSProxyOptions{
+				ListenAddr: "127.0.0.1:53", UpstreamAddrs: globalUpstreams,
+				SplitRules: splitRules, NetworkMap: networkMap, ServePeerDNS: dns.MagicDNSEnabled, SearchDomain: searchDomain,
+			}
+		}
+	}
 	blockLAN, err := ExitLANPolicyBlocksLocalLAN(cfg.ExitLANPolicy)
 	if err != nil {
 		return out, err
@@ -116,4 +262,13 @@ func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config,
 	})
 	out.FirewallMark = platformWireGuardEngineFirewallMark(out.Routes, out.RouteTable)
 	return out, nil
+}
+
+func dnsProxyOptionsEqual(a, b *DNSProxyOptions) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.ListenAddr == b.ListenAddr && slices.Equal(a.UpstreamAddrs, b.UpstreamAddrs) &&
+		a.ServePeerDNS == b.ServePeerDNS && a.SearchDomain == b.SearchDomain && reflect.DeepEqual(a.SplitRules, b.SplitRules) &&
+		reflect.DeepEqual(a.NetworkMap, b.NetworkMap)
 }

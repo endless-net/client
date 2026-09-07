@@ -62,8 +62,8 @@ func renderWireGuardValidated(privateKey string, response clientapi.RegisterNode
 	if routeTable := strings.TrimSpace(opts.RouteTable); routeTable != "" {
 		fmt.Fprintf(&b, "Table = %s\n", routeTable)
 	}
-	if len(response.Network.DNS) > 0 {
-		fmt.Fprintf(&b, "DNS = %s\n", strings.Join(response.Network.DNS, ", "))
+	if dns := wireGuardExportDNS(response.Network); len(dns) > 0 {
+		fmt.Fprintf(&b, "DNS = %s\n", strings.Join(dns, ", "))
 	}
 	for _, hook := range renderSubnetRouterSNATHooks(response, opts.SubnetRouterSNAT) {
 		fmt.Fprintln(&b, hook)
@@ -95,6 +95,28 @@ func renderWireGuardValidated(privateKey string, response clientapi.RegisterNode
 		}
 	}
 	return b.String()
+}
+
+// A static WireGuard export cannot run the EndlessNet proxy required for
+// MagicDNS or split DNS. Only a complete global override is safe to represent.
+func wireGuardExportDNS(network clientapi.Network) []string {
+	if network.DNSConfig == nil {
+		return append([]string(nil), network.DNS...)
+	}
+	dns := network.DNSConfig
+	if !dns.OverrideLocalDNS || dns.MagicDNSEnabled {
+		return nil
+	}
+	servers := make([]string, 0, len(dns.Nameservers))
+	for _, nameserver := range dns.Nameservers {
+		if nameserver.Scope == "split" {
+			return nil
+		}
+		if nameserver.Scope == "global" {
+			servers = append(servers, nameserver.Address)
+		}
+	}
+	return servers
 }
 
 func validateWireGuardRenderSafety(privateKey string, response clientapi.RegisterNodeResponse, opts WireGuardRenderOptions) error {

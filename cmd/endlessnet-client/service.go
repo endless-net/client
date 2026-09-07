@@ -776,8 +776,10 @@ func startAgentIPC(ctx context.Context, opts agentIPCOptions) (func(), error) {
 		stops = append(stops, stop)
 	}
 	if socket := strings.TrimSpace(opts.UnixSocket); socket != "" {
-		listener, err := client.ListenUnixServiceSocket(socket)
-		if err != nil {
+		// The Windows stub always returns an error, while Linux and macOS use the
+		// real listener implementation selected by build tags.
+		listener, err := client.ListenUnixServiceSocket(socket) //nolint:staticcheck // Linux and macOS return dynamic errors.
+		if err != nil {                                         //nolint:staticcheck // Real implementations can fail dynamically.
 			for _, stop := range stops {
 				stop()
 			}

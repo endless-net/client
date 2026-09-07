@@ -1244,12 +1244,13 @@ func cmdDNSServe(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	return client.ServeDNSProxy(ctx, client.DNSProxyOptions{
-		ListenAddr:   *listenAddr,
-		UpstreamAddr: *upstreamAddr,
-		SplitRules:   rules,
-		NetworkMap:   networkMap,
-		SearchDomain: *domain,
-		Timeout:      timeout,
+		ListenAddr:    *listenAddr,
+		UpstreamAddrs: []string{*upstreamAddr},
+		SplitRules:    rules,
+		NetworkMap:    networkMap,
+		ServePeerDNS:  true,
+		SearchDomain:  *domain,
+		Timeout:       timeout,
 		Ready: func(addr string) {
 			fmt.Printf("dns proxy listening on %s\n", addr)
 		},
@@ -1271,7 +1272,7 @@ func parseSplitDNSRules(values []string) ([]client.SplitDNSRule, error) {
 		if domain == "" {
 			return nil, fmt.Errorf("split DNS rule %q has empty domain", value)
 		}
-		rules = append(rules, client.SplitDNSRule{Domain: domain, Upstream: strings.TrimSpace(upstream)})
+		rules = append(rules, client.SplitDNSRule{Domain: domain, Upstreams: []string{strings.TrimSpace(upstream)}})
 	}
 	return rules, nil
 }
