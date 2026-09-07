@@ -140,3 +140,23 @@ packets and a fresh SYN are then denied. Coordinator confirms unchanged stored
 map hashes, Relay upstream rejects the pair and Management reports `EXPIRED`.
 No fake clock, map editing or re-signing is used. This proves direct expiry;
 the full Relay dataplane and lifecycle key rotation remain outstanding.
+
+The later [combined backend run 34155944754](https://github.com/endless-net/coordinator/actions/runs/34155944754)
+passed both direct and full Relay paths with Client `7909a8d`. The same real
+TOTP user/group flow authorizes TCP/443, UDP/53 and ICMP, checks encrypted
+request/reply traffic and unsolicited replies, then revocation and actual
+expiry. Relay uses its production control service, PostgreSQL session storage
+and TLS dataplane against the real Coordinator upstream. Certificates, initial
+node provisioning, Billing and OS routing remain test fixtures.
+
+The live test allows 15 seconds for an authorized packet because sequential
+engine startup can require a WireGuard handshake retry after five seconds plus
+jitter. The successful Relay run measured recovery at 5.146 and 5.052 seconds;
+the former five-second test deadline was too short. Denial deadlines remain
+unchanged. This is test timing, not a change to the runtime retry policy.
+
+The optional source replacement phase retains the deleted source engine's old
+signed map and key, applies the recipient's new map, and checks that established
+traffic is denied. A third engine uses the newly registered source key and must
+inherit no grant. This phase is implemented but awaits combined backend CI;
+it does not implement same-node WireGuard key rotation.
