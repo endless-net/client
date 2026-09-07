@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +64,16 @@ func RunRelayDataplaneBridge(ctx context.Context, opts RelayDataplaneBridgeOptio
 	if strings.TrimSpace(credential.NodeID) == "" {
 		return errors.New("relay credential is missing")
 	}
+	peers := slices.Clone(opts.NetworkMap.Peers)
+	for i := range peers {
+		// An omitted peer network in the map denotes the local network.
+		if peers[i].NetworkID == "" {
+			peers[i].NetworkID = credential.NetworkID
+		}
+		if peers[i].NetworkID == "" || strings.TrimSpace(peers[i].NetworkID) != peers[i].NetworkID {
+			return errors.New("relay peer network is invalid")
+		}
+	}
 	wgAddr, err := net.ResolveUDPAddr("udp", opts.WireGuardListenAddr)
 	if err != nil {
 		return fmt.Errorf("resolve WireGuard listen address: %w", err)
@@ -86,13 +97,13 @@ func RunRelayDataplaneBridge(ctx context.Context, opts RelayDataplaneBridgeOptio
 	defer cancel()
 	var bindings []relayDataplaneBinding
 	if strings.TrimSpace(opts.LocalEndpointBase) == "" {
-		bindings, err = listenDynamicRelayDataplaneBindings(opts.NetworkMap.Peers, wgAddr)
+		bindings, err = listenDynamicRelayDataplaneBindings(peers, wgAddr)
 	} else {
 		peerEndpoints, endpointErr := RelayDataplaneEndpointOverrides(opts.NetworkMap.Peers, opts.LocalEndpointBase)
 		if endpointErr != nil {
 			return endpointErr
 		}
-		bindings, err = listenRelayDataplaneBindings(opts.NetworkMap.Peers, peerEndpoints)
+		bindings, err = listenRelayDataplaneBindings(peers, peerEndpoints)
 	}
 	if err != nil {
 		return err
@@ -223,7 +234,7 @@ func relayDataplaneForwardUDPToRelay(ctx context.Context, binding relayDataplane
 		}
 		payload := append([]byte(nil), buf[:n]...)
 		writeMu.Lock()
-		err = encoder.Encode(relay.ClientFrame{Type: relay.MessageClientFrame, ProtocolVersion: relay.Version, PeerID: binding.peer.ID, Payload: payload})
+		err = encoder.Encode(relay.ClientFrame{Type: relay.MessageClientFrame, ProtocolVersion: relay.Version, PeerNetworkID: binding.peer.NetworkID, PeerID: binding.peer.ID, Payload: payload})
 		writeMu.Unlock()
 		if err != nil {
 			errCh <- fmt.Errorf("write relay frame for %s: %w", binding.peer.Hostname, err)
@@ -276,12 +287,12 @@ func relayDataplaneForwardRelayToUDP(ctx context.Context, conn net.Conn, binding
 			errCh <- fmt.Errorf("decode relay frame: %w", err)
 			return
 		}
-		if frame.Type != relay.MessageServerFrame || frame.ProtocolVersion != relay.Version || frame.FromNodeID == "" || frame.FromNodeID != strings.TrimSpace(frame.FromNodeID) || len(frame.Payload) == 0 || len(frame.Payload) > relay.MaxFramePayloadBytes {
+		if frame.Type != relay.MessageServerFrame || frame.ProtocolVersion != relay.Version || frame.FromNodeID == "" || frame.FromNodeID != strings.TrimSpace(frame.FromNodeID) || frame.FromNetworkID == "" || frame.FromNetworkID != strings.TrimSpace(frame.FromNetworkID) || len(frame.Payload) == 0 || len(frame.Payload) > relay.MaxFramePayloadBytes {
 			errCh <- errors.New("invalid relay frame response")
 			return
 		}
 		binding, ok := bindings[frame.FromNodeID]
-		if !ok {
+		if !ok || binding.peer.NetworkID != frame.FromNetworkID {
 			continue
 		}
 		if _, err := binding.conn.WriteToUDP(frame.Payload, wgAddr); err != nil {

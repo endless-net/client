@@ -1,5 +1,18 @@
 # Machine sharing packet enforcement
 
+The Relay bridge sends the destination network ID from the peer map (an omitted
+peer network denotes the credential's local network). Incoming frames must
+identify both the expected peer and its network before any datagram reaches
+WireGuard. A matching node ID from a different network is discarded.
+
+The encrypted engine test now runs the same scenario through direct UDP and
+the product TLS Relay dataplane: recipient-only TCP/UDP/ICMP initiation,
+responses, lease expiry, renewed access, actual WireGuard key rotation and
+withdrawal. Relay authorization in this test is a fixture. These additions
+require the non-short CI result; they do not prove the full Management/TOTP
+and Coordinator authorization chain. Earlier evidence below retains its
+original, narrower scope.
+
 The managed WireGuard engine pins ClientAPI `v1.11.0` and consumes signed
 `SharePeerGrant` permissions. The TUN wrapper checks sharing on plaintext reads
 and writes, independently of direct UDP or Relay transport. Exact endpoint

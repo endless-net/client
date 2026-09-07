@@ -17,6 +17,12 @@ func TestSharingEncryptedWireGuardDirectionAndWithdrawal(t *testing.T) {
 	if testing.Short() {
 		t.Skip("encrypted networking runs in CI")
 	}
+	for _, transport := range []string{"direct", "relay"} {
+		t.Run(transport, func(t *testing.T) { testSharingEncryptedTransport(t, transport) })
+	}
+}
+
+func testSharingEncryptedTransport(t *testing.T, transport string) {
 	base, _, signingKey := signedApplicationFixture(t, false)
 	now := time.Now()
 	maps := []clientapi.RegisterNodeResponse{sharingFilterFixture(now, false), sharingFilterFixture(now, true)}
@@ -47,8 +53,15 @@ func TestSharingEncryptedWireGuardDirectionAndWithdrawal(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	endpoints := make([]string, len(maps))
 	for i := range maps {
-		endpoint := net.JoinHostPort("127.0.0.1", strconv.Itoa(engines[1-i].Inspection().ListenPort))
+		endpoints[i] = net.JoinHostPort("127.0.0.1", strconv.Itoa(engines[1-i].Inspection().ListenPort))
+	}
+	if transport == "relay" {
+		endpoints = sharingEncryptedRelayEndpoints(t, maps, engines)
+	}
+	for i := range maps {
+		endpoint := endpoints[i]
 		maps[i].Peers[0].Endpoint = endpoint
 		maps[i].Peers[0].EndpointCandidates = []string{endpoint}
 		maps[i].Network.Revision++
@@ -137,6 +150,32 @@ func TestSharingEncryptedWireGuardDirectionAndWithdrawal(t *testing.T) {
 	binary.BigEndian.PutUint16(wrongPort[22:24], 22)
 	exchange(0, wrongPort, false)
 	exchange(1, shareTCP(true, 24), true)
+	// Rotate the shared machine's real WireGuard key first. A recipient with
+	// the old signed map must lose connectivity before receiving the new grant.
+	configs[1].PrivateKey = testWireGuardEngineKey(3)
+	maps[1].Node.PublicKey = testWireGuardEnginePublicKey(3)
+	maps[1].Network.SharePeerGrants[0].SourcePublicKey = testWireGuardEnginePublicKey(3)
+	maps[1].Network.SharePeerGrants[0].Revision++
+	maps[1].Network.Revision++
+	maps[1].Revision.Network++
+	resignApplicationMap(t, &maps[1], signingKey)
+	if _, err := engines[1].Configure(t.Context(), configs[1], maps[1]); err != nil {
+		t.Fatal(err)
+	}
+	exchange(0, shareTCP(false, 24), false)
+	maps[0].Peers[0].PublicKey = testWireGuardEnginePublicKey(3)
+	maps[0].Network.SharePeerGrants[0].SourcePublicKey = testWireGuardEnginePublicKey(3)
+	maps[0].Network.SharePeerGrants[0].Revision++
+	maps[0].Network.Revision++
+	maps[0].Revision.Network++
+	resignApplicationMap(t, &maps[0], signingKey)
+	if _, err := engines[0].Configure(t.Context(), configs[0], maps[0]); err != nil {
+		t.Fatal(err)
+	}
+	exchange(0, shareTCP(false, 2), true)
+	exchange(1, shareTCP(true, 18), true)
+	exchange(0, shareTCP(false, 16), true)
+	exchange(1, shareTCP(true, 2), false)
 	// A signed withdrawal must close even a previously established flow.
 	for i := range maps {
 		maps[i].Network.SharePeerGrants, maps[i].Peers = nil, nil

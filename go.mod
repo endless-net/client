@@ -9,14 +9,14 @@ require (
 	github.com/endless-net/client-api/clientapi/v2 v2.1.0-rc.1
 	github.com/endless-net/coordinator/coordinatorapi v1.20.0
 	github.com/endless-net/management/managementapi v1.13.0-rc.1
-	github.com/endless-net/relay v1.1.4
+	github.com/endless-net/relay v1.2.0
 	github.com/tailscale/wireguard-go v0.0.0-20260622164646-ae172d45f0f7
 	golang.org/x/crypto v0.53.0
 	golang.org/x/sys v0.46.0
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 )

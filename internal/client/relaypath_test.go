@@ -397,6 +397,13 @@ func TestAuthenticateRelayConnRejectsNonCanonicalResponses(t *testing.T) {
 }
 
 func TestRunRelayDataplaneBridgeForwardsUDPDatagrams(t *testing.T) {
+	for _, networkB := range []string{"net-1", "net-2"} {
+		t.Run(networkB, func(t *testing.T) { testRelayDataplaneBridgeNetwork(t, networkB) })
+	}
+}
+
+func testRelayDataplaneBridgeNetwork(t *testing.T, networkB string) {
+	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -416,7 +423,7 @@ func TestRunRelayDataplaneBridgeForwardsUDPDatagrams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	credentialB, err := relay.Sign(privateKey, "net-1", "node-b", time.Now().Add(time.Hour))
+	credentialB, err := relay.Sign(privateKey, networkB, "node-b", time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,16 +436,18 @@ func TestRunRelayDataplaneBridgeForwardsUDPDatagrams(t *testing.T) {
 		Relays:          []relay.Endpoint{relayEndpoint},
 		RelayCredential: credentialA,
 		Peers: []clientapi.Peer{{
-			ID:       "node-b",
-			Hostname: "node-b",
+			NetworkID: networkB,
+			ID:        "node-b",
+			Hostname:  "node-b",
 		}},
 	}
 	mapB := clientapi.RegisterNodeResponse{
 		Relays:          []relay.Endpoint{relayEndpoint},
 		RelayCredential: credentialB,
 		Peers: []clientapi.Peer{{
-			ID:       "node-a",
-			Hostname: "node-a",
+			NetworkID: "net-1",
+			ID:        "node-a",
+			Hostname:  "node-a",
 		}},
 	}
 	bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
@@ -483,12 +492,22 @@ func TestRunRelayDataplaneBridgeForwardsUDPDatagrams(t *testing.T) {
 	if err := wgB.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	n, _, err := wgB.ReadFromUDP(buf)
+	n, sender, err := wgB.ReadFromUDP(buf)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := string(buf[:n]); got != string(payload) {
 		t.Fatalf("relayed payload = %q, want %q", got, payload)
+	}
+	if _, err := wgB.WriteToUDP([]byte("reply"), sender); err != nil {
+		t.Fatal(err)
+	}
+	if err := wgA.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	n, _, err = wgA.ReadFromUDP(buf)
+	if err != nil || string(buf[:n]) != "reply" {
+		t.Fatalf("relayed reply = %q, err=%v", buf[:n], err)
 	}
 	bridgeCancel()
 	for _, done := range []chan error{doneA, doneB} {
