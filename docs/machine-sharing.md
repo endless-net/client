@@ -46,16 +46,19 @@ on 7 September 2026. That job checks out the exact Client revision and uses
 Management's existing private-module access. The log explicitly records the
 encrypted test passing; it does not establish the whole release outcome.
 
-The next extension shortens the signed lease, proves traffic still passes,
+The expiry extension shortens the signed lease, proves traffic still passes,
 waits for expiry without removing peers or keys, and requires both directions
 to stop. A new signed lease must restore a fresh TCP handshake on the same
-transport before the existing withdrawal checks. This extension needs its own
-CI evidence; local short tests skip it. Its first run at `b4ae115` failed on the
+transport before the existing withdrawal checks. Local short tests skip it.
+Its first run at `b4ae115` failed on the
 fresh handshake after renewal in
 [job 101790199433](https://github.com/endless-net/management/actions/runs/34137001624/job/101790199433).
 The filter retained established flow state past the old lease, rejecting the
-new SYN. A component regression test now covers the lease-bound state fix;
-encrypted verification must be repeated with that fix.
+new SYN. The fix at `97c7c54` passed both the component regression and the full
+encrypted scenario in
+[job 101792515111](https://github.com/endless-net/management/actions/runs/34137735475/job/101792515111)
+on 7 September 2026 (explicit PASS, 5.07 seconds). This verifies expiry and fresh
+handshake recovery with signed fixture maps, not backend map delivery or Relay.
 
 The first encrypted-test CI attempt at `890236a` did not execute the scenario:
 [Linux job 101766343601](https://github.com/endless-net/client/actions/runs/34129622991/job/101766343601)
