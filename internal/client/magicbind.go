@@ -23,7 +23,7 @@ import (
 type MagicBind struct {
 	mu               sync.RWMutex
 	session          *magicBindSession
-	waiters          map[stunclient.TransactionID]chan magicBindSTUNPacket
+	waiters          map[stunclient.TransactionID]*magicBindSTUNWaiter
 	pathKeys         map[[32]byte][32]byte
 	pathWaiters      map[[16]byte]magicBindPathProbeWaiter
 	pathLocalPublic  [32]byte
@@ -45,9 +45,9 @@ type magicBindDatagram struct {
 	endpoint *magicBindEndpoint
 }
 
-type magicBindSTUNPacket struct {
-	payload []byte
-	remote  *net.UDPAddr
+type magicBindSTUNWaiter struct {
+	remote *net.UDPAddr
+	result chan *net.UDPAddr
 }
 
 type magicBindEndpoint struct {
@@ -61,7 +61,7 @@ var (
 
 func NewMagicBind() *MagicBind {
 	return &MagicBind{
-		waiters:     map[stunclient.TransactionID]chan magicBindSTUNPacket{},
+		waiters:     map[stunclient.TransactionID]*magicBindSTUNWaiter{},
 		pathKeys:    map[[32]byte][32]byte{},
 		pathWaiters: map[[16]byte]magicBindPathProbeWaiter{},
 	}
@@ -190,9 +190,16 @@ func (b *MagicBind) dispatchSTUN(payload []byte, remote *net.UDPAddr) bool {
 	if waiter == nil {
 		return false
 	}
-	packet := magicBindSTUNPacket{payload: payload, remote: remote}
+	// Invalid replies must not occupy the result slot or terminate discovery.
+	if remote == nil || remote.Port != waiter.remote.Port || remote.Zone != waiter.remote.Zone || !remote.IP.Equal(waiter.remote.IP) {
+		return true
+	}
+	mapped, err := stunclient.ParseBindingResponse(payload, txID)
+	if err != nil {
+		return true
+	}
 	select {
-	case waiter <- packet:
+	case waiter.result <- mapped:
 	default:
 	}
 	return true
@@ -361,7 +368,7 @@ func (b *MagicBind) querySTUN(ctx context.Context, serverAddr string, timeout ti
 	if err != nil {
 		return nil, err
 	}
-	waiter := make(chan magicBindSTUNPacket, 1)
+	waiter := &magicBindSTUNWaiter{remote: remote, result: make(chan *net.UDPAddr, 1)}
 	b.mu.Lock()
 	session := b.session
 	if session == nil {
@@ -396,11 +403,7 @@ func (b *MagicBind) querySTUN(ctx context.Context, serverAddr string, timeout ti
 		return nil, net.ErrClosed
 	case <-timer.C:
 		return nil, fmt.Errorf("STUN query to %s timed out", serverAddr)
-	case packet := <-waiter:
-		mapped, err := stunclient.ParseBindingResponse(packet.payload, txID)
-		if err != nil {
-			return nil, err
-		}
+	case mapped := <-waiter.result:
 		return mapped, nil
 	}
 }
