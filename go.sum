@@ -8,6 +8,8 @@ github.com/endless-net/client-api/clientapi/v2 v2.1.0-rc.1 h1:CSlDDR2HtjZPsuPMQm
 github.com/endless-net/client-api/clientapi/v2 v2.1.0-rc.1/go.mod h1:t5HZSUkb1YaytzJ2s6dsDCLzYorPBZ5m2R4qwQ4fqGI=
 github.com/endless-net/management/managementapi v1.12.0-rc.1 h1:bV3zmvxyjmyr2UC3YPSW+80gfQ58nK9GBJQLvxXJkoQ=
 github.com/endless-net/management/managementapi v1.12.0-rc.1/go.mod h1:J4R700NSK6Ai/MgpyYcU9cJNUvnF26p7FsLNpLsKwcg=
+github.com/endless-net/management/managementapi v1.13.0-rc.1 h1:wc3RGyXiGv6rVD1nYTL6EBsJncT8Yo+n0b1r0dTb+QY=
+github.com/endless-net/management/managementapi v1.13.0-rc.1/go.mod h1:J4R700NSK6Ai/MgpyYcU9cJNUvnF26p7FsLNpLsKwcg=
 github.com/endless-net/relay v1.1.4 h1:1Oh+AU4iab/83yNDA3YY3ekBFzjvLzEEQuB1b5cY70k=
 github.com/endless-net/relay v1.1.4/go.mod h1:N7ZQeRUH5TJE5FxsvcdTn0SNFT82YFmgO1Su1GXaAj0=
 github.com/google/btree v1.0.1 h1:gK4Kx5IaGY9CD5sPJ36FHiBJ6ZXl0kilRiiCj+jdYp4=
