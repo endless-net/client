@@ -129,3 +129,14 @@ not production map streaming. The transport is direct UDP. Separate real gRPC
 upstream probes check Relay pair authorization against the same YDB state,
 but no Relay dataplane carries these packets. Expiry and key rotation remain
 separate component evidence until joined to this scenario.
+
+[CI 34153110775](https://github.com/endless-net/coordinator/actions/runs/34153110775)
+subsequently passed with Client `608a68bb2c1d01f5093bd9100dba085ec85216cd`,
+Coordinator `2bb6950` and Management `3e10a92` (125.61 seconds overall,
+124.65 seconds in the engine suite). A group share requests a real 90-second
+deadline through Management/TOTP. After successful traffic, the engines retain
+their configured signed maps and peers until that deadline. Existing-flow
+packets and a fresh SYN are then denied. Coordinator confirms unchanged stored
+map hashes, Relay upstream rejects the pair and Management reports `EXPIRED`.
+No fake clock, map editing or re-signing is used. This proves direct expiry;
+the full Relay dataplane and lifecycle key rotation remain outstanding.
