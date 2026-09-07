@@ -662,6 +662,10 @@ func cloneWireGuardEngineRouterConfig(value wireGuardEngineRouterConfig) wireGua
 			proxy.SplitRules[index] = SplitDNSRule{Domain: rule.Domain, Upstreams: append([]string(nil), rule.Upstreams...)}
 		}
 		proxy.NetworkMap = cloneRegisterNodeResponse(value.DNSProxy.NetworkMap)
+		if value.DNSProxy.SigningTrust != nil {
+			trust := cloneSigningTrustBundle(*value.DNSProxy.SigningTrust)
+			proxy.SigningTrust = &trust
+		}
 		proxy.Ready = nil
 		value.DNSProxy = &proxy
 	}
@@ -688,6 +692,22 @@ func wireGuardEngineRouterConfigForInterface(value wireGuardEngineRouterConfig, 
 
 func cloneRegisterNodeResponse(value clientapi.RegisterNodeResponse) clientapi.RegisterNodeResponse {
 	value.Network.DNS = append([]string(nil), value.Network.DNS...)
+	value.Network.Applications = append([]clientapi.Application(nil), value.Network.Applications...)
+	for i := range value.Network.Applications {
+		app := &value.Network.Applications[i]
+		app.AllowedUsers = append([]string(nil), app.AllowedUsers...)
+		app.AllowedGroups = append([]string(nil), app.AllowedGroups...)
+		app.ConnectorNodes = append([]string(nil), app.ConnectorNodes...)
+		app.ConnectorTags = append([]string(nil), app.ConnectorTags...)
+	}
+	value.Network.Services = append([]clientapi.AdvertisedService(nil), value.Network.Services...)
+	for i := range value.Network.Services {
+		service := &value.Network.Services[i]
+		service.Ports = append([]clientapi.ServicePort(nil), service.Ports...)
+		service.Hosts = append([]clientapi.ServiceHost(nil), service.Hosts...)
+		service.Tags = append([]string(nil), service.Tags...)
+		service.EligibleTags = append([]string(nil), service.EligibleTags...)
+	}
 	if value.Network.DNSConfig != nil {
 		dns := *value.Network.DNSConfig
 		dns.SearchDomains = append([]string(nil), value.Network.DNSConfig.SearchDomains...)

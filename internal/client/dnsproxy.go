@@ -36,10 +36,12 @@ type DNSProxyOptions struct {
 	UpstreamAddrs []string
 	SplitRules    []SplitDNSRule
 	NetworkMap    clientapi.RegisterNodeResponse
+	SigningTrust  *clientapi.SigningTrustBundle
 	ServePeerDNS  bool
 	SearchDomain  string
 	Timeout       time.Duration
 	Ready         func(addr string)
+	responseLimit int
 }
 
 type dnsQuestion struct {
@@ -121,6 +123,7 @@ func serveDNSProxyUDP(ctx context.Context, conn net.PacketConn, opts DNSProxyOpt
 }
 
 func serveDNSProxyTCP(ctx context.Context, listener net.Listener, opts DNSProxyOptions, timeout time.Duration) error {
+	opts.responseLimit = 65535
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -160,6 +163,9 @@ func DNSProxyResponse(ctx context.Context, request []byte, opts DNSProxyOptions,
 	question, err := parseDNSQuestion(request)
 	if err != nil {
 		return dnsErrorResponse(request, dnsRCodeForm), nil
+	}
+	if response, matched := serviceDNSResponse(request, question, opts); matched {
+		return response, nil
 	}
 	if opts.ServePeerDNS {
 		searchDomain := normalizeDNSName(opts.SearchDomain)

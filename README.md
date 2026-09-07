@@ -6,6 +6,9 @@ integration for Linux, macOS and Windows.
 The maintained Russian client architecture and operations guide starts at
 [`docs/ru/client-and-network.md`](docs/ru/client-and-network.md).
 
+Signed service catalog consumption and its limits are documented in
+[`docs/service-discovery.md`](docs/service-discovery.md).
+
 Client source is imported through pull requests. Control-plane HTTP and signed
 wire contracts are consumed from the producer-owned, versioned
 `github.com/endless-net/client-api/clientapi` module.

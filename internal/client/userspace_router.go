@@ -231,6 +231,29 @@ func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config,
 			}
 		}
 	}
+	if len(networkMap.Network.Services) > 0 {
+		trust, err := SigningTrustBundle(cfg)
+		if err != nil {
+			return out, err
+		}
+		if err := clientapi.VerifyNetworkMapSignatureWithTrustBundle(networkMap, trust); err != nil {
+			return out, err
+		}
+		if out.DNSProxy == nil {
+			upstreams := make([]string, 0, len(out.DNS))
+			for _, server := range out.DNS {
+				upstreams = append(upstreams, net.JoinHostPort(server.String(), "53"))
+			}
+			out.DNSProxy = &DNSProxyOptions{ListenAddr: "127.0.0.1:53", UpstreamAddrs: upstreams, NetworkMap: networkMap}
+		}
+		out.DNSProxy.SigningTrust = &trust
+		out.DNS = []netip.Addr{netip.MustParseAddr("127.0.0.1")}
+		for _, service := range networkMap.Network.Services {
+			if !slices.Contains(out.DNSDomains, service.DNSName) {
+				out.DNSDomains = append(out.DNSDomains, service.DNSName)
+			}
+		}
+	}
 	blockLAN, err := ExitLANPolicyBlocksLocalLAN(cfg.ExitLANPolicy)
 	if err != nil {
 		return out, err
@@ -270,5 +293,5 @@ func dnsProxyOptionsEqual(a, b *DNSProxyOptions) bool {
 	}
 	return a.ListenAddr == b.ListenAddr && slices.Equal(a.UpstreamAddrs, b.UpstreamAddrs) &&
 		a.ServePeerDNS == b.ServePeerDNS && a.SearchDomain == b.SearchDomain && reflect.DeepEqual(a.SplitRules, b.SplitRules) &&
-		reflect.DeepEqual(a.NetworkMap, b.NetworkMap)
+		reflect.DeepEqual(a.NetworkMap, b.NetworkMap) && reflect.DeepEqual(a.SigningTrust, b.SigningTrust)
 }
