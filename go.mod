@@ -7,7 +7,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/endless-net/client-api/clientapi v1.5.0
 	github.com/endless-net/client-api/clientapi/v2 v2.1.0-rc.1
-	github.com/endless-net/management/managementapi v1.7.0-rc.1
+	github.com/endless-net/management/managementapi v1.8.0-rc.1
 	github.com/endless-net/relay v1.1.4
 	github.com/tailscale/wireguard-go v0.0.0-20260622164646-ae172d45f0f7
 	golang.org/x/crypto v0.53.0
