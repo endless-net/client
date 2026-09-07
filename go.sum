@@ -10,6 +10,8 @@ github.com/endless-net/client-api/clientapi/v2 v2.1.0-rc.1 h1:CSlDDR2HtjZPsuPMQm
 github.com/endless-net/client-api/clientapi/v2 v2.1.0-rc.1/go.mod h1:t5HZSUkb1YaytzJ2s6dsDCLzYorPBZ5m2R4qwQ4fqGI=
 github.com/endless-net/coordinator/coordinatorapi v1.19.0 h1:Q8h/8jvHWY6mXjwFN1prq+SdD88uI40/WevmCEMztwU=
 github.com/endless-net/coordinator/coordinatorapi v1.19.0/go.mod h1:0Ab3aSISnrXKGdcweN92g3sztjz+d4laBlGOF0Dn54A=
+github.com/endless-net/coordinator/coordinatorapi v1.20.0 h1:rhejqxRHjH0KgRMX2E+24giBy87aXQ6RyYK1pt+o/bA=
+github.com/endless-net/coordinator/coordinatorapi v1.20.0/go.mod h1:0Ab3aSISnrXKGdcweN92g3sztjz+d4laBlGOF0Dn54A=
 github.com/endless-net/management/managementapi v1.13.0-rc.1 h1:wc3RGyXiGv6rVD1nYTL6EBsJncT8Yo+n0b1r0dTb+QY=
 github.com/endless-net/management/managementapi v1.13.0-rc.1/go.mod h1:J4R700NSK6Ai/MgpyYcU9cJNUvnF26p7FsLNpLsKwcg=
 github.com/endless-net/relay v1.1.4 h1:1Oh+AU4iab/83yNDA3YY3ekBFzjvLzEEQuB1b5cY70k=

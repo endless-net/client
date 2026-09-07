@@ -78,6 +78,10 @@ type WireGuardEngine struct {
 	pathCancel        context.CancelFunc
 	applicationFilter *applicationPacketFilter
 	applicationCancel context.CancelFunc
+	flows             *flowCollector
+	flowCancel        context.CancelFunc
+	flowKey           string
+	flowDone          chan struct{}
 }
 
 type WireGuardEngineEndpointDiscovery struct {
@@ -189,9 +193,13 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 		e.applicationFilter = newApplicationPacketFilter()
 	}
 	e.applicationFilter.update(networkMap)
+	if e.flows == nil {
+		e.flows = &flowCollector{}
+	}
 	result, err = e.configureLocked(ctx, plan, previous, &progress)
 	if err == nil {
 		e.configureApplicationsLocked(cfg, networkMap)
+		e.configureFlowLocked(cfg, networkMap)
 		return result, nil
 	}
 	if rollbackErr := e.restoreLocked(previous, progress); rollbackErr != nil {
@@ -505,7 +513,7 @@ func (e *WireGuardEngine) startLocked(mtu int) error {
 	if filter == nil {
 		filter = newApplicationPacketFilter()
 	}
-	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter}, bind, logger)
+	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, flows: e.flows}, bind, logger)
 	e.applicationFilter = filter
 	router := e.opts.router
 	if router == nil {
@@ -887,6 +895,12 @@ func (e *WireGuardEngine) Close() error {
 }
 
 func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
+	if e.flowCancel != nil {
+		e.flowCancel()
+		<-e.flowDone
+		e.flowCancel = nil
+	}
+	e.flows.stop()
 	if e.applicationCancel != nil {
 		e.applicationCancel()
 		e.applicationCancel = nil

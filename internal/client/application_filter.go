@@ -241,12 +241,19 @@ func (f *applicationPacketFilter) allows(raw []byte, inbound bool, now time.Time
 type applicationTUN struct {
 	tun.Device
 	filter *applicationPacketFilter
+	flows  *flowCollector
 }
 
 func (t *applicationTUN) Write(bufs [][]byte, offset int) (int, error) {
 	accepted := make([][]byte, 0, len(bufs))
 	for _, buf := range bufs {
-		if len(buf) >= offset && t.filter.allows(buf[offset:], true, time.Now()) {
+		if offset < 0 || len(buf) < offset {
+			continue
+		}
+		now := time.Now()
+		allowed := t.filter.allows(buf[offset:], true, now)
+		t.flows.observe(buf[offset:], allowed, now)
+		if allowed {
 			accepted = append(accepted, buf)
 		}
 	}
@@ -266,7 +273,14 @@ func (t *applicationTUN) Read(bufs [][]byte, sizes []int, offset int) (int, erro
 		}
 		accepted := 0
 		for i := 0; i < n; i++ {
-			if sizes[i] < 0 || offset+sizes[i] > len(bufs[i]) || !t.filter.allows(bufs[i][offset:offset+sizes[i]], false, time.Now()) {
+			if offset < 0 || sizes[i] < 0 || offset+sizes[i] > len(bufs[i]) {
+				continue
+			}
+			now := time.Now()
+			packet := bufs[i][offset : offset+sizes[i]]
+			allowed := t.filter.allows(packet, false, now)
+			t.flows.observe(packet, allowed, now)
+			if !allowed {
 				continue
 			}
 			if accepted != i {
