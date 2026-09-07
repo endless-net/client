@@ -69,10 +69,13 @@ passed this expanded encrypted scenario on 7 September 2026.
 
 `TestSharingBackendMapConsumer` accepts CI-supplied Coordinator base/delta
 evidence and invokes the production CLI/agent cache consumer. It checks grant,
-withdrawal, cached-map verification and unchanged cache after signature tampering.
+withdrawal, idempotent cache replay and unchanged cache after signature tampering.
 It requires a backend fixture and skips local short runs. Integration of its
 fixture producer and a successful combined CI run are still required; it does
-not yet establish engine configuration from backend events.
+not yet establish engine configuration from backend events. Recorded events are
+validated at their Coordinator-observed timestamps through the same cache helper;
+normal runtime still supplies the current time. Historical replay does not claim
+that a captured lease remains valid at the later CI execution time.
 
 The first encrypted-test CI attempt at `890236a` did not execute the scenario:
 [Linux job 101766343601](https://github.com/endless-net/client/actions/runs/34129622991/job/101766343601)

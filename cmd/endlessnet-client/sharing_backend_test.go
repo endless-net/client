@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"os"
-	"reflect"
 	"testing"
+	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/internal/client"
@@ -26,16 +26,17 @@ func TestSharingBackendMapConsumer(t *testing.T) {
 	}
 	defer func() { _ = file.Close() }()
 	var fixture struct {
-		Base   clientapi.NetworkMapSnapshot
-		Trust  clientapi.SigningTrustBundle
-		Events []clientapi.MapStreamEvent
+		Base       clientapi.NetworkMapSnapshot
+		Trust      clientapi.SigningTrustBundle
+		Events     []clientapi.MapStreamEvent
+		ObservedAt []time.Time
 	}
 	decoder := json.NewDecoder(file)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&fixture); err != nil {
 		t.Fatal(err)
 	}
-	if len(fixture.Events) != 2 || fixture.Base.MapSignature == nil || len(fixture.Base.Network.SharePeerGrants) != 0 {
+	if len(fixture.Events) != 2 || len(fixture.ObservedAt) != 2 || fixture.Base.MapSignature == nil || len(fixture.Base.Network.SharePeerGrants) != 0 {
 		t.Fatal("expected backend base, grant and withdrawal")
 	}
 	base := networkMapResponseFromSnapshot(fixture.Base)
@@ -53,14 +54,14 @@ func TestSharingBackendMapConsumer(t *testing.T) {
 		signature := *event.ResultSignature
 		signature.PayloadHash = "invalid"
 		tampered.ResultSignature = &signature
-		if _, _, err := cacheNetworkMapFromEvent(&cfg, tampered); err == nil {
+		if _, _, err := cacheNetworkMapFromEventAt(&cfg, tampered, fixture.ObservedAt[index]); err == nil {
 			t.Fatal("tampered map accepted")
 		}
 		after, err := json.Marshal(cfg)
 		if err != nil || string(before) != string(after) {
 			t.Fatal("rejected map changed cache", err)
 		}
-		result, action, err := cacheNetworkMapFromEvent(&cfg, event)
+		result, action, err := cacheNetworkMapFromEventAt(&cfg, event, fixture.ObservedAt[index])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -68,9 +69,9 @@ func TestSharingBackendMapConsumer(t *testing.T) {
 		if action != "delta" || len(result.Network.SharePeerGrants) != want || len(result.Peers) != want || cfg.MapHash != event.ResultSignature.PayloadHash || cfg.MapRevision != event.To.Network {
 			t.Fatal("backend sharing state not applied to cache")
 		}
-		verified, err := verifiedCachedNetworkMap(&cfg)
-		if err != nil || !reflect.DeepEqual(verified.Network.SharePeerGrants, result.Network.SharePeerGrants) {
-			t.Fatal("cached sharing map failed verification", err)
+		_, replayAction, err := cacheNetworkMapFromEventAt(&cfg, event, fixture.ObservedAt[index])
+		if err != nil || replayAction != "unchanged" {
+			t.Fatal("cached sharing map failed replay", err)
 		}
 	}
 }

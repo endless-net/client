@@ -1685,6 +1685,10 @@ func cacheNetworkMapChecked(cfg *client.Config, response clientapi.RegisterNodeR
 }
 
 func cacheNetworkMapFromEvent(cfg *client.Config, event clientapi.MapStreamEvent) (clientapi.RegisterNodeResponse, string, error) {
+	return cacheNetworkMapFromEventAt(cfg, event, time.Now().UTC())
+}
+
+func cacheNetworkMapFromEventAt(cfg *client.Config, event clientapi.MapStreamEvent, observedAt time.Time) (clientapi.RegisterNodeResponse, string, error) {
 	current := clientapi.NetworkMapSnapshot{}
 	if cfg.CachedMap != nil {
 		current = networkMapSnapshotFromResponse(*cfg.CachedMap)
@@ -1696,7 +1700,7 @@ func cacheNetworkMapFromEvent(cfg *client.Config, event clientapi.MapStreamEvent
 	if err != nil {
 		return clientapi.RegisterNodeResponse{}, "", err
 	}
-	next, err := clientapi.ApplyMapStreamEvent(current, event, trust, time.Now().UTC())
+	next, err := clientapi.ApplyMapStreamEvent(current, event, trust, observedAt)
 	if errors.Is(err, clientapi.ErrMapStreamEventAlreadyApplied) {
 		return networkMapResponseFromSnapshot(next), "unchanged", nil
 	}
