@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	connectrpc.com/connect v1.19.1
 	github.com/Microsoft/go-winio v0.6.2
-	github.com/endless-net/client-api/clientapi v1.10.0
+	github.com/endless-net/client-api/clientapi v1.11.0
 	github.com/endless-net/client-api/clientapi/v2 v2.1.0-rc.1
 	github.com/endless-net/coordinator/coordinatorapi v1.20.0
 	github.com/endless-net/management/managementapi v1.13.0-rc.1

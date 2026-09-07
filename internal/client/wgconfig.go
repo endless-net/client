@@ -17,18 +17,22 @@ const wireGuardACLFirewallChainPrefix = "ENACL-"
 const wireGuardExitLANFirewallChainPrefix = "ENLAN-"
 
 type WireGuardRenderOptions struct {
-	ListenPort            int
-	MTU                   int
-	RouteTable            string
-	Interfaces            []NetworkInterfaceStatus
-	PeerEndpointOverrides map[string]string
-	SubnetRouterSNAT      bool
-	ExitBlockLAN          bool
+	sharingPacketEnforcement bool
+	ListenPort               int
+	MTU                      int
+	RouteTable               string
+	Interfaces               []NetworkInterfaceStatus
+	PeerEndpointOverrides    map[string]string
+	SubnetRouterSNAT         bool
+	ExitBlockLAN             bool
 }
 
 // RenderWireGuardWithOptionsChecked validates the complete untrusted map
 // before producing a WireGuard configuration for explicit manual export.
 func RenderWireGuardWithOptionsChecked(privateKey string, response clientapi.RegisterNodeResponse, opts WireGuardRenderOptions) (string, error) {
+	if len(response.Network.SharePeerGrants) > 0 && !opts.sharingPacketEnforcement {
+		return "", fmt.Errorf("machine sharing requires the managed WireGuard packet filter; static export is unavailable")
+	}
 	if strings.TrimSpace(privateKey) == "" {
 		return "", fmt.Errorf("wireguard private key is missing")
 	}

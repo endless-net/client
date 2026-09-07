@@ -78,6 +78,7 @@ type WireGuardEngine struct {
 	pathWake          chan struct{}
 	pathCancel        context.CancelFunc
 	applicationFilter *applicationPacketFilter
+	sharingFilter     *sharingPacketFilter
 	applicationCancel context.CancelFunc
 	flows             *flowCollector
 	flowCancel        context.CancelFunc
@@ -185,7 +186,7 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 		return result, err
 	}
 	progress := wireGuardEngineApplyProgress{}
-	if len(networkMap.Network.Applications) > 0 || e.applicationFilter != nil && e.applicationFilter.active() {
+	if len(networkMap.Network.Applications) > 0 || len(networkMap.Network.SharePeerGrants) > 0 || e.sharingFilter.active() || e.applicationFilter != nil && e.applicationFilter.active() {
 		if err := verifyApplicationMap(cfg, networkMap); err != nil {
 			return result, err
 		}
@@ -197,12 +198,19 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 	if e.flows == nil {
 		e.flows = &flowCollector{}
 	}
+	if e.sharingFilter == nil {
+		e.sharingFilter = newSharingPacketFilter()
+	}
+	// Keep sharing closed until the matching peer keys and routes are installed.
+	e.sharingFilter.suspend(networkMap)
 	result, err = e.configureLocked(ctx, plan, previous, &progress)
 	if err == nil {
+		e.sharingFilter.update(networkMap)
 		e.configureApplicationsLocked(cfg, networkMap)
 		e.configureFlowLocked(cfg, networkMap)
 		return result, nil
 	}
+	e.sharingFilter.withdraw()
 	if rollbackErr := e.restoreLocked(previous, progress); rollbackErr != nil {
 		return result, errors.Join(err, fmt.Errorf("rollback wireguard-go configuration: %w", rollbackErr))
 	}
@@ -230,12 +238,13 @@ func (e *WireGuardEngine) preflightLocked(cfg Config, networkMap clientapi.Regis
 		return plan, err
 	}
 	if _, err := RenderWireGuardWithOptionsChecked(plan.privateKey, plan.networkMap, WireGuardRenderOptions{
-		ListenPort:       e.opts.ListenPort,
-		MTU:              plan.mtu,
-		RouteTable:       cfg.WireGuardRouteTable,
-		Interfaces:       LocalInterfaceStatuses(),
-		SubnetRouterSNAT: cfg.SubnetRouterSNAT,
-		ExitBlockLAN:     exitBlockLAN,
+		sharingPacketEnforcement: true,
+		ListenPort:               e.opts.ListenPort,
+		MTU:                      plan.mtu,
+		RouteTable:               cfg.WireGuardRouteTable,
+		Interfaces:               LocalInterfaceStatuses(),
+		SubnetRouterSNAT:         cfg.SubnetRouterSNAT,
+		ExitBlockLAN:             exitBlockLAN,
 	}); err != nil {
 		return plan, err
 	}
@@ -514,7 +523,10 @@ func (e *WireGuardEngine) startLocked(mtu int) error {
 	if filter == nil {
 		filter = newApplicationPacketFilter()
 	}
-	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, flows: e.flows}, bind, logger)
+	if e.sharingFilter == nil {
+		e.sharingFilter = newSharingPacketFilter()
+	}
+	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, sharing: e.sharingFilter, flows: e.flows}, bind, logger)
 	e.applicationFilter = filter
 	router := e.opts.router
 	if router == nil {
@@ -746,6 +758,13 @@ func cloneRegisterNodeResponse(value clientapi.RegisterNodeResponse) clientapi.R
 		value.Network.DNSConfig = &dns
 	}
 	value.Node.EndpointCandidates = append([]string(nil), value.Node.EndpointCandidates...)
+	value.Network.SharePeerGrants = append([]clientapi.SharePeerGrant(nil), value.Network.SharePeerGrants...)
+	for index := range value.Network.SharePeerGrants {
+		grant := &value.Network.SharePeerGrants[index]
+		grant.SourceAllowedIPs = append([]string(nil), grant.SourceAllowedIPs...)
+		grant.RecipientAllowedIPs = append([]string(nil), grant.RecipientAllowedIPs...)
+		grant.Rights = append([]clientapi.ShareTraffic(nil), grant.Rights...)
+	}
 	value.Node.AdvertisedIPs = append([]string(nil), value.Node.AdvertisedIPs...)
 	value.Node.RequestedTags = append([]string(nil), value.Node.RequestedTags...)
 	value.Node.Tags = append([]string(nil), value.Node.Tags...)
@@ -910,6 +929,7 @@ func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
 	if e.applicationFilter != nil {
 		e.applicationFilter.withdraw()
 	}
+	e.sharingFilter.withdraw()
 	if e.relayBridge != nil {
 		e.relayBridge.Stop()
 	}
