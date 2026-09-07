@@ -89,6 +89,35 @@ func TestSharingEncryptedWireGuardDirectionAndWithdrawal(t *testing.T) {
 	exchange(1, shareTCP(true, 18), true)
 	exchange(0, shareTCP(false, 16), true)
 	exchange(1, shareTCP(true, 24), true)
+	// Expiry must revoke packets while peers, keys and encrypted transport stay
+	// configured. A missing WireGuard peer cannot explain these denials.
+	leaseDeadline := time.Now().Add(2 * time.Second)
+	for i := range maps {
+		maps[i].Network.SharePeerGrants[0].ExpiresAt = leaseDeadline
+		maps[i].Network.Revision++
+		maps[i].Revision.Network++
+		resignApplicationMap(t, &maps[i], signingKey)
+		if _, err := engines[i].Configure(t.Context(), configs[i], maps[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exchange(0, shareTCP(false, 24), true)
+	time.Sleep(time.Until(leaseDeadline.Add(50 * time.Millisecond)))
+	exchange(0, shareTCP(false, 24), false)
+	exchange(1, shareTCP(true, 24), false)
+	// A fresh signed lease can establish a new flow on the same live transport.
+	for i := range maps {
+		maps[i].Network.SharePeerGrants[0].ExpiresAt = time.Now().Add(time.Minute)
+		maps[i].Network.Revision++
+		maps[i].Revision.Network++
+		resignApplicationMap(t, &maps[i], signingKey)
+		if _, err := engines[i].Configure(t.Context(), configs[i], maps[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exchange(0, shareTCP(false, 2), true)
+	exchange(1, shareTCP(true, 18), true)
+	exchange(0, shareTCP(false, 16), true)
 	exchange(1, shareTCP(true, 2), false)
 	wrongPort := shareTCP(false, 2)
 	binary.BigEndian.PutUint16(wrongPort[22:24], 22)

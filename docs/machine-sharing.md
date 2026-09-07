@@ -37,7 +37,17 @@ signed sharing maps. It establishes recipient TCP SYN/SYN-ACK/ACK and reply
 traffic before probing reverse NEW and an unauthorized destination port, then
 applies signed withdrawal and checks established traffic is blocked in both
 directions. Router changes use the test router; this is not OS routing or Relay
-acceptance. The new encrypted scenario still requires a successful CI run.
+acceptance. At Client `f185975`, this direction/withdrawal scenario passed in
+[Management release job 101783890469](https://github.com/endless-net/management/actions/runs/34135020494/job/101783890469)
+on 7 September 2026. That job checks out the exact Client revision and uses
+Management's existing private-module access. The log explicitly records the
+encrypted test passing; it does not establish the whole release outcome.
+
+The next extension shortens the signed lease, proves traffic still passes,
+waits for expiry without removing peers or keys, and requires both directions
+to stop. A new signed lease must restore a fresh TCP handshake on the same
+transport before the existing withdrawal checks. This extension needs its own
+CI evidence; local short tests skip it.
 
 The first encrypted-test CI attempt at `890236a` did not execute the scenario:
 [Linux job 101766343601](https://github.com/endless-net/client/actions/runs/34129622991/job/101766343601)
@@ -49,6 +59,7 @@ required private module repositories, currently Coordinator and Management;
 ordinary repository `GITHUB_TOKEN` cannot read those separate repositories.
 The secret was absent when checked on 7 September 2026. A trusted CI run after
 configuration is required; fork PRs without secrets cannot run these downloads.
-No successful encrypted sharing result is claimed while this prerequisite is
-missing. Release workflows need the same private-module access before release
+The separate Management release job above supplies the first encrypted result
+without configuring this missing Client secret. Client release workflows still
+need private-module access before release
 validation; the change here configures the Test workflow only.
