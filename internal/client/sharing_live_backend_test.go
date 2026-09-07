@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -144,6 +145,14 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			p[33] = flags
 			return p
 		}
+		datagram := func(sender int, protocol byte) []byte {
+			p := sharingDatagram(protocol, sender == 0)
+			copy(p[12:16], net.ParseIP(input.Maps[sender].Node.AssignedIP).To4())
+			copy(p[16:20], net.ParseIP(input.Maps[1-sender].Node.AssignedIP).To4())
+			p[10], p[11] = 0, 0
+			binary.BigEndian.PutUint16(p[10:12], sharingChecksum(p[:20]))
+			return p
+		}
 		if input.WaitForExpiry {
 			if !input.Accepted || acceptedCount == 0 || len(input.Maps[0].Network.SharePeerGrants) != 1 || len(input.Maps[1].Network.SharePeerGrants) != 1 {
 				t.Fatal("expiry probe requires an established sharing pair")
@@ -160,6 +169,10 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			exchange(1, packet(1, 16), false)
 			exchange(0, packet(0, 24), false)
 			exchange(1, packet(1, 2), false)
+			for _, protocol := range []byte{17, 1} {
+				exchange(1, datagram(1, protocol), false)
+				exchange(0, datagram(0, protocol), false)
+			}
 			expiredCount++
 			t.Log("real backend lease expired with the same configured peers and signed maps")
 		} else if input.Accepted {
@@ -169,6 +182,12 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			exchange(0, packet(0, 18), true)
 			exchange(1, packet(1, 16), true)
 			exchange(0, packet(0, 2), false)
+			for _, protocol := range []byte{17, 1} {
+				exchange(0, datagram(0, protocol), false)
+				exchange(1, datagram(1, protocol), true)
+				exchange(0, datagram(0, protocol), true)
+			}
+			t.Log("live backend TCP, UDP and ICMP grants passed encrypted request/reply enforcement")
 			acceptedCount++
 		} else {
 			if acceptedCount == 0 {
@@ -176,6 +195,10 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			}
 			exchange(1, packet(1, 2), false)
 			exchange(0, packet(0, 18), false)
+			for _, protocol := range []byte{17, 1} {
+				exchange(1, datagram(1, protocol), false)
+				exchange(0, datagram(0, protocol), false)
+			}
 			withdrawnCount++
 		}
 		fmt.Println("ENDLESSNET_SHARING_ENGINE_OK")
