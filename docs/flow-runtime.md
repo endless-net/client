@@ -41,6 +41,16 @@ Durable restart handling, user-facing diagnostics integration and central metric
 remain required follow-up. OS/kernel dataplanes outside this wireguard-go TUN
 wrapper are not claimed to produce flow logs.
 
+An encrypted spool primitive is component-tested but is not yet connected to
+the worker or agent configuration. It atomically saves sealed protobuf windows,
+preserves window IDs/revision/lease across reopening, binds AES-GCM ciphertext
+to the producer scope and credential, bounds reads to 1 MiB, rejects tampering
+and deletes expired ciphertext. Its load result is quarantined data: future
+worker integration must obtain fresh matching consent before importing/sending,
+persist before the first send, persist acknowledgements, purge on revocation
+and account for storage failures. The running queue remains memory-only until
+that integration is implemented and verified.
+
 Tests cover default-off behavior, aggregation, bounded capacity, immutable retry,
 revision/expiry cleanup, and a packet passed through the actual TUN wrapper and
 sent using TLS protobuf after a temporary receiver failure. Validation uses only
