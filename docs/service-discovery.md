@@ -27,5 +27,5 @@ re-evaluates node identity, eligibility and live state on map rebuild.
 Component checks cover signed A/AAAA/SRV discovery, a running UDP resolver,
 runtime router configuration, signature tampering, expiry, untrusted maps,
 revocation and detached cloning. They do not establish live overlay reachability
-or production activation. Application connector transport remains a design gate;
-the application catalog is foundation, not an implemented application proxy.
+or production activation. The separate [application runtime](application-runtime.md)
+uses L3 routes and has its own connector authorization and validation limits.

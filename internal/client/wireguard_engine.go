@@ -59,23 +59,25 @@ type WireGuardEngineOptions struct {
 type WireGuardEngine struct {
 	mu sync.Mutex
 
-	opts        WireGuardEngineOptions
-	tun         tun.Device
-	device      *device.Device
-	bind        *MagicBind
-	router      wireGuardEngineRouter
-	interface_  string
-	configured  bool
-	routerCfg   wireGuardEngineRouterConfig
-	uapi        string
-	discovery   WireGuardEngineEndpointDiscovery
-	relayBridge *wireGuardRelayBridge
-	relayPaths  *wireGuardRelayPathManager
-	portMapping automaticPortMappingState
-	pathMap     clientapi.RegisterNodeResponse
-	pathKey     string
-	pathWake    chan struct{}
-	pathCancel  context.CancelFunc
+	opts              WireGuardEngineOptions
+	tun               tun.Device
+	device            *device.Device
+	bind              *MagicBind
+	router            wireGuardEngineRouter
+	interface_        string
+	configured        bool
+	routerCfg         wireGuardEngineRouterConfig
+	uapi              string
+	discovery         WireGuardEngineEndpointDiscovery
+	relayBridge       *wireGuardRelayBridge
+	relayPaths        *wireGuardRelayPathManager
+	portMapping       automaticPortMappingState
+	pathMap           clientapi.RegisterNodeResponse
+	pathKey           string
+	pathWake          chan struct{}
+	pathCancel        context.CancelFunc
+	applicationFilter *applicationPacketFilter
+	applicationCancel context.CancelFunc
 }
 
 type WireGuardEngineEndpointDiscovery struct {
@@ -178,8 +180,18 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 		return result, err
 	}
 	progress := wireGuardEngineApplyProgress{}
+	if len(networkMap.Network.Applications) > 0 || e.applicationFilter != nil && e.applicationFilter.active() {
+		if err := verifyApplicationMap(cfg, networkMap); err != nil {
+			return result, err
+		}
+	}
+	if e.applicationFilter == nil {
+		e.applicationFilter = newApplicationPacketFilter()
+	}
+	e.applicationFilter.update(networkMap)
 	result, err = e.configureLocked(ctx, plan, previous, &progress)
 	if err == nil {
+		e.configureApplicationsLocked(cfg, networkMap)
 		return result, nil
 	}
 	if rollbackErr := e.restoreLocked(previous, progress); rollbackErr != nil {
@@ -489,7 +501,12 @@ func (e *WireGuardEngine) startLocked(mtu int) error {
 			log.Printf("WireGuard engine: "+format, args...)
 		},
 	}
-	wgDevice := device.NewDevice(tunDevice, bind, logger)
+	filter := e.applicationFilter
+	if filter == nil {
+		filter = newApplicationPacketFilter()
+	}
+	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter}, bind, logger)
+	e.applicationFilter = filter
 	router := e.opts.router
 	if router == nil {
 		router, err = newWireGuardEngineRouter(interfaceName, e.opts.Runner, e.opts.inputRunner)
@@ -695,10 +712,12 @@ func cloneRegisterNodeResponse(value clientapi.RegisterNodeResponse) clientapi.R
 	value.Network.Applications = append([]clientapi.Application(nil), value.Network.Applications...)
 	for i := range value.Network.Applications {
 		app := &value.Network.Applications[i]
-		app.AllowedUsers = append([]string(nil), app.AllowedUsers...)
-		app.AllowedGroups = append([]string(nil), app.AllowedGroups...)
-		app.ConnectorNodes = append([]string(nil), app.ConnectorNodes...)
-		app.ConnectorTags = append([]string(nil), app.ConnectorTags...)
+		app.Sources = append([]clientapi.ServiceHost(nil), app.Sources...)
+		app.Connectors = append([]clientapi.ServiceHost(nil), app.Connectors...)
+		app.Routes = append([]clientapi.ApplicationRoute(nil), app.Routes...)
+		for j := range app.Routes {
+			app.Routes[j].CIDRs = append([]string(nil), app.Routes[j].CIDRs...)
+		}
 	}
 	value.Network.Services = append([]clientapi.AdvertisedService(nil), value.Network.Services...)
 	for i := range value.Network.Services {
@@ -868,6 +887,13 @@ func (e *WireGuardEngine) Close() error {
 }
 
 func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
+	if e.applicationCancel != nil {
+		e.applicationCancel()
+		e.applicationCancel = nil
+	}
+	if e.applicationFilter != nil {
+		e.applicationFilter.withdraw()
+	}
 	if e.relayBridge != nil {
 		e.relayBridge.Stop()
 	}
@@ -1189,6 +1215,9 @@ func wireGuardEngineUAPIWithoutEndpoints(privateKey string, networkMap clientapi
 }
 
 func wireGuardEngineUAPIWithEndpoints(privateKey string, networkMap clientapi.RegisterNodeResponse, listenPort int, configured bool, firewallMark uint32, endpointOverrides map[string]string, emitEndpoints bool) (string, error) {
+	if len(networkMap.Network.Applications) > 0 {
+		networkMap.Peers = applicationRoutePeers(networkMap, time.Now())
+	}
 	privateHex, err := wireGuardKeyToHex(privateKey, false)
 	if err != nil {
 		return "", err

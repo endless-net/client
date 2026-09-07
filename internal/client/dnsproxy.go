@@ -167,6 +167,9 @@ func DNSProxyResponse(ctx context.Context, request []byte, opts DNSProxyOptions,
 	if response, matched := serviceDNSResponse(request, question, opts); matched {
 		return response, nil
 	}
+	if response, matched := applicationDNSResponse(request, question, opts); matched {
+		return response, nil
+	}
 	if opts.ServePeerDNS {
 		searchDomain := normalizeDNSName(opts.SearchDomain)
 		if searchDomain == "" {

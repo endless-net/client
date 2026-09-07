@@ -128,6 +128,13 @@ type wireGuardEngineRouterConfig struct {
 }
 
 func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config, networkMap clientapi.RegisterNodeResponse) (wireGuardEngineRouterConfig, error) {
+	originalMap := networkMap
+	if len(networkMap.Network.Applications) > 0 {
+		if err := verifyApplicationMap(cfg, networkMap); err != nil {
+			return wireGuardEngineRouterConfig{}, err
+		}
+		networkMap.Peers = applicationRoutePeers(networkMap, time.Now())
+	}
 	out := wireGuardEngineRouterConfig{
 		Interface:  strings.TrimSpace(interfaceName),
 		MTU:        mtu,
@@ -231,12 +238,13 @@ func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config,
 			}
 		}
 	}
-	if len(networkMap.Network.Services) > 0 {
+	appDomains := applicationDNSDomains(originalMap)
+	if len(networkMap.Network.Services) > 0 || len(appDomains) > 0 {
 		trust, err := SigningTrustBundle(cfg)
 		if err != nil {
 			return out, err
 		}
-		if err := clientapi.VerifyNetworkMapSignatureWithTrustBundle(networkMap, trust); err != nil {
+		if err := clientapi.VerifyNetworkMapSignatureWithTrustBundle(originalMap, trust); err != nil {
 			return out, err
 		}
 		if out.DNSProxy == nil {
@@ -247,6 +255,8 @@ func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config,
 			out.DNSProxy = &DNSProxyOptions{ListenAddr: "127.0.0.1:53", UpstreamAddrs: upstreams, NetworkMap: networkMap}
 		}
 		out.DNSProxy.SigningTrust = &trust
+		out.DNSProxy.NetworkMap = originalMap
+		out.DNSDomains = append(out.DNSDomains, appDomains...)
 		out.DNS = []netip.Addr{netip.MustParseAddr("127.0.0.1")}
 		for _, service := range networkMap.Network.Services {
 			if !slices.Contains(out.DNSDomains, service.DNSName) {
@@ -257,6 +267,19 @@ func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config,
 	blockLAN, err := ExitLANPolicyBlocksLocalLAN(cfg.ExitLANPolicy)
 	if err != nil {
 		return out, err
+	}
+	if out.DNSProxy != nil {
+		out.DNSProxy.NetworkMap = originalMap
+	}
+	applicationHooks := renderApplicationForwardingHooks(originalMap)
+	for _, hook := range applicationHooks {
+		kind, command, _ := strings.Cut(hook, " = ")
+		command = strings.ReplaceAll(command, "%i", out.Interface)
+		if kind == "PostUp" {
+			out.PostUp = append(out.PostUp, command)
+		} else {
+			out.PreDown = append(out.PreDown, command)
+		}
 	}
 	for _, hook := range append(append(
 		renderSubnetRouterSNATHooks(networkMap, cfg.SubnetRouterSNAT),

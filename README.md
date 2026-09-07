@@ -9,6 +9,9 @@ The maintained Russian client architecture and operations guide starts at
 Signed service catalog consumption and its limits are documented in
 [`docs/service-discovery.md`](docs/service-discovery.md).
 
+Signed L3 application routes, connector discovery and packet enforcement are
+documented in [`docs/application-runtime.md`](docs/application-runtime.md).
+
 Client source is imported through pull requests. Control-plane HTTP and signed
 wire contracts are consumed from the producer-owned, versioned
 `github.com/endless-net/client-api/clientapi` module.
