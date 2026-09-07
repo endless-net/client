@@ -38,3 +38,17 @@ traffic before probing reverse NEW and an unauthorized destination port, then
 applies signed withdrawal and checks established traffic is blocked in both
 directions. Router changes use the test router; this is not OS routing or Relay
 acceptance. The new encrypted scenario still requires a successful CI run.
+
+The first encrypted-test CI attempt at `890236a` did not execute the scenario:
+[Linux job 101766343601](https://github.com/endless-net/client/actions/runs/34129622991/job/101766343601)
+failed downloading private Coordinator and Management Go SDKs during vet. The
+test workflow now requires the repository secret `PRIVATE_MODULES_READ_TOKEN`,
+sets `GOPRIVATE=github.com/endless-net/*` and configures Git's credential helper
+through GitHub CLI before Go setup. Use a read-only credential scoped to the
+required private module repositories, currently Coordinator and Management;
+ordinary repository `GITHUB_TOKEN` cannot read those separate repositories.
+The secret was absent when checked on 7 September 2026. A trusted CI run after
+configuration is required; fork PRs without secrets cannot run these downloads.
+No successful encrypted sharing result is claimed while this prerequisite is
+missing. Release workflows need the same private-module access before release
+validation; the change here configures the Test workflow only.

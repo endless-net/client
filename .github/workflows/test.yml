@@ -20,6 +20,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  GOPRIVATE: github.com/endless-net/*
+  GH_TOKEN: ${{ secrets.PRIVATE_MODULES_READ_TOKEN }}
+
 jobs:
   verify-linux:
     name: Verify (Linux)
@@ -27,6 +31,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/private-go
 
       - uses: actions/setup-go@v7
         with:
@@ -70,6 +76,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: ./.github/actions/private-go
+
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -90,6 +98,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/private-go
 
       - uses: actions/setup-go@v7
         with:
@@ -130,6 +140,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/private-go
       - name: Check out pinned STUN source
         uses: actions/checkout@v7
         with:
