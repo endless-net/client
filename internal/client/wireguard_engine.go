@@ -39,6 +39,7 @@ const (
 )
 
 type WireGuardEngineOptions struct {
+	FlowSpoolPath    string
 	Interface        string
 	ListenPort       int
 	MTU              int
@@ -901,6 +902,7 @@ func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
 		e.flowCancel = nil
 	}
 	e.flows.stop()
+	e.discardFlowSpoolLocked()
 	if e.applicationCancel != nil {
 		e.applicationCancel()
 		e.applicationCancel = nil

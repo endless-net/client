@@ -28,28 +28,31 @@ The pinned [`coordinatorapi/v1.20.0` contract](https://github.com/endless-net/co
 owns RPC DTOs. Coordinator resolves account ownership; the Client sends only
 node identity, consent revision and the flow window.
 
-The queue is memory-only. Process termination loses unacknowledged windows;
-expiry also discards pending windows by design. `WireGuardEngine.FlowLogStatus`
-and structured `flow log runtime` records expose enabled state, active/pending
-windows, discarded windows, packet drops split by unsupported input, capacity
-and backward clock movement, report attempts/failures, acknowledged windows and
-policy failures. Counters are cumulative for the engine lifetime and reset on
-process restart. Status refresh also expires idle buffers without packet input.
-Logs emit changed snapshots at most every 15 seconds and a final stopped snapshot;
-they contain no IPs, node/window IDs, URLs, credentials or raw RPC errors.
-Durable restart handling, user-facing diagnostics integration and central metrics
-remain required follow-up. OS/kernel dataplanes outside this wireguard-go TUN
-wrapper are not claimed to produce flow logs.
+The agent stores sealed windows in `<config path>.flow-queue`, under its existing
+exclusive agent lock. AES-GCM binds ciphertext to the producer scope and current
+node credential. The disk queue is bounded to 1 MiB and 1024 windows; snapshots
+are atomically written and synced before the first report. An ACK updates the
+queue atomically. Unchanged snapshots do not rewrite the file. A crash after
+remote commit but before local ACK can replay the same immutable ID/content;
+Coordinator and Management enforce idempotency and content conflicts.
 
-An encrypted spool primitive is component-tested but is not yet connected to
-the worker or agent configuration. It atomically saves sealed protobuf windows,
-preserves window IDs/revision/lease across reopening, binds AES-GCM ciphertext
-to the producer scope and credential, bounds reads to 1 MiB, rejects tampering
-and deletes expired ciphertext. Its load result is quarantined data: future
-worker integration must obtain fresh matching consent before importing/sending,
-persist before the first send, persist acknowledgements, purge on revocation
-and account for storage failures. The running queue remains memory-only until
-that integration is implemented and verified.
+After restart, loaded windows are quarantined until fresh policy confirms the
+same revision and collection start boundary. Restart never extends the stored
+lease before this check. Revocation, revision changes, expiry while running,
+normal shutdown and disconnect erase queued data. When the process is stopped,
+expired ciphertext is deleted on the next startup. Credential/scope changes and
+corruption fail closed. Storage errors stop the worker and surface in status;
+no uncheckpointed sealed window is sent. Active windows not yet sealed (up to ten
+seconds) can still be lost on an abrupt crash. Embedded engines without an
+explicit FlowSpoolPath use memory-only buffering; the shipped agent sets it.
+
+`WireGuardEngine.FlowLogStatus` and structured `flow log runtime` records expose
+queue sizes, packet-drop categories, discarded windows, report attempts/failures,
+ACKs, policy failures, storage failures, corrupt spools and restored windows.
+Counters reset on process restart. Logs emit changed snapshots at most every
+15 seconds and a final stopped snapshot, without IPs, identifiers, credentials,
+URLs or raw errors. User-facing diagnostics and central metrics remain follow-up.
+OS/kernel dataplanes outside this wireguard-go TUN wrapper are not covered.
 
 Tests cover default-off behavior, aggregation, bounded capacity, immutable retry,
 revision/expiry cleanup, and a packet passed through the actual TUN wrapper and

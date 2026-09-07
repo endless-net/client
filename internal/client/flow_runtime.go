@@ -27,6 +27,7 @@ func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.Regi
 	}
 	e.flows.stop()
 	if cfg.NodeCredential == "" || network.Node.ID == "" {
+		e.discardFlowSpoolLocked()
 		return
 	}
 	var clients []coordinatorapiconnect.FlowLogServiceClient
@@ -39,18 +40,36 @@ func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.Regi
 		clients = append(clients, coordinatorapiconnect.NewFlowLogServiceClient(applicationHTTPClient(), base.String()))
 	}
 	if len(clients) == 0 {
+		e.discardFlowSpoolLocked()
 		return
+	}
+	var spool *flowSpool
+	if e.opts.FlowSpoolPath != "" {
+		var err error
+		spool, err = newFlowSpool(e.opts.FlowSpoolPath, cfg.NodeCredential, key)
+		if err != nil {
+			return
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	e.flowCancel = cancel
 	e.flowKey = key
 	e.flowDone = make(chan struct{})
 	done := e.flowDone
-	go func() { defer close(done); runFlowLogs(ctx, e.flows, clients, network.Node.ID, cfg.NodeCredential) }()
+	go func() {
+		defer close(done)
+		runFlowLogs(ctx, e.flows, clients, network.Node.ID, cfg.NodeCredential, spool)
+	}()
 }
 
-func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordinatorapiconnect.FlowLogServiceClient, node, credential string) {
-	defer func() { collector.stop(); logFlowStatus(slog.Default(), collector.status(time.Now())) }()
+func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordinatorapiconnect.FlowLogServiceClient, node, credential string, spool *flowSpool) {
+	persistence, err := openFlowPersistence(spool, collector, time.Now())
+	if err != nil {
+		collector.stop()
+		logFlowStatus(slog.Default(), collector.status(time.Now()))
+		return
+	}
+	defer func() { _ = persistence.purge(collector); logFlowStatus(slog.Default(), collector.status(time.Now())) }()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	var nextPolicy, nextSend time.Time
@@ -74,11 +93,14 @@ func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordi
 				}
 				if err == nil {
 					collector.policy(response.Msg, time.Now())
+					persistence.acceptPolicy(collector, time.Now())
 					break
 				}
 				collector.policyFailed()
 				if terminalFlowError(err) {
-					collector.stop()
+					if persistence.purge(collector) != nil {
+						return
+					}
 					break
 				}
 			}
@@ -87,6 +109,13 @@ func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordi
 		for range 16 {
 			window, version := collector.next(time.Now())
 			if window == nil || time.Now().Before(nextSend) {
+				break
+			}
+			if persistence.checkpoint(collector, time.Now()) != nil {
+				return
+			}
+			current, currentVersion := collector.next(time.Now())
+			if current == nil || currentVersion != version || current.GetWindowId() != window.GetWindowId() {
 				break
 			}
 			acknowledged := false
@@ -102,11 +131,16 @@ func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordi
 				}
 				if err == nil && response.Msg.GetWindowId() == window.GetWindowId() {
 					collector.acknowledge(window.GetWindowId(), version)
+					if persistence.checkpoint(collector, time.Now()) != nil {
+						return
+					}
 					acknowledged = true
 					break
 				}
 				if terminalFlowError(err) {
-					collector.stop()
+					if persistence.purge(collector) != nil {
+						return
+					}
 					nextPolicy = time.Time{}
 					break
 				}
@@ -118,6 +152,9 @@ func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordi
 			}
 			delay = time.Second
 			nextSend = time.Time{}
+		}
+		if persistence.checkpoint(collector, time.Now()) != nil {
+			return
 		}
 		if !time.Now().Before(nextStatus) {
 			status := collector.status(time.Now())

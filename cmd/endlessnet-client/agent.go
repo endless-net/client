@@ -419,6 +419,7 @@ func cmdAgent(args []string) error {
 		}
 		stored := configStore.Read()
 		wireGuard, err := client.NewWireGuardEngine(client.WireGuardEngineOptions{
+			FlowSpoolPath:  *configPath + ".flow-queue",
 			Interface:      firstNonEmpty(*wgInterface, "endlessnet"),
 			ListenPort:     *listenPort,
 			MTU:            stored.WireGuardMTU,

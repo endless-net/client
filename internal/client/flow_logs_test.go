@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -78,6 +79,7 @@ func TestFlowCollectorCapacityAndUnsupportedPackets(t *testing.T) {
 }
 
 type flowRuntimeServer struct {
+	spool *flowSpool
 	coordinatorapiconnect.UnimplementedFlowLogServiceHandler
 	reports chan *coordinatorapi.ReportFlowLogRequest
 	count   int
@@ -90,6 +92,12 @@ func (s *flowRuntimeServer) GetFlowLogPolicy(_ context.Context, r *connect.Reque
 	return connect.NewResponse(flowPolicy(time.Now(), 7)), nil
 }
 func (s *flowRuntimeServer) ReportFlowLog(_ context.Context, r *connect.Request[coordinatorapi.ReportFlowLogRequest]) (*connect.Response[coordinatorapi.ReportFlowLogResponse], error) {
+	if s.spool != nil {
+		version, _, windows, err := s.spool.load(time.Now())
+		if err != nil || version != r.Msg.GetConsentVersion() || len(windows) != 1 || !proto.Equal(windows[0], r.Msg.GetWindow()) {
+			return nil, errors.New("report preceded durable checkpoint")
+		}
+	}
 	s.reports <- proto.Clone(r.Msg).(*coordinatorapi.ReportFlowLogRequest)
 	s.count++
 	if s.count == 1 {
@@ -99,7 +107,11 @@ func (s *flowRuntimeServer) ReportFlowLog(_ context.Context, r *connect.Request[
 }
 
 func TestTUNFlowProducerRetriesThroughTLSProtobuf(t *testing.T) {
-	service := &flowRuntimeServer{reports: make(chan *coordinatorapi.ReportFlowLogRequest, 4)}
+	spool, err := newFlowSpool(filepath.Join(t.TempDir(), "queue"), "credential", "node")
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &flowRuntimeServer{reports: make(chan *coordinatorapi.ReportFlowLogRequest, 4), spool: spool}
 	_, handler := coordinatorapiconnect.NewFlowLogServiceHandler(service)
 	endpoint := httptest.NewTLSServer(handler)
 	defer endpoint.Close()
@@ -118,7 +130,7 @@ func TestTUNFlowProducerRetriesThroughTLSProtobuf(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runFlowLogs(ctx, c, []coordinatorapiconnect.FlowLogServiceClient{client}, "node", "credential")
+		runFlowLogs(ctx, c, []coordinatorapiconnect.FlowLogServiceClient{client}, "node", "credential", spool)
 	}()
 	defer func() { cancel(); <-done }()
 	var first *coordinatorapi.ReportFlowLogRequest
@@ -136,5 +148,30 @@ func TestTUNFlowProducerRetriesThroughTLSProtobuf(t *testing.T) {
 	}
 	if first.GetConsentVersion() != 7 || first.GetNodeId() != "node" || first.GetWindow().GetPackets() != 1 || first.GetWindow().GetBytes() != uint64(len(packet)) {
 		t.Fatalf("invalid TUN aggregate: %v", first)
+	}
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for c.status(time.Now()).AcknowledgedWindows != 1 {
+		select {
+		case <-ctx.Done():
+			t.Fatal("acknowledgement was not committed locally")
+		case <-ticker.C:
+		}
+	}
+	// ACK is removed from memory before the atomic checkpoint finishes; wait for
+	// the durable queue to become empty without stopping the worker prematurely.
+	for {
+		_, _, windows, err := spool.load(time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(windows) == 0 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("acknowledgement was not persisted")
+		case <-ticker.C:
+		}
 	}
 }

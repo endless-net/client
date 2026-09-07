@@ -18,6 +18,7 @@ type flowKey struct {
 	port                                    uint32
 }
 type flowCollector struct {
+	storageFailures, corruptSpools, restoredWindows                     uint64
 	mu                                                                  sync.Mutex
 	version                                                             uint64
 	notBefore, expires                                                  time.Time
