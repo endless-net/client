@@ -31,7 +31,7 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 	var engines [2]*WireGuardEngine
 	tuns := [2]*tuntest.ChannelTUN{tuntest.NewChannelTUN(), tuntest.NewChannelTUN()}
 	acceptedCount, withdrawnCount := 0, 0
-	expiredCount := 0
+	expiredCount, replacedCount := 0, 0
 	var lastHashes [2]string
 	for {
 		var input struct {
@@ -39,6 +39,7 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			Trust         clientapi.SigningTrustBundle
 			Accepted      bool
 			WaitForExpiry bool
+			SourceDeleted bool
 			RelayCAPEM    []byte
 		}
 		if err := decoder.Decode(&input); errors.Is(err, io.EOF) {
@@ -46,7 +47,11 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 		} else if err != nil {
 			t.Fatal("invalid backend snapshot handoff", err)
 		}
-		if len(input.Maps) != 2 || input.Maps[0].Node.ID != "machine" || input.Maps[1].Node.ID != "recipient-node" {
+		mapCount := 2
+		if input.SourceDeleted {
+			mapCount = 3 // retained source, updated recipient, newly registered source
+		}
+		if len(input.Maps) != mapCount || input.Maps[0].Node.ID != "machine" || input.Maps[1].Node.ID != "recipient-node" {
 			t.Fatal("unexpected backend endpoint pair")
 		}
 		var relayTLS *tls.Config
@@ -57,16 +62,16 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			}
 			relayTLS = NewRelayTLSConfig(roots)
 		}
-		for i, networkMap := range input.Maps {
+		for i, networkMap := range input.Maps[:2] {
 			if err := clientapi.VerifyNetworkMapSignatureWithTrustBundle(networkMap, input.Trust); err != nil {
 				t.Fatal("backend signature rejected", err)
 			}
 			if networkMap.Node.PublicKey != testWireGuardEnginePublicKey(byte(i+1)) {
 				t.Fatal("backend map does not bind the test engine key")
 			}
-			if input.WaitForExpiry {
+			if input.WaitForExpiry || input.SourceDeleted && i == 0 {
 				if engines[i] == nil || lastHashes[i] != networkMap.MapSignature.PayloadHash {
-					t.Fatal("expiry probe must retain the configured signed map")
+					t.Fatal("stale-map probe must retain the configured signed map")
 				}
 				continue
 			}
@@ -160,7 +165,20 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			binary.BigEndian.PutUint16(p[10:12], sharingChecksum(p[:20]))
 			return p
 		}
-		if input.WaitForExpiry {
+		if input.SourceDeleted {
+			if input.Accepted || input.WaitForExpiry || acceptedCount != 3 || len(input.Maps[0].Network.SharePeerGrants) != 1 || len(input.Maps[1].Network.SharePeerGrants) != 0 {
+				t.Fatal("source deletion must follow a distinct active sharing grant")
+			}
+			exchange(0, packet(0, 24), false)
+			exchange(1, packet(1, 16), false)
+			for _, protocol := range []byte{17, 1} {
+				exchange(0, datagram(0, protocol), false)
+				exchange(1, datagram(1, protocol), false)
+			}
+			verifyLiveReplacementEngine(t, input.Maps[2], input.Maps[1], input.Trust, relayTLS, tuns[1])
+			replacedCount++
+			t.Log("deleted source retained its old key/map but lost established traffic; replacement engine inherited no access")
+		} else if input.WaitForExpiry {
 			if !input.Accepted || acceptedCount == 0 || len(input.Maps[0].Network.SharePeerGrants) != 1 || len(input.Maps[1].Network.SharePeerGrants) != 1 {
 				t.Fatal("expiry probe requires an established sharing pair")
 			}
@@ -210,10 +228,57 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 		}
 		fmt.Println("ENDLESSNET_SHARING_ENGINE_OK")
 	}
-	if acceptedCount != 2 || withdrawnCount != 2 {
+	wantAccepted := 2
+	if os.Getenv("CLIENT_SHARING_EXPECT_REPLACEMENT") == "1" {
+		wantAccepted = 3
+		if replacedCount != 1 {
+			t.Fatal("required backend source replacement probe was omitted")
+		}
+	}
+	if acceptedCount != wantAccepted || withdrawnCount != 2 {
 		t.Fatal("live user/group engine scenario was incomplete", acceptedCount, withdrawnCount)
 	}
 	if os.Getenv("CLIENT_SHARING_EXPECT_EXPIRY") == "1" && expiredCount != 1 {
 		t.Fatal("required backend expiry probe was omitted")
+	}
+}
+
+func verifyLiveReplacementEngine(t *testing.T, replacement, recipient clientapi.RegisterNodeResponse, trust clientapi.SigningTrustBundle, relayTLS *tls.Config, recipientTUN *tuntest.ChannelTUN) {
+	t.Helper()
+	if err := clientapi.VerifyNetworkMapSignatureWithTrustBundle(replacement, trust); err != nil {
+		t.Fatal("replacement map signature rejected", err)
+	}
+	if replacement.Node.ID == "machine" || replacement.Node.PublicKey != testWireGuardEnginePublicKey(3) || len(replacement.Peers) != 0 || len(replacement.Network.SharePeerGrants) != 0 {
+		t.Fatal("new source inherited the deleted source binding or sharing")
+	}
+	device := tuntest.NewChannelTUN()
+	engine, err := NewWireGuardEngine(WireGuardEngineOptions{Interface: "sharing-new", RelayTLSConfig: relayTLS, router: &testWireGuardEngineRouter{}, tunFactory: func(string, int) (tun.Device, error) { return device.TUN(), nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = engine.Close() }()
+	cfg := Config{NodeID: replacement.Node.ID, NetworkID: replacement.Network.ID, PrivateKey: testWireGuardEngineKey(3), MapSigningTrust: &trust, NodeCredential: "isolated-test"}
+	if _, err := engine.Configure(t.Context(), cfg, replacement); err != nil {
+		t.Fatal("replacement engine rejected backend map", err)
+	}
+	for _, protocol := range []byte{6, 17, 1} {
+		packet := applicationTCPPacket(replacement.Node.AssignedIP, recipient.Node.AssignedIP, 443, 50123)
+		if protocol != 6 {
+			packet = sharingDatagram(protocol, true)
+			copy(packet[12:16], net.ParseIP(replacement.Node.AssignedIP).To4())
+			copy(packet[16:20], net.ParseIP(recipient.Node.AssignedIP).To4())
+			packet[10], packet[11] = 0, 0
+			binary.BigEndian.PutUint16(packet[10:12], sharingChecksum(packet[:20]))
+		}
+		select {
+		case device.Outbound <- packet:
+		case <-time.After(3 * time.Second):
+			t.Fatal("replacement engine did not consume packet")
+		}
+		select {
+		case <-recipientTUN.Inbound:
+			t.Fatal("replacement inherited deleted source access")
+		case <-time.After(500 * time.Millisecond):
+		}
 	}
 }
