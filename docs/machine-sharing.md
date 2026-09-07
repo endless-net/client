@@ -8,10 +8,12 @@ WireGuard. A matching node ID from a different network is discarded.
 The encrypted engine test now runs the same scenario through direct UDP and
 the product TLS Relay dataplane: recipient-only TCP/UDP/ICMP initiation,
 responses, lease expiry, renewed access, actual WireGuard key rotation and
-withdrawal. Relay authorization in this test is a fixture. These additions
-require the non-short CI result; they do not prove the full Management/TOTP
-and Coordinator authorization chain. Earlier evidence below retains its
-original, narrower scope.
+withdrawal. Relay authorization in this test is a fixture. At `7dd718c`,
+[Management job 101827237477](https://github.com/endless-net/management/actions/runs/34149054642/job/101827237477)
+passed both non-short cases: direct 12.09 s, Relay 12.12 s. Client's own
+CI stopped before tests because `PRIVATE_MODULES_READ_TOKEN` was absent.
+These results do not prove the full Management/TOTP and Coordinator
+authorization chain. Earlier evidence below retains its original, narrower scope.
 
 The managed WireGuard engine pins ClientAPI `v1.11.0` and consumes signed
 `SharePeerGrant` permissions. The TUN wrapper checks sharing on plaintext reads
