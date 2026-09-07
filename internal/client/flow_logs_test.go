@@ -9,14 +9,14 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	coordinatorapi "github.com/endless-net/coordinator/coordinatorapi/v1"
-	"github.com/endless-net/coordinator/coordinatorapi/v1/coordinatorapiconnect"
+	clientrpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
+	"github.com/endless-net/client-api/clientapi/v1/clientrpc/clientrpcconnect"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func flowPolicy(now time.Time, version uint64) *coordinatorapi.GetFlowLogPolicyResponse {
-	return &coordinatorapi.GetFlowLogPolicyResponse{ConsentVersion: version, CollectionNotBefore: timestamppb.New(now.Add(-time.Minute)), CollectionExpiresAt: timestamppb.New(now.Add(50 * time.Second))}
+func flowPolicy(now time.Time, version uint64) *clientrpc.GetFlowLogPolicyResponse {
+	return &clientrpc.GetFlowLogPolicyResponse{ConsentVersion: version, CollectionNotBefore: timestamppb.New(now.Add(-time.Minute)), CollectionExpiresAt: timestamppb.New(now.Add(50 * time.Second))}
 }
 
 func TestFlowCollectorConsentBoundsAndImmutableRetry(t *testing.T) {
@@ -80,30 +80,30 @@ func TestFlowCollectorCapacityAndUnsupportedPackets(t *testing.T) {
 
 type flowRuntimeServer struct {
 	spool *flowSpool
-	coordinatorapiconnect.UnimplementedFlowLogServiceHandler
-	reports chan *coordinatorapi.ReportFlowLogRequest
+	clientrpcconnect.UnimplementedFlowLogServiceHandler
+	reports chan *clientrpc.ReportFlowLogRequest
 	count   int
 }
 
-func (s *flowRuntimeServer) GetFlowLogPolicy(_ context.Context, r *connect.Request[coordinatorapi.GetFlowLogPolicyRequest]) (*connect.Response[coordinatorapi.GetFlowLogPolicyResponse], error) {
+func (s *flowRuntimeServer) GetFlowLogPolicy(_ context.Context, r *connect.Request[clientrpc.GetFlowLogPolicyRequest]) (*connect.Response[clientrpc.GetFlowLogPolicyResponse], error) {
 	if r.Header().Get("Authorization") != "Bearer credential" {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("credential"))
 	}
 	return connect.NewResponse(flowPolicy(time.Now(), 7)), nil
 }
-func (s *flowRuntimeServer) ReportFlowLog(_ context.Context, r *connect.Request[coordinatorapi.ReportFlowLogRequest]) (*connect.Response[coordinatorapi.ReportFlowLogResponse], error) {
+func (s *flowRuntimeServer) ReportFlowLog(_ context.Context, r *connect.Request[clientrpc.ReportFlowLogRequest]) (*connect.Response[clientrpc.ReportFlowLogResponse], error) {
 	if s.spool != nil {
 		version, _, windows, err := s.spool.load(time.Now())
 		if err != nil || version != r.Msg.GetConsentVersion() || len(windows) != 1 || !proto.Equal(windows[0], r.Msg.GetWindow()) {
 			return nil, errors.New("report preceded durable checkpoint")
 		}
 	}
-	s.reports <- proto.Clone(r.Msg).(*coordinatorapi.ReportFlowLogRequest)
+	s.reports <- proto.Clone(r.Msg).(*clientrpc.ReportFlowLogRequest)
 	s.count++
 	if s.count == 1 {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("temporary outage"))
 	}
-	return connect.NewResponse(&coordinatorapi.ReportFlowLogResponse{WindowId: r.Msg.GetWindow().GetWindowId()}), nil
+	return connect.NewResponse(&clientrpc.ReportFlowLogResponse{WindowId: r.Msg.GetWindow().GetWindowId()}), nil
 }
 
 func TestTUNFlowProducerRetriesThroughTLSProtobuf(t *testing.T) {
@@ -111,11 +111,11 @@ func TestTUNFlowProducerRetriesThroughTLSProtobuf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := &flowRuntimeServer{reports: make(chan *coordinatorapi.ReportFlowLogRequest, 4), spool: spool}
-	_, handler := coordinatorapiconnect.NewFlowLogServiceHandler(service)
+	service := &flowRuntimeServer{reports: make(chan *clientrpc.ReportFlowLogRequest, 4), spool: spool}
+	_, handler := clientrpcconnect.NewFlowLogServiceHandler(service)
 	endpoint := httptest.NewTLSServer(handler)
 	defer endpoint.Close()
-	client := coordinatorapiconnect.NewFlowLogServiceClient(endpoint.Client(), endpoint.URL)
+	client := clientrpcconnect.NewFlowLogServiceClient(endpoint.Client(), endpoint.URL)
 	c := &flowCollector{}
 	now := time.Now()
 	c.policy(flowPolicy(now, 7), now)
@@ -130,10 +130,10 @@ func TestTUNFlowProducerRetriesThroughTLSProtobuf(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runFlowLogs(ctx, c, []coordinatorapiconnect.FlowLogServiceClient{client}, "node", "credential", spool)
+		runFlowLogs(ctx, c, []clientrpcconnect.FlowLogServiceClient{client}, "node", "credential", spool)
 	}()
 	defer func() { cancel(); <-done }()
-	var first *coordinatorapi.ReportFlowLogRequest
+	var first *clientrpc.ReportFlowLogRequest
 	for i := 0; i < 2; i++ {
 		select {
 		case request := <-service.reports:

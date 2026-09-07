@@ -451,7 +451,7 @@ func cmdNetwork(args []string) error {
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		api, err := loadManagementRouteAPI(*configPath)
+		api, err := loadUserRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
@@ -466,35 +466,6 @@ func cmdNetwork(args []string) error {
 			}
 			fmt.Printf("%s\t%s\t%s\t%s\n", route.GetNodeId(), route.GetHostname(), route.GetCidr(), status)
 		}
-	case "approve-route", "revoke-route":
-		approved := args[0] == "approve-route"
-		fs := flag.NewFlagSet("network "+args[0], flag.ExitOnError)
-		network := fs.String("network", defaultNetworkName, "network name or ID")
-		nodeID := fs.String("node", "", "node ID advertising the route")
-		cidr := fs.String("cidr", "", "advertised route CIDR")
-		configPath := fs.String("config", "", "client config path")
-		if err := fs.Parse(args[1:]); err != nil {
-			return err
-		}
-		if strings.TrimSpace(*nodeID) == "" {
-			return fmt.Errorf("--node is required")
-		}
-		if strings.TrimSpace(*cidr) == "" {
-			return fmt.Errorf("--cidr is required")
-		}
-		api, err := loadManagementRouteAPI(*configPath)
-		if err != nil {
-			return err
-		}
-		response, err := api.SetAdvertisedRouteApproval(context.Background(), resolveNetworkFlag(*network), *nodeID, *cidr, approved)
-		if err != nil {
-			return err
-		}
-		status := "pending"
-		if response.GetRoute().GetApproved() {
-			status = "approved"
-		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%d\n", response.GetRoute().GetNodeId(), response.GetRoute().GetHostname(), response.GetRoute().GetCidr(), status, response.GetNetwork().GetRevision())
 	default:
 		return fmt.Errorf("unknown network command %q", args[0])
 	}
@@ -547,7 +518,7 @@ func cmdBilling(args []string) error {
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		api, err := loadManagementRouteAPI(*configPath)
+		api, err := loadUserRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
@@ -580,7 +551,7 @@ func cmdBilling(args []string) error {
 		if err != nil {
 			return err
 		}
-		api, err := loadManagementRouteAPI(*configPath)
+		api, err := loadUserRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
@@ -626,7 +597,7 @@ func cmdBilling(args []string) error {
 		if err != nil {
 			return err
 		}
-		api, err := loadManagementRouteAPI(*configPath)
+		api, err := loadUserRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
@@ -675,7 +646,7 @@ func cmdBilling(args []string) error {
 		if err != nil {
 			return err
 		}
-		api, err := loadManagementRouteAPI(*configPath)
+		api, err := loadUserRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
@@ -703,7 +674,7 @@ func cmdBilling(args []string) error {
 		if err != nil {
 			return err
 		}
-		api, err := loadManagementRouteAPI(*configPath)
+		api, err := loadUserRouteAPI(*configPath)
 		if err != nil {
 			return err
 		}
@@ -862,14 +833,15 @@ func cmdUp(args []string) error {
 		return err
 	}
 	effectiveIdempotencyKey := strings.TrimSpace(*idempotencyKey)
-	if browserEnrollment && effectiveIdempotencyKey == "" {
-		effectiveIdempotencyKey, err = clientapi.NewCreateIdempotencyKey()
+	if effectiveIdempotencyKey == "" {
+		effectiveIdempotencyKey, err = clientapi.NewRegistrationIdempotencyID()
 		if err != nil {
 			return err
 		}
 	}
 	req := clientapi.RegisterNodeRequest{
-		IdempotencyKey:    effectiveIdempotencyKey,
+		SchemaVersion:     clientapi.SchemaVersion,
+		IdempotencyID:     effectiveIdempotencyKey,
 		Hostname:          *hostname,
 		ClientVersion:     strings.TrimSpace(version),
 		IdentityPublicKey: identityPublicKey,
@@ -883,6 +855,10 @@ func cmdUp(args []string) error {
 		req.JoinToken = strings.TrimSpace(effectiveJoinToken)
 	} else if strings.TrimSpace(cfg.NodeCredential) != "" && strings.TrimSpace(cfg.Token) == "" {
 		req.NodeCredential = cfg.NodeCredential
+		req.NetworkID = cfg.NetworkID
+		if cfg.CachedMap != nil {
+			req.RegistrationBinding = cfg.CachedMap.RegistrationBinding
+		}
 	} else if strings.TrimSpace(cfg.Token) == "" {
 		browserEnrollment = true
 	} else {
@@ -1358,16 +1334,12 @@ func cmdLogout(args []string) error {
 	}
 	api := apiFromConfig(cfg)
 	if strings.TrimSpace(cfg.NodeID) != "" {
-		if err := revokeNodeV2(context.Background(), api, cfg.NodeID); err != nil {
+		if err := revokeNode(context.Background(), api, cfg.NodeID); err != nil {
 			return err
 		}
 	}
 	if strings.TrimSpace(cfg.Token) != "" {
-		managementAPI, err := managementAPIFromConfig(cfg)
-		if err != nil {
-			return err
-		}
-		if err := managementAPI.Logout(); err != nil {
+		if err := api.Logout(); err != nil {
 			return remoteCleanupError{cause: err}
 		}
 	}
@@ -1504,6 +1476,9 @@ func applyMapSigningTrustOption(cfg *client.Config, trustFile string) error {
 }
 
 func validateRegistrationResponseBinding(cfg client.Config, req clientapi.RegisterNodeRequest, response clientapi.RegisterNodeResponse, publicKey, identityPublicKey, deviceFingerprint string) error {
+	if response.SchemaVersion != clientapi.SchemaVersion || response.IdempotencyID != req.IdempotencyID {
+		return errors.New("registration response schema or idempotency ID does not match request")
+	}
 	if err := validateNetworkMapBoundary(response); err != nil {
 		return err
 	}
@@ -3457,16 +3432,7 @@ func apiFromConfig(cfg client.Config) *clientapi.API {
 	return clientapi.NewAPIWithNodeCredentialURLs(cfg.ControlURLs(), cfg.Token, cfg.NodeCredential)
 }
 
-func managementAPIFromConfig(cfg client.Config) (*clientapi.API, error) {
-	managementURL := strings.TrimRight(strings.TrimSpace(cfg.ManagementURL), "/")
-	parsed, err := url.Parse(managementURL)
-	if err != nil || !isSecureOriginURL(parsed) {
-		return nil, errors.New("management_url is required and must be a secure origin; run endlessnet-client login")
-	}
-	return clientapi.NewAPI(managementURL+"/api/v1", cfg.Token), nil
-}
-
-func resolveBillingAccount(ctx context.Context, cfg client.Config, api *managementRouteAPI, explicit string) (string, error) {
+func resolveBillingAccount(ctx context.Context, cfg client.Config, api *userRouteAPI, explicit string) (string, error) {
 	if strings.TrimSpace(explicit) != "" {
 		return strings.TrimSpace(explicit), nil
 	}
@@ -3528,7 +3494,7 @@ func (m *multiFlag) Set(value string) error {
 
 func usage() {
 	fmt.Println("usage: endlessnet-client login|logout|keygen|version|network|join-token|billing|nodes|up|sync|export|agent|service|state|down|dns|status|relay-check|path-check|ping|netcheck|diagnostics|relay-bridge")
-	fmt.Println("network subcommands: create, list, routes, approve-route, revoke-route")
+	fmt.Println("network subcommands: create, list, routes")
 	fmt.Println("billing subcommands: plans, accounts, summary, checkout, invoices")
 	fmt.Println("dns subcommands: resolve, serve")
 }

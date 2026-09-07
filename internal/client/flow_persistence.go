@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	coordinatorapi "github.com/endless-net/coordinator/coordinatorapi/v1"
+	clientrpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -14,11 +14,11 @@ type flowPersistence struct {
 	spool       *flowSpool
 	version     uint64
 	expires     time.Time
-	quarantine  []*coordinatorapi.FlowWindow
+	quarantine  []*clientrpc.FlowWindow
 	ready       bool
 	lastVersion uint64
 	lastExpires time.Time
-	lastWindows []*coordinatorapi.FlowWindow
+	lastWindows []*clientrpc.FlowWindow
 	saved       bool
 }
 
@@ -92,9 +92,9 @@ func (p *flowPersistence) checkpoint(c *flowCollector, now time.Time) error {
 		c.clearLocked()
 	}
 	version, expires := c.version, c.expires
-	windows := make([]*coordinatorapi.FlowWindow, 0, len(c.pending))
+	windows := make([]*clientrpc.FlowWindow, 0, len(c.pending))
 	for _, window := range c.pending {
-		windows = append(windows, proto.Clone(window).(*coordinatorapi.FlowWindow))
+		windows = append(windows, proto.Clone(window).(*clientrpc.FlowWindow))
 	}
 	c.mu.Unlock()
 	unchanged := p.saved && version == p.lastVersion && expires.Equal(p.lastExpires) && len(windows) == len(p.lastWindows)

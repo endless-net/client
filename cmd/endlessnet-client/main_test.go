@@ -656,7 +656,7 @@ func TestWaitForBrowserEnrollmentCompletesApprovedSavedRequestWithoutWaiting(t *
 		t.Fatal(err)
 	}
 	savedRequest := clientapi.RegisterNodeRequest{
-		IdempotencyKey:    "saved-idempotency-key",
+		IdempotencyID:     "saved-idempotency-key",
 		Hostname:          "node-a",
 		IdentityPublicKey: identityPublicKey,
 		PublicKey:         testWireGuardPublicKey("saved-browser-request"),
@@ -673,12 +673,12 @@ func TestWaitForBrowserEnrollmentCompletesApprovedSavedRequestWithoutWaiting(t *
 		EnrollmentRequest:   &savedRequest,
 	}
 	req := savedRequest
-	req.IdempotencyKey = "new-idempotency-key-that-must-not-replace-the-saved-request"
+	req.IdempotencyID = "new-idempotency-key-that-must-not-replace-the-saved-request"
 	response, err := waitForBrowserEnrollmentApproval(clientapi.NewAPI(server.URL, ""), &cfg, configPath, &req, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.Node.ID != "node-1" || statusCalls != 1 || completeCalls != 1 || req.IdempotencyKey != savedRequest.IdempotencyKey {
+	if response.Node.ID != "node-1" || statusCalls != 1 || completeCalls != 1 || req.IdempotencyID != savedRequest.IdempotencyID {
 		t.Fatalf("approved completion response=%#v status_calls=%d complete_calls=%d", response, statusCalls, completeCalls)
 	}
 }
@@ -730,7 +730,7 @@ func TestWaitForBrowserEnrollmentReplacesExpiredSavedRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	savedRequest := clientapi.RegisterNodeRequest{
-		IdempotencyKey:    "saved-idempotency-key",
+		IdempotencyID:     "saved-idempotency-key",
 		Hostname:          "node-a",
 		IdentityPublicKey: identityPublicKey,
 		PublicKey:         testWireGuardPublicKey("expired-browser-request"),
@@ -803,7 +803,7 @@ func TestWaitForBrowserEnrollmentReplacesMissingSavedRequest(t *testing.T) {
 	defer server.Close()
 
 	configPath := filepath.Join(t.TempDir(), "client.json")
-	req := clientapi.RegisterNodeRequest{Hostname: "node-a", IdempotencyKey: "new-idempotency-key"}
+	req := clientapi.RegisterNodeRequest{Hostname: "node-a", IdempotencyID: "new-idempotency-key"}
 	cfg := client.Config{
 		EnrollmentRequestID: "request-1",
 		EnrollmentPollToken: oldPollToken,
@@ -830,7 +830,7 @@ func TestWaitForBrowserEnrollmentReplacesMissingSavedRequest(t *testing.T) {
 	if cfg.EnrollmentRequestID != "request-2" || cfg.EnrollmentPollToken != newPollToken || cfg.ApprovalURL != newURL {
 		t.Fatalf("replacement enrollment state = %#v", cfg)
 	}
-	if cfg.EnrollmentRequest == nil || cfg.EnrollmentRequest.IdempotencyKey != req.IdempotencyKey {
+	if cfg.EnrollmentRequest == nil || cfg.EnrollmentRequest.IdempotencyID != req.IdempotencyID {
 		t.Fatalf("replacement enrollment proof = %#v", cfg.EnrollmentRequest)
 	}
 }
@@ -1927,7 +1927,7 @@ func TestCmdUpRejectsPendingEnrollmentBoundToDifferentWireGuardKey(t *testing.T)
 		"--join-token", "enr_pending",
 		"--hostname", "pending-a",
 	})
-	if err == nil || !strings.Contains(err.Error(), "does not match local WireGuard public key") {
+	if err == nil || !strings.Contains(err.Error(), "response node binding does not match request") {
 		t.Fatalf("mismatched pending enrollment error = %v", err)
 	}
 	cfg, loadErr := client.LoadConfig(configPath)
@@ -1954,7 +1954,7 @@ func TestCmdUpRejectsEnrollmentIdentitySubstitutionBeforePersist(t *testing.T) {
 			mutate: func(response *clientapi.RegisterNodeResponse) {
 				response.Node.IdentityPublicKey = "enp_attacker"
 			},
-			want: "does not match local identity public key",
+			want: "response node binding does not match request",
 		},
 		{
 			name:    "pending missing identity key",
@@ -1962,7 +1962,7 @@ func TestCmdUpRejectsEnrollmentIdentitySubstitutionBeforePersist(t *testing.T) {
 			mutate: func(response *clientapi.RegisterNodeResponse) {
 				response.Node.IdentityPublicKey = ""
 			},
-			want: "does not match local identity public key",
+			want: "response node binding does not match request",
 		},
 		{
 			name:    "pending missing fingerprint",
@@ -1970,21 +1970,21 @@ func TestCmdUpRejectsEnrollmentIdentitySubstitutionBeforePersist(t *testing.T) {
 			mutate: func(response *clientapi.RegisterNodeResponse) {
 				response.Node.DeviceFingerprint = ""
 			},
-			want: "does not match local device fingerprint",
+			want: "response node binding does not match request",
 		},
 		{
 			name: "invalid node credential",
 			mutate: func(response *clientapi.RegisterNodeResponse) {
 				response.NodeCredential = "enc_invalid"
 			},
-			want: "invalid registration node credential",
+			want: "node_credential:",
 		},
 		{
 			name: "signed response from another enrollment",
 			mutate: func(response *clientapi.RegisterNodeResponse) {
-				response.RegistrationBinding = "different-signed-request"
+				response.RegistrationBinding = clientapi.RegistrationIdentityProofBinding(clientapi.RegisterNodeRequest{Hostname: "another-node"})
 			},
-			want: "does not match the signed enrollment request",
+			want: "response registration_binding does not match request proof",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -2186,7 +2186,7 @@ func TestAgentIPCEnrollNoTokenReturnsApprovalURL(t *testing.T) {
 				http.Error(w, "join token must not be set", http.StatusBadRequest)
 				return
 			}
-			if strings.TrimSpace(gotReq.IdempotencyKey) == "" {
+			if strings.TrimSpace(gotReq.IdempotencyID) == "" {
 				http.Error(w, "idempotency key is required", http.StatusBadRequest)
 				return
 			}
@@ -2230,6 +2230,8 @@ func TestAgentIPCEnrollNoTokenReturnsApprovalURL(t *testing.T) {
 					AssignedIP:        "100.64.0.2",
 					ApprovalState:     clientapi.NodeApprovalApproved,
 				},
+				SchemaVersion:       clientapi.SchemaVersion,
+				IdempotencyID:       gotReq.IdempotencyID,
 				RegistrationBinding: clientapi.RegistrationIdentityProofBinding(gotReq),
 			}
 			credential, err := clientapi.SignNodeCredential(mapKey, registration.Network.ID, registration.Node.ID, []string{"node:register", "node:map", "node:endpoint", "node:delete"}, time.Now().UTC().Add(time.Hour))
@@ -2492,7 +2494,7 @@ func TestAgentIPCEnrollConnectsTunnel(t *testing.T) {
 		Server:         server.URL,
 		Mode:           "interactive",
 		Hostname:       "node-ipc",
-		IdempotencyKey: "idem-ipc",
+		IdempotencyKey: "idem-ipc-registration",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -2504,7 +2506,7 @@ func TestAgentIPCEnrollConnectsTunnel(t *testing.T) {
 		t.Fatalf("enroll apply = %#v, want success", payload.WireGuardApply)
 	}
 	req, registerCalls := enrollmentSnapshot()
-	if registerCalls != 1 || req.JoinToken != "enr_test" || req.Hostname != "node-ipc" || req.IdempotencyKey != "idem-ipc" || !containsString(req.Tags, "mode:interactive") {
+	if registerCalls != 1 || req.JoinToken != "enr_test" || req.Hostname != "node-ipc" || req.IdempotencyID != "idem-ipc-registration" || !containsString(req.Tags, "mode:interactive") {
 		t.Fatalf("register calls=%d request=%#v", registerCalls, req)
 	}
 	cfg, err := client.LoadConfig(configPath)
@@ -3061,11 +3063,11 @@ func TestCmdLogoutLeavesManualExportAndRemovesAgentState(t *testing.T) {
 	}
 }
 
-func TestCmdLogoutRevokesSessionThroughManagementAPI(t *testing.T) {
+func TestCmdLogoutRevokesSessionThroughClientAPI(t *testing.T) {
 	tmp := t.TempDir()
 	loggedOut := false
-	management := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/auth/logout" {
+	control := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/auth/logout" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 			http.NotFound(w, r)
 			return
@@ -3079,11 +3081,11 @@ func TestCmdLogoutRevokesSessionThroughManagementAPI(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"status":"ok"}`)
 	}))
-	t.Cleanup(management.Close)
+	t.Cleanup(control.Close)
 	configPath := filepath.Join(tmp, "client.json")
 	if err := client.SaveConfig(configPath, client.Config{
-		ControlPlaneURLs: []string{"http://127.0.0.1:18080"},
-		ManagementURL:    management.URL + "/",
+		ControlPlaneURLs: []string{control.URL},
+		ManagementURL:    control.URL + "/",
 		Token:            "session-token",
 	}); err != nil {
 		t.Fatal(err)
@@ -3093,13 +3095,13 @@ func TestCmdLogoutRevokesSessionThroughManagementAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !loggedOut {
-		t.Fatal("logout did not call Management API")
+		t.Fatal("logout did not call Client API")
 	}
 	stored, err := client.LoadConfig(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Token != "" || stored.ActiveAccountID != "" || stored.ManagementURL != management.URL+"/" {
+	if stored.Token != "" || stored.ActiveAccountID != "" || stored.ManagementURL != control.URL+"/" {
 		t.Fatalf("logout retained session state: %#v", stored)
 	}
 	if stored.ConnectionIntent == nil || stored.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected || stored.ConnectionIntent.Reason != "local_logout" {
@@ -4829,6 +4831,8 @@ func testEnrollmentServer(t *testing.T, mapKey ed25519.PrivateKey, expectedToken
 			}
 			response := clientapi.RegisterNodeResponse{
 				Network:             clientapi.Network{ID: "net-1", Name: "default", CIDR: "100.64.0.0/24", Revision: revision},
+				SchemaVersion:       clientapi.SchemaVersion,
+				IdempotencyID:       req.IdempotencyID,
 				RegistrationBinding: clientapi.RegistrationIdentityProofBinding(req),
 				Node: clientapi.Node{
 					ID:                "node-1",
@@ -4907,6 +4911,8 @@ func testPendingEnrollmentServer(t *testing.T, mapKey ed25519.PrivateKey, expect
 			mu.Unlock()
 			response := clientapi.RegisterNodeResponse{
 				Network:             clientapi.Network{ID: "net-pending", Name: "default", CIDR: "100.64.0.0/24", Revision: 1},
+				SchemaVersion:       clientapi.SchemaVersion,
+				IdempotencyID:       req.IdempotencyID,
 				RegistrationBinding: clientapi.RegistrationIdentityProofBinding(req),
 				Node: clientapi.Node{
 					ID:                "node-pending",

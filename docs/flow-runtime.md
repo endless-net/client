@@ -24,7 +24,7 @@ second request deadlines and exponential backoff with jitter capped at 22.5
 seconds. The worker tries configured HTTPS control origins; failed consent or
 authorization stops collection. Plain HTTP is not used for flow metadata.
 
-The pinned [`coordinatorapi/v1.20.0` contract](https://github.com/endless-net/coordinator/blob/main/proto/coordinator/v1/flow.proto)
+The producer-owned [Client API contract, main](https://github.com/endless-net/client-api/blob/main/clientapi/proto/client/v1/client.proto)
 owns RPC DTOs. Coordinator resolves account ownership; the Client sends only
 node identity, consent revision and the flow window.
 

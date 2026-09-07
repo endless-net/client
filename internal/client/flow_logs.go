@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	coordinatorapi "github.com/endless-net/coordinator/coordinatorapi/v1"
+	clientrpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -22,8 +22,8 @@ type flowCollector struct {
 	mu                                                                  sync.Mutex
 	version                                                             uint64
 	notBefore, expires                                                  time.Time
-	active                                                              map[flowKey]*coordinatorapi.FlowWindow
-	pending                                                             []*coordinatorapi.FlowWindow
+	active                                                              map[flowKey]*clientrpc.FlowWindow
+	pending                                                             []*clientrpc.FlowWindow
 	droppedPackets                                                      uint64
 	droppedWindows                                                      uint64
 	unsupportedPackets, capacityDrops, clockDrops                       uint64
@@ -46,7 +46,7 @@ func (c *flowCollector) stop() {
 	c.clearLocked()
 }
 
-func (c *flowCollector) policy(policy *coordinatorapi.GetFlowLogPolicyResponse, now time.Time) {
+func (c *flowCollector) policy(policy *clientrpc.GetFlowLogPolicyResponse, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if policy.GetConsentVersion() == 0 || policy.GetCollectionNotBefore() == nil || !policy.GetCollectionNotBefore().IsValid() || policy.GetCollectionExpiresAt() == nil || !policy.GetCollectionExpiresAt().IsValid() || !policy.GetCollectionExpiresAt().AsTime().After(now) || policy.GetCollectionExpiresAt().AsTime().After(now.Add(time.Minute)) {
@@ -116,9 +116,9 @@ func (c *flowCollector) observe(raw []byte, allowed bool, now time.Time) {
 			c.capacityDrops++
 			return
 		}
-		window = &coordinatorapi.FlowWindow{WindowId: rand.Text(), Source: key.source, Destination: key.destination, DestinationPort: key.port, Protocol: key.protocol, Decision: key.decision, WindowStart: timestamppb.New(now)}
+		window = &clientrpc.FlowWindow{WindowId: rand.Text(), Source: key.source, Destination: key.destination, DestinationPort: key.port, Protocol: key.protocol, Decision: key.decision, WindowStart: timestamppb.New(now)}
 		if c.active == nil {
-			c.active = make(map[flowKey]*coordinatorapi.FlowWindow)
+			c.active = make(map[flowKey]*clientrpc.FlowWindow)
 		}
 		c.active[key] = window
 	}
@@ -131,7 +131,7 @@ func (c *flowCollector) observe(raw []byte, allowed bool, now time.Time) {
 	window.WindowEnd = timestamppb.New(now)
 }
 
-func (c *flowCollector) next(now time.Time) (*coordinatorapi.FlowWindow, uint64) {
+func (c *flowCollector) next(now time.Time) (*clientrpc.FlowWindow, uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !now.Before(c.expires) {
@@ -147,7 +147,7 @@ func (c *flowCollector) next(now time.Time) (*coordinatorapi.FlowWindow, uint64)
 	if len(c.pending) == 0 {
 		return nil, c.version
 	}
-	return proto.Clone(c.pending[0]).(*coordinatorapi.FlowWindow), c.version
+	return proto.Clone(c.pending[0]).(*clientrpc.FlowWindow), c.version
 }
 func (c *flowCollector) acknowledge(id string, version uint64) {
 	c.mu.Lock()

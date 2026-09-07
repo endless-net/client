@@ -12,20 +12,20 @@ import (
 
 	"connectrpc.com/connect"
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
+	clientrpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
+	"github.com/endless-net/client-api/clientapi/v1/clientrpc/clientrpcconnect"
 	"github.com/endless-net/client/internal/client"
-	managementapi "github.com/endless-net/management/managementapi/v1"
-	"github.com/endless-net/management/managementapi/v1/managementapiconnect"
 )
 
-const managementRoutePageSize = 200
+const userRoutePageSize = 200
 
-type managementRouteAPI struct {
-	client    managementapiconnect.ManagementAdminServiceClient
+type userRouteAPI struct {
+	client    clientrpcconnect.UserServiceClient
 	token     string
 	accountID string
 }
 
-func loadManagementRouteAPI(configPath string) (*managementRouteAPI, error) {
+func loadUserRouteAPI(configPath string) (*userRouteAPI, error) {
 	cfg, err := client.LoadConfig(configPath)
 	if err != nil {
 		return nil, err
@@ -42,28 +42,28 @@ func loadManagementRouteAPI(configPath string) (*managementRouteAPI, error) {
 	if err != nil || !isSecureOriginURL(parsed) {
 		return nil, errors.New("control URL must be a secure origin; run endlessnet-client login")
 	}
-	return &managementRouteAPI{
-		client: managementapiconnect.NewManagementAdminServiceClient(
+	return &userRouteAPI{
+		client: clientrpcconnect.NewUserServiceClient(
 			clientapi.NewControlPlaneHTTPClient(15*time.Second, nil),
-			controlURL+"/api/v1",
+			controlURL,
 		),
 		token:     cfg.Token,
 		accountID: strings.TrimSpace(cfg.ActiveAccountID),
 	}, nil
 }
 
-func (api *managementRouteAPI) ListAdvertisedRoutes(ctx context.Context, networkRef string) ([]*managementapi.AdvertisedRoute, error) {
+func (api *userRouteAPI) ListAdvertisedRoutes(ctx context.Context, networkRef string) ([]*clientrpc.AdvertisedRoute, error) {
 	networkID, err := api.resolveNetworkID(ctx, networkRef)
 	if err != nil {
 		return nil, err
 	}
-	routes := make([]*managementapi.AdvertisedRoute, 0)
+	routes := make([]*clientrpc.AdvertisedRoute, 0)
 	seen := make(map[string]bool)
 	token := ""
 	for {
-		request := connect.NewRequest(&managementapi.ListAdvertisedRoutesRequest{
+		request := connect.NewRequest(&clientrpc.ListAdvertisedRoutesRequest{
 			NetworkId: networkID,
-			Page:      &managementapi.PageRequest{PageSize: managementRoutePageSize, PageToken: token},
+			Page:      &clientrpc.PageRequest{PageSize: userRoutePageSize, PageToken: token},
 		})
 		api.authorize(request.Header())
 		response, err := api.client.ListAdvertisedRoutes(ctx, request)
@@ -82,8 +82,8 @@ func (api *managementRouteAPI) ListAdvertisedRoutes(ctx context.Context, network
 	}
 }
 
-func (api *managementRouteAPI) ListBillingPlans(ctx context.Context) ([]*managementapi.Plan, error) {
-	request := connect.NewRequest(&managementapi.ListBillingPlansRequest{})
+func (api *userRouteAPI) ListBillingPlans(ctx context.Context) ([]*clientrpc.Plan, error) {
+	request := connect.NewRequest(&clientrpc.ListBillingPlansRequest{})
 	api.authorize(request.Header())
 	response, err := api.client.ListBillingPlans(ctx, request)
 	if err != nil {
@@ -92,12 +92,12 @@ func (api *managementRouteAPI) ListBillingPlans(ctx context.Context) ([]*managem
 	return response.Msg.GetPlans(), nil
 }
 
-func (api *managementRouteAPI) ListBillingAccounts(ctx context.Context) ([]*managementapi.Account, error) {
+func (api *userRouteAPI) ListBillingAccounts(ctx context.Context) ([]*clientrpc.Account, error) {
 	return api.fetchAccounts(ctx)
 }
 
-func (api *managementRouteAPI) GetBillingSubscription(ctx context.Context, accountID string) (*managementapi.Subscription, error) {
-	request := connect.NewRequest(&managementapi.GetBillingSubscriptionRequest{AccountId: strings.TrimSpace(accountID)})
+func (api *userRouteAPI) GetBillingSubscription(ctx context.Context, accountID string) (*clientrpc.Subscription, error) {
+	request := connect.NewRequest(&clientrpc.GetBillingSubscriptionRequest{AccountId: strings.TrimSpace(accountID)})
 	api.authorize(request.Header())
 	response, err := api.client.GetBillingSubscription(ctx, request)
 	if err != nil {
@@ -109,8 +109,8 @@ func (api *managementRouteAPI) GetBillingSubscription(ctx context.Context, accou
 	return response.Msg.GetSubscription(), nil
 }
 
-func (api *managementRouteAPI) GetBillingUsage(ctx context.Context, accountID string) (*managementapi.Usage, error) {
-	request := connect.NewRequest(&managementapi.GetBillingUsageRequest{AccountId: strings.TrimSpace(accountID)})
+func (api *userRouteAPI) GetBillingUsage(ctx context.Context, accountID string) (*clientrpc.Usage, error) {
+	request := connect.NewRequest(&clientrpc.GetBillingUsageRequest{AccountId: strings.TrimSpace(accountID)})
 	api.authorize(request.Header())
 	response, err := api.client.GetBillingUsage(ctx, request)
 	if err != nil {
@@ -122,7 +122,7 @@ func (api *managementRouteAPI) GetBillingUsage(ctx context.Context, accountID st
 	return response.Msg.GetUsage(), nil
 }
 
-func (api *managementRouteAPI) CreateBillingCheckout(ctx context.Context, accountID, planID, period, idempotencyKey string) (*managementapi.Checkout, error) {
+func (api *userRouteAPI) CreateBillingCheckout(ctx context.Context, accountID, planID, period, idempotencyKey string) (*clientrpc.Checkout, error) {
 	key := strings.TrimSpace(idempotencyKey)
 	if key == "" {
 		random := make([]byte, 32)
@@ -131,9 +131,9 @@ func (api *managementRouteAPI) CreateBillingCheckout(ctx context.Context, accoun
 		}
 		key = base64.RawURLEncoding.EncodeToString(random)
 	}
-	request := connect.NewRequest(&managementapi.CreateBillingCheckoutRequest{
+	request := connect.NewRequest(&clientrpc.CreateBillingCheckoutRequest{
 		AccountId: strings.TrimSpace(accountID), PlanId: strings.TrimSpace(planID), BillingPeriod: strings.TrimSpace(period),
-		Operation: &managementapi.OperationMetadata{IdempotencyKey: key},
+		Operation: &clientrpc.OperationMetadata{IdempotencyKey: key},
 	})
 	api.authorize(request.Header())
 	response, err := api.client.CreateBillingCheckout(ctx, request)
@@ -146,10 +146,10 @@ func (api *managementRouteAPI) CreateBillingCheckout(ctx context.Context, accoun
 	return response.Msg.GetCheckout(), nil
 }
 
-func (api *managementRouteAPI) ListBillingInvoices(ctx context.Context, accountID string) ([]*managementapi.Invoice, error) {
-	items := make([]*managementapi.Invoice, 0)
+func (api *userRouteAPI) ListBillingInvoices(ctx context.Context, accountID string) ([]*clientrpc.Invoice, error) {
+	items := make([]*clientrpc.Invoice, 0)
 	err := api.readPages(ctx, func(token string) (string, error) {
-		request := connect.NewRequest(&managementapi.ListBillingInvoicesRequest{AccountId: strings.TrimSpace(accountID), Page: &managementapi.PageRequest{PageSize: managementRoutePageSize, PageToken: token}})
+		request := connect.NewRequest(&clientrpc.ListBillingInvoicesRequest{AccountId: strings.TrimSpace(accountID), Page: &clientrpc.PageRequest{PageSize: userRoutePageSize, PageToken: token}})
 		api.authorize(request.Header())
 		response, err := api.client.ListBillingInvoices(ctx, request)
 		if err != nil {
@@ -161,37 +161,7 @@ func (api *managementRouteAPI) ListBillingInvoices(ctx context.Context, accountI
 	return items, err
 }
 
-func (api *managementRouteAPI) SetAdvertisedRouteApproval(ctx context.Context, networkRef, nodeID, cidr string, approved bool) (*managementapi.SetAdvertisedRouteApprovalResponse, error) {
-	routes, err := api.ListAdvertisedRoutes(ctx, networkRef)
-	if err != nil {
-		return nil, err
-	}
-	var selected *managementapi.AdvertisedRoute
-	for _, route := range routes {
-		if route.GetNodeId() == strings.TrimSpace(nodeID) && route.GetCidr() == strings.TrimSpace(cidr) {
-			selected = route
-			break
-		}
-	}
-	if selected == nil {
-		return nil, errors.New("advertised route was not found; refresh network routes")
-	}
-	request := connect.NewRequest(&managementapi.SetAdvertisedRouteApprovalRequest{
-		NetworkId: selected.GetNetworkId(), NodeId: selected.GetNodeId(), Cidr: selected.GetCidr(), Approved: approved,
-		Precondition: &managementapi.MutationPrecondition{ExpectedVersion: selected.GetVersion()},
-	})
-	api.authorize(request.Header())
-	response, err := api.client.SetAdvertisedRouteApproval(ctx, request)
-	if err != nil {
-		return nil, fmt.Errorf("set advertised route approval: %w", err)
-	}
-	if response.Msg.GetRoute() == nil || response.Msg.GetNetwork() == nil {
-		return nil, errors.New("set advertised route approval returned an incomplete response")
-	}
-	return response.Msg, nil
-}
-
-func (api *managementRouteAPI) resolveNetworkID(ctx context.Context, networkRef string) (string, error) {
+func (api *userRouteAPI) resolveNetworkID(ctx context.Context, networkRef string) (string, error) {
 	ref := strings.TrimSpace(networkRef)
 	if ref == "" {
 		return "", errors.New("network name or ID is required")
@@ -200,7 +170,7 @@ func (api *managementRouteAPI) resolveNetworkID(ctx context.Context, networkRef 
 	if err != nil {
 		return "", err
 	}
-	matches := make([]*managementapi.Network, 0, 1)
+	matches := make([]*clientrpc.Network, 0, 1)
 	for _, account := range accounts {
 		networks, listErr := api.listNetworks(ctx, account.GetAccountId())
 		if listErr != nil {
@@ -224,17 +194,17 @@ func (api *managementRouteAPI) resolveNetworkID(ctx context.Context, networkRef 
 	return "", fmt.Errorf("network %q was not found", ref)
 }
 
-func (api *managementRouteAPI) listAccounts(ctx context.Context) ([]*managementapi.Account, error) {
+func (api *userRouteAPI) listAccounts(ctx context.Context) ([]*clientrpc.Account, error) {
 	if api.accountID != "" {
-		return []*managementapi.Account{{AccountId: api.accountID}}, nil
+		return []*clientrpc.Account{{AccountId: api.accountID}}, nil
 	}
 	return api.fetchAccounts(ctx)
 }
 
-func (api *managementRouteAPI) fetchAccounts(ctx context.Context) ([]*managementapi.Account, error) {
-	items := make([]*managementapi.Account, 0)
+func (api *userRouteAPI) fetchAccounts(ctx context.Context) ([]*clientrpc.Account, error) {
+	items := make([]*clientrpc.Account, 0)
 	err := api.readPages(ctx, func(token string) (string, error) {
-		request := connect.NewRequest(&managementapi.ListAccountsRequest{Page: &managementapi.PageRequest{PageSize: managementRoutePageSize, PageToken: token}})
+		request := connect.NewRequest(&clientrpc.ListAccountsRequest{Page: &clientrpc.PageRequest{PageSize: userRoutePageSize, PageToken: token}})
 		api.authorize(request.Header())
 		response, err := api.client.ListAccounts(ctx, request)
 		if err != nil {
@@ -246,10 +216,10 @@ func (api *managementRouteAPI) fetchAccounts(ctx context.Context) ([]*management
 	return items, err
 }
 
-func (api *managementRouteAPI) listNetworks(ctx context.Context, accountID string) ([]*managementapi.Network, error) {
-	items := make([]*managementapi.Network, 0)
+func (api *userRouteAPI) listNetworks(ctx context.Context, accountID string) ([]*clientrpc.Network, error) {
+	items := make([]*clientrpc.Network, 0)
 	err := api.readPages(ctx, func(token string) (string, error) {
-		request := connect.NewRequest(&managementapi.ListNetworksRequest{AccountId: accountID, Page: &managementapi.PageRequest{PageSize: managementRoutePageSize, PageToken: token}})
+		request := connect.NewRequest(&clientrpc.ListNetworksRequest{AccountId: accountID, Page: &clientrpc.PageRequest{PageSize: userRoutePageSize, PageToken: token}})
 		api.authorize(request.Header())
 		response, err := api.client.ListNetworks(ctx, request)
 		if err != nil {
@@ -261,7 +231,7 @@ func (api *managementRouteAPI) listNetworks(ctx context.Context, accountID strin
 	return items, err
 }
 
-func (api *managementRouteAPI) readPages(ctx context.Context, read func(string) (string, error)) error {
+func (api *userRouteAPI) readPages(ctx context.Context, read func(string) (string, error)) error {
 	seen := make(map[string]bool)
 	token := ""
 	for {
@@ -273,7 +243,7 @@ func (api *managementRouteAPI) readPages(ctx context.Context, read func(string) 
 			return nil
 		}
 		if seen[next] {
-			return errors.New("management API returned a repeated page token")
+			return errors.New("client API returned a repeated page token")
 		}
 		seen[next] = true
 		token = next
@@ -283,6 +253,6 @@ func (api *managementRouteAPI) readPages(ctx context.Context, read func(string) 
 	}
 }
 
-func (api *managementRouteAPI) authorize(header interface{ Set(string, string) }) {
+func (api *userRouteAPI) authorize(header interface{ Set(string, string) }) {
 	header.Set("Authorization", "Bearer "+strings.TrimSpace(api.token))
 }

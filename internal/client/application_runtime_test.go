@@ -15,8 +15,8 @@ import (
 
 	"connectrpc.com/connect"
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
-	coordinatorapi "github.com/endless-net/coordinator/coordinatorapi/v1"
-	"github.com/endless-net/coordinator/coordinatorapi/v1/coordinatorapiconnect"
+	clientrpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
+	"github.com/endless-net/client-api/clientapi/v1/clientrpc/clientrpcconnect"
 	"github.com/tailscale/wireguard-go/tun"
 	"github.com/tailscale/wireguard-go/tun/tuntest"
 )
@@ -159,22 +159,22 @@ func (r *applicationResolverStub) LookupNetIP(context.Context, string, string) (
 }
 
 type applicationReporterStub struct {
-	requests    []*coordinatorapi.ReportApplicationDiscoveryRequest
+	requests    []*clientrpc.ReportApplicationDiscoveryRequest
 	credentials []string
 }
 
-func (r *applicationReporterStub) ReportApplicationDiscovery(_ context.Context, request *connect.Request[coordinatorapi.ReportApplicationDiscoveryRequest]) (*connect.Response[coordinatorapi.ReportApplicationDiscoveryResponse], error) {
+func (r *applicationReporterStub) ReportApplicationDiscovery(_ context.Context, request *connect.Request[clientrpc.ReportApplicationDiscoveryRequest]) (*connect.Response[clientrpc.ReportApplicationDiscoveryResponse], error) {
 	r.requests = append(r.requests, request.Msg)
 	r.credentials = append(r.credentials, request.Header().Get("Authorization"))
-	return connect.NewResponse(&coordinatorapi.ReportApplicationDiscoveryResponse{}), nil
+	return connect.NewResponse(&clientrpc.ReportApplicationDiscoveryResponse{}), nil
 }
 
 func TestConnectorResolvesAndReportsUsingNativeNodeRPC(t *testing.T) {
 	cfg, m, _ := signedApplicationFixture(t, true)
 	reporter := &applicationReporterStub{}
-	_, handler := coordinatorapiconnect.NewConnectorServiceHandler(reporter)
+	_, handler := clientrpcconnect.NewConnectorServiceHandler(reporter)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != coordinatorapiconnect.ConnectorServiceReportApplicationDiscoveryProcedure || r.Header.Get("Content-Type") != "application/proto" {
+		if r.URL.Path != clientrpcconnect.ConnectorServiceReportApplicationDiscoveryProcedure || r.Header.Get("Content-Type") != "application/proto" {
 			t.Errorf("unexpected transport %s %s", r.URL.Path, r.Header.Get("Content-Type"))
 		}
 		handler.ServeHTTP(w, r)

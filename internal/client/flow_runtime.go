@@ -11,8 +11,8 @@ import (
 
 	"connectrpc.com/connect"
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
-	coordinatorapi "github.com/endless-net/coordinator/coordinatorapi/v1"
-	"github.com/endless-net/coordinator/coordinatorapi/v1/coordinatorapiconnect"
+	clientrpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
+	"github.com/endless-net/client-api/clientapi/v1/clientrpc/clientrpcconnect"
 )
 
 func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.RegisterNodeResponse) {
@@ -30,14 +30,14 @@ func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.Regi
 		e.discardFlowSpoolLocked()
 		return
 	}
-	var clients []coordinatorapiconnect.FlowLogServiceClient
+	var clients []clientrpcconnect.FlowLogServiceClient
 	for _, endpoint := range cfg.ControlURLs() {
 		base, err := url.Parse(endpoint)
 		if err != nil || base.Host == "" || base.User != nil || base.Scheme != "https" {
 			continue
 		}
 		base.Path, base.RawPath, base.RawQuery, base.Fragment = "", "", "", ""
-		clients = append(clients, coordinatorapiconnect.NewFlowLogServiceClient(applicationHTTPClient(), base.String()))
+		clients = append(clients, clientrpcconnect.NewFlowLogServiceClient(applicationHTTPClient(), base.String()))
 	}
 	if len(clients) == 0 {
 		e.discardFlowSpoolLocked()
@@ -62,7 +62,7 @@ func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.Regi
 	}()
 }
 
-func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordinatorapiconnect.FlowLogServiceClient, node, credential string, spool *flowSpool) {
+func runFlowLogs(ctx context.Context, collector *flowCollector, clients []clientrpcconnect.FlowLogServiceClient, node, credential string, spool *flowSpool) {
 	persistence, err := openFlowPersistence(spool, collector, time.Now())
 	if err != nil {
 		collector.stop()
@@ -83,7 +83,7 @@ func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordi
 		now := time.Now()
 		if !now.Before(nextPolicy) {
 			for _, client := range clients {
-				request := connect.NewRequest(&coordinatorapi.GetFlowLogPolicyRequest{NodeId: node})
+				request := connect.NewRequest(&clientrpc.GetFlowLogPolicyRequest{NodeId: node})
 				request.Header().Set("Authorization", "Bearer "+credential)
 				call, cancel := context.WithTimeout(ctx, 5*time.Second)
 				response, err := client.GetFlowLogPolicy(call, request)
@@ -120,7 +120,7 @@ func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordi
 			}
 			acknowledged := false
 			for _, client := range clients {
-				request := connect.NewRequest(&coordinatorapi.ReportFlowLogRequest{NodeId: node, ConsentVersion: version, Window: window})
+				request := connect.NewRequest(&clientrpc.ReportFlowLogRequest{NodeId: node, ConsentVersion: version, Window: window})
 				request.Header().Set("Authorization", "Bearer "+credential)
 				call, cancel := context.WithTimeout(ctx, 5*time.Second)
 				response, err := client.ReportFlowLog(call, request)

@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	coordinatorapi "github.com/endless-net/coordinator/coordinatorapi/v1"
+	clientrpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -56,7 +56,7 @@ func (s *flowSpool) discard() error {
 	return err
 }
 
-func (s *flowSpool) save(version uint64, expires time.Time, windows []*coordinatorapi.FlowWindow) error {
+func (s *flowSpool) save(version uint64, expires time.Time, windows []*clientrpc.FlowWindow) error {
 	if len(windows) == 0 {
 		return s.discard()
 	}
@@ -92,7 +92,7 @@ func (s *flowSpool) save(version uint64, expires time.Time, windows []*coordinat
 // load returns quarantined windows. The caller must obtain fresh consent and
 // match its revision before importing or sending these windows. Expiry remains
 // the original lease deadline; restarting cannot extend it.
-func (s *flowSpool) load(now time.Time) (uint64, time.Time, []*coordinatorapi.FlowWindow, error) {
+func (s *flowSpool) load(now time.Time) (uint64, time.Time, []*clientrpc.FlowWindow, error) {
 	file, err := os.Open(s.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, time.Time{}, nil, nil
@@ -126,10 +126,10 @@ func (s *flowSpool) load(now time.Time) (uint64, time.Time, []*coordinatorapi.Fl
 	if batch.ExpiresAt.After(now.Add(time.Minute)) {
 		return 0, time.Time{}, nil, errInvalidFlowSpool
 	}
-	windows := make([]*coordinatorapi.FlowWindow, 0, len(batch.Windows))
+	windows := make([]*clientrpc.FlowWindow, 0, len(batch.Windows))
 	seen := make(map[string]bool)
 	for _, raw := range batch.Windows {
-		window := &coordinatorapi.FlowWindow{}
+		window := &clientrpc.FlowWindow{}
 		if proto.Unmarshal(raw, window) != nil || window.GetWindowId() == "" || seen[window.GetWindowId()] || window.GetWindowStart() == nil || !window.GetWindowStart().IsValid() || window.GetWindowEnd() == nil || !window.GetWindowEnd().IsValid() || window.GetWindowEnd().AsTime().Before(window.GetWindowStart().AsTime()) || window.GetWindowEnd().AsTime().Sub(window.GetWindowStart().AsTime()) > 10*time.Second {
 			return 0, time.Time{}, nil, errInvalidFlowSpool
 		}

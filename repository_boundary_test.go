@@ -30,6 +30,9 @@ func TestClientRepositoryHasNoBackendInternalDependency(t *testing.T) {
 		for _, forbidden := range []string{
 			`"endlessnet/` + `internal/`,
 			`"github.com/endless-net/` + `internal/`,
+			`"github.com/endless-net/management/` + `managementapi`,
+			`"github.com/endless-net/coordinator/` + `coordinatorapi`,
+			`"github.com/endless-net/client-api/clientapi/` + `v2`,
 		} {
 			if strings.Contains(string(raw), forbidden) {
 				t.Errorf("%s imports backend internals via %q", filepath.ToSlash(path), forbidden)
@@ -53,6 +56,33 @@ func TestClientRepositoryPinsProducerContractWithoutReplace(t *testing.T) {
 	}
 	if strings.Contains(text, "replace github.com/endless-net/client-api/clientapi") {
 		t.Fatal("go.mod uses a local clientapi replacement")
+	}
+
+	contractPins := 0
+	for _, line := range strings.Split(text, "\n") {
+		fields := strings.Fields(line)
+		for _, field := range fields {
+			if field == "github.com/endless-net/client-api/clientapi" {
+				contractPins++
+			}
+			if strings.HasPrefix(field, "github.com/endless-net/client-api/clientapi/") {
+				t.Fatalf("additional Client API module: %s", field)
+			}
+		}
+	}
+	if contractPins != 1 {
+		t.Fatalf("want exactly one Client API pin, got %d", contractPins)
+	}
+	for _, name := range []string{"go.mod", "go.sum"} {
+		raw, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, forbidden := range []string{"github.com/endless-net/management/" + "managementapi", "github.com/endless-net/coordinator/" + "coordinatorapi", "github.com/endless-net/client-api/clientapi/"} {
+			if strings.Contains(string(raw), forbidden) {
+				t.Errorf("%s contains forbidden module %s", name, forbidden)
+			}
+		}
 	}
 
 	workflow, err := os.ReadFile(".github/workflows/publish-client-core.yml")

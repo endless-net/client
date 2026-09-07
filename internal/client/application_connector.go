@@ -15,8 +15,8 @@ import (
 
 	"connectrpc.com/connect"
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
-	coordinatorapi "github.com/endless-net/coordinator/coordinatorapi/v1"
-	"github.com/endless-net/coordinator/coordinatorapi/v1/coordinatorapiconnect"
+	clientrpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
+	"github.com/endless-net/client-api/clientapi/v1/clientrpc/clientrpcconnect"
 )
 
 const applicationDiscoveryLeaseSeconds = 60
@@ -104,8 +104,8 @@ func reportApplicationDiscoveries(ctx context.Context, cfg Config, m clientapi.R
 				continue
 			}
 			base.Path, base.RawPath, base.RawQuery, base.Fragment = "", "", "", ""
-			client := coordinatorapiconnect.NewConnectorServiceClient(httpClient, base.String())
-			request := connect.NewRequest(&coordinatorapi.ReportApplicationDiscoveryRequest{NodeId: m.Node.ID, ApplicationId: app.ID, PolicyHash: app.PolicyHash, Addresses: addresses, TtlSeconds: applicationDiscoveryLeaseSeconds})
+			client := clientrpcconnect.NewConnectorServiceClient(httpClient, base.String())
+			request := connect.NewRequest(&clientrpc.ReportApplicationDiscoveryRequest{NodeId: m.Node.ID, ApplicationId: app.ID, PolicyHash: app.PolicyHash, Addresses: addresses, TtlSeconds: applicationDiscoveryLeaseSeconds})
 			request.Header().Set("Authorization", "Bearer "+cfg.NodeCredential)
 			if _, err := client.ReportApplicationDiscovery(ctx, request); err == nil {
 				break

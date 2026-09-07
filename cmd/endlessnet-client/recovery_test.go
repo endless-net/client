@@ -17,7 +17,6 @@ import (
 	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
-	clientapiv2 "github.com/endless-net/client-api/clientapi/v2"
 	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 	"github.com/endless-net/client/internal/client"
 	ipc "github.com/endless-net/client/ipc/v2"
@@ -82,7 +81,7 @@ func newRecoveryTestFixture(t *testing.T, controlURL string) recoveryTestFixture
 	if err != nil {
 		t.Fatal(err)
 	}
-	idempotencyID, err := clientapiv2.NewRegistrationIdempotencyID()
+	idempotencyID, err := clientapi.NewRegistrationIdempotencyID()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,13 +104,13 @@ func newRecoveryTestFixture(t *testing.T, controlURL string) recoveryTestFixture
 	return recoveryTestFixture{ConfigPath: configPath, OldSigningKey: oldKey, NewSigningKey: newKey, OldCredential: oldCredential, NewTrust: newTrust}
 }
 
-func writeRecoveryPublicError(t *testing.T, w http.ResponseWriter, code clientapiv2.ErrorCode, requestID string) {
+func writeRecoveryPublicError(t *testing.T, w http.ResponseWriter, code clientapi.ErrorCode, requestID string) {
 	t.Helper()
-	value, err := clientapiv2.NewPublicError(code, "safe recovery diagnostic", requestID)
+	value, err := clientapi.NewPublicError(code, "safe recovery diagnostic", requestID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := clientapiv2.MarshalPublicError(value)
+	raw, err := clientapi.MarshalPublicError(value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,20 +124,20 @@ func writeRecoveryPublicError(t *testing.T, w http.ResponseWriter, code clientap
 func TestEnrollmentRecoveryTerminalAndPreservationMatrix(t *testing.T) {
 	tests := []struct {
 		name      string
-		code      clientapiv2.ErrorCode
+		code      clientapi.ErrorCode
 		terminal  bool
 		phase     client.RecoveryPhase
 		retryable bool
 	}{
-		{"unknown", clientapiv2.ErrorCodeNodeCredentialUnknown, true, "", false},
-		{"revoked", clientapiv2.ErrorCodeNodeCredentialRevoked, true, "", false},
-		{"expired", clientapiv2.ErrorCodeNodeCredentialExpired, true, "", false},
-		{"invalid", clientapiv2.ErrorCodeNodeCredentialInvalid, false, client.RecoveryPhaseBlocked, false},
-		{"binding", clientapiv2.ErrorCodeNodeIdentityBindingMismatch, false, client.RecoveryPhaseBlocked, false},
-		{"renewal-required", clientapiv2.ErrorCodeNodeCredentialRenewalRequired, false, client.RecoveryPhaseBlocked, false},
-		{"authentication", clientapiv2.ErrorCodeAuthenticationRequired, false, client.RecoveryPhaseNeedsLogin, false},
-		{"authorization", clientapiv2.ErrorCodeAuthorizationDenied, false, client.RecoveryPhasePolicyBlocked, false},
-		{"transient", clientapiv2.ErrorCodeTemporarilyUnavailable, false, client.RecoveryPhaseRecovering, true},
+		{"unknown", clientapi.ErrorCodeNodeCredentialUnknown, true, "", false},
+		{"revoked", clientapi.ErrorCodeNodeCredentialRevoked, true, "", false},
+		{"expired", clientapi.ErrorCodeNodeCredentialExpired, true, "", false},
+		{"invalid", clientapi.ErrorCodeNodeCredentialInvalid, false, client.RecoveryPhaseBlocked, false},
+		{"binding", clientapi.ErrorCodeNodeIdentityBindingMismatch, false, client.RecoveryPhaseBlocked, false},
+		{"renewal-required", clientapi.ErrorCodeNodeCredentialRenewalRequired, false, client.RecoveryPhaseBlocked, false},
+		{"authentication", clientapi.ErrorCodeAuthenticationRequired, false, client.RecoveryPhaseNeedsLogin, false},
+		{"authorization", clientapi.ErrorCodeAuthorizationDenied, false, client.RecoveryPhasePolicyBlocked, false},
+		{"transient", clientapi.ErrorCodeTemporarilyUnavailable, false, client.RecoveryPhaseRecovering, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,14 +216,14 @@ func TestEnrollmentRecoveryRejectsMalformedAndTextOnlyErrorsWithoutCleanup(t *te
 
 func TestEnrollmentRecoveryRetriesSameRequestAfterLostResponse(t *testing.T) {
 	var mu sync.Mutex
-	var firstRequest clientapiv2.RegisterNodeRequest
-	var durableResponse clientapiv2.RegisterNodeResponse
+	var firstRequest clientapi.RegisterNodeRequest
+	var durableResponse clientapi.RegisterNodeResponse
 	registerCalls := 0
 	var fixture recoveryTestFixture
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/nodes/register":
-			req, err := clientapiv2.DecodeRegisterNodeRequest(r.Body)
+			req, err := clientapi.DecodeRegisterNodeRequest(r.Body)
 			if err != nil {
 				t.Errorf("decode renewal: %v", err)
 				return
@@ -295,7 +294,7 @@ func TestTrustServerPersistsTrustAndIntentBeforeRenewalAndIsIdempotent(t *testin
 		case "/server-key":
 			_ = json.NewEncoder(w).Encode(testServerKeyResponseFromBundle(fixture.NewTrust))
 		case "/nodes/register":
-			req, err := clientapiv2.DecodeRegisterNodeRequest(r.Body)
+			req, err := clientapi.DecodeRegisterNodeRequest(r.Body)
 			if err != nil {
 				t.Errorf("decode renewal: %v", err)
 				return
@@ -311,7 +310,7 @@ func TestTrustServerPersistsTrustAndIntentBeforeRenewalAndIsIdempotent(t *testin
 			mu.Lock()
 			requestIDs = append(requestIDs, req.IdempotencyID)
 			mu.Unlock()
-			writeRecoveryPublicError(t, w, clientapiv2.ErrorCodeTemporarilyUnavailable, "request-unavailable")
+			writeRecoveryPublicError(t, w, clientapi.ErrorCodeTemporarilyUnavailable, "request-unavailable")
 		case "/client/readyz":
 			_, _ = w.Write([]byte("ok"))
 		default:
@@ -356,14 +355,14 @@ func TestTrustServerPersistsTrustAndIntentBeforeRenewalAndIsIdempotent(t *testin
 	}
 }
 
-func recoverySuccessResponse(t *testing.T, signingKey ed25519.PrivateKey, req clientapiv2.RegisterNodeRequest) clientapiv2.RegisterNodeResponse {
+func recoverySuccessResponse(t *testing.T, signingKey ed25519.PrivateKey, req clientapi.RegisterNodeRequest) clientapi.RegisterNodeResponse {
 	t.Helper()
 	credential, err := clientapi.SignNodeCredential(signingKey, req.NetworkID, "node-1", []string{"node:register", "node:map"}, time.Now().UTC().Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
-	response := clientapiv2.RegisterNodeResponse{
-		SchemaVersion: clientapiv2.SchemaVersion, IdempotencyID: req.IdempotencyID,
+	response := clientapi.RegisterNodeResponse{
+		SchemaVersion: clientapi.SchemaVersion, IdempotencyID: req.IdempotencyID,
 		Revision: clientapi.MapRevision{Network: 8},
 		Network:  clientapi.Network{ID: req.NetworkID, Name: "default", CIDR: "100.64.0.0/24", Revision: 8},
 		Node: clientapi.Node{
@@ -373,10 +372,10 @@ func recoverySuccessResponse(t *testing.T, signingKey ed25519.PrivateKey, req cl
 			Endpoint: req.Endpoint, EndpointGeneration: req.EndpointGeneration,
 			EndpointCandidates: append([]string(nil), req.EndpointCandidates...), AdvertisedIPs: append([]string(nil), req.AdvertisedIPs...), RequestedTags: append([]string(nil), req.Tags...),
 		},
-		RegistrationBinding: clientapiv2.RegistrationIdentityProofBinding(req),
+		RegistrationBinding: clientapi.RegistrationIdentityProofBinding(req),
 		NodeCredential:      credential,
 	}
-	v1Response := response.NetworkMap()
+	v1Response := response
 	response.MapSignature, err = clientapi.SignNetworkMap(signingKey, v1Response)
 	if err != nil {
 		t.Fatal(err)
@@ -430,12 +429,12 @@ func TestDurableRecoveryStateOverridesStaleAgentSigningError(t *testing.T) {
 func TestConnectReturnsRecoveryStateInsteadOfTextMatchedCleanup(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
-		code    clientapiv2.ErrorCode
+		code    clientapi.ErrorCode
 		state   ipc.ServiceState
 		control ipc.ControlState
 	}{
-		{"terminal", clientapiv2.ErrorCodeNodeCredentialRevoked, ipc.StateNeedsEnrollment, ipc.ControlStateNotRegistered},
-		{"binding", clientapiv2.ErrorCodeNodeIdentityBindingMismatch, ipc.StateRecoveryBlocked, ipc.ControlStateRecoveryBlocked},
+		{"terminal", clientapi.ErrorCodeNodeCredentialRevoked, ipc.StateNeedsEnrollment, ipc.ControlStateNotRegistered},
+		{"binding", clientapi.ErrorCodeNodeIdentityBindingMismatch, ipc.StateRecoveryBlocked, ipc.ControlStateRecoveryBlocked},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -477,7 +476,7 @@ func TestLogoutReturnsTypedRemoteCleanupCorrelationAndLocalForgetStillCompletes(
 			http.NotFound(w, r)
 			return
 		}
-		writeRecoveryPublicError(t, w, clientapiv2.ErrorCodeTemporarilyUnavailable, "remote-request-123")
+		writeRecoveryPublicError(t, w, clientapi.ErrorCodeTemporarilyUnavailable, "remote-request-123")
 	}))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "client.json")

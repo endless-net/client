@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	coordinatorapi "github.com/endless-net/coordinator/coordinatorapi/v1"
+	clientrpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -21,8 +21,8 @@ func TestFlowSpoolRestartRetainsIdentityAndErasesExpiredLease(t *testing.T) {
 	}
 	now := time.Now().UTC()
 	expiry := now.Add(50 * time.Second)
-	window := &coordinatorapi.FlowWindow{WindowId: "immutable-window", Source: "100.64.0.1", Destination: "100.64.0.2", WindowStart: timestamppb.New(now), WindowEnd: timestamppb.New(now), Bytes: 40, Packets: 1}
-	if err := s.save(7, expiry, []*coordinatorapi.FlowWindow{window}); err != nil {
+	window := &clientrpc.FlowWindow{WindowId: "immutable-window", Source: "100.64.0.1", Destination: "100.64.0.2", WindowStart: timestamppb.New(now), WindowEnd: timestamppb.New(now), Bytes: 40, Packets: 1}
+	if err := s.save(7, expiry, []*clientrpc.FlowWindow{window}); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(path)
@@ -57,8 +57,8 @@ func TestFlowSpoolRejectsTamperingWrongScopeAndOversize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := &coordinatorapi.FlowWindow{WindowId: "w", WindowStart: timestamppb.New(now), WindowEnd: timestamppb.New(now)}
-	if err := s.save(1, now.Add(30*time.Second), []*coordinatorapi.FlowWindow{w}); err != nil {
+	w := &clientrpc.FlowWindow{WindowId: "w", WindowStart: timestamppb.New(now), WindowEnd: timestamppb.New(now)}
+	if err := s.save(1, now.Add(30*time.Second), []*clientrpc.FlowWindow{w}); err != nil {
 		t.Fatal(err)
 	}
 	for _, values := range [][2]string{{"other-credential", "node-a"}, {"credential", "node-b"}} {

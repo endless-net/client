@@ -13,7 +13,6 @@ import (
 	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
-	clientapiv2 "github.com/endless-net/client-api/clientapi/v2"
 	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 	"github.com/endless-net/client/internal/client"
 )
@@ -37,8 +36,8 @@ type recoveryAttemptResult struct {
 }
 
 type recoveryControlResult struct {
-	Response    *clientapiv2.RegisterNodeResponse
-	PublicError *clientapiv2.PublicError
+	Response    *clientapi.RegisterNodeResponse
+	PublicError *clientapi.PublicError
 	FailureCode string
 	Retryable   bool
 	Err         error
@@ -70,7 +69,7 @@ func continueEnrollmentRecovery(ctx context.Context, configPath string) (recover
 	if err != nil {
 		return persistRecoveryFailure(store, recovery, client.RecoveryPhaseBlocked, recoveryErrorLocalValidation, "", false, err)
 	}
-	control := registerNodeV2(ctx, apiFromConfig(cfg), req)
+	control := registerNodeRecovery(ctx, apiFromConfig(cfg), req)
 	if control.PublicError != nil {
 		publicError := *control.PublicError
 		if publicError.ErrorCode.RequiresReEnrollment() {
@@ -106,7 +105,7 @@ func continueEnrollmentRecovery(ctx context.Context, configPath string) (recover
 	}
 
 	response := *control.Response
-	networkMap := response.NetworkMap()
+	networkMap := response
 	if err := verifyNetworkMap(&cfg, networkMap); err != nil {
 		return persistRecoveryFailure(store, recovery, client.RecoveryPhaseBlocked, recoveryErrorLocalValidation, "", false, fmt.Errorf("verify recovery network map: %w", err))
 	}
@@ -133,34 +132,34 @@ func continueEnrollmentRecovery(ctx context.Context, configPath string) (recover
 	return recoveryAttemptResult{OperationID: recovery.OperationID, Completed: true}, nil
 }
 
-func credentialRenewalRequest(cfg client.Config, recovery client.EnrollmentRecovery) (clientapiv2.RegisterNodeRequest, error) {
+func credentialRenewalRequest(cfg client.Config, recovery client.EnrollmentRecovery) (clientapi.RegisterNodeRequest, error) {
 	if cfg.CachedMap == nil {
-		return clientapiv2.RegisterNodeRequest{}, errors.New("credential recovery requires the last validated network map")
+		return clientapi.RegisterNodeRequest{}, errors.New("credential recovery requires the last validated network map")
 	}
 	if strings.TrimSpace(cfg.NodeCredential) == "" || strings.TrimSpace(cfg.NetworkID) == "" {
-		return clientapiv2.RegisterNodeRequest{}, errors.New("credential recovery requires existing node enrollment")
+		return clientapi.RegisterNodeRequest{}, errors.New("credential recovery requires existing node enrollment")
 	}
 	publicKey, err := wgkeys.PublicKey(cfg.PrivateKey)
 	if err != nil {
-		return clientapiv2.RegisterNodeRequest{}, fmt.Errorf("derive WireGuard public key: %w", err)
+		return clientapi.RegisterNodeRequest{}, fmt.Errorf("derive WireGuard public key: %w", err)
 	}
 	identityPublicKey, err := client.IdentityPublicKey(cfg.IdentityPrivateKey)
 	if err != nil {
-		return clientapiv2.RegisterNodeRequest{}, fmt.Errorf("derive identity public key: %w", err)
+		return clientapi.RegisterNodeRequest{}, fmt.Errorf("derive identity public key: %w", err)
 	}
 	node := cfg.CachedMap.Node
 	if err := validateNodeIdentityBinding(node, publicKey, identityPublicKey, cfg.DeviceFingerprint); err != nil {
-		return clientapiv2.RegisterNodeRequest{}, err
+		return clientapi.RegisterNodeRequest{}, err
 	}
 	if strings.TrimSpace(cfg.CachedMap.RegistrationBinding) == "" {
-		return clientapiv2.RegisterNodeRequest{}, errors.New("credential recovery requires the prior registration binding")
+		return clientapi.RegisterNodeRequest{}, errors.New("credential recovery requires the prior registration binding")
 	}
 	tags := append([]string(nil), node.RequestedTags...)
 	if len(tags) == 0 {
 		tags = append(tags, node.Tags...)
 	}
-	req := clientapiv2.RegisterNodeRequest{
-		SchemaVersion:       clientapiv2.SchemaVersion,
+	req := clientapi.RegisterNodeRequest{
+		SchemaVersion:       clientapi.SchemaVersion,
 		IdempotencyID:       recovery.IdempotencyID,
 		NetworkID:           cfg.NetworkID,
 		NodeCredential:      cfg.NodeCredential,
@@ -176,21 +175,21 @@ func credentialRenewalRequest(cfg client.Config, recovery client.EnrollmentRecov
 		AdvertisedIPs:       append([]string(nil), node.AdvertisedIPs...),
 		Tags:                tags,
 	}
-	req.IdentitySignature, err = client.SignIdentity(cfg.IdentityPrivateKey, clientapiv2.RegistrationIdentityProofPayload(req))
+	req.IdentitySignature, err = client.SignIdentity(cfg.IdentityPrivateKey, clientapi.RegistrationIdentityProofPayload(req))
 	if err != nil {
-		return clientapiv2.RegisterNodeRequest{}, err
+		return clientapi.RegisterNodeRequest{}, err
 	}
 	if err := req.Validate(); err != nil {
-		return clientapiv2.RegisterNodeRequest{}, err
+		return clientapi.RegisterNodeRequest{}, err
 	}
 	return req, nil
 }
 
-func registerNodeV2(ctx context.Context, api *clientapi.API, req clientapiv2.RegisterNodeRequest) recoveryControlResult {
+func registerNodeRecovery(ctx context.Context, api *clientapi.API, req clientapi.RegisterNodeRequest) recoveryControlResult {
 	if api == nil || api.HTTPClient == nil {
 		return recoveryControlResult{FailureCode: recoveryErrorLocalValidation, Err: errors.New("control-plane client is required")}
 	}
-	raw, err := clientapiv2.MarshalRegisterNodeRequest(req)
+	raw, err := clientapi.MarshalRegisterNodeRequest(req)
 	if err != nil {
 		return recoveryControlResult{FailureCode: recoveryErrorLocalValidation, Err: err}
 	}
@@ -198,7 +197,7 @@ func registerNodeV2(ctx context.Context, api *clientapi.API, req clientapiv2.Reg
 	if len(baseURLs) == 0 {
 		return recoveryControlResult{FailureCode: recoveryErrorLocalValidation, Err: errors.New("control-plane URL is required")}
 	}
-	var lastUnavailable *clientapiv2.PublicError
+	var lastUnavailable *clientapi.PublicError
 	var lastTransport error
 	for _, baseURL := range baseURLs {
 		endpoint, err := recoveryControlEndpoint(baseURL)
@@ -217,9 +216,9 @@ func registerNodeV2(ctx context.Context, api *clientapi.API, req clientapiv2.Reg
 			lastTransport = err
 			continue
 		}
-		result := decodeRegisterNodeV2Response(resp, req)
+		result := decodeRegisterNodeRecoveryResponse(resp, req)
 		_ = resp.Body.Close()
-		if result.PublicError != nil && result.PublicError.ErrorCode == clientapiv2.ErrorCodeTemporarilyUnavailable {
+		if result.PublicError != nil && result.PublicError.ErrorCode == clientapi.ErrorCodeTemporarilyUnavailable {
 			lastUnavailable = result.PublicError
 			continue
 		}
@@ -229,13 +228,13 @@ func registerNodeV2(ctx context.Context, api *clientapi.API, req clientapiv2.Reg
 		return recoveryControlResult{PublicError: lastUnavailable}
 	}
 	return recoveryControlResult{
-		FailureCode: string(clientapiv2.ErrorCodeTemporarilyUnavailable),
+		FailureCode: string(clientapi.ErrorCodeTemporarilyUnavailable),
 		Retryable:   true,
 		Err:         fmt.Errorf("credential recovery transport unavailable: %w", lastTransport),
 	}
 }
 
-func revokeNodeV2(ctx context.Context, api *clientapi.API, nodeID string) error {
+func revokeNode(ctx context.Context, api *clientapi.API, nodeID string) error {
 	if api == nil || api.HTTPClient == nil {
 		return remoteCleanupError{cause: errors.New("control-plane client is required")}
 	}
@@ -271,7 +270,7 @@ func revokeNodeV2(ctx context.Context, api *clientapi.API, nodeID string) error 
 			_ = resp.Body.Close()
 			return remoteCleanupError{cause: err}
 		}
-		publicError, err := clientapiv2.DecodePublicError(resp.Body)
+		publicError, err := clientapi.DecodePublicError(resp.Body)
 		_ = resp.Body.Close()
 		if err != nil {
 			return remoteCleanupError{cause: err}
@@ -279,7 +278,7 @@ func revokeNodeV2(ctx context.Context, api *clientapi.API, nodeID string) error 
 		if err := publicError.ValidateHTTPResponse(resp.StatusCode, strings.TrimSpace(resp.Header.Get(controlRequestIDHeader))); err != nil {
 			return remoteCleanupError{cause: err}
 		}
-		if publicError.ErrorCode == clientapiv2.ErrorCodeTemporarilyUnavailable {
+		if publicError.ErrorCode == clientapi.ErrorCodeTemporarilyUnavailable {
 			lastErr = remoteCleanupError{RequestID: publicError.RequestID, cause: errors.New(string(publicError.ErrorCode))}
 			continue
 		}
@@ -292,7 +291,7 @@ func revokeNodeV2(ctx context.Context, api *clientapi.API, nodeID string) error 
 	return remoteCleanupError{cause: lastErr}
 }
 
-func decodeRegisterNodeV2Response(resp *http.Response, req clientapiv2.RegisterNodeRequest) recoveryControlResult {
+func decodeRegisterNodeRecoveryResponse(resp *http.Response, req clientapi.RegisterNodeRequest) recoveryControlResult {
 	if resp == nil || resp.Body == nil {
 		return recoveryControlResult{FailureCode: recoveryErrorProtocol, Err: errors.New("control-plane response is missing")}
 	}
@@ -300,7 +299,7 @@ func decodeRegisterNodeV2Response(resp *http.Response, req clientapiv2.RegisterN
 		return recoveryControlResult{FailureCode: recoveryErrorProtocol, Err: err}
 	}
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
-		response, err := clientapiv2.DecodeRegisterNodeResponse(resp.Body)
+		response, err := clientapi.DecodeRegisterNodeResponse(resp.Body)
 		if err != nil {
 			return recoveryControlResult{FailureCode: recoveryErrorProtocol, Err: err}
 		}
@@ -309,7 +308,7 @@ func decodeRegisterNodeV2Response(resp *http.Response, req clientapiv2.RegisterN
 		}
 		return recoveryControlResult{Response: &response}
 	}
-	publicError, err := clientapiv2.DecodePublicError(resp.Body)
+	publicError, err := clientapi.DecodePublicError(resp.Body)
 	if err != nil {
 		return recoveryControlResult{FailureCode: recoveryErrorProtocol, Err: err}
 	}
@@ -344,13 +343,13 @@ func requireJSONContentType(value string) error {
 	return nil
 }
 
-func recoveryPhaseForPublicError(code clientapiv2.ErrorCode) (client.RecoveryPhase, bool) {
+func recoveryPhaseForPublicError(code clientapi.ErrorCode) (client.RecoveryPhase, bool) {
 	switch code {
-	case clientapiv2.ErrorCodeAuthenticationRequired:
+	case clientapi.ErrorCodeAuthenticationRequired:
 		return client.RecoveryPhaseNeedsLogin, false
-	case clientapiv2.ErrorCodeAuthorizationDenied:
+	case clientapi.ErrorCodeAuthorizationDenied:
 		return client.RecoveryPhasePolicyBlocked, false
-	case clientapiv2.ErrorCodeTemporarilyUnavailable:
+	case clientapi.ErrorCodeTemporarilyUnavailable:
 		return client.RecoveryPhaseRecovering, true
 	default:
 		return client.RecoveryPhaseBlocked, false

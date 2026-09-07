@@ -20,7 +20,6 @@ import (
 	ipc "github.com/endless-net/client/ipc/v2"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
-	clientapiv2 "github.com/endless-net/client-api/clientapi/v2"
 )
 
 func cmdService(args []string) error {
@@ -1135,7 +1134,7 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 			if err != nil {
 				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, ipc.ErrorRecoveryOperationIDFailed, err)
 			}
-			candidateIdempotencyID, err := clientapiv2.NewRegistrationIdempotencyID()
+			candidateIdempotencyID, err := clientapi.NewRegistrationIdempotencyID()
 			if err != nil {
 				return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, ipc.ErrorRecoveryOperationIDFailed, err)
 			}

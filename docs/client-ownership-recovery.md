@@ -2,8 +2,8 @@
 
 This repository implements the client side of the recovery protocol defined by
 architecture decision `6cf37091846920e238bef631ef8951d395c084a1`. The public
-control-plane contract is pinned as
-`github.com/endless-net/client-api/clientapi/v2 v2.0.0-rc.4`; the local service
+control-plane contract now lives in
+`github.com/endless-net/client-api/clientapi/v1`; the local service
 contract is [client IPC v2](client-ipc-v2.openapi.yaml). Neither boundary has a
 legacy text or status-code compatibility path.
 
@@ -95,3 +95,7 @@ then emits another full status only when it changes. `sequence` is local to one
 stream and is not resumable. Recovery status contains only the stable error
 code, correlation request ID, and retryability; secrets and public diagnostic
 messages are excluded.
+
+The unified v1 contract is pinned through the published module `v1.12.0`.
+Component verification uses this pin with `GOWORK=off`; server integration and
+release acceptance remain separate requirements.

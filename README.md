@@ -60,3 +60,27 @@ local service IPC v2 contract and transport clients. Persisted state, identity,
 diagnostics implementation, and STUN implementation are internal details.
 Control-plane DTOs and signed wire verification remain in the pinned
 `github.com/endless-net/client-api/clientapi` module.
+
+## Unified Client API boundary
+
+All control-plane Go DTOs and clients come from the single
+`github.com/endless-net/client-api/clientapi` module: HTTP/recovery contracts in
+`v1`, protobuf messages in `v1/clientrpc`, and Connect bindings in
+`v1/clientrpc/clientrpcconnect`. The [producer source, main](https://github.com/endless-net/client-api/tree/main/clientapi)
+owns these contracts. There are no Management or Coordinator API dependencies.
+
+Account-scoped billing, network and route reads use Client API UserService;
+node discovery and flow collection use its credential-bound node services.
+Session logout uses Client API `/auth/logout`. The CLI has no `approve-route`
+or `revoke-route` commands; use the administration console for route approval.
+Login may still open the discovered console URL in a browser.
+
+Registration and recovery share one request, identity proof and public error
+contract. Registration uses `schema_version` and `idempotency_id`; the old
+`idempotency_key` registration body is rejected. Existing schema numbers are
+unchanged. IPC remains a separate local contract.
+
+The client pins the published module `v1.12.0` and builds independently, without
+a local workspace or module replacement. Server support and release acceptance
+are separate from component checks. See the
+[producer cutover requirements, main](https://github.com/endless-net/client-api/blob/main/clientapi/UNIFIED-CONTRACT.md).
