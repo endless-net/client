@@ -52,6 +52,9 @@ jobs:
       - name: Build client
         run: go build ./cmd/endlessnet-client ./cmd/endlessnet-client-recovery-helper
 
+      - name: Verify sharing through encrypted WireGuard engines
+        run: go test ./internal/client -run '^TestSharingEncryptedWireGuardDirectionAndWithdrawal$' -count=1 -timeout 45s
+
       - name: Verify established TCP and UDP ACL revocation in isolated namespace
         shell: bash
         run: |

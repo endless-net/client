@@ -29,3 +29,12 @@ do not establish a real encrypted two-client or Relay session. Coordinator
 grant resolution/projection, Management reconciliation, Relay upstream
 authorization and component CI network acceptance remain necessary before
 claiming end-to-end ShareMachine enforcement.
+
+The Linux CI job now runs
+`TestSharingEncryptedWireGuardDirectionAndWithdrawal` outside short mode. Two
+real WireGuard engines exchange packets over loopback UDP using channel TUNs and
+signed sharing maps. It establishes recipient TCP SYN/SYN-ACK/ACK and reply
+traffic before probing reverse NEW and an unauthorized destination port, then
+applies signed withdrawal and checks established traffic is blocked in both
+directions. Router changes use the test router; this is not OS routing or Relay
+acceptance. The new encrypted scenario still requires a successful CI run.
