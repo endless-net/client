@@ -59,7 +59,7 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 					t.Fatal("invalid backend test endpoint port")
 				}
 				device := tuns[i]
-				engine, err := NewWireGuardEngine(WireGuardEngineOptions{Interface: "sharing-backend-test", ListenPort: port, router: &testWireGuardEngineRouter{}, tunFactory: func(string, int) (tun.Device, error) { return device.TUN(), nil }})
+				engine, err := NewWireGuardEngine(WireGuardEngineOptions{Interface: "sharing-live", ListenPort: port, router: &testWireGuardEngineRouter{}, tunFactory: func(string, int) (tun.Device, error) { return device.TUN(), nil }})
 				if err != nil {
 					t.Fatal(err)
 				}
