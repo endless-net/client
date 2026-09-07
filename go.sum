@@ -6,6 +6,8 @@ github.com/endless-net/client-api/clientapi v1.5.0 h1:wSXE97CaOvqFYjGUBYOsjPC9xT
 github.com/endless-net/client-api/clientapi v1.5.0/go.mod h1:UW9lQLv7drwwNfG9lfyH0FY7txPMDBRnK77mS9c1L8s=
 github.com/endless-net/client-api/clientapi v1.6.0 h1:gpOoZHwgFbg/8/cvVF4L55DfngDoyPIsHWhx5PDw7o4=
 github.com/endless-net/client-api/clientapi v1.6.0/go.mod h1:UW9lQLv7drwwNfG9lfyH0FY7txPMDBRnK77mS9c1L8s=
+github.com/endless-net/client-api/clientapi v1.7.0 h1:HVIrFHVrF0ZYOr2842AefveozkN+fyeBvlwswCMt6ss=
+github.com/endless-net/client-api/clientapi v1.7.0/go.mod h1:UW9lQLv7drwwNfG9lfyH0FY7txPMDBRnK77mS9c1L8s=
 github.com/endless-net/client-api/clientapi/v2 v2.1.0-rc.1 h1:CSlDDR2HtjZPsuPMQmha3AE6vFo35Rhh/SgP4Cqwwns=
 github.com/endless-net/client-api/clientapi/v2 v2.1.0-rc.1/go.mod h1:t5HZSUkb1YaytzJ2s6dsDCLzYorPBZ5m2R4qwQ4fqGI=
 github.com/endless-net/management/managementapi v1.12.0-rc.1 h1:bV3zmvxyjmyr2UC3YPSW+80gfQ58nK9GBJQLvxXJkoQ=
