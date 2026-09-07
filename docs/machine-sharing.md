@@ -158,5 +158,7 @@ unchanged. This is test timing, not a change to the runtime retry policy.
 The optional source replacement phase retains the deleted source engine's old
 signed map and key, applies the recipient's new map, and checks that established
 traffic is denied. A third engine uses the newly registered source key and must
-inherit no grant. This phase is implemented but awaits combined backend CI;
-it does not implement same-node WireGuard key rotation.
+inherit no grant. [Combined CI 34157969315](https://github.com/endless-net/coordinator/actions/runs/34157969315)
+passed this phase with Client `6efedd0` in both direct and full Relay modes,
+including backend renewal key-substitution rejection and public
+`SOURCE_UNAVAILABLE`. It does not implement same-node WireGuard key rotation.
