@@ -2,6 +2,8 @@ package client
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +38,7 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			Trust         clientapi.SigningTrustBundle
 			Accepted      bool
 			WaitForExpiry bool
+			RelayCAPEM    []byte
 		}
 		if err := decoder.Decode(&input); errors.Is(err, io.EOF) {
 			break
@@ -44,6 +47,14 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 		}
 		if len(input.Maps) != 2 || input.Maps[0].Node.ID != "machine" || input.Maps[1].Node.ID != "recipient-node" {
 			t.Fatal("unexpected backend endpoint pair")
+		}
+		var relayTLS *tls.Config
+		if len(input.RelayCAPEM) > 0 {
+			roots := x509.NewCertPool()
+			if !roots.AppendCertsFromPEM(input.RelayCAPEM) {
+				t.Fatal("invalid test Relay trust")
+			}
+			relayTLS = NewRelayTLSConfig(roots)
 		}
 		for i, networkMap := range input.Maps {
 			if err := clientapi.VerifyNetworkMapSignatureWithTrustBundle(networkMap, input.Trust); err != nil {
@@ -59,16 +70,19 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 				continue
 			}
 			if engines[i] == nil {
-				host, portText, err := net.SplitHostPort(networkMap.Node.Endpoint)
-				if err != nil || host != "127.0.0.1" {
-					t.Fatal("backend test endpoint must be loopback")
-				}
-				port, err := strconv.Atoi(portText)
-				if err != nil || port < 1 || port > 65535 {
-					t.Fatal("invalid backend test endpoint port")
+				port := 0
+				if relayTLS == nil {
+					host, portText, err := net.SplitHostPort(networkMap.Node.Endpoint)
+					if err != nil || host != "127.0.0.1" {
+						t.Fatal("backend test endpoint must be loopback")
+					}
+					port, err = strconv.Atoi(portText)
+					if err != nil || port < 1 || port > 65535 {
+						t.Fatal("invalid backend test endpoint port")
+					}
 				}
 				device := tuns[i]
-				engine, err := NewWireGuardEngine(WireGuardEngineOptions{Interface: "sharing-live", ListenPort: port, router: &testWireGuardEngineRouter{}, tunFactory: func(string, int) (tun.Device, error) { return device.TUN(), nil }})
+				engine, err := NewWireGuardEngine(WireGuardEngineOptions{Interface: "sharing-live", ListenPort: port, RelayTLSConfig: relayTLS, RelayTimeout: 3 * time.Second, router: &testWireGuardEngineRouter{}, tunFactory: func(string, int) (tun.Device, error) { return device.TUN(), nil }})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -80,6 +94,20 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 				t.Fatal("engine rejected committed backend map", err)
 			}
 			lastHashes[i] = networkMap.MapSignature.PayloadHash
+			if relayTLS != nil && input.Accepted {
+				if len(networkMap.Relays) != 1 || networkMap.RelayCredential == nil {
+					t.Fatal("backend omitted Relay discovery or credential")
+				}
+				for _, peer := range networkMap.Peers {
+					if peer.Endpoint != "" || len(peer.EndpointCandidates) != 0 {
+						t.Fatal("Relay acceptance must have no direct peer endpoint")
+					}
+				}
+				paths := engines[i].PathStatus()
+				if len(paths) != 1 || paths[0].SelectedPath != "relay" {
+					t.Fatal("engine did not select Relay", paths)
+				}
+			}
 		}
 		exchange := func(sender int, packet []byte, allowed bool) {
 			t.Helper()
