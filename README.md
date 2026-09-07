@@ -23,6 +23,10 @@ go build ./cmd/endlessnet-client ./cmd/endlessnet-client-recovery-helper
 go test -short ./...
 ```
 
+CI also runs [installation and basic service acceptance](docs/installation-tests.md)
+on Ubuntu, Windows Server and macOS, including local IPC checks, disconnect
+persistence across restart, and service removal.
+
 The versioned local service and ownership-recovery contracts are documented in
 [`docs/client-ipc-v2.openapi.yaml`](docs/client-ipc-v2.openapi.yaml) and
 [`docs/client-ownership-recovery.md`](docs/client-ownership-recovery.md).
