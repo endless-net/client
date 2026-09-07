@@ -18,13 +18,15 @@ type flowKey struct {
 	port                                    uint32
 }
 type flowCollector struct {
-	mu                 sync.Mutex
-	version            uint64
-	notBefore, expires time.Time
-	active             map[flowKey]*coordinatorapi.FlowWindow
-	pending            []*coordinatorapi.FlowWindow
-	droppedPackets     uint64
-	droppedWindows     uint64
+	mu                                                                  sync.Mutex
+	version                                                             uint64
+	notBefore, expires                                                  time.Time
+	active                                                              map[flowKey]*coordinatorapi.FlowWindow
+	pending                                                             []*coordinatorapi.FlowWindow
+	droppedPackets                                                      uint64
+	droppedWindows                                                      uint64
+	unsupportedPackets, capacityDrops, clockDrops                       uint64
+	reportAttempts, acknowledgedWindows, reportFailures, policyFailures uint64
 }
 
 func (c *flowCollector) clearLocked() {
@@ -77,6 +79,7 @@ func (c *flowCollector) observe(raw []byte, allowed bool, now time.Time) {
 	packet, ok := parseApplicationPacket(raw)
 	if !ok {
 		c.droppedPackets++
+		c.unsupportedPackets++
 		return
 	}
 	protocol := "other"
@@ -98,6 +101,7 @@ func (c *flowCollector) observe(raw []byte, allowed bool, now time.Time) {
 	window := c.active[key]
 	if window != nil && now.Before(window.GetWindowStart().AsTime()) {
 		c.droppedPackets++
+		c.clockDrops++
 		return
 	}
 	if window != nil && now.Sub(window.GetWindowStart().AsTime()) >= 10*time.Second {
@@ -108,6 +112,7 @@ func (c *flowCollector) observe(raw []byte, allowed bool, now time.Time) {
 	if window == nil {
 		if len(c.active)+len(c.pending) >= maxFlowWindows {
 			c.droppedPackets++
+			c.capacityDrops++
 			return
 		}
 		window = &coordinatorapi.FlowWindow{WindowId: rand.Text(), Source: key.source, Destination: key.destination, DestinationPort: key.port, Protocol: key.protocol, Decision: key.decision, WindowStart: timestamppb.New(now)}
@@ -147,6 +152,7 @@ func (c *flowCollector) acknowledge(id string, version uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.version == version && len(c.pending) > 0 && c.pending[0].GetWindowId() == id {
+		c.acknowledgedWindows++
 		c.pending[0] = nil
 		c.pending = c.pending[1:]
 	}

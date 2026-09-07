@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net/url"
 	"time"
@@ -49,9 +50,12 @@ func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.Regi
 }
 
 func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordinatorapiconnect.FlowLogServiceClient, node, credential string) {
+	defer func() { collector.stop(); logFlowStatus(slog.Default(), collector.status(time.Now())) }()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	var nextPolicy, nextSend time.Time
+	var nextStatus time.Time
+	var previousStatus FlowLogStatus
 	delay := time.Second
 	for {
 		if ctx.Err() != nil {
@@ -72,6 +76,7 @@ func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordi
 					collector.policy(response.Msg, time.Now())
 					break
 				}
+				collector.policyFailed()
 				if terminalFlowError(err) {
 					collector.stop()
 					break
@@ -91,6 +96,7 @@ func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordi
 				call, cancel := context.WithTimeout(ctx, 5*time.Second)
 				response, err := client.ReportFlowLog(call, request)
 				cancel()
+				collector.reportResult(err == nil && response.Msg.GetWindowId() == window.GetWindowId())
 				if ctx.Err() != nil {
 					return
 				}
@@ -112,6 +118,14 @@ func runFlowLogs(ctx context.Context, collector *flowCollector, clients []coordi
 			}
 			delay = time.Second
 			nextSend = time.Time{}
+		}
+		if !time.Now().Before(nextStatus) {
+			status := collector.status(time.Now())
+			if status != previousStatus {
+				logFlowStatus(slog.Default(), status)
+				previousStatus = status
+			}
+			nextStatus = time.Now().Add(15 * time.Second)
 		}
 		select {
 		case <-ctx.Done():

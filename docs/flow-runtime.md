@@ -29,9 +29,15 @@ owns RPC DTOs. Coordinator resolves account ownership; the Client sends only
 node identity, consent revision and the flow window.
 
 The queue is memory-only. Process termination loses unacknowledged windows;
-expiry also discards pending windows by design. Packet drops and discarded-window
-counters are currently local to the collector and are not yet surfaced through
-diagnostics/metrics. Durable restart handling and observable loss reporting
+expiry also discards pending windows by design. `WireGuardEngine.FlowLogStatus`
+and structured `flow log runtime` records expose enabled state, active/pending
+windows, discarded windows, packet drops split by unsupported input, capacity
+and backward clock movement, report attempts/failures, acknowledged windows and
+policy failures. Counters are cumulative for the engine lifetime and reset on
+process restart. Status refresh also expires idle buffers without packet input.
+Logs emit changed snapshots at most every 15 seconds and a final stopped snapshot;
+they contain no IPs, node/window IDs, URLs, credentials or raw RPC errors.
+Durable restart handling, user-facing diagnostics integration and central metrics
 remain required follow-up. OS/kernel dataplanes outside this wireguard-go TUN
 wrapper are not claimed to produce flow logs.
 
