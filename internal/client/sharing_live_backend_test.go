@@ -28,11 +28,14 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 	var engines [2]*WireGuardEngine
 	tuns := [2]*tuntest.ChannelTUN{tuntest.NewChannelTUN(), tuntest.NewChannelTUN()}
 	acceptedCount, withdrawnCount := 0, 0
+	expiredCount := 0
+	var lastHashes [2]string
 	for {
 		var input struct {
-			Maps     []clientapi.RegisterNodeResponse
-			Trust    clientapi.SigningTrustBundle
-			Accepted bool
+			Maps          []clientapi.RegisterNodeResponse
+			Trust         clientapi.SigningTrustBundle
+			Accepted      bool
+			WaitForExpiry bool
 		}
 		if err := decoder.Decode(&input); errors.Is(err, io.EOF) {
 			break
@@ -48,6 +51,12 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			}
 			if networkMap.Node.PublicKey != testWireGuardEnginePublicKey(byte(i+1)) {
 				t.Fatal("backend map does not bind the test engine key")
+			}
+			if input.WaitForExpiry {
+				if engines[i] == nil || lastHashes[i] != networkMap.MapSignature.PayloadHash {
+					t.Fatal("expiry probe must retain the configured signed map")
+				}
+				continue
 			}
 			if engines[i] == nil {
 				host, portText, err := net.SplitHostPort(networkMap.Node.Endpoint)
@@ -70,6 +79,7 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			if _, err := engines[i].Configure(t.Context(), cfg, networkMap); err != nil {
 				t.Fatal("engine rejected committed backend map", err)
 			}
+			lastHashes[i] = networkMap.MapSignature.PayloadHash
 		}
 		exchange := func(sender int, packet []byte, allowed bool) {
 			t.Helper()
@@ -102,7 +112,25 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 			p[33] = flags
 			return p
 		}
-		if input.Accepted {
+		if input.WaitForExpiry {
+			if !input.Accepted || acceptedCount == 0 || len(input.Maps[0].Network.SharePeerGrants) != 1 || len(input.Maps[1].Network.SharePeerGrants) != 1 {
+				t.Fatal("expiry probe requires an established sharing pair")
+			}
+			deadline := input.Maps[0].Network.SharePeerGrants[0].ExpiresAt
+			if !deadline.Equal(input.Maps[1].Network.SharePeerGrants[0].ExpiresAt) || time.Until(deadline) <= 0 || time.Until(deadline) > 2*time.Minute {
+				t.Fatal("invalid live sharing expiry deadline")
+			}
+			select {
+			case <-t.Context().Done():
+				t.Fatal(t.Context().Err())
+			case <-time.After(time.Until(deadline.Add(50 * time.Millisecond))):
+			}
+			exchange(1, packet(1, 16), false)
+			exchange(0, packet(0, 24), false)
+			exchange(1, packet(1, 2), false)
+			expiredCount++
+			t.Log("real backend lease expired with the same configured peers and signed maps")
+		} else if input.Accepted {
 			// A successful handshake and reply establish live transport before
 			// the reverse-initiation denial probe.
 			exchange(1, packet(1, 2), true)
@@ -122,5 +150,8 @@ func TestSharingLiveBackendEngines(t *testing.T) {
 	}
 	if acceptedCount != 2 || withdrawnCount != 2 {
 		t.Fatal("live user/group engine scenario was incomplete", acceptedCount, withdrawnCount)
+	}
+	if os.Getenv("CLIENT_SHARING_EXPECT_EXPIRY") == "1" && expiredCount != 1 {
+		t.Fatal("required backend expiry probe was omitted")
 	}
 }
