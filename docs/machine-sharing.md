@@ -70,8 +70,9 @@ passed this expanded encrypted scenario on 7 September 2026.
 `TestSharingBackendMapConsumer` accepts CI-supplied Coordinator base/delta
 evidence and invokes the production CLI/agent cache consumer. It checks grant,
 withdrawal, idempotent cache replay and unchanged cache after signature tampering.
-It requires a backend fixture and skips local short runs. Integration of its
-fixture producer and a successful combined CI run are still required; it does
+It skips local short runs. The unchanged fixture captured by Coordinator run
+34140193587 is checked in with its provenance and SHA-256 under
+`cmd/endlessnet-client/testdata/`. A successful consumer CI run is still required; it does
 not yet establish engine configuration from backend events. Recorded events are
 validated at their Coordinator-observed timestamps through the same cache helper;
 normal runtime still supplies the current time. Historical replay does not claim

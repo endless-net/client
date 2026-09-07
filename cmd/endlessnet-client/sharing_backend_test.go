@@ -18,7 +18,7 @@ func TestSharingBackendMapConsumer(t *testing.T) {
 	}
 	path := os.Getenv("CLIENT_SHARING_BACKEND_FIXTURE")
 	if path == "" {
-		t.Fatal("backend sharing fixture required")
+		path = "testdata/sharing-backend-fixture.json"
 	}
 	file, err := os.Open(path)
 	if err != nil {
