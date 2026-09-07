@@ -63,7 +63,16 @@ handshake recovery with signed fixture maps, not backend map delivery or Relay.
 The next encrypted extension exercises UDP and ICMP echo on the same live
 engines: unsolicited replies deny, recipient requests and matched replies pass,
 expiry blocks both directions, renewal requires fresh request state and
-withdrawal blocks both again. This extension still requires its own CI result.
+withdrawal blocks both again. At `32164b1`,
+[job 101798673248](https://github.com/endless-net/management/actions/runs/34139686735/job/101798673248)
+passed this expanded encrypted scenario on 7 September 2026.
+
+`TestSharingBackendMapConsumer` accepts CI-supplied Coordinator base/delta
+evidence and invokes the production CLI/agent cache consumer. It checks grant,
+withdrawal, cached-map verification and unchanged cache after signature tampering.
+It requires a backend fixture and skips local short runs. Integration of its
+fixture producer and a successful combined CI run are still required; it does
+not yet establish engine configuration from backend events.
 
 The first encrypted-test CI attempt at `890236a` did not execute the scenario:
 [Linux job 101766343601](https://github.com/endless-net/client/actions/runs/34129622991/job/101766343601)
