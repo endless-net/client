@@ -180,7 +180,19 @@ func copyPublicFile(t *testing.T, source, target string) {
 func run(name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	return exec.CommandContext(ctx, name, args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, name, args...)
+	if strings.EqualFold(filepath.Base(name), "powershell.exe") {
+		// pwsh's module paths can shadow Windows PowerShell's built-in
+		// Security module. Let the child initialize its own default paths.
+		cmd.Env = []string{}
+		for _, value := range os.Environ() {
+			key, _, _ := strings.Cut(value, "=")
+			if !strings.EqualFold(key, "PSModulePath") {
+				cmd.Env = append(cmd.Env, value)
+			}
+		}
+	}
+	return cmd.CombinedOutput()
 }
 
 func command(t *testing.T, name string, args ...string) []byte {
