@@ -59,6 +59,11 @@ func setup(t *testing.T) (*testcontrol.Server, *api.API, api.RegisterNodeRequest
 
 func TestRegistrationBindingAndRevocation(t *testing.T) {
 	s, a, req, result, key := setup(t)
+	heartbeat, err := a.UpdateNodeEndpointState(result.Node.ID, api.UpdateNodeEndpointRequest{Status: api.NodeStatusOnline})
+	check(t, err)
+	if !heartbeat.Revision.Equal(result.Revision) || heartbeat.MapSignature.PayloadHash != result.MapSignature.PayloadHash {
+		t.Fatal("heartbeat changed signed projection")
+	}
 	repeated, err := a.RegisterNode(req)
 	check(t, err)
 	if repeated.Node.ID != result.Node.ID || repeated.NodeCredential != result.NodeCredential {

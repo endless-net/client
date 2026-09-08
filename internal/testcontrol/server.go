@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -412,6 +413,7 @@ func (s *Server) registerLocked(req api.RegisterNodeRequest, authorization strin
 		n = &node{Map: api.RegisterNodeResponse{Node: api.Node{ID: "node-" + rand.Text(), NetworkID: networkID, Hostname: req.Hostname, IdentityPublicKey: req.IdentityPublicKey, PublicKey: req.PublicKey, DeviceFingerprint: req.DeviceFingerprint, AssignedIP: addr.String(), ApprovalState: api.NodeApprovalApproved, Status: "online"}, Network: network, Revision: api.MapRevision{Network: 1}}}
 	}
 	result := clone(n.Map)
+	result.Node.AdvertisedIPs = slices.Clone(req.AdvertisedIPs)
 	result.SchemaVersion = api.SchemaVersion
 	result.IdempotencyID = req.IdempotencyID
 	result.RegistrationBinding = binding
@@ -444,9 +446,18 @@ func (s *Server) endpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m := clone(n.Map)
-	m.Node.Endpoint = req.Endpoint
-	m.Node.EndpointGeneration = req.Generation
-	m.Node.EndpointCandidates = req.Candidates
+	if req.Generation != 0 && req.Generation < m.Node.EndpointGeneration {
+		http.Error(w, "stale endpoint generation", http.StatusConflict)
+		return
+	}
+	if req.Endpoint != "" || req.Generation != 0 || len(req.Candidates) != 0 {
+		m.Node.Endpoint = req.Endpoint
+		m.Node.EndpointGeneration = req.Generation
+		m.Node.EndpointCandidates = req.Candidates
+	}
+	if req.Status != "" {
+		m.Node.Status = req.Status
+	}
 	if req.TTL != "" {
 		ttl, err := time.ParseDuration(req.TTL)
 		if err != nil || ttl <= 0 || ttl > 24*time.Hour {
@@ -458,6 +469,12 @@ func (s *Server) endpoint(w http.ResponseWriter, r *http.Request) {
 	}
 	if api.ValidateNetworkMap(m) != nil {
 		http.Error(w, "invalid endpoint", 400)
+		return
+	}
+	// A liveness heartbeat must not manufacture a new map revision and keep
+	// the agent from ever entering its map stream.
+	if reflect.DeepEqual(m.Node, n.Map.Node) {
+		writeJSON(w, m)
 		return
 	}
 	m.Revision.Network++
