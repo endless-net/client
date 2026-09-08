@@ -114,11 +114,15 @@ func TestSignedMapUpdatesAndFailures(t *testing.T) {
 	check(t, err)
 	public, err := wg.PublicKey(private)
 	check(t, err)
-	for _, count := range []int{1, 1, 0} {
+	for step, count := range []int{1, 1, 0} {
+		hostname, port := "peer", 443
+		if step == 1 {
+			hostname, port = "renamed-peer", 8443
+		}
 		check(t, s.UpdateMap(result.Node.ID, func(m *api.NetworkMapSnapshot) {
 			m.Peers = nil
 			if count != 0 {
-				m.Peers = []api.Peer{{ID: "peer", Hostname: "peer", PublicKey: public, AllowedIPs: []string{"100.80.0.20/32"}, ACLRestricted: true, ACLGrants: []api.ACLGrant{{DestinationCIDRs: []string{"100.80.0.20/32"}, AllowedPorts: []api.ACLPort{{Protocol: "tcp", Port: 443}}}}}}
+				m.Peers = []api.Peer{{ID: "peer", Hostname: hostname, PublicKey: public, AllowedIPs: []string{"100.80.0.20/32"}, ACLRestricted: true, ACLGrants: []api.ACLGrant{{DestinationCIDRs: []string{"100.80.0.20/32"}, AllowedPorts: []api.ACLPort{{Protocol: "tcp", Port: port}}}}}}
 			}
 			m.Network.DNS = []string{"1.1.1.1"}
 		}))
@@ -128,6 +132,12 @@ func TestSignedMapUpdatesAndFailures(t *testing.T) {
 		check(t, err)
 		if len(current.Peers) != count || current.Network.DNS[0] != "1.1.1.1" {
 			t.Fatal("map update was not projected")
+		}
+		if count != 0 {
+			peer := current.Peers[0]
+			if peer.Hostname != hostname || !peer.ACLRestricted || len(peer.ACLGrants) != 1 || len(peer.ACLGrants[0].AllowedPorts) != 1 || peer.ACLGrants[0].AllowedPorts[0].Port != port {
+				t.Fatal("peer identity or ACL update was not projected")
+			}
 		}
 	}
 	check(t, s.FailNext("GET", "/maps/"+result.Node.ID+"/stream", api.ErrorCodeTemporarilyUnavailable))
