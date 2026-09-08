@@ -74,7 +74,12 @@ func TestInstalledClient(t *testing.T) {
 			command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(artifacts, "endlessnet-client-uninstall.ps1"))
 		}
 		t.Cleanup(func() { uninstall(t) })
-		command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(artifacts, "endlessnet-client-install.ps1"))
+		// This fresh installer only emits service-manager and public file errors;
+		// unlike client/IPC output it contains no enrolled identity or credentials.
+		output, err := run("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(artifacts, "endlessnet-client-install.ps1"))
+		if err != nil {
+			t.Fatalf("Windows installer failed: %v\n%s", err, output)
+		}
 		restart = func(t *testing.T) {
 			command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; Restart-Service endlessnet-client; (Get-Service endlessnet-client).WaitForStatus('Running', '00:00:30')")
 		}
