@@ -61,6 +61,13 @@ across agent restart and logout cleanup. The browser scenario uses the real `up`
 command and explicit approval controls. ACL contents are verified at the signed-map
 boundary; kernel ACL behavior is covered by the existing separate ACL tests.
 
+The scenarios exposed a client runtime gap after v0.5.0: ordinary agent sync did
+not clear revoked enrollment. Agent sync and endpoint updates now recognize only
+validated terminal Client API error responses (including matching request ID),
+stop the tunnel, and clear node-bound state. Device keys, ownership, trust, session
+and connection intent are preserved. Temporary/malformed errors and failed tunnel
+teardown cannot trigger cleanup. This correction is subsequent to the v0.5.0 tag.
+
 ## Evidence boundaries
 
 These tests establish client behavior against a controlled peer, not production

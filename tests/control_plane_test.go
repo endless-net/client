@@ -62,6 +62,18 @@ func TestControlPlaneLifecycle(t *testing.T) {
 	}
 	before := len(s.Events())
 	s.BreakStreams()
+	resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer resumeCancel()
+	if err := testclient.Await(resumeCtx, func() bool {
+		for _, event := range s.Events()[before:] {
+			if event.Kind == "stream" && event.Cursor.Revision.Network >= status.MapRevision {
+				return true
+			}
+		}
+		return false
+	}); err != nil {
+		t.Fatal("client did not reconnect with a saved cursor")
+	}
 	update(t, s, id, func(m *api.NetworkMapSnapshot) {
 		m.Peers[0].Hostname = "renamed"
 		m.Peers[0].ACLGrants[0].AllowedPorts[0].Port = 8443
@@ -77,6 +89,7 @@ func TestControlPlaneLifecycle(t *testing.T) {
 		t.Fatal("client did not resume with a saved cursor")
 	}
 	s.SetUnavailable(true)
+	n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.State == ipc.StateDegraded })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	requests := len(s.Events())
@@ -113,6 +126,9 @@ func TestControlPlaneRejectsInvalidMaps(t *testing.T) {
 	n.Stop()
 	for _, fault := range []string{"signature", "unknown-key", "expired"} {
 		t.Run(fault, func(t *testing.T) {
+			// A duplicate of the already verified map can be ignored by hash.
+			// Exercise rejection of a genuinely new projection instead.
+			update(t, s, id, func(m *api.NetworkMapSnapshot) { m.Network.Name = "fault-" + fault })
 			if err := s.FaultNextMap(id, fault); err != nil {
 				t.Fatal(err)
 			}
@@ -128,7 +144,9 @@ func TestControlPlaneRejectsInvalidMaps(t *testing.T) {
 	if err := s.Revoke(id); err != nil {
 		t.Fatal(err)
 	}
-	n.AwaitStatus(func(v ipc.StatusResponse) bool { return !v.NodeCredentialPresent && v.NodeID == "" })
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.State == ipc.StateNeedsEnrollment && !v.NodeCredentialPresent && v.NodeID == ""
+	})
 }
 func TestControlPlaneBrowserEnrollment(t *testing.T) {
 	// Use the same CI opt-in and isolation requirements as agent scenarios.

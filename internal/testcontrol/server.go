@@ -86,6 +86,7 @@ func New(t testing.TB) *Server {
 	}
 	s := &Server{key: key, trust: trust, session: rand.Text(), networks: map[string]api.Network{}, joins: map[string]string{}, nodes: map[string]*node{}, operations: map[string]operation{}, enrollments: map[string]*enrollment{}, changed: make(chan struct{}), streams: make(chan struct{}), closed: make(chan struct{}), faults: map[string]api.ErrorCode{}, mapFaults: map[string]string{}}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /client/readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /server-key", s.serverKey)
 	mux.HandleFunc("POST /nodes/register", s.register)
 	mux.HandleFunc("POST /nodes/enrollment-requests", s.createEnrollment)
@@ -283,6 +284,7 @@ func writeJSON(w http.ResponseWriter, value any) {
 }
 func publicError(w http.ResponseWriter, code api.ErrorCode) {
 	status, _ := code.HTTPStatus()
+	w.Header().Set("X-Request-ID", "test-request")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	writeJSON(w, api.PublicError{SchemaVersion: api.SchemaVersion, ErrorCode: code, DiagnosticMessage: "test control request rejected", RequestID: "test-request"})

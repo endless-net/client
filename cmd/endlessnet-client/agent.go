@@ -158,7 +158,7 @@ func agentEndpointCandidates(endpoint, endpointFile string, listenPort int) ([]s
 	return candidates, len(candidates) > 0, nil
 }
 
-func updatePublishedEndpoint(configPath string, timeout time.Duration, candidates []string, generated bool, ttl time.Duration, state *endpointUpdateState, debounce time.Duration, now time.Time) (bool, error) {
+func updatePublishedEndpoint(configPath string, timeout time.Duration, candidates []string, generated bool, ttl time.Duration, state *endpointUpdateState, debounce time.Duration, now time.Time) (updated bool, resultErr error) {
 	cfg, err := client.LoadConfig(configPath)
 	if err != nil {
 		return false, err
@@ -199,6 +199,13 @@ func updatePublishedEndpoint(configPath string, timeout time.Duration, candidate
 	}
 	api := apiFromConfig(cfg)
 	api.HTTPClient.Timeout = timeout + 5*time.Second
+	transport := &agentCredentialTransport{base: api.HTTPClient.Transport, nodeID: cfg.NodeID, credential: cfg.NodeCredential}
+	api.HTTPClient.Transport = transport
+	defer func() {
+		if resultErr != nil && transport.terminal != nil {
+			resultErr = transport.terminal
+		}
+	}()
 	if err := refreshMapSigningTrust(&cfg, api); err != nil {
 		return false, err
 	}
@@ -571,6 +578,17 @@ func cmdAgent(args []string) error {
 					_, err = updatePublishedEndpoint(*configPath, timeout, discovery.Candidates, true, endpointTTL, &endpointState, endpointUpdateDebounce, time.Now().UTC())
 				}
 			}
+			if err != nil {
+				if terminal, cleanupErr := handleAgentTerminalCredential(ctx, ipcOpts, err); terminal {
+					if cleanupErr != nil {
+						err = cleanupErr
+					} else {
+						err = nil
+						skipForRecovery = true
+						streamFromRevision = 0
+					}
+				}
+			}
 			operationMu.Unlock()
 			if skipForDisconnected {
 				proceed, woken := waitForAgentSync(ctx, interval, syncWake)
@@ -771,7 +789,7 @@ func agentNetworkMap(configPath string, timeout time.Duration, offline bool, fro
 	return cfg, networkMap, false, nil
 }
 
-func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevision uint64) (client.Config, clientapi.RegisterNodeResponse, bool, error) {
+func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevision uint64) (resultConfig client.Config, resultMap clientapi.RegisterNodeResponse, unchanged bool, resultErr error) {
 	cfg, err := client.LoadConfig(configPath)
 	if err != nil {
 		return cfg, clientapi.RegisterNodeResponse{}, false, err
@@ -787,6 +805,13 @@ func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevisio
 	}
 	api := apiFromConfig(cfg)
 	api.HTTPClient.Timeout = timeout + 5*time.Second
+	transport := &agentCredentialTransport{base: api.HTTPClient.Transport, nodeID: cfg.NodeID, credential: cfg.NodeCredential}
+	api.HTTPClient.Transport = transport
+	defer func() {
+		if resultErr != nil && transport.terminal != nil {
+			resultErr = transport.terminal
+		}
+	}()
 	if err := refreshMapSigningTrust(&cfg, api); err != nil {
 		return cfg, clientapi.RegisterNodeResponse{}, false, err
 	}
