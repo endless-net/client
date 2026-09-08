@@ -27,6 +27,9 @@ CI also runs [installation and basic service acceptance](docs/installation-tests
 on Ubuntu, Windows Server and macOS, including local IPC checks, disconnect
 persistence across restart, and service removal.
 
+[Control-plane scenario tests](docs/testing-control-plane.md) run the real client
+against an isolated, stateful test server using the pinned Client API contract.
+
 The versioned local service and ownership-recovery contracts are documented in
 [`docs/client-ipc-v2.openapi.yaml`](docs/client-ipc-v2.openapi.yaml) and
 [`docs/client-ownership-recovery.md`](docs/client-ownership-recovery.md).

@@ -185,10 +185,38 @@ jobs:
           path: ${{ runner.temp }}/install-test/results.log
           if-no-files-found: warn
 
+  control-plane:
+    name: Client control-plane scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Check test server under race detector
+        run: go test -race ./internal/testcontrol -count=1 -timeout 2m
+      - name: Build real client and scenario runner
+        run: |
+          go build -o "$RUNNER_TEMP/control-client" ./cmd/endlessnet-client
+          go test -c -o "$RUNNER_TEMP/control-tests" ./tests
+      - name: Run scenarios three times in an isolated network namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+            ENDLESSNET_CONTROL_TEST=1 ENDLESSNET_TEST_BINARY="$RUNNER_TEMP/control-client" \
+            unshare --net -- bash -c '
+              set -euo pipefail
+              ip link set lo up
+              "$1" -test.run="^TestControlPlane" -test.count=3 -test.v -test.timeout=8m
+            ' bash "$RUNNER_TEMP/control-tests"
+
   verify:
     name: verify
     runs-on: ubuntu-latest
-    needs: [verify-linux, verify-windows, verify-macos, installation]
+    needs: [verify-linux, verify-windows, verify-macos, installation, control-plane]
     if: ${{ !cancelled() }}
     steps:
       - name: Require platform verification
@@ -199,6 +227,7 @@ jobs:
           [ "${{ needs.verify-windows.result }}" = "success" ]
           [ "${{ needs.verify-macos.result }}" = "success" ]
           [ "${{ needs.installation.result }}" = "success" ]
+          [ "${{ needs.control-plane.result }}" = "success" ]
 
   external-stun-compatibility:
     name: External STUN compatibility
