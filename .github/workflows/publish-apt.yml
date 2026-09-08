@@ -32,21 +32,33 @@ jobs:
     steps:
       - name: Check required secrets
         env:
-          APT_REPO_DEPLOY_KEY: ${{ secrets.APT_REPO_DEPLOY_KEY }}
+          APT_APP_ID: ${{ secrets.APT_APP_ID }}
+          APT_APP_PRIVATE_KEY: ${{ secrets.APT_APP_PRIVATE_KEY }}
           APT_SIGNING_PRIVATE_KEY: ${{ secrets.APT_SIGNING_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          [ -n "$APT_REPO_DEPLOY_KEY" ] || { echo "::error::APT_REPO_DEPLOY_KEY is required"; exit 1; }
+          [ -n "$APT_APP_ID" ] || { echo "::error::APT_APP_ID is required"; exit 1; }
+          [ -n "$APT_APP_PRIVATE_KEY" ] || { echo "::error::APT_APP_PRIVATE_KEY is required"; exit 1; }
           [ -n "$APT_SIGNING_PRIVATE_KEY" ] || { echo "::error::APT_SIGNING_PRIVATE_KEY is required"; exit 1; }
 
       - name: Checkout source
         uses: actions/checkout@v7
 
+      - name: Create APT publisher token
+        id: apt-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APT_APP_ID }}
+          private-key: ${{ secrets.APT_APP_PRIVATE_KEY }}
+          owner: endless-net
+          repositories: apt
+          permission-contents: write
+
       - name: Checkout APT Pages repository
         uses: actions/checkout@v7
         with:
           repository: ${{ env.APT_REPOSITORY }}
-          ssh-key: ${{ secrets.APT_REPO_DEPLOY_KEY }}
+          token: ${{ steps.apt-token.outputs.token }}
           path: apt-pages
 
       - name: Set up Go

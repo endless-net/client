@@ -92,3 +92,14 @@ APT publication is separate; its initial
 [run](https://github.com/endless-net/client/actions/runs/34196119134) failed at push
 because the deploy key lacked write access. Creating a replacement key was blocked
 by repository policy. The core release does not imply successful APT publication.
+
+APT authentication now uses the `endlessnet-apt-publisher` GitHub App, installed
+only on `endless-net/apt`. The Client repository supplies Actions secrets
+`APT_APP_ID` and `APT_APP_PRIVATE_KEY`; the workflow requests a temporary token
+for `apt` with `contents: write` and uses it for HTTPS checkout and push.
+`APT_REPO_DEPLOY_KEY` is no longer consumed. The APT signing key remains separate.
+The token action revokes its token during job cleanup. This configuration change
+alone does not establish successful publication or validate the secret contents.
+Rerunning the old tag's workflow still uses its old authentication configuration;
+publishing version 0.5.0 must retain the original tagged source, not rebuild newer
+main code under the existing version.
