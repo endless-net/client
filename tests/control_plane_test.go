@@ -52,13 +52,12 @@ func TestControlPlaneLifecycle(t *testing.T) {
 	}
 	update(t, s, id, func(m *api.NetworkMapSnapshot) {
 		m.Peers = []api.Peer{{ID: "test-peer", Hostname: "peer", PublicKey: public, AllowedIPs: []string{"100.90.0.20/32"}, ACLRestricted: true, ACLGrants: []api.ACLGrant{{DestinationCIDRs: []string{"100.90.0.20/32"}, AllowedPorts: []api.ACLPort{{Protocol: "tcp", Port: 443}}}}}}
-		m.Network.DNS = []string{"1.1.1.1"}
 	})
 	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.PeerCount == 1 && v.MapRevision >= 2 })
 	var diagnostics ipc.DiagnosticsResponse
 	n.Service("diagnostics", &diagnostics)
-	if diagnostics.Diagnostics.DNSSummary == nil || len(diagnostics.Diagnostics.DNSSummary.NetworkDNSServers) != 1 || diagnostics.Diagnostics.RouteSummary == nil || diagnostics.Diagnostics.RouteSummary.PeerCount != 1 {
-		t.Fatal("DNS/route projection did not reach IPC diagnostics")
+	if diagnostics.Diagnostics.RouteSummary == nil || diagnostics.Diagnostics.RouteSummary.PeerCount != 1 {
+		t.Fatal("route projection did not reach IPC diagnostics")
 	}
 	before := len(s.Events())
 	s.BreakStreams()
@@ -73,7 +72,7 @@ func TestControlPlaneLifecycle(t *testing.T) {
 		return false
 	}); err != nil {
 		n.Service("diagnostics", &diagnostics)
-		t.Fatalf("client did not reconnect with a saved cursor: errors=%v events=%+v", diagnostics.Diagnostics.LastErrors, s.Events()[before:])
+		t.Fatalf("client did not reconnect with a saved cursor: errors=%v requests=%d", diagnostics.Diagnostics.LastErrors, len(s.Events())-before)
 	}
 	update(t, s, id, func(m *api.NetworkMapSnapshot) {
 		m.Peers[0].Hostname = "renamed"
@@ -121,6 +120,25 @@ func TestControlPlaneLifecycle(t *testing.T) {
 	n.AwaitStatus(func(v ipc.StatusResponse) bool {
 		return !v.NodeCredentialPresent && !v.CachedMapPresent && v.NodeID == ""
 	})
+}
+func TestControlPlaneDNSProjection(t *testing.T) {
+	s, n, id := controlScenario(t)
+	// Keep system DNS outside this acceptance test. The normal sync command
+	// verifies and caches the map; a disconnected agent exposes its projection.
+	var disconnected ipc.DisconnectResponse
+	n.Service("disconnect", &disconnected)
+	n.Stop()
+	update(t, s, id, func(m *api.NetworkMapSnapshot) {
+		m.Network.DNS = []string{"1.1.1.1"}
+	})
+	n.MustRun("sync", "--config", n.Config, "--timeout", "1s")
+	n.Start()
+	var diagnostics ipc.DiagnosticsResponse
+	n.Service("diagnostics", &diagnostics)
+	dns := diagnostics.Diagnostics.DNSSummary
+	if dns == nil || len(dns.NetworkDNSServers) != 1 || dns.NetworkDNSServers[0] != "1.1.1.1" {
+		t.Fatal("DNS projection did not reach IPC diagnostics")
+	}
 }
 func TestControlPlaneRejectsInvalidMaps(t *testing.T) {
 	s, n, id := controlScenario(t)
