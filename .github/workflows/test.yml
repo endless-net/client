@@ -174,7 +174,7 @@ jobs:
           ENDLESSNET_INSTALL_TEST: '1'
         run: |
           $env:ENDLESSNET_TEST_BINARY = Join-Path $env:RUNNER_TEMP 'install-test/endlessnet-client.exe'
-          & "$env:RUNNER_TEMP/install-test/installation.test.exe" -test.run '^TestInstalledClient$' -test.v -test.timeout 8m 2>&1 |
+          & "$env:RUNNER_TEMP/install-test/installation.test.exe" '-test.run=^TestInstalledClient$' '-test.v' '-test.timeout=8m' 2>&1 |
             Tee-Object -FilePath "$env:RUNNER_TEMP/install-test/results.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve installation test report
