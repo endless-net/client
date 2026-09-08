@@ -72,7 +72,8 @@ func TestControlPlaneLifecycle(t *testing.T) {
 		}
 		return false
 	}); err != nil {
-		t.Fatal("client did not reconnect with a saved cursor")
+		n.Service("diagnostics", &diagnostics)
+		t.Fatalf("client did not reconnect with a saved cursor: errors=%v events=%+v", diagnostics.Diagnostics.LastErrors, s.Events()[before:])
 	}
 	update(t, s, id, func(m *api.NetworkMapSnapshot) {
 		m.Peers[0].Hostname = "renamed"

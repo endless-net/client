@@ -77,7 +77,7 @@ func (n *Node) Start() {
 	if n.cmd != nil {
 		n.t.Fatal("agent already started")
 	}
-	n.cmd = exec.Command(n.Binary, "agent", "--config", n.Config, "--ipc-socket", n.Socket, "--wg-interface", n.Interface, "--interval", "100ms", "--timeout", "300ms", "--stun-timeout", "100ms", "--reconnect-max-delay", "300ms", "--reconnect-jitter", "0")
+	n.cmd = exec.Command(n.Binary, "agent", "--config", n.Config, "--state-output", filepath.Join(filepath.Dir(n.Config), "agent-state.json"), "--ipc-socket", n.Socket, "--wg-interface", n.Interface, "--interval", "100ms", "--timeout", "300ms", "--stun-timeout", "100ms", "--reconnect-max-delay", "300ms", "--reconnect-jitter", "0")
 	n.cmd.Stdout = io.Discard
 	n.cmd.Stderr = io.Discard
 	if err := n.cmd.Start(); err != nil {
