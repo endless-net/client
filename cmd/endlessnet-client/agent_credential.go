@@ -41,8 +41,9 @@ func (t *agentCredentialTransport) RoundTrip(req *http.Request) (*http.Response,
 		return resp, err
 	}
 	nodePath := url.PathEscape(t.nodeID)
-	if resp.StatusCode != http.StatusUnauthorized || req.Header.Get(nodeCredentialHeader) != t.credential || t.credential == "" ||
-		!((req.Method == http.MethodPatch && req.URL.EscapedPath() == "/nodes/"+nodePath+"/endpoint") || (req.Method == http.MethodGet && req.URL.EscapedPath() == "/maps/"+nodePath+"/stream")) {
+	endpointRequest := req.Method == http.MethodPatch && req.URL.EscapedPath() == "/nodes/"+nodePath+"/endpoint"
+	mapRequest := req.Method == http.MethodGet && req.URL.EscapedPath() == "/maps/"+nodePath+"/stream"
+	if resp.StatusCode != http.StatusUnauthorized || req.Header.Get(nodeCredentialHeader) != t.credential || t.credential == "" || (!endpointRequest && !mapRequest) {
 		return resp, nil
 	}
 	if requireJSONContentType(resp.Header.Get("Content-Type")) != nil {
