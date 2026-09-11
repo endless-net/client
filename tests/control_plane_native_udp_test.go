@@ -163,4 +163,82 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 	if fresh("24001") || fresh("24002") {
 		t.Fatal("disconnected client still delivered overlay traffic")
 	}
+	// HC-017/HC-018: a new agent process must preserve disconnected intent and
+	// enrollment. Restoring connected intent must recover actual traffic using
+	// the same public node/key binding held by the unchanged reference peer.
+	registrations := func() int {
+		count := 0
+		for _, event := range s.Events() {
+			if event.Kind == "registration-request" {
+				count++
+			}
+		}
+		return count
+	}
+	before := registrations()
+	t.Log("native lifecycle: restart while disconnected")
+	n.Stop()
+	n.Start()
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.State == ipc.StateDisconnected && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected && v.NodeID == initial.NodeID && v.NodeCredentialPresent && v.CachedMapValid
+	})
+	if fresh("24001") || fresh("24002") {
+		t.Fatal("agent restart ignored disconnected intent")
+	}
+	assertConnected := func() {
+		t.Helper()
+		v := n.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.NodeID == initial.NodeID && v.OverlayIP == initial.OverlayIP && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.NodeCredentialPresent && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535 && len(v.WireGuard.Peers) == 1
+		})
+		// The Client may choose a new UDP port when its native device restarts.
+		// Only the fixture's return endpoint changes; its peer identity/map do not.
+		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(v.WireGuard.ListenPort)))
+		for _, port := range []string{"24001", "24002"} {
+			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+			err := testclient.Await(ctx, func() bool { return fresh(port) })
+			cancel()
+			if err != nil {
+				t.Fatal("connected intent did not restore native UDP traffic")
+			}
+		}
+		if registrations() != before {
+			t.Fatal("connection intent recovery attempted enrollment")
+		}
+	}
+	t.Log("native lifecycle: reconnect with retained identity")
+	var connected ipc.ConnectResponse
+	n.Service("connect", &connected)
+	assertConnected()
+	n.Service("connect", &connected)
+	t.Log("native lifecycle: restart while connected")
+	n.Stop()
+	n.Start()
+	assertConnected()
+
+	// HC-065 / IT-20: retain the reference peer's keys and routes throughout
+	// terminal retirement. Denial must follow the Client's credential handling,
+	// not a peer-map withdrawal or an application shutdown in the fixture.
+	t.Log("native lifecycle: revoke credential with established traffic")
+	retiredSession := startApplicationSession(t, binary, "", "udp", address("24001"))
+	retiredSession("ok")
+	if err := s.Revoke(initial.NodeID); err != nil {
+		t.Fatal(err)
+	}
+	for phase := range 2 {
+		if phase == 1 {
+			t.Log("native lifecycle: restart after terminal retirement")
+			n.Stop()
+			n.Start()
+		}
+		n.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.State == ipc.StateNeedsEnrollment && v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent
+		})
+		retiredSession("blocked")
+		if fresh("24001") || fresh("24002") {
+			t.Fatal("retired client still delivered fresh native UDP traffic")
+		}
+		if registrations() != before {
+			t.Fatal("terminal retirement or restart attempted enrollment")
+		}
+	}
 }
