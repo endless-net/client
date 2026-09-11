@@ -13,7 +13,7 @@ import (
 	wg "github.com/endless-net/client-api/clientapi/wireguard"
 	"github.com/tailscale/wireguard-go/conn"
 	"github.com/tailscale/wireguard-go/device"
-	"github.com/tailscale/wireguard-go/tun/netstack"
+	"github.com/tailscale/wireguard-go/tun"
 )
 
 // NewTCP serves TCP and UDP 32-byte nonce echoes through a protocol stack whose
@@ -35,10 +35,11 @@ func newTCP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 	if !clientIP.IsValid() || !peerIP.IsValid() || clientIP.Is4() != peerIP.Is4() || !underlayIP.Is4() || !underlayIP.IsGlobalUnicast() {
 		t.Fatal("invalid TCP reference peer address family")
 	}
-	tunnel, stack, err := netstack.CreateNetTUN([]netip.Addr{peerIP}, nil, 1280)
+	stack, err := newReferenceStack(peerIP)
 	if err != nil {
 		t.Fatal("could not create reference TCP stack")
 	}
+	var tunnel tun.Device = stack
 	private, err := wg.GeneratePrivateKey()
 	if err != nil {
 		_ = tunnel.Close()

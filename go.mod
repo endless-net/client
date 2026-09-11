@@ -11,6 +11,7 @@ require (
 	golang.org/x/crypto v0.53.0
 	golang.org/x/sys v0.46.0
 	google.golang.org/protobuf v1.36.11
+	gvisor.dev/gvisor v0.0.0-20230927004350-cbd86285d259
 )
 
 require (
@@ -18,5 +19,4 @@ require (
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
-	gvisor.dev/gvisor v0.0.0-20230927004350-cbd86285d259 // indirect
 )

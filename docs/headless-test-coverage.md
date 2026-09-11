@@ -1849,10 +1849,12 @@ the required aggregate correctly rejected the source because of the failed
 root. Optional external STUN was skipped and is outside these root counts.
 
 [CI 34650528186](https://github.com/endless-net/client/actions/runs/34650528186)
-has instantiated the next matrix for `28aa2939cc944ebb9aad061c3bb3144a28544cd1`,
-which aligns initial IPC readiness with the existing 30-second service timeout.
-Full source qualification remains pending. HC-001-HC-065 coverage remains
-incomplete, with the other variants and product gaps listed above.
+completed with failure for `28aa2939cc944ebb9aad061c3bb3144a28544cd1`, which
+aligns initial IPC readiness with the existing 30-second service timeout.
+Twenty-three native jobs passed; Ubuntu 22.04 x64 repetition 1 crashed during
+reference-peer teardown, as detailed below. This is not full source
+qualification. HC-001-HC-065 coverage remains incomplete, with the other
+variants and product gaps listed above.
 
 ## Two-Relay failover increment: awaiting native evidence
 
@@ -1876,6 +1878,32 @@ Failover remains unqualified until hosted results arrive. This does not prove
 seamless preservation of pre-failure TCP sessions, latency-based selection,
 automatic failback while a healthy backup remains available, NAT transitions,
 or IPv6 underlay.
+
+## Reference TCP peer teardown: awaiting hosted regression evidence
+
+[Ubuntu 22.04 repetition 1](https://github.com/endless-net/client/actions/runs/34650528186/job/103433655084)
+terminated with `panic: send on closed channel` in the reference WireGuard
+netstack adapter's `WriteNotify`, called by a gVisor TCP reset worker. The
+required aggregate rejected the run. The interrupted process cannot supply
+complete root outcomes, even though the other 23 native jobs passed.
+
+The test peer now owns a small TUN adapter around the already-pinned gVisor
+stack. It reads the link queue directly, prevents new packet injection during
+close, closes the synchronized link queue, and destroys the protocol stack,
+joining its workers. It does not use the extra notification channel implicated
+by the panic. This uses the public lifecycle APIs of
+[gVisor's channel endpoint](https://github.com/google/gvisor/blob/cbd86285d259/pkg/tcpip/link/channel/channel.go)
+and [stack](https://github.com/google/gvisor/blob/cbd86285d259/pkg/tcpip/stack/stack.go).
+Neither dependency versions nor Client runtime behavior change.
+
+`TestReferenceStackCloseWithActiveTCP` establishes IPv4 and IPv6 TCP sessions,
+checks payload delivery, then removes the return path and tears down with
+unacknowledged data. It requires termination of both packet readers and the
+stack, and rejects injection after close. This fixture regression belongs to
+the short suite and the existing hosted participant race check; it does not
+add an HC root or prove Client behavior by itself. Native Client traffic and
+two-Relay failover still require a complete hosted matrix for the updated
+source.
 
 ## Next work
 
