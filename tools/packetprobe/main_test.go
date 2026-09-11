@@ -12,6 +12,19 @@ import (
 	"golang.org/x/net/dns/dnsmessage"
 )
 
+func TestApplicationDeadlineFailureIsNotTrafficDenial(t *testing.T) {
+	local, remote := net.Pipe()
+	if err := local.Close(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = remote.Close() }()
+	var exchange applicationExchange
+	err := exchange.exchange(local)
+	if !errors.Is(err, errDeadlineSetup) || errors.Is(err, errUnreachable) {
+		t.Fatal("closed-socket deadline failure did not retain its distinct probe category")
+	}
+}
+
 func TestExplicitDNSResolverAndNameNotFound(t *testing.T) {
 	tcp, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {

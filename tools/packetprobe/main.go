@@ -70,6 +70,7 @@ func serve(address string) error {
 
 var errUnreachable = errors.New("application exchange unavailable")
 var errNameNotFound = errors.New("DNS name not found")
+var errDeadlineSetup = errors.New("application deadline setup failed")
 
 func resolver(server string) *net.Resolver {
 	if server == "" {
@@ -140,7 +141,7 @@ type applicationExchange struct {
 
 func (x *applicationExchange) exchange(conn net.Conn) error {
 	if err := conn.SetDeadline(time.Now().Add(time.Second)); err != nil {
-		return err
+		return errDeadlineSetup
 	}
 	if len(x.pending) >= 128 {
 		return errors.New("too many outstanding application requests")

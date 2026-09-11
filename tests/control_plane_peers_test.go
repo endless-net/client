@@ -349,7 +349,7 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string,
 	}
 	// Report only known fixed probe errors, never arbitrary subprocess output.
 	reason := "unclassified probe failure"
-	for _, known := range []string{"partial application request write", "application response length mismatch", "application response mismatch", "too many outstanding application requests", "network must be tcp or udp"} {
+	for _, known := range []string{"application deadline setup failed", "partial application request write", "application response length mismatch", "application response mismatch", "too many outstanding application requests", "network must be tcp or udp"} {
 		if strings.TrimSpace(string(output)) == known {
 			reason = known
 			break

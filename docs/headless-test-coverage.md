@@ -2334,6 +2334,14 @@ of this source and requires new evidence.
 
 ## Next work
 
+The packet probe now emits the fixed category `application deadline setup failed`
+when a socket cannot accept its deadline. A closed-pipe component regression
+failed before the change and verifies that this remains an internal probe
+failure (exit 1), never an accepted network-denial outcome (exit 2). The native
+harness recognizes that fixed message without exposing arbitrary socket errors.
+This improves future diagnosis; it does not identify the cause of the historical
+unclassified Windows probe failure, whose raw output was not retained.
+
 The native diagnostic-export root now ages its own public JSON artifact using
 the retention duration advertised by the CLI. The next export must delete the
 aged artifact, create a different file in the configured directory, preserve an
