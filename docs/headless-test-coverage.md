@@ -104,7 +104,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; eight-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
 | HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
-| HC-028 | C direct traffic; U Relay implementation; native forced Relay IPv4/IPv6 TCP/UDP scenario pending hosted evidence | NAT, direct/Relay transitions, endpoint failover and remaining Relay variants |
+| HC-028 | C native forced single-Relay IPv4/IPv6 TCP/UDP, outage denial, recovery and agent restart passed all 24 native repetitions | NAT, direct/Relay transitions, endpoint failover and remaining Relay variants |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
@@ -1811,6 +1811,48 @@ state-transition wait, and logs readiness duration. Subsequent state waits and
 native application probes retain their existing bounds. This corrects a test
 precondition mismatch; it is not a claim that the underlying startup latency
 has been fixed or that a 30-second bound has passed on all runners.
+
+## Native Relay qualification after replay correction
+
+[CI 34649824498](https://github.com/endless-net/client/actions/runs/34649824498)
+completed for source `ff8e6a6dabbfc70df7483ba24a86e048adab6222` with
+**551 PASS, 1 FAIL, 0 SKIP** across all 552 expected root executions.
+`TestControlPlaneNativeRelayTraffic` passed every repetition on all eight
+platforms. The table reports the total duration of its IPv4 and IPv6 subtests
+per repetition; these are scenario durations, not recovery latency measurements.
+
+| Platform | Relay repetitions (seconds) |
+| --- | --- |
+| Ubuntu 22.04 x64 | 10.72, 10.76, 10.73 |
+| Ubuntu 24.04 x64 | 10.63, 10.65, 11.60 |
+| Ubuntu 22.04 ARM64 | 10.51, 10.55, 10.52 |
+| Ubuntu 24.04 ARM64 | 10.52, 10.76, 10.59 |
+| Windows 2022 x64 | 31.21, 29.62, 28.72 |
+| Windows 2025 x64 | 33.88, 33.06, 34.93 |
+| macOS 15 Intel | 13.71, 13.57, 13.94 |
+| macOS 15 ARM64 | 10.99, 11.37, 12.07 |
+
+This qualifies a real native Client with a signed map containing no direct
+peer endpoint, using a single TLS Relay contract participant and a reference
+WireGuard peer: fresh TCP/UDP and established-session exchange, denial while
+the Relay is unavailable, fresh-traffic recovery, and recovery after agent
+restart without a new registration. IPv4 and IPv6 overlays use IPv4 underlay.
+It does not qualify multi-Relay HA, NAT transitions, IPv6 underlay, production
+Relay authorization, or recovery of every established application session.
+
+The sole failed root was initial IPC readiness in
+[Windows 2025 repetition 1](https://github.com/endless-net/client/actions/runs/34649824498/job/103430860489),
+before DNS assertions: 14 request deadlines and one harness deadline at 15
+seconds, with a live agent. That same job passed Relay. All eight installation
+jobs, three OS verification jobs and the separate Linux dataplane job passed;
+the required aggregate correctly rejected the source because of the failed
+root. Optional external STUN was skipped and is outside these root counts.
+
+[CI 34650528186](https://github.com/endless-net/client/actions/runs/34650528186)
+has instantiated the next matrix for `28aa2939cc944ebb9aad061c3bb3144a28544cd1`,
+which aligns initial IPC readiness with the existing 30-second service timeout.
+Full source qualification remains pending. HC-001-HC-065 coverage remains
+incomplete, with the other variants and product gaps listed above.
 
 ## Next work
 
