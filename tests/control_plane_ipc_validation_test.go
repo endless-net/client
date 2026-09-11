@@ -35,6 +35,12 @@ func TestControlPlaneIPCRequestValidation(t *testing.T) {
 		{"invalid-json", http.MethodPost, ipc.PathDisconnect, "{", ipc.ErrorInvalidJSON, http.StatusBadRequest},
 		{"unknown-field", http.MethodPost, ipc.PathDisconnect, `{"unexpected":true}`, ipc.ErrorInvalidJSON, http.StatusBadRequest},
 		{"trailing-json", http.MethodPost, ipc.PathDisconnect, "{} {}", ipc.ErrorInvalidJSON, http.StatusBadRequest},
+		{"null", http.MethodPost, ipc.PathDisconnect, "null", ipc.ErrorInvalidJSON, http.StatusBadRequest},
+		{"whitespace-null", http.MethodPost, ipc.PathDisconnect, " \nnull\t", ipc.ErrorInvalidJSON, http.StatusBadRequest},
+		{"array", http.MethodPost, ipc.PathDisconnect, "[]", ipc.ErrorInvalidJSON, http.StatusBadRequest},
+		{"boolean", http.MethodPost, ipc.PathDisconnect, "true", ipc.ErrorInvalidJSON, http.StatusBadRequest},
+		{"number", http.MethodPost, ipc.PathDisconnect, "42", ipc.ErrorInvalidJSON, http.StatusBadRequest},
+		{"string", http.MethodPost, ipc.PathDisconnect, `"disconnect"`, ipc.ErrorInvalidJSON, http.StatusBadRequest},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)

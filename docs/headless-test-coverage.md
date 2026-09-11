@@ -2375,6 +2375,16 @@ full-source qualification and remaining HC variants are still open.
 
 ## Next work
 
+The [published IPC schema](client-ipc-v2.openapi.yaml) declares mutation request
+bodies as objects. A component regression reproduced `null` (including padded
+`null`) reaching the disconnect action through Go's struct JSON decoder. The
+reader now rejects non-object bodies with `invalid_json` before dispatch;
+an absent optional body and `{}` still each execute exactly once. The native
+request-validation root now sends null, arrays, booleans, numbers and strings
+and checks rejection without changing client intent. Protocol/schema versions
+are unchanged. The regression proves the local decoder defect; complete native
+qualification of the extension remains pending at 31 roots / 744 outcomes.
+
 `TestControlPlaneIPCRequestValidation` adds native Unix-socket/Windows-pipe
 checks for wrong method, unknown route, malformed JSON, unknown fields and
 trailing JSON. Each request must return its published typed error and protocol

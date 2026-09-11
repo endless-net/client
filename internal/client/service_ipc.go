@@ -326,8 +326,13 @@ func readServiceIPCRequest[Request any](w http.ResponseWriter, r *http.Request) 
 		writeServiceIPCError(w, r.Context(), ipc.NewError(http.StatusRequestEntityTooLarge, ipc.ErrorRequestTooLarge, errors.New("request body is too large")))
 		return request, false
 	}
-	if strings.TrimSpace(string(raw)) == "" {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" {
 		return request, true
+	}
+	if trimmed[0] != '{' {
+		writeServiceIPCError(w, r.Context(), ipc.NewError(http.StatusBadRequest, ipc.ErrorInvalidJSON, errors.New("request body must be a JSON object")))
+		return request, false
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()

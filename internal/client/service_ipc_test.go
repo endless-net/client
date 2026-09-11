@@ -83,6 +83,40 @@ func TestServiceIPCHandlerEventsStream(t *testing.T) {
 	}
 }
 
+func TestServiceIPCRejectsNonObjectMutationBody(t *testing.T) {
+	for _, body := range []string{"null", " \nnull\t", "[]", "true", "42", `"disconnect"`} {
+		t.Run(body, func(t *testing.T) {
+			calls := 0
+			handler := NewServiceIPCHandler(ServiceIPCHandlers{
+				Disconnect: func(context.Context, ipc.DisconnectRequest) (ipc.DisconnectResponse, error) {
+					calls++
+					return ipc.DisconnectResponse{}, nil
+				},
+			})
+			request := httptest.NewRequest(http.MethodPost, ipc.PathDisconnect, bytes.NewBufferString(body))
+			setTestServiceIPCRequestHeaders(request)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			var problem ipc.ErrorResponse
+			if response.Code != http.StatusBadRequest || json.Unmarshal(response.Body.Bytes(), &problem) != nil || problem.ErrorCode != ipc.ErrorInvalidJSON || calls != 0 {
+				t.Fatal("non-object IPC body reached mutation or returned the wrong error")
+			}
+			for _, valid := range []string{"{}", ""} {
+				request = httptest.NewRequest(http.MethodPost, ipc.PathDisconnect, bytes.NewBufferString(valid))
+				setTestServiceIPCRequestHeaders(request)
+				response = httptest.NewRecorder()
+				handler.ServeHTTP(response, request)
+				if response.Code != http.StatusOK {
+					t.Fatal("valid optional object request was rejected")
+				}
+			}
+			if calls != 2 {
+				t.Fatal("valid object and absent optional body did not each execute once")
+			}
+		})
+	}
+}
+
 func TestServiceIPCHandlerStableErrors(t *testing.T) {
 	handler := NewServiceIPCHandler(ServiceIPCHandlers{
 		Logout: func(ctx context.Context, req ipc.LogoutRequest) (ipc.LogoutResponse, error) {
