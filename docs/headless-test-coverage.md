@@ -2173,6 +2173,29 @@ restart, export path, schema and first-export identity. It prevented the final
 reconnect assertion from running, so the scenario as a whole remains failed.
 The newer TLS and flow-consent scenarios are absent from this source.
 
+## Native trust-store import investigation
+
+The 28-root run failed during test-CA installation on all three macOS Intel
+repetitions, before the trusted Client enrollment step:
+[repeat 1](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831035),
+[repeat 2](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831056),
+[repeat 3](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831025).
+The original helper discarded OS-command output, so those logs do not prove
+whether certificate profile or another import constraint caused the failure.
+
+The HTTPS fixture now uses an ECDSA P-256 CA certificate with a nonempty subject
+instead of the previous Ed25519 certificate with an empty subject. Map signing
+continues to use its existing independent key and contract. Import/cleanup
+failures now expose only exit code, deadline state and allowlisted error
+categories, keeping raw command output private. The existing short TLS test
+still verifies rejection without trust and success with explicit trust; local
+short tests, vet and lint passed. OS-store compatibility remains to be proven
+by native runners. No Client TLS verification bypass was added.
+
+In the nine Linux reports inspected so far, all 28 roots passed, including the
+diagnostic export correction and HTTPS boundary. This partial result does not
+qualify the complete source or the new flow-consent scenario.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

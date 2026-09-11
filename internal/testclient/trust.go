@@ -6,10 +6,13 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/endless-net/client/internal/testcontrol"
@@ -57,16 +60,32 @@ func (n *Node) TrustControlTLS(s *testcontrol.Server) {
 	run := func(args []string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		return exec.CommandContext(ctx, args[0], args[1:]...).Run()
+		output, err := exec.CommandContext(ctx, args[0], args[1:]...).CombinedOutput()
+		if err == nil {
+			return nil
+		}
+		code := -1
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			code = exit.ExitCode()
+		}
+		reason := "unclassified"
+		for _, phrase := range []string{"unknown format", "invalid certificate", "unsupported algorithm", "user interaction is not allowed", "authorization was denied", "permission denied", "could not be found", "unable to read"} {
+			if strings.Contains(strings.ToLower(string(output)), phrase) {
+				reason = phrase
+				break
+			}
+		}
+		return fmt.Errorf("exit=%d reason=%s deadline=%t", code, reason, ctx.Err() != nil)
 	}
 	n.t.Cleanup(func() {
 		for _, args := range remove {
 			if err := run(args); err != nil {
-				n.t.Error("could not remove the exact ephemeral test CA or trust entry")
+				n.t.Errorf("could not remove the exact ephemeral test CA or trust entry: %v", err)
 			}
 		}
 	})
 	if err := run(install); err != nil {
-		n.t.Fatal("could not install ephemeral control-plane test CA")
+		n.t.Fatalf("could not install ephemeral control-plane test CA: %v", err)
 	}
 }

@@ -4,11 +4,14 @@ package testcontrol
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -148,7 +151,7 @@ func NewWithListener(t testing.TB, listener net.Listener) *Server {
 	if listener != nil {
 		_ = s.HTTP.Listener.Close()
 		s.HTTP.Listener = listener
-		pub, key, err := ed25519.GenerateKey(rand.Reader)
+		tlsKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -156,12 +159,12 @@ func NewWithListener(t testing.TB, listener net.Listener) *Server {
 		if !ok {
 			t.Fatal("test TLS requires a TCP listener")
 		}
-		certificate := &x509.Certificate{SerialNumber: big.NewInt(1), NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), IPAddresses: []net.IP{address.IP}, BasicConstraintsValid: true, IsCA: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
-		der, err := x509.CreateCertificate(rand.Reader, certificate, certificate, pub, key)
+		certificate := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "EndlessNet ephemeral test control CA"}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), IPAddresses: []net.IP{address.IP}, BasicConstraintsValid: true, IsCA: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+		der, err := x509.CreateCertificate(rand.Reader, certificate, certificate, &tlsKey.PublicKey, tlsKey)
 		if err != nil {
 			t.Fatal(err)
 		}
-		s.HTTP.TLS = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}
+		s.HTTP.TLS = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: tlsKey}}}
 		s.HTTP.StartTLS()
 	} else {
 		s.HTTP.Start()
