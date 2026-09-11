@@ -108,6 +108,7 @@ func clearNodeBoundState(cfg *Config) {
 	cfg.EnrollmentPollToken = ""
 	cfg.ApprovalURL = ""
 	cfg.EnrollmentRequest = nil
+	cfg.PendingDirectRegistration = nil
 	cfg.MapRevision = 0
 	cfg.MapGlobalRevision = 0
 	cfg.MapHash = ""

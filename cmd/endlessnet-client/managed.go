@@ -268,6 +268,7 @@ func clearBrowserEnrollmentRequest(cfg *client.Config, configPath string) error 
 	cfg.EnrollmentPollToken = ""
 	cfg.ApprovalURL = ""
 	cfg.EnrollmentRequest = nil
+	cfg.PendingDirectRegistration = nil
 	cfg.NodeApprovalState = ""
 	return client.SaveConfig(configPath, *cfg)
 }

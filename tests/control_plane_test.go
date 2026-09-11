@@ -55,6 +55,23 @@ func TestControlPlaneRegistrationResponseLoss(t *testing.T) {
 	// The client may retry within the first command. If it exits, the second
 	// command is the process-restart variant of the same operation.
 	if _, err = n.Run(args...); err != nil {
+		// Changed input must fail before another registration is sent. The
+		// original operation remains recoverable after this rejected command.
+		changed := append([]string(nil), args...)
+		for i := range changed {
+			if changed[i] == "retry-node" {
+				changed[i] = "different-node"
+			}
+		}
+		before := len(s.Events())
+		if _, changedErr := n.Run(changed...); changedErr == nil {
+			t.Fatal("changed pending registration was accepted")
+		}
+		for _, event := range s.Events()[before:] {
+			if event.Kind == "registration-request" {
+				t.Fatal("changed pending request reached registration endpoint")
+			}
+		}
 		if _, err = n.Run(args...); err != nil {
 			t.Fatal("registration did not recover after response loss")
 		}

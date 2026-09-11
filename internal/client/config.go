@@ -30,38 +30,46 @@ const (
 )
 
 type Config struct {
-	StateFormat         string                          `json:"state_format"`
-	StateVersion        int                             `json:"state_version"`
-	LocalOwnerID        string                          `json:"local_owner_id,omitempty"`
-	ControlPlaneURLs    []string                        `json:"control_plane_urls,omitempty"`
-	ManagementURL       string                          `json:"management_url,omitempty"`
-	Token               string                          `json:"token"`
-	ActiveAccountID     string                          `json:"active_account_id,omitempty"`
-	IdentityPrivateKey  string                          `json:"identity_private_key,omitempty"`
-	PrivateKey          string                          `json:"private_key"`
-	NodeID              string                          `json:"node_id,omitempty"`
-	NetworkID           string                          `json:"network_id,omitempty"`
-	NodeCredential      string                          `json:"node_credential,omitempty"`
-	NodeApprovalState   string                          `json:"node_approval_state,omitempty"`
-	EnrollmentRequestID string                          `json:"enrollment_request_id,omitempty"`
-	EnrollmentPollToken string                          `json:"enrollment_poll_token,omitempty"`
-	ApprovalURL         string                          `json:"approval_url,omitempty"`
-	EnrollmentRequest   *clientapi.RegisterNodeRequest  `json:"enrollment_request,omitempty"`
-	DeviceFingerprint   string                          `json:"device_fingerprint,omitempty"`
-	MapSigningTrust     *clientapi.SigningTrustBundle   `json:"map_signing_trust_bundle,omitempty"`
-	MapRevision         uint64                          `json:"map_revision,omitempty"`
-	MapGlobalRevision   uint64                          `json:"map_global_revision,omitempty"`
-	MapHash             string                          `json:"map_hash,omitempty"`
-	SubnetRouterSNAT    bool                            `json:"subnet_router_snat,omitempty"`
-	ExitLANPolicy       string                          `json:"exit_lan_policy,omitempty"`
-	WireGuardMTU        int                             `json:"wireguard_mtu,omitempty"`
-	WireGuardRouteTable string                          `json:"wireguard_route_table,omitempty"`
-	CachedMap           *clientapi.RegisterNodeResponse `json:"cached_map,omitempty"`
-	CachedMapSavedAt    *time.Time                      `json:"cached_map_saved_at,omitempty"`
-	ConnectionIntent    *ConnectionIntent               `json:"connection_intent,omitempty"`
-	EnrollmentRecovery  *EnrollmentRecovery             `json:"enrollment_recovery,omitempty"`
+	StateFormat               string                          `json:"state_format"`
+	StateVersion              int                             `json:"state_version"`
+	LocalOwnerID              string                          `json:"local_owner_id,omitempty"`
+	ControlPlaneURLs          []string                        `json:"control_plane_urls,omitempty"`
+	ManagementURL             string                          `json:"management_url,omitempty"`
+	Token                     string                          `json:"token"`
+	ActiveAccountID           string                          `json:"active_account_id,omitempty"`
+	IdentityPrivateKey        string                          `json:"identity_private_key,omitempty"`
+	PrivateKey                string                          `json:"private_key"`
+	NodeID                    string                          `json:"node_id,omitempty"`
+	NetworkID                 string                          `json:"network_id,omitempty"`
+	NodeCredential            string                          `json:"node_credential,omitempty"`
+	NodeApprovalState         string                          `json:"node_approval_state,omitempty"`
+	EnrollmentRequestID       string                          `json:"enrollment_request_id,omitempty"`
+	EnrollmentPollToken       string                          `json:"enrollment_poll_token,omitempty"`
+	ApprovalURL               string                          `json:"approval_url,omitempty"`
+	EnrollmentRequest         *clientapi.RegisterNodeRequest  `json:"enrollment_request,omitempty"`
+	PendingDirectRegistration *PendingDirectRegistration      `json:"pending_direct_registration,omitempty"`
+	DeviceFingerprint         string                          `json:"device_fingerprint,omitempty"`
+	MapSigningTrust           *clientapi.SigningTrustBundle   `json:"map_signing_trust_bundle,omitempty"`
+	MapRevision               uint64                          `json:"map_revision,omitempty"`
+	MapGlobalRevision         uint64                          `json:"map_global_revision,omitempty"`
+	MapHash                   string                          `json:"map_hash,omitempty"`
+	SubnetRouterSNAT          bool                            `json:"subnet_router_snat,omitempty"`
+	ExitLANPolicy             string                          `json:"exit_lan_policy,omitempty"`
+	WireGuardMTU              int                             `json:"wireguard_mtu,omitempty"`
+	WireGuardRouteTable       string                          `json:"wireguard_route_table,omitempty"`
+	CachedMap                 *clientapi.RegisterNodeResponse `json:"cached_map,omitempty"`
+	CachedMapSavedAt          *time.Time                      `json:"cached_map_saved_at,omitempty"`
+	ConnectionIntent          *ConnectionIntent               `json:"connection_intent,omitempty"`
+	EnrollmentRecovery        *EnrollmentRecovery             `json:"enrollment_recovery,omitempty"`
 
 	storeMetadata *configStoreMetadata
+}
+
+// PendingDirectRegistration retains the exact request across an ambiguous
+// response. Its credentials are protected by the normal private config store.
+type PendingDirectRegistration struct {
+	Origin  string                        `json:"origin"`
+	Request clientapi.RegisterNodeRequest `json:"request"`
 }
 
 func NormalizeWireGuardRouteTable(value string) (string, error) {

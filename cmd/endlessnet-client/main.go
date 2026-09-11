@@ -783,6 +783,9 @@ func cmdUp(args []string) error {
 	if len(cfg.ControlURLs()) == 0 {
 		return fmt.Errorf("server URL is required; run login first or pass --server")
 	}
+	if pending := cfg.PendingDirectRegistration; pending != nil && pending.Origin != firstControlPlaneURL(cfg) {
+		return errors.New("pending registration belongs to another control origin; resolve it or explicitly forget local enrollment")
+	}
 	browserEnrollment := strings.TrimSpace(effectiveJoinToken) == "" &&
 		strings.TrimSpace(cfg.NodeCredential) == "" &&
 		strings.TrimSpace(cfg.Token) == ""
@@ -833,6 +836,12 @@ func cmdUp(args []string) error {
 		return err
 	}
 	effectiveIdempotencyKey := strings.TrimSpace(*idempotencyKey)
+	if pending := cfg.PendingDirectRegistration; pending != nil {
+		if effectiveIdempotencyKey != "" && effectiveIdempotencyKey != pending.Request.IdempotencyID {
+			return errors.New("pending registration requires its original idempotency key")
+		}
+		effectiveIdempotencyKey = pending.Request.IdempotencyID
+	}
 	if effectiveIdempotencyKey == "" {
 		effectiveIdempotencyKey, err = clientapi.NewRegistrationIdempotencyID()
 		if err != nil {
@@ -872,10 +881,27 @@ func cmdUp(args []string) error {
 		return err
 	}
 	req.IdentitySignature = identitySignature
+	if pending := cfg.PendingDirectRegistration; pending != nil {
+		original, marshalErr := json.Marshal(pending.Request)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		current, marshalErr := json.Marshal(req)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if browserEnrollment || string(original) != string(current) {
+			return errors.New("pending registration requires unchanged input; resolve it or explicitly forget local enrollment")
+		}
+	}
 	var response clientapi.RegisterNodeResponse
 	if browserEnrollment {
 		response, err = waitForBrowserEnrollmentApproval(api, &cfg, *configPath, &req, approvalTimeout)
 	} else {
+		cfg.PendingDirectRegistration = &client.PendingDirectRegistration{Origin: firstControlPlaneURL(cfg), Request: req}
+		if err := client.SaveConfig(*configPath, cfg); err != nil {
+			return err
+		}
 		response, err = api.RegisterNode(req)
 	}
 	if err != nil {
@@ -894,6 +920,7 @@ func cmdUp(args []string) error {
 	if err := verifyRegistrationNodeCredential(api, response, registrationCredential); err != nil {
 		return err
 	}
+	cfg.PendingDirectRegistration = nil
 	approvalState := strings.ToLower(strings.TrimSpace(response.Node.ApprovalState))
 	if approvalState == clientapi.NodeApprovalPending || approvalState == clientapi.NodeApprovalRejected {
 		if strings.TrimSpace(response.NodeCredential) != "" {

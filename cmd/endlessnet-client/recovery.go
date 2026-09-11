@@ -124,6 +124,7 @@ func continueEnrollmentRecovery(ctx context.Context, configPath string) (recover
 		current.EnrollmentPollToken = ""
 		current.ApprovalURL = ""
 		current.EnrollmentRequest = nil
+		current.PendingDirectRegistration = nil
 		current.EnrollmentRecovery = nil
 		return nil
 	}); err != nil {
