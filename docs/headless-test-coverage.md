@@ -70,14 +70,14 @@ product scope are different conditions; neither is a successful skip.
 | HC-004 | L real service and IPC | Local authorization and unavailable-service outcomes |
 | HC-005 | C process lifecycle | Duplicate agent and termination semantics |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
-| HC-007 | C BrowserEnrollment | Real Identity/SSO pair, account binding |
+| HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
 | HC-008 | C BrowserEnrollment | Poll expiry/cancellation and foreign poll authorization |
 | HC-009 | C enrollment; P wrong/expired join authorization; R two real CLI registrations | Full authorized/denied attribute and platform variants |
-| HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; R distinct node IDs | Real producer replay currently fails; image-cloning and batch variants |
+| HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; historical R distinct node IDs | Client image-cloning and batch variants; historical producer replay failure is an external constraint |
 | HC-011 | No C/R evidence audited | Decide ephemeral lifecycle, then normal/crash expiry tests |
-| HC-012 | D request/proof tests | Producer-owned allowed/denied attributes and effective access |
+| HC-012 | D request/proof tests | Real Client allowed/denied registration attributes and effective access against published contract responses |
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
-| HC-014 | U recovery matrix | C/R session expiry, reauthentication and preservation |
+| HC-014 | U recovery matrix | C session expiry, reauthentication and preservation |
 | HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
 | HC-016 | C initial cached-map status | Actual allowed application traffic |
 | HC-017 | C disconnect/restart/connect; R repeated disconnect/connect and process restart block/restore direct TCP/UDP with original identities | Other OSes and failure variants |
@@ -113,7 +113,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-047 | No C/R evidence audited | Public exposure contract, authorization and external reachability |
 | HC-048 | No C/R evidence audited | Audience restrictions, lifetime, shutdown and crash expiry |
 | HC-049 | No C/R evidence audited | Certificate/publication scope and frontend/backend TLS |
-| HC-050 | U sharing/encrypted engine tests | R grant/consent/revoke/expiry/new identity without internal access |
+| HC-050 | U sharing/encrypted engine tests | C grant/consent/revoke/expiry/new identity against published contracts without internal access |
 | HC-051 | U service discovery/runtime | Logical service host approval, loss and actual traffic |
 | HC-052 | L/C bounded IPC waits | Public readiness conditions and noninteractive timeout results |
 | HC-053 | L/C structured IPC; D RPC authorization | Public machine output/errors and repeated report acceptance |
@@ -126,9 +126,9 @@ product scope are different conditions; neither is a successful skip.
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
-| HC-063 | U local-forget/recovery tests | Public privileged reset and new identity, real producer outcomes |
+| HC-063 | U local-forget/recovery tests | Public privileged reset and new identity against published contract responses |
 | HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
-| HC-065 | C terminal revoke; R deleted Client sync denied and peer withdrawn without node recreation | Agent/dataplane retirement, offline leases and separately verified local removal |
+| HC-065 | C terminal revoke and direct TCP/UDP retirement across agent restart; historical R deleted Client sync denied and peer withdrawn | Offline leases, other platforms/paths and separately verified local removal |
 
 ## Current implementation increment
 
@@ -482,6 +482,36 @@ Local format/vet/lint/short checks also passed. This is Client-owned Linux
 direct IPv4 evidence for HC-027 / BR-10 / IT-15; it neither depends on a real
 backend process nor proves the complete direction/destination/platform matrix
 or a production revocation SLO.
+
+## Client-only credential retirement and probe regression
+
+[Client ab2199d](https://github.com/endless-net/client/tree/ab2199d58cd364e41d8a693f06cca038cee2132f)
+adds [credential retirement](../tests/control_plane_retirement_test.go) to
+`TestControlPlaneDirectPeerTrafficAndWithdrawal`. Before revocation the real
+client exchanges TCP and UDP application payloads on persistent sockets. A
+terminal credential response must clear public enrollment/map status and block
+both existing sockets and fresh overlay traffic, including after agent restart.
+The receiver retains its peer map, and its applications remain reachable over
+the underlay. No new registration request may occur. Observations use public
+IPC, application traffic and the contract testserver's request events.
+
+The first [CI run](https://github.com/endless-net/client/actions/runs/34608602369)
+failed earlier in the policy scenario: the persistent probe process closed.
+[Client d80ab0d](https://github.com/endless-net/client/tree/d80ab0d006c044d081e79692e91219d6aa47de6c)
+fixes a reproduced probe defect: late full or partial TCP replies after a
+deadline must not corrupt the next exchange. Only an echo of the current nonce
+proves success; an old known reply is discarded and an unknown reply remains
+fatal. Regression tests also prove that an old reply alone cannot establish
+current reachability. This changes the test utility, not Client access policy.
+
+[Control-plane job 103295833928](https://github.com/endless-net/client/actions/runs/34609410344/job/103295833928)
+passed all three repetitions (16.95s, 16.94s and 16.90s for the direct scenario),
+including retirement. The overall run failed `Verify (Windows)` because the
+DNS proxy could not bind UDP on a TCP-selected ephemeral port. Thus this run
+proves the bounded Linux consumer scenario, not a successful complete CI gate.
+The DNS listener follow-up alternates which transport selects the ephemeral
+port; explicit ports never move, and failed reservations are closed. Its
+regressions are component tests and do not replace contract-only C evidence.
 
 ## Next work
 

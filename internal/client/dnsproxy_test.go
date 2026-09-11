@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"net/netip"
@@ -196,6 +197,77 @@ func TestDNSProxyServesTCPOnTheUDPAddress(t *testing.T) {
 type dnsProxyTestUpstream struct {
 	addr    string
 	queries chan string
+}
+
+func TestDNSProxyPairRecoversFromTransportSpecificExclusion(t *testing.T) {
+	denied := errors.New("simulated UDP port exclusion")
+	var first net.Listener
+	var udpAddresses []string
+	tcp, udp, err := listenDNSProxyPairWith("127.0.0.1:0",
+		func(addr string) (net.Listener, error) {
+			listener, err := net.Listen("tcp4", addr)
+			if err == nil {
+				t.Cleanup(func() { _ = listener.Close() })
+			}
+			if first == nil {
+				first = listener
+			}
+			return listener, err
+		},
+		func(addr string) (net.PacketConn, error) {
+			udpAddresses = append(udpAddresses, addr)
+			if len(udpAddresses) == 1 {
+				return nil, denied
+			}
+			return net.ListenPacket("udp4", addr)
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tcp.Close(); _ = udp.Close() }()
+	if len(udpAddresses) < 2 || udpAddresses[1] != "127.0.0.1:0" {
+		t.Fatal("UDP did not choose the replacement ephemeral port")
+	}
+	if tcp.Addr().String() != udp.LocalAddr().String() {
+		t.Fatal("DNS transports do not share an address")
+	}
+	_ = first.(*net.TCPListener).SetDeadline(time.Now().Add(time.Second))
+	if conn, err := first.Accept(); !errors.Is(err, net.ErrClosed) {
+		if conn != nil {
+			_ = conn.Close()
+		}
+		t.Fatal("failed TCP reservation was not closed")
+	}
+}
+
+func TestDNSProxyPairDoesNotMoveExplicitPort(t *testing.T) {
+	denied := errors.New("simulated UDP port exclusion")
+	var first net.Listener
+	calls := 0
+	tcp, udp, err := listenDNSProxyPairWith("127.0.0.1:5353",
+		func(addr string) (net.Listener, error) {
+			if addr != "127.0.0.1:5353" {
+				t.Fatal("explicit port changed")
+			}
+			var err error
+			// Allocate a test reservation without requiring host port 5353.
+			first, err = net.Listen("tcp4", "127.0.0.1:0")
+			if err == nil {
+				t.Cleanup(func() { _ = first.Close() })
+			}
+			return first, err
+		},
+		func(string) (net.PacketConn, error) { calls++; return nil, denied })
+	if !errors.Is(err, denied) || tcp != nil || udp != nil || calls != 1 {
+		t.Fatal("explicit bind failure was retried or ignored")
+	}
+	_ = first.(*net.TCPListener).SetDeadline(time.Now().Add(time.Second))
+	if conn, err := first.Accept(); !errors.Is(err, net.ErrClosed) {
+		if conn != nil {
+			_ = conn.Close()
+		}
+		t.Fatal("failed TCP reservation was not closed")
+	}
 }
 
 func startDNSProxyTestUpstream(t *testing.T, answer string) dnsProxyTestUpstream {
