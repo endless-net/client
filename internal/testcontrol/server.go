@@ -80,6 +80,7 @@ type Server struct {
 	mapFaults                map[string]string
 	active                   int
 	dropRegistrationResponse bool
+	registrationFault        string
 	flows                    map[string]*flowState
 }
 
@@ -311,6 +312,18 @@ func (s *Server) UpdateMap(id string, edit func(*api.NetworkMapSnapshot)) error 
 	return nil
 }
 
+// FaultNextRegistrationResponse alters only the next successful wire response.
+// The durable operation remains available for an unmodified retry.
+func (s *Server) FaultNextRegistrationResponse(fault string) error {
+	if !slices.Contains([]string{"operation", "binding", "fingerprint", "credential-node", "credential-network", "map-signature"}, fault) {
+		return errors.New("unknown registration fault")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.registrationFault = fault
+	return nil
+}
+
 // FaultNextMap corrupts only the next wire response, leaving server state valid.
 func (s *Server) FaultNextMap(id, fault string) error {
 	if !slices.Contains([]string{"signature", "unknown-key", "expired"}, fault) {
@@ -412,6 +425,34 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		// The test peer serves HTTP/1 over its own listener. Abort after commit,
 		// before headers; ErrAbortHandler makes net/http close the connection.
 		panic(http.ErrAbortHandler)
+	}
+	if fault := s.registrationFault; fault != "" {
+		s.registrationFault = ""
+		switch fault {
+		case "operation":
+			result.IdempotencyID, err = api.NewRegistrationIdempotencyID()
+		case "binding":
+			changed := req
+			changed.Hostname += "-different"
+			result.RegistrationBinding = api.RegistrationIdentityProofBinding(changed)
+		case "fingerprint":
+			result.Node.DeviceFingerprint += "-different"
+		case "credential-node":
+			result.NodeCredential, err = api.SignNodeCredential(s.key, result.Network.ID, "different-node", []string{"node:map"}, time.Now().Add(time.Hour))
+		case "credential-network":
+			result.NodeCredential, err = api.SignNodeCredential(s.key, "different-network", result.Node.ID, []string{"node:map"}, time.Now().Add(time.Hour))
+		}
+		if err == nil {
+			result.MapSignature, err = api.SignNetworkMap(s.key, result)
+		}
+		if err != nil {
+			http.Error(w, "test response signing failed", 500)
+			return
+		}
+		if fault == "map-signature" {
+			result.MapSignature.Signature = base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+		}
+		s.recordLocked(Event{Kind: "registration-response-faulted", NodeID: result.Node.ID})
 	}
 	writeJSON(w, result)
 }

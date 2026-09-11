@@ -57,6 +57,59 @@ func setup(t *testing.T) (*testcontrol.Server, *api.API, api.RegisterNodeRequest
 	return s, a, req, result, key
 }
 
+func TestRegistrationFaultPreservesCommittedReplay(t *testing.T) {
+	for _, fault := range []string{"operation", "binding", "fingerprint", "credential-node", "credential-network", "map-signature"} {
+		t.Run(fault, func(t *testing.T) {
+			s, a, req, original, _ := setup(t)
+			check(t, s.FaultNextRegistrationResponse(fault))
+			requestBody, err := json.Marshal(req)
+			check(t, err)
+			wire, err := http.Post(s.URL()+"/nodes/register", "application/json", bytes.NewReader(requestBody))
+			check(t, err)
+			defer func() { _ = wire.Body.Close() }()
+			if wire.StatusCode != http.StatusOK {
+				t.Fatalf("fault response HTTP %d", wire.StatusCode)
+			}
+			var bad api.RegisterNodeResponse
+			check(t, json.NewDecoder(wire.Body).Decode(&bad))
+			if fault == "map-signature" {
+				if api.VerifyNetworkMapSignatureWithTrustBundle(bad, s.Trust()) == nil {
+					t.Fatal("signature fault was accepted")
+				}
+			} else {
+				check(t, api.VerifyNetworkMapSignatureWithTrustBundle(bad, s.Trust()))
+			}
+			changed := false
+			switch fault {
+			case "operation":
+				changed = bad.IdempotencyID != original.IdempotencyID
+			case "binding":
+				changed = bad.RegistrationBinding != original.RegistrationBinding
+			case "fingerprint":
+				changed = bad.Node.DeviceFingerprint != original.Node.DeviceFingerprint
+			case "credential-node", "credential-network":
+				claims, err := api.VerifyNodeCredentialWithTrustBundle(bad.NodeCredential, s.Trust(), "node:map", time.Now())
+				check(t, err)
+				changed = claims.NodeID != original.Node.ID || claims.NetworkID != original.Network.ID
+			case "map-signature":
+				changed = bad.MapSignature.Signature != original.MapSignature.Signature
+			}
+			if !changed {
+				t.Fatal("fault did not alter wire response")
+			}
+			replayed, err := a.RegisterNode(req)
+			check(t, err)
+			want, err := json.Marshal(original)
+			check(t, err)
+			got, err := json.Marshal(replayed)
+			check(t, err)
+			if !bytes.Equal(got, want) {
+				t.Fatal("fault modified committed registration")
+			}
+		})
+	}
+}
+
 func TestRegistrationBindingAndRevocation(t *testing.T) {
 	s, a, req, result, key := setup(t)
 	heartbeat, err := a.UpdateNodeEndpointState(result.Node.ID, api.UpdateNodeEndpointRequest{Status: api.NodeStatusOnline})

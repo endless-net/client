@@ -90,7 +90,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-058 | L version and runtime platform | CLI/daemon/artifact mismatch and exact release identity |
 | HC-059 | U trust/recovery matrix | C explicit trust confirmation; independent node-signing scope separately |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
-| HC-061 | Publication gate and fixture tests; real API check awaits CI | Supported update channels, artifact acceptance and update failures |
+| HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
 | HC-063 | U local-forget/recovery tests | Public privileged reset and new identity, real producer outcomes |
 | HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
@@ -142,13 +142,25 @@ an older success cannot mask a newer failed run. GitHub API contract references:
 [workflow jobs](https://docs.github.com/en/rest/actions/workflow-jobs).
 The fixture-based gate tests run in short CI on every platform; a read-only
 `Check source CI gate` workflow exercises the real API after successful source CI.
-Initial execution of the new gate still needs CI evidence. This does not attest
-published artifacts or backend release acceptance, and does not deploy anything.
+Commit `d76df3a` passed [Test run 34586736163](https://github.com/endless-net/client/actions/runs/34586736163).
+The [real API gate check 34586887809](https://github.com/endless-net/client/actions/runs/34586887809)
+passed and reported that exact commit, source run and attempt 1. This does not
+attest published artifacts or backend release acceptance, and deploys nothing.
+
+`TestControlPlaneRejectsRegistrationResponseMismatch` adds six negative/recovery
+cases: another operation ID, signed request binding, device fingerprint,
+credential node, credential network, and invalid map signature. The consumer
+must reject the response without installing a node/credential/cache, then recover
+the same operation and node on retry. The double tests inspect public wire DTOs,
+verify valid signatures on deliberately mismatched responses, and ensure the
+committed replay remains unchanged. Some rejections originate in the pinned SDK;
+the real-process test also checks local lifecycle and retry effects. Local short
+tests, vet and lint pass; this increment still awaits real-process CI evidence.
 
 ## Next work
 
-Verify the publication gate in CI, then extend C with request-bound negative
-registration results, map resync/delta and real peer probes.
+Verify registration mismatch recovery in CI, then extend C with map resync/delta
+and real peer probes.
 Run producer conformance in owning service repositories. Keep contract gaps and
 platform decisions explicit; do not replace unresolved HC rows with generic smoke
 tests or infer broad completion from this initial increment.

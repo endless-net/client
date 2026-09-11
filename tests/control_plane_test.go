@@ -128,6 +128,60 @@ func controlScenario(t *testing.T) (*testcontrol.Server, *testclient.Node, strin
 
 // IT-05 / HC-010: retry a committed registration after its response was lost.
 // A second CLI process must recover the operation without exposing its store.
+// IT-04/IT-10: even a trusted signature cannot authorize a response for a
+// different request or a credential for a different node/network.
+func TestControlPlaneRejectsRegistrationResponseMismatch(t *testing.T) {
+	for _, fault := range []string{"operation", "binding", "fingerprint", "credential-node", "credential-network", "map-signature"} {
+		t.Run(fault, func(t *testing.T) {
+			requireControlScenario(t)
+			s := testcontrol.New(t)
+			network, token, err := s.AddNetwork("response-binding", "100.92.0.0/24")
+			if err != nil {
+				t.Fatal(err)
+			}
+			n := testclient.New(t, s)
+			if err := s.FaultNextRegistrationResponse(fault); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--join-token", token, "--hostname", "bound-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off"}
+			if _, err := n.Run(args...); err == nil {
+				t.Fatal("invalid registration response accepted")
+			}
+			n.Start()
+			n.AwaitStatus(func(v ipc.StatusResponse) bool {
+				return v.State == ipc.StateNeedsEnrollment && v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent
+			})
+			n.Stop()
+			n.MustRun(args...)
+			n.Start()
+			status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
+			var first testcontrol.Event
+			attempts, registrations, injected := 0, 0, 0
+			for _, event := range s.Events() {
+				switch event.Kind {
+				case "registration-request":
+					if attempts == 0 {
+						first = event
+					} else if event.OperationID != first.OperationID || event.RequestHash != first.RequestHash {
+						t.Fatal("rejected response changed retry identity")
+					}
+					attempts++
+				case "registered":
+					registrations++
+					if event.NodeID != status.NodeID {
+						t.Fatal("recovery selected a different node")
+					}
+				case "registration-response-faulted":
+					injected++
+				}
+			}
+			if attempts != 2 || registrations != 1 || injected != 1 {
+				t.Fatal("mismatch recovery did not reuse the single committed operation")
+			}
+		})
+	}
+}
+
 func TestControlPlaneRegistrationResponseLoss(t *testing.T) {
 	requireControlScenario(t)
 	s := testcontrol.New(t)
