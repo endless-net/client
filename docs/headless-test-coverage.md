@@ -133,7 +133,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-054 | No C/R evidence audited | Container persistent versus ephemeral lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
-| HC-057 | C diagnostic JSON export/reuse passed all 24 native repetitions; D FlowConsentAndIdempotency; U flow tests | Native flow consent/retry evidence, comprehensive redaction and export retention variants |
+| HC-057 | C diagnostic JSON export/reuse passed all 24 native repetitions; native IPv4 UDP flow consent/retry passed all 12 Linux repetitions; D FlowConsentAndIdempotency; U flow tests | Windows/macOS flow qualification, natural expiry/crash recovery, comprehensive redaction and export retention variants |
 | HC-058 | L version and runtime platform; native IPC negotiation scenario added, hosted evidence pending | Artifact mismatch and exact release identity; complete native negotiation qualification |
 | HC-059 | U trust/recovery matrix; C TrustConfirmation rejection passed three times on all eight native platforms | Successful rotation, interrupted recovery and independent signing scopes |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
@@ -2251,6 +2251,47 @@ credential/consent changes while an unacknowledged window is pending.
 
 The common inventory remains 29 roots / 696 expected native outcomes. Earlier
 flow-consent sources lack this additional assertion and cannot qualify it.
+
+## 2026-09-12: short flow consent qualified on Linux
+
+[Run 34656410642](https://github.com/endless-net/client/actions/runs/34656410642)
+at source `0328d13a1275c6dabecfca517fb3a3a95c126fff` completed with failure.
+All 24 native reports were inspected with identical 29-root inventories:
+**671 PASS, 25 FAIL, 0 SKIP**. Every Linux report passed all 29 roots
+(348 outcomes). All eight installation jobs, three platform verification jobs
+and the separate Linux control-plane job passed.
+
+The flow root qualifies default-off, real IPv4 UDP metadata under a short grant,
+immutable retransmission after accepted-window acknowledgement loss, live
+revocation and renewed consent on these Linux runners:
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| ubuntu-22.04 | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020624) | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020532) | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020524) |
+| ubuntu-24.04 | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020458) | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020482) | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020575) |
+| ubuntu-22.04-arm | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020513) | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020540) | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020515) |
+| ubuntu-24.04-arm | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020508) | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020473) | [PASS](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020577) |
+
+Windows flow and TLS roots still stop at current-user certificate import.
+On all six macOS jobs the flow test reaches its cleanup but fails to remove
+trust; the later TLS root then times out during import. These failed roots are
+not native qualification, even though the macOS flow assertions reached cleanup.
+This source predates the Windows machine-store and scoped macOS authorization
+corrections, natural-expiry extension and IPC-negotiation root.
+
+One additional failure occurred in
+[Windows 2025 repeat 1](https://github.com/endless-net/client/actions/runs/34656410642/job/103450020637):
+`DiagnosticsExport` obtained its initial IPC response after 39 ms, then the
+shared enrollment setup received no status responses for 15 seconds (16 failed
+attempts, agent still alive). It never reached the export assertions. The
+previous 24-platform export qualification remains historical evidence, but this
+source is unqualified. Status synchronously calls WireGuard inspection under
+the engine lock; contention during interface setup is an investigation lead,
+not a proven cause. No status timeout or runtime behavior was changed for it.
+
+The other 26 roots passed in every native job. Full coverage still requires the
+30-root matrix and remaining HC variants; Linux flow evidence does not establish
+expiry, crash-spool replay, IPv6/TCP/denied-flow reporting or producer conformance.
 
 ## Next work
 

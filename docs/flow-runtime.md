@@ -70,6 +70,9 @@ failure, live revocation, natural expiry of an unchanged policy and renewed
 consent after both revocation and expiry over HTTPS protobuf. After expiry,
 the test drains the five-second RPC deadline and observes twelve seconds of
 traffic without report attempts; captured window ends must not exceed expiry.
-Hosted qualification is pending; see the [coverage ledger](headless-test-coverage.md).
+Default-off, short-grant reporting, immutable retry, revocation and renewal passed
+all twelve Linux repetitions at source `0328d13`. Windows/macOS and the later
+natural-expiry extension remain unqualified; see the
+[coverage ledger](headless-test-coverage.md#2026-09-12-short-flow-consent-qualified-on-linux).
 This increment does not establish crash-spool replay, producer idempotency,
 IPv6, denied-flow reporting or production activation.
