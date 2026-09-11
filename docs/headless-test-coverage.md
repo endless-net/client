@@ -133,7 +133,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-054 | No C/R evidence audited | Container persistent versus ephemeral lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
-| HC-057 | D FlowConsentAndIdempotency; U flow tests | Real client consent/retry behavior and safe diagnostic export |
+| HC-057 | C diagnostic JSON export/reuse passed all 24 native repetitions; D FlowConsentAndIdempotency; U flow tests | Native flow consent/retry evidence, comprehensive redaction and export retention variants |
 | HC-058 | L version and runtime platform | CLI/daemon/artifact mismatch and exact release identity |
 | HC-059 | U trust/recovery matrix; C TrustConfirmation rejection passed three times on all eight native platforms | Successful rotation, interrupted recovery and independent signing scopes |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
@@ -2047,7 +2047,7 @@ Local vet, lint and the short suite passed. This native case is qualified by
 the later 27-root run recorded below, whose full source still failed because
 of diagnostic export. Earlier 24- and 25-root evidence cannot qualify this case.
 
-## Diagnostic status and export: awaiting native evidence
+## Diagnostic status and export increment
 
 `TestControlPlaneDiagnosticsExport` adds HC-053/HC-056/HC-057 consumer checks:
 unconfigured export must return its public error; configured diagnostics must
@@ -2063,7 +2063,8 @@ A short handler regression first reproduced diagnostic status losing persisted
 disconnect (`desired=connected`, `user_disconnected=false`). Diagnostics now
 uses the same connection-intent attachment as public status, including its
 error handling. This fixes the exported status as well. Local short tests, vet
-and lint passed; the native export case still requires hosted qualification.
+and lint passed. Native qualification required the timestamp correction below
+and is recorded in the completed 28-root run.
 
 Strict JSON decoding checks schema boundaries, not every possible secret value
 inside allowed free-text fields. Comprehensive redaction fault injection,
@@ -2195,6 +2196,41 @@ by native runners. No Client TLS verification bypass was added.
 In the nine Linux reports inspected so far, all 28 roots passed, including the
 diagnostic export correction and HTTPS boundary. This partial result does not
 qualify the complete source or the new flow-consent scenario.
+
+## Diagnostic export qualified; OS trust import blocks source acceptance
+
+[CI 34654555171](https://github.com/endless-net/client/actions/runs/34654555171)
+completed with failure for `1a63192e20e114d14a37965bf6aa56f1a41e4c53`.
+All 24 native reports contain the same 28 roots: **660 PASS, 12 FAIL, 0 SKIP**.
+All twelve Linux jobs passed. The twelve Windows/macOS jobs failed only
+`TestControlPlaneTLSTrustBoundary`, before trusted enrollment, at the OS
+certificate-import boundary. The full source remains unqualified.
+
+The corrected diagnostic-export scenario passed on every native repetition:
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| ubuntu-22.04 | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830952) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831007) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830937) |
+| ubuntu-24.04 | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830963) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830947) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830982) |
+| ubuntu-22.04-arm | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830962) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830968) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831009) |
+| ubuntu-24.04-arm | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831024) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830966) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830904) |
+| windows-2022 | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831016) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830998) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830987) |
+| windows-2025 | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830918) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831046) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831004) |
+| macos-15-intel | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831035) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831056) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831025) |
+| macos-15 | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830978) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444831001) | [PASS](https://github.com/endless-net/client/actions/runs/34654555171/job/103444830976) |
+
+This qualifies diagnostic identity/intent while connected and disconnected,
+persistence across agent restart, unconfigured-export rejection, public JSON
+schema/path/size/lifetime metadata, stable metadata on immediate artifact reuse,
+and fresh connected intent after reconnect. It does not prove every secret
+redaction, retention expiry, tamper resistance or fault classification variant.
+
+TLS trust rejection followed by explicitly trusted enrollment and restart passed
+all Linux variants. Windows/macOS evidence stops at import failure and cannot
+prove those later steps. The subsequent named P-256 CA profile and flow-consent
+scenario are not part of this source and still require their own hosted run.
+The latest goal still requires remaining HC-001-HC-065 cases and a complete
+successful required Client matrix.
 
 ## Next work
 
