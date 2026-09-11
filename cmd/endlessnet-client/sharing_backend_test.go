@@ -69,9 +69,12 @@ func TestSharingBackendMapConsumer(t *testing.T) {
 		if action != "delta" || len(result.Network.SharePeerGrants) != want || len(result.Peers) != want || cfg.MapHash != event.ResultSignature.PayloadHash || cfg.MapRevision != event.To.Network {
 			t.Fatal("backend sharing state not applied to cache")
 		}
-		_, replayAction, err := cacheNetworkMapFromEventAt(&cfg, event, fixture.ObservedAt[index])
+		replayed, replayAction, err := cacheNetworkMapFromEventAt(&cfg, event, fixture.ObservedAt[index])
 		if err != nil || replayAction != "unchanged" {
 			t.Fatal("cached sharing map failed replay", err)
+		}
+		if replayed.Node.ID != result.Node.ID || replayed.Network.ID != result.Network.ID || len(replayed.Peers) != want || len(replayed.Network.SharePeerGrants) != want {
+			t.Fatal("repeated delta lost the effective map")
 		}
 	}
 }

@@ -843,9 +843,22 @@ func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevisio
 	if err != nil {
 		return cfg, clientapi.RegisterNodeResponse{}, false, err
 	}
-	networkMap, _, err := cacheNetworkMapFromEvent(&cfg, event)
+	networkMap, action, err := cacheNetworkMapFromEvent(&cfg, event)
 	if err != nil {
 		return cfg, clientapi.RegisterNodeResponse{}, false, err
+	}
+	if action == "unchanged" && event.Snapshot == nil && len(networkMap.Relays) > 0 {
+		// A repeated delta preserves the effective cached map, but that cache
+		// intentionally contains no ephemeral Relay credential. Fetch a signed
+		// full projection before reconfiguring the live transport.
+		event, err = api.ReadMapStreamEvent(cfg.NodeID, clientapi.MapCursor{}, timeout)
+		if err != nil {
+			return cfg, clientapi.RegisterNodeResponse{}, false, err
+		}
+		networkMap, _, err = cacheNetworkMapFromEvent(&cfg, event)
+		if err != nil {
+			return cfg, clientapi.RegisterNodeResponse{}, false, err
+		}
 	}
 	if err := client.SaveConfig(configPath, cfg); err != nil {
 		return cfg, clientapi.RegisterNodeResponse{}, false, err

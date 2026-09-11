@@ -1709,7 +1709,17 @@ func cacheNetworkMapFromEventAt(cfg *client.Config, event clientapi.MapStreamEve
 	}
 	next, err := clientapi.ApplyMapStreamEvent(current, event, trust, observedAt)
 	if errors.Is(err, clientapi.ErrMapStreamEventAlreadyApplied) {
-		return networkMapResponseFromSnapshot(next), "unchanged", nil
+		// AlreadyApplied is an error sentinel, not an effective-map result.
+		// A full replay can also carry a fresh, non-persisted Relay credential;
+		// validate it from an empty base before returning it to the runtime.
+		if event.Snapshot != nil {
+			next, err = clientapi.ApplyMapStreamEvent(clientapi.NetworkMapSnapshot{}, event, trust, observedAt)
+			if err != nil {
+				return clientapi.RegisterNodeResponse{}, "", err
+			}
+			return networkMapResponseFromSnapshot(next), "unchanged", nil
+		}
+		return networkMapResponseFromSnapshot(current), "unchanged", nil
 	}
 	if err != nil {
 		return clientapi.RegisterNodeResponse{}, "", err
