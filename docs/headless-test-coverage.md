@@ -48,8 +48,8 @@ product scope are different conditions; neither is a successful skip.
 | HC-014 | U recovery matrix | C/R session expiry, reauthentication and preservation |
 | HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
 | HC-016 | C initial cached-map status | Actual allowed application traffic |
-| HC-017 | C disconnect/restart/connect; R repeated disconnect/connect blocks/restores direct TCP/UDP with original identities | Other OSes, real-pair restart and failure variants |
-| HC-018 | C connected/disconnected intent survives process restart with traffic checks | Host reboot and other platform/network variants |
+| HC-017 | C disconnect/restart/connect; R repeated disconnect/connect and process restart block/restore direct TCP/UDP with original identities | Other OSes and failure variants |
+| HC-018 | C and R connected/disconnected intent survives process restart with traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | U configuration tests | Public preference mutation and observed effect |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
@@ -387,6 +387,21 @@ This adds HC-017 real-pair evidence for a running Linux agent and direct IPv4.
 Real-pair process restart, reboot, other OSes, old-socket recovery and Relay/NAT
 remain separate. Coordinator's overall publication gate still fails on the
 existing single-use registration replay defect.
+
+[Coordinator 17b02ea](https://github.com/endless-net/coordinator/tree/17b02ea51b5d9385fb308cac229c0842ee017d00)
+extends the same Client pin with forced agent process restarts after successful
+IPC disconnect and connect. In
+[CI 34604418707](https://github.com/endless-net/coordinator/actions/runs/34604418707/job/103279351728),
+all five traffic subtests passed. The driver waits for actual process exit and
+starts a new process with the same arguments, without reading private state.
+Disconnected intent still blocks established and fresh TCP/UDP in both
+directions while underlay applications remain alive. Connected intent restores
+applied maps, WireGuard handshake/counters and fresh traffic without another
+connect command or new enrollment. Node IDs stay unchanged. The other agent
+and applications keep running. This adds HC-018 real-pair Linux/direct IPv4
+evidence; reboot, system-service autostart, crash during intent writes and other
+OS/transport variants remain separate. Overall provider failure is still the
+single-use registration replay defect.
 
 ## Next work
 
