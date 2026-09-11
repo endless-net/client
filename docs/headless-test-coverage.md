@@ -220,6 +220,25 @@ closure from success. This lifts the existing kernel-level established-flow
 test into a real-client contract scenario. Full execution awaits CI; timing
 guards remain test deadlines, not accepted business revoke SLAs.
 
+[Test run 34588791343](https://github.com/endless-net/client/actions/runs/34588791343)
+failed established TCP withdrawal in one repetition; two repetitions passed.
+The consumer assertion had waited only for cached map revision. The follow-up
+requires public IPC `Agent.SnapshotState=current`, the same applied snapshot/map
+revision, no agent error, and a healthy WireGuard instance before checking policy
+effects. Unexpected session outcomes are now reported as bounded categories.
+This addresses an insufficient readiness assertion; it does not waive the failed
+packet result or prove that runtime revocation is correct. CI must verify again.
+
+The same real-peer fixture now exercises explicit `service disconnect`, process
+restart while disconnected, `service connect`, repeated connect, and restart with
+connected intent. Application traffic must stop/resume accordingly while node
+identity and verified cache remain. It also checks bidirectional/application
+traffic during a temporary control outage with still-valid cached authority and
+recovery to a new map after service restoration. The transcript must contain only
+the two initial registrations. This extends HC-017/HC-018/HC-030 beyond state-only
+assertions; actual host reboot, lease expiration and OS variants remain separate.
+Local short tests, vet and lint pass; the new intent/outage checks await CI.
+
 ## Next work
 
 Verify corrected peer delta recovery and direct traffic in CI, then extend probes

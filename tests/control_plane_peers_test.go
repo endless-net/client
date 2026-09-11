@@ -146,6 +146,91 @@ func TestControlPlaneDirectPeerTrafficAndWithdrawal(t *testing.T) {
 		t.Fatal("restored peer did not recover traffic")
 	}
 	exerciseApplicationPolicy(t, s, nodes, states, peers)
+	exerciseConnectionIntent(t, s, nodes, states)
+}
+
+// HC-017/HC-018/HC-030: persisted user intent and outage behavior must agree with
+// application traffic, without a new enrollment or private-state inspection.
+func exerciseConnectionIntent(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.Node, initial [2]ipc.StatusResponse) {
+	t.Helper()
+	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
+	source := nodes[0]
+	assertDisconnected := func() {
+		t.Helper()
+		source.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.State == ipc.StateDisconnected && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected && v.NodeID == initial[0].NodeID && v.NodeCredentialPresent && v.CachedMapValid
+		})
+		for range 3 {
+			if !applicationProbe(t, binary, nodes[1].Namespace, "tcp", "127.0.0.1:24001") {
+				t.Fatal("disconnect denial coincided with application failure")
+			}
+			if applicationProbe(t, binary, source.Namespace, "tcp", net.JoinHostPort(initial[1].OverlayIP, "24001")) {
+				t.Fatal("user-disconnected client still passed application traffic")
+			}
+			if pingPeer(nodes[1].Namespace, initial[0].OverlayIP) == nil {
+				t.Fatal("user-disconnected client still received overlay traffic")
+			}
+		}
+	}
+	assertTraffic := func() {
+		t.Helper()
+		source.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.NodeID == initial[0].NodeID && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.WireGuard != nil && v.WireGuard.OK
+		})
+		for i := range nodes {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			err := testclient.Await(ctx, func() bool { return pingPeer(nodes[i].Namespace, initial[1-i].OverlayIP) == nil })
+			cancel()
+			if err != nil {
+				t.Fatal("connection intent did not restore bidirectional traffic")
+			}
+		}
+		for _, protocol := range []string{"tcp", "udp"} {
+			if !applicationProbe(t, binary, source.Namespace, protocol, net.JoinHostPort(initial[1].OverlayIP, "24001")) {
+				t.Fatalf("connected client did not pass %s application traffic", protocol)
+			}
+		}
+	}
+	var disconnected ipc.DisconnectResponse
+	source.Service("disconnect", &disconnected)
+	assertDisconnected()
+	source.Stop()
+	source.Start()
+	assertDisconnected()
+	var connected ipc.ConnectResponse
+	source.Service("connect", &connected)
+	assertTraffic()
+	// A repeated connect and a process restart must preserve connected intent.
+	source.Service("connect", &connected)
+	source.Stop()
+	source.Start()
+	assertTraffic()
+	s.SetUnavailable(true)
+	for _, n := range nodes {
+		n.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.State == ipc.StateDegraded && v.NodeCredentialPresent && v.CachedMapValid
+		})
+	}
+	assertTraffic()
+	s.SetUnavailable(false)
+	update(t, s, initial[0].NodeID, func(m *api.NetworkMapSnapshot) { m.Network.Name = "control-restored" })
+	recovered, err := s.Snapshot(initial[0].NodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.NodeID == initial[0].NodeID && v.MapRevision >= recovered.Revision.Network && v.State == ipc.StateConnected
+	})
+	assertTraffic()
+	registrations := 0
+	for _, event := range s.Events() {
+		if event.Kind == "registered" {
+			registrations++
+		}
+	}
+	if registrations != 2 {
+		t.Fatal("local intent or temporary outage caused another enrollment")
+	}
 }
 
 func applicationProbe(t *testing.T, binary, namespace, protocol, address string) bool {
@@ -192,7 +277,13 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 		select {
 		case got, ok := <-lines:
 			if !ok || got != want {
-				t.Fatalf("persistent %s application session did not report %s", protocol, want)
+				observed := "invalid output"
+				if !ok {
+					observed = "closed"
+				} else if got == "ok" || got == "blocked" || got == "ready" {
+					observed = got
+				}
+				t.Fatalf("persistent %s application session reported %s, expected %s", protocol, observed, want)
 			}
 		case <-time.After(3 * time.Second):
 			t.Fatalf("persistent %s application session did not respond", protocol)
@@ -269,7 +360,11 @@ func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*te
 		if err != nil {
 			t.Fatal(err)
 		}
-		nodes[0].AwaitStatus(func(v ipc.StatusResponse) bool { return v.MapRevision >= m.Revision.Network && v.PeerCount == 1 })
+		nodes[0].AwaitStatus(func(v ipc.StatusResponse) bool {
+			// Cached metadata may precede actual tunnel/ACL application. Require
+			// the public successful agent snapshot for that same current map.
+			return v.MapRevision >= m.Revision.Network && v.PeerCount == 1 && v.Agent != nil && v.Agent.StatePresent && v.Agent.SnapshotState == ipc.AgentSnapshotCurrent && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" && v.WireGuard != nil && v.WireGuard.OK
+		})
 	}
 	apply(limited)
 	check(true)
