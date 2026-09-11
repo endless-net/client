@@ -1172,6 +1172,30 @@ preserving the intended destination-denial/recovery assertion. The actual echo
 address, cryptographic peer and reference endpoint remain unchanged. Full
 platform qualification of the corrected fixture remains pending.
 
+## Completed ICMP fixture-failure evidence
+
+[CI 34634842532](https://github.com/endless-net/client/actions/runs/34634842532)
+for source `3c2f0e4d89617ca7d82efad869f1db5d10f6cac9` completed with **failure**.
+The eight native reports contain identical inventories of 17 root scenarios,
+three repetitions each: **360 PASS, 48 FAIL, 0 SKIP**. Every platform has 45 PASS
+and six failures: three IPv4 and three IPv6 native TCP repetitions rejected the
+out-of-route ICMP destination in testserver contract validation. No other root
+scenario failed. All eight installed-client jobs and the separate Linux dataplane
+job passed; the aggregate `verify` correctly failed.
+
+`TestControlPlaneDNSWireRecovery` passed all three repetitions on Windows 2022
+(7.69s, 2.70s, 2.75s) and Windows 2025 (8.69s, 3.50s, 3.73s). The earlier Windows
+2022 IPC startup timeout did not recur here, but its cause remains unproven.
+The new diagnostics are observability improvements, not proof of a runtime fix.
+
+The corrected 18-scenario source
+[`b9b7712`](https://github.com/endless-net/client/tree/b9b7712dddf059beba590329ec11e8a72c970242)
+is now running in [CI 34635511042](https://github.com/endless-net/client/actions/runs/34635511042).
+It includes valid ICMP destination routes, UDP exclusion/recovery and single-agent
+ownership. These increments remain unqualified until that matrix completes.
+Intermediate pending runs for `1e0a535` and `4a84a93` were superseded by newer
+pending source; no successful execution is claimed for those source commits.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
