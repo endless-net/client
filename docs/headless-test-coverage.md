@@ -41,12 +41,14 @@ This scope change does not reduce coverage of the client itself.
 The user additionally requires functional confirmation on every supported OS,
 using parallel GitHub-hosted runners. The Client CI contract matrix targets
 Ubuntu 22.04/24.04 amd64/arm64, Windows 2022/2025 amd64 and macOS 15 ARM/Intel, with fail-fast
-disabled, three repetitions and separate text/JSONL reports per platform.
+disabled and three isolated runner jobs per platform, each with its own text/JSONL
+report, compiled inventory, source SHA and repetition identity (24 reports total).
 Every matrix job is mandatory for verification and exact-source publication.
 This matrix runs the common real-client `TestControlPlane*` suite. The isolated
 two-client `TestClientDataplane*` suite currently has a Linux namespace fixture;
-Windows/macOS dataplane, resolver, route and firewall outcomes remain explicit
-work, and cannot be inferred from passing common contracts or installation.
+Two-client fixture parity and remaining resolver, route and firewall variants
+remain explicit work beyond the native cases qualified below; they cannot be
+inferred from unrelated passing contracts or installation.
 
 ## Evidence levels
 
@@ -1561,6 +1563,33 @@ checks that increment separately. Windows 2025 root durations sum to 868.68s,
 close to the current 900s suite limit. Further coverage growth should distribute
 repetitions across isolated runner jobs while preserving all three required
 outcomes, inventories and exact source verification.
+
+## Isolated CI repetitions awaiting hosted qualification
+
+The native matrix now runs one complete `TestControlPlane*` suite on each of
+three separate GitHub-hosted runners per platform, instead of three sequential
+iterations in one runner process. This addresses the observed 868.68s Windows
+suite duration as functional coverage grows. Existing per-operation assertions,
+the 15-minute test-process deadline and 20-minute job deadline are retained.
+Historical evidence with three same-process iterations keeps its original scope;
+new reports demonstrate three fresh-runner executions, not same-process reuse
+across repetitions. Hosted concurrency and queue capacity still govern actual
+start times.
+
+All 24 platform/repetition jobs are mandatory. The aggregate verifier requires
+every named artifact, matching `shard.txt`, the exact source SHA, the same compiled
+test inventory across all reports, and exactly one complete successful execution
+of every root in each report. It rejects missing repetitions, renamed reports
+with another repetition identity, extra executions, failed/skipped children and
+incomplete package completion. Three executions in one report cannot substitute
+for three isolated reports. The exact-source publication gate now requires all
+24 native job names in addition to its existing installation and verification
+requirements (37 required jobs total).
+
+The common 22-root inventory still requires **528 PASS outcomes**. Short tests,
+vet and lint passed, including report rejection and publication-gate regressions.
+Hosted validation of this CI change and the new Relay scenario remains pending.
+No service/provider or infrastructure execution changes are included.
 
 ## Next work
 

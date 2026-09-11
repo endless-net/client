@@ -1,0 +1,7 @@
+{"Action":"run","Package":"client/contracts","Test":"TestControlPlaneBrowserEnrollment"}
+{"Action":"run","Package":"client/contracts","Test":"TestControlPlaneBrowserEnrollment/approve"}
+{"Action":"run","Package":"client/contracts","Test":"TestControlPlaneBrowserEnrollment/reject"}
+{"Action":"pass","Package":"client/contracts","Test":"TestControlPlaneBrowserEnrollment/approve"}
+{"Action":"pass","Package":"client/contracts","Test":"TestControlPlaneBrowserEnrollment/reject"}
+{"Action":"pass","Package":"client/contracts","Test":"TestControlPlaneBrowserEnrollment"}
+{"Action":"pass","Package":"client/contracts","Test":null}

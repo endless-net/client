@@ -191,13 +191,14 @@ jobs:
           if-no-files-found: warn
 
   control-plane-platforms:
-    name: Client contracts (${{ matrix.os }})
+    name: Client contracts (${{ matrix.os }}, repeat ${{ matrix.repetition }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04, ubuntu-22.04-arm, ubuntu-24.04-arm, windows-2022, windows-2025, macos-15, macos-15-intel]
+        repetition: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -214,6 +215,7 @@ jobs:
           go test -c -o "$RUNNER_TEMP/client-contracts/contracts.test.exe" ./tests
           "$RUNNER_TEMP/client-contracts/contracts.test.exe" -test.list='^TestControlPlane' > "$RUNNER_TEMP/client-contracts/expected-tests.txt"
           printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/client-contracts/source.txt"
+          printf '%s\n' '${{ matrix.os }}-${{ matrix.repetition }}' > "$RUNNER_TEMP/client-contracts/shard.txt"
       - name: Prepare signed Wintun dependency
         if: runner.os == 'Windows'
         shell: pwsh
@@ -227,7 +229,7 @@ jobs:
           }
           Expand-Archive -LiteralPath $archive -DestinationPath (Join-Path $dir 'wintun')
           Copy-Item -LiteralPath (Join-Path $dir 'wintun/wintun/bin/amd64/wintun.dll') -Destination (Join-Path $dir 'wintun.dll')
-      - name: Run contract scenarios three times (Unix)
+      - name: Run isolated contract repetition (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
@@ -236,9 +238,9 @@ jobs:
             ENDLESSNET_CONTROL_TEST=1 ENDLESSNET_TEST_BINARY="$RUNNER_TEMP/client-contracts/client.exe" \
             ENDLESSNET_PACKET_PROBE="$RUNNER_TEMP/client-contracts/packetprobe.exe" \
             "$RUNNER_TEMP/client-contracts/contracts.test.exe" \
-            -test.run='^TestControlPlane' -test.count=3 -test.v -test.timeout=15m \
+            -test.run='^TestControlPlane' -test.count=1 -test.v -test.timeout=15m \
             2>&1 | tee "$RUNNER_TEMP/client-contracts/results.log"
-      - name: Run contract scenarios three times (Windows)
+      - name: Run isolated contract repetition (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         env:
@@ -246,7 +248,7 @@ jobs:
         run: |
           $env:ENDLESSNET_TEST_BINARY = Join-Path $env:RUNNER_TEMP 'client-contracts/client.exe'
           $env:ENDLESSNET_PACKET_PROBE = Join-Path $env:RUNNER_TEMP 'client-contracts/packetprobe.exe'
-          & "$env:RUNNER_TEMP/client-contracts/contracts.test.exe" '-test.run=^TestControlPlane' '-test.count=3' '-test.v' '-test.timeout=15m' 2>&1 |
+          & "$env:RUNNER_TEMP/client-contracts/contracts.test.exe" '-test.run=^TestControlPlane' '-test.count=1' '-test.v' '-test.timeout=15m' 2>&1 |
             Tee-Object -FilePath "$env:RUNNER_TEMP/client-contracts/results.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Produce machine-readable contract report
@@ -255,18 +257,19 @@ jobs:
         run: |
           set -euo pipefail
           go tool test2json -t -p client/contracts < "$RUNNER_TEMP/client-contracts/results.log" > "$RUNNER_TEMP/client-contracts/results.jsonl"
-          echo "### Client contracts: ${{ matrix.os }}" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Three repetitions of the real-client contract suite; per-test outcomes are in the attached JSONL report.' >> "$GITHUB_STEP_SUMMARY"
+          echo "### Client contracts: ${{ matrix.os }}, repeat ${{ matrix.repetition }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'One isolated repetition; all three reports per platform are required by verify.' >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve platform contract reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: client-contracts-${{ matrix.os }}
+          name: client-contracts-${{ matrix.os }}-${{ matrix.repetition }}
           path: |
             ${{ runner.temp }}/client-contracts/results.log
             ${{ runner.temp }}/client-contracts/results.jsonl
             ${{ runner.temp }}/client-contracts/expected-tests.txt
             ${{ runner.temp }}/client-contracts/source.txt
+            ${{ runner.temp }}/client-contracts/shard.txt
           if-no-files-found: error
 
   control-plane:

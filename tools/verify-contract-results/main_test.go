@@ -3,17 +3,18 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestRecordedTest2JSONRepeatedSubtests(t *testing.T) {
+func TestRecordedTest2JSONSubtests(t *testing.T) {
 	// Action/package/test fields from the Ubuntu 22.04 artifact of CI
 	// 34625686577, source 5ad2709. Output/timestamps and unrelated tests are
-	// omitted; repeated root/subtest ordering comes from go tool test2json.
-	data, err := os.ReadFile("testdata/repeated-subtests.jsonl")
+	// omitted; the first repetition and final package event are retained.
+	data, err := os.ReadFile("testdata/single-subtests.jsonl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,14 +40,15 @@ func goodReport(names []string, repetitions int) []byte {
 
 func TestRejectIncompleteOrUnequalExecution(t *testing.T) {
 	names := []string{"TestControlPlaneAlpha", "TestControlPlaneBeta"}
-	good := string(goodReport(names, 3))
+	good := string(goodReport(names, 1))
 	if err := verifyEvents(strings.NewReader(good), names); err != nil {
 		t.Fatal(err)
 	}
 	for name, report := range map[string]string{
-		"missing repetition":  string(goodReport(names, 2)),
-		"extra repetition":    string(goodReport(names, 4)),
-		"missing scenario":    string(goodReport(names[:1], 3)),
+		"missing repetition":  string(goodReport(names, 0)),
+		"extra repetition":    string(goodReport(names, 2)),
+		"three in one runner": string(goodReport(names, 3)),
+		"missing scenario":    string(goodReport(names[:1], 1)),
 		"undeclared scenario": strings.ReplaceAll(good, "TestControlPlaneBeta", "TestControlPlaneOther"),
 		"wrong package":       strings.ReplaceAll(good, "client/contracts", "another/package"),
 		"skipped child":       strings.Replace(good, `"Action":"pass","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, `"Action":"skip","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, 1),
@@ -65,7 +67,7 @@ func TestRejectIncompleteOrUnequalExecution(t *testing.T) {
 	}
 }
 
-func TestRequireEightMatchingInventoriesAndSource(t *testing.T) {
+func TestRequireThreeIsolatedReportsOnEightPlatforms(t *testing.T) {
 	const sha = "0123456789012345678901234567890123456789"
 	write := func(path string, value []byte) {
 		t.Helper()
@@ -73,43 +75,57 @@ func TestRequireEightMatchingInventoriesAndSource(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, mutation := range []string{"none", "missing-platform", "missing-linux-arm", "missing-report", "missing-inventory", "source", "inventory", "empty-inventory", "duplicate-inventory"} {
+	for _, mutation := range []string{"none", "missing-platform", "missing-linux-arm", "missing-repetition", "wrong-shard", "missing-shard", "missing-report", "missing-inventory", "source", "inventory", "empty-inventory", "duplicate-inventory", "repeated-in-one-shard"} {
 		t.Run(mutation, func(t *testing.T) {
 			dir := t.TempDir()
 			for _, platform := range platforms {
-				root := filepath.Join(dir, "client-contracts-"+platform)
-				if platform == "ubuntu-24.04-arm" && mutation == "missing-linux-arm" {
-					continue
-				}
-				if platform == "windows-2025" && mutation == "missing-platform" {
-					continue
-				}
-				if err := os.MkdirAll(root, 0o700); err != nil {
-					t.Fatal(err)
-				}
-				write(filepath.Join(root, "source.txt"), []byte(sha+"\n"))
-				write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneAlpha\n"))
-				write(filepath.Join(root, "results.jsonl"), goodReport([]string{"TestControlPlaneAlpha"}, 3))
-				if platform != "windows-2025" {
-					continue
-				}
-				switch mutation {
-				case "missing-report", "missing-inventory":
-					file := "results.jsonl"
-					if mutation == "missing-inventory" {
-						file = "expected-tests.txt"
+				for repetition := 1; repetition <= 3; repetition++ {
+					shard := fmt.Sprintf("%s-%d", platform, repetition)
+					root := filepath.Join(dir, "client-contracts-"+shard)
+					if platform == "ubuntu-24.04-arm" && mutation == "missing-linux-arm" {
+						continue
 					}
-					if err := os.Remove(filepath.Join(root, file)); err != nil {
+					if platform == "windows-2025" && mutation == "missing-platform" {
+						continue
+					}
+					if platform == "windows-2025" && repetition == 2 && mutation == "missing-repetition" {
+						continue
+					}
+					if err := os.MkdirAll(root, 0o700); err != nil {
 						t.Fatal(err)
 					}
-				case "source":
-					write(filepath.Join(root, "source.txt"), []byte(strings.Repeat("f", 40)))
-				case "inventory":
-					write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneBeta\n"))
-				case "empty-inventory":
-					write(filepath.Join(root, "expected-tests.txt"), nil)
-				case "duplicate-inventory":
-					write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneAlpha\nTestControlPlaneAlpha\n"))
+					write(filepath.Join(root, "source.txt"), []byte(sha+"\n"))
+					write(filepath.Join(root, "shard.txt"), []byte(shard+"\n"))
+					write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneAlpha\n"))
+					write(filepath.Join(root, "results.jsonl"), goodReport([]string{"TestControlPlaneAlpha"}, 1))
+					if platform != "windows-2025" || repetition != 2 {
+						continue
+					}
+					switch mutation {
+					case "missing-report", "missing-inventory", "missing-shard":
+						file := "results.jsonl"
+						if mutation == "missing-inventory" {
+							file = "expected-tests.txt"
+						}
+						if mutation == "missing-shard" {
+							file = "shard.txt"
+						}
+						if err := os.Remove(filepath.Join(root, file)); err != nil {
+							t.Fatal(err)
+						}
+					case "source":
+						write(filepath.Join(root, "source.txt"), []byte(strings.Repeat("f", 40)))
+					case "inventory":
+						write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneBeta\n"))
+					case "empty-inventory":
+						write(filepath.Join(root, "expected-tests.txt"), nil)
+					case "duplicate-inventory":
+						write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneAlpha\nTestControlPlaneAlpha\n"))
+					case "wrong-shard":
+						write(filepath.Join(root, "shard.txt"), []byte("windows-2025-1\n"))
+					case "repeated-in-one-shard":
+						write(filepath.Join(root, "results.jsonl"), goodReport([]string{"TestControlPlaneAlpha"}, 3))
+					}
 				}
 			}
 			n, err := verifyReports(dir, sha)

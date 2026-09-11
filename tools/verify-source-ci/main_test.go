@@ -50,7 +50,7 @@ func TestPublicationGate(t *testing.T) {
 		}, false},
 		{"missing-windows-contracts", func(f *fixture) {
 			for i := range f.jobs {
-				if f.jobs[i].Name == "Client contracts (windows-2025)" {
+				if f.jobs[i].Name == "Client contracts (windows-2025, repeat 3)" {
 					f.jobs = append(f.jobs[:i], f.jobs[i+1:]...)
 					break
 				}
@@ -58,14 +58,14 @@ func TestPublicationGate(t *testing.T) {
 		}, false},
 		{"skipped-macos-contracts", func(f *fixture) {
 			for i := range f.jobs {
-				if f.jobs[i].Name == "Client contracts (macos-15)" {
+				if f.jobs[i].Name == "Client contracts (macos-15, repeat 2)" {
 					f.jobs[i].Conclusion = "skipped"
 				}
 			}
 		}, false},
 		{"missing-linux-arm-contracts", func(f *fixture) {
 			for i := range f.jobs {
-				if f.jobs[i].Name == "Client contracts (ubuntu-24.04-arm)" {
+				if f.jobs[i].Name == "Client contracts (ubuntu-24.04-arm, repeat 1)" {
 					f.jobs = append(f.jobs[:i], f.jobs[i+1:]...)
 					break
 				}

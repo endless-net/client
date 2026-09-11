@@ -1,4 +1,4 @@
-// Command verify-contract-results compares the eight required native CI reports.
+// Command verify-contract-results requires three isolated reports per platform.
 package main
 
 import (
@@ -61,36 +61,43 @@ func verifyReports(dir, sha string) (int, error) {
 		return 0, errors.New("expected source must be a full commit SHA")
 	}
 	var common []string
-	for _, platform := range platforms {
-		root := filepath.Join(dir, "client-contracts-"+platform)
-		source, err := os.ReadFile(filepath.Join(root, "source.txt"))
-		if err != nil || strings.TrimSpace(string(source)) != sha {
-			return 0, fmt.Errorf("%s: missing or mismatched source identity", platform)
-		}
-		inventory, err := os.ReadFile(filepath.Join(root, "expected-tests.txt"))
-		if err != nil {
-			return 0, fmt.Errorf("%s: missing compiled test inventory", platform)
-		}
-		names, err := declaredTests(inventory)
-		if err != nil {
-			return 0, fmt.Errorf("%s: %w", platform, err)
-		}
-		if common == nil {
-			common = names
-		} else if !slices.Equal(common, names) {
-			return 0, fmt.Errorf("%s: compiled scenario inventory differs across platforms", platform)
-		}
-		file, err := os.Open(filepath.Join(root, "results.jsonl"))
-		if err != nil {
-			return 0, fmt.Errorf("%s: missing execution report", platform)
-		}
-		err = verifyEvents(file, names)
-		closeErr := file.Close()
-		if err != nil {
-			return 0, fmt.Errorf("%s: %w", platform, err)
-		}
-		if closeErr != nil {
-			return 0, fmt.Errorf("%s: report close failed", platform)
+	for _, platformName := range platforms {
+		for repetition := 1; repetition <= 3; repetition++ {
+			platform := fmt.Sprintf("%s-%d", platformName, repetition)
+			root := filepath.Join(dir, "client-contracts-"+platform)
+			shard, err := os.ReadFile(filepath.Join(root, "shard.txt"))
+			if err != nil || strings.TrimSpace(string(shard)) != platform {
+				return 0, fmt.Errorf("%s: missing or mismatched repetition identity", platform)
+			}
+			source, err := os.ReadFile(filepath.Join(root, "source.txt"))
+			if err != nil || strings.TrimSpace(string(source)) != sha {
+				return 0, fmt.Errorf("%s: missing or mismatched source identity", platform)
+			}
+			inventory, err := os.ReadFile(filepath.Join(root, "expected-tests.txt"))
+			if err != nil {
+				return 0, fmt.Errorf("%s: missing compiled test inventory", platform)
+			}
+			names, err := declaredTests(inventory)
+			if err != nil {
+				return 0, fmt.Errorf("%s: %w", platform, err)
+			}
+			if common == nil {
+				common = names
+			} else if !slices.Equal(common, names) {
+				return 0, fmt.Errorf("%s: compiled scenario inventory differs across platforms", platform)
+			}
+			file, err := os.Open(filepath.Join(root, "results.jsonl"))
+			if err != nil {
+				return 0, fmt.Errorf("%s: missing execution report", platform)
+			}
+			err = verifyEvents(file, names)
+			closeErr := file.Close()
+			if err != nil {
+				return 0, fmt.Errorf("%s: %w", platform, err)
+			}
+			if closeErr != nil {
+				return 0, fmt.Errorf("%s: report close failed", platform)
+			}
 		}
 	}
 	return len(common), nil
@@ -154,8 +161,8 @@ func verifyEvents(reader io.Reader, names []string) error {
 	}
 	for _, name := range names {
 		state := states[name]
-		if state.active || state.runs != 3 || state.passes != 3 {
-			return fmt.Errorf("%s: expected exactly three complete successful repetitions", name)
+		if state.active || state.runs != 1 || state.passes != 1 {
+			return fmt.Errorf("%s: expected exactly one complete successful execution in this repetition", name)
 		}
 	}
 	return nil
