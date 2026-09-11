@@ -61,7 +61,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-027 | C peer delta/resync, malformed delta, peer withdrawal, port/protocol policy and established-flow denial | Real producer policy variants and remaining platforms |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
-| HC-030 | C typed/malformed errors, outage/restart and traffic during valid-cache outage | Offline lease limits and real producer failure variants |
+| HC-030 | C typed/malformed errors and outage traffic; R real provider temporary map failure and CLI recovery without registration | Agent recovery with real producer, offline lease limits and remaining failure variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | U routes/application tests | Real consumer to resource behind router |
 | HC-033 | U configuration tests | Public selection/disable and actual route effect |
@@ -96,7 +96,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
 | HC-063 | U local-forget/recovery tests | Public privileged reset and new identity, real producer outcomes |
 | HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
-| HC-065 | C RejectsInvalidMaps terminal revoke; D revoke | R offline/online retirement and separately verified local removal |
+| HC-065 | C terminal revoke; R deleted Client sync denied and peer withdrawn without node recreation | Agent/dataplane retirement, offline leases and separately verified local removal |
 
 ## Current implementation increment
 
@@ -291,8 +291,8 @@ replay still returns 401 after a consumed key and blocks Coordinator publication
 Consumer replay success alone therefore does not establish provider compatibility.
 Do not make the client forget enrollment on arbitrary 401 responses to conceal it.
 
-The [Coordinator-owned real-pair test](https://github.com/endless-net/coordinator/blob/b10f2afa911098e841abe5cfbcffce24f95c66b6/tests/providercontract/client_pair_test.go)
-passed in [CI 34596954544](https://github.com/endless-net/coordinator/actions/runs/34596954544/job/103254909238)
+The [Coordinator-owned real-pair test](https://github.com/endless-net/coordinator/blob/ab4a94722b4e5ede948d7ecf751a470c9a5575a3/tests/providercontract/client_pair_test.go)
+passed in [CI 34597438553](https://github.com/endless-net/coordinator/actions/runs/34597438553/job/103256466928)
 against this Client at `ffa46a14282f9a063bd63ddfd92392c6fb0a2032`.
 It drives real `up`, `sync`, and `status --json`, checks two distinct nodes,
 credential renewal in a new process without a join key, and peer withdrawal after
@@ -300,6 +300,11 @@ administrative deletion. Revoking a reusable join key denies a third Client with
 the provider's typed error and preserves the original Client's map access and
 renewal; public inventory confirms no third node. It never reads private Client files. A declared edge
 double serves Signing public keys and proxies Coordinator requests unchanged.
+An actual provider temporary map error during Signing outage preserves accepted
+CLI revision/identity; restored sync succeeds without a registration attempt.
+After node deletion the removed Client's sync fails on the real typed revoked
+error, with no registration attempt or recreated node. These assertions cover
+CLI calls, not automatic agent recovery or enrollment-state cleanup.
 Signing/Billing/Relay are doubles; agent traffic, real Gateway/Signing and
 manifest acceptance remain unproven by this test. The overall CI is failed on
 the separate registration replay subtest.
