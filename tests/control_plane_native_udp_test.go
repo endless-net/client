@@ -173,12 +173,22 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	second := startApplicationSession(t, binary, "", protocol, address("24002"))
 	first("ok")
 	second("ok")
+	assertICMP := func(want bool) {
+		t.Helper()
+		// Only the protocol-stack peer answers ICMP; the UDP-only channel
+		// fixture intentionally implements just its nonce echo protocol.
+		if protocol == "tcp" && nativePing(t, peerIP) != want {
+			t.Fatalf("native ICMP reachability: want %t", want)
+		}
+	}
+	assertICMP(true)
 	limited := peer
 	limited.ACLRestricted = true
 	limited.ACLGrants = []api.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: protocol, Port: 24002}}}}
 	apply(limited)
 	for range 3 {
 		second("ok")
+		assertICMP(false)
 		first("blocked")
 		if !fresh("24002") {
 			t.Fatal("retained grant stopped working")
@@ -199,6 +209,7 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	if !fresh("24001") || !fresh("24002") {
 		t.Fatal("restored native grants did not recover")
 	}
+	assertICMP(true)
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
 	n.AwaitStatus(func(v ipc.StatusResponse) bool {
@@ -207,6 +218,7 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	if fresh("24001") || fresh("24002") {
 		t.Fatal("disconnected client still delivered overlay traffic")
 	}
+	assertICMP(false)
 	// HC-017/HC-018: a new agent process must preserve disconnected intent and
 	// enrollment. Restoring connected intent must recover actual traffic using
 	// the same public node/key binding held by the unchanged reference peer.
@@ -229,6 +241,7 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	if fresh("24001") || fresh("24002") {
 		t.Fatal("agent restart ignored disconnected intent")
 	}
+	assertICMP(false)
 	if registrationRequests() != before {
 		t.Fatal("disconnected restart attempted credential registration or refresh")
 	}
@@ -248,6 +261,7 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 				t.Fatal("connected intent did not restore native traffic")
 			}
 		}
+		assertICMP(true)
 		// Registration also renews an existing node credential. The contract
 		// fixture validates the original identity/key/fingerprint binding before
 		// recording a refresh; only a newly created node is another enrollment.
@@ -294,6 +308,7 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 			return v.State == ipc.StateNeedsEnrollment && v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent
 		})
 		retiredSession("blocked")
+		assertICMP(false)
 		if fresh("24001") || fresh("24002") {
 			t.Fatal("retired client still delivered fresh native traffic")
 		}
