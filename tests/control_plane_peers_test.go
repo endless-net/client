@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -147,6 +149,7 @@ func TestControlPlaneDirectPeerTrafficAndWithdrawal(t *testing.T) {
 	}
 	exerciseApplicationPolicy(t, s, nodes, states, peers)
 	exerciseConnectionIntent(t, s, nodes, states)
+	exercisePeerDNS(t, s, nodes, states, peers)
 }
 
 // HC-017/HC-018/HC-030: persisted user intent and outage behavior must agree with
@@ -236,11 +239,102 @@ func exerciseConnectionIntent(t *testing.T, s *testcontrol.Server, nodes [2]*tes
 	}
 }
 
-func applicationProbe(t *testing.T, binary, namespace, protocol, address string) bool {
+// HC-025: public DNS CLI/proxy and real applications using that resolver. Each
+// dns serve invocation intentionally loads a fresh signed-map snapshot; this
+// does not claim OS resolver integration or a live reload contract for the CLI.
+func exercisePeerDNS(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.Node, states [2]ipc.StatusResponse, peers [2]api.Peer) {
+	t.Helper()
+	n := nodes[0]
+	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
+	const domain = "scenario.endlessnet"
+	const dnsAddress = "127.0.0.1:1053"
+	peer := peers[0]
+	peer.Hostname = "dns-peer"
+	name := peer.Hostname + "." + domain
+	lookup := func(query, expected string) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		out, err := exec.CommandContext(ctx, "ip", "netns", "exec", n.Namespace, binary, "--mode", "resolve", "--dns", dnsAddress, "--address", query).Output()
+		if expected == "" {
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 3 {
+				t.Fatal("absent peer did not return DNS name-not-found")
+			}
+		} else if err != nil || strings.TrimSpace(string(out)) != expected {
+			t.Fatal("peer DNS returned an unexpected address")
+		}
+	}
+	for _, present := range []bool{true, false, true} {
+		var desired []api.Peer
+		if present {
+			desired = []api.Peer{peer}
+		}
+		if err := s.UpdatePeers(states[0].NodeID, desired); err != nil {
+			t.Fatal(err)
+		}
+		m, err := s.Snapshot(states[0].NodeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		n.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.MapRevision >= m.Revision.Network && v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotCurrent && v.Agent.LastError == "" && v.PeerCount == len(desired)
+		})
+		cmd := exec.Command("ip", "netns", "exec", n.Namespace, n.Binary, "dns", "serve", "--config", n.Config, "--listen", dnsAddress, "--domain", domain)
+		output, err := cmd.StdoutPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		var once sync.Once
+		stop := func() { once.Do(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }) }
+		t.Cleanup(stop)
+		ready := make(chan bool, 1)
+		go func() {
+			scanner := bufio.NewScanner(output)
+			ready <- scanner.Scan() && strings.HasPrefix(scanner.Text(), "dns proxy listening on ")
+		}()
+		select {
+		case ok := <-ready:
+			if !ok {
+				t.Fatal("public DNS proxy did not start")
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("public DNS proxy startup deadline")
+		}
+		lookup(states[0].Hostname+"."+domain, states[0].OverlayIP)
+		if present {
+			lookup(name, states[1].OverlayIP)
+			resolved := n.MustRun("dns", "resolve", "--config", n.Config, "--domain", domain, "--name", name)
+			if strings.TrimSpace(string(resolved)) != states[1].OverlayIP {
+				t.Fatal("DNS CLI differs from DNS wire resolution")
+			}
+			for _, protocol := range []string{"tcp", "udp"} {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				err := testclient.Await(ctx, func() bool {
+					return applicationProbe(t, binary, n.Namespace, protocol, net.JoinHostPort(name, "24001"), "--dns", dnsAddress)
+				})
+				cancel()
+				if err != nil {
+					t.Fatal("application could not access peer by DNS name")
+				}
+			}
+		} else {
+			lookup(name, "")
+		}
+		lookup("absent."+domain, "")
+		stop()
+	}
+}
+
+func applicationProbe(t *testing.T, binary, namespace, protocol, address string, options ...string) bool {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := exec.CommandContext(ctx, "ip", "netns", "exec", namespace, binary, "--mode", "probe", "--network", protocol, "--address", address).Run()
+	args := []string{"netns", "exec", namespace, binary, "--mode", "probe", "--network", protocol, "--address", address}
+	err := exec.CommandContext(ctx, "ip", append(args, options...)...).Run()
 	if err == nil {
 		return true
 	}

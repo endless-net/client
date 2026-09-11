@@ -5,6 +5,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/rand"
 	"errors"
 	"flag"
@@ -68,12 +69,46 @@ func serve(address string) error {
 }
 
 var errUnreachable = errors.New("application exchange unavailable")
+var errNameNotFound = errors.New("DNS name not found")
+
+func resolver(server string) *net.Resolver {
+	if server == "" {
+		return net.DefaultResolver
+	}
+	return &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		d := net.Dialer{Timeout: time.Second}
+		return d.DialContext(ctx, network, server)
+	}}
+}
+
+func resolve(name, server string, output io.Writer) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	addresses, err := resolver(server).LookupIP(ctx, "ip4", name)
+	if err != nil {
+		var dnsError *net.DNSError
+		if errors.As(err, &dnsError) && dnsError.IsNotFound {
+			return errNameNotFound
+		}
+		return errUnreachable
+	}
+	if len(addresses) != 1 {
+		return errors.New("expected one DNS address")
+	}
+	_, err = fmt.Fprintln(output, addresses[0].String())
+	return err
+}
 
 func probe(network, address string) error {
+	return probeDNS(network, address, "")
+}
+
+func probeDNS(network, address, dnsServer string) error {
 	if network != "tcp" && network != "udp" {
 		return errors.New("network must be tcp or udp")
 	}
-	conn, err := net.DialTimeout(network+"4", address, time.Second)
+	dialer := net.Dialer{Timeout: time.Second, Resolver: resolver(dnsServer)}
+	conn, err := dialer.Dial(network+"4", address)
 	if err != nil {
 		return errUnreachable
 	}
@@ -136,23 +171,29 @@ func session(network, address string, input io.Reader, output io.Writer) error {
 
 func main() {
 	fs := flag.NewFlagSet("packetprobe", flag.ExitOnError)
-	mode := fs.String("mode", "probe", "probe, session or serve")
+	mode := fs.String("mode", "probe", "probe, resolve, session or serve")
 	address := fs.String("address", "", "IPv4 address and port")
 	network := fs.String("network", "tcp", "tcp or udp for probes")
+	dnsServer := fs.String("dns", "", "explicit DNS resolver host:port")
 	_ = fs.Parse(os.Args[1:])
 	var err error
 	switch *mode {
 	case "serve":
 		err = serve(*address)
 	case "probe":
-		err = probe(*network, *address)
+		err = probeDNS(*network, *address, *dnsServer)
+	case "resolve":
+		err = resolve(*address, *dnsServer, os.Stdout)
 	case "session":
 		err = session(*network, *address, os.Stdin, os.Stdout)
 	default:
-		err = errors.New("mode must be serve, probe or session")
+		err = errors.New("mode must be serve, probe, resolve or session")
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		if errors.Is(err, errNameNotFound) {
+			os.Exit(3)
+		}
 		if errors.Is(err, errUnreachable) {
 			os.Exit(2)
 		}

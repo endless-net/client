@@ -46,8 +46,8 @@ product scope are different conditions; neither is a successful skip.
 | HC-014 | U recovery matrix | C/R session expiry, reauthentication and preservation |
 | HC-015 | D credential revocation | Revoke join authorization separately from existing Node |
 | HC-016 | C initial cached-map status | Actual allowed application traffic |
-| HC-017 | C Lifecycle disconnect/restart | Data flow stops/resumes without new identity |
-| HC-018 | C disconnected intent survives restart | Connected intent, reboot and unavailable-network variants |
+| HC-017 | C disconnect/restart/connect stops and restores application traffic | Other OSes and failure variants |
+| HC-018 | C connected/disconnected intent survives process restart with traffic checks | Host reboot and other platform/network variants |
 | HC-019 | U configuration tests | Public preference mutation and observed effect |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
@@ -56,10 +56,10 @@ product scope are different conditions; neither is a successful skip.
 | HC-024 | C DirectPeerTrafficAndWithdrawal: IPv4 ICMP/TCP/UDP between real agents | Other platforms/transports, real producer authorization and full variants |
 | HC-025 | C DNSProjection; U resolver tests | Real resolver and allowed/denied resource |
 | HC-026 | U DNS/router configuration | External DNS control and IP-access preservation |
-| HC-027 | C peer delta/resync, malformed delta, peer withdrawal and port/protocol policy | Established flow checks pending; real producer policy variants |
+| HC-027 | C peer delta/resync, malformed delta, peer withdrawal, port/protocol policy and established-flow denial | Real producer policy variants and remaining platforms |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
-| HC-030 | C typed/malformed error matrix, temporary outage and restart | Offline lease limits and real producer failure variants |
+| HC-030 | C typed/malformed errors, outage/restart and traffic during valid-cache outage | Offline lease limits and real producer failure variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | U routes/application tests | Real consumer to resource behind router |
 | HC-033 | U configuration tests | Public selection/disable and actual route effect |
@@ -256,6 +256,25 @@ controlled inbound-blocking preference. No such operation appears in current
 CLI dispatch, IPC contract or client configuration. Its product/contract decision
 remains open, alongside the explicitly unresolved BA scope questions; no missing
 feature is counted as test coverage.
+
+Commit `0b1a60e` passed all mandatory jobs in
+[Test run 34589433548](https://github.com/endless-net/client/actions/runs/34589433548),
+including all three real-peer repetitions with established-flow withdrawal,
+intent/restart and outage traffic checks. Its
+[source gate check 34589675950](https://github.com/endless-net/client/actions/runs/34589675950)
+also passed. Node creation and credential refresh are now distinguished by the
+fixture and verified through the public SDK and client outcomes.
+
+The next HC-025 increment drives real `dns resolve` and `dns serve` commands and
+accesses the receiving application by FQDN using an explicit DNS resolver. It
+checks exact IPv4 answers, real TCP/UDP payload exchange, NXDOMAIN for absent and
+removed peers, and restored name/application access after the signed map restores
+the peer. Each `dns serve` process intentionally starts from its current verified
+snapshot. This is CLI/proxy evidence, not live reload or OS resolver integration;
+split DNS, upstream failover, IPv6 and automatic DNS policy remain separate.
+The helper distinguishes DNS name-not-found from timeout/transport failure. Its
+short test uses actual DNS wire messages and a local application; local short
+tests, vet and lint pass. Real-client DNS execution still awaits CI.
 
 ## Next work
 
