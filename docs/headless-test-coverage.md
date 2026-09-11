@@ -90,9 +90,9 @@ product scope are different conditions; neither is a successful skip.
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
 | HC-014 | U recovery matrix | C session expiry, reauthentication and preservation |
 | HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
-| HC-016 | C initial cached-map status | Actual allowed application traffic |
-| HC-017 | C disconnect/restart/connect; R repeated disconnect/connect and process restart block/restore direct TCP/UDP with original identities | Other OSes and failure variants |
-| HC-018 | C and R connected/disconnected intent survives process restart with traffic checks | Host reboot, crash during intent write and other platform/network variants |
+| HC-016 | C initial cached-map status and native direct IPv4 UDP on all six runners | Other paths/protocols and denied-access variants |
+| HC-017 | C native direct IPv4 UDP blocked/restored by disconnect/connect and agent restart on all six runners with original identity; historical R direct TCP/UDP | Remaining established-flow, TCP/IPv6, other paths and operation-failure variants |
+| HC-018 | C connected/disconnected intent survives process restart with native IPv4 UDP checks on all six runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | U configuration tests | Public preference mutation and observed effect |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
@@ -139,7 +139,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
 | HC-063 | U local-forget/recovery tests | Public privileged reset and new identity against published contract responses |
 | HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
-| HC-065 | C terminal revoke and direct TCP/UDP retirement across agent restart; historical R deleted Client sync denied and peer withdrawn | Offline leases, other platforms/paths and separately verified local removal |
+| HC-065 | C terminal revoke and native direct IPv4 UDP retirement across agent restart on all six runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases, TCP/IPv6 and remaining path/platform variants, separately verified local removal |
 
 ## Current implementation increment
 
@@ -712,6 +712,66 @@ This is native direct IPv4 UDP evidence for parts of HC-024/HC-027, including
 selective port enforcement and recovery. It does not establish full coverage of
 those use cases, IPv6 packet delivery, TCP dataplane on Windows/macOS, automatic
 OS resolver integration, Relay/NAT, every firewall direction, or all HC-001–HC-065.
+
+## Native connection intent and credential retirement increment
+
+[Client 432dbf2](https://github.com/endless-net/client/tree/432dbf20ade92d7f6671d8b3171236e74a9b6d90)
+extends the native UDP scenario for HC-017/HC-018/HC-065. After disconnect, a new
+agent process must retain disconnected intent and enrollment while new UDP
+traffic remains blocked. Explicit connect, repeated connect and another process
+restart must restore traffic with the same public node and WireGuard identity,
+without creating another enrollment. Credential refresh through the registration
+API is allowed only for the same node and validated identity binding. A restart
+while disconnected must send no registration/refresh request. The fixture updates only its return UDP
+endpoint from public IPC when the Client chooses a new listen port.
+
+The scenario then establishes a fresh UDP session and revokes the node
+credential through the contract testserver. Public IPC must report
+`needs_enrollment`, no node ID, no credential and no cached map. Both the old
+session and new probes must fail before and after another agent restart, with
+no automatic registration attempt. The reference peer retains its original
+keys, routes and echo handler throughout retirement; fixture-side withdrawal
+cannot account for the loss of access.
+
+[CI 34618687176](https://github.com/endless-net/client/actions/runs/34618687176)
+reached reconnect with working UDP traffic on Ubuntu and macOS ARM, then failed
+an incorrect test assertion that counted credential refresh as new enrollment.
+The existing registration contract validates the current node/key/fingerprint
+binding for credential refresh. The test must distinguish that operation from
+creating a new node; it must still reject any registration/refresh attempt
+after terminal retirement. This run did not reach the retirement assertions.
+The corrected source superseded it: both Windows jobs and macOS Intel were
+cancelled, so their terminal results provide no completed-run evidence.
+
+[Client c38df03](https://github.com/endless-net/client/tree/c38df030171f3baa05a9e4706000003ae7c08954)
+corrects the assertion using the fixture's independently validated registration
+outcomes. Local format/vet/lint/short checks passed.
+[CI 34619235033](https://github.com/endless-net/client/actions/runs/34619235033)
+passed on this exact source. Comparing all six job logs confirms the same 13
+top-level scenarios, each passing three times: 39/39 per platform, 234/234 in
+total, with no failed or skipped top-level scenarios. Each log contains three
+executions of the final retirement-restart phase, followed by successful
+scenario completion. The suite size is unchanged: this increment extends an
+existing scenario rather than adding another top-level test.
+
+| Runner | Extended native scenario durations | Evidence |
+| --- | --- | --- |
+| Ubuntu 22.04 amd64 | 29.72s, 29.71s, 29.75s | [job](https://github.com/endless-net/client/actions/runs/34619235033/job/103328812909) |
+| Ubuntu 24.04 amd64 | 29.64s, 29.65s, 29.65s | [job](https://github.com/endless-net/client/actions/runs/34619235033/job/103328813003) |
+| macOS 15 arm64 | 29.99s, 30.06s, 30.18s | [job](https://github.com/endless-net/client/actions/runs/34619235033/job/103328813244) |
+| macOS 15 Intel | 30.95s, 30.62s, 30.59s | [job](https://github.com/endless-net/client/actions/runs/34619235033/job/103328813285) |
+| Windows 2022 amd64 | 38.63s, 38.64s, 38.57s | [job](https://github.com/endless-net/client/actions/runs/34619235033/job/103328812996) |
+| Windows 2025 amd64 | 40.45s, 41.02s, 41.24s | [job](https://github.com/endless-net/client/actions/runs/34619235033/job/103328812995) |
+
+All required platform verification, installation, Linux two-real-Client
+dataplane and aggregate jobs passed. Optional external STUN compatibility was
+skipped. Durations include process/interface setup and deliberate negative
+probe deadlines and are not performance benchmarks.
+
+This is process restart evidence, not host reboot, service-manager restart,
+offline lease expiry, TCP/IPv6 retirement or local software removal. Windows
+process restart uses termination; installation-suite service observations are
+separate. No runtime Client change is included in this test increment.
 
 ## Next work
 

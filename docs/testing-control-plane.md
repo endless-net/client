@@ -59,6 +59,14 @@ traffic. The fixture configures its return endpoint from public Client IPC;
 it does not read Client keys or import Client runtime code. Its handshake and
 decrypted-packet counters are diagnostics, not replacements for nonce echoes.
 
+The same scenario restarts the disconnected agent, explicitly reconnects it,
+repeats connect and restarts the connected agent. Node/key identity and actual
+UDP access must be preserved; credential refresh is distinct from new enrollment.
+Terminal node-credential revocation must then clear enrollment and block old and
+new traffic, including after another process restart, without a registration
+attempt. The reference peer remains unchanged during revocation. Per-platform
+results and remaining lifecycle variants are recorded in the coverage ledger.
+
 The `Client control-plane scenarios` job retains the Linux dataplane fixture:
 
 1. Runs the server suite under the race detector.
