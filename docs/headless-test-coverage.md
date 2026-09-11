@@ -102,7 +102,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; eight-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
 | HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
-| HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
+| HC-028 | C direct traffic; U Relay implementation; native forced Relay IPv4/IPv6 TCP/UDP scenario pending hosted evidence | NAT, direct/Relay transitions, endpoint failover and remaining Relay variants |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
@@ -1503,6 +1503,30 @@ Client Relay access. HC-028 still requires a real Client consuming a signed map
 with Relay credentials, traffic through its native interface, forced absence of
 a direct path, observable Relay selection and outage/recovery assertions. The
 common native inventory is unchanged by this foundation.
+
+## Native forced Relay increment awaiting qualification
+
+`TestControlPlaneNativeRelayTraffic` runs a real native Client with a signed
+peer map that publishes no direct peer endpoint. The published Relay endpoint,
+credential and explicitly supplied public TLS CA connect the Client to the
+fixed-peer contract participant. Public IPC must report the selected Relay and
+the peer's `relay` path. Fresh TCP/UDP nonce exchanges over IPv4 and IPv6 overlays
+must also increment both directions of the participant's frame counters.
+
+Closing all Relay sessions and rejecting new authentication must deny both
+established and fresh TCP/UDP exchanges while retaining Client enrollment.
+Restoring the same Relay listener must restore fresh application access; agent
+restart must again select Relay and restore traffic with the same node and one
+registration. No Client runtime internals or production Relay server are imported
+by the scenario. The WireGuard reference peer has a separate application stack
+and its address is never installed on the runner OS.
+
+The common inventory becomes 22 root scenarios, each repeated three times on
+eight platforms (528 required outcomes). Local short tests, vet and lint passed;
+native qualification remains pending. This is not evidence of NAT traversal,
+direct-path upgrades, multi-Relay failover, IPv6 underlay, production Relay
+authorization, or recovery of every established application session. HC-028 and
+HC-030 retain those unverified variants.
 
 ## Next work
 
