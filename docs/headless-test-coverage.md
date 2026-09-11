@@ -1290,6 +1290,24 @@ is unchanged. This corrects an expectation error, not a Client runtime defect.
 Restart persistence and the bounded no-reenrollment observation still execute
 only after these strict cleanup conditions hold. Hosted qualification is pending.
 
+## Completed 19-scenario pre-correction evidence
+
+[CI 34636389331](https://github.com/endless-net/client/actions/runs/34636389331)
+for `55ecd930f6f80ec78f4959fc2143938976a19f05` completed with **409 PASS, 47 FAIL,
+0 SKIP** across identical 19-scenario inventories repeated three times on eight
+platforms. Each Linux runner passed 54/57, failing only the three local-forget
+status expectations. macOS Intel passed 49/57; macOS ARM and both Windows runners
+passed 48/57. All 24 local-forget failures were at the incorrect NeedsEnrollment
+status expectation, and the remaining 23 failures were ICMP-only/recovery traffic
+checks affected by route reconfiguration. No other root scenario failed. All
+eight installation jobs passed; the required aggregate correctly failed.
+
+[CI 34637951595](https://github.com/endless-net/client/actions/runs/34637951595)
+is running source `7283d13d6f273a39a055bbdbc2db7316eee3e49f`, which includes both
+platform route corrections and the corrected local-forget status expectation.
+Its outcome is not inferred from the preceding run. Earlier queued intermediate
+commits were superseded before execution; the currently running matrix is kept.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
