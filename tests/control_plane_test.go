@@ -362,6 +362,89 @@ func TestControlPlaneLifecycle(t *testing.T) {
 		return !v.NodeCredentialPresent && !v.CachedMapPresent && v.NodeID == ""
 	})
 }
+
+// IT-07/IT-10: delta acceptance, rejection and cursor loss through public CLI/IPC.
+func TestControlPlanePeerDeltaRecovery(t *testing.T) {
+	s, n, id := controlScenario(t)
+	var disconnected ipc.DisconnectResponse
+	n.Service("disconnect", &disconnected)
+	n.Stop()
+	key, err := wg.GeneratePrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, err := wg.PublicKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := api.Peer{ID: "delta-peer", Hostname: "peer", PublicKey: pub, AllowedIPs: []string{"100.90.0.20/32"}}
+	revision := uint64(1)
+	for _, peers := range [][]api.Peer{{peer}, nil} {
+		if err := s.UpdatePeers(id, peers); err != nil {
+			t.Fatal(err)
+		}
+		n.MustRun("sync", "--config", n.Config, "--timeout", "1s")
+		revision++
+		n.Start()
+		n.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.UserDisconnected && v.CachedMapValid && v.MapRevision == revision && v.PeerCount == len(peers)
+		})
+		n.Stop()
+	}
+	for _, fault := range []string{"delta-base", "delta-revision"} {
+		if err := s.UpdatePeers(id, []api.Peer{peer}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.FaultNextMap(id, fault); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := n.Run("sync", "--config", n.Config, "--timeout", "1s"); err == nil {
+			t.Fatal("invalid delta was accepted")
+		}
+		n.MustRun("sync", "--config", n.Config, "--offline")
+		n.Start()
+		n.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.UserDisconnected && v.CachedMapValid && v.MapRevision == revision && v.NodeID == id
+		})
+		n.Stop()
+		n.MustRun("sync", "--config", n.Config, "--timeout", "1s")
+		revision++
+	}
+	// Skip two revisions: the double retains only the latest delta. The saved
+	// cursor must recover through the full, signed resync response.
+	if err := s.UpdatePeers(id, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdatePeers(id, []api.Peer{peer}); err != nil {
+		t.Fatal(err)
+	}
+	beforeResync := len(s.Events())
+	n.MustRun("sync", "--config", n.Config, "--timeout", "1s")
+	revision += 2
+	n.Start()
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.UserDisconnected && v.CachedMapValid && v.MapRevision == revision && v.PeerCount == 1 && v.NodeID == id
+	})
+	deltas := 0
+	for _, event := range s.Events() {
+		if event.Kind == "map-delta" {
+			deltas++
+		}
+	}
+	if deltas < 6 {
+		t.Fatal("scenario did not exercise delta transport")
+	}
+	resynced := false
+	for _, event := range s.Events()[beforeResync:] {
+		if event.Kind == "map-resync" && event.Cursor.Revision.Network == revision-2 {
+			resynced = true
+		}
+	}
+	if !resynced {
+		t.Fatal("missing delta history did not exercise resync transport")
+	}
+}
+
 func TestControlPlaneDNSProjection(t *testing.T) {
 	s, n, id := controlScenario(t)
 	// Keep system DNS outside this acceptance test. The normal sync command

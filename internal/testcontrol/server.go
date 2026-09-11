@@ -38,6 +38,7 @@ type Event struct {
 type node struct {
 	Map     api.RegisterNodeResponse
 	Revoked bool
+	Delta   *api.MapStreamEvent
 }
 
 type operation struct {
@@ -281,6 +282,34 @@ func (s *Server) Snapshot(id string) (api.NetworkMapSnapshot, error) {
 func (s *Server) UpdateMap(id string, edit func(*api.NetworkMapSnapshot)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.updateMapLocked(id, edit)
+}
+
+// UpdatePeers publishes one retained delta. A client with any older cursor must
+// receive a full resync; this double deliberately does not implement a history.
+func (s *Server) UpdatePeers(id string, peers []api.Peer) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := s.nodes[id]
+	if n == nil {
+		return errors.New("unknown node")
+	}
+	base := clone(n.Map.Snapshot())
+	if err := s.updateMapLocked(id, func(m *api.NetworkMapSnapshot) { m.Peers = clone(peers) }); err != nil {
+		return err
+	}
+	result := clone(n.Map.Snapshot())
+	delta := api.MapDelta{Network: &result.Network, PeerUpserts: clone(peers)}
+	for _, old := range base.Peers {
+		if !slices.ContainsFunc(peers, func(p api.Peer) bool { return p.ID == old.ID }) {
+			delta.PeerRemoveIDs = append(delta.PeerRemoveIDs, old.ID)
+		}
+	}
+	n.Delta = &api.MapStreamEvent{Type: "delta", ProtocolVersion: api.MapStreamProtocolVersion, Capabilities: api.MapStreamSupportedCapabilities(), EventID: fmt.Sprintf("%s-%d", id, result.Revision.Network), From: base.Revision, To: result.Revision, BaseHash: base.MapSignature.PayloadHash, Delta: &delta, ResultSignature: result.MapSignature}
+	return nil
+}
+
+func (s *Server) updateMapLocked(id string, edit func(*api.NetworkMapSnapshot)) error {
 	n := s.nodes[id]
 	if n == nil {
 		return errors.New("unknown node")
@@ -308,6 +337,7 @@ func (s *Server) UpdateMap(id string, edit func(*api.NetworkMapSnapshot)) error 
 	n.Map.Relays = m.Relays
 	n.Map.RelayCredential = m.RelayCredential
 	n.Map.MapSignature = m.MapSignature
+	n.Delta = nil
 	s.recordLocked(Event{Kind: "map-updated", NodeID: id})
 	return nil
 }
@@ -326,13 +356,16 @@ func (s *Server) FaultNextRegistrationResponse(fault string) error {
 
 // FaultNextMap corrupts only the next wire response, leaving server state valid.
 func (s *Server) FaultNextMap(id, fault string) error {
-	if !slices.Contains([]string{"signature", "unknown-key", "expired"}, fault) {
+	if !slices.Contains([]string{"signature", "unknown-key", "expired", "delta-base", "delta-revision"}, fault) {
 		return errors.New("unknown map fault")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.nodes[id] == nil {
 		return errors.New("unknown node")
+	}
+	if strings.HasPrefix(fault, "delta-") && s.nodes[id].Delta == nil {
+		return errors.New("delta fault requires a retained delta")
 	}
 	s.mapFaults[id] = fault
 	return nil
@@ -659,6 +692,13 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		fault := s.mapFaults[id]
 		if !m.Revision.Equal(cursor.Revision) || m.MapSignature.PayloadHash != cursor.MapHash || fault != "" {
 			delete(s.mapFaults, id)
+			var delta *api.MapStreamEvent
+			if n.Delta != nil && n.Delta.From.Equal(cursor.Revision) && n.Delta.BaseHash == cursor.MapHash && (fault == "" || strings.HasPrefix(fault, "delta-")) {
+				delta = clone(n.Delta)
+				s.recordLocked(Event{Kind: "map-delta", NodeID: id, Cursor: cursor})
+			} else if cursor.MapHash != "" {
+				s.recordLocked(Event{Kind: "map-resync", NodeID: id, Cursor: cursor})
+			}
 			s.mu.Unlock()
 			switch fault {
 			case "signature":
@@ -678,6 +718,15 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 				kind = "resync"
 			}
 			event := api.MapStreamEvent{Type: kind, ProtocolVersion: api.MapStreamProtocolVersion, Capabilities: api.MapStreamSupportedCapabilities(), EventID: fmt.Sprintf("%s-%d", id, m.Revision.Network), From: cursor.Revision, To: m.Revision, Snapshot: &m, ResultSignature: m.MapSignature}
+			if delta != nil {
+				event = *delta
+				if fault == "delta-base" {
+					event.BaseHash = strings.Repeat("0", 64)
+				}
+				if fault == "delta-revision" {
+					event.From.Network++
+				}
+			}
 			w.Header().Set("X-EndlessNet-Map-Protocol", strconv.Itoa(api.MapStreamProtocolVersion))
 			w.Header().Set("X-EndlessNet-Map-Capabilities", capabilities)
 			writeJSON(w, event)

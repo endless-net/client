@@ -155,12 +155,24 @@ the same operation and node on retry. The double tests inspect public wire DTOs,
 verify valid signatures on deliberately mismatched responses, and ensure the
 committed replay remains unchanged. Some rejections originate in the pinned SDK;
 the real-process test also checks local lifecycle and retry effects. Local short
-tests, vet and lint pass; this increment still awaits real-process CI evidence.
+tests, vet and lint pass. Commit `3b66bca` passed all mandatory jobs in
+[Test run 34587071399](https://github.com/endless-net/client/actions/runs/34587071399),
+including all three repetitions of each mismatch case. Its subsequent
+[source gate check](https://github.com/endless-net/client/actions/runs/34587265374)
+also passed.
+
+The next increment adds a retained peer delta to testcontrol and
+`TestControlPlanePeerDeltaRecovery`: add/remove peers, reject incorrect base hash
+and source revision, retain the last verified cache, retry, and recover a skipped
+history with a full signed resync. Assertions use CLI/IPC and redacted wire-event
+observations. `TestPeerDeltaAndResync` additionally verifies peer replacement and
+applies the double's events with the published SDK. The double keeps only one
+delta; this is a consumer recovery fixture, not evidence of Coordinator history
+retention. Real client execution still awaits this increment's CI.
 
 ## Next work
 
-Verify registration mismatch recovery in CI, then extend C with map resync/delta
-and real peer probes.
+Verify peer delta recovery in CI, then extend C with real peer probes.
 Run producer conformance in owning service repositories. Keep contract gaps and
 platform decisions explicit; do not replace unresolved HC rows with generic smoke
 tests or infer broad completion from this initial increment.

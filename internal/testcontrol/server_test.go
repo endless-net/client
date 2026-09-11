@@ -110,6 +110,60 @@ func TestRegistrationFaultPreservesCommittedReplay(t *testing.T) {
 	}
 }
 
+func TestPeerDeltaAndResync(t *testing.T) {
+	s, a, _, registered, _ := setup(t)
+	base := registered.Snapshot()
+	key, err := wg.GeneratePrivateKey()
+	check(t, err)
+	pub, err := wg.PublicKey(key)
+	check(t, err)
+	peer := api.Peer{ID: "delta-peer", Hostname: "peer", PublicKey: pub, AllowedIPs: []string{"100.80.0.20/32"}}
+	updated := peer
+	updated.Hostname = "renamed-peer"
+	current := base
+	for _, peers := range [][]api.Peer{{peer}, {updated}, nil} {
+		check(t, s.UpdatePeers(registered.Node.ID, peers))
+		event, err := a.ReadMapStreamEvent(registered.Node.ID, api.MapCursor{Revision: current.Revision, MapHash: current.MapSignature.PayloadHash}, time.Second)
+		check(t, err)
+		if event.Type != "delta" || event.Snapshot != nil {
+			t.Fatal("matching cursor did not receive delta")
+		}
+		current, err = api.ApplyMapStreamEvent(current, event, s.Trust(), time.Now())
+		check(t, err)
+		if len(current.Peers) != len(peers) {
+			t.Fatal("delta did not change peers")
+		}
+		if len(peers) != 0 && current.Peers[0].Hostname != peers[0].Hostname {
+			t.Fatal("delta did not replace peer fields")
+		}
+	}
+	event, err := a.ReadMapStreamEvent(registered.Node.ID, api.MapCursor{Revision: base.Revision, MapHash: base.MapSignature.PayloadHash}, time.Second)
+	check(t, err)
+	if event.Type != "resync" {
+		t.Fatal("expired cursor did not receive resync")
+	}
+	recovered, err := api.ApplyMapStreamEvent(base, event, s.Trust(), time.Now())
+	check(t, err)
+	if recovered.MapSignature.PayloadHash != current.MapSignature.PayloadHash {
+		t.Fatal("resync did not recover current map")
+	}
+	for _, fault := range []string{"delta-base", "delta-revision"} {
+		check(t, s.UpdatePeers(registered.Node.ID, []api.Peer{peer}))
+		check(t, s.FaultNextMap(registered.Node.ID, fault))
+		cursor := api.MapCursor{Revision: current.Revision, MapHash: current.MapSignature.PayloadHash}
+		bad, err := a.ReadMapStreamEvent(registered.Node.ID, cursor, time.Second)
+		if err == nil {
+			if _, err := api.ApplyMapStreamEvent(current, bad, s.Trust(), time.Now()); err == nil {
+				t.Fatal("invalid delta accepted")
+			}
+		}
+		good, err := a.ReadMapStreamEvent(registered.Node.ID, cursor, time.Second)
+		check(t, err)
+		current, err = api.ApplyMapStreamEvent(current, good, s.Trust(), time.Now())
+		check(t, err)
+	}
+}
+
 func TestRegistrationBindingAndRevocation(t *testing.T) {
 	s, a, req, result, key := setup(t)
 	heartbeat, err := a.UpdateNodeEndpointState(result.Node.ID, api.UpdateNodeEndpointRequest{Status: api.NodeStatusOnline})
