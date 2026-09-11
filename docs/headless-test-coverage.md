@@ -2334,6 +2334,16 @@ of this source and requires new evidence.
 
 ## Next work
 
+`TestControlPlaneIPCRequestValidation` adds native Unix-socket/Windows-pipe
+checks for wrong method, unknown route, malformed JSON, unknown fields and
+trailing JSON. Each request must return its published typed error and protocol
+metadata without changing connected intent, identity or the cached map. Valid
+CLI disconnect/connect must still work afterward. The test uses the public IPC
+transport and DTOs, with no runtime-internal imports or private-state reads.
+The common inventory is now 31 roots / 744 native outcomes. Hosted evidence is
+pending; request-size boundaries and hostile local-user authorization remain
+separate variants.
+
 The native TLS root now also calls the trusted fixture through `localhost`,
 while its certificate names only `127.0.0.1`. The test first verifies the OS
 resolves that alias to the listener, requires a certificate error and no request
