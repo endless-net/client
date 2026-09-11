@@ -1982,6 +1982,27 @@ root outcomes from 24 independent reports. Local vet, lint and the short suite
 passed; the new native test is CI-only and remains unqualified until hosted
 results arrive. Historical 24-root evidence retains its original scope.
 
+## Rejection during active enrollment polling: awaiting native evidence
+
+`TestControlPlaneBrowserEnrollmentRejectedDuringPolling` exercises HC-008 and
+HC-013 by rejecting a request after the running CLI has issued at least two
+polls. The CLI must report rejection without completing enrollment or obtaining
+a node credential. Resuming the saved rejected operation must report its denial
+and must not silently create a replacement. A subsequent explicit attempt must
+create exactly one distinct request; only approval of that new request may
+produce a node. The running agent must report that same identity and a valid
+map, with exactly one registration across the scenario.
+
+The test shares polling and recovery assertions with the existing expiry case,
+while preserving their different public retry behavior. No Client runtime or
+provider behavior was changed for this increment. It does not prove foreign
+poll-token isolation, account binding or a server-side cancellation API.
+
+The native inventory now contains 26 roots: 26 x 3 x 8 = 624 required outcomes.
+Local vet, lint and the short suite passed. The new native case remains
+unqualified until its own source completes the hosted matrix; the preceding
+25-root run and historical 24-root qualification cannot supply that evidence.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

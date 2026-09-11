@@ -14,6 +14,17 @@ import (
 // HC-008: expire a request after the running CLI has started repeated polling,
 // then recover through a separately approved replacement request.
 func TestControlPlaneBrowserEnrollmentExpiresDuringPolling(t *testing.T) {
+	runEnrollmentTerminalDuringPolling(t, false)
+}
+
+// HC-008/HC-013: rejection delivered during active polling must deny enrollment;
+// a later explicit attempt requires its own approval.
+func TestControlPlaneBrowserEnrollmentRejectedDuringPolling(t *testing.T) {
+	runEnrollmentTerminalDuringPolling(t, true)
+}
+
+func runEnrollmentTerminalDuringPolling(t *testing.T, reject bool) {
+	t.Helper()
 	requireControlScenario(t)
 	s := testcontrol.New(t)
 	if _, _, err := s.AddNetwork("poll-expiry", "100.95.0.0/24"); err != nil {
@@ -55,22 +66,48 @@ func TestControlPlaneBrowserEnrollmentExpiresDuringPolling(t *testing.T) {
 	}
 	select {
 	case <-completed:
-		t.Fatal("CLI stopped before request expiry was injected")
+		t.Fatal("CLI stopped before terminal enrollment status was injected")
 	default:
 	}
-	if err := s.ExpireEnrollment(created.Path); err != nil {
+	terminalMessage := "enrollment request expired"
+	terminate := s.ExpireEnrollment
+	if reject {
+		terminalMessage = "enrollment request was rejected"
+		terminate = func(id string) error { return s.DecideEnrollment(id, false) }
+	}
+	if err := terminate(created.Path); err != nil {
 		t.Fatal(err)
 	}
 	first := <-completed
-	if first.err == nil || !strings.Contains(string(first.output), "enrollment request expired") {
-		t.Fatal("active CLI did not report request expiry")
+	if first.err == nil || !strings.Contains(string(first.output), terminalMessage) {
+		t.Fatal("active CLI did not report terminal enrollment status")
 	}
 	for _, event := range s.Events() {
 		if event.Kind == "registered" || event.Kind == "registration-refreshed" {
-			t.Fatal("expired pending request produced a node credential")
+			t.Fatal("terminal pending request produced a node credential")
 		}
 		if event.Kind == "request" && event.Path == "POST /nodes/enrollment-requests/"+created.Path+"/complete" {
-			t.Fatal("CLI attempted to complete expired enrollment")
+			t.Fatal("CLI attempted to complete terminal enrollment")
+		}
+	}
+	if reject {
+		// Resuming a saved rejected operation reports the denial and retires
+		// that operation. Only a subsequent explicit attempt creates a request.
+		output, err := up("0s")
+		if err == nil || !strings.Contains(string(output), terminalMessage) {
+			t.Fatal("resuming rejected enrollment did not preserve the denial")
+		}
+		requests := 0
+		for _, event := range s.Events() {
+			if event.Kind == "enrollment" {
+				requests++
+			}
+			if event.Kind == "registered" || event.Kind == "registration-refreshed" {
+				t.Fatal("rejected enrollment resume registered a node")
+			}
+		}
+		if requests != 1 {
+			t.Fatal("rejected enrollment resume silently created a replacement")
 		}
 	}
 	if _, err := up("0s"); err == nil {
@@ -86,7 +123,7 @@ func TestControlPlaneBrowserEnrollmentExpiresDuringPolling(t *testing.T) {
 		t.Fatal("CLI did not create exactly one distinct replacement")
 	}
 	if err := s.DecideEnrollment(created.Path, true); err == nil {
-		t.Fatal("expired request was still approvable")
+		t.Fatal("terminal request was still approvable")
 	}
 	if err := s.DecideEnrollment(requests[1], true); err != nil {
 		t.Fatal(err)
@@ -108,6 +145,6 @@ func TestControlPlaneBrowserEnrollmentExpiresDuringPolling(t *testing.T) {
 		}
 	}
 	if registered != 1 {
-		t.Fatal("expiry recovery did not create exactly one approved node")
+		t.Fatal("terminal enrollment recovery did not create exactly one approved node")
 	}
 }
