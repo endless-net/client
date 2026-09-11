@@ -84,7 +84,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-005 | C SingleAgentOwnership including three concurrent contenders through lexical path aliases passed three times on all eight native runners | Symbolic/hard-link aliases, concurrent startup without an existing owner and remaining termination variants |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
-| HC-008 | C BrowserEnrollment; expiry recovery on six runners; pending CLI process interruption and explicit resume passed all 24 repetitions on eight native runners | Interactive/server-side cancellation, active rejection and foreign poll authorization |
+| HC-008 | C BrowserEnrollment; expiry recovery on six runners; pending CLI interruption/resume and active rejection/reapproval passed all 24 repetitions on eight native runners | Interactive/server-side cancellation and foreign poll authorization |
 | HC-009 | C enrollment; P wrong/expired join authorization; R two real CLI registrations | Full authorized/denied attribute and platform variants |
 | HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; historical R distinct node IDs | Client image-cloning and batch variants; historical producer replay failure is an external constraint |
 | HC-011 | CLI join-token --ephemeral forwarding has a component test; no C/R lifecycle evidence | Define client normal/crash lifecycle observations; token-option forwarding does not prove expiry |
@@ -2026,7 +2026,7 @@ export/status assertions. Those additions and the diagnostic runtime fix
 still require their own hosted qualification. HC-001-HC-065 coverage remains
 incomplete; this green source does not close unrelated variants or product gaps.
 
-## Rejection during active enrollment polling: awaiting native evidence
+## Rejection during active enrollment polling increment
 
 `TestControlPlaneBrowserEnrollmentRejectedDuringPolling` exercises HC-008 and
 HC-013 by rejecting a request after the running CLI has issued at least two
@@ -2043,9 +2043,9 @@ provider behavior was changed for this increment. It does not prove foreign
 poll-token isolation, account binding or a server-side cancellation API.
 
 The native inventory now contains 26 roots: 26 x 3 x 8 = 624 required outcomes.
-Local vet, lint and the short suite passed. The new native case remains
-unqualified until its own source completes the hosted matrix; the preceding
-25-root run and historical 24-root qualification cannot supply that evidence.
+Local vet, lint and the short suite passed. This native case is qualified by
+the later 27-root run recorded below, whose full source still failed because
+of diagnostic export. Earlier 24- and 25-root evidence cannot qualify this case.
 
 ## Diagnostic status and export: awaiting native evidence
 
@@ -2139,6 +2139,39 @@ TLS setup as HC-021. The common inventory now has 29 roots and requires
 29 x 3 x 8 = 696 outcomes. This does not qualify IPv6/TCP/denied-flow metadata,
 expiration without a policy refresh, report retry/idempotency, crash-spool
 recovery or production flow collection. Those remain Client-owned follow-up.
+
+## Active enrollment rejection qualified; export blocks source acceptance
+
+[CI 34653546587](https://github.com/endless-net/client/actions/runs/34653546587)
+completed with failure for `774169be0f2a1837e1b32383bcf431a729909218`.
+All 24 reports contain the same 27 roots: **624 PASS, 24 FAIL, 0 SKIP**.
+Every failure is `TestControlPlaneDiagnosticsExport` at the immediate-reuse
+metadata assertion. The source is not qualified; the timestamp correction
+already described above belongs to a later commit and needs its own CI.
+
+`TestControlPlaneBrowserEnrollmentRejectedDuringPolling` passed in all reports:
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| ubuntu-22.04 | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254915) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254757) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254799) |
+| ubuntu-24.04 | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254896) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254813) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254796) |
+| ubuntu-22.04-arm | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254789) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254853) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254793) |
+| ubuntu-24.04-arm | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254950) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254806) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254833) |
+| windows-2022 | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254883) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254865) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254937) |
+| windows-2025 | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254925) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254800) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254920) |
+| macos-15-intel | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442255057) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254802) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254924) |
+| macos-15 | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254907) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254918) | [PASS](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254671) |
+
+This is bounded HC-008/HC-013 evidence: rejection while the CLI is polling,
+no node registration/completion for the rejected request, rejection when the
+saved operation is resumed, then a distinct explicitly approved attempt with
+one resulting identity. It does not prove foreign poll-token isolation,
+account binding, server-side cancellation or completion of these HC rows.
+
+The diagnostic failure occurred after the checks for disconnected status,
+restart, export path, schema and first-export identity. It prevented the final
+reconnect assertion from running, so the scenario as a whole remains failed.
+The newer TLS and flow-consent scenarios are absent from this source.
 
 ## Next work
 
