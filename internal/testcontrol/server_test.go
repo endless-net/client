@@ -538,11 +538,27 @@ func TestFlowConsentAndIdempotency(t *testing.T) {
 		}
 	}
 	r.Msg.Window.Bytes++
+	observed := s.FlowReports()
+	if len(observed) != 2 || observed[0].Window.Bytes != 100 || observed[1].Window.Bytes != 100 {
+		t.Fatal("wire capture lost retry bodies or retained caller aliases")
+	}
+	observed[0].Window.Bytes = 0
+	if s.FlowReports()[0].Window.Bytes != 100 {
+		t.Fatal("wire observations are mutable through their accessor")
+	}
 	if _, err := flow.ReportFlowLog(context.Background(), r); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatal("changed retry accepted")
 	}
 	check(t, s.SetFlowConsent(result.Node.ID, now.Add(-time.Hour), now.Add(-time.Minute)))
 	if _, err := flow.ReportFlowLog(context.Background(), r); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatal("expired consent accepted")
+	}
+	check(t, s.RevokeFlowConsent(result.Node.ID))
+	policyRequest := connect.NewRequest(&rpc.GetFlowLogPolicyRequest{NodeId: result.Node.ID})
+	policyRequest.Header().Set("Authorization", "Bearer "+a.NodeCredential)
+	policy, err := flow.GetFlowLogPolicy(context.Background(), policyRequest)
+	check(t, err)
+	if policy.Msg.ConsentVersion != 0 {
+		t.Fatal("revoked consent still enabled collection")
 	}
 }

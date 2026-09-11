@@ -58,3 +58,10 @@ Tests cover default-off behavior, aggregation, bounded capacity, immutable retry
 revision/expiry cleanup, and a packet passed through the actual TUN wrapper and
 sent using TLS protobuf after a temporary receiver failure. Validation uses only
 the repository-authorized goimports, vet, lint and short-test commands.
+
+The CI-only `TestControlPlaneNativeFlowConsent` now drives real IPv4 UDP traffic
+through the native Client and a reference WireGuard peer. It checks default-off,
+consented metadata, live revocation and renewed consent over HTTPS protobuf.
+Hosted qualification is pending; see the [coverage ledger](headless-test-coverage.md).
+This increment does not establish crash-spool replay, report retry/idempotency,
+IPv6, denied-flow reporting or production activation.

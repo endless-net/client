@@ -2116,6 +2116,30 @@ response now uses that same persisted timestamp, including filesystem precision.
 The existing native assertion remains unchanged. This is a Client runtime fix;
 its full hosted evidence is pending, and the 28-root inventory is unchanged.
 
+## Native flow consent lifecycle: awaiting hosted evidence
+
+`TestControlPlaneNativeFlowConsent` (HC-057) uses the real OS UDP path and
+reference WireGuard peer over IPv4, with an HTTPS control-plane fixture. Before
+consent it requires no report RPC attempts while real traffic succeeds for
+12 seconds, exceeding the documented ten-second collection window. After a
+policy grants collection, an accepted protobuf report must match the Client's
+source IP, peer destination IP, UDP port, protocol, observed decision, positive
+packet/byte counters and consent interval. Live revocation must stop report
+attempts for another 12 seconds while traffic continues. New consent must
+produce new accepted wire evidence; an old report cannot satisfy recovery.
+
+The fixture captures authenticated RPC message bodies independently of their
+acceptance and returns copies. Request events additionally detect report
+attempts with failed authorization. Credentials/headers and client-private state
+are not captured. Fixture short tests verify immutable capture across repeated
+requests and mutation of returned observations, and the revoked policy response.
+
+Local short tests, vet and lint passed. Native execution awaits the same hosted
+TLS setup as HC-021. The common inventory now has 29 roots and requires
+29 x 3 x 8 = 696 outcomes. This does not qualify IPv6/TCP/denied-flow metadata,
+expiration without a policy refresh, report retry/idempotency, crash-spool
+recovery or production flow collection. Those remain Client-owned follow-up.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

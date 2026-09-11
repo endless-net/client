@@ -29,6 +29,7 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	rpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
 )
 
 const credentialHeader = "X-EndlessNet-Node-Credential"
@@ -88,6 +89,7 @@ type Server struct {
 	dropRegistrationResponse bool
 	registrationFault        string
 	flows                    map[string]*flowState
+	flowReports              []*rpc.ReportFlowLogRequest
 }
 
 func New(t testing.TB) *Server {

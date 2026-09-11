@@ -36,6 +36,10 @@ func TestControlPlaneNativeIPv6TCPTraffic(t *testing.T) {
 }
 
 func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
+	exerciseNativeTrafficScenario(t, ipv6, protocol, false)
+}
+
+func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flowLogs bool) {
 	t.Helper()
 	requireControlScenario(t)
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
@@ -54,12 +58,24 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 			t.Fatal("fixture address collision: ICMP peer is reachable before Client setup")
 		}
 	}
-	s := testcontrol.New(t)
+	var s *testcontrol.Server
+	if flowLogs {
+		listener, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s = testcontrol.NewWithListener(t, listener)
+	} else {
+		s = testcontrol.New(t)
+	}
 	network, join, err := s.AddNetwork("native-udp", "198.18.94.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	if flowLogs {
+		n.TrustControlTLS(s)
+	}
 	n.Enroll(s, network.Name, join, "--route-table", "auto")
 	n.Start()
 	defer n.Stop()
@@ -138,6 +154,10 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 			t.Logf("reference handshake: initiations_received=%d responses_sent=%d other_received=%d", initiations, responses, other)
 			t.Fatalf("native %s failed: endpoint_selected=%t handshake=%t rx=%d tx=%d reference_received=%d reference_echoed=%d", protocol, selected, handshake, rx, tx, received, echoed)
 		}
+	}
+	if flowLogs {
+		checkNativeFlowConsent(t, s, initial.NodeID, clientIP, peerIP, fresh)
+		return
 	}
 	first := startApplicationSession(t, binary, "", protocol, address("24001"))
 	second := startApplicationSession(t, binary, "", protocol, address("24002"))

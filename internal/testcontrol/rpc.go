@@ -11,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 	rpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
 	bindings "github.com/endless-net/client-api/clientapi/v1/clientrpc/clientrpcconnect"
+	"google.golang.org/protobuf/proto"
 )
 
 type rpcServer struct {
@@ -110,7 +111,13 @@ func (h *rpcServer) GetFlowLogPolicy(_ context.Context, r *connect.Request[rpc.G
 	if _, code := h.s.credentialLocked(strings.TrimPrefix(r.Header().Get("Authorization"), "Bearer "), r.Msg.NodeId, "node:map"); code != "" {
 		return nil, denied()
 	}
-	return connect.NewResponse(h.s.flowPolicyLocked(r.Msg.NodeId)), nil
+	policy := h.s.flowPolicyLocked(r.Msg.NodeId)
+	kind := "flow-policy-disabled"
+	if policy.ConsentVersion != 0 {
+		kind = "flow-policy-granted"
+	}
+	h.s.recordLocked(Event{Kind: kind, NodeID: r.Msg.NodeId})
+	return connect.NewResponse(policy), nil
 }
 func (h *rpcServer) ReportFlowLog(_ context.Context, r *connect.Request[rpc.ReportFlowLogRequest]) (*connect.Response[rpc.ReportFlowLogResponse], error) {
 	h.s.mu.Lock()
@@ -118,6 +125,7 @@ func (h *rpcServer) ReportFlowLog(_ context.Context, r *connect.Request[rpc.Repo
 	if _, code := h.s.credentialLocked(strings.TrimPrefix(r.Header().Get("Authorization"), "Bearer "), r.Msg.NodeId, "node:map"); code != "" {
 		return nil, denied()
 	}
+	h.s.flowReports = append(h.s.flowReports, proto.Clone(r.Msg).(*rpc.ReportFlowLogRequest))
 	if err := h.s.acceptFlowLocked(r.Msg); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
