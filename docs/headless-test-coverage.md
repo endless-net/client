@@ -2375,6 +2375,16 @@ full-source qualification and remaining HC variants are still open.
 
 ## Next work
 
+`TestControlPlaneIPCEvents` exercises the published NDJSON stream through the
+real native socket/pipe: hello, current snapshot, increasing stream-local
+sequence, timestamps, disconnect notification, subscription termination when
+the agent stops, a new hello/snapshot after restart, reconnect notification and
+explicit cancellation. It checks the same enrolled identity and retained intent
+throughout, without persisted-state reads. The sequence is not used as a resume
+cursor. The common inventory is now 32 roots / 768 expected native outcomes;
+this extension awaits hosted evidence. Slow-consumer and malformed-stream
+variants remain separate.
+
 The [published IPC schema](client-ipc-v2.openapi.yaml) declares mutation request
 bodies as objects. A component regression reproduced `null` (including padded
 `null`) reaching the disconnect action through Go's struct JSON decoder. The
