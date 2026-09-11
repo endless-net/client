@@ -1923,6 +1923,26 @@ The expanded native assertions still require hosted qualification; earlier
 HC-020 evidence did not check this response while disconnected. This does not
 introduce saved profiles or switching to another enrollment.
 
+## Interrupted browser enrollment: awaiting native evidence
+
+`TestControlPlaneBrowserEnrollmentInterrupted` starts the real CLI and waits
+for at least two public poll requests before terminating that CLI process.
+The pending operation must not register a node or invoke completion. After
+approval of that same request, an explicit new CLI invocation must resume it,
+create exactly one node and start an agent reporting that identity with a
+valid map. A second enrollment operation is forbidden. Assertions use CLI/IPC
+and contract events, without reading persisted enrollment or credential files.
+
+This covers the process-interruption variant of HC-008/HC-010. It does not
+cover interactive Ctrl-C handling, server-side cancellation, rejection recovery,
+image cloning or foreign poll-token authorization. `RunContext` supplies a
+bounded process-termination control to the test driver on each runner OS.
+
+The common native inventory now contains 25 roots, requiring 25 x 3 x 8 = 600
+root outcomes from 24 independent reports. Local vet, lint and the short suite
+passed; the new native test is CI-only and remains unqualified until hosted
+results arrive. Historical 24-root evidence retains its original scope.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

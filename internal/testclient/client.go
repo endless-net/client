@@ -73,6 +73,14 @@ func (n *Node) Run(args ...string) ([]byte, error) {
 	return n.runWithin(15*time.Second, args...)
 }
 
+// RunContext allows a scenario to interrupt a real CLI process at an observed
+// wire boundary. The usual harness deadline still bounds the invocation.
+func (n *Node) RunContext(ctx context.Context, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	return n.command(ctx, args...).CombinedOutput()
+}
+
 func (n *Node) runWithin(timeout time.Duration, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
