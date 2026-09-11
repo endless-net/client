@@ -93,6 +93,7 @@ type Server struct {
 	registrationFault        string
 	flows                    map[string]*flowState
 	flowReports              []*rpc.ReportFlowLogRequest
+	loseFlowAcknowledgement  bool
 }
 
 func New(t testing.TB) *Server {

@@ -65,6 +65,15 @@ func (s *Server) FlowReports() []*rpc.ReportFlowLogRequest {
 	return reports
 }
 
+// LoseNextFlowAcknowledgement accepts one valid window, then returns a
+// retryable RPC error instead of its acknowledgement. Acceptance remains
+// observable and a retry must preserve the same immutable wire content.
+func (s *Server) LoseNextFlowAcknowledgement() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.loseFlowAcknowledgement = true
+}
+
 func (s *Server) acceptFlowLocked(r *rpc.ReportFlowLogRequest) error {
 	f := s.flows[r.NodeId]
 	w := r.Window

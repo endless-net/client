@@ -2232,6 +2232,26 @@ scenario are not part of this source and still require their own hosted run.
 The latest goal still requires remaining HC-001-HC-065 cases and a complete
 successful required Client matrix.
 
+## Accepted flow window acknowledgement failure: awaiting native evidence
+
+The existing native flow-consent root now additionally injects a retryable
+protobuf error after the fixture accepts the first consented window. The real
+Client must submit the same window again: node scope, consent revision, window
+ID and complete protobuf body must remain identical. The comparison is against
+captured wire messages, without reading the encrypted client queue. New consent
+after revocation still requires fresh reporting evidence.
+
+The fixture records acceptance before the injected unavailable response and
+loses exactly one acknowledgement. A short RPC test verifies one acceptance,
+one injected failure and a successful retry acknowledgement for the original ID.
+Local short tests, vet and lint passed. This is Client retry evidence pending
+native execution, not a production producer or durable-storage acceptance test.
+It does not cover process crash after acceptance, retry lease expiry or
+credential/consent changes while an unacknowledged window is pending.
+
+The common inventory remains 29 roots / 696 expected native outcomes. Earlier
+flow-consent sources lack this additional assertion and cannot qualify it.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

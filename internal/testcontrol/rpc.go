@@ -129,5 +129,10 @@ func (h *rpcServer) ReportFlowLog(_ context.Context, r *connect.Request[rpc.Repo
 	if err := h.s.acceptFlowLocked(r.Msg); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
+	if h.s.loseFlowAcknowledgement {
+		h.s.loseFlowAcknowledgement = false
+		h.s.recordLocked(Event{Kind: "flow-ack-lost", NodeID: r.Msg.NodeId, Path: r.Msg.Window.WindowId})
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("test flow acknowledgement unavailable"))
+	}
 	return connect.NewResponse(&rpc.ReportFlowLogResponse{WindowId: r.Msg.Window.WindowId}), nil
 }

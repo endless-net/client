@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	rpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
 	bindings "github.com/endless-net/client-api/clientapi/v1/clientrpc/clientrpcconnect"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestControlPlaneNativeFlowConsent(t *testing.T) {
@@ -69,10 +71,39 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clie
 		t.Fatal("client attempted flow reporting before consent")
 	}
 	assertQuiet()
-	grantAndObserve := func() {
+	retriedLostWindow := func(after int) bool {
+		t.Helper()
+		lostID := ""
+		for _, event := range s.Events()[after:] {
+			if event.Kind == "flow-ack-lost" && event.NodeID == id {
+				lostID = event.Path
+			}
+		}
+		if lostID == "" {
+			return false
+		}
+		var original *rpc.ReportFlowLogRequest
+		count := 0
+		for _, report := range s.FlowReports() {
+			if report.NodeId != id || report.Window == nil || report.Window.WindowId != lostID {
+				continue
+			}
+			if original == nil {
+				original = report
+			} else if !proto.Equal(original, report) {
+				t.Fatal("client changed the flow window after losing its acknowledgement")
+			}
+			count++
+		}
+		return count >= 2
+	}
+	grantAndObserve := func(loseAck bool) {
 		t.Helper()
 		beforeGrant := len(s.Events())
 		beforeReports := len(s.FlowReports())
+		if loseAck {
+			s.LoseNextFlowAcknowledgement()
+		}
 		from, until := time.Now().Add(-time.Second), time.Now().Add(2*time.Minute)
 		if err := s.SetFlowConsent(id, from, until); err != nil {
 			t.Fatal(err)
@@ -92,7 +123,7 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clie
 					}
 					for _, event := range s.Events()[beforeGrant:] {
 						if event.Kind == "flow-accepted" && event.NodeID == id && event.Path == w.WindowId {
-							return true
+							return !loseAck || retriedLostWindow(beforeGrant)
 						}
 					}
 				}
@@ -102,12 +133,12 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clie
 			t.Fatal("client did not report real UDP flow metadata under consent")
 		}
 	}
-	grantAndObserve()
+	grantAndObserve(true)
 	beforeRevocation := len(s.Events())
 	if err := s.RevokeFlowConsent(id); err != nil {
 		t.Fatal(err)
 	}
 	awaitPolicy("flow-policy-disabled", beforeRevocation)
 	assertQuiet()
-	grantAndObserve()
+	grantAndObserve(false)
 }

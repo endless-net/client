@@ -61,7 +61,8 @@ the repository-authorized goimports, vet, lint and short-test commands.
 
 The CI-only `TestControlPlaneNativeFlowConsent` now drives real IPv4 UDP traffic
 through the native Client and a reference WireGuard peer. It checks default-off,
-consented metadata, live revocation and renewed consent over HTTPS protobuf.
+consented metadata, immutable retry after an accepted-window acknowledgement
+failure, live revocation and renewed consent over HTTPS protobuf.
 Hosted qualification is pending; see the [coverage ledger](headless-test-coverage.md).
-This increment does not establish crash-spool replay, report retry/idempotency,
+This increment does not establish crash-spool replay, producer idempotency,
 IPv6, denied-flow reporting or production activation.

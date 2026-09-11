@@ -523,6 +523,36 @@ func TestStrictWireAndIdentityProof(t *testing.T) {
 	}
 }
 
+func TestFlowAcknowledgementLossPreservesWindow(t *testing.T) {
+	s, a, _, result, _ := setup(t)
+	flow := bindings.NewFlowLogServiceClient(http.DefaultClient, s.URL())
+	now := time.Now()
+	check(t, s.SetFlowConsent(result.Node.ID, now.Add(-time.Minute), now.Add(time.Minute)))
+	r := connect.NewRequest(&rpc.ReportFlowLogRequest{NodeId: result.Node.ID, ConsentVersion: 1, Window: &rpc.FlowWindow{WindowId: "lost-ack", WindowStart: timestamppb.New(now.Add(-time.Second)), WindowEnd: timestamppb.New(now), Bytes: 100}})
+	r.Header().Set("Authorization", "Bearer "+a.NodeCredential)
+	s.LoseNextFlowAcknowledgement()
+	if _, err := flow.ReportFlowLog(context.Background(), r); connect.CodeOf(err) != connect.CodeUnavailable {
+		t.Fatal("accepted flow did not lose its first acknowledgement")
+	}
+	response, err := flow.ReportFlowLog(context.Background(), r)
+	check(t, err)
+	if response.Msg.WindowId != "lost-ack" || len(s.FlowReports()) != 2 {
+		t.Fatal("retry did not receive acknowledgement for the same window")
+	}
+	accepted, lost := 0, 0
+	for _, event := range s.Events() {
+		if event.Kind == "flow-accepted" && event.Path == "lost-ack" {
+			accepted++
+		}
+		if event.Kind == "flow-ack-lost" && event.Path == "lost-ack" {
+			lost++
+		}
+	}
+	if accepted != 1 || lost != 1 {
+		t.Fatal("flow acknowledgement loss changed acceptance cardinality")
+	}
+}
+
 func TestFlowConsentAndIdempotency(t *testing.T) {
 	s, a, _, result, _ := setup(t)
 	flow := bindings.NewFlowLogServiceClient(http.DefaultClient, s.URL())
