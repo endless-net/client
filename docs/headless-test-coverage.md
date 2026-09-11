@@ -1754,6 +1754,28 @@ traffic checks before mandatory path-status checks. Per-check deadlines are
 unchanged; safe status booleans and participant counters distinguish failure
 stages. Runtime recovery is not yet qualified.
 
+## Replayed map events: Client runtime correction awaiting native evidence
+
+Source `b30f4538651e4704967a9b7476522b60f2b459e5` corrects handling of the
+published `ErrMapStreamEventAlreadyApplied` sentinel. The agent previously
+converted the accompanying result into a runtime map even though no effective
+map was returned. A regression applying the same signed snapshot twice failed
+on the second application before this correction. Passing that empty map into
+WireGuard can remove peers and stop the Relay bridge.
+
+A replayed full snapshot is now independently validated from an empty base and
+returned with its transient Relay credential. A repeated delta returns the
+effective cached projection; when that projection has Relays, the online agent
+fetches a full signed projection before configuring the transport. Credentials
+remain excluded from the disk cache. Tampered repeated snapshots remain denied.
+
+The added repeated-delta agent test observes exactly one delta request and one
+full-snapshot request through an HTTP contract participant, checks the resulting
+peer and runtime Relay credential, and checks that the cache excludes that
+credential. Short tests, vet and lint passed for the correction. Native
+cross-platform recovery and the previously observed Windows startup symptom
+still require hosted evidence; this is not a qualification of HC-028/HC-030.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
