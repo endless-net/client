@@ -17,8 +17,10 @@ and [system design / IT specifications](https://github.com/endless-net/architect
   SDK/protobuf clients against the double. D does not prove real client or producer.
 - **U**: component tests exist but may use internal functions/state; they cannot
   replace contract-only consumer/provider integration.
-- **R**: real service/client pairs and product acceptance on an immutable manifest;
-  owned jointly with [system-tests, main](https://github.com/endless-net/system-tests/tree/main).
+- **P**: real producer conformance through published contracts, owned by that producer.
+- **R**: real service/client pairs with exact source pins. Their bounded evidence
+  is distinct from product acceptance on an immutable manifest, owned jointly
+  with [system-tests, main](https://github.com/endless-net/system-tests/tree/main).
 
 Rows identify starting evidence and remaining work, not full HC coverage. A row
 is complete only with agreed platform/feature variants, positive/negative/recovery
@@ -38,8 +40,8 @@ product scope are different conditions; neither is a successful skip.
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
 | HC-007 | C BrowserEnrollment | Real Identity/SSO pair, account binding |
 | HC-008 | C BrowserEnrollment | Poll expiry/cancellation and foreign poll authorization |
-| HC-009 | C scenario enrollment; D proof validation | Independent machines, wrong/expired join authorization |
-| HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation | Real producer replay/conflict and distinct-machine batch |
+| HC-009 | C enrollment; P wrong/expired join authorization; R two real CLI registrations | Full authorized/denied attribute and platform variants |
+| HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; R distinct node IDs | Real producer replay currently fails; image-cloning and batch variants |
 | HC-011 | No C/R evidence audited | Decide ephemeral lifecycle, then normal/crash expiry tests |
 | HC-012 | D request/proof tests | Producer-owned allowed/denied attributes and effective access |
 | HC-013 | C BrowserEnrollment approve/reject | Pending must not authorize traffic; completion binding |
@@ -281,17 +283,28 @@ including all three DNS/application repetitions; its
 also passed.
 
 A [cross-service source audit in Architecture, main](https://github.com/endless-net/architecture/blob/main/docs/ru/evidence/2026-09-11-headless-provider-contract-gap.md)
-found that actual Coordinator map-stream authorization errors are plaintext
-401/503, while the consumer double models the typed public error contract. The
-Coordinator authorizer currently collapses several credential outcomes into a
-boolean. Consumer terminal recovery evidence therefore does not establish actual
-provider compatibility. Do not make the client forget enrollment on arbitrary
-401 responses to conceal this gap. Coordinator owns the provider behavior and
-its real-binary/YDB contract-only suite; Client API owns contract clarification.
+found plaintext Coordinator authorization errors at its recorded source snapshot.
+[Subsequent provider evidence](https://github.com/endless-net/architecture/blob/main/docs/ru/evidence/2026-09-11-headless-provider-recovery.md)
+records the typed-error fix and real-binary/YDB checks for credential recovery,
+join-key validity, approval, and node-key policy expiry. Direct registration
+replay still returns 401 after a consumed key and blocks Coordinator publication.
+Consumer replay success alone therefore does not establish provider compatibility.
+Do not make the client forget enrollment on arbitrary 401 responses to conceal it.
+
+The [Coordinator-owned real-pair test](https://github.com/endless-net/coordinator/blob/ba59fdd476d5ced7d8f9fdc3e633c78554da5734/tests/providercontract/client_pair_test.go)
+passed in [CI 34596568419](https://github.com/endless-net/coordinator/actions/runs/34596568419/job/103253670793)
+against this Client at `ffa46a14282f9a063bd63ddfd92392c6fb0a2032`.
+It drives real `up`, `sync`, and `status --json`, checks two distinct nodes,
+credential renewal in a new process without a join key, and peer withdrawal after
+administrative deletion. It never reads private Client files. A declared edge
+double serves Signing public keys and proxies Coordinator requests unchanged.
+Signing/Billing/Relay are doubles; agent traffic, real Gateway/Signing and
+manifest acceptance remain unproven by this test. The overall CI is failed on
+the separate registration replay subtest.
 
 ## Next work
 
-Close and verify the Coordinator map-stream recovery gap with producer conformance
-and a real pair, then extend remaining consumer/OS/transport variants. Keep contract gaps and
+Fix and verify Coordinator direct registration replay, extend real-pair recovery
+and dataplane, then remaining consumer/OS/transport variants. Keep contract gaps and
 platform decisions explicit; do not replace unresolved HC rows with generic smoke
 tests or infer broad completion from this initial increment.
