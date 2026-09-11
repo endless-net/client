@@ -339,7 +339,7 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string,
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	args := []string{"--mode", "probe", "--network", protocol, "--address", address}
-	err := packetProbeCommand(ctx, namespace, binary, append(args, options...)...).Run()
+	output, err := packetProbeCommand(ctx, namespace, binary, append(args, options...)...).CombinedOutput()
 	if err == nil {
 		return true
 	}
@@ -347,7 +347,15 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string,
 	if errors.As(err, &exit) && exit.ExitCode() == 2 {
 		return false
 	}
-	t.Fatalf("application probe failed independently of network access: %v", err)
+	// Report only known fixed probe errors, never arbitrary subprocess output.
+	reason := "unclassified probe failure"
+	for _, known := range []string{"partial application request write", "application response length mismatch", "application response mismatch", "too many outstanding application requests", "network must be tcp or udp"} {
+		if strings.TrimSpace(string(output)) == known {
+			reason = known
+			break
+		}
+	}
+	t.Fatalf("application probe could not classify network access: %s: %v", reason, err)
 	return false
 }
 

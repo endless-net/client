@@ -106,7 +106,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
-| HC-032 | U routes/application tests | Real consumer to resource behind router |
+| HC-032 | U routes/application tests; native `TestControlPlaneRoutedResource` pending hosted evidence | Consumer IPv4/IPv6 resource prefix via forwarding peer; full router roles remain open |
 | HC-033 | U configuration tests | Public selection/disable and actual route effect |
 | HC-034 | U SNAT/forwarding tests | Advertisement versus approval versus effective traffic |
 | HC-035 | No C/R evidence audited | Site-to-site scope and reverse-path tests |
@@ -1349,6 +1349,30 @@ system resolver integration, ICMP errors/PMTU, full policy-direction variants
 and other gaps in the matrix remain open. The isolated earlier Windows IPC
 startup timeout did not recur but its cause remains unproven. Later documentation
 commits require their own source CI for publication under the existing gate.
+
+## Routed resource increment awaiting hosted qualification
+
+`TestControlPlaneRoutedResource` adds a real native Client consuming a signed
+IPv4/IPv6 resource prefix through a WireGuard reference routing peer. The
+resource has its own network stack behind an explicit IP forwarding hop that
+decrements TTL/Hop Limit and validates IPv4 checksums. Its address is never
+assigned to the runner OS. TCP/UDP nonce exchanges and forwarding counters
+prove delivery through that hop. The scenario checks absent-route denial,
+route installation, established/fresh flow denial after withdrawal and recovery
+after restoration. The common inventory becomes 20 roots repeated three times
+on eight platforms (480 required outcomes); native qualification is pending.
+
+This is Client consumer-route evidence, not production router implementation,
+SNAT, HA, overlapping-route selection, IPv6 underlay or ICMP error/PMTU coverage.
+
+The later documentation-source [CI 34638279169](https://github.com/endless-net/client/actions/runs/34638279169)
+has a native IPv6 UDP failure on
+[macOS Intel](https://github.com/endless-net/client/actions/runs/34638279169/job/103395234127):
+the probe exited 1 before its result could be classified as reachable/unreachable.
+This does not invalidate the cited successful run, but repeatability is not yet
+established. Its cause is unproven. Probe diagnostics now report only allowlisted
+fixed error messages, preserving failure semantics and keeping arbitrary process
+output out of logs. No network assertion, retry count or timeout was relaxed.
 
 ## Next work
 

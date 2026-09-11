@@ -20,6 +20,18 @@ import (
 // address is never installed on the runner OS. Client uses its real OS stack.
 func NewTCP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP netip.Addr) Peer {
 	t.Helper()
+	return newTCP(t, clientPublic, clientIP, peerIP, underlayIP, false)
+}
+
+// NewRoutedResource places the resource stack behind a separate IP-forwarding
+// hop, rather than attaching WireGuard directly to that stack.
+func NewRoutedResource(t *testing.T, clientPublic string, clientIP, resourceIP, underlayIP netip.Addr) Peer {
+	t.Helper()
+	return newTCP(t, clientPublic, clientIP, resourceIP, underlayIP, true)
+}
+
+func newTCP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP netip.Addr, routed bool) Peer {
+	t.Helper()
 	if !clientIP.IsValid() || !peerIP.IsValid() || clientIP.Is4() != peerIP.Is4() || !underlayIP.Is4() || !underlayIP.IsGlobalUnicast() {
 		t.Fatal("invalid TCP reference peer address family")
 	}
@@ -45,8 +57,14 @@ func NewTCP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 		return hex.EncodeToString(decoded)
 	}
 	bind := &observedBind{Bind: conn.NewStdNetBind()}
-	engine := device.NewDevice(tunnel, bind, &device.Logger{Verbosef: device.DiscardLogf, Errorf: device.DiscardLogf})
-	t.Cleanup(engine.Close)
+	transport := tunnel
+	var forwarded *trafficCounters
+	stopLink, waitLink := func() {}, func() {}
+	if routed {
+		transport, forwarded, stopLink, waitLink = newResourceLink(tunnel, clientIP, peerIP)
+	}
+	engine := device.NewDevice(transport, bind, &device.Logger{Verbosef: device.DiscardLogf, Errorf: device.DiscardLogf})
+	t.Cleanup(func() { stopLink(); engine.Close(); waitLink() })
 	if err := engine.IpcSet(fmt.Sprintf("private_key=%s\nlisten_port=0\nreplace_peers=true\npublic_key=%s\nallowed_ip=%s\n\n", toHex(private), toHex(clientPublic), netip.PrefixFrom(clientIP, clientIP.BitLen()))); err != nil {
 		t.Fatal("reference TCP peer rejected WireGuard configuration")
 	}
@@ -140,7 +158,7 @@ func NewTCP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 		}()
 	}
 	return Peer{
-		PublicKey: public, Endpoint: netip.AddrPortFrom(underlayIP, uint16(bind.port.Load())).String(), traffic: traffic, bind: bind,
+		PublicKey: public, Endpoint: netip.AddrPortFrom(underlayIP, uint16(bind.port.Load())).String(), traffic: traffic, bind: bind, forwarded: forwarded,
 		setEndpoint: func(endpoint netip.AddrPort) error {
 			return engine.IpcSet(fmt.Sprintf("public_key=%s\nupdate_only=true\nendpoint=%s\n\n", toHex(clientPublic), endpoint))
 		},

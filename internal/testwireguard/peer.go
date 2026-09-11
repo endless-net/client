@@ -62,6 +62,7 @@ func (b *observedBind) Send(packets [][]byte, endpoint conn.Endpoint, offset int
 type Peer struct {
 	PublicKey, Endpoint string
 	traffic             *trafficCounters
+	forwarded           *trafficCounters
 	bind                *observedBind
 	setEndpoint         func(netip.AddrPort) error
 }
@@ -212,4 +213,12 @@ func echoUDPv6(packet []byte, clientIP, peerIP [16]byte) []byte {
 	// Address and port swaps preserve the UDP checksum's one's-complement
 	// sum, including its IPv6 pseudoheader. IPv6 has no IP header checksum.
 	return reply
+}
+
+// ForwardedPacketCounts observes IP packets crossing the router/resource link.
+func (p Peer) ForwardedPacketCounts() (uint64, uint64) {
+	if p.forwarded == nil {
+		return 0, 0
+	}
+	return p.forwarded.received.Load(), p.forwarded.echoed.Load()
 }
