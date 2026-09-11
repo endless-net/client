@@ -513,6 +513,16 @@ The DNS listener follow-up alternates which transport selects the ephemeral
 port; explicit ports never move, and failed reservations are closed. Its
 regressions are component tests and do not replace contract-only C evidence.
 
+[Client 90faa0e](https://github.com/endless-net/client/tree/90faa0eaeee1d772763e510aff701114d32be048)
+contains that DNS fix. [CI 34610099868](https://github.com/endless-net/client/actions/runs/34610099868)
+passed every mandatory job, including Windows Verify, the platform/installation
+matrix and all three control-plane repetitions. The direct scenario passed in
+16.98s, 16.92s and 16.98s. Optional external STUN compatibility was skipped and
+is not part of this evidence. Local format, vet, lint and short tests passed.
+This establishes the stated direct IPv4 Linux retirement behavior against the
+contract testserver; offline lease expiry, other paths/platforms and full local
+removal remain separate HC-065 gaps.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
