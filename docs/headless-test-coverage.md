@@ -1591,6 +1591,16 @@ vet and lint passed, including report rejection and publication-gate regressions
 Hosted validation of this CI change and the new Relay scenario remains pending.
 No service/provider or infrastructure execution changes are included.
 
+## Concurrent fixture validation
+
+The existing mandatory Linux control-plane CI job now runs the race detector
+against `internal/testcontrol`, `internal/testrelay` and `internal/testwireguard`.
+This checks concurrent fixture behavior (including TLS session shutdown and
+packet forwarding) in addition to short component tests. It is fixture evidence,
+not another native Client or production service coverage claim. Native tests and
+the 24-report publication requirement remain unchanged. Hosted race validation
+of the expanded participant set is pending.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

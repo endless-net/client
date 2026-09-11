@@ -282,8 +282,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Check test server under race detector
-        run: go test -race ./internal/testcontrol -count=1 -timeout 2m
+      - name: Check contract participants under race detector
+        run: go test -race ./internal/testcontrol ./internal/testrelay ./internal/testwireguard -count=1 -timeout 2m
       - name: Build real client and scenario runner
         run: |
           go build -o "$RUNNER_TEMP/control-client" ./cmd/endlessnet-client
