@@ -2325,13 +2325,18 @@ This does not prove binary artifact/build identity or unauthorized local-user
 access. The common inventory is now 30 roots / 720 expected native outcomes;
 qualification awaits the corresponding complete hosted source matrix.
 
-macOS fixture trust setup now snapshots the single
-`com.apple.trust-settings.admin` authorization rule in memory, temporarily uses
-Apple's `is-root` rule, removes the exact test certificate/trust entry, and
-restores the original rule through stdin. The fixture holds a mutex through
-cleanup, treats restoration failure as a test failure, and requires both
-`GITHUB_ACTIONS=true` and `RUNNER_ENVIRONMENT=github-hosted`. No runner image,
-managed host or Client TLS verification behavior is changed.
+The attempted scoped macOS authorization-rule override was rejected by hosted
+runners and has been removed. The fixture imports its ephemeral public CA,
+then deletes that exact certificate from System.keychain by fingerprint. The
+certificate-hash Admin Trust Settings entry remains until GitHub destroys the
+disposable VM. The corresponding signing key exists only in fixture memory and
+is never persisted. Cleanup failure for the keychain certificate remains fatal.
+The helper requires both `GITHUB_ACTIONS=true` and
+`RUNNER_ENVIRONMENT=github-hosted`; it is not a managed-host cleanup procedure.
+No authorization rule, runner image or Client TLS verification is modified.
+The negative untrusted enrollment and positive explicitly trusted enrollment
+assertions are unchanged. Exact trust-entry removal is not claimed by this
+fixture; platform qualification of its revised lifecycle is still pending.
 
 The preparation follows Apple's
 [trust settings implementation](https://github.com/apple-oss-distributions/Security/blob/main/OSX/libsecurity_keychain/lib/TrustSettings.cpp),
@@ -2339,7 +2344,8 @@ whose root shortcut requires nonempty settings, and the
 [authorization rules](https://github.com/apple-oss-distributions/Security/blob/main/OSX/authd/authorization.plist),
 which otherwise require entitlement or interactive administrator authentication.
 This explains why deleting the last trust entry can take a different path from
-adding it; hosted execution must still confirm this correction and restoration.
+adding it. The revised fixture uses VM disposal for that final trust entry
+instead of requiring interactive authorization or weakening host policy.
 
 The native flow root now also leaves its last granted policy unchanged through
 natural expiry while UDP traffic continues. After draining the five-second RPC
