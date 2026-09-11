@@ -476,6 +476,24 @@ func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*te
 		session("ok")
 		sessions = append(sessions, session)
 	}
+	// A narrower replacement must revoke TCP without interrupting the UDP
+	// grant on the same peer. Observe both old sockets and fresh traffic.
+	limited.ACLGrants = []api.ACLGrant{{DestinationCIDRs: limited.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: "udp", Port: 24002}}}}
+	apply(limited)
+	for range 3 {
+		sessions[1]("ok")
+		sessions[0]("blocked")
+		if !applicationProbe(t, binary, nodes[0].Namespace, "udp", net.JoinHostPort(states[1].OverlayIP, "24002")) {
+			t.Fatal("TCP withdrawal interrupted another authorized overlay flow")
+		}
+		if !applicationProbe(t, binary, nodes[1].Namespace, "tcp", "127.0.0.1:24001") {
+			t.Fatal("TCP denial coincided with application failure")
+		}
+		if applicationProbe(t, binary, nodes[0].Namespace, "tcp", net.JoinHostPort(states[1].OverlayIP, "24001")) {
+			t.Fatal("withdrawn TCP grant still passed fresh traffic")
+		}
+		sessions[1]("ok")
+	}
 	limited.ACLGrants = nil
 	apply(limited)
 	for _, session := range sessions {
