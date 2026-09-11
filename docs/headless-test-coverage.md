@@ -1486,6 +1486,24 @@ this source and is being checked separately by
 [CI 34642493566](https://github.com/endless-net/client/actions/runs/34642493566).
 Its result must not be inferred from this successful qualification.
 
+## Relay contract participant foundation
+
+`internal/testrelay` provides a Client-owned, fixed-peer TLS participant using
+only the pinned published `relay/protocol/v1` messages. It accepts the credential
+issued for the test Client, checks frame peer/network scope, forwards opaque
+datagrams to one reference WireGuard UDP endpoint and wraps responses in public
+server frames. It exposes only public certificate material and aggregate counts;
+private keys remain in memory. Explicit unavailability closes existing sessions
+and denies new ones while allowing recovery at the same listener.
+
+Its short component test verifies TLS trust, denied authentication, foreign
+scope rejection, bidirectional opaque payload preservation and reconnection.
+These are fixture checks, not production Relay tests or evidence of native
+Client Relay access. HC-028 still requires a real Client consuming a signed map
+with Relay credentials, traffic through its native interface, forced absence of
+a direct path, observable Relay selection and outage/recovery assertions. The
+common native inventory is unchanged by this foundation.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
