@@ -2254,6 +2254,25 @@ flow-consent sources lack this additional assertion and cannot qualify it.
 
 ## Next work
 
+Run [34655479384](https://github.com/endless-net/client/actions/runs/34655479384)
+completed with failure at source `add60a385d4a17a92d1f3ddb0d34f52cd0ae6d16`.
+All 24 native job reports were inspected: identical 29-root inventories,
+660 PASS, 36 FAIL, 0 SKIP. The flow-consent root failed in all 24 jobs;
+TLS trust failed in all 12 Windows/macOS jobs and passed in all 12 Linux jobs.
+The other 27 roots passed on every runner/repetition. All eight installation
+jobs, three platform verification jobs and the separate Linux control-plane job
+passed. This source remains unqualified; it predates the short-grant and
+Windows machine-store corrections and cannot attest either correction.
+
+The named P-256 CA run still times out at Windows current-user root import.
+The fixture now uses the elevated disposable runner's machine root store for
+both installation and exact-thumbprint removal. This follows the
+[Windows machine-store model](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/local-machine-and-current-user-certificate-stores).
+macOS reaches native traffic in the flow case, but cleanup and subsequent TLS
+setup time out; cleanup errors now identify the failing operation number.
+Neither timeout is evidence of a Client TLS verification defect. Windows and
+macOS trust lifecycle qualification remains pending.
+
 The initial 29-root run [34655479384](https://github.com/endless-net/client/actions/runs/34655479384)
 exposed a flow fixture mismatch: its two-minute grant was rejected by the
 Client's one-minute future-expiry guard. The native scenario now uses a

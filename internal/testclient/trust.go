@@ -44,8 +44,10 @@ func (n *Node) TrustControlTLS(s *testcontrol.Server) {
 	var remove [][]string
 	switch runtime.GOOS {
 	case "windows":
-		install = []string{"certutil", "-user", "-addstore", "Root", path}
-		remove = [][]string{{"certutil", "-user", "-delstore", "Root", thumbprint}}
+		// The elevated disposable runner uses machine trust, avoiding the
+		// interactive confirmation required by the current-user root store.
+		install = []string{"certutil", "-addstore", "Root", path}
+		remove = [][]string{{"certutil", "-delstore", "Root", thumbprint}}
 	case "darwin":
 		install = []string{"security", "add-trusted-cert", "-d", "-r", "trustRoot", "-k", "/Library/Keychains/System.keychain", path}
 		remove = [][]string{
@@ -79,9 +81,9 @@ func (n *Node) TrustControlTLS(s *testcontrol.Server) {
 		return fmt.Errorf("exit=%d reason=%s deadline=%t", code, reason, ctx.Err() != nil)
 	}
 	n.t.Cleanup(func() {
-		for _, args := range remove {
+		for index, args := range remove {
 			if err := run(args); err != nil {
-				n.t.Errorf("could not remove the exact ephemeral test CA or trust entry: %v", err)
+				n.t.Errorf("could not remove the exact ephemeral test CA or trust entry (step %d): %v", index+1, err)
 			}
 		}
 	})
