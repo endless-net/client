@@ -3,7 +3,9 @@ package tests
 import (
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -24,17 +26,35 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 		before := n.AwaitStatus(func(v ipc.StatusResponse) bool {
 			return v.NodeID == id && v.UserDisconnected == disconnected && v.CachedMapValid
 		})
-		args := []string{"agent", "--config", n.Config, "--wg-interface", n.Interface}
-		// A separate IPC endpoint excludes address-in-use as a false positive.
-		if runtime.GOOS == "windows" {
-			args = append(args, "--ipc-pipe", n.Pipe+"-duplicate")
-		} else {
-			args = append(args, "--ipc-socket", n.Socket+".dup")
+		// Preserve lexical aliases instead of letting filepath.Join clean them.
+		// All paths name the existing configuration; no identity file is read.
+		separator := string(filepath.Separator)
+		dir := filepath.Dir(n.Config)
+		paths := []string{n.Config, dir + separator + "." + separator + filepath.Base(n.Config), dir + separator + ".." + separator + filepath.Base(dir) + separator + filepath.Base(n.Config)}
+		start, results := make(chan struct{}), make(chan bool, len(paths))
+		for i, path := range paths {
+			args := []string{"agent", "--config", path, "--wg-interface", n.Interface}
+			// Distinct IPC endpoints exclude address-in-use as a false positive.
+			if runtime.GOOS == "windows" {
+				args = append(args, "--ipc-pipe", n.Pipe+"-duplicate-"+strconv.Itoa(i))
+			} else {
+				args = append(args, "--ipc-socket", n.Socket+".dup"+strconv.Itoa(i))
+			}
+			go func() {
+				<-start
+				output, err := n.Run(args...)
+				var exit *exec.ExitError
+				results <- errors.As(err, &exit) && exit.ExitCode() == 1 && strings.Contains(string(output), "agent already running for this config")
+			}()
 		}
-		output, err := n.Run(args...)
-		var exit *exec.ExitError
-		if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(output), "agent already running for this config") {
-			t.Fatal("duplicate agent did not exit with the configuration-ownership error (output withheld)")
+		close(start)
+		for range paths {
+			if !<-results {
+				t.Error("concurrent agent did not exit with the configuration-ownership error (output withheld)")
+			}
+		}
+		if t.Failed() {
+			t.FailNow()
 		}
 		n.AwaitStatus(func(v ipc.StatusResponse) bool {
 			return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid

@@ -1647,6 +1647,31 @@ has instantiated 24 native jobs for `0981f09add71d1e6f6209b8b4d2be17bdc586aea`.
 Relay packet loss still requires localization and correction; CI repartitioning
 alone cannot fix or qualify it.
 
+## Relay return-path correction and concurrent ownership increment
+
+The diagnostic source `0981f09add71d1e6f6209b8b4d2be17bdc586aea` reached the
+reference WireGuard peer: the Ubuntu 24.04 first repetition recorded two Relay
+authentications, two forwarded frames and two handshake initiations, but no
+handshake response or application request. This localizes the initial failure
+before application traffic; it is not evidence of a Client runtime defect.
+
+Source `798755b84cce93c86ee33bf0b876152b3fcafcca` configures the reference peer's
+return endpoint for each authenticated Relay connection, before readiness and
+forwarding. The pinned reference engine requires an explicit endpoint, as in
+the existing direct-traffic fixture. The fixture recovery test now withholds
+UDP replies unless the configured return endpoint matches the sending socket.
+Local vet, lint and short tests pass; native Relay qualification still requires
+the complete hosted matrix.
+
+`TestControlPlaneSingleAgentOwnership` additionally launches three contenders
+concurrently against an already-running real agent, using the original path,
+a directory-dot path and a directory-parent path to the same configuration.
+Each contender has a separate IPC endpoint and must report the ownership error.
+The original agent must retain identity and connected/disconnected intent,
+consume a signed map while connected, and restart without another registration.
+This increment awaits hosted evidence. It does not qualify symbolic links,
+hard links, simultaneous startup without an existing owner, or all crash cases.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
