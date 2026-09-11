@@ -78,6 +78,7 @@ type WireGuardEngine struct {
 	pathWake          chan struct{}
 	pathCancel        context.CancelFunc
 	applicationFilter *applicationPacketFilter
+	peerACLFilter     *peerACLFilter
 	sharingFilter     *sharingPacketFilter
 	applicationCancel context.CancelFunc
 	flows             *flowCollector
@@ -203,14 +204,27 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 	}
 	// Keep sharing closed until the matching peer keys and routes are installed.
 	e.sharingFilter.suspend(networkMap)
+	if e.peerACLFilter == nil {
+		e.peerACLFilter = &peerACLFilter{}
+	}
+	aclPeers := plan.networkMap.Peers
+	if len(plan.networkMap.Network.Applications) > 0 {
+		aclPeers = applicationRoutePeers(plan.networkMap, time.Now())
+	}
+	peerACLChanged := e.peerACLFilter.suspend(aclPeers)
 	result, err = e.configureLocked(ctx, plan, previous, &progress)
 	if err == nil {
+		e.peerACLFilter.commit()
+		if peerACLChanged && !result.Changed {
+			result.Changed, result.Skipped, result.Reason = true, false, "peer ACL updated"
+		}
 		e.sharingFilter.update(networkMap)
 		e.configureApplicationsLocked(cfg, networkMap)
 		e.configureFlowLocked(cfg, networkMap)
 		return result, nil
 	}
 	e.sharingFilter.withdraw()
+	e.peerACLFilter.withdraw()
 	if rollbackErr := e.restoreLocked(previous, progress); rollbackErr != nil {
 		return result, errors.Join(err, fmt.Errorf("rollback wireguard-go configuration: %w", rollbackErr))
 	}
@@ -526,7 +540,10 @@ func (e *WireGuardEngine) startLocked(mtu int) error {
 	if e.sharingFilter == nil {
 		e.sharingFilter = newSharingPacketFilter()
 	}
-	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, sharing: e.sharingFilter, flows: e.flows}, bind, logger)
+	if e.peerACLFilter == nil {
+		e.peerACLFilter = &peerACLFilter{}
+	}
+	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, sharing: e.sharingFilter, peerACL: e.peerACLFilter, flows: e.flows}, bind, logger)
 	e.applicationFilter = filter
 	router := e.opts.router
 	if router == nil {

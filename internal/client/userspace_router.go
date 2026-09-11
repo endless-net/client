@@ -281,10 +281,11 @@ func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config,
 			out.PreDown = append(out.PreDown, command)
 		}
 	}
-	for _, hook := range append(append(
+	// Userspace peer ACLs run before WireGuard encryption on every OS. Keeping
+	// Linux-only ACL hooks here would also tear down routes for a port change.
+	for _, hook := range append(
 		renderSubnetRouterSNATHooks(networkMap, cfg.SubnetRouterSNAT),
-		renderExitLANFirewallHooks(networkMap.Peers, blockLAN)...),
-		renderACLFirewallHooks(networkMap.Peers)...,
+		renderExitLANFirewallHooks(networkMap.Peers, blockLAN)...,
 	) {
 		kind, command, ok := strings.Cut(hook, " = ")
 		if !ok {

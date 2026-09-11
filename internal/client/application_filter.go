@@ -243,6 +243,7 @@ type applicationTUN struct {
 	filter  *applicationPacketFilter
 	flows   *flowCollector
 	sharing *sharingPacketFilter
+	peerACL *peerACLFilter
 }
 
 func (t *applicationTUN) Write(bufs [][]byte, offset int) (int, error) {
@@ -279,7 +280,7 @@ func (t *applicationTUN) Read(bufs [][]byte, sizes []int, offset int) (int, erro
 			}
 			now := time.Now()
 			packet := bufs[i][offset : offset+sizes[i]]
-			allowed := t.filter.allows(packet, false, now) && t.sharing.allows(packet, false, now)
+			allowed := t.peerACL.allows(packet) && t.filter.allows(packet, false, now) && t.sharing.allows(packet, false, now)
 			t.flows.observe(packet, allowed, now)
 			if !allowed {
 				continue

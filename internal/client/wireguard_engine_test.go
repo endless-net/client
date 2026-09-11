@@ -628,8 +628,8 @@ func TestBuildWireGuardEngineRouterConfig(t *testing.T) {
 	if len(cfg.Addresses) != 2 || len(cfg.Routes) != 2 || len(cfg.DNS) != 1 || cfg.MTU != 1280 {
 		t.Fatalf("router config = %#v", cfg)
 	}
-	if len(cfg.PostUp) == 0 || len(cfg.PreDown) == 0 || !strings.Contains(strings.Join(cfg.PostUp, "\n"), "ENACL-endlessnet") {
-		t.Fatalf("userspace firewall hooks = post:%#v pre:%#v", cfg.PostUp, cfg.PreDown)
+	if strings.Contains(strings.Join(append(cfg.PostUp, cfg.PreDown...), "\n"), "ENACL-") {
+		t.Fatal("userspace peer ACL must not depend on OS firewall hooks")
 	}
 	if strings.Contains(strings.Join(append(cfg.PostUp, cfg.PreDown...), "\n"), "%i") {
 		t.Fatalf("userspace firewall hooks retain interface placeholder: %#v / %#v", cfg.PostUp, cfg.PreDown)
