@@ -79,7 +79,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-002 | L installed CLI version | Artifact/dependency failure paths |
 | HC-003 | L noninteractive installation and enrolled same-artifact reinstall on all eight runners, preserving identity, intent and real TCP access | Interrupted installation and artifact replacement variants |
 | HC-004 | L real service and IPC | Local authorization and unavailable-service outcomes |
-| HC-005 | C process lifecycle | Duplicate agent and termination semantics |
+| HC-005 | C process lifecycle; new SingleAgentOwnership scenario pending hosted qualification | Alias-path ownership, concurrent launch and remaining termination variants |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
 | HC-008 | C BrowserEnrollment; expired-request replacement/resume/approval; expiry during active CLI polling and approved recovery on all six runners | Cancellation and foreign poll authorization |
@@ -1135,6 +1135,25 @@ still serializes runs in the same branch group and may replace an older pending
 run with a newer pending run; it does not guarantee execution of every queued
 commit. Jobs within each matrix remain parallel with fail-fast disabled. This
 changes Client-owned workflow scheduling only, not managed runner infrastructure.
+
+## Single-agent ownership increment
+
+`TestControlPlaneSingleAgentOwnership` starts a real enrolled Client, then starts
+another real agent for the same configuration with a different IPC endpoint.
+The second process must exit with code 1 and the public configuration-ownership
+error, excluding IPC address collision as a false positive. The original process
+must continue answering IPC with its identity and intent intact, and while
+connected must consume a newer signed map. The test repeats rejection while
+user-disconnected, then stops and starts the owner after each case to prove that
+ownership is released and enrollment/intent survive. The contract testserver
+must observe exactly one registration. Tests never read lock files, persisted
+identity or private runtime state. This does not yet cover path aliases,
+simultaneous first launch or loss of power during writes.
+
+The compiled common inventory increases to 18 root scenarios, with the existing
+CI comparator requiring three successful repetitions of every scenario on all
+eight platforms (432 outcomes). Local format/vet/lint/short checks passed;
+platform evidence for this new scenario remains pending.
 
 ## Next work
 
