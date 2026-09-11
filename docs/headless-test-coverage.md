@@ -133,8 +133,8 @@ product scope are different conditions; neither is a successful skip.
 | HC-054 | No C/R evidence audited | Container persistent versus ephemeral lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
-| HC-057 | C diagnostic JSON export/reuse passed all 24 native repetitions; native IPv4 UDP flow consent/retry passed all 12 Linux repetitions; D FlowConsentAndIdempotency; U flow tests | Windows/macOS flow qualification, natural expiry/crash recovery, comprehensive redaction and export retention variants |
-| HC-058 | L version and runtime platform; native IPC negotiation scenario added, hosted evidence pending | Artifact mismatch and exact release identity; complete native negotiation qualification |
+| HC-057 | C export/reuse has historical 24-repetition evidence; retention and IPv4 UDP flow consent/retry/expiry passed 23/24 native repetitions at `1af0278`; D FlowConsentAndIdempotency; U flow tests | Missing macOS Intel repetition, crash recovery, comprehensive redaction and remaining retention/flow variants |
+| HC-058 | L version and runtime platform; native IPC negotiation/restart passed 23/24 repetitions at `1af0278` | Missing macOS Intel repetition, artifact mismatch and exact release identity |
 | HC-059 | U trust/recovery matrix; C TrustConfirmation rejection passed three times on all eight native platforms | Successful rotation, interrupted recovery and independent signing scopes |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
@@ -2331,6 +2331,47 @@ nor a known payload mismatch, and remains an investigation item. No raw probe
 output was retained by the existing diagnostic filter. The other 26 roots passed
 on every native job. The subsequent diagnostic-retention extension is not part
 of this source and requires new evidence.
+
+## 2026-09-12: 23 native reports passed; one build missing
+
+[Run 34658370761](https://github.com/endless-net/client/actions/runs/34658370761)
+at source `1af02785d498f624281cf385d6516065b83ac812` completed with failure.
+All 23 available native reports were read and contained identical 30-root
+inventories: **690 PASS, 0 FAIL, 0 SKIP**. The remaining macOS Intel repetition
+failed to download pinned Go modules after a DNS failure, before compiling or
+executing tests. Its 30 missing outcomes are not passes or skips. The required
+[`verify` job](https://github.com/endless-net/client/actions/runs/34658370761/job/103458307510)
+failed on the unsuccessful matrix dependency. All eight installation jobs,
+three OS verification jobs and the separate Linux control-plane job passed.
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| ubuntu-22.04 | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542817) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542575) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542927) |
+| ubuntu-24.04 | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542616) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542746) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542604) |
+| ubuntu-22.04-arm | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542567) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542684) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542606) |
+| ubuntu-24.04-arm | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542580) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542857) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542899) |
+| windows-2022 | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542685) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542652) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542626) |
+| windows-2025 | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542759) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542595) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542545) |
+| macos-15-intel | [NO EXECUTION: DNS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542603) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542662) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542590) |
+| macos-15 | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542654) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542599) | [PASS](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542651) |
+
+Every executed root passed, including native TLS trust, IPv4 UDP flow consent,
+immutable retry, revocation, expiry and renewal; IPC negotiation and restart
+recovery; diagnostic export reuse, timestamp-based retention, preservation of
+an unrelated operator file and fresh connected export. These are 23-repetition
+results across all eight runner variants, not complete 24-repetition qualification.
+The macOS fixture removes the exact CA certificate from the keychain; its
+hash-bound trust entry lasts until disposable VM destruction. No successful
+explicit removal of that final trust entry is claimed.
+
+The source includes nonblocking status/diagnostic engine inspection. Component
+regressions prove the blocked-interface-creation case; these native results
+show no recurrence of the earlier status failure under the exercised scenarios,
+not a bound on every OS operation. The old unknown UDP-probe failure did not
+recur, but its cause remains unidentified. This run predates the probe deadline
+category, dependency-download retry, TLS hostname mismatch and IPC request
+validation additions. The current inventory is 31 roots / 744 expected outcomes;
+full-source qualification and remaining HC variants are still open.
 
 ## Next work
 

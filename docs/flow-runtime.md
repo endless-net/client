@@ -71,8 +71,9 @@ consent after both revocation and expiry over HTTPS protobuf. After expiry,
 the test drains the five-second RPC deadline and observes twelve seconds of
 traffic without report attempts; captured window ends must not exceed expiry.
 Default-off, short-grant reporting, immutable retry, revocation, natural expiry
-and renewal passed all eighteen Linux/Windows repetitions at source `b1d3b91`.
-macOS remains unqualified; see the
-[coverage ledger](headless-test-coverage.md#2026-09-12-flow-expiry-and-tls-qualified-on-linux-and-windows).
+and renewal passed 23 native Linux/Windows/macOS repetitions at source `1af0278`.
+One macOS Intel repetition did not compile after a dependency DNS failure, so
+complete matrix qualification remains open; see the
+[coverage ledger](headless-test-coverage.md#2026-09-12-23-native-reports-passed-one-build-missing).
 This increment does not establish crash-spool replay, producer idempotency,
 IPv6, denied-flow reporting or production activation.
