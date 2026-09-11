@@ -207,6 +207,8 @@ jobs:
           go build -o "$RUNNER_TEMP/client-contracts/client.exe" ./cmd/endlessnet-client
           go build -o "$RUNNER_TEMP/client-contracts/packetprobe.exe" ./tools/packetprobe
           go test -c -o "$RUNNER_TEMP/client-contracts/contracts.test.exe" ./tests
+          "$RUNNER_TEMP/client-contracts/contracts.test.exe" -test.list='^TestControlPlane' > "$RUNNER_TEMP/client-contracts/expected-tests.txt"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/client-contracts/source.txt"
       - name: Prepare signed Wintun dependency
         if: runner.os == 'Windows'
         shell: pwsh
@@ -258,6 +260,8 @@ jobs:
           path: |
             ${{ runner.temp }}/client-contracts/results.log
             ${{ runner.temp }}/client-contracts/results.jsonl
+            ${{ runner.temp }}/client-contracts/expected-tests.txt
+            ${{ runner.temp }}/client-contracts/source.txt
           if-no-files-found: error
 
   control-plane:
@@ -293,6 +297,9 @@ jobs:
   verify:
     name: verify
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     needs: [verify-linux, verify-windows, verify-macos, installation, control-plane, control-plane-platforms]
     if: ${{ !cancelled() }}
     steps:
@@ -306,6 +313,20 @@ jobs:
           [ "${{ needs.installation.result }}" = "success" ]
           [ "${{ needs.control-plane.result }}" = "success" ]
           [ "${{ needs.control-plane-platforms.result }}" = "success" ]
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Require identical successful contract coverage on every platform
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'client-contracts-*' --dir "$RUNNER_TEMP/contract-reports"
+          go run ./tools/verify-contract-results "$RUNNER_TEMP/contract-reports" "$GITHUB_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
 
   external-stun-compatibility:
     name: External STUN compatibility

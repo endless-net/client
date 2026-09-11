@@ -42,8 +42,20 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	if !filepath.IsAbs(binary) {
 		t.Fatal("native traffic requires the packetprobe binary")
 	}
+	// Use the benchmarking address range instead of a shared-address prefix
+	// that is reachable through the macOS runner's underlying network.
+	peerIP := netip.MustParseAddr("198.18.94.20")
+	if ipv6 {
+		peerIP = netip.MustParseAddr("fd94::20")
+	}
+	if protocol == "tcp" {
+		baseline, _, _ := nativePing(t, peerIP)
+		if baseline {
+			t.Fatal("fixture address collision: ICMP peer is reachable before Client setup")
+		}
+	}
 	s := testcontrol.New(t)
-	network, join, err := s.AddNetwork("native-udp", "100.94.0.0/24")
+	network, join, err := s.AddNetwork("native-udp", "198.18.94.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,10 +81,8 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	peerIP := netip.MustParseAddr("100.94.0.20")
 	clientIP := netip.MustParseAddr(initial.OverlayIP)
 	if ipv6 {
-		peerIP = netip.MustParseAddr("fd94::20")
 		clientIP = netip.MustParseAddr(initial.OverlayIPv6)
 	}
 	addresses, err := net.InterfaceAddrs()
@@ -145,12 +155,6 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	}
 	address := func(port string) string { return net.JoinHostPort(peerIP.String(), port) }
 	fresh := func(port string) bool { return applicationProbe(t, binary, "", protocol, address(port)) }
-	if protocol == "tcp" {
-		// Diagnose an address collision outside the Client tunnel before the
-		// reference peer is published. This is not a positive traffic assertion.
-		baseline, _, _ := nativePing(t, peerIP)
-		t.Logf("ICMP pre-peer baseline: echo=%t", baseline)
-	}
 	apply(peer)
 	for _, port := range []string{"24001", "24002"} {
 		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)

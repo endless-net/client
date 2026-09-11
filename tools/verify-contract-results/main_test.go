@@ -1,0 +1,122 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestRecordedTest2JSONRepeatedSubtests(t *testing.T) {
+	// Action/package/test fields from the Ubuntu 22.04 artifact of CI
+	// 34625686577, source 5ad2709. Output/timestamps and unrelated tests are
+	// omitted; repeated root/subtest ordering comes from go tool test2json.
+	data, err := os.ReadFile("testdata/repeated-subtests.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyEvents(bytes.NewReader(data), []string{"TestControlPlaneBrowserEnrollment"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func goodReport(names []string, repetitions int) []byte {
+	var out bytes.Buffer
+	encoder := json.NewEncoder(&out)
+	for range repetitions {
+		for _, name := range names {
+			_ = encoder.Encode(event{Action: "run", Package: "client/contracts", Test: name})
+			_ = encoder.Encode(event{Action: "run", Package: "client/contracts", Test: name + "/case"})
+			_ = encoder.Encode(event{Action: "pass", Package: "client/contracts", Test: name + "/case"})
+			_ = encoder.Encode(event{Action: "pass", Package: "client/contracts", Test: name})
+		}
+	}
+	_ = encoder.Encode(event{Action: "pass", Package: "client/contracts"})
+	return out.Bytes()
+}
+
+func TestRejectIncompleteOrUnequalExecution(t *testing.T) {
+	names := []string{"TestControlPlaneAlpha", "TestControlPlaneBeta"}
+	good := string(goodReport(names, 3))
+	if err := verifyEvents(strings.NewReader(good), names); err != nil {
+		t.Fatal(err)
+	}
+	for name, report := range map[string]string{
+		"missing repetition":  string(goodReport(names, 2)),
+		"extra repetition":    string(goodReport(names, 4)),
+		"missing scenario":    string(goodReport(names[:1], 3)),
+		"undeclared scenario": strings.ReplaceAll(good, "TestControlPlaneBeta", "TestControlPlaneOther"),
+		"wrong package":       strings.ReplaceAll(good, "client/contracts", "another/package"),
+		"skipped child":       strings.Replace(good, `"Action":"pass","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, `"Action":"skip","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, 1),
+		"failed child":        strings.Replace(good, `"Action":"pass","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, `"Action":"fail","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, 1),
+		"missing start":       strings.Replace(good, `"Action":"run","Package":"client/contracts","Test":"TestControlPlaneAlpha"`, `"Action":"output","Package":"client/contracts","Test":"TestControlPlaneAlpha"`, 1),
+		"truncated":           good[:strings.LastIndex(strings.TrimSpace(good), "\n")+1],
+		"malformed":           good[:len(good)/2],
+		"empty":               "",
+		"duplicate report":    good + good,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := verifyEvents(strings.NewReader(report), names); err == nil {
+				t.Fatal("incomplete or invalid execution was accepted")
+			}
+		})
+	}
+}
+
+func TestRequireSixMatchingInventoriesAndSource(t *testing.T) {
+	const sha = "0123456789012345678901234567890123456789"
+	write := func(path string, value []byte) {
+		t.Helper()
+		if err := os.WriteFile(path, value, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, mutation := range []string{"none", "missing-platform", "missing-report", "missing-inventory", "source", "inventory", "empty-inventory", "duplicate-inventory"} {
+		t.Run(mutation, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, platform := range platforms {
+				root := filepath.Join(dir, "client-contracts-"+platform)
+				if platform == "windows-2025" && mutation == "missing-platform" {
+					continue
+				}
+				if err := os.MkdirAll(root, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				write(filepath.Join(root, "source.txt"), []byte(sha+"\n"))
+				write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneAlpha\n"))
+				write(filepath.Join(root, "results.jsonl"), goodReport([]string{"TestControlPlaneAlpha"}, 3))
+				if platform != "windows-2025" {
+					continue
+				}
+				switch mutation {
+				case "missing-report", "missing-inventory":
+					file := "results.jsonl"
+					if mutation == "missing-inventory" {
+						file = "expected-tests.txt"
+					}
+					if err := os.Remove(filepath.Join(root, file)); err != nil {
+						t.Fatal(err)
+					}
+				case "source":
+					write(filepath.Join(root, "source.txt"), []byte(strings.Repeat("f", 40)))
+				case "inventory":
+					write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneBeta\n"))
+				case "empty-inventory":
+					write(filepath.Join(root, "expected-tests.txt"), nil)
+				case "duplicate-inventory":
+					write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneAlpha\nTestControlPlaneAlpha\n"))
+				}
+			}
+			n, err := verifyReports(dir, sha)
+			if mutation == "none" {
+				if err != nil || n != 1 {
+					t.Fatalf("valid reports: count=%d err=%v", n, err)
+				}
+			} else if err == nil {
+				t.Fatal("invalid platform reports were accepted")
+			}
+		})
+	}
+}

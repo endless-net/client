@@ -946,6 +946,40 @@ runners; these are new assertions within two existing scenarios. IPv6 overlay
 still travels over an IPv4 underlay. Explicit ICMP-only grants, inbound policy,
 ICMP errors/PMTU, IPv6 underlay and Relay/NAT remain separate coverage gaps.
 
+### ICMP probe corrections and platform report gate
+
+[Diagnostic source 3b00533](https://github.com/endless-net/client/tree/3b00533eaf2a44ccbf84e027e7d0f5112256890c)
+and [CI 34627036920](https://github.com/endless-net/client/actions/runs/34627036920)
+identify two test defects. Both macOS runners receive IPv4 echo replies before
+the reference peer is published and after Client disconnect, with zero reference
+transport packets during the latter probe. The shared-space address
+`100.94.0.20` is reachable outside the fixture's tunnel; the assertion was testing
+another network path. Native IPv6 ICMP completes on macOS. Both Windows runners report
+a real initial IPv6 echo reply and reference transport packets, but a trailing
+space in the reply line makes the original parser reject it. These observations
+do not establish a Client runtime defect.
+
+The correction moves the native fixture's IPv4 network to `198.18.94.0/24`,
+within IANA's [benchmarking range](https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml).
+Before any Client setup, an ICMP reply from the selected fixture address now
+fails with an explicit address-collision error. No runner firewall/drop route
+is introduced to manufacture a denial. All existing traffic and lifecycle
+assertions remain required. The Windows parser permits trailing horizontal
+whitespace, with the observed IPv6 line and a non-whitespace suffix rejection
+as regression cases. IPv6 overlay and the IPv4 underlay are unchanged.
+
+The same increment adds [verify-contract-results](../tools/verify-contract-results/main.go)
+to the existing required `verify` job. It downloads the six artifacts from its
+own workflow run and compares each compiled test inventory, source SHA and
+JSONL execution stream. All declared scenarios must start and pass exactly
+three times on every platform; root/subtest skips or failures, missing or
+unequal inventories, wrong source identities, missing reports and incomplete
+package completion fail the gate. Unit regressions cover those failure cases
+and replay reduced action/package/test events from the first ICMP run's real
+Ubuntu JSONL artifact. No provider or Infrastructure work is involved.
+Full hosted qualification of these corrections and the new report gate is
+pending the subsequent source run; neither failing ICMP run is passing evidence.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

@@ -59,7 +59,7 @@ func nativePingReply(platform string, address netip.Addr, output string) bool {
 	ip := regexp.QuoteMeta(address.String())
 	pattern := `(?m)^\d+ bytes from ` + ip + `[:,] +icmp_seq=\d+ +(ttl|hlim)=\d+ +time[=<][0-9.]+ ?ms\r?$`
 	if platform == "windows" {
-		pattern = `(?m)^Reply from ` + ip + `: (bytes=\d+ )?time[=<][0-9.]+ms( TTL=\d+)?\r?$`
+		pattern = `(?m)^Reply from ` + ip + `: (bytes=\d+ )?time[=<][0-9.]+ms( TTL=\d+)?[ \t]*\r?$`
 	}
 	return regexp.MustCompile(pattern).MatchString(output)
 }
@@ -73,6 +73,9 @@ func TestNativePingReplyRejectsUnreachableAndUnrelatedOutput(t *testing.T) {
 		{"darwin", "fd94::20", "16 bytes from fd94::20, icmp_seq=0 hlim=64 time=0.125 ms\n", true},
 		{"windows", "100.94.0.20", "Reply from 100.94.0.20: bytes=32 time<1ms TTL=64\r\n", true},
 		{"windows", "fd94::20", "Reply from fd94::20: time=2ms\r\n", true},
+		// Actual Windows 2022/2025 IPv6 output has a trailing space.
+		{"windows", "fd94::20", "Reply from fd94::20: time<1ms \r\n", true},
+		{"windows", "fd94::20", "Reply from fd94::20: time<1ms unrelated text\r\n", false},
 		{"windows", "100.94.0.20", "Reply from 100.94.0.20: Destination host unreachable.\r\n", false},
 		{"windows", "100.94.0.20", "Reply from 100.94.0.21: bytes=32 time<1ms TTL=64\r\n", false},
 		{"linux", "100.94.0.20", "From 100.94.0.20 icmp_seq=1 Destination Host Unreachable\n", false},

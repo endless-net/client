@@ -1,0 +1,162 @@
+// Command verify-contract-results compares the six required native CI reports.
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+)
+
+var platforms = []string{"ubuntu-22.04", "ubuntu-24.04", "windows-2022", "windows-2025", "macos-15", "macos-15-intel"}
+
+var testName = regexp.MustCompile(`^TestControlPlane[A-Za-z0-9_]+$`)
+var commitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+type event struct {
+	Action  string
+	Package string
+	Test    string
+}
+
+type outcome struct {
+	runs, passes int
+	active       bool
+}
+
+func main() {
+	if len(os.Args) != 3 {
+		fmt.Fprintln(os.Stderr, "usage: verify-contract-results REPORT_DIRECTORY SOURCE_SHA")
+		os.Exit(1)
+	}
+	n, err := verifyReports(os.Args[1], os.Args[2])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Printf("Verified %d common scenarios x 3 repetitions x %d platforms: %d PASS outcomes, no skips.\n", n, len(platforms), n*3*len(platforms))
+}
+
+func declaredTests(data []byte) ([]string, error) {
+	names := strings.Fields(string(data))
+	if len(names) == 0 {
+		return nil, errors.New("empty compiled test inventory")
+	}
+	slices.Sort(names)
+	for i, name := range names {
+		if !testName.MatchString(name) || i > 0 && names[i-1] == name {
+			return nil, errors.New("invalid or duplicate compiled test name")
+		}
+	}
+	return names, nil
+}
+
+func verifyReports(dir, sha string) (int, error) {
+	if !commitSHA.MatchString(sha) {
+		return 0, errors.New("expected source must be a full commit SHA")
+	}
+	var common []string
+	for _, platform := range platforms {
+		root := filepath.Join(dir, "client-contracts-"+platform)
+		source, err := os.ReadFile(filepath.Join(root, "source.txt"))
+		if err != nil || strings.TrimSpace(string(source)) != sha {
+			return 0, fmt.Errorf("%s: missing or mismatched source identity", platform)
+		}
+		inventory, err := os.ReadFile(filepath.Join(root, "expected-tests.txt"))
+		if err != nil {
+			return 0, fmt.Errorf("%s: missing compiled test inventory", platform)
+		}
+		names, err := declaredTests(inventory)
+		if err != nil {
+			return 0, fmt.Errorf("%s: %w", platform, err)
+		}
+		if common == nil {
+			common = names
+		} else if !slices.Equal(common, names) {
+			return 0, fmt.Errorf("%s: compiled scenario inventory differs across platforms", platform)
+		}
+		file, err := os.Open(filepath.Join(root, "results.jsonl"))
+		if err != nil {
+			return 0, fmt.Errorf("%s: missing execution report", platform)
+		}
+		err = verifyEvents(file, names)
+		closeErr := file.Close()
+		if err != nil {
+			return 0, fmt.Errorf("%s: %w", platform, err)
+		}
+		if closeErr != nil {
+			return 0, fmt.Errorf("%s: report close failed", platform)
+		}
+	}
+	return len(common), nil
+}
+
+func verifyEvents(reader io.Reader, names []string) error {
+	states := make(map[string]*outcome, len(names))
+	for _, name := range names {
+		states[name] = &outcome{}
+	}
+	packagePass := false
+	decoder := json.NewDecoder(reader)
+	for {
+		var e event
+		if err := decoder.Decode(&e); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return errors.New("invalid JSONL execution report")
+		}
+		if e.Package != "client/contracts" || e.Action == "" || packagePass {
+			return errors.New("invalid report package or events after completion")
+		}
+		if e.Action == "fail" || e.Action == "skip" {
+			return errors.New("report contains a failed or skipped test")
+		}
+		if e.Test == "" {
+			if e.Action == "pass" {
+				packagePass = true
+			}
+			continue
+		}
+		root, _, child := strings.Cut(e.Test, "/")
+		state, ok := states[root]
+		if !ok {
+			return errors.New("report contains an undeclared test")
+		}
+		if child {
+			if !state.active {
+				return errors.New("subtest event outside an active root scenario")
+			}
+			continue
+		}
+		switch e.Action {
+		case "run":
+			if state.active {
+				return errors.New("overlapping root scenario executions")
+			}
+			state.runs++
+			state.active = true
+		case "pass":
+			if !state.active {
+				return errors.New("pass without a matching scenario start")
+			}
+			state.passes++
+			state.active = false
+		}
+	}
+	if !packagePass {
+		return errors.New("execution report has no successful package completion")
+	}
+	for _, name := range names {
+		state := states[name]
+		if state.active || state.runs != 3 || state.passes != 3 {
+			return fmt.Errorf("%s: expected exactly three complete successful repetitions", name)
+		}
+	}
+	return nil
+}

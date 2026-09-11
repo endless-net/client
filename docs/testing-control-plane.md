@@ -106,6 +106,15 @@ teardown cannot trigger cleanup. This correction is subsequent to the v0.5.0 tag
 
 ## Evidence boundaries
 
+The required `verify` job downloads this run's six platform artifacts and runs
+[verify-contract-results](../tools/verify-contract-results/main.go). Each build
+records its source SHA and the compiled executable's `-test.list` inventory.
+The verifier requires the same nonempty inventory on every platform, exactly
+three started-and-passed executions per root scenario, no failed or skipped
+root/subtest, and successful package completion in every JSONL report. Missing,
+truncated, malformed or wrong-source reports fail the gate. These assertions
+check the executed suite; they do not imply that every HC scenario has a test.
+
 Common contract results are attributed separately to each runner's OS and
 architecture. They do not prove that OS's complete dataplane, DNS resolver,
 route, firewall or service lifecycle behavior. The native TCP/UDP scenarios cover
