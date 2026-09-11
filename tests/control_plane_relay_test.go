@@ -71,7 +71,24 @@ func TestControlPlaneNativeRelayTraffic(t *testing.T) {
 			n.Start()
 			selected := func() {
 				t.Helper()
+				var last ipc.StatusResponse
+				defer func() {
+					if !t.Failed() {
+						return
+					}
+					authenticated, sent, received := transport.Counts()
+					var relayOK, selectedRelay, selectedPath bool
+					if last.Agent != nil {
+						relayOK = last.Agent.RelayOK
+						selectedRelay = last.Agent.SelectedRelay.ID == transport.Endpoint.ID
+						for _, peer := range last.Agent.Peers {
+							selectedPath = selectedPath || peer.PeerID == "relay-peer" && peer.SelectedPath == "relay"
+						}
+					}
+					t.Logf("Relay status wait: agent_present=%t relay_ok=%t relay_selected=%t peer_relay_path=%t auth=%d frames_to_peer=%d frames_from_peer=%d", last.Agent != nil, relayOK, selectedRelay, selectedPath, authenticated, sent, received)
+				}()
 				n.AwaitStatus(func(v ipc.StatusResponse) bool {
+					last = v
 					if v.NodeID != initial.NodeID || !v.CachedMapValid || v.Agent == nil || !v.Agent.RelayOK || v.Agent.SelectedRelay.ID != transport.Endpoint.ID || v.WireGuard == nil || !v.WireGuard.OK {
 						return false
 					}
@@ -87,7 +104,6 @@ func TestControlPlaneNativeRelayTraffic(t *testing.T) {
 			probe := func(protocol string) bool { return applicationProbe(t, binary, "", protocol, address) }
 			reachable := func() {
 				t.Helper()
-				selected()
 				ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 				defer cancel()
 				var tcpOK, udpOK bool
@@ -117,6 +133,8 @@ func TestControlPlaneNativeRelayTraffic(t *testing.T) {
 				if authenticated == 0 || sent == 0 || received == 0 {
 					t.Fatal("application traffic bypassed Relay contract participant")
 				}
+				t.Log("native Relay TCP and UDP exchange succeeded; verifying public path status")
+				selected()
 			}
 			reachable()
 			tcp := startApplicationSession(t, binary, "", "tcp", address)
