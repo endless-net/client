@@ -2334,6 +2334,15 @@ of this source and requires new evidence.
 
 ## Next work
 
+[macOS Intel repeat 1 of run 34658370761](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542603)
+failed before compiling its contract runner: DNS lookup of `proxy.golang.org`
+timed out and then returned no host while downloading pinned modules. It has no
+native scenario outcomes and cannot count as platform evidence. The Client
+workflow now downloads pinned modules before compilation, with at most three
+attempts under a three-minute step deadline, then verifies `go.mod`/`go.sum`
+remain unchanged. It does not retry tests, change dependency versions or switch
+registries. Continued download failure still fails the required job and source.
+
 The packet probe now emits the fixed category `application deadline setup failed`
 when a socket cannot accept its deadline. A closed-pipe component regression
 failed before the change and verifies that this remains an internal probe
