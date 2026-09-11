@@ -41,6 +41,7 @@ func diagnosticsPayload(cfg client.Config) map[string]any {
 }
 
 type testAgentWireGuard struct {
+	inspectionBusy bool
 	configureCalls int
 	downCalls      int
 	configure      func(client.Config, clientapi.RegisterNodeResponse) (client.WireGuardApplyResult, error)
@@ -73,6 +74,13 @@ func (*testAgentWireGuard) STUNSnapshot(context.Context, clientapi.RegisterNodeR
 
 func (*testAgentWireGuard) Inspection() client.WireGuardInspection {
 	return client.WireGuardInspection{Interface: "endlessnet"}
+}
+
+func (w *testAgentWireGuard) TryInspection() (client.WireGuardInspection, bool) {
+	if w.inspectionBusy {
+		return client.WireGuardInspection{}, false
+	}
+	return w.Inspection(), true
 }
 
 func testSuccessfulIPCWireGuardApply() *ipc.WireGuardApplyResult {

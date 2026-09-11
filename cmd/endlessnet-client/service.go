@@ -556,6 +556,7 @@ type agentWireGuard interface {
 	LastEndpointDiscovery() client.WireGuardEngineEndpointDiscovery
 	STUNSnapshot(context.Context, clientapi.RegisterNodeResponse, time.Duration) client.AgentSTUNSnapshot
 	Inspection() client.WireGuardInspection
+	TryInspection() (client.WireGuardInspection, bool)
 	PathStatus() []client.PeerPathStatus
 	RelayStatus() (client.RelayDataplaneBridgeStatus, bool, error)
 }
@@ -639,6 +640,14 @@ func wireGuardApplyResult(result client.WireGuardApplyResult) ipc.WireGuardApply
 		Skipped: result.Skipped, Reason: result.Reason, DownError: result.DownError,
 		UpError: result.UpError, SyncError: result.SyncError, RouteError: result.RouteError,
 	}
+}
+
+func serviceWireGuardInspection(engine agentWireGuard) ipc.WireGuardInspection {
+	inspection, available := engine.TryInspection()
+	if !available {
+		inspection.Error = "wireguard-go operation in progress; inspection unavailable"
+	}
+	return wireGuardInspection(inspection)
 }
 
 func wireGuardInspection(inspection client.WireGuardInspection) ipc.WireGuardInspection {
@@ -1343,8 +1352,7 @@ func buildServiceIPCDiagnostics(opts agentIPCOptions, logLimit int) (ipc.Diagnos
 		attachServiceIPCAgentStatus(&status, *agentState)
 	}
 	if opts.WireGuard != nil {
-		inspection := opts.WireGuard.Inspection()
-		converted := wireGuardInspection(inspection)
+		converted := serviceWireGuardInspection(opts.WireGuard)
 		status.WireGuard = &converted
 	}
 	status.State = serviceStateFromControlState(status.ControlState, status.CachedMapError != "")
@@ -1479,8 +1487,7 @@ func agentIPCStatusForConfig(ctx context.Context, opts agentIPCOptions, cfg clie
 		attachServiceIPCAgentStatus(&response, *agentState)
 	}
 	if opts.WireGuard != nil {
-		inspection := opts.WireGuard.Inspection()
-		converted := wireGuardInspection(inspection)
+		converted := serviceWireGuardInspection(opts.WireGuard)
 		response.WireGuard = &converted
 	}
 	response.State = serviceStateFromControlState(response.ControlState, response.CachedMapError != "")

@@ -983,6 +983,16 @@ func (e *WireGuardEngine) Inspection() WireGuardInspection {
 	return e.inspectionLocked()
 }
 
+// TryInspection reports whether inspection is available without waiting for an
+// engine operation such as platform interface creation or route replacement.
+func (e *WireGuardEngine) TryInspection() (WireGuardInspection, bool) {
+	if !e.mu.TryLock() {
+		return WireGuardInspection{}, false
+	}
+	defer e.mu.Unlock()
+	return e.inspectionLocked(), true
+}
+
 func (e *WireGuardEngine) inspectionLocked() WireGuardInspection {
 	inspection := WireGuardInspection{Interface: e.interface_, Peers: []WireGuardPeerInspection{}, Routes: []WireGuardRouteInspection{}}
 	if e.device == nil {

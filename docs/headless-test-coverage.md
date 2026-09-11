@@ -2295,6 +2295,23 @@ expiry, crash-spool replay, IPv6/TCP/denied-flow reporting or producer conforman
 
 ## Next work
 
+A short component regression now holds platform TUN creation pending while
+requesting engine inspection. The previous blocking inspection path failed the
+bounded observation; the new `TryInspection` reports unavailability without
+waiting for the engine mutex, then becomes available after configuration
+recovers. Agent status and diagnostic snapshots use this path and explicitly
+report `inspection unavailable` while retaining identity, cached-map and intent
+fields. Their deadlines and wire versions are unchanged. This isolates engine
+lock contention; it does not prove every OS inspection call is bounded or that
+the earlier Windows timeout had this exact cause. Native qualification is pending.
+
+The first macOS ARM repetition in
+[run 34657192800](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688613)
+rejects both the scoped authorization-rule write and restoration with exit 255.
+The root-only authorization preparation is therefore not a confirmed fix;
+macOS TLS/flow qualification remains open. The same job completes its IPC
+negotiation restart sequence, but full-matrix evidence must be assessed separately.
+
 `TestControlPlaneIPCNegotiation` extends HC-053/HC-058 through the published
 IPC package and the real agent's Unix socket or Windows named pipe. Missing,
 wrong-protocol, malformed, nonpositive, reversed, disjoint and duplicate version
