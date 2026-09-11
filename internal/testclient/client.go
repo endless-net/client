@@ -121,7 +121,11 @@ func (n *Node) Start() {
 	cmd := n.cmd
 	done := n.done
 	go func() { done <- cmd.Wait() }()
-	n.AwaitStatus(func(s ipc.StatusResponse) bool { return s.IPCVersion == ipc.Version })
+	// Match the public service IPC default and installed-service startup wait.
+	// Native driver initialization can outlast the shorter state-transition wait.
+	started := time.Now()
+	n.awaitStatusWithin(30*time.Second, func(s ipc.StatusResponse) bool { return s.IPCVersion == ipc.Version })
+	n.t.Logf("agent IPC became ready after %s", time.Since(started).Round(time.Millisecond))
 }
 func (n *Node) Stop() {
 	if n.cmd == nil {
@@ -215,7 +219,12 @@ func (n *Node) ipcArgs() []string {
 }
 func (n *Node) AwaitStatus(match func(ipc.StatusResponse) bool) ipc.StatusResponse {
 	n.t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	return n.awaitStatusWithin(15*time.Second, match)
+}
+
+func (n *Node) awaitStatusWithin(timeout time.Duration, match func(ipc.StatusResponse) bool) ipc.StatusResponse {
+	n.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var last ipc.StatusResponse
 	responses, failures := 0, 0

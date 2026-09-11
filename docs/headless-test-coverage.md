@@ -1796,6 +1796,22 @@ of real recovery traffic, independently of snapshot freshness. The replayed
 map correction `b30f4538651e4704967a9b7476522b60f2b459e5` was made after this
 source and is still awaiting native qualification.
 
+## Initial IPC readiness deadline alignment
+
+[Windows 2025 repetition 2 in CI 34649232328](https://github.com/endless-net/client/actions/runs/34649232328/job/103427695628)
+again failed before DNS assertions. The new diagnostic reported 14
+`context deadline exceeded` results and one expiration of the harness context,
+with no successful IPC response and a live agent. This identifies bounded
+status-request timeouts, but does not identify the runtime initialization stage.
+
+The real CLI's default service IPC timeout is 30 seconds and the installed
+service startup test also allows 30 seconds. The contract driver now uses that
+same bound for initial IPC readiness instead of its generic 15-second
+state-transition wait, and logs readiness duration. Subsequent state waits and
+native application probes retain their existing bounds. This corrects a test
+precondition mismatch; it is not a claim that the underlying startup latency
+has been fixed or that a 30-second bound has passed on all runners.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
