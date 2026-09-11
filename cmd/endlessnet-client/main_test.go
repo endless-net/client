@@ -706,6 +706,12 @@ func TestWaitForBrowserEnrollmentReplacesExpiredSavedRequest(t *testing.T) {
 			})
 		case r.Method == http.MethodPost && r.URL.Path == "/nodes/enrollment-requests":
 			createCalls++
+			var replacement clientapi.RegisterNodeRequest
+			if err := json.NewDecoder(r.Body).Decode(&replacement); err != nil || replacement.IdempotencyID == "saved-idempotency-key" || clientapi.VerifyRegisterNodeIdentityProof(replacement) != nil {
+				t.Error("replacement must use a new operation ID and a valid identity proof")
+				http.Error(w, "invalid replacement", http.StatusBadRequest)
+				return
+			}
 			_ = json.NewEncoder(w).Encode(clientapi.CreateNodeEnrollmentRequestResponse{
 				Request: clientapi.NodeEnrollmentRequest{
 					ID:          "request-2",
@@ -746,6 +752,7 @@ func TestWaitForBrowserEnrollmentReplacesExpiredSavedRequest(t *testing.T) {
 		ApprovalURL:         "https://admin.example.test/?enrollment_request=request-1",
 		EnrollmentRequest:   &savedRequest,
 		NodeApprovalState:   clientapi.NodeEnrollmentRequestPending,
+		IdentityPrivateKey:  identityPrivateKey,
 	}
 	req := savedRequest
 	_, err = waitForBrowserEnrollmentApproval(

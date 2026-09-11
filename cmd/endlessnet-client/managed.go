@@ -213,9 +213,21 @@ func waitForBrowserEnrollmentApproval(api *clientapi.API, cfg *client.Config, co
 			}
 			return clientapi.RegisterNodeResponse{}, errors.New("enrollment request was rejected")
 		case clientapi.NodeEnrollmentRequestExpired:
+			// Expiry ends the old operation. Reusing its idempotency ID would
+			// replay the expired request even after clearing local poll state.
+			replacement := *req
+			replacement.IdempotencyID, err = clientapi.NewRegistrationIdempotencyID()
+			if err != nil {
+				return clientapi.RegisterNodeResponse{}, err
+			}
+			replacement.IdentitySignature, err = client.SignIdentity(cfg.IdentityPrivateKey, clientapi.RegistrationIdentityProofPayload(replacement))
+			if err != nil {
+				return clientapi.RegisterNodeResponse{}, err
+			}
 			if err := clearBrowserEnrollmentRequest(cfg, configPath); err != nil {
 				return clientapi.RegisterNodeResponse{}, err
 			}
+			*req = replacement
 			return waitForBrowserEnrollmentApproval(api, cfg, configPath, req, timeout)
 		}
 	}
