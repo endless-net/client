@@ -106,7 +106,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
-| HC-032 | U routes/application tests; native `TestControlPlaneRoutedResource` pending hosted evidence | Consumer IPv4/IPv6 resource prefix via forwarding peer; full router roles remain open |
+| HC-032 | C RoutedResource passed three times on all eight native platforms: IPv4/IPv6 TCP/UDP through an IP forwarding peer, route withdrawal and recovery | Full Client router roles, SNAT, HA and remaining resource variants |
 | HC-033 | U configuration tests; native durable route installation disable/restore pending CI | Per-resource selection and remaining route-selection semantics |
 | HC-034 | U SNAT/forwarding tests | Advertisement versus approval versus effective traffic |
 | HC-035 | No C/R evidence audited | Site-to-site scope and reverse-path tests |
@@ -133,7 +133,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
 | HC-057 | D FlowConsentAndIdempotency; U flow tests | Real client consent/retry behavior and safe diagnostic export |
 | HC-058 | L version and runtime platform | CLI/daemon/artifact mismatch and exact release identity |
-| HC-059 | U trust/recovery matrix; C TrustConfirmation rejection pending hosted evidence | Successful rotation, interrupted recovery and independent signing scopes |
+| HC-059 | U trust/recovery matrix; C TrustConfirmation rejection passed three times on all eight native platforms | Successful rotation, interrupted recovery and independent signing scopes |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
@@ -1448,6 +1448,43 @@ selection or router advertisement. The common inventory remains 21 roots and
 504 expected outcomes across eight platforms; this extension awaits its own
 hosted source evidence. Local short tests, vet and lint passed, but do not
 execute native routing scenarios.
+
+## Confirmed 21-scenario eight-platform qualification
+
+[CI 34641056248](https://github.com/endless-net/client/actions/runs/34641056248)
+succeeded for [source 859e102](https://github.com/endless-net/client/tree/859e1021673c50876404cf2de3baed594d21b21a).
+The native job reports contain 63 successful root outcomes per platform:
+
+| Platform | Native job evidence | RoutedResource repetitions (seconds) | TrustConfirmation repetitions (seconds) |
+| --- | --- | --- | --- |
+| Ubuntu 22.04 x64 | [103403847639](https://github.com/endless-net/client/actions/runs/34641056248/job/103403847639) | 8.13, 8.16, 8.14 | 0.46, 0.46, 0.46 |
+| Ubuntu 24.04 x64 | [103403848463](https://github.com/endless-net/client/actions/runs/34641056248/job/103403848463) | 8.05, 8.05, 8.07 | 0.43, 0.43, 0.43 |
+| Ubuntu 22.04 ARM64 | [103403847649](https://github.com/endless-net/client/actions/runs/34641056248/job/103403847649) | 8.02, 7.98, 8.00 | 0.43, 0.44, 0.44 |
+| Ubuntu 24.04 ARM64 | [103403847770](https://github.com/endless-net/client/actions/runs/34641056248/job/103403847770) | 8.00, 8.00, 7.97 | 0.42, 0.42, 0.42 |
+| macOS 15 Intel | [103403847842](https://github.com/endless-net/client/actions/runs/34641056248/job/103403847842) | 7.39, 7.87, 7.79 | 0.72, 0.69, 0.69 |
+| macOS 15 ARM64 | [103403847729](https://github.com/endless-net/client/actions/runs/34641056248/job/103403847729) | 7.21, 7.06, 7.11 | 0.52, 0.44, 0.47 |
+| Windows 2022 x64 | [103403847620](https://github.com/endless-net/client/actions/runs/34641056248/job/103403847620) | 18.41, 17.21, 17.35 | 3.43, 3.38, 3.54 |
+| Windows 2025 x64 | [103403847769](https://github.com/endless-net/client/actions/runs/34641056248/job/103403847769) | 17.15, 23.13, 18.93 | 4.04, 3.75, 2.53 |
+
+The [aggregate verifier](https://github.com/endless-net/client/actions/runs/34641056248/job/103408442552)
+confirmed identical compiled inventories and source SHA: **21 common scenarios
+x 3 repetitions x 8 platforms = 504 PASS, 0 FAIL, 0 SKIP**. All eight installed
+client jobs, three OS verification jobs and the separate Linux dataplane job
+also passed. Optional external STUN compatibility was skipped and is excluded.
+
+The new evidence proves consumer access to a resource behind a separate IP
+forwarding hop, absent/withdrawn-route denial including established flows, and
+TCP/UDP recovery over IPv4 and IPv6 overlays. It also proves CLI rejection of
+missing consent, wrong origin and wrong key ID without changing pinned trust
+or enrollment, with later signed-map acceptance and durable state after restart.
+
+It does not prove Client acting as a production router, SNAT, route HA, IPv6
+underlay, successful signing-key rotation or full HC-001-HC-065 coverage. The
+earlier isolated macOS Intel IPv6 UDP failure again did not recur; its cause
+remains unproven. The later local route-table off/auto extension is absent from
+this source and is being checked separately by
+[CI 34642493566](https://github.com/endless-net/client/actions/runs/34642493566).
+Its result must not be inferred from this successful qualification.
 
 ## Next work
 
