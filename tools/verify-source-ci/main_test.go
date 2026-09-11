@@ -63,6 +63,21 @@ func TestPublicationGate(t *testing.T) {
 				}
 			}
 		}, false},
+		{"missing-linux-arm-contracts", func(f *fixture) {
+			for i := range f.jobs {
+				if f.jobs[i].Name == "Client contracts (ubuntu-24.04-arm)" {
+					f.jobs = append(f.jobs[:i], f.jobs[i+1:]...)
+					break
+				}
+			}
+		}, false},
+		{"skipped-linux-arm-install", func(f *fixture) {
+			for i := range f.jobs {
+				if f.jobs[i].Name == "Install and smoke (ubuntu-22.04-arm)" {
+					f.jobs[i].Conclusion = "skipped"
+				}
+			}
+		}, false},
 		{"duplicate-verify", func(f *fixture) { f.jobs = append(f.jobs, f.jobs[0]) }, false},
 		{"attempt-changed", func(f *fixture) { f.current.Attempt++ }, false},
 		{"run-restarted", func(f *fixture) { f.current.Status = "queued" }, false},

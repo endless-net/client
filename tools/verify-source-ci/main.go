@@ -54,9 +54,11 @@ func (g githubAPI) get(ctx context.Context, path string, out any) error {
 var requiredJobs = []string{
 	"verify", "Client control-plane scenarios", "Verify (Linux)", "Verify (Windows)", "Verify (macOS)",
 	"Install and smoke (ubuntu-24.04)", "Install and smoke (ubuntu-22.04)",
+	"Install and smoke (ubuntu-24.04-arm)", "Install and smoke (ubuntu-22.04-arm)",
 	"Install and smoke (windows-2022)", "Install and smoke (windows-2025)",
 	"Install and smoke (macos-15)", "Install and smoke (macos-15-intel)",
 	"Client contracts (ubuntu-22.04)", "Client contracts (ubuntu-24.04)",
+	"Client contracts (ubuntu-22.04-arm)", "Client contracts (ubuntu-24.04-arm)",
 	"Client contracts (windows-2022)", "Client contracts (windows-2025)",
 	"Client contracts (macos-15)", "Client contracts (macos-15-intel)",
 }

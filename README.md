@@ -52,6 +52,13 @@ publishes Debian/Ubuntu packages for amd64 and arm64. macOS remains covered by
 the source and CI portability contract, but no signed/notarized macOS package is
 declared as a release-supported artifact yet.
 
+The Client CI matrix targets Ubuntu 22.04/24.04 on amd64 and arm64, Windows
+2022/2025 on amd64, and macOS 15 on Intel and ARM. Installation and real-client
+contract jobs run natively on GitHub-hosted runners. The publication gate
+requires every matrix job and matching source-bound execution reports; actual
+qualification and remaining gaps are recorded in the
+[coverage ledger](docs/headless-test-coverage.md).
+
 All Go dependencies used by public CI are available without repository deploy
 keys. Pull requests run on standard GitHub-hosted Linux, Windows, and macOS
 runners; release and APT credentials are restricted to their dedicated jobs.

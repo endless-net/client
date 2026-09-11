@@ -42,7 +42,7 @@ request bindings, idempotency, renewal/revocation, browser approval, signed map
 updates, bad signatures, unknown keys, expired maps, cancellation and concurrency.
 
 The parallel `Client contracts` matrix in `.github/workflows/test.yml` runs
-`TestControlPlane*` three times on Ubuntu 22.04/24.04, Windows 2022/2025 and
+`TestControlPlane*` three times on Ubuntu 22.04/24.04 (amd64 and arm64), Windows 2022/2025 and
 macOS 15 ARM/Intel. Fail-fast is disabled. Each job preserves sanitized text and
 JSONL results; all six jobs are required by verification and publication gates.
 Windows uses the same checksum-pinned Wintun dependency as the installer suite.
@@ -106,7 +106,7 @@ teardown cannot trigger cleanup. This correction is subsequent to the v0.5.0 tag
 
 ## Evidence boundaries
 
-The required `verify` job downloads this run's six platform artifacts and runs
+The required `verify` job downloads this run's eight platform artifacts and runs
 [verify-contract-results](../tools/verify-contract-results/main.go). Each build
 records its source SHA and the compiled executable's `-test.list` inventory.
 The verifier requires the same nonempty inventory on every platform, exactly

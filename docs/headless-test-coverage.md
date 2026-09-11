@@ -40,7 +40,7 @@ This scope change does not reduce coverage of the client itself.
 
 The user additionally requires functional confirmation on every supported OS,
 using parallel GitHub-hosted runners. The Client CI contract matrix targets
-Ubuntu 22.04/24.04, Windows 2022/2025 and macOS 15 ARM/Intel, with fail-fast
+Ubuntu 22.04/24.04 amd64/arm64, Windows 2022/2025 amd64 and macOS 15 ARM/Intel, with fail-fast
 disabled, three repetitions and separate text/JSONL reports per platform.
 Every matrix job is mandatory for verification and exact-source publication.
 This matrix runs the common real-client `TestControlPlane*` suite. The isolated
@@ -977,8 +977,38 @@ unequal inventories, wrong source identities, missing reports and incomplete
 package completion fail the gate. Unit regressions cover those failure cases
 and replay reduced action/package/test events from the first ICMP run's real
 Ubuntu JSONL artifact. No provider or Infrastructure work is involved.
-Full hosted qualification of these corrections and the new report gate is
-pending the subsequent source run; neither failing ICMP run is passing evidence.
+[Corrected source d2be781](https://github.com/endless-net/client/tree/d2be7819c77a0bc95c23eff54094845b89757915)
+passed [CI 34628269044](https://github.com/endless-net/client/actions/runs/34628269044).
+All six runner logs have the same 17 scenarios, each passing three times.
+The new required report gate also completed successfully and reported 306 PASS
+outcomes with no skips. All installation, platform verification and Linux
+dataplane jobs passed; optional external STUN did not execute. Both native
+TCP scenarios, including their IPv4/IPv6 ICMP assertions, passed every repetition.
+Neither preceding failing ICMP run is passing evidence. This confirms the
+bounded echo/policy/lifecycle cases on these six runners, not all ICMP behavior
+or Linux ARM, which is addressed by the expansion below.
+
+## Linux ARM coverage expansion
+
+The release audit finds an existing supported artifact without native runtime
+evidence in the preceding matrix: [APT publication](../.github/workflows/publish-apt.yml)
+already builds and indexes both amd64 and arm64 packages. Successful amd64
+jobs and arm64 cross-compilation do not qualify the Linux ARM client.
+
+The expansion adds `ubuntu-22.04-arm` and `ubuntu-24.04-arm` to both installation
+and contract matrices, using [standard hosted ARM runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+The Debian job builds for the runner's actual Go architecture and verifies the
+package Architecture field against dpkg before installation. It retains the
+existing release version. Contract executables and packet probes compile and
+run natively on each ARM runner, exercising the same declared scenario inventory.
+
+Both new installation jobs and both contract jobs become mandatory in the
+exact-source publication verifier. The report comparer requires eight matching
+artifacts, with explicit missing-ARM regression cases. With the current 17
+common scenarios, three repetitions imply 408 expected outcomes across eight
+runners. These are expected counts, not completed evidence: native Linux ARM
+qualification awaits the source run for this expansion. Windows ARM is not a
+declared release artifact; macOS keeps its existing source/CI support boundary.
 
 ## Next work
 
@@ -989,7 +1019,7 @@ contract gaps and platform decisions explicit; do not replace unresolved client
 scenarios with generic smoke tests or infer completion from historical P/R runs.
 
 Extend native platform coverage beyond direct IPv4/IPv6 TCP/UDP over IPv4 underlay:
-ICMP, IPv6 underlay, Relay/NAT, policy direction/destination variants and automatic OS
+Explicit ICMP grants and errors/PMTU, IPv6 underlay, Relay/NAT, policy direction/destination variants and automatic OS
 resolver behavior still require explicit client tests and runner evidence.
 Do not infer those outcomes from component ACL tests or successful peer UDP
 echoes. The real Client must continue to use its native OS interface and CLI/IPC.

@@ -115,7 +115,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04, windows-2022, windows-2025, macos-15, macos-15-intel]
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-22.04-arm, ubuntu-24.04-arm, windows-2022, windows-2025, macos-15, macos-15-intel]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -137,9 +137,10 @@ jobs:
         run: |
           set -euo pipefail
           tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*')"
-          VERSION="${tag#v}" OUTPUT_DIR="$RUNNER_TEMP/install-test" bash scripts/build-deb.sh amd64
+          VERSION="${tag#v}" OUTPUT_DIR="$RUNNER_TEMP/install-test" bash scripts/build-deb.sh "$(go env GOARCH)"
           deb=("$RUNNER_TEMP/install-test/"*.deb)
           [ "${#deb[@]}" -eq 1 ]
+          [ "$(dpkg-deb --field "${deb[0]}" Architecture)" = "$(dpkg --print-architecture)" ]
           echo "ENDLESSNET_TEST_DEB=${deb[0]}" >> "$GITHUB_ENV"
       - name: Prepare signed Wintun dependency
         if: runner.os == 'Windows'
@@ -192,7 +193,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04, windows-2022, windows-2025, macos-15, macos-15-intel]
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-22.04-arm, ubuntu-24.04-arm, windows-2022, windows-2025, macos-15, macos-15-intel]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7

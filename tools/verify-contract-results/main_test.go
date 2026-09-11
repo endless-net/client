@@ -65,7 +65,7 @@ func TestRejectIncompleteOrUnequalExecution(t *testing.T) {
 	}
 }
 
-func TestRequireSixMatchingInventoriesAndSource(t *testing.T) {
+func TestRequireEightMatchingInventoriesAndSource(t *testing.T) {
 	const sha = "0123456789012345678901234567890123456789"
 	write := func(path string, value []byte) {
 		t.Helper()
@@ -73,11 +73,14 @@ func TestRequireSixMatchingInventoriesAndSource(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, mutation := range []string{"none", "missing-platform", "missing-report", "missing-inventory", "source", "inventory", "empty-inventory", "duplicate-inventory"} {
+	for _, mutation := range []string{"none", "missing-platform", "missing-linux-arm", "missing-report", "missing-inventory", "source", "inventory", "empty-inventory", "duplicate-inventory"} {
 		t.Run(mutation, func(t *testing.T) {
 			dir := t.TempDir()
 			for _, platform := range platforms {
 				root := filepath.Join(dir, "client-contracts-"+platform)
+				if platform == "ubuntu-24.04-arm" && mutation == "missing-linux-arm" {
+					continue
+				}
 				if platform == "windows-2025" && mutation == "missing-platform" {
 					continue
 				}

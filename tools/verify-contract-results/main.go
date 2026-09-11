@@ -1,4 +1,4 @@
-// Command verify-contract-results compares the six required native CI reports.
+// Command verify-contract-results compares the eight required native CI reports.
 package main
 
 import (
@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-var platforms = []string{"ubuntu-22.04", "ubuntu-24.04", "windows-2022", "windows-2025", "macos-15", "macos-15-intel"}
+var platforms = []string{"ubuntu-22.04", "ubuntu-24.04", "ubuntu-22.04-arm", "ubuntu-24.04-arm", "windows-2022", "windows-2025", "macos-15", "macos-15-intel"}
 
 var testName = regexp.MustCompile(`^TestControlPlane[A-Za-z0-9_]+$`)
 var commitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
