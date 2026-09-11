@@ -1155,6 +1155,23 @@ CI comparator requiring three successful repetitions of every scenario on all
 eight platforms (432 outcomes). Local format/vet/lint/short checks passed;
 platform evidence for this new scenario remains pending.
 
+## ICMP destination fixture correction
+
+In [CI 34634842532](https://github.com/endless-net/client/actions/runs/34634842532),
+all four Linux runners rejected the new wrong-destination fixture in both native
+TCP scenarios on all three repetitions: the published contract validator reports
+`acl_grants[0] destination is outside peer allowed_ips`. This occurs while the
+testserver prepares the signed map, not in Client packet enforcement. The earlier
+ICMP-only positive and TCP-negative assertions ran before this failure, but the
+full new lifecycle scenario is not qualified by this run.
+
+The fixture now publishes both exact destination routes as owned by the same
+peer throughout the ICMP-only phase, while the grant alternates between the
+actual echo address and its adjacent address. This makes both maps valid while
+preserving the intended destination-denial/recovery assertion. The actual echo
+address, cryptographic peer and reference endpoint remain unchanged. Full
+platform qualification of the corrected fixture remains pending.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

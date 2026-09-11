@@ -198,6 +198,10 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 		udpSession := startApplicationSession(t, binary, "", "udp", address("24002"))
 		udpSession("ok")
 		icmpOnly := peer
+		wrongIP := peerIP.Next()
+		// Both destinations must belong to the peer's published routes; a grant
+		// outside allowed_ips is rejected by the contract before Client sees it.
+		icmpOnly.AllowedIPs = append([]string{peer.AllowedIPs[0]}, netip.PrefixFrom(wrongIP, wrongIP.BitLen()).String())
 		icmpOnly.ACLRestricted = true
 		icmpOnly.ACLGrants = []api.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: "icmp"}}}}
 		apply(icmpOnly)
@@ -212,7 +216,6 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 		}
 		// A matching protocol alone must not authorize a different destination.
 		wrongDestination := icmpOnly
-		wrongIP := peerIP.Next()
 		wrongDestination.ACLGrants = []api.ACLGrant{{DestinationCIDRs: []string{netip.PrefixFrom(wrongIP, wrongIP.BitLen()).String()}, AllowedPorts: []api.ACLPort{{Protocol: "icmp"}}}}
 		apply(wrongDestination)
 		assertICMP("icmp-wrong-destination", false)
