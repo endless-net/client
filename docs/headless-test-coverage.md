@@ -90,7 +90,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-058 | L version and runtime platform | CLI/daemon/artifact mismatch and exact release identity |
 | HC-059 | U trust/recovery matrix | C explicit trust confirmation; independent node-signing scope separately |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
-| HC-061 | Existing publication workflows | Exact tested-SHA gate; supported update channels and failures |
+| HC-061 | Publication gate and fixture tests; real API check awaits CI | Supported update channels, artifact acceptance and update failures |
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
 | HC-063 | U local-forget/recovery tests | Public privileged reset and new identity, real producer outcomes |
 | HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
@@ -127,16 +127,27 @@ wire responses). They observe only public IPC identity/cache indicators and map
 recovery. Misleading diagnostic text must not trigger enrollment cleanup. A
 scoped persistent wire fault is cleared to demonstrate recovery for nonterminal
 responses; a separate double test verifies fault isolation and restoration.
-Local short tests and vet pass; full consumer execution awaits this commit's CI.
+The error matrix is commit `e9b5fa8`, verified in
+[Test run 34586300405](https://github.com/endless-net/client/actions/runs/34586300405).
+All three consumer repetitions and all mandatory platform/installation jobs pass.
 
 The existing `control-plane` job selects all `TestControlPlane*` tests, runs them
 three times and is required by `verify`. These additions therefore run on each
-main push. Publication still needs a separate exact-SHA verification gate;
-source CI alone does not attest a published artifact or a backend release.
+main push. Core and APT publication now call `tools/verify-source-ci` before
+building or publishing. The gate requires a successful `Test` main-push run for
+the checked-out SHA, all eleven required jobs, and stable run-attempt evidence.
+Missing, skipped, failed, pending or inconsistent evidence blocks publication;
+an older success cannot mask a newer failed run. GitHub API contract references:
+[workflow runs](https://docs.github.com/en/rest/actions/workflow-runs) and
+[workflow jobs](https://docs.github.com/en/rest/actions/workflow-jobs).
+The fixture-based gate tests run in short CI on every platform; a read-only
+`Check source CI gate` workflow exercises the real API after successful source CI.
+Initial execution of the new gate still needs CI evidence. This does not attest
+published artifacts or backend release acceptance, and does not deploy anything.
 
 ## Next work
 
-Verify the new error matrix in CI, then extend C with request-bound negative
+Verify the publication gate in CI, then extend C with request-bound negative
 registration results, map resync/delta and real peer probes.
 Run producer conformance in owning service repositories. Keep contract gaps and
 platform decisions explicit; do not replace unresolved HC rows with generic smoke

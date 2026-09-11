@@ -12,6 +12,7 @@ on:
       - "v*"
 
 permissions:
+  actions: read
   contents: read
 
 env:
@@ -44,6 +45,20 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v7
 
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Require exact source CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export SOURCE_SHA="$(git rev-parse HEAD)"
+          go run ./tools/verify-source-ci
+
       - name: Create APT publisher token
         id: apt-token
         uses: actions/create-github-app-token@v3
@@ -60,12 +75,6 @@ jobs:
           repository: ${{ env.APT_REPOSITORY }}
           token: ${{ steps.apt-token.outputs.token }}
           path: apt-pages
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: false
 
       - name: Check preinstalled packaging tools
         run: |

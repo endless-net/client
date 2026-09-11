@@ -9,6 +9,31 @@ import (
 	"testing"
 )
 
+func TestPublicationsRequireSourceCIBeforeArtifactsOrPublisherAccess(t *testing.T) {
+	for path, boundary := range map[string]string{
+		".github/workflows/publish-client-core.yml": "- name: Build immutable client artifacts",
+		".github/workflows/publish-apt.yml":         "- name: Create APT publisher token",
+	} {
+		t.Run(path, func(t *testing.T) {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			workflow := string(raw)
+			gate := strings.Index(workflow, "go run ./tools/verify-source-ci")
+			publication := strings.Index(workflow, boundary)
+			if gate < 0 || publication <= gate {
+				t.Fatal("publication can precede source CI verification")
+			}
+			for _, required := range []string{"actions: read", `export SOURCE_SHA="$(git rev-parse HEAD)"`, "GH_TOKEN: ${{ github.token }}"} {
+				if !strings.Contains(workflow[:publication], required) {
+					t.Fatalf("missing gate input %q", required)
+				}
+			}
+		})
+	}
+}
+
 func TestClientRepositoryHasNoBackendInternalDependency(t *testing.T) {
 	err := filepath.WalkDir(".", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
