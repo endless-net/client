@@ -29,14 +29,23 @@ func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
 		return response
 	}
 	listed := list()
-	for _, ref := range []string{initial.NetworkID, listed.Networks[0].Name, strings.ToUpper(listed.Networks[0].Name)} {
-		output, err := n.ServiceCommand("select-network", "--network-id", ref)
-		var response ipc.SelectNetworkResponse
-		if err != nil || json.Unmarshal(output, &response) != nil {
-			t.Fatal("selection of the enrolled network failed (output withheld)")
-		}
-		if response.NodeID != id || response.SelectedNetworkID != initial.NetworkID || response.SelectedNetwork.ID != initial.NetworkID {
-			t.Fatal("selection changed the enrolled network or identity")
+	selectCurrent := func(before ipc.StatusResponse) {
+		t.Helper()
+		for _, ref := range []string{initial.NetworkID, listed.Networks[0].Name, strings.ToUpper(listed.Networks[0].Name)} {
+			output, err := n.ServiceCommand("select-network", "--network-id", ref)
+			var response ipc.SelectNetworkResponse
+			if err != nil || json.Unmarshal(output, &response) != nil {
+				t.Fatal("selection of the enrolled network failed (output withheld)")
+			}
+			if response.NodeID != id || response.SelectedNetworkID != initial.NetworkID || response.SelectedNetwork.ID != initial.NetworkID {
+				t.Fatal("selection changed the enrolled network or identity")
+			}
+			if response.DesiredState != before.DesiredState || (before.UserDisconnected && response.State != ipc.StateDisconnected) {
+				t.Fatal("selection of the current network misreported connection intent")
+			}
+			n.AwaitStatus(func(v ipc.StatusResponse) bool {
+				return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == before.UserDisconnected && v.DesiredState == before.DesiredState && v.CachedMapValid
+			})
 		}
 	}
 	for _, disconnected := range []bool{false, true} {
@@ -45,6 +54,7 @@ func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
 			n.Service("disconnect", &response)
 		}
 		before := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.UserDisconnected == disconnected })
+		selectCurrent(before)
 		for _, ref := range []string{foreign.ID, foreign.Name, "absent-network"} {
 			output, err := n.ServiceCommand("select-network", "--network-id", ref)
 			var exit *exec.ExitError
@@ -62,6 +72,7 @@ func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
 		n.AwaitStatus(func(v ipc.StatusResponse) bool {
 			return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.CachedMapValid
 		})
+		selectCurrent(before)
 	}
 	registrations := 0
 	for _, event := range s.Events() {

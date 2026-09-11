@@ -3795,6 +3795,17 @@ func TestAgentIPCSelectNetworkCurrentNetwork(t *testing.T) {
 	if payload.SelectedNetworkID != "net-1" {
 		t.Fatalf("SelectNetwork by name payload = %#v", payload)
 	}
+	opts := agentIPCOptions{ConfigPath: configPath}
+	if err := agentConnectionIntentStore(opts).SetDisconnected("test"); err != nil {
+		t.Fatal(err)
+	}
+	payload, err = agentIPCHandlers(opts).SelectNetwork(context.Background(), ipc.SelectNetworkRequest{NetworkID: "net-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload.State != ipc.StateDisconnected || payload.DesiredState != ipc.DesiredDisconnected {
+		t.Fatalf("selecting the current network misreported disconnected intent: state=%s desired=%s", payload.State, payload.DesiredState)
+	}
 }
 
 func TestAgentIPCSelectNetworkStableErrors(t *testing.T) {

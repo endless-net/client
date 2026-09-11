@@ -1905,6 +1905,24 @@ add an HC root or prove Client behavior by itself. Native Client traffic and
 two-Relay failover still require a complete hosted matrix for the updated
 source.
 
+## Current-network selection preserves connection intent: awaiting native evidence
+
+The existing HC-020 boundary scenario now selects the enrolled network by ID,
+name and case-insensitive name while connected and disconnected, before and
+after agent restart. It compares the response's desired state with public
+status and requires disconnected state when the user has disconnected. Status
+must preserve identity, network, intent and cached-map validity; the existing
+foreign-network rejection and single-registration assertions remain in place.
+
+A short handler regression reproduced an incorrect `Connected/connected`
+response after persisted disconnect. Selection had not reconnected the client:
+the response was hard-coded. The handler now derives state and desired state
+from the same status calculation as the public status endpoint, including
+connection intent. Local short tests, vet and lint passed after the fix.
+The expanded native assertions still require hosted qualification; earlier
+HC-020 evidence did not check this response while disconnected. This does not
+introduce saved profiles or switching to another enrollment.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
