@@ -60,7 +60,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed error matrix, temporary outage and restart | Offline lease limits and real producer failure variants |
-| HC-031 | U ACL enforcement | Local restriction through IPC with packet observations |
+| HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | U routes/application tests | Real consumer to resource behind router |
 | HC-033 | U configuration tests | Public selection/disable and actual route effect |
 | HC-034 | U SNAT/forwarding tests | Advertisement versus approval versus effective traffic |
@@ -238,6 +238,24 @@ recovery to a new map after service restoration. The transcript must contain onl
 the two initial registrations. This extends HC-017/HC-018/HC-030 beyond state-only
 assertions; actual host reboot, lease expiration and OS variants remain separate.
 Local short tests, vet and lint pass; the new intent/outage checks await CI.
+
+[Test run 34589108703](https://github.com/endless-net/client/actions/runs/34589108703)
+reached the final registration-count assertion in all three repetitions: applied
+ACL withdrawal, established-flow denial, disconnect/restart/connect and outage
+traffic checks completed. The final assertion failed because the double recorded
+both node creation and credential-authenticated refresh as `registered`.
+`service connect` legitimately refreshes the existing node through the published
+registration operation. The corrected transcript separates `registered` from
+`registration-refreshed`; a double/SDK test proves refresh preserves node ID,
+identity key and WireGuard key. The consumer still requires exactly two created
+nodes and rejects a refresh for any other identity. This is pending CI evidence,
+not a successful aggregate result for run 34589108703.
+
+HC-031 was audited separately: current central ACL tests cannot establish a user
+controlled inbound-blocking preference. No such operation appears in current
+CLI dispatch, IPC contract or client configuration. Its product/contract decision
+remains open, alongside the explicitly unresolved BA scope questions; no missing
+feature is counted as test coverage.
 
 ## Next work
 

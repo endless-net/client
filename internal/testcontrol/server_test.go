@@ -113,6 +113,35 @@ func TestRegistrationFaultPreservesCommittedReplay(t *testing.T) {
 	}
 }
 
+func TestCredentialRefreshDoesNotCreateAnotherNode(t *testing.T) {
+	s, a, original, result, key := setup(t)
+	req := original
+	var err error
+	req.IdempotencyID, err = api.NewRegistrationIdempotencyID()
+	check(t, err)
+	req.JoinToken = ""
+	req.NodeCredential = result.NodeCredential
+	req.RegistrationBinding = result.RegistrationBinding
+	check(t, api.SetRegisterNodeIdentityProof(&req, key))
+	refreshed, err := a.RegisterNode(req)
+	check(t, err)
+	if refreshed.Node.ID != result.Node.ID || refreshed.Node.PublicKey != result.Node.PublicKey || refreshed.Node.IdentityPublicKey != result.Node.IdentityPublicKey {
+		t.Fatal("credential refresh changed node identity")
+	}
+	created, refreshes := 0, 0
+	for _, event := range s.Events() {
+		if event.Kind == "registered" {
+			created++
+		}
+		if event.Kind == "registration-refreshed" {
+			refreshes++
+		}
+	}
+	if created != 1 || refreshes != 1 {
+		t.Fatal("transcript conflates refresh with node creation")
+	}
+}
+
 func TestTLSControlPeerRequiresItsExplicitTrust(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	check(t, err)

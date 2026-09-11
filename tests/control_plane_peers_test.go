@@ -227,6 +227,9 @@ func exerciseConnectionIntent(t *testing.T, s *testcontrol.Server, nodes [2]*tes
 		if event.Kind == "registered" {
 			registrations++
 		}
+		if event.Kind == "registration-refreshed" && event.NodeID != initial[0].NodeID && event.NodeID != initial[1].NodeID {
+			t.Fatal("credential refresh changed node identity")
+		}
 	}
 	if registrations != 2 {
 		t.Fatal("local intent or temporary outage caused another enrollment")

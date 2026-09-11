@@ -578,7 +578,8 @@ func (s *Server) registerLocked(req api.RegisterNodeRequest, authorization strin
 	if !ok || (req.AccountID != "" && req.AccountID != network.AccountID) {
 		return api.RegisterNodeResponse{}, api.ErrorCodeAuthorizationDenied, nil
 	}
-	if n == nil {
+	created := n == nil
+	if created {
 		p, _ := netip.ParsePrefix(network.CIDR)
 		addr := p.Addr().Next()
 		for range len(s.nodes) {
@@ -606,7 +607,11 @@ func (s *Server) registerLocked(req api.RegisterNodeRequest, authorization strin
 	n.Map = result
 	s.nodes[result.Node.ID] = n
 	s.operations[req.IdempotencyID] = operation{binding, clone(result)}
-	s.recordLocked(Event{Kind: "registered", NodeID: result.Node.ID})
+	kind := "registration-refreshed"
+	if created {
+		kind = "registered"
+	}
+	s.recordLocked(Event{Kind: kind, NodeID: result.Node.ID})
 	return clone(result), "", nil
 }
 
