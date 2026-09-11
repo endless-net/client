@@ -150,6 +150,7 @@ func TestControlPlaneDirectPeerTrafficAndWithdrawal(t *testing.T) {
 	exerciseApplicationPolicy(t, s, nodes, states, peers)
 	exerciseConnectionIntent(t, s, nodes, states)
 	exercisePeerDNS(t, s, nodes, states, peers)
+	exerciseCredentialRetirement(t, s, nodes, states)
 }
 
 // HC-017/HC-018/HC-030: persisted user intent and outage behavior must agree with
