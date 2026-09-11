@@ -96,7 +96,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | C durable route-table off/auto passed three times on all eight native platforms; U configuration tests | Other public preferences and live mutation variants |
-| HC-020 | C NetworkSelectionBoundary added, awaiting native evidence: enrolled network listing/selection and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
+| HC-020 | C NetworkSelectionBoundary passed all 24 native repetitions: enrolled network listing/selection and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
@@ -1699,7 +1699,7 @@ has instantiated the next matrix for `01ac1e486c5496bbae55b55b1fc12d069d02ff56`,
 including the Relay return-path correction and concurrent ownership checks.
 Its results are pending; it predates the IPC category-count diagnostic.
 
-## Network-scoped selection boundary: awaiting native evidence
+## Network-scoped selection boundary
 
 `TestControlPlaneNetworkSelectionBoundary` drives the real `service networks`
 and `service select-network` CLI operations. A second network exists at the
@@ -1775,6 +1775,26 @@ peer and runtime Relay credential, and checks that the cache excludes that
 credential. Short tests, vet and lint passed for the correction. Native
 cross-platform recovery and the previously observed Windows startup symptom
 still require hosted evidence; this is not a qualification of HC-028/HC-030.
+
+## Completed 23-root diagnostic matrix
+
+[CI 34648109886](https://github.com/endless-net/client/actions/runs/34648109886)
+completed for source `a6b4edb4724b9a23be8575e29e94109bc9592f7f` with
+**528 PASS, 24 FAIL, 0 SKIP** across all 552 expected root executions.
+Every platform/repetition completed 22 passing roots and one failed
+`TestControlPlaneNativeRelayTraffic`. The new network-selection boundary and
+the expanded ownership scenario passed in every shard. This is evidence of
+their stated cases, not full HC-020/HC-005 coverage or source qualification.
+
+The DNS/IPC startup failure observed in the preceding two runs did not recur
+in this matrix. Its absence does not establish a cause or a fix.
+
+In [Ubuntu ARM64 repetition 3](https://github.com/endless-net/client/actions/runs/34648109886/job/103424679886),
+initial Relay TCP/UDP succeeded; after the outage, both application probes
+failed with only one recorded Relay authentication. This establishes failure
+of real recovery traffic, independently of snapshot freshness. The replayed
+map correction `b30f4538651e4704967a9b7476522b60f2b459e5` was made after this
+source and is still awaiting native qualification.
 
 ## Next work
 
