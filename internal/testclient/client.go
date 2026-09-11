@@ -10,7 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
+	"runtime"
 	"testing"
 	"time"
 
@@ -21,7 +21,7 @@ import (
 type Node struct {
 	t                                            *testing.T
 	Binary, Config, Socket, Interface, TrustFile string
-	Namespace                                    string
+	Namespace, Pipe                              string
 	AgentArgs                                    []string
 	Environment                                  []string
 	cmd                                          *exec.Cmd
@@ -36,6 +36,9 @@ func New(t *testing.T, s *testcontrol.Server) *Node {
 	}
 	dir := t.TempDir()
 	n := &Node{t: t, Binary: binary, Config: filepath.Join(dir, "client.json"), Socket: filepath.Join(dir, "ipc.sock"), Interface: "ent" + rand.Text()[:8], TrustFile: filepath.Join(dir, "trust.json")}
+	if runtime.GOOS == "windows" {
+		n.Pipe = `\\.\pipe\endlessnet-test-` + rand.Text()
+	}
 	// Linux Unix-domain socket paths are limited to 108 bytes.
 	if len(n.Socket) >= 100 {
 		short, err := os.MkdirTemp("", "ent-")
@@ -99,7 +102,8 @@ func (n *Node) Start() {
 	if n.cmd != nil {
 		n.t.Fatal("agent already started")
 	}
-	args := []string{"agent", "--config", n.Config, "--state-output", filepath.Join(filepath.Dir(n.Config), "agent-state.json"), "--ipc-socket", n.Socket, "--wg-interface", n.Interface, "--interval", "100ms", "--timeout", "300ms", "--stun-timeout", "100ms", "--reconnect-max-delay", "300ms", "--reconnect-jitter", "0"}
+	args := []string{"agent", "--config", n.Config, "--state-output", filepath.Join(filepath.Dir(n.Config), "agent-state.json"), "--wg-interface", n.Interface, "--interval", "100ms", "--timeout", "300ms", "--stun-timeout", "100ms", "--reconnect-max-delay", "300ms", "--reconnect-jitter", "0"}
+	args = append(args, n.ipcArgs()...)
 	n.cmd = n.command(context.Background(), append(args, n.AgentArgs...)...)
 	n.cmd.Stdout = io.Discard
 	n.cmd.Stderr = io.Discard
@@ -119,7 +123,13 @@ func (n *Node) Stop() {
 	}
 	cmd := n.cmd
 	n.cmd = nil
-	_ = cmd.Process.Signal(syscall.SIGTERM)
+	// Go agents handle Interrupt on Unix. Windows process termination is abrupt;
+	// service-manager restart semantics are covered by the installation suite.
+	if runtime.GOOS == "windows" {
+		_ = cmd.Process.Kill()
+	} else {
+		_ = cmd.Process.Signal(os.Interrupt)
+	}
 	select {
 	case <-n.done:
 	case <-time.After(5 * time.Second):
@@ -129,19 +139,26 @@ func (n *Node) Stop() {
 }
 func (n *Node) Service(operation string, target any) {
 	n.t.Helper()
-	out := n.MustRun("service", operation, "--ipc-socket", n.Socket, "--timeout", "3s")
+	out := n.MustRun(append([]string{"service", operation, "--timeout", "3s"}, n.ipcArgs()...)...)
 	if err := json.Unmarshal(out, target); err != nil {
 		n.t.Fatalf("invalid %s IPC JSON: %v", operation, err)
 	}
 }
 func (n *Node) Status() (ipc.StatusResponse, error) {
-	out, err := n.Run("service", "status", "--ipc-socket", n.Socket, "--timeout", "1s")
+	out, err := n.Run(append([]string{"service", "status", "--timeout", "1s"}, n.ipcArgs()...)...)
 	if err != nil {
 		return ipc.StatusResponse{}, err
 	}
 	var status ipc.StatusResponse
 	err = json.Unmarshal(out, &status)
 	return status, err
+}
+
+func (n *Node) ipcArgs() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"--ipc-pipe", n.Pipe}
+	}
+	return []string{"--ipc-socket", n.Socket}
 }
 func (n *Node) AwaitStatus(match func(ipc.StatusResponse) bool) ipc.StatusResponse {
 	n.t.Helper()

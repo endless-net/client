@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -106,8 +105,8 @@ func requireControlScenario(t *testing.T) {
 	if testing.Short() || os.Getenv("ENDLESSNET_CONTROL_TEST") != "1" {
 		t.Skip("requires isolated control-plane CI")
 	}
-	if runtime.GOOS != "linux" || os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" {
-		t.Fatal("requires a disposable Linux GitHub-hosted runner")
+	if os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" {
+		t.Fatal("requires a disposable GitHub-hosted runner")
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -66,8 +67,11 @@ func pingPeer(namespace, address string) error {
 
 // HC-024/HC-027/HC-028: actual IP traffic between real agents, isolated so the
 // host cannot short-circuit a tunnel by treating both overlay IPs as local.
-func TestControlPlaneDirectPeerTrafficAndWithdrawal(t *testing.T) {
+func TestClientDataplaneDirectPeerTrafficAndWithdrawal(t *testing.T) {
 	requireControlScenario(t)
+	if runtime.GOOS != "linux" {
+		t.Fatal("this dataplane fixture requires Linux namespaces")
+	}
 	for _, tool := range []string{"ip", "ping"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Fatalf("CI requires %s", tool)

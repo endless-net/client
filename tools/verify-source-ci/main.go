@@ -56,6 +56,9 @@ var requiredJobs = []string{
 	"Install and smoke (ubuntu-24.04)", "Install and smoke (ubuntu-22.04)",
 	"Install and smoke (windows-2022)", "Install and smoke (windows-2025)",
 	"Install and smoke (macos-15)", "Install and smoke (macos-15-intel)",
+	"Client contracts (ubuntu-22.04)", "Client contracts (ubuntu-24.04)",
+	"Client contracts (windows-2022)", "Client contracts (windows-2025)",
+	"Client contracts (macos-15)", "Client contracts (macos-15-intel)",
 }
 
 func (g githubAPI) verify(ctx context.Context, sha string) (workflowRun, error) {

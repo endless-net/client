@@ -3,7 +3,8 @@
 The client owns `internal/testcontrol`, a Go fake server built with `httptest`
 and the pinned Client API v1.12.0 DTOs, signing functions and Connect handlers.
 It owns no production backend packages. `internal/testclient` drives a separately
-built client executable through CLI and Unix IPC on an isolated CI runner.
+built client executable through CLI and public IPC (Unix sockets or Windows
+named pipes) on disposable GitHub-hosted runners.
 
 ## Server controls
 
@@ -40,15 +41,23 @@ implementation of production membership, billing, storage or policy evaluation.
 request bindings, idempotency, renewal/revocation, browser approval, signed map
 updates, bad signatures, unknown keys, expired maps, cancellation and concurrency.
 
-The `Client control-plane scenarios` job in `.github/workflows/test.yml`:
+The parallel `Client contracts` matrix in `.github/workflows/test.yml` runs
+`TestControlPlane*` three times on Ubuntu 22.04/24.04, Windows 2022/2025 and
+macOS 15 ARM/Intel. Fail-fast is disabled. Each job preserves sanitized text and
+JSONL results; all six jobs are required by verification and publication gates.
+Windows uses the same checksum-pinned Wintun dependency as the installer suite.
+Windows agent restart in this driver uses process termination; graceful Windows
+service-manager restart remains a distinct installation-suite observation.
+
+The `Client control-plane scenarios` job retains the Linux dataplane fixture:
 
 1. Runs the server suite under the race detector.
 2. Builds the real client and the `tests` executable.
-3. Runs `TestControlPlane*` three times inside a fresh Linux network namespace,
+3. Runs `TestClientDataplane*` three times inside a fresh Linux network namespace,
    with loopback enabled and no production control server.
 
 Process tests require `ENDLESSNET_CONTROL_TEST=1`, `ENDLESSNET_TEST_BINARY`, and
-a disposable GitHub-hosted Linux runner. They skip under `-short`. Never run
+a disposable GitHub-hosted runner. They skip under `-short`. Never run
 the privileged suite on a developer host. Each client uses its own state,
 trust file, IPC socket and interface. State and private identity files are not
 read for assertions; CLI/IPC output is parsed in memory and not dumped on errors.
@@ -73,6 +82,11 @@ and connection intent are preserved. Temporary/malformed errors and failed tunne
 teardown cannot trigger cleanup. This correction is subsequent to the v0.5.0 tag.
 
 ## Evidence boundaries
+
+Common contract results are attributed separately to each runner's OS and
+architecture. They do not prove that OS's complete dataplane, DNS resolver,
+route, firewall or service lifecycle behavior. The two-client traffic fixture
+currently runs on Linux only; Windows/macOS equivalents remain required work.
 
 These tests establish client behavior against a controlled peer, not production
 compatibility, OIDC/browser UI acceptance, real Relay/STUN, packet delivery, NAT,

@@ -38,6 +38,16 @@ scenario/variant and successful required Client CI. Unsupported features and
 unresolved product requirements remain explicit gaps, never successful skips.
 This scope change does not reduce coverage of the client itself.
 
+The user additionally requires functional confirmation on every supported OS,
+using parallel GitHub-hosted runners. The Client CI contract matrix targets
+Ubuntu 22.04/24.04, Windows 2022/2025 and macOS 15 ARM/Intel, with fail-fast
+disabled, three repetitions and separate text/JSONL reports per platform.
+Every matrix job is mandatory for verification and exact-source publication.
+This matrix runs the common real-client `TestControlPlane*` suite. The isolated
+two-client `TestClientDataplane*` suite currently has a Linux namespace fixture;
+Windows/macOS dataplane, resolver, route and firewall outcomes remain explicit
+work, and cannot be inferred from passing common contracts or installation.
+
 ## Evidence levels
 
 - **L**: [installation suite](../tests/installation_test.go), driven by real OS

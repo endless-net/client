@@ -41,7 +41,28 @@ func TestPublicationGate(t *testing.T) {
 		}, false},
 		{"missing-control-plane", func(f *fixture) { f.jobs = append(f.jobs[:1], f.jobs[2:]...) }, false},
 		{"skipped-control-plane", func(f *fixture) { f.jobs[1].Conclusion = "skipped" }, false},
-		{"failed-install", func(f *fixture) { f.jobs[len(f.jobs)-1].Conclusion = "failure" }, false},
+		{"failed-install", func(f *fixture) {
+			for i := range f.jobs {
+				if f.jobs[i].Name == "Install and smoke (windows-2025)" {
+					f.jobs[i].Conclusion = "failure"
+				}
+			}
+		}, false},
+		{"missing-windows-contracts", func(f *fixture) {
+			for i := range f.jobs {
+				if f.jobs[i].Name == "Client contracts (windows-2025)" {
+					f.jobs = append(f.jobs[:i], f.jobs[i+1:]...)
+					break
+				}
+			}
+		}, false},
+		{"skipped-macos-contracts", func(f *fixture) {
+			for i := range f.jobs {
+				if f.jobs[i].Name == "Client contracts (macos-15)" {
+					f.jobs[i].Conclusion = "skipped"
+				}
+			}
+		}, false},
 		{"duplicate-verify", func(f *fixture) { f.jobs = append(f.jobs, f.jobs[0]) }, false},
 		{"attempt-changed", func(f *fixture) { f.current.Attempt++ }, false},
 		{"run-restarted", func(f *fixture) { f.current.Status = "queued" }, false},
