@@ -96,12 +96,12 @@ product scope are different conditions; neither is a successful skip.
 | HC-019 | U configuration tests | Public preference mutation and observed effect |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
-| HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout added, pending hosted qualification | Remaining revocation retry, traffic-retirement and profile semantics |
+| HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; eight-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
-| HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration and ICMP denial under TCP-only grants on all eight runners; historical R node/port withdrawal | Explicit ICMP-only grants, remaining Client direction/destination correlation and other policy/transport variants |
+| HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
@@ -1307,6 +1307,48 @@ is running source `7283d13d6f273a39a055bbdbc2db7316eee3e49f`, which includes bot
 platform route corrections and the corrected local-forget status expectation.
 Its outcome is not inferred from the preceding run. Earlier queued intermediate
 commits were superseded before execution; the currently running matrix is kept.
+
+## Confirmed 19-scenario eight-platform qualification
+
+[Source 7283d13](https://github.com/endless-net/client/tree/7283d13d6f273a39a055bbdbc2db7316eee3e49f)
+completed [CI 34637951595](https://github.com/endless-net/client/actions/runs/34637951595)
+with **success** on 2026-09-11. All required jobs passed: eight installed-client
+jobs, eight native contract jobs, three platform verification jobs, the separate
+Linux dataplane suite and aggregate `verify`. The optional external STUN job was
+skipped and is not included in this qualification claim.
+
+| Native platform | Common root outcomes | Job evidence |
+| --- | --- | --- |
+| Ubuntu 22.04 x64 | 57 PASS | [103390748039](https://github.com/endless-net/client/actions/runs/34637951595/job/103390748039) |
+| Ubuntu 24.04 x64 | 57 PASS | [103390748040](https://github.com/endless-net/client/actions/runs/34637951595/job/103390748040) |
+| Ubuntu 22.04 ARM64 | 57 PASS | [103390748261](https://github.com/endless-net/client/actions/runs/34637951595/job/103390748261) |
+| Ubuntu 24.04 ARM64 | 57 PASS | [103390748312](https://github.com/endless-net/client/actions/runs/34637951595/job/103390748312) |
+| macOS 15 Intel | 57 PASS | [103390748153](https://github.com/endless-net/client/actions/runs/34637951595/job/103390748153) |
+| macOS 15 ARM64 | 57 PASS | [103390748411](https://github.com/endless-net/client/actions/runs/34637951595/job/103390748411) |
+| Windows 2022 x64 | 57 PASS | [103390748109](https://github.com/endless-net/client/actions/runs/34637951595/job/103390748109) |
+| Windows 2025 x64 | 57 PASS | [103390748539](https://github.com/endless-net/client/actions/runs/34637951595/job/103390748539) |
+
+The [aggregate verifier](https://github.com/endless-net/client/actions/runs/34637951595/job/103395121526)
+confirmed identical compiled inventories and source SHA, three successful runs
+of each of 19 common scenarios on all eight platforms: **456 PASS, 0 FAIL,
+0 SKIP**. This includes the new ICMP-only grant and exact-destination checks,
+established/fresh TCP and UDP exclusion and recovery, single-agent ownership,
+and explicit local cleanup followed by restart without automatic reenrollment.
+The successful native traffic checks qualify the Windows/Darwin route-only
+corrections for these tested transitions. No timing bound or packet assertion
+was relaxed to obtain this result.
+
+The installed-client jobs also reconfirm fresh installation, disconnect intent
+across service restart, enrolled same-artifact reinstall in connected/disconnected
+states with identity preservation and real TCP recovery, and uninstall. These
+are not version-upgrade, interrupted-install or full-state-removal claims.
+
+This qualifies the cited source and tested cases, not every HC-001–HC-065 variant
+or a production release. IPv6 overlay still uses IPv4 underlay. Relay/NAT,
+system resolver integration, ICMP errors/PMTU, full policy-direction variants
+and other gaps in the matrix remain open. The isolated earlier Windows IPC
+startup timeout did not recur but its cause remains unproven. Later documentation
+commits require their own source CI for publication under the existing gate.
 
 ## Next work
 
