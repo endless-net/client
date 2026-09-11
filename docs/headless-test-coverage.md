@@ -1272,6 +1272,24 @@ criterion. Both this correction and the earlier Darwin route correction require
 new hosted evidence before being called confirmed fixes. No scenario or platform
 was removed, no timing assertion was relaxed and no version was increased.
 
+## Local-forget status expectation correction
+
+In [CI 34636389331](https://github.com/endless-net/client/actions/runs/34636389331),
+Linux ARM and macOS ARM completed the local-forget command but the new test
+waited for `StatusResponse.state=NeedsEnrollment`. The observed service status was
+`Disconnected` / `disconnected` with revision zero. Source inspection and the
+[local cleanup retention matrix](client-ownership-recovery.md#logout-and-local-forget)
+show that explicit local cleanup records disconnected intent with reason
+`local_logout`; the status projection gives that intent precedence. The command
+response separately reports `NeedsEnrollment` and `remote_cleanup_unconfirmed`.
+
+The test now requires the exact disconnected status/control state, the public
+`local_logout` intent reason and zero revision alongside all original node,
+credential, session, map and peer cleanup checks. The command response assertion
+is unchanged. This corrects an expectation error, not a Client runtime defect.
+Restart persistence and the bounded no-reenrollment observation still execute
+only after these strict cleanup conditions hold. Hosted qualification is pending.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

@@ -46,7 +46,7 @@ func TestControlPlaneLocalForgetAfterUnconfirmedLogout(t *testing.T) {
 		t.Fatal("local cleanup incorrectly reported confirmed remote revocation")
 	}
 	clean := func(v ipc.StatusResponse) bool {
-		return v.State == ipc.StateNeedsEnrollment && v.NodeID == "" && v.NetworkID == "" && !v.NodeCredentialPresent && !v.TokenPresent && !v.CachedMapPresent && v.PeerCount == 0 && v.DesiredState == ipc.DesiredDisconnected && v.MapSigningTrustPresent
+		return v.State == ipc.StateDisconnected && v.ControlState == ipc.ControlStateDisconnected && v.UserDisconnected && v.ConnectionIntent != nil && v.ConnectionIntent.Reason == "local_logout" && v.MapRevision == 0 && v.NodeID == "" && v.NetworkID == "" && !v.NodeCredentialPresent && !v.TokenPresent && !v.CachedMapPresent && v.PeerCount == 0 && v.DesiredState == ipc.DesiredDisconnected && v.MapSigningTrustPresent
 	}
 	n.AwaitStatus(clean)
 	s.SetUnavailable(false)
