@@ -90,7 +90,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-024 | C IPv4 ICMP/TCP/UDP; R real Coordinator and two agents exchange direct TCP/UDP nonce data | Other platforms, IPv6, Relay/NAT and full policy variants |
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN | OS resolver integration, live reload, split DNS, IPv6 and upstream variants |
 | HC-026 | U DNS/router configuration | External DNS control and IP-access preservation |
-| HC-027 | C delta/resync; R node and port withdrawal block fresh/established TCP/UDP while another authorized overlay flow stays live | Directional/correlated policy grants, real Management intent, remaining platforms |
+| HC-027 | C delta/resync and TCP grant withdrawal with retained established/fresh UDP flow; historical R node/port withdrawal | Remaining Client direction/destination correlation and platform variants |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
@@ -463,6 +463,25 @@ or issuing a registration request. Real Management intent/compilation,
 directional and correlated grants, local inbound preference, production revoke
 SLO and other OS/transport variants remain separate. Overall provider failure
 is still registration replay; this does not close HC-027 as a whole.
+
+## Client-only selective withdrawal evidence
+
+[Client 5cd716f](https://github.com/endless-net/client/tree/5cd716fa78fa14410ed1252be58a0cda6667369f)
+extends `TestControlPlaneDirectPeerTrafficAndWithdrawal` using only real Client
+agents and the contract testserver. A signed replacement map withdraws TCP
+24001 while retaining UDP 24002 on the same peer. After the public agent
+snapshot confirms application, three iterations require the old TCP socket
+and fresh TCP attempts to be blocked while the old UDP socket and fresh UDP
+exchanges continue. The destination TCP application remains healthy. Subsequent
+deny-all and restoration checks remain in the scenario.
+
+[Client CI 34608000071](https://github.com/endless-net/client/actions/runs/34608000071)
+passed all mandatory jobs, including three control-plane repetitions and the
+platform/install matrix. Optional external STUN compatibility was not run.
+Local format/vet/lint/short checks also passed. This is Client-owned Linux
+direct IPv4 evidence for HC-027 / BR-10 / IT-15; it neither depends on a real
+backend process nor proves the complete direction/destination/platform matrix
+or a production revocation SLO.
 
 ## Next work
 
