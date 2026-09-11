@@ -54,14 +54,14 @@ product scope are different conditions; neither is a successful skip.
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; U typed logout | Remote cleanup unconfirmed, local forget, profile semantics |
-| HC-023 | C Lifecycle peer projection | Authorized listing and peer absence semantics |
+| HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C DirectPeerTrafficAndWithdrawal: IPv4 ICMP/TCP/UDP between real agents | Other platforms/transports, real producer authorization and full variants |
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN | OS resolver integration, live reload, split DNS, IPv6 and upstream variants |
 | HC-026 | U DNS/router configuration | External DNS control and IP-access preservation |
 | HC-027 | C peer delta/resync, malformed delta, peer withdrawal, port/protocol policy and established-flow denial | Real producer policy variants and remaining platforms |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
-| HC-030 | C typed/malformed errors and outage traffic; R real provider temporary map failure and CLI recovery without registration | Agent recovery with real producer, offline lease limits and remaining failure variants |
+| HC-030 | C typed/malformed errors and outage traffic; R CLI and running-agent recovery after provider dependency failure without registration | Real-pair packet continuity, offline lease limits and remaining failure variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | U routes/application tests | Real consumer to resource behind router |
 | HC-033 | U configuration tests | Public selection/disable and actual route effect |
@@ -308,6 +308,15 @@ CLI calls, not automatic agent recovery or enrollment-state cleanup.
 Signing/Billing/Relay are doubles; agent traffic, real Gateway/Signing and
 manifest acceptance remain unproven by this test. The overall CI is failed on
 the separate registration replay subtest.
+
+The [running-agent extension](https://github.com/endless-net/coordinator/blob/8912929d117a5021c28a0dcb95d6abade11df003/tests/providercontract/client_agent_test.go)
+passed in [CI 34598600137](https://github.com/endless-net/coordinator/actions/runs/34598600137/job/103260229551),
+with the same Client pin. Public IPC confirms approval withdrawal/restoration in
+the current applied snapshot and WireGuard peer count. After the actual provider
+returns a typed temporary map/endpoint failure, the agent recovers automatically
+without registration, preserving identity and credential. This privileged hosted
+CI test never reads private state files. Packet delivery, existing-flow denial,
+Gateway readiness, OS service installation and manifest acceptance are separate.
 
 ## Next work
 
