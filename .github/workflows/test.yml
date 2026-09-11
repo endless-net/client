@@ -205,6 +205,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/client-contracts"
           go build -o "$RUNNER_TEMP/client-contracts/client.exe" ./cmd/endlessnet-client
+          go build -o "$RUNNER_TEMP/client-contracts/packetprobe.exe" ./tools/packetprobe
           go test -c -o "$RUNNER_TEMP/client-contracts/contracts.test.exe" ./tests
       - name: Prepare signed Wintun dependency
         if: runner.os == 'Windows'
@@ -226,6 +227,7 @@ jobs:
           set -euo pipefail
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
             ENDLESSNET_CONTROL_TEST=1 ENDLESSNET_TEST_BINARY="$RUNNER_TEMP/client-contracts/client.exe" \
+            ENDLESSNET_PACKET_PROBE="$RUNNER_TEMP/client-contracts/packetprobe.exe" \
             "$RUNNER_TEMP/client-contracts/contracts.test.exe" \
             -test.run='^TestControlPlane' -test.count=3 -test.v -test.timeout=12m \
             2>&1 | tee "$RUNNER_TEMP/client-contracts/results.log"
@@ -236,6 +238,7 @@ jobs:
           ENDLESSNET_CONTROL_TEST: '1'
         run: |
           $env:ENDLESSNET_TEST_BINARY = Join-Path $env:RUNNER_TEMP 'client-contracts/client.exe'
+          $env:ENDLESSNET_PACKET_PROBE = Join-Path $env:RUNNER_TEMP 'client-contracts/packetprobe.exe'
           & "$env:RUNNER_TEMP/client-contracts/contracts.test.exe" '-test.run=^TestControlPlane' '-test.count=3' '-test.v' '-test.timeout=12m' 2>&1 |
             Tee-Object -FilePath "$env:RUNNER_TEMP/client-contracts/results.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

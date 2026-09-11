@@ -338,8 +338,8 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string,
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	args := []string{"netns", "exec", namespace, binary, "--mode", "probe", "--network", protocol, "--address", address}
-	err := exec.CommandContext(ctx, "ip", append(args, options...)...).Run()
+	args := []string{"--mode", "probe", "--network", protocol, "--address", address}
+	err := packetProbeCommand(ctx, namespace, binary, append(args, options...)...).Run()
 	if err == nil {
 		return true
 	}
@@ -353,7 +353,7 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string,
 
 func startApplicationSession(t *testing.T, binary, namespace, protocol, address string) func(string) {
 	t.Helper()
-	cmd := exec.Command("ip", "netns", "exec", namespace, binary, "--mode", "session", "--network", protocol, "--address", address)
+	cmd := packetProbeCommand(context.Background(), namespace, binary, "--mode", "session", "--network", protocol, "--address", address)
 	input, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -399,6 +399,13 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 		}
 		expect(want)
 	}
+}
+
+func packetProbeCommand(ctx context.Context, namespace, binary string, args ...string) *exec.Cmd {
+	if namespace != "" {
+		return exec.CommandContext(ctx, "ip", append([]string{"netns", "exec", namespace, binary}, args...)...)
+	}
+	return exec.CommandContext(ctx, binary, args...)
 }
 
 // HC-024/HC-027: published protocol and destination-port policy with payload checks.
