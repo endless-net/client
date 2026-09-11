@@ -93,7 +93,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners | Other paths/protocols and denied-access variants |
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
-| HC-019 | U configuration tests; native durable route-table off/auto checks pending CI | Other public preferences and live mutation variants |
+| HC-019 | C durable route-table off/auto passed three times on all eight native platforms; U configuration tests | Other public preferences and live mutation variants |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
@@ -107,7 +107,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | C RoutedResource passed three times on all eight native platforms: IPv4/IPv6 TCP/UDP through an IP forwarding peer, route withdrawal and recovery | Full Client router roles, SNAT, HA and remaining resource variants |
-| HC-033 | U configuration tests; native durable route installation disable/restore pending CI | Per-resource selection and remaining route-selection semantics |
+| HC-033 | C durable route installation disable/restore passed three times on all eight native platforms; U configuration tests | Per-resource selection and remaining route-selection semantics |
 | HC-034 | U SNAT/forwarding tests | Advertisement versus approval versus effective traffic |
 | HC-035 | No C/R evidence audited | Site-to-site scope and reverse-path tests |
 | HC-036 | U exit-route configuration | Egress IP and independent IPv4/IPv6 probes |
@@ -1527,6 +1527,40 @@ native qualification remains pending. This is not evidence of NAT traversal,
 direct-path upgrades, multi-Relay failover, IPv6 underlay, production Relay
 authorization, or recovery of every established application session. HC-028 and
 HC-030 retain those unverified variants.
+
+## Confirmed durable route preference qualification
+
+[CI 34642493566](https://github.com/endless-net/client/actions/runs/34642493566)
+succeeded for [source 9805f0e](https://github.com/endless-net/client/tree/9805f0ed4520b3a7f12d939f7807f87c89fdb45e).
+Each native job produced 63 PASS outcomes, including the expanded IPv4/IPv6
+`TestControlPlaneRoutedResource` with public offline `off`/`auto` preference
+changes, persistence across agent restart and TCP/UDP denial/restoration.
+
+| Platform | Native job evidence | RoutedResource repetitions (seconds) |
+| --- | --- | --- |
+| Ubuntu 22.04 x64 | [103408597962](https://github.com/endless-net/client/actions/runs/34642493566/job/103408597962) | 23.20, 23.28, 23.11 |
+| Ubuntu 24.04 x64 | [103408597975](https://github.com/endless-net/client/actions/runs/34642493566/job/103408597975) | 23.15, 23.12, 23.00 |
+| Ubuntu 22.04 ARM64 | [103408598040](https://github.com/endless-net/client/actions/runs/34642493566/job/103408598040) | 22.75, 22.89, 22.85 |
+| Ubuntu 24.04 ARM64 | [103408598010](https://github.com/endless-net/client/actions/runs/34642493566/job/103408598010) | 22.75, 23.02, 22.84 |
+| macOS 15 Intel | [103408598074](https://github.com/endless-net/client/actions/runs/34642493566/job/103408598074) | 23.78, 23.85, 23.02 |
+| macOS 15 ARM64 | [103408598007](https://github.com/endless-net/client/actions/runs/34642493566/job/103408598007) | 22.34, 22.34, 22.27 |
+| Windows 2022 x64 | [103408597919](https://github.com/endless-net/client/actions/runs/34642493566/job/103408597919) | 42.87, 42.24, 42.35 |
+| Windows 2025 x64 | [103408598110](https://github.com/endless-net/client/actions/runs/34642493566/job/103408598110) | 43.82, 43.61, 43.76 |
+
+The [aggregate verifier](https://github.com/endless-net/client/actions/runs/34642493566/job/103413261540)
+confirmed **21 scenarios x 3 repetitions x 8 platforms = 504 PASS, 0 FAIL,
+0 SKIP** with identical compiled inventory and source SHA. Eight installation
+jobs, three OS verification jobs and separate Linux dataplane checks also passed.
+Optional external STUN compatibility was skipped and remains outside the claim.
+
+This qualifies durable local route installation control, not live preference
+mutation, per-resource selection, numerical tables, egress selection or router
+advertisement. The source does not contain the new native Relay scenario;
+[CI 34644300216](https://github.com/endless-net/client/actions/runs/34644300216)
+checks that increment separately. Windows 2025 root durations sum to 868.68s,
+close to the current 900s suite limit. Further coverage growth should distribute
+repetitions across isolated runner jobs while preserving all three required
+outcomes, inventories and exact source verification.
 
 ## Next work
 
