@@ -187,6 +187,9 @@ func (n *Node) Status() (ipc.StatusResponse, error) {
 func (n *Node) statusWithin(ctx context.Context) (ipc.StatusResponse, string, error) {
 	out, err := n.command(ctx, append([]string{"service", "status", "--timeout", "1s"}, n.ipcArgs()...)...).CombinedOutput()
 	if err != nil {
+		if ctx.Err() != nil {
+			return ipc.StatusResponse{}, "harness context ended", err
+		}
 		category := "unclassified"
 		for _, known := range []string{"context deadline exceeded", "connection refused", "Access is denied", "The pipe is being closed", "The system cannot find the file specified"} {
 			if strings.Contains(string(out), known) {
@@ -217,6 +220,7 @@ func (n *Node) AwaitStatus(match func(ipc.StatusResponse) bool) ipc.StatusRespon
 	var last ipc.StatusResponse
 	responses, failures := 0, 0
 	lastCategory := "none"
+	errorCategories := make(map[string]int)
 	err := Await(ctx, func() bool {
 		status, category, err := n.statusWithin(ctx)
 		if err == nil {
@@ -226,6 +230,7 @@ func (n *Node) AwaitStatus(match func(ipc.StatusResponse) bool) ipc.StatusRespon
 		}
 		failures++
 		lastCategory = category
+		errorCategories[category]++
 		return false
 	})
 	if err != nil {
@@ -244,7 +249,7 @@ func (n *Node) AwaitStatus(match func(ipc.StatusResponse) bool) ipc.StatusRespon
 			n.done <- processErr // Preserve the process result for cleanup.
 		default:
 		}
-		n.t.Fatalf("client state deadline: responses=%d failures=%d last_ipc_error=%q agent_exited=%t exit_code=%d state=%s control=%s revision=%d peers=%d", responses, failures, lastCategory, exited, exitCode, last.State, last.ControlState, last.MapRevision, last.PeerCount)
+		n.t.Fatalf("client state deadline: responses=%d failures=%d last_ipc_error=%q ipc_error_counts=%v agent_exited=%t exit_code=%d state=%s control=%s revision=%d peers=%d", responses, failures, lastCategory, errorCategories, exited, exitCode, last.State, last.ControlState, last.MapRevision, last.PeerCount)
 	}
 	return last
 }

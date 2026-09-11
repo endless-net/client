@@ -1672,6 +1672,32 @@ consume a signed map while connected, and restart without another registration.
 This increment awaits hosted evidence. It does not qualify symbolic links,
 hard links, simultaneous startup without an existing owner, or all crash cases.
 
+## Completed first matrix with separate repetitions
+
+[Diagnostic CI 34646086686](https://github.com/endless-net/client/actions/runs/34646086686)
+finished with **503 PASS, 25 FAIL, 0 SKIP** across all 528 expected root
+executions for source `0981f09add71d1e6f6209b8b4d2be17bdc586aea`.
+All 24 shards completed their 22 root scenarios; splitting repetitions onto
+separate runners removed the incomplete Windows outcomes seen in the initial
+run. It did not qualify the suite: all 24 Relay roots failed before the
+return-path correction.
+
+The additional failure was
+[Windows 2025 repetition 3](https://github.com/endless-net/client/actions/runs/34646086686/job/103418092163):
+`TestControlPlaneDNSWireRecovery` received zero IPC responses and 16 failures
+during its initial 15-second agent-start wait, while the process remained alive.
+No DNS wire assertion had run. The last IPC error was unclassified, so its
+cause is not established. Preserve this failure separately from the Relay
+fixture defect; a later pass alone does not explain it.
+
+The harness now preserves counts of every fixed IPC error category and labels
+expiration of its own context separately, without printing arbitrary CLI
+output. This diagnostic change retains the original deadlines and assertions.
+[CI 34647302646](https://github.com/endless-net/client/actions/runs/34647302646)
+has instantiated the next matrix for `01ac1e486c5496bbae55b55b1fc12d069d02ff56`,
+including the Relay return-path correction and concurrent ownership checks.
+Its results are pending; it predates the IPC category-count diagnostic.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
