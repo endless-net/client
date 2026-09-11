@@ -84,7 +84,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-005 | C SingleAgentOwnership including three concurrent contenders through lexical path aliases passed three times on all eight native runners | Symbolic/hard-link aliases, concurrent startup without an existing owner and remaining termination variants |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
-| HC-008 | C BrowserEnrollment; expired-request replacement/resume/approval; expiry during active CLI polling and approved recovery on all six runners | Cancellation and foreign poll authorization |
+| HC-008 | C BrowserEnrollment; expiry recovery on six runners; pending CLI process interruption and explicit resume passed all 24 repetitions on eight native runners | Interactive/server-side cancellation, active rejection and foreign poll authorization |
 | HC-009 | C enrollment; P wrong/expired join authorization; R two real CLI registrations | Full authorized/denied attribute and platform variants |
 | HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; historical R distinct node IDs | Client image-cloning and batch variants; historical producer replay failure is an external constraint |
 | HC-011 | CLI join-token --ephemeral forwarding has a component test; no C/R lifecycle evidence | Define client normal/crash lifecycle observations; token-option forwarding does not prove expiry |
@@ -96,7 +96,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | C durable route-table off/auto passed three times on all eight native platforms; U configuration tests | Other public preferences and live mutation variants |
-| HC-020 | C NetworkSelectionBoundary passed all 24 native repetitions: enrolled network listing/selection and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
+| HC-020 | C NetworkSelectionBoundary passed all 24 native repetitions: enrolled network listing/selection, disconnected response before/after restart and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
@@ -1918,7 +1918,7 @@ Their qualification belongs to the subsequent 25-root source, not this green
 run. The previously captured peer teardown panic remains valid evidence even
 though it did not recur here. HC-001-HC-065 completion remains unproven.
 
-## Reference TCP peer teardown: awaiting hosted regression evidence
+## Reference TCP peer teardown increment
 
 [Ubuntu 22.04 repetition 1](https://github.com/endless-net/client/actions/runs/34650528186/job/103433655084)
 terminated with `panic: send on closed channel` in the reference WireGuard
@@ -1940,11 +1940,10 @@ checks payload delivery, then removes the return path and tears down with
 unacknowledged data. It requires termination of both packet readers and the
 stack, and rejects injection after close. This fixture regression belongs to
 the short suite and the existing hosted participant race check; it does not
-add an HC root or prove Client behavior by itself. Native Client traffic and
-two-Relay failover still require a complete hosted matrix for the updated
-source.
+add an HC root or prove Client behavior by itself. The complete 25-root hosted
+qualification below covers native Client traffic with this lifecycle fix.
 
-## Current-network selection preserves connection intent: awaiting native evidence
+## Current-network selection preserves connection intent increment
 
 The existing HC-020 boundary scenario now selects the enrolled network by ID,
 name and case-insensitive name while connected and disconnected, before and
@@ -1958,11 +1957,11 @@ response after persisted disconnect. Selection had not reconnected the client:
 the response was hard-coded. The handler now derives state and desired state
 from the same status calculation as the public status endpoint, including
 connection intent. Local short tests, vet and lint passed after the fix.
-The expanded native assertions still require hosted qualification; earlier
-HC-020 evidence did not check this response while disconnected. This does not
+The expanded native assertions passed in the 25-root qualification below;
+earlier HC-020 evidence did not check this response while disconnected. This does not
 introduce saved profiles or switching to another enrollment.
 
-## Interrupted browser enrollment: awaiting native evidence
+## Interrupted browser enrollment increment
 
 `TestControlPlaneBrowserEnrollmentInterrupted` starts the real CLI and waits
 for at least two public poll requests before terminating that CLI process.
@@ -1977,10 +1976,55 @@ cover interactive Ctrl-C handling, server-side cancellation, rejection recovery,
 image cloning or foreign poll-token authorization. `RunContext` supplies a
 bounded process-termination control to the test driver on each runner OS.
 
-The common native inventory now contains 25 roots, requiring 25 x 3 x 8 = 600
-root outcomes from 24 independent reports. Local vet, lint and the short suite
-passed; the new native test is CI-only and remains unqualified until hosted
-results arrive. Historical 24-root evidence retains its original scope.
+This increment introduced 25 roots, requiring 25 x 3 x 8 = 600 root outcomes
+from 24 independent reports. Local vet, lint and the short suite passed;
+the CI-only native test is qualified by the run below. Historical 24-root
+evidence retains its original scope.
+
+## Interrupted enrollment and client fixes qualified: 600 PASS
+
+[CI 34652700516](https://github.com/endless-net/client/actions/runs/34652700516)
+completed successfully for `d4eb13d40afe629204e80df05e2f54425095b169`.
+All 24 native reports contain exactly the same 25 roots, each once:
+**600 PASS, 0 FAIL, 0 SKIP**. The mandatory aggregate verified complete reports
+for that source. Eight installation jobs, three OS verification jobs and the
+separate Linux dataplane job passed. Optional external STUN was skipped and
+is excluded from the required root totals.
+
+Interrupted-enrollment elapsed times and full per-runner reports:
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| ubuntu-22.04 | [1.14s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254382) | [1.10s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254340) | [1.08s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254486) |
+| ubuntu-24.04 | [1.95s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254273) | [1.09s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254375) | [1.09s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254347) |
+| ubuntu-22.04-arm | [1.09s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254523) | [1.13s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254384) | [1.09s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254398) |
+| ubuntu-24.04-arm | [1.21s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254592) | [1.09s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254414) | [1.09s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254448) |
+| windows-2022 | [2.24s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254159) | [2.40s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254456) | [2.37s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254082) |
+| windows-2025 | [2.76s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254451) | [2.97s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254118) | [2.76s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254088) |
+| macos-15-intel | [1.22s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254166) | [1.48s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254220) | [1.24s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254174) |
+| macos-15 | [1.13s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254158) | [1.11s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254127) | [1.16s](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254124) |
+
+This qualifies HC-008 process interruption while approval is pending, explicit
+CLI restart completing the same approved request, and exactly one resulting
+node observed through agent IPC. It does not qualify interactive cancellation,
+foreign poll tokens or rejection during active polling.
+
+Every report also passed the expanded HC-020 assertions: selecting the current
+network while disconnected preserves and accurately reports that intent before
+and after restart, with no new registration. Multiple saved profiles and
+switching to another enrollment remain outside this evidence.
+
+The source includes the reference-stack lifecycle fix. All native direct,
+resource and Relay cases completed without the prior teardown panic. The
+[Linux participant race check](https://github.com/endless-net/client/actions/runs/34652700516/job/103439254164)
+also passed `internal/testwireguard`, including the active-TCP teardown
+regression. This is bounded regression evidence, not proof that every possible
+concurrency interleaving has been exercised.
+
+The subsequent 27-root source adds rejection during polling and diagnostic
+export/status assertions. Those additions and the diagnostic runtime fix
+still require their own hosted qualification. HC-001-HC-065 coverage remains
+incomplete; this green source does not close unrelated variants or product gaps.
 
 ## Rejection during active enrollment polling: awaiting native evidence
 
