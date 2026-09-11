@@ -90,18 +90,18 @@ product scope are different conditions; neither is a successful skip.
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
 | HC-014 | U recovery matrix | C session expiry, reauthentication and preservation |
 | HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
-| HC-016 | C initial cached-map status and native direct IPv4/IPv6 UDP on all six runners | Other paths/protocols and denied-access variants |
-| HC-017 | C native direct IPv4/IPv6 UDP blocked/restored by disconnect/connect and agent restart on all six runners with original identity; historical R direct TCP/UDP | Remaining established-flow, TCP, other paths and operation-failure variants |
-| HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 UDP checks on all six runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
+| HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP on all six runners | Other paths/protocols and denied-access variants |
+| HC-017 | C native direct IPv4/IPv6 TCP/UDP blocked/restored by disconnect/connect and agent restart on all six runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
+| HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP checks on all six runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | U configuration tests | Public preference mutation and observed effect |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; U typed logout | Remote cleanup unconfirmed, local forget, profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
-| HC-024 | C IPv4 ICMP/TCP/UDP; real Client direct IPv4/IPv6 UDP on all six runners (native increments below); historical R two agents with real Coordinator | Native TCP/ICMP on Windows/macOS and IPv6, IPv6 underlay, Relay/NAT and full policy variants |
+| HC-024 | C IPv4 ICMP/TCP/UDP; real Client direct IPv4/IPv6 TCP/UDP on all six runners (native increments below); historical R two agents with real Coordinator | Native ICMP on Windows/macOS and IPv6, IPv6 underlay, Relay/NAT and full policy variants |
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; six-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
-| HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 UDP port withdrawal/restoration with established/fresh flows on all six runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, TCP and other platform variants |
+| HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration with established/fresh flows on all six runners; historical R node/port withdrawal | Remaining Client direction/destination correlation and other policy/transport variants |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
@@ -139,7 +139,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
 | HC-063 | U local-forget/recovery tests | Public privileged reset and new identity against published contract responses |
 | HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
-| HC-065 | C terminal revoke and native direct IPv4/IPv6 UDP retirement across agent restart on all six runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases, TCP and remaining path/platform variants, separately verified local removal |
+| HC-065 | C terminal revoke and native direct IPv4/IPv6 TCP/UDP retirement across agent restart on all six runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
 ## Current implementation increment
 
@@ -853,6 +853,50 @@ dataplane and aggregate jobs also passed. Optional external STUN compatibility
 was skipped. Durations include interface/process setup and negative-probe
 deadlines; they are not IPv4-versus-IPv6 performance measurements.
 
+## Native TCP protocol-stack increment
+
+[Client d6fcfc3](https://github.com/endless-net/client/tree/d6fcfc30f4be9959b3a0cc2ae5fd40421ddfc1b5)
+adds native TCP scenarios for IPv4 and IPv6 to the same six-runner matrix.
+[The reference TCP peer](../internal/testwireguard/tcp.go) uses the pinned
+WireGuard module's netstack with two TCP listeners. Its overlay address exists
+only in that stack; the Client uses the runner's real OS TCP stack, TUN and
+routes. Successful assertions require complete fresh 32-byte nonce echoes.
+Listeners, accepted connections and worker goroutines are closed before the
+reference WireGuard device is removed.
+
+Both TCP variants require fresh and established sessions on two ports. A
+signed ACL update withdraws one port while the other established session and
+fresh connections must keep working. Restoring the grant must admit fresh
+connections on both ports. The denied TCP connection itself may terminate or
+enter retransmission backoff; this test does not require its immediate reuse.
+Disconnected/connected intent, agent restart and terminal credential retirement
+use the same public CLI/IPC and traffic assertions as the UDP cases.
+
+The newly explicit indirect requirements in `go.mod` use the versions already
+selected by the pinned WireGuard module: gVisor, btree and x/time. No dependency
+version or Client runtime behavior changes. Local format/vet/lint/short checks
+passed on Windows with the current Go toolchain.
+[CI 34623788903](https://github.com/endless-net/client/actions/runs/34623788903)
+passed for that exact source commit. All six runner logs contain the same 17
+top-level contract scenarios, each passing three times: 306/306 outcomes, with
+no failures or top-level skips. Both new TCP scenarios passed on every runner.
+
+| Runner | TCP/IPv4 repetitions (seconds) | TCP/IPv6 repetitions (seconds) |
+| --- | --- | --- |
+| Ubuntu 22.04 amd64 | 31.71, 31.73, 31.72 | 23.85, 23.85, 23.81 |
+| Ubuntu 24.04 amd64 | 31.70, 31.68, 31.66 | 23.80, 23.80, 23.88 |
+| macOS 15 ARM | 32.05, 32.07, 32.28 | 24.14, 23.88, 24.19 |
+| macOS 15 Intel | 33.28, 33.57, 33.18 | 25.57, 26.47, 25.29 |
+| Windows 2022 amd64 | 38.66, 38.53, 38.62 | 30.47, 30.50, 30.54 |
+| Windows 2025 amd64 | 42.35, 44.21, 42.41 | 33.58, 35.55, 33.72 |
+
+All six installation jobs, three platform verification jobs, Linux dataplane
+scenarios and the aggregate gate also passed. Optional external STUN did not
+execute. Durations include process/interface setup and intentional negative
+deadlines; Windows takes longer, but this is not a transport performance comparison.
+IPv6 still uses an IPv4 WireGuard underlay. These tests do not qualify lossy-network
+TCP recovery, Relay/NAT or all policy directions, or complete HC-001–HC-065.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
@@ -861,14 +905,8 @@ producer failures are constraints, not tasks to fix outside Client. Keep
 contract gaps and platform decisions explicit; do not replace unresolved client
 scenarios with generic smoke tests or infer completion from historical P/R runs.
 
-Extend native platform coverage beyond direct IPv4/IPv6 UDP over IPv4 underlay:
-TCP/ICMP, IPv6 underlay, Relay/NAT, policy direction/destination variants and automatic OS
+Extend native platform coverage beyond direct IPv4/IPv6 TCP/UDP over IPv4 underlay:
+ICMP, IPv6 underlay, Relay/NAT, policy direction/destination variants and automatic OS
 resolver behavior still require explicit client tests and runner evidence.
 Do not infer those outcomes from component ACL tests or successful peer UDP
 echoes. The real Client must continue to use its native OS interface and CLI/IPC.
-
-For a native TCP reference peer, the pinned WireGuard module exposes
-[CreateNetTUN and TCP listeners](https://github.com/tailscale/wireguard-go/blob/ae172d45f0f7/tun/netstack/tun.go).
-Check its dependency selection and compatibility with the current Go toolchain
-before adopting it. This is a candidate fixture implementation, not TCP
-coverage or authorization to increase dependency versions.
