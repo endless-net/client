@@ -96,7 +96,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-019 | U configuration tests | Public preference mutation and observed effect |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
-| HC-022 | C Lifecycle logout; U typed logout | Remote cleanup unconfirmed, local forget, profile semantics |
+| HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout added, pending hosted qualification | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; eight-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
@@ -1195,6 +1195,28 @@ It includes valid ICMP destination routes, UDP exclusion/recovery and single-age
 ownership. These increments remain unqualified until that matrix completes.
 Intermediate pending runs for `1e0a535` and `4a84a93` were superseded by newer
 pending source; no successful execution is claimed for those source commits.
+
+## Explicit local cleanup after unconfirmed logout
+
+`TestControlPlaneLocalForgetAfterUnconfirmedLogout` drives the real CLI and IPC.
+It first rejects `service local-forget` without explicit confirmation and checks
+that enrollment remains. While the contract server is unavailable, `service
+logout` must report that remote cleanup was not confirmed and retain the node
+credential and cached map. Explicit local-forget must then return the public
+`remote_cleanup_unconfirmed` outcome, clear node/network/credential/cache/session
+state visible through IPC, retain signing trust and record disconnected intent.
+After server recovery and an agent restart the cleared public state must persist;
+no registration request may appear during the one-second observation interval,
+and the testserver must never have confirmed deletion or logout. This bounded
+observation is not a claim about arbitrary offline duration or all traffic paths.
+The scenario does not claim removal of installation identity/private keys, a
+full reset, profile support or proof of remote revocation.
+
+The shared harness now exposes bounded `ServiceCommand` results for expected
+CLI errors using the same 35-second outer bound as successful service operations.
+Arbitrary output is never printed. Local format/vet/lint/short checks pass.
+The common inventory grows to 19 scenarios, with three required repetitions
+on eight platforms (456 outcomes); hosted qualification remains pending.
 
 ## Next work
 

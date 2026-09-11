@@ -143,12 +143,20 @@ func (n *Node) Stop() {
 		<-n.done
 	}
 }
+
+// ServiceCommand uses the same bounded native-operation timeout for success
+// and expected error cases. Callers must not print arbitrary returned output.
+func (n *Node) ServiceCommand(operation string, options ...string) ([]byte, error) {
+	args := append([]string{"service", operation}, options...)
+	return n.runWithin(35*time.Second, append(args, n.ipcArgs()...)...)
+}
+
 func (n *Node) Service(operation string, target any) {
 	n.t.Helper()
 	// Exercise the CLI's published default (30s), rather than imposing a 3s
 	// mutation SLO that was never specified for native OS teardown operations.
 	started := time.Now()
-	out, err := n.runWithin(35*time.Second, append([]string{"service", operation}, n.ipcArgs()...)...)
+	out, err := n.ServiceCommand(operation)
 	if err != nil {
 		category := "unclassified"
 		for _, known := range []string{"context deadline exceeded", "connection refused", "Access is denied", "The pipe is being closed"} {
