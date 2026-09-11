@@ -2293,6 +2293,45 @@ The other 26 roots passed in every native job. Full coverage still requires the
 30-root matrix and remaining HC variants; Linux flow evidence does not establish
 expiry, crash-spool replay, IPv6/TCP/denied-flow reporting or producer conformance.
 
+## 2026-09-12: flow expiry and TLS qualified on Linux and Windows
+
+[Run 34657192800](https://github.com/endless-net/client/actions/runs/34657192800)
+at source `b1d3b91021e25a0b6d610e04b94a936bce41e3dd` completed with failure.
+All 24 native reports were read: identical 30-root inventories,
+**701 PASS, 19 FAIL, 0 SKIP**. All twelve Linux repetitions passed every root.
+All eight installation jobs, three platform verification jobs and the separate
+Linux control-plane job passed. The complete source remains unqualified.
+
+The TLS trust boundary and IPv4 UDP flow root both passed every repetition
+below. Flow includes immutable acknowledgement-loss retry, live revocation,
+unchanged-policy natural expiry, reporting silence after expiry and renewed
+consent. TLS includes rejection before explicit trust, then enrollment and
+identity-preserving restart with the trusted fixture.
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| ubuntu-22.04 | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688451) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688423) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688517) |
+| ubuntu-24.04 | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688421) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688414) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688234) |
+| ubuntu-22.04-arm | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688441) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688530) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688496) |
+| ubuntu-24.04-arm | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688498) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688467) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688546) |
+| windows-2022 | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688439) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688450) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688674) |
+| windows-2025 | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688367) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688643) | [PASS](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688548) |
+
+All six macOS jobs failed flow and TLS during the authorization-rule preparation;
+that failed approach is superseded by the later disposable-VM trust lifecycle.
+IPC negotiation passed all twelve Linux and six macOS jobs; all six Windows
+jobs failed the immediate post-restart status assertion. Those results predate
+both nonblocking status inspection and the runtime-readiness wait correction.
+
+One additional failure in
+[Windows 2025 repeat 2](https://github.com/endless-net/client/actions/runs/34657192800/job/103452688643)
+affected `NativeTCPTraffic`: the UDP baseline before the ICMP-only policy step
+returned an unclassified probe exit 1. This is neither a confirmed policy denial
+nor a known payload mismatch, and remains an investigation item. No raw probe
+output was retained by the existing diagnostic filter. The other 26 roots passed
+on every native job. The subsequent diagnostic-retention extension is not part
+of this source and requires new evidence.
+
 ## Next work
 
 The native diagnostic-export root now ages its own public JSON artifact using
