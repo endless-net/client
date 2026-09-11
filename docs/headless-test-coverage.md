@@ -48,7 +48,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-014 | U recovery matrix | C/R session expiry, reauthentication and preservation |
 | HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
 | HC-016 | C initial cached-map status | Actual allowed application traffic |
-| HC-017 | C disconnect/restart/connect stops and restores application traffic | Other OSes and failure variants |
+| HC-017 | C disconnect/restart/connect; R repeated disconnect/connect blocks/restores direct TCP/UDP with original identities | Other OSes, real-pair restart and failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with traffic checks | Host reboot and other platform/network variants |
 | HC-019 | U configuration tests | Public preference mutation and observed effect |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
@@ -358,6 +358,35 @@ four established TCP/UDP sockets and fresh exchanges in both directions kept
 working with valid cached maps. After automatic recovery the same sockets still
 exchanged nonces; no registration request occurred. This does not cover expired
 maps/leases, indefinite offline access or a complete Coordinator process outage.
+
+## Real reconnect with the enrolled hostname
+
+[Coordinator baseline CI 34602586998](https://github.com/endless-net/coordinator/actions/runs/34602586998/job/103273334657)
+failed on IPC connect after disconnect. Renewal used the operating-system
+hostname instead of the custom enrolled name, violating Coordinator's identity
+binding. `TestConnectSyncPreservesEnrolledHostname` reproduced the typed binding
+error after the consumer double added the missing hostname check.
+
+[Client dcb619a](https://github.com/endless-net/client/tree/dcb619af0d7cf93e7c47a518b1ce381c8f430def)
+preserves the enrolled name when renewal has no explicit hostname option.
+Format/vet/lint/short checks and all mandatory
+[Client CI 34603816925](https://github.com/endless-net/client/actions/runs/34603816925)
+jobs passed. Optional external STUN compatibility did not run.
+
+[Coordinator 4a57069](https://github.com/endless-net/coordinator/tree/4a57069ffa17ec5b279264055058f68d5cbcd7ee)
+pins this Client. In
+[CI 34603841552](https://github.com/endless-net/coordinator/actions/runs/34603841552/job/103277471582),
+all five traffic subtests passed. Repeated disconnect preserves public identity,
+credential and valid cache while blocking four established sockets and fresh
+TCP/UDP in both directions; underlay applications stay alive. Repeated connect
+restores applied maps, WireGuard handshake/RX/TX and fresh bidirectional traffic
+with the same node IDs. The test distinguishes credential renewal through
+`/nodes/register` from a new enrollment, which remains forbidden in this case.
+
+This adds HC-017 real-pair evidence for a running Linux agent and direct IPv4.
+Real-pair process restart, reboot, other OSes, old-socket recovery and Relay/NAT
+remain separate. Coordinator's overall publication gate still fails on the
+existing single-use registration replay defect.
 
 ## Next work
 
