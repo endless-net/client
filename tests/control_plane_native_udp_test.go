@@ -99,6 +99,10 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 		if len(applied.WireGuard.Peers) != 1 || applied.WireGuard.Peers[0].Endpoint != reference.Endpoint {
 			t.Fatal("client did not select the fixture's signed direct endpoint")
 		}
+		if applied.WireGuard.ListenPort <= 0 || applied.WireGuard.ListenPort > 65535 {
+			t.Fatal("client did not publish a usable WireGuard listen port")
+		}
+		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(applied.WireGuard.ListenPort)))
 	}
 	address := func(port string) string { return net.JoinHostPort(peerIP.String(), port) }
 	fresh := func(port string) bool { return applicationProbe(t, binary, "", "udp", address(port)) }
@@ -121,6 +125,8 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 				}
 			}
 			received, echoed := reference.PacketCounts()
+			initiations, responses, other := reference.HandshakeCounts()
+			t.Logf("reference handshake: initiations_received=%d responses_sent=%d other_received=%d", initiations, responses, other)
 			t.Fatalf("native UDP failed: endpoint_selected=%t handshake=%t rx=%d tx=%d reference_received=%d reference_echoed=%d", selected, handshake, rx, tx, received, echoed)
 		}
 	}

@@ -22,20 +22,65 @@ import (
 
 type observedBind struct {
 	conn.Bind
-	port atomic.Uint32
+	port                          atomic.Uint32
+	initiations, responses, other atomic.Uint64
 }
 
 func (b *observedBind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
 	readers, actual, err := b.Bind.Open(port)
 	if err == nil {
 		b.port.Store(uint32(actual))
+		for i, reader := range readers {
+			readers[i] = func(packets [][]byte, sizes []int, endpoints []conn.Endpoint) (int, error) {
+				n, err := reader(packets, sizes, endpoints)
+				for j := 0; j < n; j++ {
+					if sizes[j] == 148 && binary.LittleEndian.Uint32(packets[j][:4]) == 1 {
+						b.initiations.Add(1)
+					} else {
+						b.other.Add(1)
+					}
+				}
+				return n, err
+			}
+		}
 	}
 	return readers, actual, err
+}
+
+func (b *observedBind) Send(packets [][]byte, endpoint conn.Endpoint, offset int) error {
+	err := b.Bind.Send(packets, endpoint, offset)
+	if err == nil {
+		for _, packet := range packets {
+			if len(packet)-offset == 92 && binary.LittleEndian.Uint32(packet[offset:offset+4]) == 2 {
+				b.responses.Add(1)
+			}
+		}
+	}
+	return err
 }
 
 type Peer struct {
 	PublicKey, Endpoint string
 	traffic             *trafficCounters
+	bind                *observedBind
+	setEndpoint         func(netip.AddrPort) error
+}
+
+// SetClientEndpoint supplies the endpoint observed through public Client IPC.
+// The pinned Tailscale WireGuard engine does not learn roaming endpoints from
+// incoming handshakes, so the reference peer must configure its return path.
+func (p Peer) SetClientEndpoint(t *testing.T, endpoint netip.AddrPort) {
+	t.Helper()
+	if !endpoint.IsValid() || endpoint.Port() == 0 {
+		t.Fatal("reference peer requires the client's current UDP endpoint")
+	}
+	if err := p.setEndpoint(endpoint); err != nil {
+		t.Fatal("reference peer could not configure the client endpoint")
+	}
+}
+
+func (p Peer) HandshakeCounts() (uint64, uint64, uint64) {
+	return p.bind.initiations.Load(), p.bind.responses.Load(), p.bind.other.Load()
 }
 
 type trafficCounters struct{ received, echoed atomic.Uint64 }
@@ -110,7 +155,12 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 	if port == 0 {
 		t.Fatal("reference peer has no UDP listener")
 	}
-	return Peer{PublicKey: public, Endpoint: net.JoinHostPort(underlayIP.String(), strconv.Itoa(int(port))), traffic: traffic}
+	return Peer{
+		PublicKey: public, Endpoint: net.JoinHostPort(underlayIP.String(), strconv.Itoa(int(port))), traffic: traffic, bind: bind,
+		setEndpoint: func(endpoint netip.AddrPort) error {
+			return engine.IpcSet(fmt.Sprintf("public_key=%s\nupdate_only=true\nendpoint=%s\n\n", toHex(clientPublic), endpoint))
+		},
+	}
 }
 
 func echoUDP(packet []byte, clientIP, peerIP [4]byte) []byte {
