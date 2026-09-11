@@ -54,7 +54,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-022 | C Lifecycle logout; U typed logout | Remote cleanup unconfirmed, local forget, profile semantics |
 | HC-023 | C Lifecycle peer projection | Authorized listing and peer absence semantics |
 | HC-024 | C DirectPeerTrafficAndWithdrawal: IPv4 ICMP/TCP/UDP between real agents | Other platforms/transports, real producer authorization and full variants |
-| HC-025 | C DNSProjection; U resolver tests | Real resolver and allowed/denied resource |
+| HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN | OS resolver integration, live reload, split DNS, IPv6 and upstream variants |
 | HC-026 | U DNS/router configuration | External DNS control and IP-access preservation |
 | HC-027 | C peer delta/resync, malformed delta, peer withdrawal, port/protocol policy and established-flow denial | Real producer policy variants and remaining platforms |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
@@ -274,12 +274,24 @@ snapshot. This is CLI/proxy evidence, not live reload or OS resolver integration
 split DNS, upstream failover, IPv6 and automatic DNS policy remain separate.
 The helper distinguishes DNS name-not-found from timeout/transport failure. Its
 short test uses actual DNS wire messages and a local application; local short
-tests, vet and lint pass. Real-client DNS execution still awaits CI.
+tests, vet and lint pass. Commit `8ccd0fc` passed all mandatory jobs in
+[Test run 34589868156](https://github.com/endless-net/client/actions/runs/34589868156),
+including all three DNS/application repetitions; its
+[source gate check](https://github.com/endless-net/client/actions/runs/34590070988)
+also passed.
+
+A [cross-service source audit in Architecture, main](https://github.com/endless-net/architecture/blob/main/docs/ru/evidence/2026-09-11-headless-provider-contract-gap.md)
+found that actual Coordinator map-stream authorization errors are plaintext
+401/503, while the consumer double models the typed public error contract. The
+Coordinator authorizer currently collapses several credential outcomes into a
+boolean. Consumer terminal recovery evidence therefore does not establish actual
+provider compatibility. Do not make the client forget enrollment on arbitrary
+401 responses to conceal this gap. Coordinator owns the provider behavior and
+its real-binary/YDB contract-only suite; Client API owns contract clarification.
 
 ## Next work
 
-Verify corrected peer delta recovery and direct traffic in CI, then extend probes
-to application protocols, enforcement and transport changes.
-Run producer conformance in owning service repositories. Keep contract gaps and
+Close and verify the Coordinator map-stream recovery gap with producer conformance
+and a real pair, then extend remaining consumer/OS/transport variants. Keep contract gaps and
 platform decisions explicit; do not replace unresolved HC rows with generic smoke
 tests or infer broad completion from this initial increment.
