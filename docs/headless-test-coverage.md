@@ -58,7 +58,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-024 | C IPv4 ICMP/TCP/UDP; R real Coordinator and two agents exchange direct TCP/UDP nonce data | Other platforms, IPv6, Relay/NAT and full policy variants |
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN | OS resolver integration, live reload, split DNS, IPv6 and upstream variants |
 | HC-026 | U DNS/router configuration | External DNS control and IP-access preservation |
-| HC-027 | C delta/resync and established-flow denial; R approval withdrawal blocks fresh traffic with live application | Real producer established-flow and port/policy variants, remaining platforms |
+| HC-027 | C delta/resync; R approval withdrawal blocks fresh and established TCP/UDP while independent underlay stays live | Real producer port/policy variants, other authorized overlay flows and remaining platforms |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors and outage traffic; R CLI and running-agent recovery after provider dependency failure without registration | Real-pair packet continuity, offline lease limits and remaining failure variants |
@@ -337,9 +337,18 @@ own [Test CI 34600218754](https://github.com/endless-net/client/actions/runs/346
 passed all mandatory jobs; optional external STUN compatibility was not run.
 
 [Architecture evidence](https://github.com/endless-net/architecture/blob/main/docs/ru/evidence/2026-09-11-headless-real-traffic.md)
-records exact pins, the failing baseline and the fix. This is not established-flow
-revocation, real Gateway/Signing conformance, Relay/NAT, IPv6 or manifest
+records exact pins, the failing baseline and the fix. This initial slice does not
+establish real Gateway/Signing conformance, Relay/NAT, IPv6 or manifest
 acceptance. Coordinator's overall gate still fails on direct registration replay.
+
+[Coordinator 7217a98](https://github.com/endless-net/coordinator/tree/7217a989bca078ddcd2175bde920f04aa60a4c1a)
+extends the same Client pin with four persistent sockets, TCP and UDP in both
+directions. [CI 34601192560](https://github.com/endless-net/coordinator/actions/runs/34601192560/job/103268699745)
+confirmed successful nonce exchange before approval withdrawal and unavailable
+exchange on the same sockets afterwards. Both applications remained reachable
+over loopback and the independent underlay. Reapproval restored fresh traffic.
+This is node-approval withdrawal, not a complete port-policy, lease or latency
+matrix; another authorized overlay flow remains a separate control case.
 
 ## Next work
 
