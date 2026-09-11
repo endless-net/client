@@ -98,10 +98,10 @@ product scope are different conditions; neither is a successful skip.
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; U typed logout | Remote cleanup unconfirmed, local forget, profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
-| HC-024 | C IPv4 ICMP/TCP/UDP; R real Coordinator and two agents exchange direct TCP/UDP nonce data | Other platforms, IPv6, Relay/NAT and full policy variants |
+| HC-024 | C IPv4 ICMP/TCP/UDP; real Client direct IPv4 UDP on all six runners (native increment below); historical R two agents with real Coordinator | Native TCP/ICMP on Windows/macOS, IPv6, Relay/NAT and full policy variants |
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; six-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
-| HC-027 | C delta/resync and TCP grant withdrawal with retained established/fresh UDP flow; historical R node/port withdrawal | Remaining Client direction/destination correlation and platform variants |
+| HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native UDP port withdrawal/restoration with established/fresh flows on all six runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, TCP and other platform variants |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
@@ -635,6 +635,84 @@ new diagnostic. Optional external STUN compatibility was skipped. Local
 format/vet/lint/short checks passed, and no Client runtime change was made by
 this DNS/driver increment.
 
+## Native IPv4 UDP and peer ACL increment
+
+[TestControlPlaneNativeUDPTraffic](../tests/control_plane_native_udp_test.go)
+uses one real Client with the runner's native TUN and routes. A reference
+WireGuard peer uses a channel TUN, so its overlay address is not assigned to
+the host and application traffic cannot take a local-address shortcut. The
+contract testserver publishes the peer and signed ACL changes; application
+assertions require fresh nonce echoes through the encrypted path. No producer
+runtime or private Client state is used.
+
+The scenario checks both fresh and established UDP flows to two ports, blocks
+one port while preserving the other, restores both grants on the same sockets,
+then disconnects and requires new traffic to fail. Reference peer counters
+report handshake message counts and decrypted/echoed packet counts without
+printing payloads or keys.
+
+The initial fixture runs failed before establishing traffic:
+[34615012933](https://github.com/endless-net/client/actions/runs/34615012933)
+used a loopback endpoint, which Client deliberately excludes from direct paths;
+[34615766536](https://github.com/endless-net/client/actions/runs/34615766536)
+selected a native address but lacked the return endpoint required by the
+pinned Tailscale WireGuard engine. The fixture now configures that endpoint
+from the Client's public IPC listen port. Neither result proved a Client
+handshake defect.
+
+[Client 9e64e19](https://github.com/endless-net/client/tree/9e64e1953b462a6415e26fa471d4e0b2a539ed0e)
+and [CI 34616766281](https://github.com/endless-net/client/actions/runs/34616766281)
+established initial traffic on all six platforms and exposed distinct failures:
+
+| Runners | New scenario failure, three repetitions each |
+| --- | --- |
+| Ubuntu 22.04 / 24.04 | Previously denied UDP socket did not recover after restoring its grant |
+| Windows 2022 / 2025 | Retained UDP socket stopped responding after the other port's grant was withdrawn |
+| macOS ARM / Intel | Withdrawn UDP socket continued delivering nonce echoes |
+
+Every platform passed the other 36 top-level outcomes. All six contract jobs
+and the aggregate run failed, as required. In the implementation, peer ACL
+enforcement depended on Linux hooks which Windows/Darwin routers did not apply;
+changing those hooks also caused OS interface/route reconfiguration.
+
+[Client a8d38af](https://github.com/endless-net/client/tree/a8d38af969156a46d979de5dbd91aa6e799def5e)
+moves userspace peer ACL enforcement before WireGuard encryption on all OSes.
+Every outbound packet is checked, including established flows. Rules retain
+destination/port correlation and longest-prefix ordering. While applying a
+map, the old/new permission intersection is enforced; newly granted access
+opens only after runtime apply succeeds, and a failed apply closes the filter.
+Peer port changes no longer alter router hooks or tear down the native
+interface. Exported kernel WireGuard configuration still owns its Linux hooks.
+Local format, vet, lint and short tests passed, including withdrawal/restoration,
+failed apply, protocol correlation and IPv4/IPv6 prefix regressions. Native CI
+verification is recorded separately below.
+
+[CI 34617628535](https://github.com/endless-net/client/actions/runs/34617628535)
+passed on the exact runtime source `a8d38af969156a46d979de5dbd91aa6e799def5e`.
+Log comparison confirms the identical 13 top-level scenarios, each passing
+three times on every runner: 39/39 per platform, 234/234 overall, with no
+failed or skipped top-level scenarios. The native scenario's assertions were
+unchanged between the failing `9e64e19` run and this successful runtime fix.
+
+| Runner | Native UDP repetitions | Common suite | Evidence |
+| --- | --- | --- | --- |
+| Ubuntu 22.04 amd64 | 13.32s, 13.33s, 13.31s | 39/39 | [job](https://github.com/endless-net/client/actions/runs/34617628535/job/103323401714) |
+| Ubuntu 24.04 amd64 | 13.31s, 13.33s, 13.34s | 39/39 | [job](https://github.com/endless-net/client/actions/runs/34617628535/job/103323401805) |
+| macOS 15 arm64 | 13.70s, 13.61s, 13.61s | 39/39 | [job](https://github.com/endless-net/client/actions/runs/34617628535/job/103323401629) |
+| macOS 15 Intel | 13.77s, 13.96s, 13.83s | 39/39 | [job](https://github.com/endless-net/client/actions/runs/34617628535/job/103323402006) |
+| Windows 2022 amd64 | 17.15s, 17.43s, 17.12s | 39/39 | [job](https://github.com/endless-net/client/actions/runs/34617628535/job/103323401876) |
+| Windows 2025 amd64 | 18.07s, 18.07s, 18.07s | 39/39 | [job](https://github.com/endless-net/client/actions/runs/34617628535/job/103323401831) |
+
+All six installation jobs, platform verification, the Linux two-real-Client
+dataplane job and aggregate `verify` also passed. Optional external STUN
+compatibility did not execute. Durations include fixture startup and intentional
+negative-probe deadlines; they are not throughput or latency benchmarks.
+
+This is native direct IPv4 UDP evidence for parts of HC-024/HC-027, including
+selective port enforcement and recovery. It does not establish full coverage of
+those use cases, IPv6 packet delivery, TCP dataplane on Windows/macOS, automatic
+OS resolver integration, Relay/NAT, every firewall direction, or all HC-001–HC-065.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
@@ -643,10 +721,8 @@ producer failures are constraints, not tasks to fix outside Client. Keep
 contract gaps and platform decisions explicit; do not replace unresolved client
 scenarios with generic smoke tests or infer completion from historical P/R runs.
 
-The next native dataplane fixture should pair one real Client with a protocol
-WireGuard peer whose overlay IP is never assigned to the runner OS. This avoids
-same-host route short-circuiting and permits native Windows/macOS/Linux UDP
-traffic and policy withdrawal checks without Linux namespaces, producer runtime
-imports or new backend work. The pinned third-party WireGuard implementation
-already provides a standard UDP bind and channel TUN for the reference peer;
-the Client under test must continue to use its real OS interface and CLI/IPC.
+Extend native platform coverage beyond the bounded IPv4 direct UDP scenario:
+TCP, IPv6, Relay/NAT, policy direction/destination variants and automatic OS
+resolver behavior still require explicit client tests and runner evidence.
+Do not infer those outcomes from component ACL tests or successful peer UDP
+echoes. The real Client must continue to use its native OS interface and CLI/IPC.

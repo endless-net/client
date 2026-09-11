@@ -424,8 +424,11 @@ Unit tests и сборка platform-specific кода подтверждают �
 
 Это не реализованные обещания, а логичные продолжения обнаруженных границ:
 
-1. Добавить native WFP/pf enforcement либо fail-closed feature negotiation для
-   ACL, SNAT и exit policy на Windows/macOS.
+1. Подтвердить оставшиеся направления ACL, SNAT и exit policy на Windows/macOS.
+   Исходящие peer ACL userspace-клиента уже проверяются перед WireGuard на всех
+   ОС; прямой IPv4 UDP, выборочный отзыв порта и восстановление подтверждены
+   [шестиплатформенным CI](../headless-test-coverage.md#native-ipv4-udp-and-peer-acl-increment).
+   Эти результаты не доказывают полную функциональность WFP/pf, SNAT или exit policy.
 2. Добавить явный readiness/alerting contract для freshness endpoint snapshot
    и проверить failover между всеми `relay_control_urls`.
 3. Перейти к binary framing и независимым QUIC streams/datagrams, если метрики

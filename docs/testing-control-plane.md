@@ -49,6 +49,16 @@ Windows uses the same checksum-pinned Wintun dependency as the installer suite.
 Windows agent restart in this driver uses process termination; graceful Windows
 service-manager restart remains a distinct installation-suite observation.
 
+`TestControlPlaneNativeUDPTraffic` also builds and invokes `packetprobe` on every
+runner. One real Client uses its native OS TUN and routing; a reference WireGuard
+peer uses the pinned third-party implementation with a channel TUN. The peer's
+overlay address is never assigned to the host. Fresh and established UDP flows
+to two ports must work, selective withdrawal must block one port while preserving
+the other, restoring the grant must recover both, and disconnect must block new
+traffic. The fixture configures its return endpoint from public Client IPC;
+it does not read Client keys or import Client runtime code. Its handshake and
+decrypted-packet counters are diagnostics, not replacements for nonce echoes.
+
 The `Client control-plane scenarios` job retains the Linux dataplane fixture:
 
 1. Runs the server suite under the race detector.
@@ -85,12 +95,16 @@ teardown cannot trigger cleanup. This correction is subsequent to the v0.5.0 tag
 
 Common contract results are attributed separately to each runner's OS and
 architecture. They do not prove that OS's complete dataplane, DNS resolver,
-route, firewall or service lifecycle behavior. The two-client traffic fixture
-currently runs on Linux only; Windows/macOS equivalents remain required work.
+route, firewall or service lifecycle behavior. The native UDP scenario covers
+only its explicit IPv4 direct-path and selective-port assertions. The two-real-
+Client traffic fixture currently runs on Linux only. TCP, IPv6, Relay/NAT and
+other policy variants still need their own platform evidence; see the
+[coverage ledger](headless-test-coverage.md) for actual run outcomes.
 
 These tests establish client behavior against a controlled peer, not production
-compatibility, OIDC/browser UI acceptance, real Relay/STUN, packet delivery, NAT,
-or Windows/macOS networking behavior. Installer tests remain separate.
+compatibility, OIDC/browser UI acceptance, real Relay/STUN or NAT behavior.
+Only explicit traffic assertions establish packet delivery on the named runner.
+Installer tests remain separate.
 The server race check and three consecutive process-suite runs passed on
 `96c37a7fe7b2e570c555a364790cb903b9d1864a`:
 [control-plane CI](https://github.com/endless-net/client/actions/runs/34199199908/job/101973847667).
