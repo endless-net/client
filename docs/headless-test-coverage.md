@@ -58,7 +58,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-024 | C IPv4 ICMP/TCP/UDP; R real Coordinator and two agents exchange direct TCP/UDP nonce data | Other platforms, IPv6, Relay/NAT and full policy variants |
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN | OS resolver integration, live reload, split DNS, IPv6 and upstream variants |
 | HC-026 | U DNS/router configuration | External DNS control and IP-access preservation |
-| HC-027 | C delta/resync; R approval withdrawal blocks fresh and established TCP/UDP while independent underlay stays live | Real producer port/policy variants, other authorized overlay flows and remaining platforms |
+| HC-027 | C delta/resync; R node and port withdrawal block fresh/established TCP/UDP while another authorized overlay flow stays live | Directional/correlated policy grants, real Management intent, remaining platforms |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
@@ -416,6 +416,21 @@ both agents recover current applied maps and exchange data on fresh and original
 sockets without any registration request. This is a short upstream process
 outage with a live edge/storage; map expiry, edge connection loss, long offline,
 storage failure and other transports remain separate.
+
+[Coordinator 89438f9](https://github.com/endless-net/coordinator/tree/89438f9c16de17de582d4f4205e1c6ca842d9f02)
+adds a real Coordinator port-policy case using its published Management projection
+API, with the same Client pin. In
+[CI 34605743032](https://github.com/endless-net/coordinator/actions/runs/34605743032/job/103283699810),
+all seven traffic subtests passed. Eight sockets cover TCP/UDP on ports 24001
+and 24002 in both directions. After policy withdraws 24001, its four established
+sockets and fresh overlay probes are blocked while 24002's original sockets
+and fresh traffic continue. Retained sockets are checked before and after each
+denied exchange; applications on the withdrawn port remain live over underlay.
+Regrant restores fresh 24001 traffic without disrupting retained 24002 sockets
+or issuing a registration request. Real Management intent/compilation,
+directional and correlated grants, local inbound preference, production revoke
+SLO and other OS/transport variants remain separate. Overall provider failure
+is still registration replay; this does not close HC-027 as a whole.
 
 ## Next work
 
