@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,7 +69,11 @@ func New(t *testing.T, s *testcontrol.Server) *Node {
 
 // Run keeps output in memory; failures never dump secrets from arbitrary CLI output.
 func (n *Node) Run(args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	return n.runWithin(15*time.Second, args...)
+}
+
+func (n *Node) runWithin(timeout time.Duration, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := n.command(ctx, args...)
 	return cmd.CombinedOutput()
@@ -139,7 +144,24 @@ func (n *Node) Stop() {
 }
 func (n *Node) Service(operation string, target any) {
 	n.t.Helper()
-	out := n.MustRun(append([]string{"service", operation, "--timeout", "3s"}, n.ipcArgs()...)...)
+	// Exercise the CLI's published default (30s), rather than imposing a 3s
+	// mutation SLO that was never specified for native OS teardown operations.
+	started := time.Now()
+	out, err := n.runWithin(35*time.Second, append([]string{"service", operation}, n.ipcArgs()...)...)
+	if err != nil {
+		category := "unclassified"
+		for _, known := range []string{"context deadline exceeded", "connection refused", "Access is denied", "The pipe is being closed"} {
+			if strings.Contains(string(out), known) {
+				category = known
+				break
+			}
+		}
+		// Never print arbitrary CLI output, errors, credentials or file content.
+		n.t.Fatalf("client service %s failed after %s: %s (output withheld)", operation, time.Since(started).Round(time.Millisecond), category)
+	}
+	if elapsed := time.Since(started); elapsed >= 3*time.Second {
+		n.t.Logf("client service %s completed after %s using the default CLI timeout", operation, elapsed.Round(time.Millisecond))
+	}
 	if err := json.Unmarshal(out, target); err != nil {
 		n.t.Fatalf("invalid %s IPC JSON: %v", operation, err)
 	}

@@ -99,8 +99,8 @@ product scope are different conditions; neither is a successful skip.
 | HC-022 | C Lifecycle logout; U typed logout | Remote cleanup unconfirmed, local forget, profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C IPv4 ICMP/TCP/UDP; R real Coordinator and two agents exchange direct TCP/UDP nonce data | Other platforms, IPv6, Relay/NAT and full policy variants |
-| HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN | OS resolver integration, live reload, split DNS, IPv6 and upstream variants |
-| HC-026 | U DNS/router configuration | External DNS control and IP-access preservation |
+| HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; six-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
+| HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
 | HC-027 | C delta/resync and TCP grant withdrawal with retained established/fresh UDP flow; historical R node/port withdrawal | Remaining Client direction/destination correlation and platform variants |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
@@ -585,6 +585,32 @@ the suite retains bounded operation deadlines and a 12-minute job test deadline.
 Optional external STUN compatibility did not execute. These results establish
 the common contract suite on each platform, not completion of HC-001–HC-065 or
 native Windows/macOS application traffic, routing, resolver and firewall checks.
+
+## Six-platform DNS wire increment
+
+[Client c6bc9fb](https://github.com/endless-net/client/tree/c6bc9fb35fd7164e711d3c9f5fcfa5bdaa700408)
+adds [TestControlPlaneDNSWireRecovery](../tests/control_plane_dns_test.go).
+The real `dns serve` CLI receives UDP and TCP DNS questions. Three map phases
+require a peer's A record to appear, disappear with NXDOMAIN, and reappear.
+Absent private names remain NXDOMAIN; public names use the explicit default
+upstream, split-domain names use their selected upstream, and a more-specific
+blocked split domain returns SERVFAIL. Both DNS fixtures record wire questions:
+only the intended domain may reach each upstream. No private client state is
+read, and no real backend is required.
+
+[CI 34612884945](https://github.com/endless-net/client/actions/runs/34612884945)
+passed all three new DNS repetitions on each of the six platforms. The overall
+run failed because one Windows 2025 lifecycle repetition failed its public
+`service disconnect` call. The original driver withheld CLI output and did not
+classify the cause, so that log alone does not prove a timeout or runtime defect.
+The driver had imposed a 3-second mutation timeout, while the CLI default is
+30 seconds. The follow-up uses that default, bounds the process to 35 seconds,
+reports slow operation duration and allowlisted failure categories, and still
+fails on any unsuccessful operation. No automatic mutation retry is added.
+
+Each DNS proxy invocation loads a fresh verified map. These results do not
+establish live reload, automatic OS resolver setup, IPv6 DNS, TCP upstream
+fallback, or actual overlay application traffic on Windows/macOS.
 
 ## Next work
 
