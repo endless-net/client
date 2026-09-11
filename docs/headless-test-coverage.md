@@ -1343,7 +1343,7 @@ across service restart, enrolled same-artifact reinstall in connected/disconnect
 states with identity preservation and real TCP recovery, and uninstall. These
 are not version-upgrade, interrupted-install or full-state-removal claims.
 
-This qualifies the cited source and tested cases, not every HC-001–HC-065 variant
+This qualifies the cited source and tested cases, not every HC-001-HC-065 variant
 or a production release. IPv6 overlay still uses IPv4 underlay. Relay/NAT,
 system resolver integration, ICMP errors/PMTU, full policy-direction variants
 and other gaps in the matrix remain open. The isolated earlier Windows IPC
