@@ -1,9 +1,11 @@
 package tests
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -162,7 +164,51 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string)
 	return false
 }
 
-// HC-024/HC-027/HC-031: protocol and destination-port policy with payload checks.
+func startApplicationSession(t *testing.T, binary, namespace, protocol, address string) func(string) {
+	t.Helper()
+	cmd := exec.Command("ip", "netns", "exec", namespace, binary, "--mode", "session", "--network", protocol, "--address", address)
+	input, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = input.Close(); _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	lines := make(chan string, 8)
+	go func() {
+		defer close(lines)
+		scanner := bufio.NewScanner(output)
+		for scanner.Scan() {
+			lines <- scanner.Text()
+		}
+	}()
+	expect := func(want string) {
+		t.Helper()
+		select {
+		case got, ok := <-lines:
+			if !ok || got != want {
+				t.Fatalf("persistent %s application session did not report %s", protocol, want)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("persistent %s application session did not respond", protocol)
+		}
+	}
+	expect("ready")
+	return func(want string) {
+		t.Helper()
+		if _, err := fmt.Fprintln(input, "exchange"); err != nil {
+			t.Fatal("cannot command persistent application session")
+		}
+		expect(want)
+	}
+}
+
+// HC-024/HC-027: published protocol and destination-port policy with payload checks.
 func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.Node, states [2]ipc.StatusResponse, peers [2]api.Peer) {
 	t.Helper()
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
@@ -227,6 +273,30 @@ func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*te
 	}
 	apply(limited)
 	check(true)
+	// Keep the same source sockets open across withdrawal. Fresh connection
+	// failures alone do not prove that original-direction established flows stop.
+	var sessions []func(string)
+	for _, flow := range []struct {
+		protocol string
+		port     int
+	}{{"tcp", 24001}, {"udp", 24002}} {
+		session := startApplicationSession(t, binary, nodes[0].Namespace, flow.protocol, net.JoinHostPort(states[1].OverlayIP, strconv.Itoa(flow.port)))
+		session("ok")
+		sessions = append(sessions, session)
+	}
+	limited.ACLGrants = nil
+	apply(limited)
+	for _, session := range sessions {
+		session("blocked")
+	}
+	for _, flow := range []struct {
+		protocol string
+		port     int
+	}{{"tcp", 24001}, {"udp", 24002}} {
+		if !applicationProbe(t, binary, nodes[1].Namespace, flow.protocol, "127.0.0.1:"+strconv.Itoa(flow.port)) {
+			t.Fatal("established-flow denial coincided with application failure")
+		}
+	}
 	apply(peers[0])
 	check(false)
 }

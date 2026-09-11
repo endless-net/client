@@ -1,11 +1,44 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"testing"
 )
+
+func TestSessionKeepsOneConnectionAcrossExchanges(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		for range 2 {
+			body := make([]byte, 32)
+			if _, err := io.ReadFull(conn, body); err != nil {
+				return
+			}
+			if _, err := conn.Write(body); err != nil {
+				return
+			}
+		}
+	}()
+	var output bytes.Buffer
+	if err := session("tcp", listener.Addr().String(), strings.NewReader("exchange\nexchange\nexchange\n"), &output); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != "ready\nok\nok\nblocked\n" {
+		t.Fatal("session did not preserve its connection or distinguish closure")
+	}
+}
 
 func TestProbeExchangesApplicationPayload(t *testing.T) {
 	tcp, err := net.Listen("tcp4", "127.0.0.1:0")

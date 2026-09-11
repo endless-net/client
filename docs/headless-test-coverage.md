@@ -53,13 +53,13 @@ product scope are different conditions; neither is a successful skip.
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; U typed logout | Remote cleanup unconfirmed, local forget, profile semantics |
 | HC-023 | C Lifecycle peer projection | Authorized listing and peer absence semantics |
-| HC-024 | U encrypted engine tests | Two real client processes and application probes |
+| HC-024 | C DirectPeerTrafficAndWithdrawal: IPv4 ICMP/TCP/UDP between real agents | Other platforms/transports, real producer authorization and full variants |
 | HC-025 | C DNSProjection; U resolver tests | Real resolver and allowed/denied resource |
 | HC-026 | U DNS/router configuration | External DNS control and IP-access preservation |
-| HC-027 | C Lifecycle peer/ACL updates | Wire deltas, bad base/hash and real withdrawal of traffic |
-| HC-028 | U direct/Relay implementations | R direct versus forced Relay with positive/negative probes |
+| HC-027 | C peer delta/resync, malformed delta, peer withdrawal and port/protocol policy | Established flow checks pending; real producer policy variants |
+| HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
-| HC-030 | C TemporaryFailurePreservesEnrollment | Full typed/malformed error matrix and offline lease limits |
+| HC-030 | C typed/malformed error matrix, temporary outage and restart | Offline lease limits and real producer failure variants |
 | HC-031 | U ACL enforcement | Local restriction through IPC with packet observations |
 | HC-032 | U routes/application tests | Real consumer to resource behind router |
 | HC-033 | U configuration tests | Public selection/disable and actual route effect |
@@ -203,7 +203,22 @@ health is independently checked. Removing the restriction must restore all four
 combinations. Helper failures and corrupt payloads are distinct from network
 denial. This tests newly opened flows; established-flow withdrawal and broader
 policy variants remain separate requirements. Local short tests, vet and lint
-pass; the HTTPS real-peer and application/policy scenarios await CI evidence.
+pass. Commit `f3aed7e` passed all mandatory jobs in
+[Test run 34588456392](https://github.com/endless-net/client/actions/runs/34588456392).
+The HTTPS real-peer/application/policy scenario passed in all three repetitions;
+[source gate run 34588626955](https://github.com/endless-net/client/actions/runs/34588626955)
+also passed. This establishes the stated Linux consumer scope, not all platform
+variants or producer authorization.
+
+The subsequent increment holds the original TCP and UDP sockets across a
+published ACL withdrawal. Each must exchange a random payload before withdrawal,
+then fail to exchange after the new map arrives while the local receiving
+application stays healthy. Fresh application access must recover when the grant
+is restored. The helper protocol reports only readiness and exchange outcomes;
+its short test proves repeated exchanges reuse one connection and distinguishes
+closure from success. This lifts the existing kernel-level established-flow
+test into a real-client contract scenario. Full execution awaits CI; timing
+guards remain test deadlines, not accepted business revoke SLAs.
 
 ## Next work
 
