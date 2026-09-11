@@ -44,7 +44,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; R distinct node IDs | Real producer replay currently fails; image-cloning and batch variants |
 | HC-011 | No C/R evidence audited | Decide ephemeral lifecycle, then normal/crash expiry tests |
 | HC-012 | D request/proof tests | Producer-owned allowed/denied attributes and effective access |
-| HC-013 | C BrowserEnrollment approve/reject | Pending must not authorize traffic; completion binding |
+| HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
 | HC-014 | U recovery matrix | C/R session expiry, reauthentication and preservation |
 | HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
 | HC-016 | C initial cached-map status | Actual allowed application traffic |
@@ -55,10 +55,10 @@ product scope are different conditions; neither is a successful skip.
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; U typed logout | Remote cleanup unconfirmed, local forget, profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
-| HC-024 | C DirectPeerTrafficAndWithdrawal: IPv4 ICMP/TCP/UDP between real agents | Other platforms/transports, real producer authorization and full variants |
+| HC-024 | C IPv4 ICMP/TCP/UDP; R real Coordinator and two agents exchange direct TCP/UDP nonce data | Other platforms, IPv6, Relay/NAT and full policy variants |
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN | OS resolver integration, live reload, split DNS, IPv6 and upstream variants |
 | HC-026 | U DNS/router configuration | External DNS control and IP-access preservation |
-| HC-027 | C peer delta/resync, malformed delta, peer withdrawal, port/protocol policy and established-flow denial | Real producer policy variants and remaining platforms |
+| HC-027 | C delta/resync and established-flow denial; R approval withdrawal blocks fresh traffic with live application | Real producer established-flow and port/policy variants, remaining platforms |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors and outage traffic; R CLI and running-agent recovery after provider dependency failure without registration | Real-pair packet continuity, offline lease limits and remaining failure variants |
@@ -317,6 +317,29 @@ returns a typed temporary map/endpoint failure, the agent recovers automatically
 without registration, preserving identity and credential. This privileged hosted
 CI test never reads private state files. Packet delivery, existing-flow denial,
 Gateway readiness, OS service installation and manifest acceptance are separate.
+
+## Real direct traffic and rejected-node recovery
+
+The [Coordinator-owned traffic suite](https://github.com/endless-net/coordinator/blob/dbede53d2a62b3154769b5e862b7b663dddf264f/tests/providercontract/client_traffic_test.go)
+uses this Client and packetprobe at `a73e943a63115efc568f2f9529b39a383443b71d`.
+[CI 34600366604](https://github.com/endless-net/coordinator/actions/runs/34600366604/job/103265978598)
+passed bidirectional direct IPv4 TCP/UDP nonce exchange, fresh-traffic denial
+after withdrawal with a live destination application, and restored exchange
+after reapproval under the original node IDs. Public IPC confirms applied maps,
+WireGuard peers, handshakes and RX/TX counters. Separate network namespaces
+prevent same-host overlay delivery from bypassing the tunnel.
+
+The earlier Client stopped map polling after a signed rejected state, so it
+could not observe later approval. A component regression reproduced this, then
+passed after pending/rejected nodes were kept as signed-map observers without
+online heartbeat. The real-pair test then confirmed restored traffic. Client's
+own [Test CI 34600218754](https://github.com/endless-net/client/actions/runs/34600218754)
+passed all mandatory jobs; optional external STUN compatibility was not run.
+
+[Architecture evidence](https://github.com/endless-net/architecture/blob/main/docs/ru/evidence/2026-09-11-headless-real-traffic.md)
+records exact pins, the failing baseline and the fix. This is not established-flow
+revocation, real Gateway/Signing conformance, Relay/NAT, IPv6 or manifest
+acceptance. Coordinator's overall gate still fails on direct registration replay.
 
 ## Next work
 
