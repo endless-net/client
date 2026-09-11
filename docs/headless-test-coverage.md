@@ -1854,6 +1854,29 @@ which aligns initial IPC readiness with the existing 30-second service timeout.
 Full source qualification remains pending. HC-001-HC-065 coverage remains
 incomplete, with the other variants and product gaps listed above.
 
+## Two-Relay failover increment: awaiting native evidence
+
+`TestControlPlaneNativeRelayFailover` extends the same native IPv4/IPv6
+TCP/UDP contract scenario with two independent TLS endpoints, a preferred
+primary and a lower-priority backup. Both accept the same issued Client
+credential. No direct peer endpoint is published. After initial primary
+traffic succeeds, primary loss must lead to fresh traffic through the backup,
+confirmed by its forwarding counters and public selected-path status. Losing
+both endpoints must deny established and fresh traffic. Restoring only the
+primary must restore fresh traffic and survive agent restart without another
+registration.
+
+The shared fixture's short test also checks that a second endpoint accepts the
+original credential and preserves the datagram's sender scope while the first
+endpoint is unavailable. This tests the Client's contract participants, not
+production Relay mesh behavior or authorization implementation.
+
+The native inventory now has 24 roots and requires 24 x 3 x 8 = 576 outcomes.
+Failover remains unqualified until hosted results arrive. This does not prove
+seamless preservation of pre-failure TCP sessions, latency-based selection,
+automatic failback while a healthy backup remains available, NAT transitions,
+or IPv6 underlay.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

@@ -41,14 +41,26 @@ type Server struct {
 // New only forwards frames for the configured peer and accepts the credential
 // issued for this test's Client. Keys stay in memory; only a public CA is exposed.
 func New(t testing.TB, networkID, nodeID, peerID, peerAddress string, configureReturnPath func(netip.AddrPort) error) *Server {
+	return newServer(t, networkID, nodeID, peerID, peerAddress, configureReturnPath, nil)
+}
+
+// NewWithCredential creates another endpoint accepting the same issued Client
+// credential, with its own TLS identity and independent availability.
+func NewWithCredential(t testing.TB, credential relay.Credential, peerID, peerAddress string, configureReturnPath func(netip.AddrPort) error) *Server {
+	return newServer(t, credential.NetworkID, credential.NodeID, peerID, peerAddress, configureReturnPath, &credential)
+}
+
+func newServer(t testing.TB, networkID, nodeID, peerID, peerAddress string, configureReturnPath func(netip.AddrPort) error, credential *relay.Credential) *Server {
 	t.Helper()
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal("could not create reference Relay signing identity")
 	}
-	credential, err := relay.Sign(private, networkID, nodeID, time.Now().Add(time.Hour))
-	if err != nil {
-		t.Fatal("could not issue reference Relay credential")
+	if credential == nil {
+		credential, err = relay.Sign(private, networkID, nodeID, time.Now().Add(time.Hour))
+		if err != nil {
+			t.Fatal("could not issue reference Relay credential")
+		}
 	}
 	template := &x509.Certificate{SerialNumber: big.NewInt(1), NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, public, private)

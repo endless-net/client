@@ -21,6 +21,15 @@ import (
 // HC-028/HC-030: no direct endpoint is published. All real native application
 // traffic must cross the public TLS Relay contract before reaching WireGuard.
 func TestControlPlaneNativeRelayTraffic(t *testing.T) {
+	runNativeRelayTraffic(t, false)
+}
+
+func TestControlPlaneNativeRelayFailover(t *testing.T) {
+	runNativeRelayTraffic(t, true)
+}
+
+func runNativeRelayTraffic(t *testing.T, failover bool) {
+	t.Helper()
 	requireControlScenario(t)
 	binary := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
 	for _, ipv6 := range []bool{false, true} {
@@ -55,15 +64,26 @@ func TestControlPlaneNativeRelayTraffic(t *testing.T) {
 			}
 			reference := testwireguard.NewTCP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
 			transport := testrelay.New(t, network.ID, initial.NodeID, "relay-peer", reference.Endpoint, reference.ConfigureClientEndpoint)
+			primary := transport
+			var backup *testrelay.Server
+			endpoints := []relay.Endpoint{primary.Endpoint}
+			certificates := append([]byte(nil), primary.CertificatePEM...)
+			if failover {
+				backup = testrelay.NewWithCredential(t, primary.Credential, "relay-peer", reference.Endpoint, reference.ConfigureClientEndpoint)
+				backup.Endpoint.ID = "reference-relay-backup"
+				backup.Endpoint.Priority = 10
+				endpoints = append(endpoints, backup.Endpoint)
+				certificates = append(certificates, backup.CertificatePEM...)
+			}
 			caFile := filepath.Join(t.TempDir(), "relay-ca.pem")
-			if err := os.WriteFile(caFile, transport.CertificatePEM, 0o600); err != nil {
+			if err := os.WriteFile(caFile, certificates, 0o600); err != nil {
 				t.Fatal("could not write public Relay test CA")
 			}
 			n.Stop()
 			n.AgentArgs = append(n.AgentArgs, "--relay-ca-cert", caFile)
 			if err := s.UpdateMap(initial.NodeID, func(m *api.NetworkMapSnapshot) {
 				m.Peers = []api.Peer{{ID: "relay-peer", NetworkID: network.ID, Hostname: "relay-peer", PublicKey: reference.PublicKey, AllowedIPs: []string{netip.PrefixFrom(peerIP, peerIP.BitLen()).String()}}}
-				m.Relays = []relay.Endpoint{transport.Endpoint}
+				m.Relays = endpoints
 				m.RelayCredential = &transport.Credential
 			}); err != nil {
 				t.Fatal(err)
@@ -137,6 +157,11 @@ func TestControlPlaneNativeRelayTraffic(t *testing.T) {
 				selected()
 			}
 			reachable()
+			if backup != nil {
+				primary.SetUnavailable(true)
+				transport = backup
+				reachable()
+			}
 			tcp := startApplicationSession(t, binary, "", "tcp", address)
 			udp := startApplicationSession(t, binary, "", "udp", address)
 			tcp("ok")
@@ -150,7 +175,8 @@ func TestControlPlaneNativeRelayTraffic(t *testing.T) {
 			n.AwaitStatus(func(v ipc.StatusResponse) bool {
 				return v.NodeID == initial.NodeID && v.NodeCredentialPresent && v.CachedMapPresent
 			})
-			transport.SetUnavailable(false)
+			primary.SetUnavailable(false)
+			transport = primary
 			reachable()
 			n.Stop()
 			n.Start()

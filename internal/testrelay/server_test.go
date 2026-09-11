@@ -102,4 +102,17 @@ func TestFixedPeerContractForwardingAndRecovery(t *testing.T) {
 	if authenticated < 3 || sent != 2 || received < 1 {
 		t.Fatal("fixture forwarding observations missing")
 	}
+	// An independent endpoint must accept the same issued credential and retain
+	// the same datagram/sender scope after the original endpoint is unavailable.
+	credential := s.Credential
+	s.SetUnavailable(true)
+	s = NewWithCredential(t, credential, "peer", udp.LocalAddr().String(), func(endpoint netip.AddrPort) error {
+		configured.Store(endpoint)
+		return nil
+	})
+	if !roots.AppendCertsFromPEM(s.CertificatePEM) {
+		t.Fatal("invalid secondary fixture CA")
+	}
+	dial(relay.Credential{}, false)
+	exchange(dial(credential, true))
 }
