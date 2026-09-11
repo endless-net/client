@@ -4,7 +4,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -113,28 +112,72 @@ func probeDNS(network, address, dnsServer string) error {
 		return errUnreachable
 	}
 	defer func() { _ = conn.Close() }()
-	return exchange(conn)
+	x := applicationExchange{datagram: network == "udp"}
+	return x.exchange(conn)
 }
 
-func exchange(conn net.Conn) error {
+// Keep known outstanding requests and partial TCP frames across deadlines.
+// A delayed echo can be discarded, but only the current nonce proves success.
+type applicationExchange struct {
+	datagram bool
+	pending  map[[32]byte]struct{}
+	frame    [32]byte
+	filled   int
+}
+
+func (x *applicationExchange) exchange(conn net.Conn) error {
 	if err := conn.SetDeadline(time.Now().Add(time.Second)); err != nil {
 		return err
 	}
-	request := make([]byte, 32)
-	if _, err := rand.Read(request); err != nil {
+	if len(x.pending) >= 128 {
+		return errors.New("too many outstanding application requests")
+	}
+	var request [32]byte
+	if _, err := rand.Read(request[:]); err != nil {
 		return err
 	}
-	if _, err := conn.Write(request); err != nil {
+	n, err := conn.Write(request[:])
+	if n != 0 && n != len(request) {
+		return errors.New("partial application request write")
+	}
+	if n == len(request) {
+		if x.pending == nil {
+			x.pending = make(map[[32]byte]struct{})
+		}
+		x.pending[request] = struct{}{}
+	}
+	if err != nil || n == 0 {
 		return errUnreachable
 	}
-	reply := make([]byte, len(request))
-	if _, err := io.ReadFull(conn, reply); err != nil {
-		return errUnreachable
+	for {
+		if x.datagram {
+			// Preserve datagram boundaries and reject truncated/oversized echoes.
+			var packet [33]byte
+			n, err := conn.Read(packet[:])
+			if err != nil {
+				return errUnreachable
+			}
+			if n != len(x.frame) {
+				return errors.New("application response length mismatch")
+			}
+			copy(x.frame[:], packet[:n])
+		} else {
+			n, err := io.ReadFull(conn, x.frame[x.filled:])
+			x.filled += n
+			if err != nil {
+				return errUnreachable
+			}
+		}
+		reply := x.frame
+		x.filled = 0
+		if _, known := x.pending[reply]; !known {
+			return errors.New("application response mismatch")
+		}
+		delete(x.pending, reply)
+		if reply == request {
+			return nil
+		}
 	}
-	if !bytes.Equal(request, reply) {
-		return errors.New("application response mismatch")
-	}
-	return nil
 }
 
 // session keeps one network connection while the parent changes policy. Its
@@ -152,12 +195,13 @@ func session(network, address string, input io.Reader, output io.Writer) error {
 		return err
 	}
 	scanner := bufio.NewScanner(input)
+	x := applicationExchange{datagram: network == "udp"}
 	for scanner.Scan() {
 		if scanner.Text() != "exchange" {
 			return errors.New("invalid session command")
 		}
 		outcome := "ok"
-		if err := exchange(conn); errors.Is(err, errUnreachable) {
+		if err := x.exchange(conn); errors.Is(err, errUnreachable) {
 			outcome = "blocked"
 		} else if err != nil {
 			return err

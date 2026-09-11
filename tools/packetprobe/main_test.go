@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
 )
@@ -91,6 +92,82 @@ func TestSessionKeepsOneConnectionAcrossExchanges(t *testing.T) {
 	}
 	if output.String() != "ready\nok\nok\nblocked\n" {
 		t.Fatal("session did not preserve its connection or distinguish closure")
+	}
+}
+
+func TestSessionHandlesLateReplies(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		partial bool
+		current bool
+		corrupt bool
+		want    string
+	}{
+		{name: "late complete reply", current: true, want: "ready\nblocked\nok\n"},
+		{name: "late partial reply", partial: true, current: true, want: "ready\nblocked\nok\n"},
+		{name: "old reply cannot prove current reachability", want: "ready\nblocked\nblocked\n"},
+		{name: "unknown reply is fatal", current: true, corrupt: true, want: "ready\nblocked\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, err := net.Listen("tcp4", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = listener.Close() }()
+			done := make(chan error, 1)
+			go func() {
+				done <- func() error {
+					conn, err := listener.Accept()
+					if err != nil {
+						return err
+					}
+					defer func() { _ = conn.Close() }()
+					if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+						return err
+					}
+					first := make([]byte, 32)
+					if _, err := io.ReadFull(conn, first); err != nil {
+						return err
+					}
+					offset := 0
+					if tc.partial {
+						offset = 7
+						if _, err := conn.Write(first[:offset]); err != nil {
+							return err
+						}
+					}
+					// The next request proves the first exchange has timed out.
+					second := make([]byte, 32)
+					if _, err := io.ReadFull(conn, second); err != nil {
+						return err
+					}
+					if tc.corrupt {
+						first[0] ^= 1
+					}
+					replies := first[offset:]
+					if tc.current {
+						replies = append(replies, second...)
+					}
+					_, err = conn.Write(replies)
+					return err
+				}()
+			}()
+			var output bytes.Buffer
+			err = session("tcp", listener.Addr().String(), strings.NewReader("exchange\nexchange\n"), &output)
+			if tc.corrupt {
+				if err == nil || errors.Is(err, errUnreachable) {
+					t.Fatal("unknown response was accepted as a network outcome")
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if output.String() != tc.want {
+				t.Fatalf("got %q, want %q", output.String(), tc.want)
+			}
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
