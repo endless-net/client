@@ -61,7 +61,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-027 | C delta/resync; R approval withdrawal blocks fresh and established TCP/UDP while independent underlay stays live | Real producer port/policy variants, other authorized overlay flows and remaining platforms |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
-| HC-030 | C typed/malformed errors and outage traffic; R CLI and running-agent recovery after provider dependency failure without registration | Real-pair packet continuity, offline lease limits and remaining failure variants |
+| HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short provider dependency outage and recover without registration | Map/lease expiry, full process/transport outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | U routes/application tests | Real consumer to resource behind router |
 | HC-033 | U configuration tests | Public selection/disable and actual route effect |
@@ -349,6 +349,15 @@ exchange on the same sockets afterwards. Both applications remained reachable
 over loopback and the independent underlay. Reapproval restored fresh traffic.
 This is node-approval withdrawal, not a complete port-policy, lease or latency
 matrix; another authorized overlay flow remains a separate control case.
+
+[Coordinator 3ba91ff](https://github.com/endless-net/coordinator/tree/3ba91ff4774fbc9dcfc7e0d5084ca1a85bb1a72f)
+added a short Signing dependency outage with both real agents reporting the
+provider's temporary map/endpoint error. In
+[CI 34601934992](https://github.com/endless-net/coordinator/actions/runs/34601934992/job/103271192505),
+four established TCP/UDP sockets and fresh exchanges in both directions kept
+working with valid cached maps. After automatic recovery the same sockets still
+exchanged nonces; no registration request occurred. This does not cover expired
+maps/leases, indefinite offline access or a complete Coordinator process outage.
 
 ## Next work
 
