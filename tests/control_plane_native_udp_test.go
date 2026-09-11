@@ -20,14 +20,22 @@ import (
 // The reference peer's overlay address is not local to this host, preventing
 // a same-host shortcut that could falsely prove encrypted packet delivery.
 func TestControlPlaneNativeUDPTraffic(t *testing.T) {
-	exerciseNativeUDPTraffic(t, false)
+	exerciseNativeTraffic(t, false, "udp")
 }
 
 func TestControlPlaneNativeIPv6UDPTraffic(t *testing.T) {
-	exerciseNativeUDPTraffic(t, true)
+	exerciseNativeTraffic(t, true, "udp")
 }
 
-func exerciseNativeUDPTraffic(t *testing.T, ipv6 bool) {
+func TestControlPlaneNativeTCPTraffic(t *testing.T) {
+	exerciseNativeTraffic(t, false, "tcp")
+}
+
+func TestControlPlaneNativeIPv6TCPTraffic(t *testing.T) {
+	exerciseNativeTraffic(t, true, "tcp")
+}
+
+func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	t.Helper()
 	requireControlScenario(t)
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
@@ -108,7 +116,12 @@ func exerciseNativeUDPTraffic(t *testing.T, ipv6 bool) {
 	if !underlay.IsValid() {
 		t.Fatal("runner has no usable IPv4 underlay interface")
 	}
-	reference := testwireguard.NewUDP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
+	var reference testwireguard.Peer
+	if protocol == "tcp" {
+		reference = testwireguard.NewTCP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
+	} else {
+		reference = testwireguard.NewUDP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
+	}
 	peer := api.Peer{ID: "protocol-peer", Hostname: "udp-peer", PublicKey: reference.PublicKey, Endpoint: reference.Endpoint, EndpointCandidates: []string{reference.Endpoint}, AllowedIPs: []string{netip.PrefixFrom(peerIP, peerIP.BitLen()).String()}}
 	apply := func(desired api.Peer) {
 		t.Helper()
@@ -131,7 +144,7 @@ func exerciseNativeUDPTraffic(t *testing.T, ipv6 bool) {
 		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(applied.WireGuard.ListenPort)))
 	}
 	address := func(port string) string { return net.JoinHostPort(peerIP.String(), port) }
-	fresh := func(port string) bool { return applicationProbe(t, binary, "", "udp", address(port)) }
+	fresh := func(port string) bool { return applicationProbe(t, binary, "", protocol, address(port)) }
 	apply(peer)
 	for _, port := range []string{"24001", "24002"} {
 		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
@@ -153,33 +166,38 @@ func exerciseNativeUDPTraffic(t *testing.T, ipv6 bool) {
 			received, echoed := reference.PacketCounts()
 			initiations, responses, other := reference.HandshakeCounts()
 			t.Logf("reference handshake: initiations_received=%d responses_sent=%d other_received=%d", initiations, responses, other)
-			t.Fatalf("native UDP failed: endpoint_selected=%t handshake=%t rx=%d tx=%d reference_received=%d reference_echoed=%d", selected, handshake, rx, tx, received, echoed)
+			t.Fatalf("native %s failed: endpoint_selected=%t handshake=%t rx=%d tx=%d reference_received=%d reference_echoed=%d", protocol, selected, handshake, rx, tx, received, echoed)
 		}
 	}
-	first := startApplicationSession(t, binary, "", "udp", address("24001"))
-	second := startApplicationSession(t, binary, "", "udp", address("24002"))
+	first := startApplicationSession(t, binary, "", protocol, address("24001"))
+	second := startApplicationSession(t, binary, "", protocol, address("24002"))
 	first("ok")
 	second("ok")
 	limited := peer
 	limited.ACLRestricted = true
-	limited.ACLGrants = []api.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: "udp", Port: 24002}}}}
+	limited.ACLGrants = []api.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: protocol, Port: 24002}}}}
 	apply(limited)
 	for range 3 {
 		second("ok")
 		first("blocked")
 		if !fresh("24002") {
-			t.Fatal("retained UDP grant stopped working")
+			t.Fatal("retained grant stopped working")
 		}
 		if fresh("24001") {
-			t.Fatal("withdrawn UDP grant still permitted new traffic")
+			t.Fatal("withdrawn grant still permitted new traffic")
 		}
 		second("ok")
 	}
 	apply(peer)
-	first("ok")
+	// A denied TCP connection may terminate or enter retransmission backoff.
+	// Restored authorization must admit fresh connections; the other port's
+	// established connection must remain usable throughout the policy change.
+	if protocol == "udp" {
+		first("ok")
+	}
 	second("ok")
 	if !fresh("24001") || !fresh("24002") {
-		t.Fatal("restored native UDP grants did not recover")
+		t.Fatal("restored native grants did not recover")
 	}
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
@@ -227,7 +245,7 @@ func exerciseNativeUDPTraffic(t *testing.T, ipv6 bool) {
 			err := testclient.Await(ctx, func() bool { return fresh(port) })
 			cancel()
 			if err != nil {
-				t.Fatal("connected intent did not restore native UDP traffic")
+				t.Fatal("connected intent did not restore native traffic")
 			}
 		}
 		// Registration also renews an existing node credential. The contract
@@ -260,7 +278,7 @@ func exerciseNativeUDPTraffic(t *testing.T, ipv6 bool) {
 	// terminal retirement. Denial must follow the Client's credential handling,
 	// not a peer-map withdrawal or an application shutdown in the fixture.
 	t.Log("native lifecycle: revoke credential with established traffic")
-	retiredSession := startApplicationSession(t, binary, "", "udp", address("24001"))
+	retiredSession := startApplicationSession(t, binary, "", protocol, address("24001"))
 	retiredSession("ok")
 	before = registrationRequests()
 	if err := s.Revoke(initial.NodeID); err != nil {
@@ -277,7 +295,7 @@ func exerciseNativeUDPTraffic(t *testing.T, ipv6 bool) {
 		})
 		retiredSession("blocked")
 		if fresh("24001") || fresh("24002") {
-			t.Fatal("retired client still delivered fresh native UDP traffic")
+			t.Fatal("retired client still delivered fresh native traffic")
 		}
 		if registrationRequests() != before {
 			t.Fatal("terminal retirement or restart attempted enrollment")
