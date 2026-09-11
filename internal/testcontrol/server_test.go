@@ -97,6 +97,40 @@ func TestRegistrationBindingAndRevocation(t *testing.T) {
 	}
 }
 
+func TestRegistrationResponseLossPreservesOperation(t *testing.T) {
+	s := testcontrol.New(t)
+	n, token, err := s.AddNetwork("lost-response", "100.82.0.0/24")
+	check(t, err)
+	req, _ := request(t, n, token)
+	a := api.NewAPI(s.URL(), "")
+	s.DropNextRegistrationResponse()
+	if _, err := a.RegisterNode(req); err == nil {
+		t.Fatal("response loss was not observable by caller")
+	}
+	result, err := a.RegisterNode(req)
+	check(t, err)
+	check(t, api.VerifyNetworkMapSignatureWithTrustBundle(result, s.Trust()))
+	var dropped string
+	var attempts []testcontrol.Event
+	commits := 0
+	for _, event := range s.Events() {
+		switch event.Kind {
+		case "registration-request":
+			attempts = append(attempts, event)
+		case "registration-response-dropped":
+			dropped = event.NodeID
+		case "registered":
+			commits++
+		}
+	}
+	if dropped != result.Node.ID || commits != 1 || len(attempts) != 2 {
+		t.Fatal("response loss/replay did not preserve one logical registration")
+	}
+	if attempts[0].OperationID != attempts[1].OperationID || attempts[0].RequestHash != attempts[1].RequestHash {
+		t.Fatal("registration retry changed its wire input")
+	}
+}
+
 func TestSignedMapUpdatesAndFailures(t *testing.T) {
 	s, a, _, result, _ := setup(t)
 	current := result.Snapshot()

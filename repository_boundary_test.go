@@ -140,22 +140,26 @@ func TestPublicModuleCIUsesNoPrivateRepositoryCredentials(t *testing.T) {
 	}
 }
 
-func TestAPTReleaseUsesRepositoryScopedDeployKey(t *testing.T) {
+func TestAPTReleaseUsesRepositoryScopedAppToken(t *testing.T) {
 	workflow, err := os.ReadFile(".github/workflows/publish-apt.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	workflowText := string(workflow)
 	for _, expected := range []string{
-		"APT_REPO_DEPLOY_KEY: ${{ secrets.APT_REPO_DEPLOY_KEY }}",
-		"ssh-key: ${{ secrets.APT_REPO_DEPLOY_KEY }}",
+		"uses: actions/create-github-app-token@v3",
+		"repositories: apt",
+		"permission-contents: write",
+		"token: ${{ steps.apt-token.outputs.token }}",
 	} {
 		if !strings.Contains(workflowText, expected) {
 			t.Fatalf("APT release workflow does not contain %q", expected)
 		}
 	}
-	if strings.Contains(workflowText, "APT_REPO_TOKEN") {
-		t.Fatal("APT release workflow still requests a repository-wide token")
+	for _, forbidden := range []string{"APT_REPO_TOKEN", "APT_REPO_DEPLOY_KEY", "ssh-key:"} {
+		if strings.Contains(workflowText, forbidden) {
+			t.Fatalf("APT release workflow retains superseded credential %q", forbidden)
+		}
 	}
 }
 

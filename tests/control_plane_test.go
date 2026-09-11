@@ -15,7 +15,7 @@ import (
 	ipc "github.com/endless-net/client/ipc/v2"
 )
 
-func controlScenario(t *testing.T) (*testcontrol.Server, *testclient.Node, string) {
+func requireControlScenario(t *testing.T) {
 	t.Helper()
 	if testing.Short() || os.Getenv("ENDLESSNET_CONTROL_TEST") != "1" {
 		t.Skip("requires isolated control-plane CI")
@@ -23,6 +23,11 @@ func controlScenario(t *testing.T) (*testcontrol.Server, *testclient.Node, strin
 	if runtime.GOOS != "linux" || os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" {
 		t.Fatal("requires a disposable Linux GitHub-hosted runner")
 	}
+}
+
+func controlScenario(t *testing.T) (*testcontrol.Server, *testclient.Node, string) {
+	t.Helper()
+	requireControlScenario(t)
 	s := testcontrol.New(t)
 	network, token, err := s.AddNetwork("scenario", "100.90.0.0/24")
 	if err != nil {
@@ -33,6 +38,85 @@ func controlScenario(t *testing.T) (*testcontrol.Server, *testclient.Node, strin
 	n.Start()
 	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
 	return s, n, status.NodeID
+}
+
+// IT-05 / HC-010: retry a committed registration after its response was lost.
+// A second CLI process must recover the operation without exposing its store.
+func TestControlPlaneRegistrationResponseLoss(t *testing.T) {
+	requireControlScenario(t)
+	s := testcontrol.New(t)
+	network, token, err := s.AddNetwork("retry", "100.91.0.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := testclient.New(t, s)
+	s.DropNextRegistrationResponse()
+	args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--join-token", token, "--hostname", "retry-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off"}
+	// The client may retry within the first command. If it exits, the second
+	// command is the process-restart variant of the same operation.
+	if _, err = n.Run(args...); err != nil {
+		if _, err = n.Run(args...); err != nil {
+			t.Fatal("registration did not recover after response loss")
+		}
+	}
+	n.Start()
+	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
+	var first testcontrol.Event
+	attempts, registrations := 0, 0
+	dropped := ""
+	for _, event := range s.Events() {
+		switch event.Kind {
+		case "registration-request":
+			if attempts == 0 {
+				first = event
+			} else if event.OperationID != first.OperationID || event.RequestHash != first.RequestHash {
+				t.Fatal("client changed the operation or signed input on retry")
+			}
+			attempts++
+		case "registered":
+			registrations++
+		case "registration-response-dropped":
+			dropped = event.NodeID
+		}
+	}
+	if attempts < 2 || registrations != 1 || dropped != status.NodeID {
+		t.Fatal("retry did not recover the original registered node")
+	}
+}
+
+// IT-20 / HC-030: a temporary service failure must not destroy enrollment.
+func TestControlPlaneTemporaryFailurePreservesEnrollment(t *testing.T) {
+	s, n, id := controlScenario(t)
+	s.SetUnavailable(true)
+	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.State == ipc.StateDegraded })
+	if status.NodeID != id || !status.NodeCredentialPresent || !status.CachedMapValid {
+		t.Fatal("temporary failure destroyed verified enrollment")
+	}
+	n.Stop()
+	n.Start()
+	status = n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.State == ipc.StateDegraded })
+	if status.NodeID != id || !status.NodeCredentialPresent {
+		t.Fatal("restart during outage discarded enrollment")
+	}
+	s.SetUnavailable(false)
+	update(t, s, id, func(m *api.NetworkMapSnapshot) { m.Network.Name = "recovered" })
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.NodeID == id && v.CachedMapValid && v.MapRevision > status.MapRevision
+	})
+	for _, event := range s.Events() {
+		if event.Kind == "registration-request" && event.OperationID == "" {
+			t.Fatal("registration lacked operation identity")
+		}
+	}
+	registrations := 0
+	for _, event := range s.Events() {
+		if event.Kind == "registered" {
+			registrations++
+		}
+	}
+	if registrations != 1 {
+		t.Fatal("outage recovery created another registration")
+	}
 }
 func update(t *testing.T, s *testcontrol.Server, id string, edit func(*api.NetworkMapSnapshot)) {
 	t.Helper()

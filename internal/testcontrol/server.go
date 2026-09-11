@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -29,8 +30,9 @@ const credentialHeader = "X-EndlessNet-Node-Credential"
 
 // Event deliberately excludes request bodies, credentials and identity keys.
 type Event struct {
-	Kind, NodeID, Path string
-	Cursor             api.MapCursor
+	Kind, NodeID, Path       string
+	OperationID, RequestHash string
+	Cursor                   api.MapCursor
 }
 
 type node struct {
@@ -52,26 +54,27 @@ type enrollment struct {
 
 // Server owns all mutable state. Callers receive independent copies.
 type Server struct {
-	HTTP        *httptest.Server
-	mu          sync.Mutex
-	key         ed25519.PrivateKey
-	trust       api.SigningTrustBundle
-	session     string
-	networks    map[string]api.Network
-	joins       map[string]string
-	nodes       map[string]*node
-	operations  map[string]operation
-	enrollments map[string]*enrollment
-	events      []Event
-	changed     chan struct{}
-	streams     chan struct{}
-	closed      chan struct{}
-	closeOnce   sync.Once
-	unavailable bool
-	faults      map[string]api.ErrorCode
-	mapFaults   map[string]string
-	active      int
-	flows       map[string]*flowState
+	HTTP                     *httptest.Server
+	mu                       sync.Mutex
+	key                      ed25519.PrivateKey
+	trust                    api.SigningTrustBundle
+	session                  string
+	networks                 map[string]api.Network
+	joins                    map[string]string
+	nodes                    map[string]*node
+	operations               map[string]operation
+	enrollments              map[string]*enrollment
+	events                   []Event
+	changed                  chan struct{}
+	streams                  chan struct{}
+	closed                   chan struct{}
+	closeOnce                sync.Once
+	unavailable              bool
+	faults                   map[string]api.ErrorCode
+	mapFaults                map[string]string
+	active                   int
+	dropRegistrationResponse bool
+	flows                    map[string]*flowState
 }
 
 func New(t testing.TB) *Server {
@@ -205,6 +208,14 @@ func (s *Server) BreakStreams() {
 	defer s.mu.Unlock()
 	close(s.streams)
 	s.streams = make(chan struct{})
+}
+
+// DropNextRegistrationResponse closes the connection after successful registration
+// has been recorded. Only the response is lost; a retry must reuse its operation.
+func (s *Server) DropNextRegistrationResponse() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dropRegistrationResponse = true
 }
 
 func (s *Server) Revoke(id string) error {
@@ -344,6 +355,12 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	raw, err := json.Marshal(req)
+	if err != nil {
+		http.Error(w, "invalid registration", 400)
+		return
+	}
+	s.recordLocked(Event{Kind: "registration-request", OperationID: req.IdempotencyID, RequestHash: fmt.Sprintf("%x", sha256.Sum256(raw))})
 	result, code, err := s.registerLocked(req, r.Header.Get("Authorization"), false)
 	if code != "" {
 		publicError(w, code)
@@ -352,6 +369,13 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "invalid registration", 400)
 		return
+	}
+	if s.dropRegistrationResponse {
+		s.dropRegistrationResponse = false
+		s.recordLocked(Event{Kind: "registration-response-dropped", NodeID: result.Node.ID})
+		// The test peer serves HTTP/1 over its own listener. Abort after commit,
+		// before headers; ErrAbortHandler makes net/http close the connection.
+		panic(http.ErrAbortHandler)
 	}
 	writeJSON(w, result)
 }
