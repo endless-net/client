@@ -35,14 +35,24 @@ func (b *observedBind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
 
 type Peer struct {
 	PublicKey, Endpoint string
+	traffic             *trafficCounters
+}
+
+type trafficCounters struct{ received, echoed atomic.Uint64 }
+
+func (p Peer) PacketCounts() (uint64, uint64) {
+	return p.traffic.received.Load(), p.traffic.echoed.Load()
 }
 
 // NewUDP creates an encrypted UDP echo peer for ports 24001 and 24002. Its
 // overlay address exists only in the channel TUN, never on the runner OS.
-func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP netip.Addr) Peer {
+func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP netip.Addr) Peer {
 	t.Helper()
 	if !clientIP.Is4() || !peerIP.Is4() {
 		t.Fatal("reference peer requires IPv4 addresses")
+	}
+	if !underlayIP.Is4() || !underlayIP.IsGlobalUnicast() || underlayIP.IsLinkLocalUnicast() {
+		t.Fatal("reference peer requires a usable direct underlay address")
 	}
 	private, err := wg.GeneratePrivateKey()
 	if err != nil {
@@ -63,6 +73,7 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP netip.Addr) Peer
 	bind := &observedBind{Bind: conn.NewStdNetBind()}
 	engine := device.NewDevice(tunnel.TUN(), bind, &device.Logger{Verbosef: device.DiscardLogf, Errorf: device.DiscardLogf})
 	done, exited := make(chan struct{}), make(chan struct{})
+	traffic := &trafficCounters{}
 	t.Cleanup(func() { close(done); engine.Close(); <-exited })
 	go func() {
 		defer close(exited)
@@ -74,12 +85,14 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP netip.Addr) Peer
 				if !ok {
 					return
 				}
+				traffic.received.Add(1)
 				reply := echoUDP(packet, clientIP.As4(), peerIP.As4())
 				if reply == nil {
 					continue
 				}
 				select {
 				case tunnel.Outbound <- reply:
+					traffic.echoed.Add(1)
 				case <-done:
 					return
 				}
@@ -97,7 +110,7 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP netip.Addr) Peer
 	if port == 0 {
 		t.Fatal("reference peer has no UDP listener")
 	}
-	return Peer{PublicKey: public, Endpoint: net.JoinHostPort("127.0.0.1", strconv.Itoa(int(port)))}
+	return Peer{PublicKey: public, Endpoint: net.JoinHostPort(underlayIP.String(), strconv.Itoa(int(port))), traffic: traffic}
 }
 
 func echoUDP(packet []byte, clientIP, peerIP [4]byte) []byte {

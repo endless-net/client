@@ -50,7 +50,39 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 			t.Fatal("reference peer overlay IP is assigned to the host")
 		}
 	}
-	reference := testwireguard.NewUDP(t, m.Node.PublicKey, netip.MustParseAddr(initial.OverlayIP), peerIP)
+	clientIP := netip.MustParseAddr(initial.OverlayIP)
+	var underlay netip.Addr
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&(net.FlagLoopback|net.FlagPointToPoint) != 0 {
+			continue
+		}
+		values, err := iface.Addrs()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, value := range values {
+			prefix, err := netip.ParsePrefix(value.String())
+			if err != nil {
+				continue
+			}
+			ip := prefix.Addr()
+			if ip.Is4() && ip.IsGlobalUnicast() && !ip.IsLinkLocalUnicast() && ip != clientIP && ip != peerIP {
+				underlay = ip
+				break
+			}
+		}
+		if underlay.IsValid() {
+			break
+		}
+	}
+	if !underlay.IsValid() {
+		t.Fatal("runner has no usable IPv4 underlay interface")
+	}
+	reference := testwireguard.NewUDP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
 	peer := api.Peer{ID: "protocol-peer", Hostname: "udp-peer", PublicKey: reference.PublicKey, Endpoint: reference.Endpoint, EndpointCandidates: []string{reference.Endpoint}, AllowedIPs: []string{peerIP.String() + "/32"}}
 	apply := func(desired api.Peer) {
 		t.Helper()
@@ -61,9 +93,12 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		applied := n.AwaitStatus(func(v ipc.StatusResponse) bool {
 			return v.MapRevision >= current.Revision.Network && v.PeerCount == 1 && v.Agent != nil && v.Agent.StatePresent && v.Agent.SnapshotState == ipc.AgentSnapshotCurrent && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" && v.WireGuard != nil && v.WireGuard.OK
 		})
+		if len(applied.WireGuard.Peers) != 1 || applied.WireGuard.Peers[0].Endpoint != reference.Endpoint {
+			t.Fatal("client did not select the fixture's signed direct endpoint")
+		}
 	}
 	address := func(port string) string { return net.JoinHostPort(peerIP.String(), port) }
 	fresh := func(port string) bool { return applicationProbe(t, binary, "", "udp", address(port)) }
@@ -73,7 +108,20 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 		err := testclient.Await(ctx, func() bool { return fresh(port) })
 		cancel()
 		if err != nil {
-			t.Fatal("native UDP application did not cross the encrypted tunnel")
+			v, _ := n.Status()
+			var handshake bool
+			var rx, tx uint64
+			var selected bool
+			if v.WireGuard != nil {
+				for _, p := range v.WireGuard.Peers {
+					handshake = handshake || p.LatestHandshakeUnix > 0
+					rx += p.TransferRXBytes
+					tx += p.TransferTXBytes
+					selected = selected || p.Endpoint == reference.Endpoint
+				}
+			}
+			received, echoed := reference.PacketCounts()
+			t.Fatalf("native UDP failed: endpoint_selected=%t handshake=%t rx=%d tx=%d reference_received=%d reference_echoed=%d", selected, handshake, rx, tx, received, echoed)
 		}
 	}
 	first := startApplicationSession(t, binary, "", "udp", address("24001"))
