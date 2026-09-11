@@ -97,7 +97,7 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clie
 		}
 		return count >= 2
 	}
-	grantAndObserve := func(loseAck bool) {
+	grantAndObserve := func(loseAck bool) time.Time {
 		t.Helper()
 		beforeGrant := len(s.Events())
 		beforeReports := len(s.FlowReports())
@@ -133,6 +133,7 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clie
 		}); err != nil {
 			t.Fatal("client did not report real UDP flow metadata under consent")
 		}
+		return until
 	}
 	grantAndObserve(true)
 	beforeRevocation := len(s.Events())
@@ -141,5 +142,26 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clie
 	}
 	awaitPolicy("flow-policy-disabled", beforeRevocation)
 	assertQuiet()
+	expires := grantAndObserve(false)
+	// Keep returning the same policy, including its original expiry, rather
+	// than replacing it with a revocation. Traffic must survive the expiry.
+	ctx, cancel := context.WithDeadline(t.Context(), expires.Add(10*time.Second))
+	defer cancel()
+	if err := testclient.Await(ctx, func() bool {
+		if !fresh("24001") {
+			t.Fatal("flow consent expiry disrupted application traffic")
+		}
+		// Drain the documented five-second RPC deadline before measuring
+		// silence; window timestamps still enforce the exact expiry below.
+		return time.Now().After(expires.Add(5 * time.Second))
+	}); err != nil {
+		t.Fatal("flow consent expiry observation interrupted")
+	}
+	assertQuiet()
+	for _, report := range s.FlowReports() {
+		if report.NodeId == id && report.Window != nil && report.Window.WindowEnd != nil && report.Window.WindowEnd.AsTime().After(expires) {
+			t.Fatal("client collected flow metadata beyond consent expiry")
+		}
+	}
 	grantAndObserve(false)
 }

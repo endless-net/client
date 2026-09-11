@@ -2254,6 +2254,15 @@ flow-consent sources lack this additional assertion and cannot qualify it.
 
 ## Next work
 
+The native flow root now also leaves its last granted policy unchanged through
+natural expiry while UDP traffic continues. After draining the five-second RPC
+deadline, twelve seconds of fresh traffic must produce no report attempts.
+Captured window timestamps may not exceed the consent boundary. A new explicit
+grant must restore reporting, without restarting or re-enrolling the Client.
+This covers expiry with the policy endpoint still reachable; loss of policy
+connectivity and abrupt-crash spool recovery remain separate. The inventory is
+still 29 roots / 696 outcomes; this extension awaits its own hosted evidence.
+
 Run [34655479384](https://github.com/endless-net/client/actions/runs/34655479384)
 completed with failure at source `add60a385d4a17a92d1f3ddb0d34f52cd0ae6d16`.
 All 24 native job reports were inspected: identical 29-root inventories,
