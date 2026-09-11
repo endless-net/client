@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"time"
 )
@@ -102,12 +103,24 @@ func probe(network, address string) error {
 	return probeDNS(network, address, "")
 }
 
+// IPv6 traffic assertions use literal IPv6 destinations and must never fall
+// back to IPv4. Existing hostname/DNS scenarios explicitly exercise IPv4.
+func probeNetwork(network, address string) string {
+	host, _, err := net.SplitHostPort(address)
+	if err == nil {
+		if ip, err := netip.ParseAddr(host); err == nil && ip.Is6() && !ip.Is4In6() {
+			return network + "6"
+		}
+	}
+	return network + "4"
+}
+
 func probeDNS(network, address, dnsServer string) error {
 	if network != "tcp" && network != "udp" {
 		return errors.New("network must be tcp or udp")
 	}
 	dialer := net.Dialer{Timeout: time.Second, Resolver: resolver(dnsServer)}
-	conn, err := dialer.Dial(network+"4", address)
+	conn, err := dialer.Dial(probeNetwork(network, address), address)
 	if err != nil {
 		return errUnreachable
 	}
@@ -186,7 +199,7 @@ func session(network, address string, input io.Reader, output io.Writer) error {
 	if network != "tcp" && network != "udp" {
 		return errors.New("network must be tcp or udp")
 	}
-	conn, err := net.DialTimeout(network+"4", address, time.Second)
+	conn, err := net.DialTimeout(probeNetwork(network, address), address, time.Second)
 	if err != nil {
 		return errUnreachable
 	}

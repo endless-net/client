@@ -20,6 +20,15 @@ import (
 // The reference peer's overlay address is not local to this host, preventing
 // a same-host shortcut that could falsely prove encrypted packet delivery.
 func TestControlPlaneNativeUDPTraffic(t *testing.T) {
+	exerciseNativeUDPTraffic(t, false)
+}
+
+func TestControlPlaneNativeIPv6UDPTraffic(t *testing.T) {
+	exerciseNativeUDPTraffic(t, true)
+}
+
+func exerciseNativeUDPTraffic(t *testing.T, ipv6 bool) {
+	t.Helper()
 	requireControlScenario(t)
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
 	if !filepath.IsAbs(binary) {
@@ -35,11 +44,29 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 	n.Start()
 	defer n.Stop()
 	initial := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
+	if ipv6 {
+		// Supply the dual-stack projection through the signed public contract.
+		// The Client must configure its real OS IPv6 address and route itself.
+		if err := s.UpdateMap(initial.NodeID, func(m *api.NetworkMapSnapshot) {
+			m.Network.IPv6CIDR = "fd94::/64"
+			m.Node.AssignedIPv6 = "fd94::1"
+		}); err != nil {
+			t.Fatal(err)
+		}
+		initial = n.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.NodeID == initial.NodeID && v.OverlayIPv6 == "fd94::1" && v.CachedMapValid
+		})
+	}
 	m, err := s.Snapshot(initial.NodeID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	peerIP := netip.MustParseAddr("100.94.0.20")
+	clientIP := netip.MustParseAddr(initial.OverlayIP)
+	if ipv6 {
+		peerIP = netip.MustParseAddr("fd94::20")
+		clientIP = netip.MustParseAddr(initial.OverlayIPv6)
+	}
 	addresses, err := net.InterfaceAddrs()
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +77,6 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 			t.Fatal("reference peer overlay IP is assigned to the host")
 		}
 	}
-	clientIP := netip.MustParseAddr(initial.OverlayIP)
 	var underlay netip.Addr
 	interfaces, err := net.Interfaces()
 	if err != nil {
@@ -70,7 +96,7 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 				continue
 			}
 			ip := prefix.Addr()
-			if ip.Is4() && ip.IsGlobalUnicast() && !ip.IsLinkLocalUnicast() && ip != clientIP && ip != peerIP {
+			if ip.Is4() && ip.IsGlobalUnicast() && !ip.IsLinkLocalUnicast() && ip != netip.MustParseAddr(initial.OverlayIP) && ip != peerIP {
 				underlay = ip
 				break
 			}
@@ -83,7 +109,7 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 		t.Fatal("runner has no usable IPv4 underlay interface")
 	}
 	reference := testwireguard.NewUDP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
-	peer := api.Peer{ID: "protocol-peer", Hostname: "udp-peer", PublicKey: reference.PublicKey, Endpoint: reference.Endpoint, EndpointCandidates: []string{reference.Endpoint}, AllowedIPs: []string{peerIP.String() + "/32"}}
+	peer := api.Peer{ID: "protocol-peer", Hostname: "udp-peer", PublicKey: reference.PublicKey, Endpoint: reference.Endpoint, EndpointCandidates: []string{reference.Endpoint}, AllowedIPs: []string{netip.PrefixFrom(peerIP, peerIP.BitLen()).String()}}
 	apply := func(desired api.Peer) {
 		t.Helper()
 		if err := s.UpdatePeers(initial.NodeID, []api.Peer{desired}); err != nil {
@@ -191,7 +217,7 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 	assertConnected := func() {
 		t.Helper()
 		v := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == initial.NodeID && v.OverlayIP == initial.OverlayIP && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.NodeCredentialPresent && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535 && len(v.WireGuard.Peers) == 1
+			return v.NodeID == initial.NodeID && v.OverlayIP == initial.OverlayIP && v.OverlayIPv6 == initial.OverlayIPv6 && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.NodeCredentialPresent && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535 && len(v.WireGuard.Peers) == 1
 		})
 		// The Client may choose a new UDP port when its native device restarts.
 		// Only the fixture's return endpoint changes; its peer identity/map do not.

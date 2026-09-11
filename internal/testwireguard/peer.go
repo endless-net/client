@@ -93,8 +93,8 @@ func (p Peer) PacketCounts() (uint64, uint64) {
 // overlay address exists only in the channel TUN, never on the runner OS.
 func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP netip.Addr) Peer {
 	t.Helper()
-	if !clientIP.Is4() || !peerIP.Is4() {
-		t.Fatal("reference peer requires IPv4 addresses")
+	if !clientIP.IsValid() || !peerIP.IsValid() || clientIP.Is4() != peerIP.Is4() || clientIP.Is4In6() || peerIP.Is4In6() {
+		t.Fatal("reference peer requires addresses of the same IP family")
 	}
 	if !underlayIP.Is4() || !underlayIP.IsGlobalUnicast() || underlayIP.IsLinkLocalUnicast() {
 		t.Fatal("reference peer requires a usable direct underlay address")
@@ -131,7 +131,12 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 					return
 				}
 				traffic.received.Add(1)
-				reply := echoUDP(packet, clientIP.As4(), peerIP.As4())
+				var reply []byte
+				if clientIP.Is4() {
+					reply = echoUDP(packet, clientIP.As4(), peerIP.As4())
+				} else {
+					reply = echoUDPv6(packet, clientIP.As16(), peerIP.As16())
+				}
 				if reply == nil {
 					continue
 				}
@@ -144,7 +149,7 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 			}
 		}
 	}()
-	uapi := fmt.Sprintf("private_key=%s\nlisten_port=0\nreplace_peers=true\npublic_key=%s\nallowed_ip=%s/32\n", toHex(private), toHex(clientPublic), clientIP)
+	uapi := fmt.Sprintf("private_key=%s\nlisten_port=0\nreplace_peers=true\npublic_key=%s\nallowed_ip=%s\n", toHex(private), toHex(clientPublic), netip.PrefixFrom(clientIP, clientIP.BitLen()))
 	if err := engine.IpcSet(uapi); err != nil {
 		t.Fatal("reference WireGuard peer rejected configuration")
 	}
@@ -183,5 +188,28 @@ func echoUDP(packet []byte, clientIP, peerIP [4]byte) []byte {
 	copy(reply[22:24], packet[20:22])
 	// Swapping addresses and ports preserves the IPv4 and UDP one's-complement
 	// checksum sums, including the UDP pseudoheader; the payload is unchanged.
+	return reply
+}
+
+func echoUDPv6(packet []byte, clientIP, peerIP [16]byte) []byte {
+	// Only fixed-header IPv6 UDP carrying the 32-byte application nonce is
+	// part of this fixture. Extension headers and fragments are not echoed.
+	if len(packet) != 80 || packet[0]>>4 != 6 || packet[6] != 17 || binary.BigEndian.Uint16(packet[4:6]) != 40 || binary.BigEndian.Uint16(packet[44:46]) != 40 || binary.BigEndian.Uint16(packet[46:48]) == 0 {
+		return nil
+	}
+	if !bytes.Equal(packet[8:24], clientIP[:]) || !bytes.Equal(packet[24:40], peerIP[:]) {
+		return nil
+	}
+	port := binary.BigEndian.Uint16(packet[42:44])
+	if port != 24001 && port != 24002 {
+		return nil
+	}
+	reply := append([]byte(nil), packet...)
+	copy(reply[8:24], packet[24:40])
+	copy(reply[24:40], packet[8:24])
+	copy(reply[40:42], packet[42:44])
+	copy(reply[42:44], packet[40:42])
+	// Address and port swaps preserve the UDP checksum's one's-complement
+	// sum, including its IPv6 pseudoheader. IPv6 has no IP header checksum.
 	return reply
 }
