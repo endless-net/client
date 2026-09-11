@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"runtime"
 	"strings"
@@ -14,6 +15,91 @@ import (
 	"github.com/endless-net/client/internal/testcontrol"
 	ipc "github.com/endless-net/client/ipc/v2"
 )
+
+// IT-20 / HC-014, HC-030, HC-063: public errors, not status codes or
+// diagnostic words, decide whether the real agent forgets enrollment.
+func TestControlPlaneRecoveryErrorMatrix(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		code     api.ErrorCode
+		terminal bool
+	}{
+		{"unknown", api.ErrorCodeNodeCredentialUnknown, true},
+		{"revoked", api.ErrorCodeNodeCredentialRevoked, true},
+		{"expired", api.ErrorCodeNodeCredentialExpired, true},
+		{"invalid", api.ErrorCodeNodeCredentialInvalid, false},
+		{"binding", api.ErrorCodeNodeIdentityBindingMismatch, false},
+		{"session", api.ErrorCodeAuthenticationRequired, false},
+		{"policy", api.ErrorCodeAuthorizationDenied, false},
+		{"temporary", api.ErrorCodeTemporarilyUnavailable, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, n, id := controlScenario(t)
+			n.Stop()
+			body, err := json.Marshal(api.PublicError{SchemaVersion: api.SchemaVersion, ErrorCode: tc.code, DiagnosticMessage: "node_credential_unknown revoked expired", RequestID: "test-request"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			status, ok := tc.code.HTTPStatus()
+			if !ok {
+				t.Fatal("missing error status")
+			}
+			path := "/maps/" + id + "/stream"
+			if err := s.SetResponseFault("GET", path, status, "application/json", string(body)); err != nil {
+				t.Fatal(err)
+			}
+			n.Start()
+			if tc.terminal {
+				n.AwaitStatus(func(v ipc.StatusResponse) bool {
+					return v.State == ipc.StateNeedsEnrollment && v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent
+				})
+			} else {
+				v := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.State == ipc.StateDegraded })
+				if v.NodeID != id || !v.NodeCredentialPresent || !v.CachedMapValid {
+					t.Fatal("nonterminal code cleared enrollment")
+				}
+				s.ClearResponseFault("GET", path)
+				update(t, s, id, func(m *api.NetworkMapSnapshot) { m.Network.Name = "after-error" })
+				n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid && v.MapRevision > 1 })
+			}
+		})
+	}
+}
+
+func TestControlPlaneMalformedErrorsPreserveEnrollment(t *testing.T) {
+	unknown, err := json.Marshal(api.PublicError{SchemaVersion: api.SchemaVersion, ErrorCode: "future_terminal_code", DiagnosticMessage: "node_credential_revoked", RequestID: "test-request"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name              string
+		status            int
+		contentType, body string
+	}{
+		{"plain-401", 401, "text/plain", "node_credential_unknown revoked expired"},
+		{"plain-403", 403, "text/plain", "forbidden node_credential_revoked"},
+		{"unknown-code", 401, "application/json", string(unknown)},
+		{"generic-json", 401, "application/json", `{"error":"node_credential_expired"}`},
+		{"truncated-json", 401, "application/json", `{"error_code":`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, n, id := controlScenario(t)
+			n.Stop()
+			path := "/maps/" + id + "/stream"
+			if err := s.SetResponseFault("GET", path, tc.status, tc.contentType, tc.body); err != nil {
+				t.Fatal(err)
+			}
+			n.Start()
+			v := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.State == ipc.StateDegraded })
+			if v.NodeID != id || !v.NodeCredentialPresent || !v.CachedMapValid {
+				t.Fatal("malformed error cleared enrollment")
+			}
+			s.ClearResponseFault("GET", path)
+			update(t, s, id, func(m *api.NetworkMapSnapshot) { m.Network.Name = "after-malformed" })
+			n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid && v.MapRevision > 1 })
+		})
+	}
+}
 
 func requireControlScenario(t *testing.T) {
 	t.Helper()

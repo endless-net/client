@@ -45,6 +45,11 @@ type operation struct {
 	Result  api.RegisterNodeResponse
 }
 
+type responseFault struct {
+	Status            int
+	ContentType, Body string
+}
+
 type enrollment struct {
 	Request api.RegisterNodeRequest
 	Public  api.NodeEnrollmentRequest
@@ -71,6 +76,7 @@ type Server struct {
 	closeOnce                sync.Once
 	unavailable              bool
 	faults                   map[string]api.ErrorCode
+	responseFaults           map[string]responseFault
 	mapFaults                map[string]string
 	active                   int
 	dropRegistrationResponse bool
@@ -104,11 +110,19 @@ func New(t testing.TB) *Server {
 		s.mu.Lock()
 		code := s.faults[r.Method+" "+r.URL.Path]
 		delete(s.faults, r.Method+" "+r.URL.Path)
+		response, responseFaulted := s.responseFaults[r.Method+" "+r.URL.Path]
 		if s.unavailable {
 			code = api.ErrorCodeTemporarilyUnavailable
 		}
 		s.recordLocked(Event{Kind: "request", Path: r.Method + " " + r.URL.Path})
 		s.mu.Unlock()
+		if responseFaulted {
+			w.Header().Set("Content-Type", response.ContentType)
+			w.Header().Set("X-Request-ID", "test-request")
+			w.WriteHeader(response.Status)
+			_, _ = io.WriteString(w, response.Body)
+			return
+		}
 		if code != "" {
 			publicError(w, code)
 			return
@@ -202,6 +216,28 @@ func (s *Server) FailNext(method, path string, code api.ErrorCode) error {
 	defer s.mu.Unlock()
 	s.faults[method+" "+path] = code
 	return nil
+}
+
+// SetResponseFault persistently replaces a single wire route with an explicit
+// negative response. Unlike FailNext it lets a process observe a stable failure.
+// Bodies are test-supplied and never included in the event transcript.
+func (s *Server) SetResponseFault(method, path string, status int, contentType, body string) error {
+	if status < 400 || status > 599 || method == "" || !strings.HasPrefix(path, "/") || len(body) > 1<<20 {
+		return errors.New("invalid negative response fault")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.responseFaults == nil {
+		s.responseFaults = make(map[string]responseFault)
+	}
+	s.responseFaults[method+" "+path] = responseFault{Status: status, ContentType: contentType, Body: body}
+	return nil
+}
+
+func (s *Server) ClearResponseFault(method, path string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.responseFaults, method+" "+path)
 }
 func (s *Server) BreakStreams() {
 	s.mu.Lock()

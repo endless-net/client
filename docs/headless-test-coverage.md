@@ -115,6 +115,20 @@ before sending, rejects changed retry input, and clears pending state only with
 the validated registration result or explicit enrollment cleanup. Its subsequent
 CI run must pass before this registration case is considered verified.
 
+That fix is commit `aa46030`, verified by successful
+[Test run 34585856847](https://github.com/endless-net/client/actions/runs/34585856847),
+including all three control-plane repetitions and the installation/platform jobs.
+This establishes consumer retry behavior against the double, not real producer
+idempotency or release acceptance.
+
+The next increment adds `TestControlPlaneRecoveryErrorMatrix` (eight published
+error codes) and `TestControlPlaneMalformedErrorsPreserveEnrollment` (five invalid
+wire responses). They observe only public IPC identity/cache indicators and map
+recovery. Misleading diagnostic text must not trigger enrollment cleanup. A
+scoped persistent wire fault is cleared to demonstrate recovery for nonterminal
+responses; a separate double test verifies fault isolation and restoration.
+Local short tests and vet pass; full consumer execution awaits this commit's CI.
+
 The existing `control-plane` job selects all `TestControlPlane*` tests, runs them
 three times and is required by `verify`. These additions therefore run on each
 main push. Publication still needs a separate exact-SHA verification gate;
@@ -122,8 +136,8 @@ source CI alone does not attest a published artifact or a backend release.
 
 ## Next work
 
-Extend C with typed terminal/nonterminal/malformed errors and request-bound
-negative registration results, then map resync/delta and real peer probes.
+Verify the new error matrix in CI, then extend C with request-bound negative
+registration results, map resync/delta and real peer probes.
 Run producer conformance in owning service repositories. Keep contract gaps and
 platform decisions explicit; do not replace unresolved HC rows with generic smoke
 tests or infer broad completion from this initial increment.

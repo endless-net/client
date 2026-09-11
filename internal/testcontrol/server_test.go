@@ -131,6 +131,27 @@ func TestRegistrationResponseLossPreservesOperation(t *testing.T) {
 	}
 }
 
+func TestNegativeWireResponseIsScopedAndRecoverable(t *testing.T) {
+	s, a, _, result, _ := setup(t)
+	path := "/maps/" + result.Node.ID + "/stream"
+	check(t, s.SetResponseFault("GET", path, 401, "text/plain", "node_credential_unknown"))
+	for range 2 {
+		if _, err := a.ReadMapStreamEvent(result.Node.ID, api.MapCursor{}, time.Second); err == nil {
+			t.Fatal("negative wire response was ignored")
+		}
+	}
+	_, err := a.ServerKey()
+	check(t, err)
+	s.ClearResponseFault("GET", path)
+	event, err := a.ReadMapStreamEvent(result.Node.ID, api.MapCursor{}, time.Second)
+	check(t, err)
+	_, err = api.ApplyMapStreamEvent(api.NetworkMapSnapshot{}, event, s.Trust(), time.Now())
+	check(t, err)
+	if err := s.SetResponseFault("GET", path, 200, "text/plain", "success"); err == nil {
+		t.Fatal("negative response API accepted a success status")
+	}
+}
+
 func TestSignedMapUpdatesAndFailures(t *testing.T) {
 	s, a, _, result, _ := setup(t)
 	current := result.Snapshot()
