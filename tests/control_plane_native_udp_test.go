@@ -191,11 +191,21 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	}
 	assertICMP("restored-grant", true)
 	if protocol == "tcp" {
+		udp := func(port string) bool { return applicationProbe(t, binary, "", "udp", address(port)) }
+		if !udp("24001") || !udp("24002") {
+			t.Fatal("reference UDP baseline failed before ICMP-only policy")
+		}
+		udpSession := startApplicationSession(t, binary, "", "udp", address("24002"))
+		udpSession("ok")
 		icmpOnly := peer
 		icmpOnly.ACLRestricted = true
 		icmpOnly.ACLGrants = []api.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: "icmp"}}}}
 		apply(icmpOnly)
 		assertICMP("icmp-only-grant", true)
+		udpSession("blocked")
+		if udp("24001") || udp("24002") {
+			t.Fatal("ICMP-only grant permitted UDP traffic")
+		}
 		second("blocked")
 		if fresh("24001") || fresh("24002") {
 			t.Fatal("ICMP-only grant permitted TCP traffic")
@@ -211,6 +221,9 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 		apply(peer)
 		if !fresh("24001") || !fresh("24002") {
 			t.Fatal("restoring unrestricted grant after ICMP-only policy did not restore TCP")
+		}
+		if !udp("24001") || !udp("24002") {
+			t.Fatal("restoring unrestricted grant after ICMP-only policy did not restore UDP")
 		}
 		assertICMP("all-protocols-restored", true)
 	}

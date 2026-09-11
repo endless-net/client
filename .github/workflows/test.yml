@@ -15,7 +15,8 @@ name: Test
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-v2
-  cancel-in-progress: true
+  # Finish the active platform matrix so every started source gets analysable evidence.
+  cancel-in-progress: false
 
 permissions:
   contents: read

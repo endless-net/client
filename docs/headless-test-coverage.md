@@ -1116,6 +1116,26 @@ root test names. Local format/vet/lint/short checks pass; hosted evidence for
 these new assertions is pending. This does not prove UDP denial under ICMP-only
 policy, ICMP errors/PMTU, IPv6 underlay, Relay/NAT or all policy directions.
 
+## UDP isolation under ICMP-only policy
+
+The protocol-stack reference peer now answers real UDP nonce echoes on the same
+two destination ports as TCP. Before applying an ICMP-only grant, native Client
+UDP probes on both ports and a persistent UDP session must succeed. While ICMP
+remains allowed, the established UDP session and new UDP exchanges on both ports
+must be blocked; restoring unrestricted authorization must restore both fresh
+UDP exchanges. These checks run for both overlay address families in the native
+TCP scenarios, independently of the existing UDP-only reference scenarios.
+Only public signed maps and externally observed payload delivery are used.
+Local format/vet/lint/short checks pass; hosted qualification remains pending.
+
+The Client Test workflow now finishes its active matrix when a newer commit is
+pushed (`cancel-in-progress: false`). This preserves completed-source evidence
+for analysis instead of interrupting the slowest platform. GitHub concurrency
+still serializes runs in the same branch group and may replace an older pending
+run with a newer pending run; it does not guarantee execution of every queued
+commit. Jobs within each matrix remain parallel with fail-fast disabled. This
+changes Client-owned workflow scheduling only, not managed runner infrastructure.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

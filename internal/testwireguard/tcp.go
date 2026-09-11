@@ -16,7 +16,7 @@ import (
 	"github.com/tailscale/wireguard-go/tun/netstack"
 )
 
-// NewTCP serves 32-byte nonce echoes through a userspace protocol stack whose
+// NewTCP serves TCP and UDP 32-byte nonce echoes through a protocol stack whose
 // address is never installed on the runner OS. Client uses its real OS stack.
 func NewTCP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP netip.Addr) Peer {
 	t.Helper()
@@ -59,6 +59,7 @@ func NewTCP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 	closed := false
 	connections := map[net.Conn]struct{}{}
 	var listeners []net.Listener
+	var packets []net.PacketConn
 	t.Cleanup(func() {
 		mu.Lock()
 		closed = true
@@ -69,9 +70,35 @@ func NewTCP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 		for _, listener := range listeners {
 			_ = listener.Close()
 		}
+		for _, packet := range packets {
+			_ = packet.Close()
+		}
 		workers.Wait()
 	})
 	for _, port := range []uint16{24001, 24002} {
+		packet, err := stack.ListenUDPAddrPort(netip.AddrPortFrom(peerIP, port))
+		if err != nil {
+			t.Fatal("reference UDP listener could not start")
+		}
+		packets = append(packets, packet)
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			var payload [2048]byte
+			for {
+				n, from, err := packet.ReadFrom(payload[:])
+				if err != nil {
+					return
+				}
+				if n != 32 {
+					continue
+				}
+				traffic.received.Add(1)
+				if sent, err := packet.WriteTo(payload[:n], from); err == nil && sent == n {
+					traffic.echoed.Add(1)
+				}
+			}
+		}()
 		listener, err := stack.ListenTCPAddrPort(netip.AddrPortFrom(peerIP, port))
 		if err != nil {
 			t.Fatal("reference TCP listener could not start")
