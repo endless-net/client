@@ -49,8 +49,9 @@ Windows uses the same checksum-pinned Wintun dependency as the installer suite.
 Windows agent restart in this driver uses process termination; graceful Windows
 service-manager restart remains a distinct installation-suite observation.
 
-`TestControlPlaneNativeUDPTraffic` also builds and invokes `packetprobe` on every
-runner. One real Client uses its native OS TUN and routing; a reference WireGuard
+`TestControlPlaneNativeUDPTraffic` and `TestControlPlaneNativeIPv6UDPTraffic`
+invoke `packetprobe` on every runner. They share the same assertions using IPv4
+or IPv6 overlay addresses over an IPv4 WireGuard underlay. One real Client uses its native OS TUN and routing; a reference WireGuard
 peer uses the pinned third-party implementation with a channel TUN. The peer's
 overlay address is never assigned to the host. Fresh and established UDP flows
 to two ports must work, selective withdrawal must block one port while preserving
@@ -104,8 +105,9 @@ teardown cannot trigger cleanup. This correction is subsequent to the v0.5.0 tag
 Common contract results are attributed separately to each runner's OS and
 architecture. They do not prove that OS's complete dataplane, DNS resolver,
 route, firewall or service lifecycle behavior. The native UDP scenario covers
-only its explicit IPv4 direct-path and selective-port assertions. The two-real-
-Client traffic fixture currently runs on Linux only. TCP, IPv6, Relay/NAT and
+only its explicit IPv4/IPv6 overlay direct-path and selective-port assertions.
+The two-real-Client traffic fixture currently runs on Linux only. TCP/ICMP,
+IPv6 underlay, Relay/NAT and
 other policy variants still need their own platform evidence; see the
 [coverage ledger](headless-test-coverage.md) for actual run outcomes.
 

@@ -90,18 +90,18 @@ product scope are different conditions; neither is a successful skip.
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
 | HC-014 | U recovery matrix | C session expiry, reauthentication and preservation |
 | HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
-| HC-016 | C initial cached-map status and native direct IPv4 UDP on all six runners | Other paths/protocols and denied-access variants |
-| HC-017 | C native direct IPv4 UDP blocked/restored by disconnect/connect and agent restart on all six runners with original identity; historical R direct TCP/UDP | Remaining established-flow, TCP/IPv6, other paths and operation-failure variants |
-| HC-018 | C connected/disconnected intent survives process restart with native IPv4 UDP checks on all six runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
+| HC-016 | C initial cached-map status and native direct IPv4/IPv6 UDP on all six runners | Other paths/protocols and denied-access variants |
+| HC-017 | C native direct IPv4/IPv6 UDP blocked/restored by disconnect/connect and agent restart on all six runners with original identity; historical R direct TCP/UDP | Remaining established-flow, TCP, other paths and operation-failure variants |
+| HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 UDP checks on all six runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | U configuration tests | Public preference mutation and observed effect |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; U typed logout | Remote cleanup unconfirmed, local forget, profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
-| HC-024 | C IPv4 ICMP/TCP/UDP; real Client direct IPv4 UDP on all six runners (native increment below); historical R two agents with real Coordinator | Native TCP/ICMP on Windows/macOS, IPv6, Relay/NAT and full policy variants |
+| HC-024 | C IPv4 ICMP/TCP/UDP; real Client direct IPv4/IPv6 UDP on all six runners (native increments below); historical R two agents with real Coordinator | Native TCP/ICMP on Windows/macOS and IPv6, IPv6 underlay, Relay/NAT and full policy variants |
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; six-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
-| HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native UDP port withdrawal/restoration with established/fresh flows on all six runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, TCP and other platform variants |
+| HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 UDP port withdrawal/restoration with established/fresh flows on all six runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, TCP and other platform variants |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
@@ -139,7 +139,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
 | HC-063 | U local-forget/recovery tests | Public privileged reset and new identity against published contract responses |
 | HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
-| HC-065 | C terminal revoke and native direct IPv4 UDP retirement across agent restart on all six runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases, TCP/IPv6 and remaining path/platform variants, separately verified local removal |
+| HC-065 | C terminal revoke and native direct IPv4/IPv6 UDP retirement across agent restart on all six runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases, TCP and remaining path/platform variants, separately verified local removal |
 
 ## Current implementation increment
 
@@ -811,6 +811,48 @@ include process/fixture setup and the contract polling interval; they are not
 performance benchmarks. Cancellation and foreign poll authorization remain
 separate HC-008 variants; no browser UI or real OIDC provider is involved.
 
+## Native IPv6 UDP increment
+
+[Client f63e7a1](https://github.com/endless-net/client/tree/f63e7a1e27c394792b0221ccb1c652eb23cd6bc0)
+adds `TestControlPlaneNativeIPv6UDPTraffic` alongside the IPv4 scenario in
+[the native traffic suite](../tests/control_plane_native_udp_test.go). Both
+invoke the same assertions for two-port UDP delivery, selective grant withdrawal
+and restoration, disconnected/connected intent across agent restart, and
+terminal credential retirement with established and fresh traffic checks.
+
+The IPv6 scenario supplies a dual-stack signed map with a ULA node address and
+publishes an IPv6-only route to the reference peer. The real Client configures
+the OS interface and route; the peer's IPv6 overlay address is not assigned to
+the runner host. Packetprobe chooses IPv6 for the literal IPv6 destination,
+without IPv4 fallback. The reference channel-TUN peer echoes fixed-header IPv6
+UDP packets with the existing 32-byte nonce. Unit checks verify its mandatory
+UDP checksum and rejection of zero checksums, unrelated addresses/ports,
+truncation and unsupported extension/fragment headers.
+
+The encrypted WireGuard underlay remains IPv4. This increment cannot prove
+IPv6 underlay reachability, IPv6 DNS resolution, TCP/ICMP, IPv6 fragmentation,
+Relay/NAT or performance. No Client runtime or published contract change is
+included. Local format/vet/lint/short checks passed; actual native outcomes
+belong to [CI 34621919584](https://github.com/endless-net/client/actions/runs/34621919584).
+That run passed on exact source `f63e7a1e27c394792b0221ccb1c652eb23cd6bc0`.
+Comparison of all six job logs confirms the same 15 top-level scenarios, each
+passing three times: 45/45 per platform, 270/270 overall, with no failed or
+skipped top-level scenarios. The IPv6-specific repetitions were:
+
+| Runner | Three successful IPv6 repetitions | Evidence |
+| --- | --- | --- |
+| Ubuntu 22.04 amd64 | 21.81s, 22.12s, 22.08s | [job](https://github.com/endless-net/client/actions/runs/34621919584/job/103337778579) |
+| Ubuntu 24.04 amd64 | 21.86s, 21.87s, 21.73s | [job](https://github.com/endless-net/client/actions/runs/34621919584/job/103337778622) |
+| macOS 15 arm64 | 22.33s, 22.15s, 22.26s | [job](https://github.com/endless-net/client/actions/runs/34621919584/job/103337778509) |
+| macOS 15 Intel | 22.96s, 23.06s, 23.51s | [job](https://github.com/endless-net/client/actions/runs/34621919584/job/103337778518) |
+| Windows 2022 amd64 | 30.65s, 30.70s, 30.38s | [job](https://github.com/endless-net/client/actions/runs/34621919584/job/103337778587) |
+| Windows 2025 amd64 | 32.54s, 36.61s, 32.91s | [job](https://github.com/endless-net/client/actions/runs/34621919584/job/103337778571) |
+
+All required installation, platform verification, Linux two-real-Client
+dataplane and aggregate jobs also passed. Optional external STUN compatibility
+was skipped. Durations include interface/process setup and negative-probe
+deadlines; they are not IPv4-versus-IPv6 performance measurements.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
@@ -819,14 +861,14 @@ producer failures are constraints, not tasks to fix outside Client. Keep
 contract gaps and platform decisions explicit; do not replace unresolved client
 scenarios with generic smoke tests or infer completion from historical P/R runs.
 
-Extend native platform coverage beyond the bounded IPv4 direct UDP scenario:
-TCP, IPv6, Relay/NAT, policy direction/destination variants and automatic OS
+Extend native platform coverage beyond direct IPv4/IPv6 UDP over IPv4 underlay:
+TCP/ICMP, IPv6 underlay, Relay/NAT, policy direction/destination variants and automatic OS
 resolver behavior still require explicit client tests and runner evidence.
 Do not infer those outcomes from component ACL tests or successful peer UDP
 echoes. The real Client must continue to use its native OS interface and CLI/IPC.
 
-For the next native IPv6 increment, public IPC already exposes `overlay_ipv6`
-and `overlay_ipv6_cidr`. The current CI packetprobe forces IPv4 dialing, and
-the reference UDP peer accepts only IPv4 packets. Extend those Client-owned
-fixtures before claiming IPv6 traffic coverage, and distinguish the overlay
-address family from the WireGuard underlay transport in the resulting evidence.
+For a native TCP reference peer, the pinned WireGuard module exposes
+[CreateNetTUN and TCP listeners](https://github.com/tailscale/wireguard-go/blob/ae172d45f0f7/tun/netstack/tun.go).
+Check its dependency selection and compatibility with the current Go toolchain
+before adopting it. This is a candidate fixture implementation, not TCP
+coverage or authorization to increase dependency versions.

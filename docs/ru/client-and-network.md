@@ -426,8 +426,9 @@ Unit tests и сборка platform-specific кода подтверждают �
 
 1. Подтвердить оставшиеся направления ACL, SNAT и exit policy на Windows/macOS.
    Исходящие peer ACL userspace-клиента уже проверяются перед WireGuard на всех
-   ОС; прямой IPv4 UDP, выборочный отзыв порта и восстановление подтверждены
-   [шестиплатформенным CI](../headless-test-coverage.md#native-ipv4-udp-and-peer-acl-increment).
+   ОС; прямой IPv4/IPv6 UDP внутри туннеля с IPv4-транспортом, выборочный отзыв
+   порта и восстановление подтверждены
+   [шестиплатформенным CI](../headless-test-coverage.md#native-ipv6-udp-increment).
    Эти результаты не доказывают полную функциональность WFP/pf, SNAT или exit policy.
 2. Добавить явный readiness/alerting contract для freshness endpoint snapshot
    и проверить failover между всеми `relay_control_urls`.
