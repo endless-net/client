@@ -499,6 +499,66 @@ func TestControlPlaneRejectsInvalidMaps(t *testing.T) {
 		return v.State == ipc.StateNeedsEnrollment && !v.NodeCredentialPresent && v.NodeID == ""
 	})
 }
+func TestControlPlaneBrowserEnrollmentExpiryRecovery(t *testing.T) {
+	s, n, _ := controlScenario(t)
+	n.Stop()
+	other := testclient.New(t, s)
+	up := func(timeout string) ([]byte, error) {
+		return other.Run("up", "--server", s.URL(), "--network", "scenario", "--hostname", "expiry-node", "--config", other.Config, "--map-signing-trust-file", other.TrustFile, "--approval-timeout", timeout)
+	}
+	requests := func() []string {
+		var ids []string
+		for _, e := range s.Events() {
+			if e.Kind == "enrollment" {
+				ids = append(ids, e.Path)
+			}
+		}
+		return ids
+	}
+	if _, err := up("0s"); err == nil {
+		t.Fatal("pending enrollment succeeded")
+	}
+	first := requests()
+	if len(first) != 1 {
+		t.Fatal("initial browser request was not created once")
+	}
+	if err := s.ExpireEnrollment(first[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DecideEnrollment(first[0], true); err == nil {
+		t.Fatal("expired testserver request could still be approved")
+	}
+	if _, err := up("0s"); err == nil {
+		t.Fatal("expired enrollment granted access")
+	}
+	second := requests()
+	if len(second) != 2 || second[0] == second[1] {
+		t.Fatal("client did not replace the expired request with a new enrollment")
+	}
+	// A separate CLI process must resume the replacement instead of creating
+	// another request or silently enrolling before explicit approval.
+	if _, err := up("0s"); err == nil {
+		t.Fatal("replacement enrolled without approval")
+	}
+	if len(requests()) != 2 {
+		t.Fatal("pending replacement was not reused")
+	}
+	if err := s.DecideEnrollment(second[1], true); err != nil {
+		t.Fatal(err)
+	}
+	out, err := up("1s")
+	if err != nil || !strings.Contains(string(out), "enrolled node") {
+		t.Fatal("approved replacement did not enroll")
+	}
+	other.Start()
+	other.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.NodeID != "" && v.NodeCredentialPresent && v.CachedMapPresent
+	})
+	if len(requests()) != 2 {
+		t.Fatal("agent created another browser enrollment")
+	}
+}
+
 func TestControlPlaneBrowserEnrollment(t *testing.T) {
 	// Use the same CI opt-in and isolation requirements as agent scenarios.
 	s, n, _ := controlScenario(t)

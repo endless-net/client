@@ -38,6 +38,21 @@ func (s *Server) createEnrollment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, api.CreateNodeEnrollmentRequestResponse{Request: e.Public, PollToken: e.Token, PollAfterSeconds: 1})
 }
 
+// ExpireEnrollment advances only this request's lifetime in the contract model.
+// The real client learns of expiry through the normal status response.
+func (s *Server) ExpireEnrollment(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e := s.enrollments[id]
+	if e == nil || e.Public.Status != api.NodeEnrollmentRequestPending {
+		return errors.New("enrollment is not pending")
+	}
+	e.Public.ExpiresAt = time.Now().Add(-time.Second)
+	e.Public.Status = api.NodeEnrollmentRequestExpired
+	s.recordLocked(Event{Kind: "enrollment-expired", Path: id})
+	return nil
+}
+
 func (s *Server) DecideEnrollment(id string, approve bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

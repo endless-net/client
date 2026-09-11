@@ -406,6 +406,35 @@ func TestStreamCancellationAndConcurrentUpdates(t *testing.T) {
 	}
 }
 
+func TestExpiredEnrollmentCannotCompleteOrBecomeNewByReplay(t *testing.T) {
+	s := testcontrol.New(t)
+	n, _, err := s.AddNetwork("expiry", "100.82.0.0/24")
+	check(t, err)
+	req, _ := request(t, n, "")
+	a := api.NewAPI(s.URL(), "")
+	e, err := a.CreateNodeEnrollmentRequest(req)
+	check(t, err)
+	check(t, s.ExpireEnrollment(e.Request.ID))
+	status, err := a.NodeEnrollmentRequestStatus(e.Request.ID, e.PollToken)
+	check(t, err)
+	if status.Request.Status != api.NodeEnrollmentRequestExpired {
+		t.Fatal("expired request did not expose terminal status")
+	}
+	completed, err := a.CompleteNodeEnrollmentRequest(e.Request.ID, e.PollToken)
+	check(t, err)
+	if completed.Registration != nil {
+		t.Fatal("expired request issued credentials")
+	}
+	replay, err := a.CreateNodeEnrollmentRequest(req)
+	check(t, err)
+	if replay.Request.ID != e.Request.ID || replay.Request.Status != api.NodeEnrollmentRequestExpired {
+		t.Fatal("exact retry resurrected expired enrollment")
+	}
+	if err := s.DecideEnrollment(e.Request.ID, true); err == nil {
+		t.Fatal("expired request was approved")
+	}
+}
+
 func TestBrowserEnrollment(t *testing.T) {
 	for _, approve := range []bool{false, true} {
 		t.Run(map[bool]string{false: "rejected", true: "approved"}[approve], func(t *testing.T) {
