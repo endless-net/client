@@ -61,7 +61,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-027 | C delta/resync; R approval withdrawal blocks fresh and established TCP/UDP while independent underlay stays live | Real producer port/policy variants, other authorized overlay flows and remaining platforms |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
-| HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short provider dependency outage and recover without registration | Map/lease expiry, full process/transport outage and remaining variants |
+| HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | U routes/application tests | Real consumer to resource behind router |
 | HC-033 | U configuration tests | Public selection/disable and actual route effect |
@@ -402,6 +402,20 @@ and applications keep running. This adds HC-018 real-pair Linux/direct IPv4
 evidence; reboot, system-service autostart, crash during intent writes and other
 OS/transport variants remain separate. Overall provider failure is still the
 single-use registration replay defect.
+
+[Coordinator 75856ee](https://github.com/endless-net/coordinator/tree/75856eeac17753ac7d3569ace1b3334b0dcfc76c)
+adds actual Coordinator process termination and restart with the same Client pin.
+[CI 34605075606](https://github.com/endless-net/coordinator/actions/runs/34605075606/job/103281500242)
+passed all six traffic subtests. During confirmed process exit the edge observes
+upstream failures and returns HTTP 502 on map/endpoint. Both agents report
+control errors while retaining identities, credentials, valid maps and WireGuard
+peers. Four existing sockets and fresh TCP/UDP exchanges in both directions
+continue to work. Restart uses the same binary, configuration and disposable
+YDB without repeated migrations or manual state restoration. After readiness,
+both agents recover current applied maps and exchange data on fresh and original
+sockets without any registration request. This is a short upstream process
+outage with a live edge/storage; map expiry, edge connection loss, long offline,
+storage failure and other transports remain separate.
 
 ## Next work
 
