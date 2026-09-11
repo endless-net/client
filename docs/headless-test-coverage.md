@@ -2295,6 +2295,16 @@ expiry, crash-spool replay, IPv6/TCP/denied-flow reporting or producer conforman
 
 ## Next work
 
+The native diagnostic-export root now ages its own public JSON artifact using
+the retention duration advertised by the CLI. The next export must delete the
+aged artifact, create a different file in the configured directory, preserve an
+unrelated operator note and capture the current connected identity/intent.
+Only the exported file's OS timestamps are changed; no private config, queue,
+snapshot or credential is read or altered, and no agent clock is injected.
+This is file-retention evidence pending all native repetitions, not a seven-day
+wall-clock soak or comprehensive tamper/size-quota qualification. The inventory
+remains 30 roots / 720 outcomes; previous export evidence lacks this extension.
+
 The IPC-negotiation root in the first three completed Windows 2022 repetitions
 of [run 34657192800](https://github.com/endless-net/client/actions/runs/34657192800)
 failed its immediate status assertion after agent restart; its incompatible

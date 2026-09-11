@@ -90,4 +90,32 @@ func TestControlPlaneDiagnosticsExport(t *testing.T) {
 	var connected ipc.ConnectResponse
 	n.Service("connect", &connected)
 	check(false)
+	// Age only the public export, using the lifetime advertised by the CLI.
+	// This exercises OS file retention without reading private client state or
+	// advancing a test clock inside the running agent.
+	note := filepath.Join(directory, "operator-note.txt")
+	const noteText = "operator-owned diagnostic note"
+	if err := os.WriteFile(note, []byte(noteText), 0o600); err != nil {
+		t.Fatal("could not create unrelated test note")
+	}
+	aged := time.Now().Add(-expires.Sub(created) - time.Hour)
+	if err := os.Chtimes(bundle.Path, aged, aged); err != nil {
+		t.Fatal("could not age the public diagnostic artifact")
+	}
+	var renewed ipc.DiagnosticsBundleResponse
+	n.Service("diagnostics-bundle", &renewed)
+	if renewed.Reused || renewed.Path == bundle.Path || filepath.Dir(renewed.Path) != directory || renewed.SizeBytes <= 0 {
+		t.Fatal("retention did not produce a new export within the configured directory")
+	}
+	if _, err := os.Stat(bundle.Path); !os.IsNotExist(err) {
+		t.Fatal("expired public diagnostic artifact was retained")
+	}
+	if data, err := os.ReadFile(note); err != nil || string(data) != noteText {
+		t.Fatal("diagnostic retention changed an unrelated operator file")
+	}
+	newData, err := os.ReadFile(renewed.Path)
+	var newExport ipc.Diagnostics
+	if err != nil || int64(len(newData)) != renewed.SizeBytes || json.Unmarshal(newData, &newExport) != nil || newExport.Status.NodeID != id || newExport.Status.UserDisconnected || newExport.Status.DesiredState != ipc.DesiredConnected {
+		t.Fatal("replacement diagnostic export did not capture current connected intent")
+	}
 }
