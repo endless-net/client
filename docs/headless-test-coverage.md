@@ -104,7 +104,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; eight-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
 | HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
-| HC-028 | C native forced single-Relay IPv4/IPv6 TCP/UDP, outage denial, recovery and agent restart passed all 24 native repetitions | NAT, direct/Relay transitions, endpoint failover and remaining Relay variants |
+| HC-028 | C native single-Relay and two-Relay failover IPv4/IPv6 TCP/UDP, outage denial, recovery and agent restart passed all 24 native repetitions | NAT, direct/Relay transitions, existing-session failover, healthy-backup failback and remaining Relay variants |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
@@ -1856,7 +1856,7 @@ reference-peer teardown, as detailed below. This is not full source
 qualification. HC-001-HC-065 coverage remains incomplete, with the other
 variants and product gaps listed above.
 
-## Two-Relay failover increment: awaiting native evidence
+## Two-Relay failover increment
 
 `TestControlPlaneNativeRelayFailover` extends the same native IPv4/IPv6
 TCP/UDP contract scenario with two independent TLS endpoints, a preferred
@@ -1873,11 +1873,50 @@ original credential and preserves the datagram's sender scope while the first
 endpoint is unavailable. This tests the Client's contract participants, not
 production Relay mesh behavior or authorization implementation.
 
-The native inventory now has 24 roots and requires 24 x 3 x 8 = 576 outcomes.
-Failover remains unqualified until hosted results arrive. This does not prove
+This increment introduced 24 roots and required 24 x 3 x 8 = 576 outcomes,
+qualified by the completed run below. This does not prove
 seamless preservation of pre-failure TCP sessions, latency-based selection,
 automatic failback while a healthy backup remains available, NAT transitions,
 or IPv6 underlay.
+
+## Two-Relay native qualification: 576 PASS
+
+[CI 34651631287](https://github.com/endless-net/client/actions/runs/34651631287)
+completed successfully for source `64f9537537cd17478d6e006213303f47b3f0a913`.
+All 24 native reports contain the same 24 root scenarios: **576 PASS, 0 FAIL,
+0 SKIP**. The mandatory aggregate also verified complete source-bound reports.
+All eight installation jobs, three OS verification jobs and the separate
+Linux dataplane job passed. Optional external STUN was skipped and is outside
+these required root outcomes.
+
+The two-Relay scenario passed in every repetition (elapsed time shown):
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| ubuntu-22.04 | [13.24s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199021) | [14.82s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198885) | [13.26s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198936) |
+| ubuntu-24.04 | [13.08s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199040) | [13.03s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198882) | [14.61s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198963) |
+| ubuntu-22.04-arm | [12.95s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198856) | [13.01s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198951) | [13.08s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199194) |
+| ubuntu-24.04-arm | [12.91s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199078) | [13.02s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198954) | [13.05s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198969) |
+| windows-2022 | [33.08s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199090) | [34.61s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199054) | [33.40s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199426) |
+| windows-2025 | [34.42s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199153) | [40.21s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199082) | [39.29s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198901) |
+| macos-15-intel | [15.58s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199001) | [15.27s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198987) | [14.11s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436198939) |
+| macos-15 | [12.73s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199130) | [12.87s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199039) | [15.62s](https://github.com/endless-net/client/actions/runs/34651631287/job/103436199109) |
+
+This qualifies fresh IPv4/IPv6 TCP/UDP traffic moving from an unavailable
+primary to the backup, denial when both endpoints are unavailable, restoration
+when only the primary returns, and agent restart with the original identity.
+Both overlay families use IPv4 underlay. Assertions use actual application
+traffic, Relay forwarding counters and public Client selected-path status.
+This is Client consumer evidence, not production Relay mesh qualification.
+It does not establish seamless existing-session failover, healthy-backup
+failback, latency selection, NAT changes or IPv6 underlay.
+
+This source includes the 30-second initial IPC readiness bound; no readiness
+failure occurred in these 24 jobs. It predates the reference-stack teardown
+fix, corrected network-selection response and interrupted-enrollment scenario.
+Their qualification belongs to the subsequent 25-root source, not this green
+run. The previously captured peer teardown panic remains valid evidence even
+though it did not recur here. HC-001-HC-065 completion remains unproven.
 
 ## Reference TCP peer teardown: awaiting hosted regression evidence
 
