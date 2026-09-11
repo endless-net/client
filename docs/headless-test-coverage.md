@@ -134,7 +134,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
 | HC-057 | C diagnostic JSON export/reuse passed all 24 native repetitions; D FlowConsentAndIdempotency; U flow tests | Native flow consent/retry evidence, comprehensive redaction and export retention variants |
-| HC-058 | L version and runtime platform | CLI/daemon/artifact mismatch and exact release identity |
+| HC-058 | L version and runtime platform; native IPC negotiation scenario added, hosted evidence pending | Artifact mismatch and exact release identity; complete native negotiation qualification |
 | HC-059 | U trust/recovery matrix; C TrustConfirmation rejection passed three times on all eight native platforms | Successful rotation, interrupted recovery and independent signing scopes |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
@@ -2253,6 +2253,19 @@ The common inventory remains 29 roots / 696 expected native outcomes. Earlier
 flow-consent sources lack this additional assertion and cannot qualify it.
 
 ## Next work
+
+`TestControlPlaneIPCNegotiation` extends HC-053/HC-058 through the published
+IPC package and the real agent's Unix socket or Windows named pipe. Missing,
+wrong-protocol, malformed, nonpositive, reversed, disjoint and duplicate version
+headers must return the specified HTTP status, typed error and server metadata
+for both status and disconnect requests. Rejected mutations must preserve the
+connected intent, cached map and enrolled identity. An overlapping range must
+negotiate the current version; agent restart and subsequent valid CLI
+disconnect/connect must still work with one enrollment. Unsupported numbers
+are malformed-input probes, not a version increase or compatibility support.
+This does not prove binary artifact/build identity or unauthorized local-user
+access. The common inventory is now 30 roots / 720 expected native outcomes;
+qualification awaits the corresponding complete hosted source matrix.
 
 macOS fixture trust setup now snapshots the single
 `com.apple.trust-settings.admin` authorization rule in memory, temporarily uses
