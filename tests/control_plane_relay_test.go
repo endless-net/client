@@ -90,8 +90,28 @@ func TestControlPlaneNativeRelayTraffic(t *testing.T) {
 				selected()
 				ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 				defer cancel()
-				if err := testclient.Await(ctx, func() bool { return probe("tcp") && probe("udp") }); err != nil {
-					t.Fatal("native TCP/UDP did not traverse Relay")
+				var tcpOK, udpOK bool
+				if err := testclient.Await(ctx, func() bool {
+					tcpOK, udpOK = probe("tcp"), probe("udp")
+					return tcpOK && udpOK
+				}); err != nil {
+					authenticated, sent, received := transport.Counts()
+					initiations, responses, other := reference.HandshakeCounts()
+					requests, echoes := reference.PacketCounts()
+					v, statusErr := n.Status()
+					var handshake, loopback bool
+					var rx, tx uint64
+					if statusErr == nil && v.WireGuard != nil {
+						for _, peer := range v.WireGuard.Peers {
+							handshake = handshake || peer.LatestHandshakeUnix > 0
+							rx += peer.TransferRXBytes
+							tx += peer.TransferTXBytes
+							if endpoint, err := netip.ParseAddrPort(peer.Endpoint); err == nil {
+								loopback = loopback || endpoint.Addr().IsLoopback()
+							}
+						}
+					}
+					t.Fatalf("native Relay exchange unavailable: tcp=%t udp=%t auth=%d frames_to_peer=%d frames_from_peer=%d reference_init=%d reference_response=%d reference_other=%d application_requests=%d echoes=%d status_available=%t client_handshake=%t client_loopback_endpoint=%t rx=%d tx=%d", tcpOK, udpOK, authenticated, sent, received, initiations, responses, other, requests, echoes, statusErr == nil, handshake, loopback, rx, tx)
 				}
 				authenticated, sent, received := transport.Counts()
 				if authenticated == 0 || sent == 0 || received == 0 {

@@ -1601,6 +1601,25 @@ not another native Client or production service coverage claim. Native tests and
 the 24-report publication requirement remain unchanged. Hosted race validation
 of the expanded participant set is pending.
 
+## Initial native Relay failure and diagnostic follow-up
+
+In [CI 34644300216](https://github.com/endless-net/client/actions/runs/34644300216),
+both Linux ARM jobs failed all three native Relay repetitions in both IPv4 and
+IPv6: [Ubuntu 22.04 ARM](https://github.com/endless-net/client/actions/runs/34644300216/job/103413387229)
+and [Ubuntu 24.04 ARM](https://github.com/endless-net/client/actions/runs/34644300216/job/103413387112).
+The completed Linux x64 jobs also report failure. The observed stage is initial
+application exchange after public IPC already selected Relay; outage/recovery
+assertions have not yet been reached. This does not establish whether the fault
+is in Client packet handling or the new contract participant.
+
+The diagnostic follow-up probes TCP and UDP independently and reports only
+booleans and counters: Relay authentication and frame directions, reference
+WireGuard initiations/responses, reference application requests/echoes, and
+public Client handshake, loopback endpoint and byte counters. Arbitrary process
+output, keys and credentials remain withheld. The 15-second exchange bound and
+required payload checks are unchanged. HC-028 remains unqualified pending
+localization, correction and native reruns.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
