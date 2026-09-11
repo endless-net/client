@@ -817,10 +817,10 @@ func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevisio
 	}
 	previousRevision := cfg.MapRevision
 	approvalState := strings.ToLower(strings.TrimSpace(cfg.NodeApprovalState))
-	if approvalState == clientapi.NodeApprovalRejected {
-		return cfg, clientapi.RegisterNodeResponse{}, false, errors.New("node enrollment was rejected")
-	}
-	if approvalState != clientapi.NodeApprovalPending {
+	// Approval is server-owned mutable state. A restricted node still reads
+	// signed maps so later approval can take effect without a new identity.
+	// It must not publish an online heartbeat while pending or rejected.
+	if approvalState != clientapi.NodeApprovalPending && approvalState != clientapi.NodeApprovalRejected {
 		heartbeatMap, heartbeatSent, err := updatePublishedEndpointRequestFromConfig(&cfg, api, clientapi.UpdateNodeEndpointRequest{Status: clientapi.NodeStatusOnline})
 		if err != nil {
 			return cfg, clientapi.RegisterNodeResponse{}, false, err

@@ -2345,85 +2345,91 @@ func TestAgentIPCEnrollNoTokenReturnsApprovalURL(t *testing.T) {
 	}
 }
 
-func TestAgentOnlineNetworkMapActivatesPendingEnrollmentAfterApproval(t *testing.T) {
-	mapKey := testMapSigningKey(t)
-	mapPublicKey := base64.RawURLEncoding.EncodeToString(mapKey.Public().(ed25519.PublicKey))
-	approvedMap := clientapi.RegisterNodeResponse{
-		Network: clientapi.Network{ID: "net-pending", Name: "default", CIDR: "100.64.0.0/24", Revision: 2},
-		Node: clientapi.Node{
-			ID:            "node-pending",
-			NetworkID:     "net-pending",
-			Hostname:      "pending-a",
-			PublicKey:     testWireGuardPublicKey("pending-a"),
-			AssignedIP:    "100.64.0.2",
-			ApprovalState: clientapi.NodeApprovalApproved,
-		},
-	}
-	signature, err := clientapi.SignNetworkMap(mapKey, approvedMap)
-	if err != nil {
-		t.Fatal(err)
-	}
-	approvedMap.MapSignature = signature
-	var approved atomic.Bool
-	var endpointCalls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/server-key":
-			_ = json.NewEncoder(w).Encode(testServerKeyResponse(t, mapPublicKey))
-		case "/nodes/node-pending/endpoint":
-			endpointCalls.Add(1)
-			http.Error(w, "pending client must not publish endpoint", http.StatusInternalServerError)
-		case "/maps/node-pending/stream":
-			setTestMapStreamResponseHeaders(w)
-			if !approved.Load() {
-				http.Error(w, "node is pending and cannot receive a network map", http.StatusUnauthorized)
-				return
-			}
-			w.Header().Set("Content-Type", "application/x-ndjson")
-			_ = json.NewEncoder(w).Encode(testMapStreamSnapshotEvent(t, approvedMap))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-	tmp := t.TempDir()
-	configPath := filepath.Join(tmp, "client.json")
-	bundle := testSigningTrustBundle(t, mapPublicKey)
-	cfg := client.Config{
-		ControlPlaneURLs:  []string{server.URL},
-		PrivateKey:        "private-key",
-		NodeID:            "node-pending",
-		NetworkID:         "net-pending",
-		NodeCredential:    "credential-pending",
-		NodeApprovalState: clientapi.NodeApprovalPending,
-	}
-	if err := client.SetSigningTrustBundle(&cfg, *bundle); err != nil {
-		t.Fatal(err)
-	}
-	if err := client.SaveConfig(configPath, cfg); err != nil {
-		t.Fatal(err)
-	}
+func TestAgentOnlineNetworkMapActivatesRestrictedEnrollmentAfterApproval(t *testing.T) {
+	for _, initial := range []string{clientapi.NodeApprovalPending, clientapi.NodeApprovalRejected} {
+		t.Run(initial, func(t *testing.T) {
 
-	if _, _, _, err := agentOnlineNetworkMap(configPath, time.Second, 0); err == nil || !strings.Contains(err.Error(), "pending") {
-		t.Fatalf("pending map poll error = %v, want pending denial", err)
-	}
-	if endpointCalls.Load() != 0 {
-		t.Fatalf("pending map poll endpoint calls = %d, want 0", endpointCalls.Load())
-	}
-	approved.Store(true)
-	updatedCfg, networkMap, unchanged, err := agentOnlineNetworkMap(configPath, time.Second, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if unchanged || networkMap.Network.Revision != 2 || updatedCfg.NodeApprovalState != clientapi.NodeApprovalApproved {
-		t.Fatalf("approved poll cfg=%#v map=%#v unchanged=%t", updatedCfg, networkMap, unchanged)
-	}
-	saved, err := client.LoadConfig(configPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if saved.NodeApprovalState != clientapi.NodeApprovalApproved || saved.CachedMap == nil || saved.MapRevision != 2 {
-		t.Fatalf("activated pending config = %#v", saved)
+			mapKey := testMapSigningKey(t)
+			mapPublicKey := base64.RawURLEncoding.EncodeToString(mapKey.Public().(ed25519.PublicKey))
+			approvedMap := clientapi.RegisterNodeResponse{
+				Network: clientapi.Network{ID: "net-pending", Name: "default", CIDR: "100.64.0.0/24", Revision: 2},
+				Node: clientapi.Node{
+					ID:            "node-pending",
+					NetworkID:     "net-pending",
+					Hostname:      "pending-a",
+					PublicKey:     testWireGuardPublicKey("pending-a"),
+					AssignedIP:    "100.64.0.2",
+					ApprovalState: clientapi.NodeApprovalApproved,
+				},
+			}
+			signature, err := clientapi.SignNetworkMap(mapKey, approvedMap)
+			if err != nil {
+				t.Fatal(err)
+			}
+			approvedMap.MapSignature = signature
+			var approved atomic.Bool
+			var endpointCalls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/server-key":
+					_ = json.NewEncoder(w).Encode(testServerKeyResponse(t, mapPublicKey))
+				case "/nodes/node-pending/endpoint":
+					endpointCalls.Add(1)
+					http.Error(w, "pending client must not publish endpoint", http.StatusInternalServerError)
+				case "/maps/node-pending/stream":
+					setTestMapStreamResponseHeaders(w)
+					if !approved.Load() {
+						http.Error(w, "node is pending and cannot receive a network map", http.StatusUnauthorized)
+						return
+					}
+					w.Header().Set("Content-Type", "application/x-ndjson")
+					_ = json.NewEncoder(w).Encode(testMapStreamSnapshotEvent(t, approvedMap))
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			tmp := t.TempDir()
+			configPath := filepath.Join(tmp, "client.json")
+			bundle := testSigningTrustBundle(t, mapPublicKey)
+			cfg := client.Config{
+				ControlPlaneURLs:  []string{server.URL},
+				PrivateKey:        "private-key",
+				NodeID:            "node-pending",
+				NetworkID:         "net-pending",
+				NodeCredential:    "credential-pending",
+				NodeApprovalState: initial,
+			}
+			if err := client.SetSigningTrustBundle(&cfg, *bundle); err != nil {
+				t.Fatal(err)
+			}
+			if err := client.SaveConfig(configPath, cfg); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, _, _, err := agentOnlineNetworkMap(configPath, time.Second, 0); err == nil || !strings.Contains(err.Error(), "pending") {
+				t.Fatalf("pending map poll error = %v, want pending denial", err)
+			}
+			if endpointCalls.Load() != 0 {
+				t.Fatalf("pending map poll endpoint calls = %d, want 0", endpointCalls.Load())
+			}
+			approved.Store(true)
+			updatedCfg, networkMap, unchanged, err := agentOnlineNetworkMap(configPath, time.Second, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if unchanged || networkMap.Network.Revision != 2 || updatedCfg.NodeApprovalState != clientapi.NodeApprovalApproved {
+				t.Fatalf("approved poll cfg=%#v map=%#v unchanged=%t", updatedCfg, networkMap, unchanged)
+			}
+			saved, err := client.LoadConfig(configPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if saved.NodeApprovalState != clientapi.NodeApprovalApproved || saved.CachedMap == nil || saved.MapRevision != 2 {
+				t.Fatalf("activated pending config = %#v", saved)
+			}
+
+		})
 	}
 }
 
