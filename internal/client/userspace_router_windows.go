@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 )
 
@@ -13,6 +14,7 @@ type windowsWireGuardEngineRouter struct {
 	interfaceName string
 	runner        CommandRunner
 	configured    bool
+	current       wireGuardEngineRouterConfig
 }
 
 func newPlatformWireGuardEngineRouter(interfaceName string, runner CommandRunner, _ commandInputRunner) (wireGuardEngineRouter, error) {
@@ -26,13 +28,25 @@ func platformWireGuardEngineFirewallMark(_ []netip.Prefix, _ string) uint32 { re
 
 func (r *windowsWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
 	script := windowsUserspaceRouterScript(cfg, false)
+	if r.configured {
+		withoutRouteChange := cfg
+		withoutRouteChange.Routes = r.current.Routes
+		if wireGuardEngineRouterConfigsEqual(withoutRouteChange, r.current) {
+			if slices.Equal(cfg.Routes, r.current.Routes) {
+				return nil
+			}
+			script = windowsUserspaceRouteUpdateScript(r.current, cfg)
+		}
+	}
 	r.configured = true
 	out, err := r.runner(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script)
 	if err != nil {
 		_, _ = r.runner(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", windowsUserspaceRouterScript(wireGuardEngineRouterConfig{Interface: r.interfaceName}, true))
 		r.configured = false
+		r.current = wireGuardEngineRouterConfig{}
 		return fmt.Errorf("configure Windows wireguard-go interface: %s", commandError(err, out))
 	}
+	r.current = cloneWireGuardEngineRouterConfig(cfg)
 	return nil
 }
 
@@ -43,10 +57,34 @@ func (r *windowsWireGuardEngineRouter) Down(ctx context.Context) error {
 	cfg := wireGuardEngineRouterConfig{Interface: r.interfaceName}
 	out, err := r.runner(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", windowsUserspaceRouterScript(cfg, true))
 	r.configured = false
+	r.current = wireGuardEngineRouterConfig{}
 	if err != nil {
 		return fmt.Errorf("remove Windows wireguard-go interface configuration: %s", commandError(err, out))
 	}
 	return nil
+}
+
+// Updating routes must not delete/recreate the interface addresses: that
+// interrupts established flows and starts duplicate-address detection again.
+func windowsUserspaceRouteUpdateScript(previous, next wireGuardEngineRouterConfig) string {
+	var b strings.Builder
+	b.WriteString("$ErrorActionPreference='Stop';")
+	fmt.Fprintf(&b, "$ifName=%s;", quotePowerShellSingle(next.Interface))
+	for _, route := range previous.Routes {
+		if !slices.Contains(next.Routes, route) {
+			fmt.Fprintf(&b, "Remove-NetRoute -DestinationPrefix %s -InterfaceAlias $ifName -PolicyStore ActiveStore -Confirm:$false;", quotePowerShellSingle(route.String()))
+		}
+	}
+	for _, route := range next.Routes {
+		if !slices.Contains(previous.Routes, route) {
+			nextHop := "0.0.0.0"
+			if route.Addr().Is6() {
+				nextHop = "::"
+			}
+			fmt.Fprintf(&b, "New-NetRoute -DestinationPrefix %s -InterfaceAlias $ifName -NextHop %s -RouteMetric 5 -PolicyStore ActiveStore | Out-Null;", quotePowerShellSingle(route.String()), quotePowerShellSingle(nextHop))
+		}
+	}
+	return b.String()
 }
 
 func windowsUserspaceRouterScript(cfg wireGuardEngineRouterConfig, down bool) string {

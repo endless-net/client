@@ -79,7 +79,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-002 | L installed CLI version | Artifact/dependency failure paths |
 | HC-003 | L noninteractive installation and enrolled same-artifact reinstall on all eight runners, preserving identity, intent and real TCP access | Interrupted installation and artifact replacement variants |
 | HC-004 | L real service and IPC | Local authorization and unavailable-service outcomes |
-| HC-005 | C process lifecycle; new SingleAgentOwnership scenario pending hosted qualification | Alias-path ownership, concurrent launch and remaining termination variants |
+| HC-005 | C process lifecycle; SingleAgentOwnership passed three times on all eight native runners | Alias-path ownership, concurrent launch and remaining termination variants |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
 | HC-008 | C BrowserEnrollment; expired-request replacement/resume/approval; expiry during active CLI polling and approved recovery on all six runners | Cancellation and foreign poll authorization |
@@ -1243,6 +1243,34 @@ unchanged native packet assertions require hosted macOS qualification. The
 interface-event race is the working explanation for the traffic failures, not
 an independently captured OS event trace. No packet assertion was relaxed and
 no recovery deadline was increased. No Infrastructure or version changes occur.
+
+## Windows route-only update regression and completed 18-scenario evidence
+
+The completed [CI 34635511042](https://github.com/endless-net/client/actions/runs/34635511042)
+for source `b9b7712dddf059beba590329ec11e8a72c970242` failed: **408 PASS, 24 FAIL,
+0 SKIP**, with the same 18 root scenarios repeated three times on every platform.
+All four Linux platforms passed 54/54. Both macOS and both Windows platforms
+passed 48/54; all failures were native IPv4/IPv6 TCP scenarios at the new ICMP-only
+or subsequent recovery phase. Windows consistently failed the first permitted
+ICMP echo after adding the second route. Single-agent ownership passed 3/3 on
+all eight platforms (24 independent outcomes). Installation passed on all eight;
+these scenario-level successes do not make the complete source CI successful.
+
+Windows source inspection found route reconfiguration removing and recreating
+all manual interface IP addresses, routes and DNS rules even when only routes
+changed. The router now records its last successful configuration and applies
+only route additions/removals when all other settings are unchanged. Retained
+routes, addresses and DNS are untouched. On a failed route script the existing
+cleanup path invalidates configured state so subsequent engine rollback performs
+a full restoration instead of treating the previous desired state as applied.
+Regression tests reject address/DNS changes during route updates, verify IPv4
+and IPv6 additions/removals, and verify full restoration after a partial failure.
+
+Windows local format/vet/lint/short checks pass, including these regression tests.
+The unchanged native ICMP/TCP/UDP tests remain the cross-platform acceptance
+criterion. Both this correction and the earlier Darwin route correction require
+new hosted evidence before being called confirmed fixes. No scenario or platform
+was removed, no timing assertion was relaxed and no version was increased.
 
 ## Next work
 
