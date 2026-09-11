@@ -93,7 +93,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners | Other paths/protocols and denied-access variants |
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
-| HC-019 | U configuration tests | Public preference mutation and observed effect |
+| HC-019 | U configuration tests; native durable route-table off/auto checks pending CI | Other public preferences and live mutation variants |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
@@ -107,7 +107,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | U routes/application tests; native `TestControlPlaneRoutedResource` pending hosted evidence | Consumer IPv4/IPv6 resource prefix via forwarding peer; full router roles remain open |
-| HC-033 | U configuration tests | Public selection/disable and actual route effect |
+| HC-033 | U configuration tests; native durable route installation disable/restore pending CI | Per-resource selection and remaining route-selection semantics |
 | HC-034 | U SNAT/forwarding tests | Advertisement versus approval versus effective traffic |
 | HC-035 | No C/R evidence audited | Site-to-site scope and reverse-path tests |
 | HC-036 | U exit-route configuration | Egress IP and independent IPv4/IPv6 probes |
@@ -1430,6 +1430,24 @@ The new routed-resource and trust-confirmation scenarios are absent from this
 is running separately for `859e1021673c50876404cf2de3baed594d21b21a`; qualification
 of its 504 expected outcomes remains pending. Full HC-001-HC-065 coverage,
 production acceptance and all stated scope gaps remain unproven.
+
+## Native route preference increment awaiting hosted qualification
+
+`TestControlPlaneRoutedResource` now also exercises HC-019/HC-033 through the
+real `sync --offline --route-table off|auto` CLI while the agent is stopped.
+With the resource prefix still present in the signed map, `off` must deny
+fresh IPv4/IPv6 TCP/UDP access and remain effective after another agent restart.
+Restoring `auto` must restore nonce exchanges through the forwarding peer.
+Public IPC must report the expected route table, same node and applied map;
+testserver observations must show exactly one registration. The existing
+server route-withdrawal checks, including established flows, remain intact.
+
+This is durable local route-installation preference coverage, not live mutation
+of a running agent, per-resource selection, numerical route tables, egress
+selection or router advertisement. The common inventory remains 21 roots and
+504 expected outcomes across eight platforms; this extension awaits its own
+hosted source evidence. Local short tests, vet and lint passed, but do not
+execute native routing scenarios.
 
 ## Next work
 

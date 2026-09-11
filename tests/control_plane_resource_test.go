@@ -49,6 +49,7 @@ func TestControlPlaneRoutedResource(t *testing.T) {
 			}
 			reference := testwireguard.NewRoutedResource(t, snapshot.Node.PublicKey, clientIP, resource, underlay)
 			peer := api.Peer{ID: "resource-router", Hostname: "resource-router", PublicKey: reference.PublicKey, Endpoint: reference.Endpoint, EndpointCandidates: []string{reference.Endpoint}, AllowedIPs: []string{peerHost}}
+			routeTable := "auto"
 			apply := func(p api.Peer) {
 				t.Helper()
 				if err := s.UpdatePeers(initial.NodeID, []api.Peer{p}); err != nil {
@@ -59,7 +60,7 @@ func TestControlPlaneRoutedResource(t *testing.T) {
 					t.Fatal(err)
 				}
 				v := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.MapRevision >= m.Revision.Network && v.PeerCount == 1 && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535 && v.Agent != nil && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == ""
+					return v.NodeID == initial.NodeID && v.RouteTable == routeTable && v.MapRevision >= m.Revision.Network && v.PeerCount == 1 && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535 && v.Agent != nil && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == ""
 				})
 				reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(v.WireGuard.ListenPort)))
 			}
@@ -69,7 +70,7 @@ func TestControlPlaneRoutedResource(t *testing.T) {
 			blocked := func() {
 				t.Helper()
 				if probe("tcp") || probe("udp") {
-					t.Fatal("resource reachable without its signed route")
+					t.Fatal("resource reachable while routing is unavailable or disabled")
 				}
 			}
 			reachable := func() {
@@ -90,6 +91,35 @@ func TestControlPlaneRoutedResource(t *testing.T) {
 			routed.AllowedIPs = []string{peerHost, prefix}
 			apply(routed)
 			reachable()
+
+			// HC-019/HC-033: the signed resource prefix remains available while
+			// the operator disables OS routes through the public CLI. Change
+			// offline preferences with the agent stopped, then test durability.
+			setRouteTable := func(value string) {
+				t.Helper()
+				n.Stop()
+				n.MustRun("sync", "--config", n.Config, "--offline", "--route-table", value)
+				routeTable = value
+				n.Start()
+				apply(routed)
+			}
+			setRouteTable("off")
+			blocked()
+			n.Stop()
+			n.Start()
+			apply(routed)
+			blocked()
+			setRouteTable("auto")
+			reachable()
+			registrations := 0
+			for _, event := range s.Events() {
+				if event.Kind == "registered" {
+					registrations++
+				}
+			}
+			if registrations != 1 {
+				t.Fatal("route preference changes unexpectedly created a new registration")
+			}
 			tcp := startApplicationSession(t, binary, "", "tcp", address)
 			udp := startApplicationSession(t, binary, "", "udp", address)
 			tcp("ok")
