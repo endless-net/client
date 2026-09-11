@@ -2074,6 +2074,33 @@ fresh status is checked through the diagnostics endpoint after reconnect.
 The current native inventory has 27 roots and requires 27 x 3 x 8 = 648 outcomes.
 Earlier 24-, 25- and 26-root sources do not qualify this added scenario.
 
+## Native control-plane TLS trust: awaiting runner evidence
+
+HC-057 flow reporting uses HTTPS-only protobuf RPC through the default HTTP
+transport. Existing native scenarios use loopback HTTP; successful Relay TLS
+with an explicitly configured CA does not establish control-plane TLS trust.
+The next prerequisite is therefore a real Client HTTPS enrollment/map scenario.
+
+`TestControlPlaneTLSTrustBoundary` (HC-021) requires enrollment rejection for an
+unknown ephemeral HTTPS certificate even when map-signing trust was supplied.
+The fixture must receive no registration. After explicitly trusting that CA,
+enrollment and agent startup/restart must retain one node identity and valid map.
+This does not test hostname mismatch, certificate expiry or trust rotation.
+
+`TrustControlTLS` is restricted to GitHub Actions. Linux uses process-scoped
+`SSL_CERT_FILE`; Windows installs the public CA in the current user's Root store;
+macOS uses the runner's administrative trust store and system keychain. Cleanup
+targets the exact certificate fingerprint and removes its trust entry on macOS
+using the [Apple security tool commands](https://github.com/apple-oss-distributions/Security/blob/main/SecurityTool/macOS/security.c).
+Only ephemeral public certificates are written; their private keys remain in
+the fixture process. No TLS verification bypass or Client runtime change is
+introduced. These operations run only on the disposable native CI jobs.
+
+The current inventory has 28 roots, requiring 28 x 3 x 8 = 672 outcomes. Local
+vet, lint and the short suite passed; native HTTPS trust remains unqualified.
+HC-057 consent, wire reports, retries and revocation still need their own real
+traffic scenario after this prerequisite; component flow tests are insufficient.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
