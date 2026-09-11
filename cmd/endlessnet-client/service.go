@@ -1349,6 +1349,7 @@ func buildServiceIPCDiagnostics(opts agentIPCOptions, logLimit int) (ipc.Diagnos
 	}
 	status.State = serviceStateFromControlState(status.ControlState, status.CachedMapError != "")
 	status.Metadata = serviceIPCMetadata()
+	attachAgentConnectionIntentStatus(&status, opts)
 	payload := serviceIPCDiagnosticsPayload(cfg, status, agentState)
 	entries := recentLogEntries(opts.RecentLogs, positiveIntOr(logLimit, 100))
 	payload.RecentLogs = make([]ipc.LogEntry, 0, len(entries))
@@ -1484,15 +1485,19 @@ func agentIPCStatusForConfig(ctx context.Context, opts agentIPCOptions, cfg clie
 	}
 	response.State = serviceStateFromControlState(response.ControlState, response.CachedMapError != "")
 	response.Metadata = serviceIPCMetadata()
+	attachAgentConnectionIntentStatus(&response, opts)
+	return response
+}
+
+func attachAgentConnectionIntentStatus(response *ipc.StatusResponse, opts agentIPCOptions) {
 	if intent, disconnected, err := agentConnectionIntentStore(opts).Disconnected(); err != nil {
 		response.ConnectionIntentError = err.Error()
 		response.ControlState = ipc.ControlStateError
 		response.State = ipc.StateError
 	} else if disconnected {
-		applyAgentConnectionIntentStatus(&response, intent)
+		applyAgentConnectionIntentStatus(response, intent)
 		response.State = serviceStateFromControlState(response.ControlState, response.CachedMapError != "")
 	}
-	return response
 }
 
 func agentSnapshotMatchesStatus(status ipc.StatusResponse, snapshot client.AgentSnapshot) bool {

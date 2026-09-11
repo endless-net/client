@@ -2003,6 +2003,33 @@ Local vet, lint and the short suite passed. The new native case remains
 unqualified until its own source completes the hosted matrix; the preceding
 25-root run and historical 24-root qualification cannot supply that evidence.
 
+## Diagnostic status and export: awaiting native evidence
+
+`TestControlPlaneDiagnosticsExport` adds HC-053/HC-056/HC-057 consumer checks:
+unconfigured export must return its public error; configured diagnostics must
+agree with public identity and connection intent while connected, disconnected
+and after agent restart. The generated JSON artifact must remain inside the
+configured output directory, match the published diagnostic schema and size,
+and have valid creation/expiry metadata. An immediate repeated export must
+identify the same reused artifact. Reconnecting must restore connected intent
+in fresh diagnostics. The test reads only the exported artifact, never private
+configuration, agent snapshots or credential files.
+
+A short handler regression first reproduced diagnostic status losing persisted
+disconnect (`desired=connected`, `user_disconnected=false`). Diagnostics now
+uses the same connection-intent attachment as public status, including its
+error handling. This fixes the exported status as well. Local short tests, vet
+and lint passed; the native export case still requires hosted qualification.
+
+Strict JSON decoding checks schema boundaries, not every possible secret value
+inside allowed free-text fields. Comprehensive redaction fault injection,
+export retention/expiry, flow-log consent and control/path/DNS/application fault
+classification remain separate work. Cached exports are historical snapshots;
+fresh status is checked through the diagnostics endpoint after reconnect.
+
+The current native inventory has 27 roots and requires 27 x 3 x 8 = 648 outcomes.
+Earlier 24-, 25- and 26-root sources do not qualify this added scenario.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
