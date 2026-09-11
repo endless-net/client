@@ -186,6 +186,25 @@ authorization, forced Relay, NAT traversal, application TCP/UDP or other OSes.
 Initial execution is pending CI; this is not yet confirmed coverage of HC-024,
 HC-027 or HC-028 as a whole.
 
+In [Test run 34587947570](https://github.com/endless-net/client/actions/runs/34587947570)
+the corrected delta case passed all three repetitions. The new real-peer case
+failed during enrollment: its underlay control address was plaintext outside
+loopback, which the pinned SDK rejects. The follow-up uses HTTPS with an
+ephemeral test certificate, keeps its private key only in testserver memory, and
+supplies public CA trust via `SSL_CERT_FILE` only to the spawned client processes.
+A double test proves that an untrusted certificate is rejected and explicit test
+trust permits the public API call. The client security rule remains enforced.
+
+The real-peer scenario now also runs `tools/packetprobe` inside the receiving
+namespace and verifies random payload echoes over TCP and UDP on two ports.
+After baseline success, a published peer ACL permits TCP on one port and UDP on
+the other; each denied combination is probed three times while local application
+health is independently checked. Removing the restriction must restore all four
+combinations. Helper failures and corrupt payloads are distinct from network
+denial. This tests newly opened flows; established-flow withdrawal and broader
+policy variants remain separate requirements. Local short tests, vet and lint
+pass; the HTTPS real-peer and application/policy scenarios await CI evidence.
+
 ## Next work
 
 Verify corrected peer delta recovery and direct traffic in CI, then extend probes

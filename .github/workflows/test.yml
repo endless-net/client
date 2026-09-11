@@ -200,6 +200,7 @@ jobs:
       - name: Build real client and scenario runner
         run: |
           go build -o "$RUNNER_TEMP/control-client" ./cmd/endlessnet-client
+          go build -o "$RUNNER_TEMP/packetprobe" ./tools/packetprobe
           go test -c -o "$RUNNER_TEMP/control-tests" ./tests
       - name: Run scenarios three times in an isolated network namespace
         shell: bash
@@ -207,6 +208,7 @@ jobs:
           set -euo pipefail
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
             ENDLESSNET_CONTROL_TEST=1 ENDLESSNET_TEST_BINARY="$RUNNER_TEMP/control-client" \
+            ENDLESSNET_PACKET_PROBE="$RUNNER_TEMP/packetprobe" \
             unshare --net -- bash -c '
               set -euo pipefail
               ip link set lo up

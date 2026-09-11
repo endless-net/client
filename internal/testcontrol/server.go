@@ -7,11 +7,15 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -91,7 +95,8 @@ func New(t testing.TB) *Server {
 }
 
 // NewWithListener allows isolated namespace clients to reach the test peer.
-// The caller supplies a listener on the CI-only underlay; nil uses loopback.
+// The caller supplies a listener on the CI-only underlay and gets HTTPS with an
+// ephemeral certificate. Nil uses loopback HTTP. Private keys stay in memory.
 func NewWithListener(t testing.TB, listener net.Listener) *Server {
 	t.Helper()
 	pub, key, err := ed25519.GenerateKey(rand.Reader)
@@ -141,14 +146,38 @@ func NewWithListener(t testing.TB, listener net.Listener) *Server {
 	if listener != nil {
 		_ = s.HTTP.Listener.Close()
 		s.HTTP.Listener = listener
+		pub, key, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		address, ok := listener.Addr().(*net.TCPAddr)
+		if !ok {
+			t.Fatal("test TLS requires a TCP listener")
+		}
+		certificate := &x509.Certificate{SerialNumber: big.NewInt(1), NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), IPAddresses: []net.IP{address.IP}, BasicConstraintsValid: true, IsCA: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+		der, err := x509.CreateCertificate(rand.Reader, certificate, certificate, pub, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.HTTP.TLS = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}
+		s.HTTP.StartTLS()
+	} else {
+		s.HTTP.Start()
 	}
-	s.HTTP.Start()
 	t.Cleanup(s.Close)
 	return s
 }
 
-func (s *Server) Close()                        { s.closeOnce.Do(func() { close(s.closed); s.HTTP.Close() }) }
-func (s *Server) URL() string                   { return s.HTTP.URL }
+func (s *Server) Close()      { s.closeOnce.Do(func() { close(s.closed); s.HTTP.Close() }) }
+func (s *Server) URL() string { return s.HTTP.URL }
+
+// TLSCertificatePEM returns public trust material, never the TLS private key.
+func (s *Server) TLSCertificatePEM() []byte {
+	if s.HTTP.Certificate() == nil {
+		return nil
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.HTTP.Certificate().Raw})
+}
 func (s *Server) Trust() api.SigningTrustBundle { return api.CloneSigningTrustBundle(s.trust) }
 func (s *Server) SessionToken() string          { s.mu.Lock(); defer s.mu.Unlock(); return s.session }
 

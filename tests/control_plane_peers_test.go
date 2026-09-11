@@ -3,8 +3,12 @@ package tests
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -139,4 +143,90 @@ func TestControlPlaneDirectPeerTrafficAndWithdrawal(t *testing.T) {
 	if err := testclient.Await(ctx, func() bool { return pingPeer(namespaces[0], states[1].OverlayIP) == nil }); err != nil {
 		t.Fatal("restored peer did not recover traffic")
 	}
+	exerciseApplicationPolicy(t, s, nodes, states, peers)
+}
+
+func applicationProbe(t *testing.T, binary, namespace, protocol, address string) bool {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := exec.CommandContext(ctx, "ip", "netns", "exec", namespace, binary, "--mode", "probe", "--network", protocol, "--address", address).Run()
+	if err == nil {
+		return true
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 2 {
+		return false
+	}
+	t.Fatalf("application probe failed independently of network access: %v", err)
+	return false
+}
+
+// HC-024/HC-027/HC-031: protocol and destination-port policy with payload checks.
+func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.Node, states [2]ipc.StatusResponse, peers [2]api.Peer) {
+	t.Helper()
+	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
+	if !filepath.IsAbs(binary) {
+		t.Fatal("ENDLESSNET_PACKET_PROBE must identify the CI application peer")
+	}
+	for _, port := range []int{24001, 24002} {
+		cmd := exec.Command("ip", "netns", "exec", nodes[1].Namespace, binary, "--mode", "serve", "--address", "0.0.0.0:"+strconv.Itoa(port))
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := testclient.Await(ctx, func() bool {
+			return applicationProbe(t, binary, nodes[1].Namespace, "tcp", "127.0.0.1:"+strconv.Itoa(port))
+		})
+		cancel()
+		if err != nil {
+			t.Fatal("application listener did not start")
+		}
+	}
+	check := func(restricted bool) {
+		t.Helper()
+		for _, protocol := range []string{"tcp", "udp"} {
+			for _, port := range []int{24001, 24002} {
+				address := net.JoinHostPort(states[1].OverlayIP, strconv.Itoa(port))
+				allowed := !restricted || (protocol == "tcp" && port == 24001) || (protocol == "udp" && port == 24002)
+				if allowed {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					err := testclient.Await(ctx, func() bool { return applicationProbe(t, binary, nodes[0].Namespace, protocol, address) })
+					cancel()
+					if err != nil {
+						t.Fatalf("allowed %s port %d did not exchange application data", protocol, port)
+					}
+				} else {
+					for range 3 {
+						if !applicationProbe(t, binary, nodes[1].Namespace, protocol, "127.0.0.1:"+strconv.Itoa(port)) {
+							t.Fatal("denial cannot be checked against an unavailable application")
+						}
+						if applicationProbe(t, binary, nodes[0].Namespace, protocol, address) {
+							t.Fatalf("denied %s port %d passed application data", protocol, port)
+						}
+					}
+				}
+			}
+		}
+	}
+	check(false)
+	limited := peers[0]
+	limited.ACLRestricted = true
+	limited.ACLGrants = []api.ACLGrant{{DestinationCIDRs: limited.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: "tcp", Port: 24001}, {Protocol: "udp", Port: 24002}}}}
+	apply := func(peer api.Peer) {
+		t.Helper()
+		if err := s.UpdatePeers(states[0].NodeID, []api.Peer{peer}); err != nil {
+			t.Fatal(err)
+		}
+		m, err := s.Snapshot(states[0].NodeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nodes[0].AwaitStatus(func(v ipc.StatusResponse) bool { return v.MapRevision >= m.Revision.Network && v.PeerCount == 1 })
+	}
+	apply(limited)
+	check(true)
+	apply(peers[0])
+	check(false)
 }

@@ -23,6 +23,7 @@ type Node struct {
 	Binary, Config, Socket, Interface, TrustFile string
 	Namespace                                    string
 	AgentArgs                                    []string
+	Environment                                  []string
 	cmd                                          *exec.Cmd
 	done                                         chan error
 }
@@ -51,6 +52,13 @@ func New(t *testing.T, s *testcontrol.Server) *Node {
 	if err = os.WriteFile(n.TrustFile, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if public := s.TLSCertificatePEM(); len(public) > 0 {
+		path := filepath.Join(dir, "test-tls-ca.pem")
+		if err := os.WriteFile(path, public, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		n.Environment = []string{"SSL_CERT_FILE=" + path}
+	}
 	t.Cleanup(n.Stop)
 	return n
 }
@@ -64,10 +72,14 @@ func (n *Node) Run(args ...string) ([]byte, error) {
 }
 
 func (n *Node) command(ctx context.Context, args ...string) *exec.Cmd {
+	var cmd *exec.Cmd
 	if n.Namespace != "" {
-		return exec.CommandContext(ctx, "ip", append([]string{"netns", "exec", n.Namespace, n.Binary}, args...)...)
+		cmd = exec.CommandContext(ctx, "ip", append([]string{"netns", "exec", n.Namespace, n.Binary}, args...)...)
+	} else {
+		cmd = exec.CommandContext(ctx, n.Binary, args...)
 	}
-	return exec.CommandContext(ctx, n.Binary, args...)
+	cmd.Env = append(os.Environ(), n.Environment...)
+	return cmd
 }
 func (n *Node) MustRun(args ...string) []byte {
 	n.t.Helper()

@@ -5,8 +5,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -108,6 +111,28 @@ func TestRegistrationFaultPreservesCommittedReplay(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTLSControlPeerRequiresItsExplicitTrust(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	check(t, err)
+	s := testcontrol.NewWithListener(t, listener)
+	a := api.NewAPI(s.URL(), "")
+	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: x509.NewCertPool()}}
+	defer transport.CloseIdleConnections()
+	a.HTTPClient = &http.Client{Transport: transport, Timeout: time.Second}
+	if _, err := a.ServerKey(); err == nil {
+		t.Fatal("untrusted test certificate accepted")
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(s.TLSCertificatePEM()) {
+		t.Fatal("invalid public test certificate")
+	}
+	trusted := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots}}
+	defer trusted.CloseIdleConnections()
+	a.HTTPClient = &http.Client{Transport: trusted, Timeout: time.Second}
+	_, err = a.ServerKey()
+	check(t, err)
 }
 
 func TestPeerDeltaAndResync(t *testing.T) {
