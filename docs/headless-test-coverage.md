@@ -559,9 +559,32 @@ repetitions: Darwin `ifconfig` rejected IPv4 assignment on utun with
 `Destination address required`. This is a Client platform defect, not a waiver
 or a fixture skip. The fix adds the IPv4 point-to-point destination, consistent
 with [WireGuard's Darwin address setup](https://git.zx2c4.com/wireguard-tools/tree/src/wg-quick/darwin.bash).
-Its real-platform verification remains required before declaring that scenario
-successful on macOS. The overall first matrix run failed, as required by the
+The first run did not verify that correction. The overall first matrix run failed, as required by the
 mandatory platform gate.
+
+[Client 4716b53](https://github.com/endless-net/client/tree/4716b53e25c9d35ba951ff33f8d0c8e25bdd0c98)
+contains the Darwin correction and address-command regression.
+[CI 34612021750](https://github.com/endless-net/client/actions/runs/34612021750)
+passed every mandatory job, including the six contract jobs, six installation
+jobs, platform verification and Linux dataplane. Per-job logs confirm the same
+11 top-level scenarios and three repetitions on all six runners: 198 successful
+top-level outcomes, with no failed or skipped top-level scenarios.
+
+| Runner | Successful / attempted | Sum of scenario times | Evidence |
+| --- | --- | --- | --- |
+| Ubuntu 22.04 amd64 | 33 / 33 | 38.67s | [job](https://github.com/endless-net/client/actions/runs/34612021750/job/103304596630) |
+| Ubuntu 24.04 amd64 | 33 / 33 | 20.89s | [job](https://github.com/endless-net/client/actions/runs/34612021750/job/103304596701) |
+| Windows 2022 amd64 | 33 / 33 | 164.78s | [job](https://github.com/endless-net/client/actions/runs/34612021750/job/103304596820) |
+| Windows 2025 amd64 | 33 / 33 | 120.28s | [job](https://github.com/endless-net/client/actions/runs/34612021750/job/103304596627) |
+| macOS 15 arm64 | 33 / 33 | 22.14s | [job](https://github.com/endless-net/client/actions/runs/34612021750/job/103304596581) |
+| macOS 15 Intel | 33 / 33 | 31.27s | [job](https://github.com/endless-net/client/actions/runs/34612021750/job/103304596540) |
+
+Times include fixture/process/OS setup within each scenario and are not product
+throughput or latency benchmarks. The Windows runs take materially longer, so
+the suite retains bounded operation deadlines and a 12-minute job test deadline.
+Optional external STUN compatibility did not execute. These results establish
+the common contract suite on each platform, not completion of HC-001–HC-065 or
+native Windows/macOS application traffic, routing, resolver and firewall checks.
 
 ## Next work
 
