@@ -82,7 +82,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-005 | C process lifecycle | Duplicate agent and termination semantics |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
-| HC-008 | C BrowserEnrollment and expired-request replacement/resume/approval | Expiry during active polling, cancellation and foreign poll authorization |
+| HC-008 | C BrowserEnrollment; expired-request replacement/resume/approval; expiry during active CLI polling and approved recovery on all six runners | Cancellation and foreign poll authorization |
 | HC-009 | C enrollment; P wrong/expired join authorization; R two real CLI registrations | Full authorized/denied attribute and platform variants |
 | HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; historical R distinct node IDs | Client image-cloning and batch variants; historical producer replay failure is an external constraint |
 | HC-011 | No C/R evidence audited | Decide ephemeral lifecycle, then normal/crash expiry tests |
@@ -773,6 +773,44 @@ offline lease expiry, TCP/IPv6 retirement or local software removal. Windows
 process restart uses termination; installation-suite service observations are
 separate. No runtime Client change is included in this test increment.
 
+## Browser enrollment expiry during active polling
+
+[Client d3cd7ca](https://github.com/endless-net/client/tree/d3cd7caee0c78af44b4e90e89d625f6077475109)
+adds [TestControlPlaneBrowserEnrollmentExpiresDuringPolling](../tests/control_plane_enrollment_poll_test.go)
+for HC-008. The real `up` CLI runs with a bounded approval wait. Only after the
+testserver observes at least two status requests, and the CLI is still running,
+does the fixture expire its pending request. The same invocation must report
+expiry; it must not attempt completion or create a node credential.
+
+A later CLI process must create exactly one distinct replacement. The expired
+request remains unapprovable; only explicit approval of the replacement permits
+enrollment. A real agent then exposes the single approved node through public
+IPC. Assertions use HTTP request observations, public CLI output and IPC rather
+than private persisted state. No new testserver behavior or Client runtime
+change is added.
+
+Local format/vet/lint/short checks passed.
+[CI 34620489439](https://github.com/endless-net/client/actions/runs/34620489439)
+passed on exact source `d3cd7caee0c78af44b4e90e89d625f6077475109`. Comparing all
+six job logs confirms the same 14 top-level scenarios, each passing three
+times: 42/42 per platform, 252/252 overall, with no failed or skipped top-level
+scenarios. The new polling-expiry scenario outcomes were:
+
+| Runner | Three successful repetitions | Evidence |
+| --- | --- | --- |
+| Ubuntu 22.04 amd64 | 2.09s, 2.09s, 2.09s | [job](https://github.com/endless-net/client/actions/runs/34620489439/job/103333416543) |
+| Ubuntu 24.04 amd64 | 3.01s, 2.29s, 2.34s | [job](https://github.com/endless-net/client/actions/runs/34620489439/job/103333416726) |
+| macOS 15 arm64 | 2.10s, 2.22s, 2.14s | [job](https://github.com/endless-net/client/actions/runs/34620489439/job/103333416272) |
+| macOS 15 Intel | 2.28s, 2.25s, 2.28s | [job](https://github.com/endless-net/client/actions/runs/34620489439/job/103333416443) |
+| Windows 2022 amd64 | 3.48s, 3.45s, 3.46s | [job](https://github.com/endless-net/client/actions/runs/34620489439/job/103333416767) |
+| Windows 2025 amd64 | 4.00s, 3.86s, 3.71s | [job](https://github.com/endless-net/client/actions/runs/34620489439/job/103333416347) |
+
+All installation, platform verification, Linux dataplane and aggregate jobs
+also passed. Optional external STUN compatibility did not execute. Timings
+include process/fixture setup and the contract polling interval; they are not
+performance benchmarks. Cancellation and foreign poll authorization remain
+separate HC-008 variants; no browser UI or real OIDC provider is involved.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
@@ -786,3 +824,9 @@ TCP, IPv6, Relay/NAT, policy direction/destination variants and automatic OS
 resolver behavior still require explicit client tests and runner evidence.
 Do not infer those outcomes from component ACL tests or successful peer UDP
 echoes. The real Client must continue to use its native OS interface and CLI/IPC.
+
+For the next native IPv6 increment, public IPC already exposes `overlay_ipv6`
+and `overlay_ipv6_cidr`. The current CI packetprobe forces IPv4 dialing, and
+the reference UDP peer accepts only IPv4 packets. Extend those Client-owned
+fixtures before claiming IPv6 traffic coverage, and distinguish the overlay
+address family from the WireGuard underlay transport in the resulting evidence.
