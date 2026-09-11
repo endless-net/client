@@ -6,6 +6,38 @@ Scope: [HC-001–HC-065, architecture main](https://github.com/endless-net/archi
 [business requirements](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-business-analysis.md),
 and [system design / IT specifications](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-system-design.md).
 
+## Active goal: Client only
+
+The user narrowed the working goal on 2026-09-11. This scope supersedes the
+earlier cross-repository plan, including producer follow-ups recorded below.
+
+Cover every applicable HC-001–HC-065 client scenario and its BR/AC requirements
+with positive, negative and recovery tests owned by this repository. Exercise
+the real headless client against a testserver implementing published wire
+contracts. Observe public CLI/IPC, protocol exchanges and actual application
+traffic; do not read databases or private persisted state, or import service
+runtime internals into these integration tests. The testserver must model
+contract behavior, not copy a backend implementation or accommodate a client bug.
+
+Keep test drivers, fixtures, coverage documentation and CI changes in Client.
+Include installation, service lifecycle, privileges, update and removal in the
+Client-owned OS suite. Fix client defects revealed by these tests and verify
+them with regressions. Require the applicable client scenarios in Client CI
+and gate client publication on successful checks for the exact source commit.
+
+Do not develop or modify Coordinator or other services, their tests or CI.
+Real backend processes, provider conformance, cross-service acceptance,
+system-tests, Infrastructure and production deployment are outside this goal.
+External contract gaps are recorded as constraints; they do not authorize
+changes to the producer. Existing P/R results below are historical evidence,
+not required work or substitutes for Client-owned coverage. No rollback of
+previously committed changes is implied by this scope correction.
+
+Completion requires a traceable Client-owned test for every agreed applicable
+scenario/variant and successful required Client CI. Unsupported features and
+unresolved product requirements remain explicit gaps, never successful skips.
+This scope change does not reduce coverage of the client itself.
+
 ## Evidence levels
 
 - **L**: [installation suite](../tests/installation_test.go), driven by real OS
@@ -434,7 +466,8 @@ is still registration replay; this does not close HC-027 as a whole.
 
 ## Next work
 
-Fix and verify Coordinator direct registration replay, extend real-pair recovery
-and dataplane, then remaining consumer/OS/transport variants. Keep contract gaps and
-platform decisions explicit; do not replace unresolved HC rows with generic smoke
-tests or infer broad completion from this initial increment.
+Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
+missing contract-only testserver scenarios and client regressions. Historical
+producer failures are constraints, not tasks to fix outside Client. Keep
+contract gaps and platform decisions explicit; do not replace unresolved client
+scenarios with generic smoke tests or infer completion from historical P/R runs.
