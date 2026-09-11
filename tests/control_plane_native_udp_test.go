@@ -145,6 +145,12 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	}
 	address := func(port string) string { return net.JoinHostPort(peerIP.String(), port) }
 	fresh := func(port string) bool { return applicationProbe(t, binary, "", protocol, address(port)) }
+	if protocol == "tcp" {
+		// Diagnose an address collision outside the Client tunnel before the
+		// reference peer is published. This is not a positive traffic assertion.
+		baseline, _, _ := nativePing(t, peerIP)
+		t.Logf("ICMP pre-peer baseline: echo=%t", baseline)
+	}
 	apply(peer)
 	for _, port := range []string{"24001", "24002"} {
 		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
@@ -173,22 +179,32 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	second := startApplicationSession(t, binary, "", protocol, address("24002"))
 	first("ok")
 	second("ok")
-	assertICMP := func(want bool) {
+	assertICMP := func(phase string, want bool) {
 		t.Helper()
 		// Only the protocol-stack peer answers ICMP; the UDP-only channel
 		// fixture intentionally implements just its nonce echo protocol.
-		if protocol == "tcp" && nativePing(t, peerIP) != want {
-			t.Fatalf("native ICMP reachability: want %t", want)
+		if protocol != "tcp" {
+			return
+		}
+		_, _, beforeProbe := reference.HandshakeCounts()
+		got, exitCode, pingOutput := nativePing(t, peerIP)
+		_, _, afterProbe := reference.HandshakeCounts()
+		if got != want {
+			status, _ := n.Status()
+			// Ping uses a fixed numeric fixture IP; this output contains no Client state.
+			t.Logf("ICMP process: exit=%d output=%q", exitCode, pingOutput)
+			t.Logf("ICMP diagnostic: phase=%s reference_transport_packets=%d wireguard_status_present=%t", phase, afterProbe-beforeProbe, status.WireGuard != nil)
+			t.Fatalf("native ICMP reachability: phase=%s got=%t want=%t", phase, got, want)
 		}
 	}
-	assertICMP(true)
+	assertICMP("initial", true)
 	limited := peer
 	limited.ACLRestricted = true
 	limited.ACLGrants = []api.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: protocol, Port: 24002}}}}
 	apply(limited)
 	for range 3 {
 		second("ok")
-		assertICMP(false)
+		assertICMP("tcp-only-grant", false)
 		first("blocked")
 		if !fresh("24002") {
 			t.Fatal("retained grant stopped working")
@@ -209,7 +225,7 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	if !fresh("24001") || !fresh("24002") {
 		t.Fatal("restored native grants did not recover")
 	}
-	assertICMP(true)
+	assertICMP("restored-grant", true)
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
 	n.AwaitStatus(func(v ipc.StatusResponse) bool {
@@ -218,7 +234,7 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	if fresh("24001") || fresh("24002") {
 		t.Fatal("disconnected client still delivered overlay traffic")
 	}
-	assertICMP(false)
+	assertICMP("disconnected", false)
 	// HC-017/HC-018: a new agent process must preserve disconnected intent and
 	// enrollment. Restoring connected intent must recover actual traffic using
 	// the same public node/key binding held by the unchanged reference peer.
@@ -241,7 +257,7 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 	if fresh("24001") || fresh("24002") {
 		t.Fatal("agent restart ignored disconnected intent")
 	}
-	assertICMP(false)
+	assertICMP("disconnected-restart", false)
 	if registrationRequests() != before {
 		t.Fatal("disconnected restart attempted credential registration or refresh")
 	}
@@ -261,7 +277,7 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 				t.Fatal("connected intent did not restore native traffic")
 			}
 		}
-		assertICMP(true)
+		assertICMP("connected", true)
 		// Registration also renews an existing node credential. The contract
 		// fixture validates the original identity/key/fingerprint binding before
 		// recording a refresh; only a newly created node is another enrollment.
@@ -308,7 +324,7 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 			return v.State == ipc.StateNeedsEnrollment && v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent
 		})
 		retiredSession("blocked")
-		assertICMP(false)
+		assertICMP("retired", false)
 		if fresh("24001") || fresh("24002") {
 			t.Fatal("retired client still delivered fresh native traffic")
 		}

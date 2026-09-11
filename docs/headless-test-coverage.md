@@ -897,6 +897,55 @@ deadlines; Windows takes longer, but this is not a transport performance compari
 IPv6 still uses an IPv4 WireGuard underlay. These tests do not qualify lossy-network
 TCP recovery, Relay/NAT or all policy directions, or complete HC-001–HC-065.
 
+## Native ICMP policy and lifecycle increment
+
+[Client 5ad2709](https://github.com/endless-net/client/tree/5ad27093849daf566bf34773e50e29a61312db45)
+extends the native TCP/IPv4 and TCP/IPv6 scenarios with OS ICMP echo probes.
+The existing reference netstack handles ICMP; its address remains absent from
+the host. No Client runtime changes or dependency/version increases are involved.
+
+Echo must succeed with the unrestricted peer, fail three times under the
+TCP-only port grant while authorized TCP still works, and recover when the
+original peer grant returns. Disconnect and disconnected restart must deny
+echo. Reconnect and connected restart must restore it with the same enrollment.
+Terminal credential revocation must deny echo before and after agent restart,
+while the reference peer remains running with unchanged keys and addresses.
+
+The driver requires a successful native ping process and an echo-reply line
+from the exact numeric peer address with RTT data. An unreachable response,
+aggregate receive count or another source address cannot satisfy the assertion.
+Unit cases exercise those false-positive boundaries. Unix output uses the C
+locale; the Windows driver targets the English GitHub-hosted images. The probe
+has a three-second process bound and sends one request per invocation. These
+are native OS echo checks, not the packetprobe TCP/UDP nonce protocol.
+CLI details follow [Microsoft ping](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping)
+and [Apple ping6 source](https://github.com/apple-oss-distributions/network_cmds/blob/main/ping6.tproj/ping6.c).
+
+Local format/vet/lint/short checks passed.
+[CI 34625686577](https://github.com/endless-net/client/actions/runs/34625686577)
+completed all six jobs: 294 PASS and 12 FAIL outcomes. Both Ubuntu runners
+passed 51/51. Both macOS runners failed the IPv4 TCP scenario's new ICMP denial
+assertion in all three repetitions; both Windows runners failed the IPv6 TCP
+scenario's new positive ICMP assertion in all three repetitions. All other
+common scenarios passed. This is not six-platform ICMP qualification. The
+original failure message did not identify the phase or include ping output,
+so these results alone do not establish a Client defect or a probe defect.
+
+The diagnostic follow-up labels each ICMP phase, records native ping output
+only on unexpected results, observes reference WireGuard transport packet
+counts and probes the numeric address before publishing the reference peer.
+It preserves every reachability assertion. A reply outside the Client tunnel
+is a possible address collision to investigate, not an established cause.
+The common test-process budget becomes 15 minutes within the existing 20-minute
+job bound: the preceding successful Windows 2025 TCP run consumed 715 seconds
+of the old 720-second budget before these additional probes. Individual CLI,
+ping and application-operation deadlines are unchanged. The failed ICMP run
+completed its assertions and was not a timeout failure.
+The suite still has 17 top-level scenarios, each repeated three times on six
+runners; these are new assertions within two existing scenarios. IPv6 overlay
+still travels over an IPv4 underlay. Explicit ICMP-only grants, inbound policy,
+ICMP errors/PMTU, IPv6 underlay and Relay/NAT remain separate coverage gaps.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

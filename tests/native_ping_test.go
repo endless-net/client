@@ -16,7 +16,7 @@ import (
 // inside the remote userspace stack, so a reply requires Client tunnel traffic.
 // In particular, Windows can report an unreachable response with exit code 0;
 // accept only an echo-reply line from the exact expected peer, with RTT data.
-func nativePing(t *testing.T, address netip.Addr) bool {
+func nativePing(t *testing.T, address netip.Addr) (bool, int, string) {
 	t.Helper()
 	program := "ping"
 	args := []string{"-n", "-c", "1", address.String()}
@@ -50,9 +50,9 @@ func nativePing(t *testing.T, address netip.Addr) bool {
 		if !errors.As(err, &exit) {
 			t.Fatal("native ICMP probe could not execute")
 		}
-		return false
+		return false, exit.ExitCode(), string(output)
 	}
-	return nativePingReply(runtime.GOOS, address, string(output))
+	return nativePingReply(runtime.GOOS, address, string(output)), 0, string(output)
 }
 
 func nativePingReply(platform string, address netip.Addr, output string) bool {
