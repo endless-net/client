@@ -550,7 +550,7 @@ func (s *Server) registerLocked(req api.RegisterNodeRequest, authorization strin
 		if code != "" {
 			return api.RegisterNodeResponse{}, code, nil
 		}
-		if n.Map.Node.IdentityPublicKey != req.IdentityPublicKey || n.Map.Node.PublicKey != req.PublicKey || n.Map.Node.DeviceFingerprint != req.DeviceFingerprint || n.Map.RegistrationBinding != req.RegistrationBinding || n.Map.Network.ID != req.NetworkID {
+		if n.Map.Node.IdentityPublicKey != req.IdentityPublicKey || n.Map.Node.PublicKey != req.PublicKey || n.Map.Node.DeviceFingerprint != req.DeviceFingerprint || n.Map.Node.Hostname != req.Hostname || n.Map.RegistrationBinding != req.RegistrationBinding || n.Map.Network.ID != req.NetworkID {
 			return api.RegisterNodeResponse{}, api.ErrorCodeNodeIdentityBindingMismatch, nil
 		}
 		networkID = n.Map.Network.ID

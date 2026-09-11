@@ -867,6 +867,11 @@ func cmdUp(args []string) error {
 		req.NetworkID = cfg.NetworkID
 		if cfg.CachedMap != nil {
 			req.RegistrationBinding = cfg.CachedMap.RegistrationBinding
+			// Credential renewal retains the enrolled name, including a custom
+			// name or one established before the operating-system host was renamed.
+			if !flagWasSet(fs, "hostname") {
+				req.Hostname = cfg.CachedMap.Node.Hostname
+			}
 		}
 	} else if strings.TrimSpace(cfg.Token) == "" {
 		browserEnrollment = true
