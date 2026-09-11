@@ -81,7 +81,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-002 | L installed CLI version | Artifact/dependency failure paths |
 | HC-003 | L noninteractive installation and enrolled same-artifact reinstall on all eight runners, preserving identity, intent and real TCP access | Interrupted installation and artifact replacement variants |
 | HC-004 | L real service and IPC | Local authorization and unavailable-service outcomes |
-| HC-005 | C process lifecycle; SingleAgentOwnership passed three times on all eight native runners | Alias-path ownership, concurrent launch and remaining termination variants |
+| HC-005 | C SingleAgentOwnership including three concurrent contenders through lexical path aliases passed three times on all eight native runners | Symbolic/hard-link aliases, concurrent startup without an existing owner and remaining termination variants |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
 | HC-008 | C BrowserEnrollment; expired-request replacement/resume/approval; expiry during active CLI polling and approved recovery on all six runners | Cancellation and foreign poll authorization |
@@ -1669,7 +1669,8 @@ a directory-dot path and a directory-parent path to the same configuration.
 Each contender has a separate IPC endpoint and must report the ownership error.
 The original agent must retain identity and connected/disconnected intent,
 consume a signed map while connected, and restart without another registration.
-This increment awaits hosted evidence. It does not qualify symbolic links,
+This increment passed all 24 native repetitions in CI 34647302646, documented
+below. It does not qualify symbolic links,
 hard links, simultaneous startup without an existing owner, or all crash cases.
 
 ## Completed first matrix with separate repetitions
@@ -1714,6 +1715,44 @@ outcomes for this source. CI discovers the compiled inventory automatically.
 This scenario does not establish multiple-profile support, authorized migration
 to a new network, traffic isolation after such migration, or same-network
 selection semantics while disconnected. HC-020 remains incomplete.
+
+## Completed return-path correction run: partial evidence
+
+[CI 34647302646](https://github.com/endless-net/client/actions/runs/34647302646)
+completed with failure for source `01ac1e486c5496bbae55b55b1fc12d069d02ff56`.
+All 528 expected roots completed: **503 PASS, 25 FAIL, 0 SKIP**. The expanded
+`TestControlPlaneSingleAgentOwnership` passed all 24 repetitions across eight
+platforms. This qualifies the tested lexical aliases and concurrent contenders
+against an existing owner, not every HC-005 variant or the source as a whole.
+
+All 24 Relay roots failed. The
+[Ubuntu 24.04 repetition 3](https://github.com/endless-net/client/actions/runs/34647302646/job/103421527555),
+[macOS Intel repetition 1](https://github.com/endless-net/client/actions/runs/34647302646/job/103421527641)
+and [macOS ARM repetition 3](https://github.com/endless-net/client/actions/runs/34647302646/job/103421527699)
+logs locate both IP-family failures at the public path-status wait after Relay
+availability was restored. Initial TCP/UDP exchange, established sessions and
+outage denial assertions had passed. Because status was checked before traffic
+at recovery, these logs do not establish whether recovered traffic worked.
+
+[Windows 2025 repetition 1](https://github.com/endless-net/client/actions/runs/34647302646/job/103421527552)
+instead failed at the initial exchange in both families: 2 authentications,
+4 frames to the peer, 2 frames back, 2 reference handshake initiations and
+2 responses, but zero application requests/echoes. This must be investigated
+separately from the Linux/macOS recovery-status observation.
+
+The additional root failure was
+[Windows 2025 repetition 2](https://github.com/endless-net/client/actions/runs/34647302646/job/103421527778),
+again during initial IPC readiness in `TestControlPlaneDNSWireRecovery`:
+zero responses, 16 failed attempts and a live agent. The DNS wire assertions
+had not started. This repeats the startup symptom from CI 34646086686; its
+cause remains unresolved.
+
+[Diagnostic CI 34648109886](https://github.com/endless-net/client/actions/runs/34648109886)
+has instantiated the matrix for `a6b4edb4724b9a23be8575e29e94109bc9592f7f`.
+It includes the 23-root inventory, IPC category counts, and mandatory Relay
+traffic checks before mandatory path-status checks. Per-check deadlines are
+unchanged; safe status booleans and participant counters distinguish failure
+stages. Runtime recovery is not yet qualified.
 
 ## Next work
 
