@@ -168,11 +168,28 @@ history with a full signed resync. Assertions use CLI/IPC and redacted wire-even
 observations. `TestPeerDeltaAndResync` additionally verifies peer replacement and
 applies the double's events with the published SDK. The double keeps only one
 delta; this is a consumer recovery fixture, not evidence of Coordinator history
-retention. Real client execution still awaits this increment's CI.
+retention. [Test run 34587437499](https://github.com/endless-net/client/actions/runs/34587437499)
+failed the new consumer case in all three repetitions: the test assumed revision
+1 after disconnect, but disconnect had already published a node-state revision.
+The follow-up establishes an explicit post-teardown signed baseline and derives
+its exact revision before checking delta transitions. All other mandatory jobs
+passed; corrected consumer execution still needs CI evidence.
+
+`TestControlPlaneDirectPeerTrafficAndWithdrawal` introduces two real agents in
+separate disposable Linux network namespaces connected by a private underlay
+bridge. The client manages overlay routes with `--route-table auto`. The test
+requires bidirectional overlay ICMP, successful WireGuard handshakes and byte
+counters, denial after receiver-side peer withdrawal, then restored traffic.
+It uses public maps and IPC; no client config, identity keys or runtime internals
+are read. It covers a direct IPv4 path with a control double, not real backend
+authorization, forced Relay, NAT traversal, application TCP/UDP or other OSes.
+Initial execution is pending CI; this is not yet confirmed coverage of HC-024,
+HC-027 or HC-028 as a whole.
 
 ## Next work
 
-Verify peer delta recovery in CI, then extend C with real peer probes.
+Verify corrected peer delta recovery and direct traffic in CI, then extend probes
+to application protocols, enforcement and transport changes.
 Run producer conformance in owning service repositories. Keep contract gaps and
 platform decisions explicit; do not replace unresolved HC rows with generic smoke
 tests or infer broad completion from this initial increment.

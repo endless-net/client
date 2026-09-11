@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -86,6 +87,12 @@ type Server struct {
 }
 
 func New(t testing.TB) *Server {
+	return NewWithListener(t, nil)
+}
+
+// NewWithListener allows isolated namespace clients to reach the test peer.
+// The caller supplies a listener on the CI-only underlay; nil uses loopback.
+func NewWithListener(t testing.TB, listener net.Listener) *Server {
 	t.Helper()
 	pub, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -108,7 +115,7 @@ func New(t testing.TB) *Server {
 	mux.HandleFunc("GET /maps/{id}/stream", s.stream)
 	mux.HandleFunc("POST /auth/logout", s.logout)
 	s.mountRPC(mux)
-	s.HTTP = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s.HTTP = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		code := s.faults[r.Method+" "+r.URL.Path]
 		delete(s.faults, r.Method+" "+r.URL.Path)
@@ -131,6 +138,11 @@ func New(t testing.TB) *Server {
 		}
 		mux.ServeHTTP(w, r)
 	}))
+	if listener != nil {
+		_ = s.HTTP.Listener.Close()
+		s.HTTP.Listener = listener
+	}
+	s.HTTP.Start()
 	t.Cleanup(s.Close)
 	return s
 }
@@ -622,6 +634,7 @@ func (s *Server) endpoint(w http.ResponseWriter, r *http.Request) {
 	}
 	m.MapSignature = sig
 	n.Map = m
+	n.Delta = nil
 	s.recordLocked(Event{Kind: "endpoint", NodeID: m.Node.ID})
 	writeJSON(w, m)
 }

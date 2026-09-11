@@ -378,7 +378,15 @@ func TestControlPlanePeerDeltaRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	peer := api.Peer{ID: "delta-peer", Hostname: "peer", PublicKey: pub, AllowedIPs: []string{"100.90.0.20/32"}}
-	revision := uint64(1)
+	// Disconnect can publish a node-status revision. Establish a known cached
+	// cursor after teardown rather than assuming registration is still revision 1.
+	update(t, s, id, func(m *api.NetworkMapSnapshot) { m.Network.Name = "delta-baseline" })
+	n.MustRun("sync", "--config", n.Config, "--timeout", "1s")
+	base, err := s.Snapshot(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := base.Revision.Network
 	for _, peers := range [][]api.Peer{{peer}, nil} {
 		if err := s.UpdatePeers(id, peers); err != nil {
 			t.Fatal(err)

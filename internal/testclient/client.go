@@ -21,6 +21,8 @@ import (
 type Node struct {
 	t                                            *testing.T
 	Binary, Config, Socket, Interface, TrustFile string
+	Namespace                                    string
+	AgentArgs                                    []string
 	cmd                                          *exec.Cmd
 	done                                         chan error
 }
@@ -57,8 +59,15 @@ func New(t *testing.T, s *testcontrol.Server) *Node {
 func (n *Node) Run(args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, n.Binary, args...)
+	cmd := n.command(ctx, args...)
 	return cmd.CombinedOutput()
+}
+
+func (n *Node) command(ctx context.Context, args ...string) *exec.Cmd {
+	if n.Namespace != "" {
+		return exec.CommandContext(ctx, "ip", append([]string{"netns", "exec", n.Namespace, n.Binary}, args...)...)
+	}
+	return exec.CommandContext(ctx, n.Binary, args...)
 }
 func (n *Node) MustRun(args ...string) []byte {
 	n.t.Helper()
@@ -68,16 +77,18 @@ func (n *Node) MustRun(args ...string) []byte {
 	}
 	return out
 }
-func (n *Node) Enroll(s *testcontrol.Server, network, join string) {
+func (n *Node) Enroll(s *testcontrol.Server, network, join string, options ...string) {
 	n.t.Helper()
-	n.MustRun("up", "--config", n.Config, "--server", s.URL(), "--network", network, "--join-token", join, "--hostname", "scenario-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off")
+	args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network, "--join-token", join, "--hostname", "scenario-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off"}
+	n.MustRun(append(args, options...)...)
 }
 func (n *Node) Start() {
 	n.t.Helper()
 	if n.cmd != nil {
 		n.t.Fatal("agent already started")
 	}
-	n.cmd = exec.Command(n.Binary, "agent", "--config", n.Config, "--state-output", filepath.Join(filepath.Dir(n.Config), "agent-state.json"), "--ipc-socket", n.Socket, "--wg-interface", n.Interface, "--interval", "100ms", "--timeout", "300ms", "--stun-timeout", "100ms", "--reconnect-max-delay", "300ms", "--reconnect-jitter", "0")
+	args := []string{"agent", "--config", n.Config, "--state-output", filepath.Join(filepath.Dir(n.Config), "agent-state.json"), "--ipc-socket", n.Socket, "--wg-interface", n.Interface, "--interval", "100ms", "--timeout", "300ms", "--stun-timeout", "100ms", "--reconnect-max-delay", "300ms", "--reconnect-jitter", "0"}
+	n.cmd = n.command(context.Background(), append(args, n.AgentArgs...)...)
 	n.cmd.Stdout = io.Discard
 	n.cmd.Stderr = io.Discard
 	if err := n.cmd.Start(); err != nil {
