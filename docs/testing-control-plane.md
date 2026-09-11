@@ -64,6 +64,14 @@ The fixture configures its return endpoint from public Client IPC;
 it does not read Client keys or import Client runtime code. Its handshake and
 decrypted-packet counters are diagnostics, not replacements for nonce echoes.
 
+Both TCP scenarios also invoke native OS ping for their overlay address family.
+Echo must pass initially, fail under a TCP-only grant while authorized TCP
+continues, and recover with restored permission. The same probes check
+disconnect, reconnect, process restart and terminal retirement. The IPv4 fixture
+uses `198.18.94.0/24`; a successful ping before Client setup fails the fixture
+as an address collision. A successful probe requires an echo-reply line from
+the exact numeric peer with RTT data, not only the ping process exit code.
+
 The same scenario restarts the disconnected agent, explicitly reconnects it,
 repeats connect and restarts the connected agent. Node/key identity and actual
 TCP/UDP access must be preserved; credential refresh is distinct from new enrollment.
@@ -117,9 +125,10 @@ check the executed suite; they do not imply that every HC scenario has a test.
 
 Common contract results are attributed separately to each runner's OS and
 architecture. They do not prove that OS's complete dataplane, DNS resolver,
-route, firewall or service lifecycle behavior. The native TCP/UDP scenarios cover
-only its explicit IPv4/IPv6 overlay direct-path and selective-port assertions.
-The two-real-Client traffic fixture currently runs on Linux only. Native ICMP,
+route, firewall or service lifecycle behavior. The native scenarios cover
+their explicit IPv4/IPv6 overlay TCP/UDP and ICMP echo, selective-permission and
+lifecycle assertions. The two-real-Client traffic fixture currently runs on Linux only.
+Explicit ICMP-only grants and ICMP errors/PMTU,
 IPv6 underlay, Relay/NAT and
 lossy-network TCP recovery and other policy variants still need their own platform evidence; see the
 [coverage ledger](headless-test-coverage.md) for actual run outcomes.

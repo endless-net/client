@@ -90,18 +90,18 @@ product scope are different conditions; neither is a successful skip.
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
 | HC-014 | U recovery matrix | C session expiry, reauthentication and preservation |
 | HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
-| HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP on all six runners | Other paths/protocols and denied-access variants |
-| HC-017 | C native direct IPv4/IPv6 TCP/UDP blocked/restored by disconnect/connect and agent restart on all six runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
-| HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP checks on all six runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
+| HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners | Other paths/protocols and denied-access variants |
+| HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
+| HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | U configuration tests | Public preference mutation and observed effect |
 | HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; U typed logout | Remote cleanup unconfirmed, local forget, profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
-| HC-024 | C IPv4 ICMP/TCP/UDP; real Client direct IPv4/IPv6 TCP/UDP on all six runners (native increments below); historical R two agents with real Coordinator | Native ICMP on Windows/macOS and IPv6, IPv6 underlay, Relay/NAT and full policy variants |
-| HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; six-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
+| HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
+| HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; eight-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
-| HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration with established/fresh flows on all six runners; historical R node/port withdrawal | Remaining Client direction/destination correlation and other policy/transport variants |
+| HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration and ICMP denial under TCP-only grants on all eight runners; historical R node/port withdrawal | Explicit ICMP-only grants, remaining Client direction/destination correlation and other policy/transport variants |
 | HC-028 | C direct IPv4 traffic; U Relay implementation | Forced Relay, NAT and path transitions with packet probes |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
 | HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
@@ -139,7 +139,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
 | HC-063 | U local-forget/recovery tests | Public privileged reset and new identity against published contract responses |
 | HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
-| HC-065 | C terminal revoke and native direct IPv4/IPv6 TCP/UDP retirement across agent restart on all six runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
+| HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
 ## Current implementation increment
 
@@ -1004,11 +1004,35 @@ run natively on each ARM runner, exercising the same declared scenario inventory
 
 Both new installation jobs and both contract jobs become mandatory in the
 exact-source publication verifier. The report comparer requires eight matching
-artifacts, with explicit missing-ARM regression cases. With the current 17
-common scenarios, three repetitions imply 408 expected outcomes across eight
-runners. These are expected counts, not completed evidence: native Linux ARM
-qualification awaits the source run for this expansion. Windows ARM is not a
+artifacts, with explicit missing-ARM regression cases. Windows ARM is not a
 declared release artifact; macOS keeps its existing source/CI support boundary.
+
+[Source 4bf3263](https://github.com/endless-net/client/tree/4bf326393beac8bff89f444e83637007fe981a09)
+passed [CI 34629704362](https://github.com/endless-net/client/actions/runs/34629704362).
+All eight logs contain the same 17 common scenarios, each passing three times:
+408/408 outcomes. The required automated comparer independently reports the
+same count with no skips. All eight installation jobs, three platform
+verification jobs and Linux dataplane scenarios also passed. Optional external
+STUN did not execute.
+
+| Native runner | Contract outcomes | Installation |
+| --- | --- | --- |
+| Ubuntu 22.04 amd64 | 51/51 PASS | PASS |
+| Ubuntu 24.04 amd64 | 51/51 PASS | PASS |
+| Ubuntu 22.04 arm64 | 51/51 PASS | PASS |
+| Ubuntu 24.04 arm64 | 51/51 PASS | PASS |
+| Windows 2022 amd64 | 51/51 PASS | PASS |
+| Windows 2025 amd64 | 51/51 PASS | PASS |
+| macOS 15 ARM | 51/51 PASS | PASS |
+| macOS 15 Intel | 51/51 PASS | PASS |
+
+Both ARM installation logs identify a native Go arm64 toolchain and the
+`endlessnet-client_0.5.0_arm64.deb` package. Fresh IPC, disconnected-intent
+preservation across service restart and uninstall pass. The package uses the
+existing release version; this run does not establish an enrolled-client upgrade.
+Native TCP/UDP and ICMP echo in both overlay families now have evidence on all
+eight runners, with the same IPv4-underlay and policy/lifecycle limits above.
+This remains partial HC coverage, not completion of the entire catalog.
 
 ## Next work
 
@@ -1018,7 +1042,13 @@ producer failures are constraints, not tasks to fix outside Client. Keep
 contract gaps and platform decisions explicit; do not replace unresolved client
 scenarios with generic smoke tests or infer completion from historical P/R runs.
 
-Extend native platform coverage beyond direct IPv4/IPv6 TCP/UDP over IPv4 underlay:
+Prioritize the installed-client lifecycle gap next: repeat installation of an
+already enrolled Client through the real OS installer/service manager, observe
+identity and desired-state preservation through public CLI/IPC, and verify
+restored traffic. Same-artifact reinstall is HC-003 evidence; it must not be
+reported as a completed version-upgrade or full-removal scenario for HC-060/HC-064.
+
+Extend native platform coverage beyond direct IPv4/IPv6 TCP/UDP and ICMP echo over IPv4 underlay:
 Explicit ICMP grants and errors/PMTU, IPv6 underlay, Relay/NAT, policy direction/destination variants and automatic OS
 resolver behavior still require explicit client tests and runner evidence.
 Do not infer those outcomes from component ACL tests or successful peer UDP
