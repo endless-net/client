@@ -1620,6 +1620,33 @@ output, keys and credentials remain withheld. The 15-second exchange bound and
 required payload checks are unchanged. HC-028 remains unqualified pending
 localization, correction and native reruns.
 
+## Completed initial Relay run: failure, not qualification
+
+[CI 34644300216](https://github.com/endless-net/client/actions/runs/34644300216)
+completed unsuccessfully for source `b3548fd35cfe985806c271d084ac48310f5bd96a`.
+Its root reports contain **479 PASS, 24 FAIL, 0 SKIP**, with **25 expected root
+executions incomplete or absent** from the 528-outcome requirement. All 24
+completed root failures are `TestControlPlaneNativeRelayTraffic` (three per
+platform). Each of the four Linux and two macOS jobs completed the other 63
+outcomes successfully. This supports preserving the previous qualification,
+not accepting the new Relay feature.
+
+[Windows 2022](https://github.com/endless-net/client/actions/runs/34644300216/job/103413387483)
+recorded 52 PASS and 3 FAIL, then hit the overall 15-minute test-process limit
+while `TestControlPlaneMalformedErrorsPreserveEnrollment` had run for 4 seconds.
+[Windows 2025](https://github.com/endless-net/client/actions/runs/34644300216/job/103413387148)
+recorded 49 PASS and 3 FAIL, then reached the same overall limit during
+`TestControlPlaneRoutedResource` (40 seconds into that scenario). These incomplete
+runs are not additional successful coverage or evidence that the active scenario
+itself exceeded its own operation deadline.
+
+The already-implemented separate-runner repetition matrix addresses suite
+capacity while retaining all expected outcomes. Its first diagnostic source
+[CI 34646086686](https://github.com/endless-net/client/actions/runs/34646086686)
+has instantiated 24 native jobs for `0981f09add71d1e6f6209b8b4d2be17bdc586aea`.
+Relay packet loss still requires localization and correction; CI repartitioning
+alone cannot fix or qualify it.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
