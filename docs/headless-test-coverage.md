@@ -612,6 +612,29 @@ Each DNS proxy invocation loads a fresh verified map. These results do not
 establish live reload, automatic OS resolver setup, IPv6 DNS, TCP upstream
 fallback, or actual overlay application traffic on Windows/macOS.
 
+[Client 0aa41ff](https://github.com/endless-net/client/tree/0aa41ffaa430db19e2bcec9965eb55afb2990fac)
+contains the driver follow-up. [CI 34613835101](https://github.com/endless-net/client/actions/runs/34613835101)
+passed every mandatory job. Comparing the logs confirms an identical set of
+12 top-level contract scenarios with three successful repetitions per platform:
+36/36 on every runner, 216/216 overall. The DNS-specific repetitions were:
+
+| Platform | DNS scenario durations | Evidence |
+| --- | --- | --- |
+| Ubuntu 22.04 | 0.23s, 0.12s, 0.19s | [job](https://github.com/endless-net/client/actions/runs/34613835101/job/103310702629) |
+| Ubuntu 24.04 | 0.17s, 0.11s, 0.12s | [job](https://github.com/endless-net/client/actions/runs/34613835101/job/103310702626) |
+| macOS ARM | 0.38s, 0.23s, 0.33s | [job](https://github.com/endless-net/client/actions/runs/34613835101/job/103310702671) |
+| macOS Intel | 0.83s, 0.45s, 0.44s | [job](https://github.com/endless-net/client/actions/runs/34613835101/job/103310702558) |
+| Windows 2022 | 9.22s, 2.63s, 2.62s | [job](https://github.com/endless-net/client/actions/runs/34613835101/job/103310702571) |
+| Windows 2025 | 7.67s, 3.40s, 3.39s | [job](https://github.com/endless-net/client/actions/runs/34613835101/job/103310702563) |
+
+These durations include process and fixture setup. No service operation in
+this run triggered the greater-than-or-equal-to-three-second diagnostic; the
+earlier unclassified Windows IPC failure therefore remains unexplained, rather
+than a proven timeout fixed by increasing a limit. Future failures must use the
+new diagnostic. Optional external STUN compatibility was skipped. Local
+format/vet/lint/short checks passed, and no Client runtime change was made by
+this DNS/driver increment.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
@@ -619,3 +642,11 @@ missing contract-only testserver scenarios and client regressions. Historical
 producer failures are constraints, not tasks to fix outside Client. Keep
 contract gaps and platform decisions explicit; do not replace unresolved client
 scenarios with generic smoke tests or infer completion from historical P/R runs.
+
+The next native dataplane fixture should pair one real Client with a protocol
+WireGuard peer whose overlay IP is never assigned to the runner OS. This avoids
+same-host route short-circuiting and permits native Windows/macOS/Linux UDP
+traffic and policy withdrawal checks without Linux namespaces, producer runtime
+imports or new backend work. The pinned third-party WireGuard implementation
+already provides a standard UDP bind and channel TUN for the reference peer;
+the Client under test must continue to use its real OS interface and CLI/IPC.
