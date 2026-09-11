@@ -131,8 +131,11 @@ func (s *diagnosticsStore) Write(payload any) (diagnosticsBundleInfo, error) {
 		_ = os.Remove(path)
 		return diagnosticsBundleInfo{}, errors.New("diagnostics bundle store created an unsafe file")
 	}
+	// Reuse and retention read the persisted file timestamp, which may differ
+	// from the pre-write clock (including filesystem timestamp precision).
+	created := info.ModTime().UTC()
 	return diagnosticsBundleInfo{
-		Path: path, CreatedAt: now, ExpiresAt: now.Add(diagnosticsBundleRetention), SizeBytes: info.Size(),
+		Path: path, CreatedAt: created, ExpiresAt: created.Add(diagnosticsBundleRetention), SizeBytes: info.Size(),
 	}, nil
 }
 

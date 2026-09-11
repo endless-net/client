@@ -2101,6 +2101,21 @@ vet, lint and the short suite passed; native HTTPS trust remains unqualified.
 HC-057 consent, wire reports, retries and revocation still need their own real
 traffic scenario after this prerequisite; component flow tests are insufficient.
 
+## Diagnostic export timestamp correction: awaiting native evidence
+
+The 27-root run exposed a diagnostic-export metadata mismatch on
+[macOS ARM](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254671)
+and [Ubuntu 22.04](https://github.com/endless-net/client/actions/runs/34653546587/job/103442254757):
+an immediate repeated export did not preserve the first response's lifecycle
+metadata. The run remains unqualified. The short store regression reproduced
+the mismatch after adding timestamp and size comparisons to its reuse check.
+
+The first response used the pre-write clock for creation and expiry, whereas
+reuse and retention used the persisted file modification time. The first
+response now uses that same persisted timestamp, including filesystem precision.
+The existing native assertion remains unchanged. This is a Client runtime fix;
+its full hosted evidence is pending, and the 28-root inventory is unchanged.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

@@ -20,7 +20,7 @@ func TestDiagnosticsStoreReusesAndBoundsOwnedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reused.Reused || reused.Path != first.Path {
+	if !reused.Reused || reused.Path != first.Path || !reused.CreatedAt.Equal(first.CreatedAt) || !reused.ExpiresAt.Equal(first.ExpiresAt) || reused.SizeBytes != first.SizeBytes {
 		t.Fatalf("reused bundle = %#v, first = %#v", reused, first)
 	}
 	unrelated := filepath.Join(dir, "keep-me.txt")
