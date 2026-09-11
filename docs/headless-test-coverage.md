@@ -96,7 +96,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | C durable route-table off/auto passed three times on all eight native platforms; U configuration tests | Other public preferences and live mutation variants |
-| HC-020 | No C/R evidence audited | Product decision for profiles, isolation and switching |
+| HC-020 | C NetworkSelectionBoundary added, awaiting native evidence: enrolled network listing/selection and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
 | HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
@@ -1697,6 +1697,23 @@ output. This diagnostic change retains the original deadlines and assertions.
 has instantiated the next matrix for `01ac1e486c5496bbae55b55b1fc12d069d02ff56`,
 including the Relay return-path correction and concurrent ownership checks.
 Its results are pending; it predates the IPC category-count diagnostic.
+
+## Network-scoped selection boundary: awaiting native evidence
+
+`TestControlPlaneNetworkSelectionBoundary` drives the real `service networks`
+and `service select-network` CLI operations. A second network exists at the
+contract testserver, but the enrolled Client must list only its own network.
+Selection of that network by ID or case-insensitive name must preserve its node
+identity. Requests for a foreign network ID/name or an absent network must
+require a new network-scoped enrollment, both while connected and disconnected.
+Rejection and agent restart must retain the original selected network, identity
+and desired connection state, without an extra registration.
+
+The common native inventory now contains 23 roots: 23 x 3 x 8 = 552 required
+outcomes for this source. CI discovers the compiled inventory automatically.
+This scenario does not establish multiple-profile support, authorized migration
+to a new network, traffic isolation after such migration, or same-network
+selection semantics while disconnected. HC-020 remains incomplete.
 
 ## Next work
 
