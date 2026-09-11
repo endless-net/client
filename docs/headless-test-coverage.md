@@ -1067,6 +1067,18 @@ only public enums and presence/error flags, without dumping identities, keys,
 credentials or private state. Diagnose that failure before claiming HC-003
 coverage across the matrix; the common contract jobs are separate evidence.
 
+The diagnostic source 7fb421a in
+[CI 34633043288](https://github.com/endless-net/client/actions/runs/34633043288)
+localized macOS ARM failure to bootstrap: enrollment, credentials, trust and
+cached map were present, but public status reported a local-state error and
+invalid cached map. Source inspection found macOS installation identity lookup
+falling back to `os.UserConfigDir`, unlike the machine-level Linux/Windows paths.
+The macOS root CLI and launchd daemon now resolve the same machine installation
+directory independently of HOME. Non-root clients retain user-scoped identity.
+The enrolled installer scenario is the native regression check; qualification
+of this runtime correction remains pending. No private state was read, no
+fingerprint validation was bypassed and no version was increased.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
