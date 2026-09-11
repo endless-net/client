@@ -1,0 +1,156 @@
+package tests
+
+import (
+	"context"
+	"encoding/json"
+	"net"
+	"net/netip"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
+	"github.com/endless-net/client/internal/testclient"
+	"github.com/endless-net/client/internal/testcontrol"
+	"github.com/endless-net/client/internal/testwireguard"
+	ipc "github.com/endless-net/client/ipc/v2"
+)
+
+// HC-003: reinstall the same artifact while enrolled. Version upgrades and
+// complete state removal require their own scenarios. Only the real CLI writes
+// enrollment state; assertions never inspect its private files or keys.
+func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, configPath string, start, stop, reinstall func(*testing.T)) {
+	t.Helper()
+	probe := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
+	network, join, err := s.AddNetwork("installed-client", "198.18.95.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	trust, err := json.Marshal(s.Trust())
+	if err != nil {
+		t.Fatal(err)
+	}
+	trustFile := filepath.Join(t.TempDir(), "public-trust.json")
+	if err := os.WriteFile(trustFile, trust, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stop the service for the public CLI bootstrap, then let the real service
+	// manager resume the installed agent. The CLI consumes the token on stdin.
+	stop(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	cmd := exec.CommandContext(ctx, binary, "up", "--config", configPath, "--server", s.URL(), "--network", network.Name, "--join-token-file", "-", "--hostname", "installed-node", "--map-signing-trust-file", trustFile, "--route-table", "auto")
+	cmd.Stdin = strings.NewReader(join)
+	err = cmd.Run()
+	cancel()
+	if err != nil {
+		t.Fatal("installed CLI enrollment failed (output withheld)")
+	}
+	start(t)
+	initial := waitInstalledCondition(t, binary, func(v ipc.StatusResponse) bool {
+		return v.NodeID != "" && v.NetworkID == network.ID && v.NodeCredentialPresent && v.CachedMapValid
+	})
+	snapshot, err := s.Snapshot(initial.NodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerIP := netip.MustParseAddr("198.18.95.20")
+	clientIP := netip.MustParseAddr(initial.OverlayIP)
+	underlay := nativePeerUnderlay(t, clientIP, peerIP)
+	reference := testwireguard.NewTCP(t, snapshot.Node.PublicKey, clientIP, peerIP, underlay)
+	peer := api.Peer{ID: "installed-reference", Hostname: "installed-reference", PublicKey: reference.PublicKey, Endpoint: reference.Endpoint, EndpointCandidates: []string{reference.Endpoint}, AllowedIPs: []string{netip.PrefixFrom(peerIP, 32).String()}}
+	if err := s.UpdatePeers(initial.NodeID, []api.Peer{peer}); err != nil {
+		t.Fatal(err)
+	}
+	address := net.JoinHostPort(peerIP.String(), "24001")
+	fresh := func() bool { return applicationProbe(t, probe, "", "tcp", address) }
+	sameIdentity := func(v ipc.StatusResponse) bool {
+		return v.NodeID == initial.NodeID && v.NetworkID == initial.NetworkID && v.Hostname == initial.Hostname && v.OverlayIP == initial.OverlayIP && v.MapSigningTrustPresent && v.NodeCredentialPresent && v.CachedMapValid
+	}
+	connected := func() {
+		t.Helper()
+		v := waitInstalledCondition(t, binary, func(v ipc.StatusResponse) bool {
+			return sameIdentity(v) && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.PeerCount == 1 && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535 && len(v.WireGuard.Peers) == 1 && v.WireGuard.Peers[0].Endpoint == reference.Endpoint
+		})
+		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(v.WireGuard.ListenPort)))
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		err := testclient.Await(ctx, fresh)
+		cancel()
+		if err != nil {
+			t.Fatal("installed service did not restore real TCP traffic")
+		}
+	}
+	var response ipc.ConnectResponse
+	request(t, binary, "connect", &response)
+	connected()
+	t.Log("reinstall: connected enrolled service")
+	reinstall(t)
+	connected()
+
+	var disconnected ipc.DisconnectResponse
+	request(t, binary, "disconnect", &disconnected)
+	assertDisconnected := func() {
+		t.Helper()
+		waitInstalledCondition(t, binary, func(v ipc.StatusResponse) bool {
+			return sameIdentity(v) && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+		})
+		if fresh() {
+			t.Fatal("disconnected installed service delivered overlay traffic")
+		}
+	}
+	assertDisconnected()
+	registrationRequests := func() int {
+		count := 0
+		for _, e := range s.Events() {
+			if e.Kind == "registration-request" {
+				count++
+			}
+		}
+		return count
+	}
+	before := registrationRequests()
+	t.Log("reinstall: disconnected enrolled service")
+	reinstall(t)
+	assertDisconnected()
+	if registrationRequests() != before {
+		t.Fatal("disconnected reinstall attempted registration or refresh")
+	}
+	request(t, binary, "connect", &response)
+	connected()
+	created := 0
+	for _, e := range s.Events() {
+		if e.Kind == "registered" {
+			created++
+		}
+		if (e.Kind == "registered" || e.Kind == "registration-refreshed") && e.NodeID != initial.NodeID {
+			t.Fatal("reinstall changed the enrollment identity")
+		}
+	}
+	if created != 1 {
+		t.Fatal("reinstall created another enrollment")
+	}
+}
+
+func waitInstalledCondition(t *testing.T, binary string, predicate func(ipc.StatusResponse) bool) ipc.StatusResponse {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	var status ipc.StatusResponse
+	err := testclient.Await(ctx, func() bool {
+		output, err := exec.CommandContext(ctx, binary, "service", "status", "--timeout", "2s").Output()
+		if err != nil {
+			return false
+		}
+		if err := json.Unmarshal(output, &status); err != nil {
+			t.Fatal("installed service returned invalid public status")
+		}
+		return predicate(status)
+	})
+	if err != nil {
+		t.Fatal("installed service did not reach the required public state within 45s")
+	}
+	return status
+}

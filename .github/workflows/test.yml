@@ -130,6 +130,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/install-test"
           go build -o "$RUNNER_TEMP/install-test/endlessnet-client.exe" ./cmd/endlessnet-client
+          go build -o "$RUNNER_TEMP/install-test/packetprobe.exe" ./tools/packetprobe
           go test -c -o "$RUNNER_TEMP/install-test/installation.test.exe" ./tests
       - name: Build Debian package using the existing release version
         if: runner.os == 'Linux'
@@ -164,6 +165,7 @@ jobs:
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
             ENDLESSNET_INSTALL_TEST=1 \
             ENDLESSNET_TEST_BINARY="$RUNNER_TEMP/install-test/endlessnet-client.exe" \
+            ENDLESSNET_PACKET_PROBE="$RUNNER_TEMP/install-test/packetprobe.exe" \
             ENDLESSNET_TEST_DEB="${ENDLESSNET_TEST_DEB:-}" \
             "$RUNNER_TEMP/install-test/installation.test.exe" \
             -test.run '^TestInstalledClient$' -test.v -test.timeout 8m \
@@ -175,6 +177,7 @@ jobs:
           ENDLESSNET_INSTALL_TEST: '1'
         run: |
           $env:ENDLESSNET_TEST_BINARY = Join-Path $env:RUNNER_TEMP 'install-test/endlessnet-client.exe'
+          $env:ENDLESSNET_PACKET_PROBE = Join-Path $env:RUNNER_TEMP 'install-test/packetprobe.exe'
           & "$env:RUNNER_TEMP/install-test/installation.test.exe" '-test.run=^TestInstalledClient$' '-test.v' '-test.timeout=8m' 2>&1 |
             Tee-Object -FilePath "$env:RUNNER_TEMP/install-test/results.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

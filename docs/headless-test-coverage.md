@@ -1034,6 +1034,30 @@ Native TCP/UDP and ICMP echo in both overlay families now have evidence on all
 eight runners, with the same IPv4-underlay and policy/lifecycle limits above.
 This remains partial HC coverage, not completion of the entire catalog.
 
+## Enrolled same-artifact reinstall increment
+
+The installed-client suite now includes `enrolled-reinstall` on every native
+runner. It stops the installed service for a public CLI enrollment bootstrap
+against the contract testserver, supplying only the fixture's public signing
+trust and a token through stdin. No test reads or edits persisted Client state.
+The service then runs under systemd, launchd or Windows SCM with its normal
+installed configuration path. A reference WireGuard TCP peer validates actual
+traffic with fresh nonce echoes; its address is never assigned to the host.
+
+Repeating the existing package/service installer while connected must preserve
+the public node identity, overlay address, credential/cache indicators and
+restore TCP traffic without creating another enrollment. Repeating installation
+while user-disconnected must preserve that intent and identity, deny traffic
+and send no registration/refresh request. Explicit connect must subsequently
+restore access through the same reference peer/key binding. Credential refresh
+while connected is distinct from creating a new enrollment.
+
+The installation workflow builds packetprobe natively for all eight runners.
+The standalone contract suite reuses the extracted underlay-selection helper;
+its assertions are unchanged. This is HC-003 same-artifact repetition, not a
+version-upgrade, interrupted-installation or complete-state-removal result.
+Hosted qualification is pending the source CI run for this increment.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement

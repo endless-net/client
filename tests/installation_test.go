@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/endless-net/client/internal/testcontrol"
 	ipc "github.com/endless-net/client/ipc/v2"
 )
 
@@ -25,14 +26,18 @@ func TestInstalledClient(t *testing.T) {
 	}
 	source := requiredPath(t, "ENDLESSNET_TEST_BINARY")
 	artifacts := t.TempDir()
-	var binary string
-	var restart, uninstall func(*testing.T)
+	var binary, configPath string
+	var start, stop, reinstall, restart, uninstall func(*testing.T)
 	var removed func() bool
 	switch runtime.GOOS {
 	case "linux":
 		binary = "/opt/endlessnet/bin/endlessnet-client"
+		configPath = "/var/lib/endlessnet/client.json"
 		absent(t, binary, "/var/lib/endlessnet", "/lib/systemd/system/endlessnet-client.service")
 		deb := requiredPath(t, "ENDLESSNET_TEST_DEB")
+		reinstall = func(t *testing.T) { command(t, "dpkg", "--install", deb) }
+		start = func(t *testing.T) { command(t, "systemctl", "start", "endlessnet-client") }
+		stop = func(t *testing.T) { command(t, "systemctl", "stop", "endlessnet-client") }
 		uninstall = func(t *testing.T) { command(t, "dpkg", "--remove", "endlessnet-client") }
 		t.Cleanup(func() { uninstall(t) })
 		command(t, "dpkg", "--install", deb)
@@ -50,10 +55,14 @@ func TestInstalledClient(t *testing.T) {
 		}
 	case "darwin":
 		binary = "/Library/EndlessNet/endlessnet-client"
+		configPath = "/Library/Application Support/EndlessNet/client.json"
 		absent(t, binary, "/Library/Application Support/EndlessNet", "/Library/LaunchDaemons/ru.endlessnet.client.plist")
 		command(t, "install", "-d", "-m", "0755", filepath.Dir(binary))
 		command(t, "install", "-m", "0755", source, binary)
 		command(t, binary, "service", "render-macos", "--output-dir", artifacts, "--debug=false")
+		reinstall = func(t *testing.T) { command(t, "sh", filepath.Join(artifacts, "ru.endlessnet.client-install.sh")) }
+		start = reinstall
+		stop = func(t *testing.T) { command(t, "launchctl", "bootout", "system/ru.endlessnet.client") }
 		uninstall = func(t *testing.T) { command(t, "sh", filepath.Join(artifacts, "ru.endlessnet.client-uninstall.sh")) }
 		t.Cleanup(func() { uninstall(t) })
 		command(t, "sh", filepath.Join(artifacts, "ru.endlessnet.client-install.sh"))
@@ -65,11 +74,21 @@ func TestInstalledClient(t *testing.T) {
 		}
 	case "windows":
 		binary = `C:\Program Files\EndlessNet\endlessnet-client.exe`
+		configPath = `C:\ProgramData\EndlessNet\client.json`
 		absent(t, filepath.Dir(binary), `C:\ProgramData\EndlessNet`)
 		command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "if (Get-Service endlessnet-client -ErrorAction SilentlyContinue) { exit 1 }")
 		copyPublicFile(t, source, binary)
 		copyPublicFile(t, requiredPath(t, "ENDLESSNET_TEST_WINTUN"), filepath.Join(filepath.Dir(binary), "wintun.dll"))
 		command(t, binary, "service", "render-windows", "--output-dir", artifacts, "--debug=false")
+		reinstall = func(t *testing.T) {
+			command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(artifacts, "endlessnet-client-install.ps1"))
+		}
+		start = func(t *testing.T) {
+			command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; Start-Service endlessnet-client; (Get-Service endlessnet-client).WaitForStatus('Running', '00:00:30')")
+		}
+		stop = func(t *testing.T) {
+			command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; Stop-Service endlessnet-client; (Get-Service endlessnet-client).WaitForStatus('Stopped', '00:00:30')")
+		}
 		uninstall = func(t *testing.T) {
 			command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(artifacts, "endlessnet-client-uninstall.ps1"))
 		}
@@ -124,6 +143,13 @@ func TestInstalledClient(t *testing.T) {
 		if status.DesiredState != ipc.DesiredDisconnected || !status.UserDisconnected || status.NodeCredentialPresent {
 			t.Fatal("service restart lost the disconnected intent or acquired credentials")
 		}
+	}) {
+		t.FailNow()
+	}
+	// Keep the contract peer alive through the later OS uninstall operation.
+	s := testcontrol.New(t)
+	if !t.Run("enrolled-reinstall", func(t *testing.T) {
+		exerciseInstalledReinstall(t, s, binary, configPath, start, stop, reinstall)
 	}) {
 		t.FailNow()
 	}
@@ -207,7 +233,11 @@ func command(t *testing.T, name string, args ...string) []byte {
 
 func request(t *testing.T, binary, operation string, target any) {
 	t.Helper()
-	output := command(t, binary, "service", operation, "--timeout", "5s")
+	timeout := "5s"
+	if operation == "connect" || operation == "disconnect" {
+		timeout = "30s"
+	}
+	output := command(t, binary, "service", operation, "--timeout", timeout)
 	if err := json.Unmarshal(output, target); err != nil {
 		t.Fatalf("%s returned invalid JSON: %v", operation, err)
 	}
