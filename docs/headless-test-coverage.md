@@ -54,7 +54,8 @@ work, and cannot be inferred from passing common contracts or installation.
   services and public CLI/IPC. Platform limits: [installation notes](installation-tests.md).
 - **C**: [control-plane suite](../tests/control_plane_test.go), real client
   process against [testcontrol](../internal/testcontrol/server.go) through wire
-  contracts, observed through public IPC/CLI. Linux isolated CI only.
+  contracts, observed through public IPC/CLI. Evidence is attributed to each
+  platform below; isolated two-client dataplane evidence remains Linux-only.
 - **D**: [testcontrol self-tests](../internal/testcontrol/server_test.go), public
   SDK/protobuf clients against the double. D does not prove real client or producer.
 - **U**: component tests exist but may use internal functions/state; they cannot
@@ -81,7 +82,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-005 | C process lifecycle | Duplicate agent and termination semantics |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
-| HC-008 | C BrowserEnrollment | Poll expiry/cancellation and foreign poll authorization |
+| HC-008 | C BrowserEnrollment and expired-request replacement/resume/approval | Expiry during active polling, cancellation and foreign poll authorization |
 | HC-009 | C enrollment; P wrong/expired join authorization; R two real CLI registrations | Full authorized/denied attribute and platform variants |
 | HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; historical R distinct node IDs | Client image-cloning and batch variants; historical producer replay failure is an external constraint |
 | HC-011 | No C/R evidence audited | Decide ephemeral lifecycle, then normal/crash expiry tests |
@@ -532,6 +533,35 @@ is not part of this evidence. Local format, vet, lint and short tests passed.
 This establishes the stated direct IPv4 Linux retirement behavior against the
 contract testserver; offline lease expiry, other paths/platforms and full local
 removal remain separate HC-065 gaps.
+
+## Parallel platform contract rollout
+
+[Client 321706d](https://github.com/endless-net/client/tree/321706dc0f4c08bae5769fe1456b149c74a3ce84)
+adds `TestControlPlaneBrowserEnrollmentExpiryRecovery`. It expires a pending
+request in the testserver, requires a new request, resumes that replacement
+from a separate CLI process and enrolls only after explicit approval. The double
+retains an expired result for an exact operation replay. A component regression
+then reproduced the Client's reuse of the old operation ID. The correction in
+[c5a6402](https://github.com/endless-net/client/tree/c5a6402f3ab9ff83191332ff15d0f0963363c349)
+generates a new operation ID and signs it with the existing device identity.
+[CI 34610874047](https://github.com/endless-net/client/actions/runs/34610874047)
+passed all mandatory jobs and three Linux expiry-scenario repetitions. The
+preceding test-only run was cancelled and is not failure evidence; the recorded
+local regression supplied the before/after reproduction.
+
+[Client 9f4ef49](https://github.com/endless-net/client/tree/9f4ef49d5c75bbf2db421351bc497baea154404f)
+adds the six-platform matrix, named-pipe Client driver and required publication
+checks. [First matrix run 34611414889](https://github.com/endless-net/client/actions/runs/34611414889)
+executes 11 top-level common contract scenarios three times per platform.
+Both Ubuntu versions and both Windows versions passed all 33 outcomes without skips.
+Both macOS architectures passed 30 and failed all three `TestControlPlaneLifecycle`
+repetitions: Darwin `ifconfig` rejected IPv4 assignment on utun with
+`Destination address required`. This is a Client platform defect, not a waiver
+or a fixture skip. The fix adds the IPv4 point-to-point destination, consistent
+with [WireGuard's Darwin address setup](https://git.zx2c4.com/wireguard-tools/tree/src/wg-quick/darwin.bash).
+Its real-platform verification remains required before declaring that scenario
+successful on macOS. The overall first matrix run failed, as required by the
+mandatory platform gate.
 
 ## Next work
 

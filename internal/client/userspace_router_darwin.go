@@ -52,7 +52,14 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 		if address.Addr().Is6() {
 			family = "inet6"
 		}
-		if out, err := r.runner(ctx, "ifconfig", cfg.Interface, family, address.String(), "alias"); err != nil {
+		args := []string{cfg.Interface, family, address.String()}
+		if address.Addr().Is4() {
+			// utun is point-to-point: Darwin requires an IPv4 destination,
+			// even though WireGuard selects the remote peer from its routes.
+			args = append(args, address.Addr().String())
+		}
+		args = append(args, "alias")
+		if out, err := r.runner(ctx, "ifconfig", args...); err != nil {
 			return fail(fmt.Errorf("configure darwin TUN address: %s", commandError(err, out)))
 		}
 	}
