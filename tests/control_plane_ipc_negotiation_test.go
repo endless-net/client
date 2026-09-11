@@ -74,7 +74,10 @@ func TestControlPlaneIPCNegotiation(t *testing.T) {
 	assertConnected := func(t *testing.T) {
 		t.Helper()
 		status, err := n.Status()
-		if err != nil || status.NodeID != id || !status.CachedMapValid || status.UserDisconnected || status.DesiredState != ipc.DesiredConnected {
+		if err != nil {
+			t.Fatal("IPC status request failed after rejected negotiation")
+		}
+		if status.NodeID != id || !status.CachedMapValid || status.UserDisconnected || status.DesiredState != ipc.DesiredConnected {
 			t.Fatal("rejected IPC mutation changed identity or connection intent")
 		}
 	}
@@ -97,7 +100,11 @@ func TestControlPlaneIPCNegotiation(t *testing.T) {
 	}
 	n.Stop()
 	n.Start()
-	assertConnected(t)
+	// IPC endpoint readiness precedes restored runtime readiness, especially
+	// while Windows recreates its native interface after process termination.
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.NodeID == id && v.CachedMapValid && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
+	})
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
 	n.AwaitStatus(func(v ipc.StatusResponse) bool {

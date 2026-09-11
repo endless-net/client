@@ -2295,6 +2295,17 @@ expiry, crash-spool replay, IPv6/TCP/denied-flow reporting or producer conforman
 
 ## Next work
 
+The IPC-negotiation root in the first three completed Windows 2022 repetitions
+of [run 34657192800](https://github.com/endless-net/client/actions/runs/34657192800)
+failed its immediate status assertion after agent restart; its incompatible
+read/mutation probes and overlapping negotiation had already completed.
+The recovery phase now uses the existing bounded runtime-readiness wait after
+IPC endpoint startup. Immediate identity/intent assertions after each rejected
+request remain unchanged; transport errors are diagnosed separately from a
+state mismatch. No transition deadline or negotiated version is increased.
+These three jobs passed their native TLS and flow consent/expiry/retry roots;
+complete Windows and cross-platform qualification still requires all reports.
+
 A short component regression now holds platform TUN creation pending while
 requesting engine inspection. The previous blocking inspection path failed the
 bounded observation; the new `TryInspection` reports unavailability without
