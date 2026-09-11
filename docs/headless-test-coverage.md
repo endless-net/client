@@ -85,7 +85,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-008 | C BrowserEnrollment; expired-request replacement/resume/approval; expiry during active CLI polling and approved recovery on all six runners | Cancellation and foreign poll authorization |
 | HC-009 | C enrollment; P wrong/expired join authorization; R two real CLI registrations | Full authorized/denied attribute and platform variants |
 | HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; historical R distinct node IDs | Client image-cloning and batch variants; historical producer replay failure is an external constraint |
-| HC-011 | No C/R evidence audited | Decide ephemeral lifecycle, then normal/crash expiry tests |
+| HC-011 | CLI join-token --ephemeral forwarding has a component test; no C/R lifecycle evidence | Define client normal/crash lifecycle observations; token-option forwarding does not prove expiry |
 | HC-012 | D request/proof tests | Real Client allowed/denied registration attributes and effective access against published contract responses |
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
 | HC-014 | U recovery matrix | C session expiry, reauthentication and preservation |
@@ -1395,6 +1395,41 @@ exposed local-forget operation deliberately retains device and WireGuard keys,
 installation fingerprint and local owner, as specified in
 [the recovery retention matrix](client-ownership-recovery.md#logout-and-local-forget).
 Its passing tests must not be reported as new-identity reset coverage.
+
+## Repeat qualification of the 19-scenario source
+
+[CI 34639597707](https://github.com/endless-net/client/actions/runs/34639597707)
+succeeded for [source 3387f4c](https://github.com/endless-net/client/tree/3387f4c93552b2efa2f2202151c3624a216804f9).
+All eight native jobs completed with 57 PASS each, without failures or skips.
+
+| Native platform | Job evidence |
+| --- | --- |
+| Ubuntu 22.04 x64 | [103399230717](https://github.com/endless-net/client/actions/runs/34639597707/job/103399230717) |
+| Ubuntu 24.04 x64 | [103399230775](https://github.com/endless-net/client/actions/runs/34639597707/job/103399230775) |
+| Ubuntu 22.04 ARM64 | [103399230854](https://github.com/endless-net/client/actions/runs/34639597707/job/103399230854) |
+| Ubuntu 24.04 ARM64 | [103399230784](https://github.com/endless-net/client/actions/runs/34639597707/job/103399230784) |
+| macOS 15 Intel | [103399230821](https://github.com/endless-net/client/actions/runs/34639597707/job/103399230821) |
+| macOS 15 ARM64 | [103399230903](https://github.com/endless-net/client/actions/runs/34639597707/job/103399230903) |
+| Windows 2022 x64 | [103399230818](https://github.com/endless-net/client/actions/runs/34639597707/job/103399230818) |
+| Windows 2025 x64 | [103399230764](https://github.com/endless-net/client/actions/runs/34639597707/job/103399230764) |
+
+The [aggregate verifier](https://github.com/endless-net/client/actions/runs/34639597707/job/103403700599)
+confirmed identical source/inventory and **19 scenarios x 3 repetitions x 8
+platforms = 456 PASS, 0 FAIL, 0 SKIP**. All eight installation jobs, three OS
+verification jobs and the separate Linux dataplane job also succeeded. Optional
+external STUN compatibility was skipped and remains outside this claim.
+
+For comparison, completed CI 34638279169 produced **455 PASS, 1 FAIL, 0 SKIP**;
+its sole failure was one macOS Intel native IPv6 UDP repetition. The same three
+repetitions passed in this later run (22.57s, 22.40s, 24.80s). This is evidence
+of non-recurrence, not proof of a cause or a fix. No runtime change separated
+these documentation-only source revisions. Keep the earlier failure visible.
+
+The new routed-resource and trust-confirmation scenarios are absent from this
+19-root source. Their [21-root source CI](https://github.com/endless-net/client/actions/runs/34641056248)
+is running separately for `859e1021673c50876404cf2de3baed594d21b21a`; qualification
+of its 504 expected outcomes remains pending. Full HC-001-HC-065 coverage,
+production acceptance and all stated scope gaps remain unproven.
 
 ## Next work
 
