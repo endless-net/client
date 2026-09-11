@@ -166,7 +166,7 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 	// HC-017/HC-018: a new agent process must preserve disconnected intent and
 	// enrollment. Restoring connected intent must recover actual traffic using
 	// the same public node/key binding held by the unchanged reference peer.
-	registrations := func() int {
+	registrationRequests := func() int {
 		count := 0
 		for _, event := range s.Events() {
 			if event.Kind == "registration-request" {
@@ -175,7 +175,7 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 		}
 		return count
 	}
-	before := registrations()
+	before := registrationRequests()
 	t.Log("native lifecycle: restart while disconnected")
 	n.Stop()
 	n.Start()
@@ -184,6 +184,9 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 	})
 	if fresh("24001") || fresh("24002") {
 		t.Fatal("agent restart ignored disconnected intent")
+	}
+	if registrationRequests() != before {
+		t.Fatal("disconnected restart attempted credential registration or refresh")
 	}
 	assertConnected := func() {
 		t.Helper()
@@ -201,8 +204,20 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 				t.Fatal("connected intent did not restore native UDP traffic")
 			}
 		}
-		if registrations() != before {
-			t.Fatal("connection intent recovery attempted enrollment")
+		// Registration also renews an existing node credential. The contract
+		// fixture validates the original identity/key/fingerprint binding before
+		// recording a refresh; only a newly created node is another enrollment.
+		created := 0
+		for _, event := range s.Events() {
+			if event.Kind == "registered" {
+				created++
+			}
+			if (event.Kind == "registered" || event.Kind == "registration-refreshed") && event.NodeID != initial.NodeID {
+				t.Fatal("connection intent recovery changed the registered identity")
+			}
+		}
+		if created != 1 {
+			t.Fatal("connection intent recovery created another enrollment")
 		}
 	}
 	t.Log("native lifecycle: reconnect with retained identity")
@@ -221,6 +236,7 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 	t.Log("native lifecycle: revoke credential with established traffic")
 	retiredSession := startApplicationSession(t, binary, "", "udp", address("24001"))
 	retiredSession("ok")
+	before = registrationRequests()
 	if err := s.Revoke(initial.NodeID); err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +253,7 @@ func TestControlPlaneNativeUDPTraffic(t *testing.T) {
 		if fresh("24001") || fresh("24002") {
 			t.Fatal("retired client still delivered fresh native UDP traffic")
 		}
-		if registrations() != before {
+		if registrationRequests() != before {
 			t.Fatal("terminal retirement or restart attempted enrollment")
 		}
 	}
