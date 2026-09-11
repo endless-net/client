@@ -133,11 +133,11 @@ product scope are different conditions; neither is a successful skip.
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
 | HC-057 | D FlowConsentAndIdempotency; U flow tests | Real client consent/retry behavior and safe diagnostic export |
 | HC-058 | L version and runtime platform | CLI/daemon/artifact mismatch and exact release identity |
-| HC-059 | U trust/recovery matrix | C explicit trust confirmation; independent node-signing scope separately |
+| HC-059 | U trust/recovery matrix; C TrustConfirmation rejection pending hosted evidence | Successful rotation, interrupted recovery and independent signing scopes |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
-| HC-063 | U local-forget/recovery tests | Public privileged reset and new identity against published contract responses |
+| HC-063 | U local-forget/recovery tests; local forget deliberately retains identity | Full identity-reset product/interface gap; do not infer it from local forget |
 | HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
@@ -1373,6 +1373,28 @@ This does not invalidate the cited successful run, but repeatability is not yet
 established. Its cause is unproven. Probe diagnostics now report only allowlisted
 fixed error messages, preserving failure semantics and keeping arbitrary process
 output out of logs. No network assertion, retry count or timeout was relaxed.
+
+## Trust confirmation rejection awaiting hosted qualification
+
+`TestControlPlaneTrustConfirmation` invokes the real CLI to inspect announced
+and trusted server identities and reject missing consent, a foreign control
+origin and a wrong key ID. Each rejection must preserve trust and enrollment
+and allow a later signed map revision. Agent restart must retain the same
+trusted key and registered node, with only one registration observed through
+the testserver contract. No persisted identity or configuration is read by the
+test. This covers HC-021/HC-059 rejection behavior; successful key rotation,
+durable interrupted recovery and independent signing scopes remain open.
+
+The common native inventory now contains 21 roots, requiring three repetitions
+on eight platforms (504 outcomes). Hosted evidence for the routed-resource and
+trust-confirmation increments remains pending; the earlier 456-PASS qualification
+continues to describe only its cited source.
+
+HC-063 remains a product/interface gap for a full identity reset: the currently
+exposed local-forget operation deliberately retains device and WireGuard keys,
+installation fingerprint and local owner, as specified in
+[the recovery retention matrix](client-ownership-recovery.md#logout-and-local-forget).
+Its passing tests must not be reported as new-identity reset coverage.
 
 ## Next work
 
