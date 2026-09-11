@@ -72,12 +72,18 @@ type Peer struct {
 // incoming handshakes, so the reference peer must configure its return path.
 func (p Peer) SetClientEndpoint(t *testing.T, endpoint netip.AddrPort) {
 	t.Helper()
-	if !endpoint.IsValid() || endpoint.Port() == 0 {
-		t.Fatal("reference peer requires the client's current UDP endpoint")
-	}
-	if err := p.setEndpoint(endpoint); err != nil {
+	if err := p.ConfigureClientEndpoint(endpoint); err != nil {
 		t.Fatal("reference peer could not configure the client endpoint")
 	}
+}
+
+// ConfigureClientEndpoint also supports a Relay participant's UDP return path.
+// It can run in a connection worker without calling testing.Fatal there.
+func (p Peer) ConfigureClientEndpoint(endpoint netip.AddrPort) error {
+	if !endpoint.IsValid() || endpoint.Port() == 0 {
+		return fmt.Errorf("reference peer requires a valid UDP endpoint")
+	}
+	return p.setEndpoint(endpoint)
 }
 
 func (p Peer) HandshakeCounts() (uint64, uint64, uint64) {

@@ -54,7 +54,7 @@ func TestControlPlaneNativeRelayTraffic(t *testing.T) {
 				t.Fatal(err)
 			}
 			reference := testwireguard.NewTCP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
-			transport := testrelay.New(t, network.ID, initial.NodeID, "relay-peer", reference.Endpoint)
+			transport := testrelay.New(t, network.ID, initial.NodeID, "relay-peer", reference.Endpoint, reference.ConfigureClientEndpoint)
 			caFile := filepath.Join(t.TempDir(), "relay-ca.pem")
 			if err := os.WriteFile(caFile, transport.CertificatePEM, 0o600); err != nil {
 				t.Fatal("could not write public Relay test CA")

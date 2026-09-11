@@ -7,6 +7,8 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"net"
+	"net/netip"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +21,7 @@ func TestFixedPeerContractForwardingAndRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan struct{})
+	var configured atomic.Value
 	go func() {
 		defer close(done)
 		buffer := make([]byte, 2048)
@@ -27,13 +30,19 @@ func TestFixedPeerContractForwardingAndRecovery(t *testing.T) {
 			if err != nil {
 				return
 			}
+			if endpoint, ok := configured.Load().(netip.AddrPort); !ok || endpoint != address.AddrPort() {
+				continue
+			}
 			if _, err := udp.WriteToUDP(buffer[:n], address); err != nil {
 				return
 			}
 		}
 	}()
 	t.Cleanup(func() { _ = udp.Close(); <-done })
-	s := New(t, "network", "client", "peer", udp.LocalAddr().String())
+	s := New(t, "network", "client", "peer", udp.LocalAddr().String(), func(endpoint netip.AddrPort) error {
+		configured.Store(endpoint)
+		return nil
+	})
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(s.CertificatePEM) {
 		t.Fatal("invalid public fixture CA")

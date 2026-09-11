@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net"
+	"net/netip"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ type Server struct {
 	CertificatePEM                []byte
 	peerNetwork, peerID           string
 	peerAddress                   *net.UDPAddr
+	configureReturnPath           func(netip.AddrPort) error
 	listener                      net.Listener
 	mu                            sync.Mutex
 	connections                   map[net.Conn]struct{}
@@ -38,7 +40,7 @@ type Server struct {
 
 // New only forwards frames for the configured peer and accepts the credential
 // issued for this test's Client. Keys stay in memory; only a public CA is exposed.
-func New(t testing.TB, networkID, nodeID, peerID, peerAddress string) *Server {
+func New(t testing.TB, networkID, nodeID, peerID, peerAddress string, configureReturnPath func(netip.AddrPort) error) *Server {
 	t.Helper()
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -64,6 +66,7 @@ func New(t testing.TB, networkID, nodeID, peerID, peerAddress string) *Server {
 	}
 	s := &Server{Endpoint: relay.Endpoint{ID: "reference-relay", Addr: listener.Addr().String(), Protocol: relay.EndpointProtocolTLS}, Credential: *credential, CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), peerNetwork: networkID, peerID: peerID, peerAddress: address, listener: listener, connections: map[net.Conn]struct{}{}}
 	s.workers.Add(1)
+	s.configureReturnPath = configureReturnPath
 	go s.accept()
 	t.Cleanup(s.Close)
 	return s
@@ -109,6 +112,11 @@ func (s *Server) serve(conn net.Conn) {
 		return
 	}
 	defer func() { _ = udp.Close() }()
+	// The reference WireGuard engine does not learn roaming endpoints. Configure
+	// this connection's return path before advertising readiness or forwarding.
+	if s.configureReturnPath != nil && s.configureReturnPath(udp.LocalAddr().(*net.UDPAddr).AddrPort()) != nil {
+		return
+	}
 	encoder := json.NewEncoder(conn)
 	if encoder.Encode(relay.Ready{Type: relay.MessageReady, ProtocolVersion: relay.Version, Ready: true}) != nil {
 		return
