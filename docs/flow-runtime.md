@@ -12,7 +12,11 @@ The existing parser excludes fragments and IPv6 extension headers; unsupported
 packets are counted as drops. No protocol guessing is performed for them.
 
 Collection is disabled until an HTTPS protobuf policy response grants it. The
-worker refreshes policy every 15 seconds; TUN observations check the expiration
+current Client rejects policies expiring more than one minute in the future.
+The published protobuf describes the consent interval without that maximum;
+compatibility with longer grants remains an explicit contract gap. Native tests
+use a 50-second grant and do not qualify longer grants.
+The worker refreshes policy every 15 seconds; TUN observations check the expiration
 on every packet. Changed revision, revocation, expiry, reconfiguration or shutdown
 clears buffered metadata. Shutdown cancels and joins the worker before reusing
 the collector, preventing stale policy responses from re-enabling collection.

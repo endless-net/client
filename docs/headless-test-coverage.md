@@ -2254,6 +2254,15 @@ flow-consent sources lack this additional assertion and cannot qualify it.
 
 ## Next work
 
+The initial 29-root run [34655479384](https://github.com/endless-net/client/actions/runs/34655479384)
+exposed a flow fixture mismatch: its two-minute grant was rejected by the
+Client's one-minute future-expiry guard. The native scenario now uses a
+50-second grant, covering the policy refresh and reporting/retry observation
+budgets. This changes the fixture only; it does not remove the privacy guard or
+qualify longer grants. The published protobuf does not state that maximum, so
+long-grant behavior remains an explicit Client contract gap. The corrected
+scenario still requires native evidence on every runner and repetition.
+
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
 missing contract-only testserver scenarios and client regressions. Historical
 producer failures are constraints, not tasks to fix outside Client. Keep

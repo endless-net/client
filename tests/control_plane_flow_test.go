@@ -104,7 +104,8 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clie
 		if loseAck {
 			s.LoseNextFlowAcknowledgement()
 		}
-		from, until := time.Now().Add(-time.Second), time.Now().Add(2*time.Minute)
+		// Leave room for the policy refresh and report retry within a short grant.
+		from, until := time.Now().Add(-time.Second), time.Now().Add(50*time.Second)
 		if err := s.SetFlowConsent(id, from, until); err != nil {
 			t.Fatal(err)
 		}
