@@ -46,7 +46,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-012 | D request/proof tests | Producer-owned allowed/denied attributes and effective access |
 | HC-013 | C BrowserEnrollment approve/reject | Pending must not authorize traffic; completion binding |
 | HC-014 | U recovery matrix | C/R session expiry, reauthentication and preservation |
-| HC-015 | D credential revocation | Revoke join authorization separately from existing Node |
+| HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
 | HC-016 | C initial cached-map status | Actual allowed application traffic |
 | HC-017 | C disconnect/restart/connect stops and restores application traffic | Other OSes and failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with traffic checks | Host reboot and other platform/network variants |
@@ -291,12 +291,14 @@ replay still returns 401 after a consumed key and blocks Coordinator publication
 Consumer replay success alone therefore does not establish provider compatibility.
 Do not make the client forget enrollment on arbitrary 401 responses to conceal it.
 
-The [Coordinator-owned real-pair test](https://github.com/endless-net/coordinator/blob/ba59fdd476d5ced7d8f9fdc3e633c78554da5734/tests/providercontract/client_pair_test.go)
-passed in [CI 34596568419](https://github.com/endless-net/coordinator/actions/runs/34596568419/job/103253670793)
+The [Coordinator-owned real-pair test](https://github.com/endless-net/coordinator/blob/b10f2afa911098e841abe5cfbcffce24f95c66b6/tests/providercontract/client_pair_test.go)
+passed in [CI 34596954544](https://github.com/endless-net/coordinator/actions/runs/34596954544/job/103254909238)
 against this Client at `ffa46a14282f9a063bd63ddfd92392c6fb0a2032`.
 It drives real `up`, `sync`, and `status --json`, checks two distinct nodes,
 credential renewal in a new process without a join key, and peer withdrawal after
-administrative deletion. It never reads private Client files. A declared edge
+administrative deletion. Revoking a reusable join key denies a third Client with
+the provider's typed error and preserves the original Client's map access and
+renewal; public inventory confirms no third node. It never reads private Client files. A declared edge
 double serves Signing public keys and proxies Coordinator requests unchanged.
 Signing/Billing/Relay are doubles; agent traffic, real Gateway/Signing and
 manifest acceptance remain unproven by this test. The overall CI is failed on
