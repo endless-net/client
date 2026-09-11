@@ -2254,6 +2254,22 @@ flow-consent sources lack this additional assertion and cannot qualify it.
 
 ## Next work
 
+macOS fixture trust setup now snapshots the single
+`com.apple.trust-settings.admin` authorization rule in memory, temporarily uses
+Apple's `is-root` rule, removes the exact test certificate/trust entry, and
+restores the original rule through stdin. The fixture holds a mutex through
+cleanup, treats restoration failure as a test failure, and requires both
+`GITHUB_ACTIONS=true` and `RUNNER_ENVIRONMENT=github-hosted`. No runner image,
+managed host or Client TLS verification behavior is changed.
+
+The preparation follows Apple's
+[trust settings implementation](https://github.com/apple-oss-distributions/Security/blob/main/OSX/libsecurity_keychain/lib/TrustSettings.cpp),
+whose root shortcut requires nonempty settings, and the
+[authorization rules](https://github.com/apple-oss-distributions/Security/blob/main/OSX/authd/authorization.plist),
+which otherwise require entitlement or interactive administrator authentication.
+This explains why deleting the last trust entry can take a different path from
+adding it; hosted execution must still confirm this correction and restoration.
+
 The native flow root now also leaves its last granted policy unchanged through
 natural expiry while UDP traffic continues. After draining the five-second RPC
 deadline, twelve seconds of fresh traffic must produce no report attempts.
