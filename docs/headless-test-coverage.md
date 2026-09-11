@@ -97,7 +97,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | C durable route-table off/auto passed three times on all eight native platforms; U configuration tests | Other public preferences and live mutation variants |
 | HC-020 | C NetworkSelectionBoundary passed all 24 native repetitions: enrolled network listing/selection, disconnected response before/after restart and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
-| HC-021 | U control-endpoint security | Public origin/trust changes and wrong endpoint |
+| HC-021 | U control-endpoint security; native TLS trust boundary qualified on Linux/Windows; hostname mismatch extension awaiting CI | macOS TLS qualification, certificate expiry/rotation and remaining origin variants |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
@@ -2333,6 +2333,14 @@ on every native job. The subsequent diagnostic-retention extension is not part
 of this source and requires new evidence.
 
 ## Next work
+
+The native TLS root now also calls the trusted fixture through `localhost`,
+while its certificate names only `127.0.0.1`. The test first verifies the OS
+resolves that alias to the listener, requires a certificate error and no request
+at the control HTTP handler, then enrolls successfully through the certificate's
+IP address. This checks hostname verification independently of adding CA trust.
+The root inventory stays at 30 / 720 outcomes. Previous TLS evidence predates
+this assertion; certificate expiry and rotation remain separate cases.
 
 [macOS Intel repeat 1 of run 34658370761](https://github.com/endless-net/client/actions/runs/34658370761/job/103455542603)
 failed before compiling its contract runner: DNS lookup of `proxy.golang.org`

@@ -1,8 +1,11 @@
 package tests
 
 import (
+	"context"
 	"net"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
@@ -36,6 +39,27 @@ func TestControlPlaneTLSTrustBoundary(t *testing.T) {
 	}
 	n.Environment = trustedEnvironment
 	n.TrustControlTLS(s)
+	// The CA is trusted, but its certificate contains only the listener IP.
+	// Resolve the alias explicitly so a DNS failure cannot satisfy this case.
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	addresses, lookupErr := net.DefaultResolver.LookupIP(ctx, "ip4", "localhost")
+	cancel()
+	loopbackFound := false
+	for _, address := range addresses {
+		loopbackFound = loopbackFound || address.Equal(net.ParseIP("127.0.0.1"))
+	}
+	if lookupErr != nil || !loopbackFound {
+		t.Fatal("localhost fixture did not resolve to the TLS listener")
+	}
+	wrongName := strings.Replace(s.URL(), "127.0.0.1", "localhost", 1)
+	beforeMismatch := len(s.Events())
+	output, err := n.Run("up", "--config", n.Config, "--server", wrongName, "--network", network.Name, "--join-token", join, "--hostname", "tls-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off")
+	if err == nil || !strings.Contains(strings.ToLower(string(output)), "certificate") {
+		t.Fatal("trusted certificate with mismatched hostname did not return a certificate error")
+	}
+	if len(s.Events()) != beforeMismatch {
+		t.Fatal("hostname-mismatched TLS connection reached the control HTTP handler")
+	}
 	n.Enroll(s, network.Name, join)
 	n.Start()
 	defer n.Stop()
