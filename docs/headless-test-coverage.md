@@ -1056,7 +1056,16 @@ The installation workflow builds packetprobe natively for all eight runners.
 The standalone contract suite reuses the extracted underlay-selection helper;
 its assertions are unchanged. This is HC-003 same-artifact repetition, not a
 version-upgrade, interrupted-installation or complete-state-removal result.
-Hosted qualification is pending the source CI run for this increment.
+[Source 8866f54](https://github.com/endless-net/client/tree/8866f54df64ad6138d036740242c667a56128404)
+passed local format/vet/lint/short checks. In
+[CI 34631959688](https://github.com/endless-net/client/actions/runs/34631959688),
+all four Linux and both Windows installation jobs passed. Both macOS installation
+jobs failed waiting for public service state before the first tested reinstall;
+the original timeout did not distinguish bootstrap from initial connect. This
+increment is not qualified on macOS. Phase-specific IPC diagnostics now report
+only public enums and presence/error flags, without dumping identities, keys,
+credentials or private state. Diagnose that failure before claiming HC-003
+coverage across the matrix; the common contract jobs are separate evidence.
 
 ## Next work
 

@@ -50,7 +50,7 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 		t.Fatal("installed CLI enrollment failed (output withheld)")
 	}
 	start(t)
-	initial := waitInstalledCondition(t, binary, func(v ipc.StatusResponse) bool {
+	initial := waitInstalledCondition(t, binary, "bootstrap enrollment", func(v ipc.StatusResponse) bool {
 		return v.NodeID != "" && v.NetworkID == network.ID && v.NodeCredentialPresent && v.CachedMapValid
 	})
 	snapshot, err := s.Snapshot(initial.NodeID)
@@ -70,9 +70,9 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	sameIdentity := func(v ipc.StatusResponse) bool {
 		return v.NodeID == initial.NodeID && v.NetworkID == initial.NetworkID && v.Hostname == initial.Hostname && v.OverlayIP == initial.OverlayIP && v.MapSigningTrustPresent && v.NodeCredentialPresent && v.CachedMapValid
 	}
-	connected := func() {
+	connected := func(phase string) {
 		t.Helper()
-		v := waitInstalledCondition(t, binary, func(v ipc.StatusResponse) bool {
+		v := waitInstalledCondition(t, binary, phase, func(v ipc.StatusResponse) bool {
 			return sameIdentity(v) && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.PeerCount == 1 && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535 && len(v.WireGuard.Peers) == 1 && v.WireGuard.Peers[0].Endpoint == reference.Endpoint
 		})
 		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(v.WireGuard.ListenPort)))
@@ -85,23 +85,23 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	}
 	var response ipc.ConnectResponse
 	request(t, binary, "connect", &response)
-	connected()
+	connected("initial connect")
 	t.Log("reinstall: connected enrolled service")
 	reinstall(t)
-	connected()
+	connected("connected reinstall")
 
 	var disconnected ipc.DisconnectResponse
 	request(t, binary, "disconnect", &disconnected)
-	assertDisconnected := func() {
+	assertDisconnected := func(phase string) {
 		t.Helper()
-		waitInstalledCondition(t, binary, func(v ipc.StatusResponse) bool {
+		waitInstalledCondition(t, binary, phase, func(v ipc.StatusResponse) bool {
 			return sameIdentity(v) && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
 		})
 		if fresh() {
 			t.Fatal("disconnected installed service delivered overlay traffic")
 		}
 	}
-	assertDisconnected()
+	assertDisconnected("initial disconnect")
 	registrationRequests := func() int {
 		count := 0
 		for _, e := range s.Events() {
@@ -114,12 +114,12 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	before := registrationRequests()
 	t.Log("reinstall: disconnected enrolled service")
 	reinstall(t)
-	assertDisconnected()
+	assertDisconnected("disconnected reinstall")
 	if registrationRequests() != before {
 		t.Fatal("disconnected reinstall attempted registration or refresh")
 	}
 	request(t, binary, "connect", &response)
-	connected()
+	connected("reconnect after reinstall")
 	created := 0
 	for _, e := range s.Events() {
 		if e.Kind == "registered" {
@@ -134,11 +134,12 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	}
 }
 
-func waitInstalledCondition(t *testing.T, binary string, predicate func(ipc.StatusResponse) bool) ipc.StatusResponse {
+func waitInstalledCondition(t *testing.T, binary, phase string, predicate func(ipc.StatusResponse) bool) ipc.StatusResponse {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	var status ipc.StatusResponse
+	responses := 0
 	err := testclient.Await(ctx, func() bool {
 		output, err := exec.CommandContext(ctx, binary, "service", "status", "--timeout", "2s").Output()
 		if err != nil {
@@ -147,10 +148,11 @@ func waitInstalledCondition(t *testing.T, binary string, predicate func(ipc.Stat
 		if err := json.Unmarshal(output, &status); err != nil {
 			t.Fatal("installed service returned invalid public status")
 		}
+		responses++
 		return predicate(status)
 	})
 	if err != nil {
-		t.Fatal("installed service did not reach the required public state within 45s")
+		t.Fatalf("installed service phase=%q timed out: responses=%d state=%s control=%s desired=%s disconnected=%t node=%t network=%t credential=%t trust=%t cache=%t cache_valid=%t peers=%d wireguard=%t local_error=%t cache_error=%t intent_error=%t", phase, responses, status.State, status.ControlState, status.DesiredState, status.UserDisconnected, status.NodeID != "", status.NetworkID != "", status.NodeCredentialPresent, status.MapSigningTrustPresent, status.CachedMapPresent, status.CachedMapValid, status.PeerCount, status.WireGuard != nil, status.LocalStateError != "", status.CachedMapError != "", status.ConnectionIntentError != "")
 	}
 	return status
 }
