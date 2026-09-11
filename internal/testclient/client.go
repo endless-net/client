@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -167,13 +168,32 @@ func (n *Node) Service(operation string, target any) {
 	}
 }
 func (n *Node) Status() (ipc.StatusResponse, error) {
-	out, err := n.Run(append([]string{"service", "status", "--timeout", "1s"}, n.ipcArgs()...)...)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	status, _, err := n.statusWithin(ctx)
+	return status, err
+}
+
+// Only fixed error categories may leave the harness; arbitrary CLI output can
+// contain configuration or credentials and must never be logged.
+func (n *Node) statusWithin(ctx context.Context) (ipc.StatusResponse, string, error) {
+	out, err := n.command(ctx, append([]string{"service", "status", "--timeout", "1s"}, n.ipcArgs()...)...).CombinedOutput()
 	if err != nil {
-		return ipc.StatusResponse{}, err
+		category := "unclassified"
+		for _, known := range []string{"context deadline exceeded", "connection refused", "Access is denied", "The pipe is being closed", "The system cannot find the file specified"} {
+			if strings.Contains(string(out), known) {
+				category = known
+				break
+			}
+		}
+		return ipc.StatusResponse{}, category, err
 	}
 	var status ipc.StatusResponse
 	err = json.Unmarshal(out, &status)
-	return status, err
+	if err != nil {
+		return status, "invalid public JSON", err
+	}
+	return status, "", nil
 }
 
 func (n *Node) ipcArgs() []string {
@@ -187,16 +207,36 @@ func (n *Node) AwaitStatus(match func(ipc.StatusResponse) bool) ipc.StatusRespon
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	var last ipc.StatusResponse
+	responses, failures := 0, 0
+	lastCategory := "none"
 	err := Await(ctx, func() bool {
-		status, err := n.Status()
+		status, category, err := n.statusWithin(ctx)
 		if err == nil {
+			responses++
 			last = status
 			return match(status)
 		}
+		failures++
+		lastCategory = category
 		return false
 	})
 	if err != nil {
-		n.t.Fatalf("client state deadline: state=%s control=%s revision=%d peers=%d", last.State, last.ControlState, last.MapRevision, last.PeerCount)
+		exited, exitCode := false, -1
+		select {
+		case processErr := <-n.done:
+			exited = true
+			if processErr == nil {
+				exitCode = 0
+			} else {
+				var exit *exec.ExitError
+				if errors.As(processErr, &exit) {
+					exitCode = exit.ExitCode()
+				}
+			}
+			n.done <- processErr // Preserve the process result for cleanup.
+		default:
+		}
+		n.t.Fatalf("client state deadline: responses=%d failures=%d last_ipc_error=%q agent_exited=%t exit_code=%d state=%s control=%s revision=%d peers=%d", responses, failures, lastCategory, exited, exitCode, last.State, last.ControlState, last.MapRevision, last.PeerCount)
 	}
 	return last
 }

@@ -77,7 +77,7 @@ product scope are different conditions; neither is a successful skip.
 | --- | --- | --- |
 | HC-001 | L supported installation matrix | Unsupported platform/privilege outcomes and explicit supported variants |
 | HC-002 | L installed CLI version | Artifact/dependency failure paths |
-| HC-003 | L noninteractive installation | Repeat and interrupted installation |
+| HC-003 | L noninteractive installation and enrolled same-artifact reinstall on all eight runners, preserving identity, intent and real TCP access | Interrupted installation and artifact replacement variants |
 | HC-004 | L real service and IPC | Local authorization and unavailable-service outcomes |
 | HC-005 | C process lifecycle | Duplicate agent and termination semantics |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
@@ -1075,9 +1075,46 @@ invalid cached map. Source inspection found macOS installation identity lookup
 falling back to `os.UserConfigDir`, unlike the machine-level Linux/Windows paths.
 The macOS root CLI and launchd daemon now resolve the same machine installation
 directory independently of HOME. Non-root clients retain user-scoped identity.
-The enrolled installer scenario is the native regression check; qualification
-of this runtime correction remains pending. No private state was read, no
+The enrolled installer scenario is the native regression check.
+[Source 5f8aadd](https://github.com/endless-net/client/tree/5f8aadd629be26cf9367bc0b3bcaa057423c80ce)
+in [CI 34633422853](https://github.com/endless-net/client/actions/runs/34633422853)
+passed all eight installation jobs, including macOS ARM and Intel. Their
+`enrolled-reinstall` cases passed in 48.65s and 48.57s respectively; both tested
+connected and disconnected reinstall, identity preservation, renewed TCP traffic
+and subsequent uninstall. The common contract suite is still separate evidence. No private state was read, no
 fingerprint validation was bypassed and no version was increased.
+
+The completed common matrix for source 5f8aadd contains the same 17 scenarios
+three times on each of eight platforms: **407 PASS, 1 FAIL, 0 SKIP**. The only
+failure was the first `TestControlPlaneDNSWireRecovery` repetition on Windows
+2022: its shared Client startup helper obtained no successful public IPC status
+within 15 seconds, before any DNS-wire assertions. The other two repetitions
+passed. Windows 2025 and both macOS variants each passed all 51 outcomes, as did
+all four Linux variants. The required aggregate correctly failed; this source
+has no fully successful qualification run. All eight installation jobs passed
+independently. This is not evidence that DNS itself malfunctioned or that the
+startup failure is fixed.
+
+The harness now records fixed IPC failure categories, response/failure counts
+and whether the agent exited (with exit code), without arbitrary command output.
+Each status subprocess is also bounded by the existing overall 15-second wait
+context. No deadline was increased, no retry of a failed test was introduced and
+no assertion was removed. Re-observe the startup failure in subsequent CI before
+attributing or closing its cause.
+
+## Explicit ICMP-only policy increment
+
+The two native TCP scenarios now additionally apply a signed ICMP-only grant
+for the exact reference peer destination. Real OS ping must succeed while an
+already established TCP stream and fresh TCP connections to both reference ports
+are blocked. Changing only the granted destination to the adjacent host address
+must deny ping; restoring the original destination must recover ping. Finally,
+restoring unrestricted authorization must recover fresh TCP on both ports and
+preserve ping. IPv4 and IPv6 use the same checks on all eight native runners.
+These are new assertions within the existing 17-scenario inventory, not new
+root test names. Local format/vet/lint/short checks pass; hosted evidence for
+these new assertions is pending. This does not prove UDP denial under ICMP-only
+policy, ICMP errors/PMTU, IPv6 underlay, Relay/NAT or all policy directions.
 
 ## Next work
 
@@ -1087,10 +1124,8 @@ producer failures are constraints, not tasks to fix outside Client. Keep
 contract gaps and platform decisions explicit; do not replace unresolved client
 scenarios with generic smoke tests or infer completion from historical P/R runs.
 
-Prioritize the installed-client lifecycle gap next: repeat installation of an
-already enrolled Client through the real OS installer/service manager, observe
-identity and desired-state preservation through public CLI/IPC, and verify
-restored traffic. Same-artifact reinstall is HC-003 evidence; it must not be
+Continue installed-client lifecycle coverage with interruption and artifact
+replacement, explicit reset and complete-state removal. Same-artifact reinstall is HC-003 evidence; it must not be
 reported as a completed version-upgrade or full-removal scenario for HC-060/HC-064.
 
 Extend native platform coverage beyond direct IPv4/IPv6 TCP/UDP and ICMP echo over IPv4 underlay:

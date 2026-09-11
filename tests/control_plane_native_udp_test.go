@@ -190,6 +190,30 @@ func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
 		t.Fatal("restored native grants did not recover")
 	}
 	assertICMP("restored-grant", true)
+	if protocol == "tcp" {
+		icmpOnly := peer
+		icmpOnly.ACLRestricted = true
+		icmpOnly.ACLGrants = []api.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: "icmp"}}}}
+		apply(icmpOnly)
+		assertICMP("icmp-only-grant", true)
+		second("blocked")
+		if fresh("24001") || fresh("24002") {
+			t.Fatal("ICMP-only grant permitted TCP traffic")
+		}
+		// A matching protocol alone must not authorize a different destination.
+		wrongDestination := icmpOnly
+		wrongIP := peerIP.Next()
+		wrongDestination.ACLGrants = []api.ACLGrant{{DestinationCIDRs: []string{netip.PrefixFrom(wrongIP, wrongIP.BitLen()).String()}, AllowedPorts: []api.ACLPort{{Protocol: "icmp"}}}}
+		apply(wrongDestination)
+		assertICMP("icmp-wrong-destination", false)
+		apply(icmpOnly)
+		assertICMP("icmp-destination-restored", true)
+		apply(peer)
+		if !fresh("24001") || !fresh("24002") {
+			t.Fatal("restoring unrestricted grant after ICMP-only policy did not restore TCP")
+		}
+		assertICMP("all-protocols-restored", true)
+	}
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
 	n.AwaitStatus(func(v ipc.StatusResponse) bool {
