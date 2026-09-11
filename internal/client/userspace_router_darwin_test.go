@@ -2,7 +2,9 @@ package client
 
 import (
 	"context"
+	"errors"
 	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -53,5 +55,47 @@ func TestDarwinUserspaceDNSUsesDefaultRouteForOverride(t *testing.T) {
 	})
 	if !strings.Contains(script, "d.add SupplementalMatchDomains * .") {
 		t.Fatalf("override DNS script omitted the default route:\n%s", script)
+	}
+}
+
+func TestDarwinRouteUpdatePreservesLiveInterfaceAndSupportsRollback(t *testing.T) {
+	original := wireGuardEngineRouterConfig{
+		Interface: "utun99", MTU: 1280,
+		Addresses: []netip.Prefix{netip.MustParsePrefix("198.18.94.1/32")},
+		Routes:    []netip.Prefix{netip.MustParsePrefix("198.18.94.20/32")},
+	}
+	next := cloneWireGuardEngineRouterConfig(original)
+	next.Routes = append(next.Routes, netip.MustParsePrefix("198.18.94.21/32"), netip.MustParsePrefix("fd94::20/128"))
+	for _, failSecondAdd := range []bool{false, true} {
+		var commands []string
+		r := &darwinWireGuardEngineRouter{configured: true, current: cloneWireGuardEngineRouterConfig(original), runner: func(_ context.Context, name string, args ...string) ([]byte, error) {
+			command := name + " " + strings.Join(args, " ")
+			commands = append(commands, command)
+			if name != "route" {
+				t.Fatalf("route update disrupted interface or address state: %s", command)
+			}
+			if failSecondAdd && command == "route -n add -inet6 fd94::20/128 -interface utun99" {
+				return nil, errors.New("injected route failure")
+			}
+			return nil, nil
+		}}
+		err := r.Configure(t.Context(), next)
+		if (err != nil) != failSecondAdd {
+			t.Fatalf("route update error=%v, injected failure=%t", err, failSecondAdd)
+		}
+		if err := r.Configure(t.Context(), original); err != nil {
+			t.Fatal(err)
+		}
+		want := []string{
+			"route -n add -inet 198.18.94.21/32 -interface utun99",
+			"route -n add -inet6 fd94::20/128 -interface utun99",
+			"route -n delete -inet 198.18.94.21/32 -interface utun99",
+		}
+		if !failSecondAdd {
+			want = append(want, "route -n delete -inet6 fd94::20/128 -interface utun99")
+		}
+		if !slices.Equal(commands, want) || !wireGuardEngineRouterConfigsEqual(r.current, original) || !r.configured {
+			t.Fatalf("route rollback did not preserve the original live interface: %v", commands)
+		}
 	}
 }

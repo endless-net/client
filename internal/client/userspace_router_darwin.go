@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -37,6 +38,13 @@ func newPlatformWireGuardEngineRouter(interfaceName string, runner CommandRunner
 func platformWireGuardEngineFirewallMark(_ []netip.Prefix, _ string) uint32 { return 0 }
 
 func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
+	if r.configured {
+		withoutRouteChange := cfg
+		withoutRouteChange.Routes = r.current.Routes
+		if wireGuardEngineRouterConfigsEqual(withoutRouteChange, r.current) {
+			return r.reconcileRoutes(ctx, cfg)
+		}
+	}
 	if r.configured {
 		_ = r.Down(ctx)
 	}
@@ -79,6 +87,42 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 	}
 	r.current = cfg
 	r.configured = true
+	return nil
+}
+
+// Route-only map changes must not flap utun: asynchronous interface-down
+// events can stop WireGuard while its new peer configuration is being applied.
+func (r *darwinWireGuardEngineRouter) reconcileRoutes(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
+	change := func(operation string, route netip.Prefix) error {
+		family := "-inet"
+		if route.Addr().Is6() {
+			family = "-inet6"
+		}
+		out, err := r.runner(ctx, "route", "-n", operation, family, route.String(), "-interface", cfg.Interface)
+		if err != nil {
+			return fmt.Errorf("%s darwin TUN route: %s", operation, commandError(err, out))
+		}
+		return nil
+	}
+	// Track each successful mutation so engine rollback can reconcile back to
+	// the previous map even if a later route command fails.
+	for _, route := range slices.Clone(r.current.Routes) {
+		if !slices.Contains(cfg.Routes, route) {
+			if err := change("delete", route); err != nil {
+				return err
+			}
+			r.current.Routes = slices.DeleteFunc(slices.Clone(r.current.Routes), func(p netip.Prefix) bool { return p == route })
+		}
+	}
+	for _, route := range cfg.Routes {
+		if !slices.Contains(r.current.Routes, route) {
+			if err := change("add", route); err != nil {
+				return err
+			}
+			r.current.Routes = append(slices.Clone(r.current.Routes), route)
+		}
+	}
+	r.current = cloneWireGuardEngineRouterConfig(cfg)
 	return nil
 }
 

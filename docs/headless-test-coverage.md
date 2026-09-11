@@ -1218,6 +1218,32 @@ Arbitrary output is never printed. Local format/vet/lint/short checks pass.
 The common inventory grows to 19 scenarios, with three required repetitions
 on eight platforms (456 outcomes); hosted qualification remains pending.
 
+## macOS route-only update regression
+
+The corrected source `b9b7712` in
+[CI 34635511042](https://github.com/endless-net/client/actions/runs/34635511042)
+passed all 54 root outcomes on each of four Linux runners (216 PASS). Both macOS
+runners passed 48/54; their six failures were native IPv4/IPv6 TCP scenarios after
+valid route changes, either missing ICMP echo under an ICMP-only grant or failing
+to restore TCP after restoring unrestricted authorization. These failures are
+distinct from the preceding contract-invalid fixture. Single-agent ownership
+passed three times on all six completed platforms; Windows evidence is pending.
+
+Source inspection found Darwin router reconfiguration unconditionally lowering
+utun even for route-only changes. The correction reconciles only added/removed
+routes when other router settings are unchanged, preserving the live interface
+and addresses. Each successful mutation updates the router's tracked routes so
+engine rollback can restore the prior map after a later command failure. A
+Darwin-specific regression exercises successful add/remove and failure on the
+second add, requiring rollback without any interface command. Other router
+changes continue through the full configuration path.
+
+Local format/vet/lint/short checks on Windows pass; the Darwin-specific test and
+unchanged native packet assertions require hosted macOS qualification. The
+interface-event race is the working explanation for the traffic failures, not
+an independently captured OS event trace. No packet assertion was relaxed and
+no recovery deadline was increased. No Infrastructure or version changes occur.
+
 ## Next work
 
 Reconcile the HC matrix with Client-owned consumer/OS coverage, then implement
