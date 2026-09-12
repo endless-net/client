@@ -2737,6 +2737,14 @@ The later post-failure public status observation is not part of this source.
 
 ## Next work
 
+Run `34666246762`, source `08d5186`, failed the IPC-events root in Windows 2022
+repetition 1 ([job 103478854527](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854527)):
+the first SDK subscription ended before the initial hello, after the CLI event
+check. The cause is unknown; the test previously discarded the Stream error.
+Unexpected termination now reports only a fixed error category or numeric OS
+error and last observed sequence. It remains fatal, without retries or raw error
+output. This is additional investigation, not a fix or a qualification claim.
+
 HC-021 TLS lifetime acceptance now extends the common TLS root with expired and
 not-yet-valid leaf certificates signed by the already trusted test CA, at the
 same origin. Each real CLI enrollment must fail with a certificate error before

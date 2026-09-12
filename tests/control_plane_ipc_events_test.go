@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"runtime"
+	"syscall"
 	"testing"
 	"time"
 
@@ -61,6 +65,7 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 		done         <-chan struct{}
 		cancel       context.CancelFunc
 		lastSequence int
+		termination  <-chan string
 	}
 	subscribe := func() *subscription {
 		t.Helper()
@@ -71,11 +76,12 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		events := make(chan ipc.Event, 32)
 		done := make(chan struct{})
+		termination := make(chan string, 1)
 		go func() {
 			defer close(done)
 			// Either EOF or a transport error ends a subscription. The caller
 			// verifies when it ends and reconnects through a new public client.
-			_ = local.Stream(ctx, http.MethodGet, ipc.PathEvents, nil, func(event ipc.Event) error {
+			err := local.Stream(ctx, http.MethodGet, ipc.PathEvents, nil, func(event ipc.Event) error {
 				select {
 				case events <- event:
 					return nil
@@ -83,6 +89,21 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 					return ctx.Err()
 				}
 			})
+			category := "transport_or_protocol_error"
+			var errno syscall.Errno
+			switch {
+			case err == nil:
+				category = "clean_end"
+			case errors.Is(err, context.Canceled):
+				category = "cancelled"
+			case errors.Is(err, context.DeadlineExceeded):
+				category = "deadline"
+			case errors.Is(err, io.EOF):
+				category = "eof"
+			case errors.As(err, &errno):
+				category = fmt.Sprintf("os_error_%d", errno)
+			}
+			termination <- category
 		}()
 		t.Cleanup(func() {
 			cancel()
@@ -93,7 +114,7 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 			}
 			local.HTTPClient.CloseIdleConnections()
 		})
-		return &subscription{events: events, done: done, cancel: cancel}
+		return &subscription{events: events, done: done, cancel: cancel, termination: termination}
 	}
 	await := func(stream *subscription, match func(ipc.Event) bool) ipc.Event {
 		t.Helper()
@@ -119,7 +140,7 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 					return event
 				}
 			case <-stream.done:
-				t.Fatal("IPC subscription ended before the expected event")
+				t.Fatalf("IPC subscription ended before the expected event: %s; last_sequence=%d", <-stream.termination, stream.lastSequence)
 			case <-ctx.Done():
 				t.Fatal("IPC subscription did not report the expected state within the deadline")
 			}
