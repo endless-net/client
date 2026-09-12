@@ -2640,6 +2640,15 @@ own source matrix. Full HC-001–HC-065 coverage is still incomplete.
 
 ## Next work
 
+Windows HC-004/053 installation now checks administrator-only local-forget using
+a restricted child CLI token in both connection states. Administrators must be
+deny-only, CLI version must execute, and local-forget must fail without a success
+payload. Logs distinguish pipe access denial from explicit IPC administrator
+authorization; the former does not prove application-role handling. The parent
+then requires the original identity/intent and corresponding TCP behavior.
+This preserves the account SID and leaves another-owner/observer scenarios open.
+Windows hosted evidence is pending; only compilation/short checks ran locally.
+
 HC-004/053 Unix installation acceptance now checks the pre-existing nobody
 account: a non-root UID and executable installed CLI, then explicit IPC permission
 denial for status/connect/disconnect/confirmed local-forget while the enrolled

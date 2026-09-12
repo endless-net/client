@@ -49,6 +49,16 @@ run privileged installation tests on a development workstation.
 
 ## Remaining acceptance work
 
+Windows installation acceptance additionally executes the CLI with a restricted
+version of the runner process token: Administrators is deny-only and privileges
+are removed using [CreateRestrictedToken](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-createrestrictedtoken).
+The test verifies group attributes and successful CLI execution before requiring
+confirmed local-forget to fail. It classifies named-pipe access denial separately
+from IPC administrator authorization and rechecks identity, intent and traffic.
+Only child CLI processes receive the restricted token; no account/password is
+created. The account SID remains unchanged, so another owner's rights are not
+tested. Windows 2022/2025 execution is pending.
+
 The Linux/macOS suite additionally runs the installed CLI as the existing
 `nobody` account. A non-root UID and successful `version` invocation exclude a
 failed privilege switch or unexecutable binary as false positives. Status,
