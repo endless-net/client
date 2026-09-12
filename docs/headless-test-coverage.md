@@ -3151,6 +3151,26 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+An additional failure in run 34673867164 is independent of the endpoint fixture:
+[Ubuntu 22.04 ARM repeat 3](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753933)
+fails `TestControlPlaneNativeIPv6UDPTraffic` at 2026-09-12 05:19:45 UTC, following
+the map-signer confirmation phase. The application probe reports 32 differing
+bytes and zero zero-valued reply bytes, exits with code 1 in 4 ms, and explicitly
+reports no process deadline expiration. This is an unclassified data mismatch,
+not an accepted network denial. Temporal proximity does not establish signer
+rotation as the cause.
+
+The probe remembers outstanding requests and bounded completed UDP replies
+within its own process. Unknown replies remain fatal, as exercised by
+`TestUDPPreviouslyCompletedEchoCannotSatisfyNewExchange/unknown-reply`.
+The reference UDP echo copies the received packet before swapping addresses and
+ports. These source observations do not locate the failing payload: no per-packet
+correlation evidence currently distinguishes a delayed reply from another socket
+from corruption in the Client or reference path. Do not suppress this failure or
+infer a fix from passing flow-consent/Relay roots. Further packet correlation and
+native validation belong to Client test tooling; no producer changes are required
+by this observation. The endpoint fixture correction does not address this fault.
+
 The first completed contract report from run 34673867164,
 [Ubuntu 24.04 ARM repeat 2](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753932),
 contains 38 PASS roots, one FAIL and zero SKIP at source
