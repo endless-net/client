@@ -3062,6 +3062,14 @@ correction/completion additions. None of those changes is validated by this run.
 
 ## Next work
 
+The browser endpoint-correction variant now checks that the signed enrollment
+projection contains the corrected endpoint before starting the agent. Later
+endpoint discovery may legitimately replace this value. The assertion uses the
+fixture's public DTO and registration transcript, never Client private state.
+This proves propagation of the accepted input, not endpoint reachability. The
+new assertion awaits native CI; earlier passing browser variants proved
+completion but did not assert this endpoint field.
+
 Run 34672491102, source `d0fc32a9f7c9d0d97623953fbbab3f452790089a`,
 passed [Verify (Windows), job 103496467959](https://github.com/endless-net/client/actions/runs/34672491102/job/103496467959).
 Its `internal/client` package passed in 15.318 seconds at 04:35:09 UTC on

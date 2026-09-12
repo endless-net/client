@@ -65,6 +65,20 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 			if _, err := n.Run(append(args, tc.valid)...); err != nil {
 				t.Fatal("corrected browser input could not complete approved enrollment")
 			}
+			if tc.flag == "--endpoint" {
+				// Inspect the signed enrollment result before the agent's normal
+				// endpoint discovery can legitimately publish a different address.
+				nodeID := ""
+				for _, event := range s.Events() {
+					if event.Kind == "registered" {
+						nodeID = event.NodeID
+					}
+				}
+				projection, err := s.Snapshot(nodeID)
+				if err != nil || projection.Node.Endpoint != tc.valid {
+					t.Fatal("approved browser enrollment lost the corrected endpoint")
+				}
+			}
 			n.Start()
 			status := n.AwaitStatus(func(v ipc.StatusResponse) bool {
 				return v.NodeID != "" && v.CachedMapValid && v.NodeCredentialPresent
