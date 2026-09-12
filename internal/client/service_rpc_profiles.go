@@ -2,6 +2,7 @@ package client
 
 import (
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -12,9 +13,50 @@ import (
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const maxRPCProfiles = 128
+
+func (m *ClientRPCMutations) listProfilesAs(peer local.Peer, request *ipc.ListProfilesRequest) (*ipc.ListProfilesResponse, error) {
+	cfg := m.store.Read()
+	const procedure = "/client.v0.ClientService/ListProfiles"
+	if err := authorizeRPCPeer(peer, rpcMethod(procedure), cfg); err != nil {
+		return nil, err
+	}
+	profiles := []clientRPCProfile{}
+	activeID := ""
+	revision := uint64(1)
+	if cfg.RPCState != nil {
+		for _, profile := range cfg.RPCState.Profiles {
+			profiles = append(profiles, profile)
+		}
+		activeID, revision = cfg.RPCState.ActiveProfileID, cfg.RPCState.Revision
+	}
+	sort.Slice(profiles, func(i, j int) bool { return profiles[i].ID < profiles[j].ID })
+	start, end, next, err := m.pageRange(peer, procedure, request.GetPage(), cfg, len(profiles))
+	if err != nil {
+		return nil, err
+	}
+	result := &ipc.ListProfilesResponse{ActiveProfileId: activeID, Page: &ipc.PageResponse{NextPageToken: next, Metadata: &ipc.SnapshotMetadata{InstanceId: m.instanceID, Revision: revision, GeneratedAt: timestamppb.New(m.now())}}}
+	for _, profile := range profiles[start:end] {
+		configuration := profile.Configuration
+		if profile.ID == activeID {
+			configuration = cfg
+		}
+		state := ipc.ProfileState_PROFILE_STATE_EMPTY
+		if rpcConfigHasEnrollment(configuration) {
+			state = ipc.ProfileState_PROFILE_STATE_REGISTERED
+		}
+		if configuration.EnrollmentRequestID != "" {
+			state = ipc.ProfileState_PROFILE_STATE_NEEDS_APPROVAL
+		}
+		result.Profiles = append(result.Profiles, &ipc.Profile{Id: profile.ID, DisplayName: profile.DisplayName, ControlOrigin: profile.ControlOrigin,
+			AccountId: configuration.ActiveAccountID, SelectedNetworkId: configuration.NetworkID, State: state, Active: profile.ID == activeID,
+			Selection: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_UNSUPPORTED, ReasonKey: "profile_selection_not_implemented"}})
+	}
+	return result, nil
+}
 
 // Configuration excludes installation RPC state/ownership. Active-profile
 // state lives in the top-level Config until a safe tunnel-context switch saves
@@ -28,7 +70,7 @@ type clientRPCProfile struct {
 
 func rpcProfileDisplayName(value string) (string, error) {
 	value = strings.TrimSpace(value)
-	if !utf8.ValidString(value) || value == "" || utf8.RuneCountInString(value) > 128 || strings.ContainsFunc(value, unicode.IsControl) {
+	if !utf8.ValidString(value) || value == "" || len(value) > 128 || strings.ContainsFunc(value, unicode.IsControl) {
 		return "", rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	return value, nil

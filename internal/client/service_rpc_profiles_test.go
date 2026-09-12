@@ -134,7 +134,7 @@ func TestRPCProfileInputRejectionDoesNotClaimOwnership(t *testing.T) {
 			t.Fatal("invalid profile claimed installation")
 		}
 	}
-	for _, name := range []string{"", " \t ", "name\nline", strings.Repeat("x", 129), string([]byte{255})} {
+	for _, name := range []string{"", " \t ", "name\nline", strings.Repeat("x", 129), strings.Repeat("я", 65), string([]byte{255})} {
 		if _, err := rpcProfileDisplayName(name); err == nil {
 			t.Errorf("accepted invalid display name")
 		}

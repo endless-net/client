@@ -118,6 +118,15 @@ func (s *ClientRPCService) CreateProfile(ctx context.Context, request *connect.R
 	return connect.NewResponse(&ipc.CreateProfileResponse{Operation: op}), nil
 }
 
+func (s *ClientRPCService) ListProfiles(ctx context.Context, request *connect.Request[ipc.ListProfilesRequest]) (*connect.Response[ipc.ListProfilesResponse], error) {
+	peer, _ := local.PeerFromContext(ctx)
+	result, err := s.mutations.listProfilesAs(peer, request.Msg)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(result), nil
+}
+
 func (s *ClientRPCService) RenameProfile(ctx context.Context, request *connect.Request[ipc.RenameProfileRequest]) (*connect.Response[ipc.RenameProfileResponse], error) {
 	peer, _ := local.PeerFromContext(ctx)
 	op, err := s.mutations.renameProfileAs(peer, request.Msg)

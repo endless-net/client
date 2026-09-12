@@ -73,7 +73,7 @@ generated drift and Dart analysis; it predates the durable mutation foundation.
 ## Local profile handlers (2026-09-13)
 
 `service_rpc_handlers.go` exposes native GetRuntimeInfo, GetOperation and
-Create/Rename/RemoveProfile handlers with strict guard, message bounds and typed
+List/Create/Rename/RemoveProfile handlers with strict guard, message bounds and typed
 error sanitization. The production listener has not switched to this service;
 remaining methods are unimplemented and no complete capability is advertised.
 
@@ -81,7 +81,10 @@ Local-only profile changes and SUCCEEDED outcomes share one config transaction.
 Create makes an empty inactive context with immutable canonical HTTPS origin;
 rename cannot change origin/identity; remove rejects active, enrolled or busy
 profiles and retains installation ownership. The producer bounds profile count
-at 128 and display names at 128 Unicode code points without control characters.
+at 128 and display names at 128 UTF-8 bytes without control characters.
 `service_rpc_profiles_test.go` verifies these invariants, durable terminal
-records and idempotent replay. List/select, per-profile tunnel handover and other
+records and idempotent replay. `service_rpc_pages_test.go` covers caller/query/
+instance/revision/size-bound signed pagination, five-minute expiry, stable
+ordering, stale snapshot rejection and no private config disclosure.
+SelectProfile, per-profile tunnel handover and other
 runtime providers remain required work; this is not UF-16 acceptance yet.

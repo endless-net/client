@@ -225,7 +225,7 @@ At most one profile is active; at most one tunnel context may apply routes.
 Creating a profile creates an empty inactive context. `Enroll` binds an empty
 profile to an authorized identity; account identity cannot be edited by renaming.
 The runtime bounds the local catalog at 128 profiles. Display names are trimmed,
-nonempty, at most 128 Unicode code points, and contain no control characters.
+nonempty, at most 128 UTF-8 bytes, and contain no control characters.
 Origins must be HTTPS origins without userinfo, query, fragment or service path;
 the host is canonicalized to lowercase and explicit default port 443 is removed.
 An inactive profile must be selected before enrollment, connection, renewal,
