@@ -254,6 +254,11 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			if status.Agent != nil {
 				agentError = status.Agent.LastError != ""
 			}
+			// test2json runs on the completed text log in native CI, so its
+			// event timestamps cannot date the original traffic failure.
+			if latestHandshake > 0 {
+				t.Logf("flow handshake age at failure inspection: %s", time.Since(time.Unix(latestHandshake, 0)).Round(time.Millisecond))
+			}
 			t.Logf("flow failure: protocol=%s ipv6=%t status_available=%t cached_map_valid=%t disconnected=%t wireguard_ok=%t handshake=%t agent_error_present=%t rx=%d tx=%d reference_received=%d reference_echoed=%d initiations=%d response_attempts=%d responses=%d response_errors=%d other=%d", protocol, ipv6, err == nil, status.CachedMapValid, status.UserDisconnected, wgOK, handshake, agentError, rx, tx, received, echoed, initiations, responseAttempts, responses, responseErrors, other)
 			t.Logf("flow inspection: wireguard_present=%t inspection_error_present=%t peers=%d agent_present=%t first_client_listen_port=%d configured_client_listen_port=%d current_client_listen_port=%d latest_handshake_unix=%d", status.WireGuard != nil, inspectionError, peerCount, status.Agent != nil, firstClientListenPort, clientListenPort, currentListenPort, latestHandshake)
 		}()
