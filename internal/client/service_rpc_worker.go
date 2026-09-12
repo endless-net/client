@@ -31,6 +31,9 @@ func (s *ClientRPCService) StartProfileWorker(ctx context.Context, driver Client
 	if s.profileWorker != nil {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 	}
+	if err := s.mutations.AdoptInitialProfile(); err != nil {
+		return nil, err
+	}
 	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	s.profileWorker = w
 	done := make(chan error, 1)

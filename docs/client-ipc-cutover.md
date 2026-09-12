@@ -150,8 +150,7 @@ tests verify the shared lock, missing provider/enrollment rejection and typed
 failure sanitization. These are deterministic local tests, not OS route or
 release acceptance evidence.
 
-Production wiring of the native SelectProfile worker, initial-profile adoption for
-existing installations, complete policy restrictions, Disconnect race handling,
+Production wiring of the native SelectProfile worker, complete policy restrictions, Disconnect preemption,
 other profile-scoped invalidations and multi-platform real tunnel verification
 still need implementation/validation in this repository before UF-16 acceptance.
 The production HTTP v2 listener remains until the full hard cutover is ready;
@@ -218,3 +217,23 @@ At inspection on 2026-09-13, the [Test run for a4b5319](https://github.com/endle
 was pending and its [Protobuf contract run](https://github.com/endless-net/client/actions/runs/34724571995)
 was queued. Local green checks are not evidence that these cross-platform CI
 gates passed; no runner or infrastructure changes were made.
+
+## Initial profile state adoption (2026-09-13)
+
+Before starting its native executor, the service assigns existing configured
+installation state to one active v0 profile. Registration, credentials, keys,
+ownership and connection intent remain unchanged at the config root; adoption
+does not reconfigure the tunnel or duplicate installation secrets into profiles.
+Repeated startup preserves the same profile ID and revision. Ownerless existing
+enrollment stays ownerless and cannot be claimed by the first connecting UI.
+
+Adoption requires a single unambiguous canonical HTTPS control origin. Different
+origins, missing origin for enrollment, unsafe URLs, corrupt active-profile
+references or conflicting unfinished work fail without changing persisted state.
+Equivalent spellings of the same origin are accepted without rewriting the
+existing URL configuration. Resolving an ambiguous existing configuration remains
+an explicit operator task, not automatic credential reassignment.
+
+`service_rpc_adoption_test.go` verifies preserved config, idempotence, ownerless
+access protection and rejection without mutation. This is initial state cutover,
+not an HTTP v2 fallback; production listener migration remains outstanding.
