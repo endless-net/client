@@ -51,6 +51,9 @@ func (s *ClientRPCService) StartProfileWorker(ctx context.Context, driver Client
 			if err = s.mutations.ReconcileDisconnect(ctx, driver); err != nil {
 				return
 			}
+			if err = s.mutations.ReconcileConnect(ctx, driver); err != nil {
+				return
+			}
 			// Also reconcile once at startup: no request needs to be replayed
 			// to recover an accepted operation after a process crash.
 			if err = s.mutations.ReconcileProfileSwitch(ctx, driver); err != nil {

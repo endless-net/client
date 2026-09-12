@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
@@ -124,7 +125,12 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, ctx.Err()
 			}
 		},
-		Start: func(context.Context, Config) error { t.Error("empty profile attempted connection"); return nil },
+		Start: func(_ context.Context, cfg Config) error {
+			if cfg.NodeID == "" {
+				t.Error("empty profile attempted connection")
+			}
+			return nil
+		},
 	})
 	if err != nil {
 		stopWorker()
@@ -171,4 +177,27 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if disconnected.Msg.Operation.Kind != ipc.OperationKind_OPERATION_KIND_DISCONNECT || disconnected.Msg.Operation.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || m.store.Read().ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
 		t.Fatal("native Disconnect did not complete durable intent")
 	}
+	_, err = client.Connect(ctx, connect.NewRequest(&ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile}))
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.NodeID = "synthetic-test-node"
+		cfg.CachedMap = &clientapi.RegisterNodeResponse{}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	connected, err := client.Connect(ctx, connect.NewRequest(&ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for switchEvents.Receive() {
+		op := switchEvents.Msg().GetOperationChanged()
+		if op.GetId() == connected.Msg.Operation.Id && rpcOperationTerminal(op.State) {
+			if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.Kind != ipc.OperationKind_OPERATION_KIND_CONNECT {
+				t.Fatal("native Connect failed")
+			}
+			return
+		}
+	}
+	t.Fatal("Connect terminal event missing", switchEvents.Err())
 }

@@ -38,6 +38,7 @@ type ClientRPCState struct {
 	ActiveProfileID       string                              `json:"active_profile_id,omitempty"`
 	ProfileSwitch         *clientRPCProfileSwitch             `json:"profile_switch,omitempty"`
 	DisconnectOperationID string                              `json:"disconnect_operation_id,omitempty"`
+	ConnectOperationID    string                              `json:"connect_operation_id,omitempty"`
 }
 
 type clientRPCOperationRecord struct {
@@ -448,6 +449,10 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 		if updated.State == ipc.OperationState_OPERATION_STATE_SUCCEEDED {
 			m.observedStatus.ConnectionPhase = ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED
 		}
+	}
+	if updated.Kind == ipc.OperationKind_OPERATION_KIND_CONNECT && m.observedStatus != nil {
+		// Applying configuration alone is not a fresh connectivity observation.
+		m.observedStatus.ConnectionPhase = ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED
 	}
 	m.publishMutationLocked(updated)
 	return updated, nil

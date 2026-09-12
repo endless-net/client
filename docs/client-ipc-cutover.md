@@ -237,3 +237,26 @@ an explicit operator task, not automatic credential reassignment.
 `service_rpc_adoption_test.go` verifies preserved config, idempotence, ownerless
 access protection and rejection without mutation. This is initial state cutover,
 not an HTTP v2 fallback; production listener migration remains outstanding.
+
+## Native Connect execution (2026-09-13)
+
+Connect now persists its operation and connected intent for the active registered
+profile before invoking the native driver. Conflicting nonterminal operations
+are rejected; replay remains idempotent. The service executor resumes a persisted
+Connect at startup and retains unfinished work on lifecycle cancellation.
+Failed apply attempts invoke cleanup and disable automatic reconnect while
+retaining registration. Failures expose typed diagnostics, not raw driver text.
+
+Disconnect can supersede Connect before or during apply. The terminal transaction
+rechecks durable intent and marks the superseded Connect CANCELLED without ever
+restoring connected intent. Disconnect's own operation still waits for Down.
+Successful configuration apply is not treated as evidence of live connectivity:
+phase remains unknown until an authoritative provider observation arrives.
+
+`service_rpc_connect_test.go` covers durable acceptance/replay, success/failure,
+partial-apply cleanup, both Disconnect orderings and disk-backed restart recovery.
+The real local-transport test exercises Connect rejection without enrollment and
+its terminal event with a substituted driver. Its unsigned fixture is not real
+map-verification or tunnel evidence. Full policy/phase provider integration,
+bounded preemption, production lifecycle and multi-platform system acceptance
+remain required before claiming UF-05 release acceptance.
