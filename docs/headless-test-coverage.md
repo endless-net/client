@@ -2773,6 +2773,17 @@ public status observation. Those increments require their own exact-source CI.
 
 ## Next work
 
+HC-022 adds `TestControlPlaneLogoutRetryAfterControlRecovery`, the 35th common
+root. Unavailable control must cause an explicitly unconfirmed logout error;
+public status must retain the original registration and credential across an
+agent restart. After control recovery, retry must return confirmed cleanup,
+produce exactly one deletion for the original node, clear public enrollment/map
+state and retain disconnected intent after a second restart. Exactly one node
+creation is observed throughout. This is distinct from forced local-forget and
+does not yet prove real-traffic retirement or every remote cleanup stage.
+The automatic native inventory now requires 35 x 3 x 8 = 840 root outcomes;
+platform evidence for this new scenario is pending.
+
 The CLI event consumer now rejects a first event other than hello before writing
 it to stdout, matching the ordering requirement in the public IPC OpenAPI events
 description. A short regression supplied status_changed followed by hello:
