@@ -61,8 +61,10 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if _, err := client.Bootstrap(ctx); err != nil {
 		t.Fatal(err)
 	}
-	_, err = client.GetSupportInfo(ctx, connect.NewRequest(&ipc.GetSupportInfoRequest{}))
-	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	support, err := client.GetSupportInfo(ctx, connect.NewRequest(&ipc.GetSupportInfoRequest{}))
+	if err != nil || support.Msg.Info.ProductName != "EndlessNet" || support.Msg.Info.Runtime.Version != "test" || support.Msg.Info.Runtime.Architecture != runtime.GOARCH {
+		t.Fatal("observer support metadata missing", err)
+	}
 	events, err := client.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
 	if err != nil {
 		t.Fatal(err)

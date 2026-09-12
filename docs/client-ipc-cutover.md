@@ -270,3 +270,18 @@ through Down and its own result handling. `TestRPCDisconnectPreemptsApplyOnlyAft
 checks rejected CAS, cancellation of an active apply, cancelled Connect outcome
 and subsequent Disconnect completion. Providers must honor cancellation; real
 driver latency and OS cleanup still require system evidence.
+
+## Observer-safe support metadata (2026-09-13)
+
+Native GetSupportInfo returns product/build identity without enrollment or a
+control-plane request. The service fills absent platform/architecture from its
+actual Go runtime (not a Windows assumption), preserves supplied build version,
+commit and date, and clones inputs/outputs to avoid mutable metadata leakage.
+The local-transport test calls it before ownership claim; the support test checks
+offline operation, build identity and response isolation.
+
+Documentation/support/privacy/license destinations and the offline-help resource
+key remain absent until approved product metadata and shipped UI content supply
+them. Their absence is not a complete UF-23 implementation: client-ui still owns
+localized offline help and presentation, and the client/distribution integration
+must provide build metadata and approved destinations before release acceptance.

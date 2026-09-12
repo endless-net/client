@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +33,21 @@ func NewClientRPCService(mutations *ClientRPCMutations, build *ipc.BuildIdentity
 	if build == nil {
 		build = &ipc.BuildIdentity{}
 	}
+	build = proto.Clone(build).(*ipc.BuildIdentity)
+	if build.Platform == ipc.Platform_PLATFORM_UNSPECIFIED {
+		build.Platform = map[string]ipc.Platform{"windows": ipc.Platform_PLATFORM_WINDOWS, "darwin": ipc.Platform_PLATFORM_MACOS, "linux": ipc.Platform_PLATFORM_LINUX, "android": ipc.Platform_PLATFORM_ANDROID, "ios": ipc.Platform_PLATFORM_IOS}[runtime.GOOS]
+	}
+	if build.Architecture == "" {
+		build.Architecture = runtime.GOARCH
+	}
 	return &ClientRPCService{mutations: mutations, build: proto.Clone(build).(*ipc.BuildIdentity), disconnectGate: make(chan struct{}, 1)}
+}
+
+// Support metadata is observer-safe and does not require enrollment or a live
+// control plane. URLs/offline content keys remain absent until supplied by the
+// approved product/distribution source; do not invent links or UI resources.
+func (s *ClientRPCService) GetSupportInfo(_ context.Context, _ *connect.Request[ipc.GetSupportInfoRequest]) (*connect.Response[ipc.GetSupportInfoResponse], error) {
+	return connect.NewResponse(&ipc.GetSupportInfoResponse{Info: &ipc.SupportInfo{Runtime: proto.Clone(s.build).(*ipc.BuildIdentity), ProductName: "EndlessNet"}}), nil
 }
 
 func (s *ClientRPCService) Handler() http.Handler {
