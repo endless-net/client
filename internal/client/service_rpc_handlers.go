@@ -21,17 +21,18 @@ import (
 // consumers are migrated. It never forwards requests to the HTTP v2 handler.
 type ClientRPCService struct {
 	clientipcconnect.UnimplementedClientServiceHandler
-	mutations     *ClientRPCMutations
-	build         *ipc.BuildIdentity
-	profileMu     sync.Mutex
-	profileWorker *clientRPCProfileWorker
+	mutations      *ClientRPCMutations
+	build          *ipc.BuildIdentity
+	profileMu      sync.Mutex
+	profileWorker  *clientRPCProfileWorker
+	disconnectGate chan struct{}
 }
 
 func NewClientRPCService(mutations *ClientRPCMutations, build *ipc.BuildIdentity) *ClientRPCService {
 	if build == nil {
 		build = &ipc.BuildIdentity{}
 	}
-	return &ClientRPCService{mutations: mutations, build: proto.Clone(build).(*ipc.BuildIdentity)}
+	return &ClientRPCService{mutations: mutations, build: proto.Clone(build).(*ipc.BuildIdentity), disconnectGate: make(chan struct{}, 1)}
 }
 
 func (s *ClientRPCService) Handler() http.Handler {

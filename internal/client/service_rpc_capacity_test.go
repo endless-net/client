@@ -13,7 +13,7 @@ func TestRPCNonterminalCapacityBeforeSideEffects(t *testing.T) {
 	peer := local.Peer{Identity: "uid:1000"}
 	var first *ipc.CreateProfileRequest
 	var firstOp *ipc.Operation
-	for i := 0; i < rpcMaxNonterminalOperations; i++ {
+	for i := 0; i < rpcMaxNonterminalOperations-1; i++ {
 		r := rpcCreateRequest(t, m)
 		op, _, err := m.acceptAs(peer, rpcCreateProfile, r, rpcPrepareTest)
 		if err != nil {
@@ -27,7 +27,7 @@ func TestRPCNonterminalCapacityBeforeSideEffects(t *testing.T) {
 	prepared := false
 	_, _, err := m.acceptAs(peer, rpcCreateProfile, rpcCreateRequest(t, m), func(*Config, *ipc.Operation) error { prepared = true; return nil })
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
-	if prepared || before.Revision != m.Metadata().Revision || before.InstanceId != m.Metadata().InstanceId || len(m.store.Read().RPCState.Operations) != rpcMaxNonterminalOperations {
+	if prepared || before.Revision != m.Metadata().Revision || before.InstanceId != m.Metadata().InstanceId || len(m.store.Read().RPCState.Operations) != rpcMaxNonterminalOperations-1 {
 		t.Fatal("capacity rejection changed state")
 	}
 	retry, reused, err := m.acceptAs(peer, rpcCreateProfile, first, rpcPrepareTest)
@@ -48,7 +48,7 @@ func TestRPCNonterminalCapacityBeforeSideEffects(t *testing.T) {
 	if _, _, err := m.acceptAs(peer, rpcCreateProfile, rpcCreateRequest(t, m), rpcPrepareTest); err != nil {
 		t.Fatal("terminal operation did not release capacity", err)
 	}
-	if len(m.store.Read().RPCState.Operations) != rpcMaxNonterminalOperations+1 {
+	if len(m.store.Read().RPCState.Operations) != rpcMaxNonterminalOperations {
 		t.Fatal("terminal journal record was discarded to release capacity")
 	}
 }

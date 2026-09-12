@@ -207,6 +207,11 @@ include this list atomically with connection_phase. Its entries have profile IDs
 There are at most 32 nonterminal operations per installation; new commands beyond
 the bound fail LIMIT_EXCEEDED without side effects, while Disconnect remains
 available. The runtime serializes/coalesces Disconnect to honor the bound.
+The runtime reserves one of these 32 slots for serialized Disconnect; other
+commands can occupy at most 31 nonterminal slots. Distinct Disconnect request
+identities are not aliased: each retains its own durable outcome. The normal
+4096-record admission cap does not block Disconnect; its terminal outcomes retain
+the same 24-hour retention, including when the normal journal cap is reached.
 Terminal transitions remove the entry, emit operation_changed and update status.
 An observer receives the connection phase but no operation list or credential
 deadlines. A reconnect refetches persisted terminal outcomes by saved request ID.

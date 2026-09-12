@@ -12,6 +12,7 @@ import (
 type clientRPCProfileWorker struct {
 	ctx  context.Context
 	wake chan struct{}
+	done chan struct{}
 }
 
 // StartProfileWorker must precede serving the listener. The caller owns ctx and
@@ -30,7 +31,7 @@ func (s *ClientRPCService) StartProfileWorker(ctx context.Context, driver Client
 	if s.profileWorker != nil {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 	}
-	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1)}
+	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	s.profileWorker = w
 	done := make(chan error, 1)
 	go func() {
@@ -39,13 +40,20 @@ func (s *ClientRPCService) StartProfileWorker(ctx context.Context, driver Client
 			s.profileMu.Lock()
 			s.profileWorker = nil
 			s.profileMu.Unlock()
+			close(w.done)
 			done <- err
 			close(done)
 		}()
 		for {
+			if err = s.mutations.ReconcileDisconnect(ctx, driver); err != nil {
+				return
+			}
 			// Also reconcile once at startup: no request needs to be replayed
 			// to recover an accepted operation after a process crash.
 			if err = s.mutations.ReconcileProfileSwitch(ctx, driver); err != nil {
+				return
+			}
+			if err = s.mutations.ReconcileDisconnect(ctx, driver); err != nil {
 				return
 			}
 			select {

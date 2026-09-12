@@ -31,12 +31,13 @@ var errRPCNoChange = errors.New("RPC durable state unchanged")
 // Request payloads are not retained: a keyed digest prevents token disclosure
 // and offline guessing from an unkeyed enrollment-request hash.
 type ClientRPCState struct {
-	Revision        uint64                              `json:"revision"`
-	DigestKey       []byte                              `json:"digest_key"`
-	Operations      map[string]clientRPCOperationRecord `json:"operations"`
-	Profiles        map[string]clientRPCProfile         `json:"profiles,omitempty"`
-	ActiveProfileID string                              `json:"active_profile_id,omitempty"`
-	ProfileSwitch   *clientRPCProfileSwitch             `json:"profile_switch,omitempty"`
+	Revision              uint64                              `json:"revision"`
+	DigestKey             []byte                              `json:"digest_key"`
+	Operations            map[string]clientRPCOperationRecord `json:"operations"`
+	Profiles              map[string]clientRPCProfile         `json:"profiles,omitempty"`
+	ActiveProfileID       string                              `json:"active_profile_id,omitempty"`
+	ProfileSwitch         *clientRPCProfileSwitch             `json:"profile_switch,omitempty"`
+	DisconnectOperationID string                              `json:"disconnect_operation_id,omitempty"`
 }
 
 type clientRPCOperationRecord struct {
@@ -50,13 +51,14 @@ type clientRPCOperationRecord struct {
 // mutate only the supplied config: no network, device or other external effects
 // may run until acceptance commits. Runtime reconciliation executes those effects.
 type ClientRPCMutations struct {
-	mu             sync.Mutex
-	profileWorker  sync.Mutex
-	store          *ConfigStore
-	instanceID     string
-	now            func() time.Time
-	observedStatus *ipc.Status
-	subscribers    map[*rpcSubscriber]struct{}
+	mu               sync.Mutex
+	profileWorker    sync.Mutex
+	disconnectWorker sync.Mutex
+	store            *ConfigStore
+	instanceID       string
+	now              func() time.Time
+	observedStatus   *ipc.Status
+	subscribers      map[*rpcSubscriber]struct{}
 }
 
 func NewClientRPCMutations(store *ConfigStore) (*ClientRPCMutations, error) {
@@ -230,12 +232,13 @@ func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, r
 		if mutation.ExpectedInstanceId != m.instanceID || mutation.ExpectedRevision != state.Revision {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
-		if len(state.Operations) >= rpcMaxOperationRecords {
+		if len(state.Operations) >= rpcMaxOperationRecords && kind != ipc.OperationKind_OPERATION_KIND_DISCONNECT {
 			return rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 		}
 		// Check before domain preparation and ownership changes. Retries were
 		// resolved above and must remain readable even at capacity.
 		nonterminal := 0
+		ordinary := 0
 		for _, record := range state.Operations {
 			op := new(ipc.Operation)
 			if err := proto.Unmarshal(record.Operation, op); err != nil {
@@ -243,9 +246,13 @@ func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, r
 			}
 			if !rpcOperationTerminal(op.State) {
 				nonterminal++
+				if op.Kind != ipc.OperationKind_OPERATION_KIND_DISCONNECT {
+					ordinary++
+				}
 			}
 		}
-		if nonterminal >= rpcMaxNonterminalOperations {
+		// Reserve one slot without double-reserving it when Disconnect is active.
+		if nonterminal >= rpcMaxNonterminalOperations || (kind != ipc.OperationKind_OPERATION_KIND_DISCONNECT && ordinary >= rpcMaxNonterminalOperations-1) {
 			return rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 		}
 		if cfg.LocalOwnerID == "" && proto.GetExtension(method.Options(), ipc.E_AllowsInitialOwnershipClaim).(bool) {
@@ -429,6 +436,18 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 	}
 	if state := m.store.Read().RPCState; state != nil && state.ActiveProfileID != previousActive {
 		m.observedStatus = nil
+	}
+	if updated.Kind == ipc.OperationKind_OPERATION_KIND_DISCONNECT {
+		if m.observedStatus == nil {
+			m.observedStatus = &ipc.Status{}
+		}
+		m.observedStatus.ConnectionPhase = ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED
+		if updated.State == ipc.OperationState_OPERATION_STATE_RUNNING {
+			m.observedStatus.ConnectionPhase = ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTING
+		}
+		if updated.State == ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+			m.observedStatus.ConnectionPhase = ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED
+		}
 	}
 	m.publishMutationLocked(updated)
 	return updated, nil

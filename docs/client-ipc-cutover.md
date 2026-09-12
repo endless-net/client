@@ -110,7 +110,7 @@ discard stale state and reconnect in either case.
 
 The agent still needs to publish its verified map, tunnel, connection phase,
 session/credential and control-probe observations through PublishStatus. Other
-domain invalidations, capability providers, Disconnect coalescing and production
+domain invalidations, capability providers and production
 listener migration remain incomplete. Global operation bounds are covered below.
 
 ## Agent observation projection (2026-09-13)
@@ -174,14 +174,36 @@ multi-platform route cleanup.
 ## Nonterminal operation bound (2026-09-13)
 
 Durable acceptance enforces the installation-wide bound of 32 nonterminal
-operations before domain preparation or ownership changes. Retained terminal
+operations before domain preparation or ownership changes, reserving one slot
+for Disconnect (31 for other commands). Retained terminal
 records do not occupy an active slot. Idempotent replay is resolved before the
 capacity check, preserving recovery at capacity; conflicting request payloads
 still fail INVALID_ARGUMENT. Snapshot projection uses the same bound.
 
-`service_rpc_capacity_test.go` fills the journal with 32 pending operations,
+`service_rpc_capacity_test.go` fills the ordinary admission slots with 31 pending operations,
 checks rejection without preparation/revision changes, exercises replay/conflict
 at capacity and verifies a terminal transition releases a slot without deleting
 its retained outcome. These are journal-level tests, not Disconnect acceptance.
-The native Disconnect provider and serialization/coalescing path still need to
-ensure Disconnect remains available at capacity; no such capability is claimed.
+The reserved Disconnect path is exercised separately as described below.
+
+## Native Disconnect execution (2026-09-13)
+
+Disconnect persists disconnected intent and a durable operation before Down,
+retains registration, and uses the service executor's shared tunnel lock. Pending
+profile selection also receives disconnected target intent so it cannot restore
+the saved connected preference. The executor processes Disconnect before and
+after a profile handover. A Down error produces a typed failure with unknown
+continuity, never successful cleanup. Lifecycle cancellation leaves the journal
+plan resumable; request cancellation does not cancel accepted execution.
+
+The native handler serializes distinct Disconnect requests through terminal
+completion to use one reserved slot without aliasing request IDs. Ordinary
+commands have 31 active slots; Disconnect can use slot 32 and is exempt from the
+normal retained-record admission cap. Terminal retention is unchanged.
+
+`service_rpc_disconnect_test.go` covers acceptance at capacity, replay, retained
+registration, Disconnect during blocked profile apply, Down failure and lifecycle
+cancellation. The real local-transport test invokes Disconnect with the generated
+client and checks its native terminal outcome. Production wiring, provider
+timeouts/preemption, restart with real OS state and full multi-platform route
+acceptance remain required; these local checks do not establish release readiness.

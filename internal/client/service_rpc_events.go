@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
@@ -136,6 +137,20 @@ func (m *ClientRPCMutations) snapshotLocked(peer local.Peer, build *ipc.BuildIde
 	}
 	status.Metadata = metadata
 	status.CurrentOperations = nil
+	// Intent is durable command state, not a delayed provider observation.
+	if intent := cfg.ConnectionIntent; intent != nil {
+		status.Intent = &ipc.ConnectionIntent{}
+		status.UserDisconnected = intent.DesiredState == ConnectionIntentDesiredDisconnected
+		switch intent.DesiredState {
+		case ConnectionIntentDesiredConnected:
+			status.Intent.DesiredState = ipc.DesiredState_DESIRED_STATE_CONNECTED
+		case ConnectionIntentDesiredDisconnected:
+			status.Intent.DesiredState = ipc.DesiredState_DESIRED_STATE_DISCONNECTED
+		}
+		if updated, err := time.Parse(time.RFC3339Nano, intent.UpdatedAt); err == nil {
+			status.Intent.UpdatedAt = timestamppb.New(updated)
+		}
+	}
 	if access == ipc.Access_ACCESS_OBSERVER {
 		status = &ipc.Status{Metadata: metadata, ServiceState: status.ServiceState, ControlState: status.ControlState,
 			ConnectionPhase: status.ConnectionPhase, UserDisconnected: status.UserDisconnected,

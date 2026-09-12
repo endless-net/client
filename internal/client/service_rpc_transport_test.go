@@ -150,14 +150,25 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	close(allowSwitch)
+	switchCompleted := false
 	for switchEvents.Receive() {
 		op := switchEvents.Msg().GetOperationChanged()
 		if op.GetId() == selected.Msg.Operation.Id && rpcOperationTerminal(op.State) {
 			if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.GetSelection().SelectedId != selection.Profile.ProfileId {
 				t.Fatal("native worker selection failed")
 			}
-			return
+			switchCompleted = true
+			break
 		}
 	}
-	t.Fatal("native worker did not publish terminal selection", switchEvents.Err())
+	if !switchCompleted {
+		t.Fatal("native worker did not publish terminal selection", switchEvents.Err())
+	}
+	disconnected, err := client.Disconnect(ctx, connect.NewRequest(&ipc.DisconnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if disconnected.Msg.Operation.Kind != ipc.OperationKind_OPERATION_KIND_DISCONNECT || disconnected.Msg.Operation.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || m.store.Read().ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
+		t.Fatal("native Disconnect did not complete durable intent")
+	}
 }
