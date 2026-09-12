@@ -5028,3 +5028,29 @@ families execute this phase. This covers recipient recovery from a stale
 connector endpoint, not connector process restart, automatic health discovery
 or multi-connector failover. Local short tests, vet and lint pass; native
 qualification of the added phase remains pending.
+
+### 2026-09-12: sixteen inspected native reports for `92983ae`
+
+The same run now provides all twelve Linux repetitions, macOS ARM repetition 3,
+macOS Intel repetition 1, and Windows 2022 repetitions 1 and 3. Each inspected
+artifact identifies `92983ae0adf6c0746e25c56ed027b8576e932f50`.
+
+| Inspected group | Reports | PASS roots | FAIL roots | SKIP roots |
+| --- | ---: | ---: | ---: | ---: |
+| All Linux variants and repetitions | 12 | 599 | 1 | 0 |
+| macOS ARM repetition 3 and Intel repetition 1 | 2 | 100 | 0 | 0 |
+| Windows 2022 repetitions 1 and 3 | 2 | 97 | 3 | 0 |
+| Total inspected | 16 | 796 | 4 | 0 |
+
+Both inspected Windows reports fail IPv4 exit routing with TCP=false,
+UDP=false and reference forwarded=0/0 before=0/0. This localizes the failure
+before resource forwarding but does not distinguish OS route selection from
+the tunnel path. The Windows route-selection diagnostic added in `9772335` is
+not present in this source and still requires its own native execution.
+
+Windows 2022 repetition 1 also fails application-route IPv4 at its first map
+application wait: public IPC has revision 1, zero peers, WireGuard not ready
+with an error and no agent projection. This is an initialization/readiness
+failure, distinct from Ubuntu ARM's final recovery DNS timeout. Do not count
+the DNS diagnostic change as a fix for either failure. Eight native reports
+remain uninspected or pending; the full matrix is not qualified.
