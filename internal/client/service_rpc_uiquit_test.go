@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
@@ -76,4 +77,41 @@ func TestRPCUIQuitRejectsUnsupportedPatchAtomically(t *testing.T) {
 	}
 	_, err = m.notifyLifecycleAs(peer, &ipc.NotifyLifecycleRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Event: ipc.LifecycleEvent(99)})
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+}
+
+func TestRPCPreferenceChangeInvalidatesEffectiveSettings(t *testing.T) {
+	m, peer, profile := rpcConnectFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	sub, err := m.subscribe(peer, &ipc.BuildIdentity{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.unsubscribe(sub)
+	if _, err := sub.next(ctx); err != nil {
+		t.Fatal(err)
+	}
+	op, err := m.setPreferencesAs(peer, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[ipc.Domain]bool{}
+	for i := 0; i < 4; i++ {
+		event, err := sub.next(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if event.Metadata.Revision != op.Metadata.Revision {
+			t.Fatal("preference events mixed revisions")
+		}
+		if invalidation := event.GetInvalidated(); invalidation != nil {
+			if invalidation.ProfileId != profile.ProfileId {
+				t.Fatal("invalidation lost profile scope")
+			}
+			seen[invalidation.Domain] = true
+		}
+	}
+	if !seen[ipc.Domain_DOMAIN_PREFERENCES] || !seen[ipc.Domain_DOMAIN_MANAGED_SETTINGS] {
+		t.Fatal("effective setting consumers left stale")
+	}
 }

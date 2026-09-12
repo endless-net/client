@@ -322,3 +322,12 @@ transport exercises preference reads/writes/reset and NotifyLifecycle. Wiring
 graceful UI exit in client-ui, managed setting constraints, the remaining seven
 preferences, OS lifecycle adapters and production/system acceptance remain open;
 this is not complete UF-18/UF-21 acceptance.
+
+ListManagedSettings now shares the same native UI_QUIT effective projection as
+GetPreferences, including DEFAULT/USER source and snapshot revision. Set/reset
+invalidates both profile-scoped PREFERENCES and MANAGED_SETTINGS so consumers
+refetch both views. Local transport tests check matching values/revisions,
+reset-to-default source and observer denial; event tests check both invalidations
+at the committed revision. Missing providers still mean the other managed
+settings are absent, not proven unlocked or policy-free. Full device/account
+policy projection and UF-20 acceptance remain outstanding.

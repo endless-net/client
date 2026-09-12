@@ -65,6 +65,8 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if err != nil || support.Msg.Info.ProductName != "EndlessNet" || support.Msg.Info.Runtime.Version != "test" || support.Msg.Info.Runtime.Architecture != runtime.GOARCH {
 		t.Fatal("observer support metadata missing", err)
 	}
+	_, err = client.ListManagedSettings(ctx, connect.NewRequest(&ipc.ListManagedSettingsRequest{Profile: &ipc.ProfileRef{ProfileId: "not-observer-visible"}}))
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
 	events, err := client.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
 	if err != nil {
 		t.Fatal(err)
@@ -206,9 +208,17 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 			if err != nil || preferences.Msg.Preferences.Lifecycle.UiQuit.Requested == nil || preferences.Msg.Preferences.Lifecycle.UiQuit.Control.Source != ipc.SettingSource_SETTING_SOURCE_USER {
 				t.Fatal("native user preference projection", err)
 			}
+			managed, err := client.ListManagedSettings(ctx, connect.NewRequest(&ipc.ListManagedSettingsRequest{Profile: selection.Profile}))
+			if err != nil || len(managed.Msg.Settings) != 1 || managed.Msg.Settings[0].Key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT || managed.Msg.Settings[0].GetLifecycleValue() != preferences.Msg.Preferences.Lifecycle.UiQuit.Effective || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_USER || managed.Msg.Metadata.Revision != preferences.Msg.Preferences.Metadata.Revision {
+				t.Fatal("managed projection disagrees with native preferences", err)
+			}
 			_, err = client.ResetPreferences(ctx, connect.NewRequest(&ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT}}))
 			if err != nil {
 				t.Fatal(err)
+			}
+			managed, err = client.ListManagedSettings(ctx, connect.NewRequest(&ipc.ListManagedSettingsRequest{Profile: selection.Profile}))
+			if err != nil || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_DEFAULT {
+				t.Fatal("reset retained managed user source", err)
 			}
 			quit, err := client.NotifyLifecycle(ctx, connect.NewRequest(&ipc.NotifyLifecycleRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Event: ipc.LifecycleEvent_LIFECYCLE_EVENT_UI_QUIT}))
 			if err != nil || quit.Msg.Operation.Kind != ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE || quit.Msg.Operation.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {

@@ -7,6 +7,7 @@ import (
 	"github.com/endless-net/client/clientipc/local"
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -130,6 +131,17 @@ func (s *ClientRPCService) SetPreferences(ctx context.Context, request *connect.
 		return nil, err
 	}
 	return connect.NewResponse(&ipc.SetPreferencesResponse{Operation: op}), nil
+}
+
+func (s *ClientRPCService) ListManagedSettings(ctx context.Context, request *connect.Request[ipc.ListManagedSettingsRequest]) (*connect.Response[ipc.ListManagedSettingsResponse], error) {
+	// Reuse the native effective projection, not an independently maintained
+	// policy/default table. Unsupported settings have no fabricated value.
+	preferences, err := s.GetPreferences(ctx, connect.NewRequest(&ipc.GetPreferencesRequest{Profile: request.Msg.Profile}))
+	if err != nil {
+		return nil, err
+	}
+	value := preferences.Msg.Preferences.Lifecycle.UiQuit
+	return connect.NewResponse(&ipc.ListManagedSettingsResponse{Metadata: preferences.Msg.Preferences.Metadata, Settings: []*ipc.ManagedSetting{{Key: ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT, Control: proto.Clone(value.Control).(*ipc.SettingControl), EffectiveValue: &ipc.ManagedSetting_LifecycleValue{LifecycleValue: value.Effective}}}}), nil
 }
 
 func (s *ClientRPCService) ResetPreferences(ctx context.Context, request *connect.Request[ipc.ResetPreferencesRequest]) (*connect.Response[ipc.ResetPreferencesResponse], error) {
