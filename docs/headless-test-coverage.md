@@ -3062,6 +3062,12 @@ correction/completion additions. None of those changes is validated by this run.
 
 ## Next work
 
+Cached-bootstrap component checks additionally reject missing cached maps,
+mismatched device fingerprints and an enrollment in the recovering phase. Like
+the existing invalid-signature, age-limit and missing-credential cases, each must
+fail without control requests. These are validation-boundary tests using private
+component fixtures, not substitutes for the public-contract/OS integration suite.
+
 The installed-service cached-startup scenario now has an explicit disconnected
 counterpart: after disconnected repair, stop the service, make control unavailable
 and start through the OS manager. Public IPC must retain disconnected intent and

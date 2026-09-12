@@ -12,7 +12,7 @@ import (
 // Component coverage of cache selection and validation. Native OS tests prove
 // actual WireGuard configuration and traffic without a control endpoint.
 func TestAgentCachedBootstrapWithoutControl(t *testing.T) {
-	for _, scenario := range []string{"valid", "modified-map", "expired-cache", "missing-credential"} {
+	for _, scenario := range []string{"valid", "modified-map", "expired-cache", "missing-credential", "missing-map", "different-device", "recovering"} {
 		t.Run(scenario, func(t *testing.T) {
 			setInstallationStateDirForTest(t, t.TempDir())
 			s := testcontrol.New(t)
@@ -38,6 +38,12 @@ func TestAgentCachedBootstrapWithoutControl(t *testing.T) {
 				cfg.CachedMapSavedAt = &expired
 			case "missing-credential":
 				cfg.NodeCredential = ""
+			case "missing-map":
+				cfg.CachedMap = nil
+			case "different-device":
+				cfg.DeviceFingerprint = "different-device"
+			case "recovering":
+				cfg.EnrollmentRecovery = &client.EnrollmentRecovery{Phase: client.RecoveryPhaseRecovering}
 			}
 			if err := client.SaveConfig(path, cfg); err != nil {
 				t.Fatal("fixture configuration update failed")
