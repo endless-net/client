@@ -31,13 +31,25 @@ func platformWireGuardEngineFirewallMark(_ []netip.Prefix, _ string) uint32 { re
 func (r *windowsWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
 	script := windowsUserspaceRouterScript(cfg, false)
 	if r.configured {
-		withoutRouteChange := cfg
-		withoutRouteChange.Routes = r.current.Routes
-		if wireGuardEnginePlatformRouterConfigsEqual(withoutRouteChange, r.current) {
-			if slices.Equal(cfg.Routes, r.current.Routes) {
+		withoutSettingsChange := cfg
+		withoutSettingsChange.Routes = r.current.Routes
+		withoutSettingsChange.DNS = r.current.DNS
+		withoutSettingsChange.DNSDomains = r.current.DNSDomains
+		withoutSettingsChange.SearchDomains = r.current.SearchDomains
+		withoutSettingsChange.DNSOverride = r.current.DNSOverride
+		withoutSettingsChange.DNSConfigPresent = r.current.DNSConfigPresent
+		if wireGuardEnginePlatformRouterConfigsEqual(withoutSettingsChange, r.current) {
+			dnsChanged := !windowsRouterDNSSettingsEqual(cfg, r.current)
+			if slices.Equal(cfg.Routes, r.current.Routes) && !dnsChanged {
 				return nil
 			}
 			script = windowsUserspaceRouteUpdateScript(r.current, cfg)
+			if dnsChanged {
+				var dns strings.Builder
+				appendWindowsRouterDNSCleanup(&dns)
+				appendWindowsRouterDNSSettings(&dns, cfg)
+				script += dns.String()
+			}
 		}
 	}
 	r.configured = true
@@ -98,7 +110,7 @@ func windowsUserspaceRouterScript(cfg wireGuardEngineRouterConfig, down bool) st
 	fmt.Fprintf(&b, "$ifName=%s;", iface)
 	b.WriteString("Get-NetRoute -InterfaceAlias $ifName -PolicyStore ActiveStore -ErrorAction SilentlyContinue | Where-Object {$_.Protocol -eq 'NetMgmt'} | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue;")
 	b.WriteString("Get-NetIPAddress -InterfaceAlias $ifName -PolicyStore ActiveStore -ErrorAction SilentlyContinue | Where-Object {$_.PrefixOrigin -eq 'Manual'} | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue;")
-	b.WriteString("Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like ('EndlessNet-'+$ifName+'-*')} | Remove-DnsClientNrptRule -Force -ErrorAction SilentlyContinue;")
+	appendWindowsRouterDNSCleanup(&b)
 	if down {
 		b.WriteString("Set-DnsClientServerAddress -InterfaceAlias $ifName -ResetServerAddresses -ErrorAction SilentlyContinue;")
 		b.WriteString("Set-DnsClient -InterfaceAlias $ifName -ConnectionSpecificSuffix '' -ErrorAction SilentlyContinue;")
@@ -115,24 +127,39 @@ func windowsUserspaceRouterScript(cfg wireGuardEngineRouterConfig, down bool) st
 		}
 		fmt.Fprintf(&b, "New-NetRoute -DestinationPrefix %s -InterfaceAlias $ifName -NextHop %s -RouteMetric 5 -PolicyStore ActiveStore | Out-Null;", quotePowerShellSingle(route.String()), quotePowerShellSingle(nextHop))
 	}
+	appendWindowsRouterDNSSettings(&b, cfg)
+	return b.String()
+}
+
+func windowsRouterDNSSettingsEqual(a, b wireGuardEngineRouterConfig) bool {
+	return slices.Equal(a.DNS, b.DNS) && slices.Equal(a.DNSDomains, b.DNSDomains) &&
+		slices.Equal(a.SearchDomains, b.SearchDomains) && a.DNSOverride == b.DNSOverride &&
+		a.DNSConfigPresent == b.DNSConfigPresent
+}
+
+func appendWindowsRouterDNSCleanup(b *strings.Builder) {
+	b.WriteString("Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like ('EndlessNet-'+$ifName+'-*')} | Remove-DnsClientNrptRule -Force -ErrorAction SilentlyContinue;")
+}
+
+// Updating resolver policy must not remove interface addresses or retained routes.
+func appendWindowsRouterDNSSettings(b *strings.Builder, cfg wireGuardEngineRouterConfig) {
 	if len(cfg.DNS) > 0 && (cfg.DNSOverride || !cfg.DNSConfigPresent) {
 		values := make([]string, 0, len(cfg.DNS))
 		for _, server := range cfg.DNS {
 			values = append(values, quotePowerShellSingle(server.String()))
 		}
-		fmt.Fprintf(&b, "Set-DnsClientServerAddress -InterfaceAlias $ifName -ServerAddresses @(%s);", strings.Join(values, ","))
+		fmt.Fprintf(b, "Set-DnsClientServerAddress -InterfaceAlias $ifName -ServerAddresses @(%s);", strings.Join(values, ","))
 	} else {
 		b.WriteString("Set-DnsClientServerAddress -InterfaceAlias $ifName -ResetServerAddresses -ErrorAction SilentlyContinue;")
 	}
 	if cfg.DNSConfigPresent && !cfg.DNSOverride && len(cfg.DNS) > 0 {
 		for index, domain := range cfg.DNSDomains {
-			fmt.Fprintf(&b, "Add-DnsClientNrptRule -Namespace %s -NameServers %s -DisplayName ('EndlessNet-'+$ifName+'-%d') | Out-Null;", quotePowerShellSingle("."+strings.TrimSuffix(domain, ".")), quotePowerShellSingle(cfg.DNS[0].String()), index)
+			fmt.Fprintf(b, "Add-DnsClientNrptRule -Namespace %s -NameServers %s -DisplayName ('EndlessNet-'+$ifName+'-%d') | Out-Null;", quotePowerShellSingle("."+strings.TrimSuffix(domain, ".")), quotePowerShellSingle(cfg.DNS[0].String()), index)
 		}
 	}
 	if len(cfg.SearchDomains) > 0 {
-		fmt.Fprintf(&b, "Set-DnsClient -InterfaceAlias $ifName -ConnectionSpecificSuffix %s;", quotePowerShellSingle(strings.TrimSuffix(cfg.SearchDomains[0], ".")))
+		fmt.Fprintf(b, "Set-DnsClient -InterfaceAlias $ifName -ConnectionSpecificSuffix %s;", quotePowerShellSingle(strings.TrimSuffix(cfg.SearchDomains[0], ".")))
 	} else {
 		b.WriteString("Set-DnsClient -InterfaceAlias $ifName -ConnectionSpecificSuffix '' -ErrorAction SilentlyContinue;")
 	}
-	return b.String()
 }

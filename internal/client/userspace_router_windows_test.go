@@ -77,6 +77,43 @@ func TestWindowsRouteUpdatesPreserveAddressesAndRetainedRoutes(t *testing.T) {
 	}
 }
 
+func TestWindowsDNSSettingsUpdatePreservesInterfaceAddresses(t *testing.T) {
+	original := wireGuardEngineRouterConfig{Interface: "EndlessNet", MTU: 1280,
+		Addresses: []netip.Prefix{netip.MustParsePrefix("198.18.94.1/32")},
+		Routes:    []netip.Prefix{netip.MustParsePrefix("198.18.94.20/32")}}
+	next := cloneWireGuardEngineRouterConfig(original)
+	next.DNS = []netip.Addr{netip.MustParseAddr("127.0.0.1")}
+	next.DNSDomains = []string{"app.example"}
+	next.SearchDomains = []string{"app.example"}
+	next.DNSConfigPresent = true
+	next.Routes = append(next.Routes, netip.MustParsePrefix("198.18.94.21/32"))
+	var scripts []string
+	r := &windowsWireGuardEngineRouter{interfaceName: original.Interface, configured: true, current: original,
+		runner: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			scripts = append(scripts, args[len(args)-1])
+			return nil, nil
+		}}
+	for _, cfg := range []wireGuardEngineRouterConfig{next, original} {
+		if err := r.Configure(t.Context(), cfg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, script := range scripts {
+		for _, forbidden := range []string{"Remove-NetIPAddress", "New-NetIPAddress", "Set-NetIPInterface", "New-NetRoute -DestinationPrefix '198.18.94.20/32'"} {
+			if strings.Contains(script, forbidden) {
+				t.Fatal("DNS settings update recreated retained network configuration")
+			}
+		}
+	}
+	if len(scripts) != 2 || !strings.Contains(scripts[0], "Add-DnsClientNrptRule -Namespace '.app.example'") ||
+		!strings.Contains(scripts[0], "New-NetRoute -DestinationPrefix '198.18.94.21/32'") ||
+		!strings.Contains(scripts[1], "Remove-NetRoute -DestinationPrefix '198.18.94.21/32'") ||
+		!strings.Contains(scripts[1], "Remove-DnsClientNrptRule") || !strings.Contains(scripts[1], "-ResetServerAddresses") ||
+		!strings.Contains(scripts[1], "ConnectionSpecificSuffix ''") || !wireGuardEngineRouterConfigsEqual(r.current, original) {
+		t.Fatal("DNS and route settings were not applied and withdrawn independently")
+	}
+}
+
 func TestWindowsDNSProjectionUpdateDoesNotRecreateInterface(t *testing.T) {
 	original := wireGuardEngineRouterConfig{
 		Interface: "EndlessNet", MTU: 1280,

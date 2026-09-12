@@ -143,6 +143,25 @@ product scope are different conditions; neither is a successful skip.
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
+## Windows resolver-setting updates — 2026-09-12
+
+[Windows 2022 repeat 2 at `2e04b0a`](https://github.com/endless-net/client/actions/runs/34713022475/job/103607014675)
+has 52 passing roots, one failing application-route root and no missing or
+skipped roots. DNS map diagnostics pass. During the first application map's
+IPv4 apply, public logs show the initial route configuration completed, then a
+second `routes begin` remained active at the 15-second deadline. The signed
+map is revision 2 while the agent still reports revision 1; the process is alive.
+
+Source inspection found Windows DNS-setting changes unnecessarily ran the full
+interface teardown/recreation script even when addresses and MTU were unchanged.
+The router now applies route deltas and resolver/NRPT settings independently for
+that case. A component regression requires adding and withdrawing scoped DNS
+and a new route while preserving existing addresses, MTU and retained routes.
+Failure still clears the configured marker and uses the existing full recovery
+path. This removes unnecessary OS operations; it does not establish the exact
+slow command in the observed CI failure. Native timing qualification is pending,
+and individual readiness deadlines remain unchanged.
+
 ## Same-client registration recovery increment — 2026-09-12
 
 Both join-token retirement roots now retry the replacement token using the
