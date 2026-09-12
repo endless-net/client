@@ -2638,6 +2638,41 @@ This source predates IPv6 DNS upstream/listener combinations, truncated UDP to
 TCP retry and nobody-account Unix permissions tests. Those remain pending their
 own source matrix. Full HC-001–HC-065 coverage is still incomplete.
 
+## Unix IPC permissions qualified; native UDP mismatch under investigation
+
+Source `c36c0db57b4d814053ac261f466c36e2bfcbe73b` in run
+[34665159849](https://github.com/endless-net/client/actions/runs/34665159849)
+passed all six Linux/macOS installation reports. Each contains PASS for the root
+and all four installation subcases, without failure or skip. The enrolled-reinstall
+subcase executes the nobody-account checks in both connection states.
+
+| Runner | Installation report |
+| --- | --- |
+| macos-15-intel | [103476274292](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274292) |
+| macos-15 | [103476274381](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274381) |
+| ubuntu-22.04-arm | [103476274207](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274207) |
+| ubuntu-22.04 | [103476274277](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274277) |
+| ubuntu-24.04-arm | [103476274185](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274185) |
+| ubuntu-24.04 | [103476274265](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274265) |
+
+The CLI executes with a verified non-root UID, then status/connect/disconnect
+and confirmed local-forget fail with Unix IPC permission denial. Privileged
+status and real TCP probes verify retained identity and connected/disconnected
+behavior afterward. This qualifies protected Unix transport denial, not
+observer/owner/admin roles after IPC access. Windows restricted-token tests
+were added after this source and have no evidence in this run.
+
+The [Windows 2025 third repetition](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274315)
+failed only `TestControlPlaneNativeUDPTraffic`: after reconnecting with retained
+identity, a fresh application probe reported `application response mismatch`.
+Its other 32 roots and all eight DNS leaf variants passed. The mismatch is a
+received UDP payload that did not match a known outstanding probe nonce;
+packet corruption versus delayed unrelated traffic is not established. This
+failure is not classified as permitted traffic, denied traffic or an expected
+skip. No speculative runtime fix or relaxed probe assertion is justified by
+this log alone. The remaining matrix was still running when this evidence was
+recorded; this source has no successful publication qualification.
+
 ## Next work
 
 Windows HC-004/053 installation now checks administrator-only local-forget using
