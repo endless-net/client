@@ -5,12 +5,14 @@ on:
     paths:
       - "proto/**"
       - "buf.yaml"
+      - "contracts/proto-baseline/**"
       - ".github/workflows/protobuf-contract.yml"
   push:
     branches: [main]
     paths:
       - "proto/**"
       - "buf.yaml"
+      - "contracts/proto-baseline/**"
       - ".github/workflows/protobuf-contract.yml"
   workflow_dispatch:
 
@@ -34,8 +36,29 @@ jobs:
         run: buf lint
       - name: Compile descriptor
         run: buf build -o client-ipc-v0.binpb
+      - name: Check accepted contract baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s contracts/proto-baseline/client.binpb
+          buf breaking proto --against contracts/proto-baseline/client.binpb
+      - name: Verify RPC deletion is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$(mktemp -d)"
+          cp -R proto "$fixture/proto"
+          cp buf.yaml "$fixture/buf.yaml"
+          sed -i '/  rpc GetStatus(/,+2d' "$fixture/proto/client/v0/service.proto"
+          buf build "$fixture"
+          if buf breaking "$fixture" --against contracts/proto-baseline/client.binpb --error-format=json > "$fixture/breaking.json" 2>&1; then
+            echo "::error::Breaking check accepted deletion of GetStatus"
+            exit 1
+          fi
+          cat "$fixture/breaking.json"
+          grep -q 'RPC_NO_DELETE' "$fixture/breaking.json"
       - uses: actions/upload-artifact@v7
         with:
-          name: client-ipc-v0-draft-descriptor
+          name: client-ipc-v0-descriptor
           path: client-ipc-v0.binpb
           if-no-files-found: error

@@ -1,6 +1,6 @@
 # Client Protobuf IPC v0
 
-- Status: **draft**, 2026-09-12.
+- Status: **accepted**, 2026-09-12.
 - Owner: `client`.
 - Contract version: **v0**, explicitly selected by the user.
 - Canonical source: [service.proto](../proto/client/v0/service.proto),
@@ -11,8 +11,8 @@
 - Input: [Client UI business analysis, main](https://github.com/endless-net/architecture/blob/main/docs/ru/client-ui-business-analysis.md),
   read on 2026-09-12.
 
-This is a complete proposed RPC surface for the analyzed functions, not an
-implementation or release acceptance claim. Existing HTTP IPC is still defined
+This is the accepted RPC specification for the analyzed functions. Contract
+acceptance is separate from implementation and release acceptance. Existing HTTP IPC is still defined
 by [the active OpenAPI v2 contract](client-ipc-v2.openapi.yaml). Protobuf v0 is a
 new protocol identity, not a lower compatible revision of that HTTP protocol.
 No fallback or simultaneous production protocol support is specified.
@@ -27,7 +27,8 @@ The runtime, CLI, privileged helper and UI have not been migrated.
 | `proto/client/v0/features.proto` | Exit nodes, preferences, resources, policy, lifecycle, update/support projections |
 | `proto/client/v0/service.proto` | RPCs, requests/responses, access annotations, event stream |
 | `buf.yaml` | Schema lint/build configuration |
-| `.github/workflows/protobuf-contract.yml` | CI formatting, lint and descriptor compilation |
+| `contracts/proto-baseline/client.binpb` | Accepted v0 descriptor used for breaking-change detection |
+| `.github/workflows/protobuf-contract.yml` | CI formatting, lint, descriptor compilation and mandatory breaking check |
 
 The Go package option reserves `github.com/endless-net/client/clientipc/v0` for
 future generated bindings. No generated module or SDK is claimed to exist.
@@ -35,18 +36,27 @@ Dart bindings must consume this same schema from a pinned immutable source.
 Control-plane DTOs remain owned by their existing producer modules; these
 messages are local UI projections and do not duplicate signed wire formats.
 
-There is no accepted Protobuf baseline yet. The CI descriptor is explicitly a
-draft artifact, not a release or baseline. `breaking: FILE` configures the future
-comparison policy; a breaking comparison must be enabled against an accepted
-descriptor before production adoption. New versions need separate explicit
-authorization. Buf configuration format `v2` is unrelated to IPC version v0.
+The accepted baseline is `contracts/proto-baseline/client.binpb`.
+CI always runs `buf breaking proto --against contracts/proto-baseline/client.binpb`
+using `breaking: FILE`. A missing or invalid baseline fails the job; comparison
+is never skipped. A negative CI fixture removes GetStatus and verifies that the
+gate rejects RPC deletion after the modified schema successfully compiles.
+
+Ordinary schema changes must not regenerate the baseline merely to make CI pass.
+An intentional hard cutover requires an explicit decision and a reviewed baseline
+update. No legacy behavior or fallback is required by this check. New versions
+need separate explicit authorization. Buf configuration format `v2` is unrelated
+to IPC version v0. CI descriptors are build evidence, not release acceptance.
+Buf's PACKAGE_VERSION_SUFFIX lint rule requires a nonzero major version, so it
+is excluded for the explicitly selected v0 package. All other STANDARD lint
+rules and FILE breaking rules remain enabled.
 
 ## Transport and identity
 
 The schema is independent of the transport binding. Desktop binding must preserve
 authenticated local peer identity over Windows named pipes and Linux/macOS Unix
 sockets. Choose and demonstrate a concrete RPC stack (gRPC or Connect) with Go
-and Dart before implementing the cutover. This draft does not create a TCP
+and Dart before implementing the cutover. This contract does not create a TCP
 listener or claim that a particular Dart library supports named pipes.
 
 Android and iOS use the same messages through a separately validated native
@@ -283,7 +293,8 @@ prove installer success or rollback; that requires the distribution contract.
 
 ## Business-function coverage
 
-All rows are **designed**, not implemented or accepted for release.
+All rows are covered by the **accepted specification**, not implemented or
+accepted for release.
 
 | Function | Proposed coverage / owning boundary |
 | --- | --- |

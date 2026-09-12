@@ -1,4 +1,4 @@
-// Draft producer-owned IPC contract. Not served by the current runtime.
+// Accepted producer-owned IPC v0 contract. Not yet served by the runtime.
 // See docs/client-ipc-protobuf.md for normative semantics and adoption gates.
 syntax = "proto3";
 
@@ -97,7 +97,7 @@ message RuntimeInfo {
   string instance_id = 2;
   repeated CapabilityStatus capabilities = 3;
   Access caller_access = 4;
-  // Exact draft contract revision/hash. Version number alone cannot pair artifacts.
+  // Exact contract revision/hash. Version number alone cannot pair artifacts.
   string contract_sha256 = 5;
   string protocol = 6; // Must be endlessnet-client-ipc.
   uint32 ipc_version = 7; // Must be 0, as explicitly selected for this new contract.

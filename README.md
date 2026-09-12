@@ -34,11 +34,11 @@ The versioned local service and ownership-recovery contracts are documented in
 [`docs/client-ipc-v2.openapi.yaml`](docs/client-ipc-v2.openapi.yaml) and
 [`docs/client-ownership-recovery.md`](docs/client-ownership-recovery.md).
 
-The proposed Protobuf replacement is **draft**, version **v0**:
+The accepted Protobuf contract is version **v0**:
 [`proto/client/v0/service.proto`](proto/client/v0/service.proto).
 Its [contract guide and UF-01–UF-23 coverage](docs/client-ipc-protobuf.md)
 define commands, events, ownership, platform applicability and adoption gates.
-The draft is not served by the runtime and is not a released IPC artifact.
+The contract is not yet served by the runtime or published as a released IPC artifact.
 
 The repository owns the client binary, Linux service assets, APT package,
 immutable Windows core manifest and the producer side of the versioned local IPC

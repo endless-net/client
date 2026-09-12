@@ -4,6 +4,9 @@ modules:
 lint:
   use:
     - STANDARD
+  except:
+    # The explicitly accepted client.v0 package is rejected by this v1+ rule.
+    - PACKAGE_VERSION_SUFFIX
 breaking:
   use:
     - FILE

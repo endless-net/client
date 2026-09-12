@@ -1,4 +1,4 @@
-// Draft producer-owned local RPC surface. Authorization annotations are normative.
+// Accepted producer-owned local RPC surface. Authorization annotations are normative.
 syntax = "proto3";
 
 package client.v0;

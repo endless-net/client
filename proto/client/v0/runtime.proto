@@ -1,4 +1,4 @@
-// Draft: common desktop/mobile runtime state. No platform parity is implied.
+// Common desktop/mobile runtime state. No platform parity is implied.
 syntax = "proto3";
 
 package client.v0;

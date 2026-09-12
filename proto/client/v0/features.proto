@@ -1,4 +1,4 @@
-// Draft extensions for UF-08 and UF-16..UF-23.
+// Contract extensions for UF-08 and UF-16..UF-23.
 syntax = "proto3";
 
 package client.v0;
