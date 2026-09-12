@@ -2948,6 +2948,52 @@ control-outage traffic, strict probe-denial oracle and DNS response-binding work
 | ubuntu-24.04, repeat 1 | [103487108959](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108959) | 37 PASS |
 | ubuntu-24.04, repeat 3 | [103487108890](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108890) | 36 PASS, 1 FAIL |
 
+## Partial 39-scenario matrix: Relay session recovery on Linux
+
+Run `34670764847`, source `985763edf13e74fc479abb293b26420cc653e6f3`,
+was still running at this snapshot on 2026-09-12. Eleven completed contract jobs
+reported the same 39 root scenarios: **409 PASS, 20 FAIL, 0 SKIP**.
+Thirteen contract jobs remained unfinished; this is not a final matrix result.
+
+| Platform / repetition | Job | Root outcomes |
+| --- | --- | --- |
+| macos-15-intel, repeat 3 | [103491773697](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773697) | 39 PASS |
+| ubuntu-24.04-arm, repeat 3 | [103491773761](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773761) | 37 PASS, 2 FAIL |
+| ubuntu-22.04-arm, repeat 3 | [103491773787](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773787) | 37 PASS, 2 FAIL |
+| ubuntu-22.04, repeat 3 | [103491773808](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773808) | 37 PASS, 2 FAIL |
+| ubuntu-24.04, repeat 3 | [103491773818](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773818) | 37 PASS, 2 FAIL |
+| ubuntu-24.04, repeat 1 | [103491773822](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773822) | 37 PASS, 2 FAIL |
+| ubuntu-24.04-arm, repeat 1 | [103491773837](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773837) | 37 PASS, 2 FAIL |
+| ubuntu-24.04, repeat 2 | [103491773854](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773854) | 37 PASS, 2 FAIL |
+| ubuntu-22.04, repeat 2 | [103491773875](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773875) | 37 PASS, 2 FAIL |
+| ubuntu-22.04, repeat 1 | [103491773880](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773880) | 37 PASS, 2 FAIL |
+| ubuntu-24.04-arm, repeat 2 | [103491774023](https://github.com/endless-net/client/actions/runs/34670764847/job/103491774023) | 37 PASS, 2 FAIL |
+
+All ten completed Linux jobs failed both `NativeRelayTraffic` and
+`NativeRelayFailover`, with IPv4 and IPv6 children failing. No other root or
+child failed or skipped in these eleven reports. macOS Intel repeat 3 passed
+all 39 roots, including the six DNS upstream response-binding variants and
+route-advertisement input recovery. This single macOS result does not qualify
+those additions across the matrix.
+
+In [Ubuntu 24.04 repeat 1](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773822),
+all four Relay failures occur at `control_plane_relay_test.go:185`: after the
+only remaining Relay path is restored, fresh TCP/UDP probes succeed, but the
+existing TCP session reports `blocked` when `ok` is required. Failure times
+are 03:52:47, 03:52:53, 03:53:01 and 03:53:08 UTC. The failing session exchange
+has a one-second socket deadline; the parent permits three seconds for its
+response. The same socket is retained throughout the outage. UDP session
+recovery after this point is not reached in those children.
+
+The observation establishes a failure of the current immediate retained-session
+assertion, not permanent loss of the TCP connection. TCP retransmission timing,
+Client transport state and the reference peer remain competing explanations.
+No retransmission trace or longer retained-session observation was collected,
+so the cause is unresolved. Do not infer that fresh-connection recovery proves
+existing-session recovery, or relax the assertion without establishing the
+intended recovery bound and collecting evidence. These native failures are
+separate from the Windows component queue access-denied failure below.
+
 ## Next work
 
 HC-006/HC-030 installed-service coverage now stops an enrolled service, makes
