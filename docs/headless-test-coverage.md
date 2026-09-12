@@ -5235,3 +5235,36 @@ in progress from an engine not running; other error text is withheld. A short
 regression ensures an arbitrary suffix on a known message is also withheld.
 No readiness condition or deadline changes. Local short tests, vet and lint
 pass; the additional native diagnostic evidence is pending.
+
+### 2026-09-12: completed cce41e6 native matrix
+
+[Run 34704108878](https://github.com/endless-net/client/actions/runs/34704108878)
+completed with failure at source `cce41e6a3b91fd322f7bb9a91125a1dd3bc251c0`.
+All 24 reports are available, with the same 50-root compiled inventory and
+matching source identity. Results total **1196 PASS, 4 FAIL, 0 SKIP**:
+
+| Native runner | Three-repeat root PASS / FAIL |
+| --- | --- |
+| Ubuntu 22.04 amd64 | 150 / 0 |
+| Ubuntu 24.04 amd64 | 150 / 0 |
+| Ubuntu 22.04 ARM64 | 150 / 0 |
+| Ubuntu 24.04 ARM64 | 150 / 0 |
+| Windows 2022 | 146 / 4 |
+| Windows 2025 | 150 / 0 |
+| macOS 15 ARM64 | 150 / 0 |
+| macOS 15 Intel | 150 / 0 |
+
+Windows 2022 IPv4 exit routing fails in all three repeats; initial IPv4
+application-map readiness also fails in repeat 1, as detailed above. All other
+roots pass in all 24 reports, including live sharing-rights replacement and the
+expanded flow-consent observation. Application endpoint recovery is successful
+in the other 23 reports; it is not qualified across every repeat. Previous
+Ubuntu application DNS recovery and macOS flow failures do not recur in this
+run, which alone does not prove their root causes have been resolved.
+
+All eight installation jobs and the initial container lifecycle job pass.
+The aggregate verifier reports all three failed Windows shards and rejects the
+run. The later MTU and cached-map-expiry roots, expanded container transports,
+Windows `/1` fix and inspection-state diagnostics are absent from this source
+and remain pending on a subsequent run. These root counts do not represent a
+percentage of complete HC-001–HC-065 coverage or release acceptance.
