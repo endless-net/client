@@ -2735,6 +2735,42 @@ contract matrix is incomplete; these installation results do not qualify the
 whole source or resolve the previous Windows UDP mismatch and disconnect timeout.
 The later post-failure public status observation is not part of this source.
 
+## Complete matrix with restricted Windows tokens — 2026-09-12
+
+[Run 34666246762](https://github.com/endless-net/client/actions/runs/34666246762)
+completed with failure for source `08d5186596527f6ce8a0f0064b75431a07126f69`.
+All 24 contract reports contain the same 33 root scenarios, exactly once each:
+**790 PASS, 2 FAIL, 0 SKIP**.
+
+| Platform | Repetition 1 | Repetition 2 | Repetition 3 |
+| --- | --- | --- | --- |
+| macos-15 | [103478854546](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854546) | [103478854627](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854627) | [103478854679](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854679) |
+| macos-15-intel | [103478854621](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854621) | [103478854554](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854554) | [103478854543](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854543) |
+| ubuntu-22.04 | [103478854563](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854563) | [103478854500](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854500) | [103478854590](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854590) |
+| ubuntu-22.04-arm | [103478854556](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854556) | [103478854613](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854613) | [103478854609](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854609) |
+| ubuntu-24.04 | [103478854611](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854611) | [103478854447](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854447) | [103478854596](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854596) |
+| ubuntu-24.04-arm | [103478854603](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854603) | [103478854549](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854549) | [103478854568](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854568) |
+| windows-2022 | [103478854527](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854527) | [103478854599](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854599) | [103478854571](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854571) |
+| windows-2025 | [103478854598](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854598) | [103478854612](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854612) | [103478854644](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854644) |
+
+Windows 2022 repetition 1 failed `TestControlPlaneIPCEvents` before the first
+SDK subscription's hello; the underlying Stream error was not retained by that
+source. Windows 2025 repetition 1 failed `TestControlPlaneDNSWireRecovery`:
+the udp4/::1/truncated-udp and udp6/::1/truncated-udp variants could not bind the
+TCP fixture on the UDP-selected port. The DNS leaf totals are 190 PASS and 2 FAIL.
+Both setup failures remain failed evidence, not Client DNS success or skips.
+
+All eight installation jobs, three OS verification jobs and the separate
+control-plane job passed. The [aggregate gate](https://github.com/endless-net/client/actions/runs/34666246762/job/103481499793)
+failed; this source is not qualified for publication. The optional external STUN
+job was skipped and supplies no evidence.
+
+The earlier native UDP mismatch and disconnect timeout did not recur in these
+24 reports. Their absence does not establish a cause or a fix. This source
+predates the TLS-lifetime variants, TCP-first DNS port allocation, IPC termination
+categories, eight simultaneous subscriptions, OS-thread pinning and post-failure
+public status observation. Those increments require their own exact-source CI.
+
 ## Next work
 
 Windows IPC peer inspection now locks the goroutine to one OS thread for
