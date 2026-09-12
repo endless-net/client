@@ -3151,6 +3151,41 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+### Completed matrix at 28cf961: one IPv6 UDP failure remains
+
+Run [34676671634](https://github.com/endless-net/client/actions/runs/34676671634)
+completed on 2026-09-12 at exact source
+`28cf961b8b796aa1dbe0b1ff8b9464c9f981defd`. All 24 reports contain identical
+inventories of 39 root tests: **935 PASS, 1 FAIL, 0 SKIP** across 936 executions.
+
+| Runner | Three repetitions: PASS / FAIL / SKIP |
+| --- | --- |
+| ubuntu-22.04 | 116 / 1 / 0 |
+| ubuntu-24.04 | 117 / 0 / 0 |
+| ubuntu-22.04-arm | 117 / 0 / 0 |
+| ubuntu-24.04-arm | 117 / 0 / 0 |
+| windows-2022 | 117 / 0 / 0 |
+| windows-2025 | 117 / 0 / 0 |
+| macos-15-intel | 117 / 0 / 0 |
+| macos-15 | 117 / 0 / 0 |
+
+The final [macOS Intel repeat 3 report](https://github.com/endless-net/client/actions/runs/34676671634/job/103509328691)
+passes all 39 roots. Previous Windows TCP and macOS underlay/retained-port failures
+do not recur here; this does not establish their cause or resolution. All 96 Relay
+family leaves pass. Flow family/protocol leaves contain 95 PASS and the single
+Ubuntu 22.04 repeat 3 IPv6 UDP failure detailed below.
+
+All eight installation jobs pass, with 40 PASS parent/child records (one root and
+four children per runner, not 40 independent scenarios). All three platform Verify
+jobs and the separate Client control-plane job pass. Optional external STUN is
+skipped. The aggregate [verify gate](https://github.com/endless-net/client/actions/runs/34676671634/job/103513660996)
+fails; this source is not qualified for publication. The later enrolled TLS
+lifetime recovery, DNS rename/address replacement, stricter untrusted-CA rejection
+and rejected-packet observations are absent from this source and await native CI.
+Follow-up remains in `endless-net/client` on `main`: diagnose the UDP failure,
+validate those additions, and cover the remaining HC/BR/AC platform variants.
+This matrix does not establish completion of any full HC row.
+
 ### IPv6 UDP consent failure with inspection present at 28cf961
 
 [Ubuntu 22.04 repeat 3](https://github.com/endless-net/client/actions/runs/34676671634/job/103509328557)
@@ -3180,7 +3215,7 @@ Truncated IPv4/IPv6 headers have a bounded parsing component test. Native
 validation of these observations remains pending; echo acceptance is unchanged.
 Client-owned follow-up is to correlate rejected packet shapes with failed
 exchanges without exposing payloads or reading Client state, then revalidate.
-The report does not qualify the full source; other repetitions are still running.
+The completed matrix above does not qualify this source because of this failure.
 Assertions remain strict and no retry or runtime change is justified yet.
 
 ### DNS peer rename and address replacement: native validation pending
