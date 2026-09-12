@@ -2771,6 +2771,49 @@ predates the TLS-lifetime variants, TCP-first DNS port allocation, IPC terminati
 categories, eight simultaneous subscriptions, OS-thread pinning and post-failure
 public status observation. Those increments require their own exact-source CI.
 
+## Qualified TLS lifetime, DNS families and IPC concurrency — 2026-09-12
+
+[Run 34667224598](https://github.com/endless-net/client/actions/runs/34667224598)
+completed successfully for source `ef19a9fb1e516b2ddb96b250888006291dd6c0af`.
+All 24 reports contain the same 33 root scenarios, exactly once each:
+**792 PASS, 0 FAIL, 0 SKIP**. The
+[aggregate gate](https://github.com/endless-net/client/actions/runs/34667224598/job/103484180731)
+verified the complete source-bound report set.
+
+| Platform | Repetition 1 | Repetition 2 | Repetition 3 |
+| --- | --- | --- | --- |
+| macos-15 | [103481518360](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518360) | [103481518346](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518346) | [103481518381](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518381) |
+| macos-15-intel | [103481518369](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518369) | [103481518330](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518330) | [103481518374](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518374) |
+| ubuntu-22.04 | [103481518320](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518320) | [103481518583](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518583) | [103481518463](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518463) |
+| ubuntu-22.04-arm | [103481518525](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518525) | [103481518547](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518547) | [103481518387](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518387) |
+| ubuntu-24.04 | [103481518546](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518546) | [103481518584](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518584) | [103481518313](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518313) |
+| ubuntu-24.04-arm | [103481518575](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518575) | [103481518266](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518266) | [103481518617](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518617) |
+| windows-2022 | [103481518332](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518332) | [103481518328](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518328) | [103481518358](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518358) |
+| windows-2025 | [103481518305](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518305) | [103481518314](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518314) | [103481518353](https://github.com/endless-net/client/actions/runs/34667224598/job/103481518353) |
+
+All 48 TLS lifetime leaves passed: expired and not-yet-valid certificates under
+the trusted CA were rejected before HTTP, and valid-certificate recovery and
+identity-preserving restart passed in every parent scenario. All 192 DNS leaves
+passed, covering independent IPv4/IPv6 upstream and listener families, UDP/TCP
+queries, truncated-UDP TCP retry, split isolation and SERVFAIL recovery.
+
+The IPC-events root passed all 24 repetitions with eight simultaneous native
+subscriptions, required hello/status, individual cancellation, CLI event output,
+intent mutations and restart. This source includes Windows OS-thread pinning
+during peer impersonation and TCP-first allocation for DNS fixtures. The earlier
+IPC failure did not recur; this is qualification of the corrected source and its
+tests, not proof that thread migration caused that historical incident.
+
+All eight installation jobs, three OS verification jobs and the separate
+control-plane job passed. Optional external STUN was skipped and supplies no
+evidence. The earlier UDP nonce mismatch and disconnect timeout also did not
+recur; their precise causes remain unresolved.
+
+This run predates the native CLI fault/recovery root, CLI first-event ordering
+fix, logout retry and native logout/local-forget traffic roots. Current source
+has 36 roots and still requires its own 864-outcome matrix. This successful
+33-root run does not complete HC-001–HC-065 or qualify those later increments.
+
 ## Next work
 
 HC-022 additionally has `TestControlPlaneNativeLogoutTraffic`: eight variants,
@@ -2834,8 +2877,9 @@ thread migration caused the observed Windows 2022 subscription failure.
 The common IPC-events scenario additionally opens eight independent public
 subscriptions together, requires hello and enrolled status on every connection,
 then requires cancellation of each before continuing the existing mutation and
-restart sequence. No failed subscription is retried. Native qualification of the
-fix and concurrency increment is pending; this does not prove all local roles.
+restart sequence. No failed subscription is retried. The fix and concurrency
+increment passed the complete qualified `ef19a9f` matrix above; this does not
+prove all local roles.
 
 Source `08d5186` also failed Windows 2025 repetition 1
 ([job 103478854598](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854598)):
@@ -2845,7 +2889,8 @@ The fixture now allocates TCP first, then binds UDP to that same endpoint, so TC
 port selection respects existing TCP sockets and TIME_WAIT. The original OS error
 was withheld, so TIME_WAIT is not established as the specific cause. UDP bind
 failure remains fatal; there are no retries, skipped families or relaxed wire
-assertions. Native confirmation of the changed allocation order is pending.
+assertions. All DNS variants passed with the changed allocation order in the
+qualified `ef19a9f` matrix above.
 
 Run `34666246762`, source `08d5186`, failed the IPC-events root in Windows 2022
 repetition 1 ([job 103478854527](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854527)):
@@ -2862,8 +2907,8 @@ any HTTP handler observation. Restoring a valid leaf must allow the same Client
 profile to enroll and preserve its identity across agent restart. The fixture
 closes previous connections to require a fresh handshake and retains private
 TLS material only in memory. A short contract-fixture test verifies both lifetime
-denials and recovery independently. Short checks passed locally; native evidence
-for these new variants is pending. This does not prove expiry handling for an
+denials and recovery independently. Short checks passed locally; all native
+variants passed at qualified source `ef19a9f`. This does not prove expiry handling for an
 already established agent session or data-plane retirement at expiry.
 
 Failed harness Service commands now trigger one public status query with a
