@@ -79,6 +79,7 @@ type Server struct {
 	session                   string
 	networks                  map[string]api.Network
 	joins                     map[string]string
+	ephemeralJoins            map[string]bool
 	nodes                     map[string]*node
 	operations                map[string]operation
 	enrollments               map[string]*enrollment
@@ -119,7 +120,7 @@ func NewWithListener(t testing.TB, listener net.Listener) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{key: key, trust: trust, mapKey: key, mapTrust: trust, session: rand.Text(), networks: map[string]api.Network{}, joins: map[string]string{}, nodes: map[string]*node{}, operations: map[string]operation{}, enrollments: map[string]*enrollment{}, changed: make(chan struct{}), streams: make(chan struct{}), closed: make(chan struct{}), faults: map[string]api.ErrorCode{}, mapFaults: map[string]string{}}
+	s := &Server{key: key, trust: trust, mapKey: key, mapTrust: trust, session: rand.Text(), networks: map[string]api.Network{}, joins: map[string]string{}, ephemeralJoins: map[string]bool{}, nodes: map[string]*node{}, operations: map[string]operation{}, enrollments: map[string]*enrollment{}, changed: make(chan struct{}), streams: make(chan struct{}), closed: make(chan struct{}), faults: map[string]api.ErrorCode{}, mapFaults: map[string]string{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/endlessnet", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, struct {
@@ -202,6 +203,19 @@ func NewWithListener(t testing.TB, listener net.Listener) *Server {
 	}
 	t.Cleanup(s.Close)
 	return s
+}
+
+// SetJoinTokenEphemeral configures the published registration result for a
+// fixture-issued token. Cleanup timing remains provider behavior; client tests
+// use Revoke to model the resulting terminal credential response.
+func (s *Server) SetJoinTokenEphemeral(token string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.joins[token]; !ok {
+		return errors.New("unknown join token")
+	}
+	s.ephemeralJoins[token] = true
+	return nil
 }
 
 func (s *Server) Close()      { s.closeOnce.Do(func() { close(s.closed); s.HTTP.Close() }) }
@@ -305,8 +319,13 @@ func (s *Server) RotateJoinToken(token string) (string, error) {
 		return "", errors.New("unknown join token")
 	}
 	delete(s.joins, token)
+	ephemeral := s.ephemeralJoins[token]
+	delete(s.ephemeralJoins, token)
 	replacement := rand.Text()
 	s.joins[replacement] = networkID
+	if ephemeral {
+		s.ephemeralJoins[replacement] = true
+	}
 	s.recordLocked(Event{Kind: "join-token-rotated"})
 	return replacement, nil
 }
@@ -719,6 +738,9 @@ func (s *Server) registerLocked(req api.RegisterNodeRequest, authorization strin
 	result := clone(n.Map)
 	result.Node.AdvertisedIPs = slices.Clone(req.AdvertisedIPs)
 	result.Node.RequestedTags = slices.Clone(req.Tags)
+	if created && req.JoinToken != "" {
+		result.Node.Ephemeral = s.ephemeralJoins[req.JoinToken]
+	}
 	result.SchemaVersion = api.SchemaVersion
 	result.IdempotencyID = req.IdempotencyID
 	result.RegistrationBinding = binding

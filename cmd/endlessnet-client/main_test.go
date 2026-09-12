@@ -2494,6 +2494,28 @@ func TestPendingApprovalStatusIsNotOverriddenByExpectedPollingError(t *testing.T
 	}
 }
 
+func TestServiceIPCStatusExposesEphemeralEnrollment(t *testing.T) {
+	key := testMapSigningKey(t)
+	networkMap := testNetworkMapWithRevision(t, key, "net-ephemeral", "node-ephemeral", 3)
+	networkMap.Node.Ephemeral = true
+	signature, err := clientapi.SignNetworkMap(key, networkMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	networkMap.MapSignature = signature
+	status := serviceIPCStatusForConfig(client.Config{
+		NodeID:          networkMap.Node.ID,
+		NetworkID:       networkMap.Network.ID,
+		NodeCredential:  "credential",
+		MapRevision:     networkMap.Revision.Network,
+		MapSigningTrust: testSigningTrustBundle(t, testMapSigningPublicKey(t, networkMap.MapSignature)),
+		CachedMap:       &networkMap,
+	})
+	if !status.Ephemeral || status.NodeID != networkMap.Node.ID || !status.CachedMapValid {
+		t.Fatalf("ephemeral status = %#v", status)
+	}
+}
+
 func TestAgentIPCEnrollConnectsTunnel(t *testing.T) {
 	tmp := t.TempDir()
 	setInstallationStateDirForTest(t, filepath.Join(tmp, "installation-state"))

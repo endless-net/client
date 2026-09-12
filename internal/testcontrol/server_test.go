@@ -60,6 +60,34 @@ func setup(t *testing.T) (*testcontrol.Server, *api.API, api.RegisterNodeRequest
 	return s, a, req, result, key
 }
 
+func TestEphemeralJoinTokenSurvivesRotation(t *testing.T) {
+	s := testcontrol.New(t)
+	network, token, err := s.AddNetwork("ephemeral", "100.80.1.0/24")
+	check(t, err)
+	check(t, s.SetJoinTokenEphemeral(token))
+	replacement, err := s.RotateJoinToken(token)
+	check(t, err)
+	req, key := request(t, network, replacement)
+	a := api.NewAPI(s.URL(), "")
+	result, err := a.RegisterNode(req)
+	check(t, err)
+	if !result.Node.Ephemeral {
+		t.Fatal("rotated ephemeral join token produced a persistent node")
+	}
+	renew := req
+	renew.IdempotencyID, err = api.NewRegistrationIdempotencyID()
+	check(t, err)
+	renew.JoinToken = ""
+	renew.NodeCredential = result.NodeCredential
+	renew.RegistrationBinding = result.RegistrationBinding
+	check(t, api.SetRegisterNodeIdentityProof(&renew, key))
+	renewed, err := a.RegisterNode(renew)
+	check(t, err)
+	if !renewed.Node.Ephemeral || renewed.Node.ID != result.Node.ID {
+		t.Fatal("credential renewal lost the ephemeral node lifecycle")
+	}
+}
+
 func TestOfflineResponseHoldLeavesOtherRequestsUsable(t *testing.T) {
 	s, a, _, result, _ := setup(t)
 	a.HTTPClient = &http.Client{Timeout: 2 * time.Second}

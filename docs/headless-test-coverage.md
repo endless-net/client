@@ -87,7 +87,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-008 | C BrowserEnrollment; expiry recovery on six runners; pending CLI interruption/resume and active rejection/reapproval passed all 24 repetitions on eight native runners | Interactive/server-side cancellation and foreign poll authorization |
 | HC-009 | C enrollment; P wrong/expired join authorization; R two real CLI registrations | Full authorized/denied attribute and platform variants |
 | HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; historical R distinct node IDs | Client image-cloning and batch variants; historical producer replay failure is an external constraint |
-| HC-011 | CLI join-token --ephemeral forwarding has a component test; no C/R lifecycle evidence | Define client normal/crash lifecycle observations; token-option forwarding does not prove expiry |
+| HC-011 | C ephemeral lifecycle is executable: public IPC projection, native TCP access, abrupt process loss, terminal provider cleanup outcome and distinct replacement enrollment; CLI join-token --ephemeral forwarding has a component test | Qualify the native root; provider absence detection and asynchronous cleanup timing remain outside the Client boundary |
 | HC-012 | C real Client rejects invalid and preserves corrected hostname, endpoint, advertised-prefix and requested-tag registration inputs through browser approval; D request/proof tests | Qualify the expanded native root; effective tag/route authorization and additional platform attributes against published responses |
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
 | HC-014 | C user-session rotation, user-RPC denial, node-credential independence, reauthentication and same-node traffic/restart recovery are executable; U recovery matrix | Qualify the native root on every runner; browser/OIDC refresh and other session-expiry timing variants |
@@ -4696,3 +4696,31 @@ and WireGuard presence, error, port, peer-count and revision fields if the
 failure recurs. All eight install jobs, all three platform verify jobs and the
 separate Linux control-plane job passed. The aggregate verify job correctly
 failed because the contract matrix was not green.
+
+Run [34693000779](https://github.com/endless-net/client/actions/runs/34693000779)
+completed with failure at source `00de988c019b27635c6392dedf9cbf75e0765e71`.
+All 24 native artifacts were inspected. Their common inventory had 45 roots and
+1,080 expected outcomes; two Windows 2025 jobs reached the old 25-minute suite
+deadline, so 1,076 terminal root outcomes were recorded: 1,007 PASS, 69 FAIL and
+0 SKIP, with four outcomes missing after the timeout. The repeated failures were
+24 invalid route-advertisement inputs accepted by the Client, 24 join-token
+replacement attempts that violated immutable operation identity, six Ubuntu
+22.04 system-resolver failures, six Windows Application failures and six
+Windows service-catalog failures. Windows 2025 also had one isolated routed
+resource, Relay traffic and Relay failover failure. The two timeout reports had
+already completed 43 roots in about 25 minutes and were executing map-signing
+rotation; this was aggregate suite duration rather than a single stuck root.
+The Client/input, scenario, Linux DNS and Windows route changes above address
+the repeated causes. The test process now has 30 minutes inside a 35-minute job
+so report upload remains possible. This source predates every correction and
+does not qualify them.
+
+`TestControlPlaneEphemeralLifecycle` adds bounded Client-owned HC-011 coverage.
+The real Client exposes the provider-assigned `ephemeral` node attribute through
+public IPC, carries a native TCP exchange to a WireGuard peer, is terminated
+without graceful logout, consumes the provider's published terminal credential
+outcome after cleanup, clears local access and permits a new job to enroll with
+a distinct node identity. The fixture controls token metadata and the cleanup
+decision but the assertions read only CLI/IPC, signed maps and traffic. Provider
+absence detection and cleanup timing are deliberately not claimed. This raises
+the pending common inventory to 47 roots / 1,128 native outcomes.

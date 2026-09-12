@@ -2775,6 +2775,7 @@ func serviceIPCStatusForConfig(cfg client.Config) (response ipc.StatusResponse) 
 	response.OverlayIPv6 = cached.Node.AssignedIPv6
 	response.NodeID = cached.Node.ID
 	response.Hostname = cached.Node.Hostname
+	response.Ephemeral = cached.Node.Ephemeral
 	response.MapRevision = cached.Network.Revision
 	response.PeerCount = len(cached.Peers)
 	response.STUNEndpoints = make([]ipc.EndpointAddress, 0, len(cached.STUNEndpoints))

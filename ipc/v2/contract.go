@@ -319,6 +319,7 @@ type StatusResponse struct {
 	EnrollmentRequestID       string                  `json:"enrollment_request_id,omitempty"`
 	ApprovalURL               string                  `json:"approval_url,omitempty"`
 	NodeApprovalState         string                  `json:"node_approval_state,omitempty"`
+	Ephemeral                 bool                    `json:"ephemeral,omitempty"`
 	OverlayCIDR               string                  `json:"overlay_cidr,omitempty"`
 	OverlayIPv6CIDR           string                  `json:"overlay_ipv6_cidr,omitempty"`
 	OverlayIP                 string                  `json:"overlay_ip,omitempty"`
