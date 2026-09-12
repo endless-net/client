@@ -23,6 +23,13 @@ import (
 // map changes on every platform. Each proxy invocation loads a fresh map;
 // this does not claim live reload or system resolver configuration.
 func TestControlPlaneDNSWireRecovery(t *testing.T) {
+	for _, network := range []string{"udp4", "udp6"} {
+		t.Run(network, func(t *testing.T) { exerciseDNSWireRecovery(t, network) })
+	}
+}
+
+func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork string) {
+	t.Helper()
 	s, n, id := controlScenario(t)
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
@@ -36,8 +43,8 @@ func TestControlPlaneDNSWireRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	peer := api.Peer{ID: "dns-wire-peer", Hostname: "wire-peer", PublicKey: public, AllowedIPs: []string{"100.90.0.20/32", "fd7a:115c:a1e0::20/128"}}
-	globalAddress, globalQueries, _ := dnsContractUpstream(t, [4]byte{203, 0, 113, 4})
-	splitAddress, splitQueries, setSplitCode := dnsContractUpstream(t, [4]byte{198, 51, 100, 7})
+	globalAddress, globalQueries, _ := dnsContractUpstream(t, upstreamNetwork, [4]byte{203, 0, 113, 4})
+	splitAddress, splitQueries, setSplitCode := dnsContractUpstream(t, upstreamNetwork, [4]byte{198, 51, 100, 7})
 	for _, present := range []bool{true, false, true} {
 		var peers []api.Peer
 		if present {
@@ -208,9 +215,13 @@ func assertDNSWireType(t *testing.T, transport, address, name string, family dns
 	}
 }
 
-func dnsContractUpstream(t *testing.T, address [4]byte) (string, func() []string, func(dnsmessage.RCode)) {
+func dnsContractUpstream(t *testing.T, network string, address [4]byte) (string, func() []string, func(dnsmessage.RCode)) {
 	t.Helper()
-	conn, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	host := "127.0.0.1"
+	if network == "udp6" {
+		host = "::1"
+	}
+	conn, err := net.ListenPacket(network, net.JoinHostPort(host, "0"))
 	if err != nil {
 		t.Fatal(err)
 	}
