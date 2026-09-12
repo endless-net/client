@@ -338,24 +338,34 @@ func exercisePeerDNS(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.N
 
 func applicationProbe(t *testing.T, binary, namespace, protocol, address string, options ...string) bool {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	args := []string{"--mode", "probe", "--network", protocol, "--address", address}
-	started := time.Now()
-	output, err := packetProbeCommand(ctx, namespace, binary, append(args, options...)...).CombinedOutput()
-	if err == nil {
-		return true
+	for attempt := 1; attempt <= 2; attempt++ {
+		// The probe's longest supported exchange timeout is five seconds. Leave
+		// enough parent-process headroom for Windows to flush and close inherited
+		// handles after the child reports the network outcome.
+		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+		args := []string{"--mode", "probe", "--network", protocol, "--address", address}
+		started := time.Now()
+		output, err := packetProbeCommand(ctx, namespace, binary, append(args, options...)...).CombinedOutput()
+		deadlineExceeded := errors.Is(ctx.Err(), context.DeadlineExceeded)
+		cancel()
+		if err == nil {
+			return true
+		}
+		var exit *exec.ExitError
+		exitCode := -1
+		if errors.As(err, &exit) {
+			exitCode = exit.ExitCode()
+		}
+		if exit != nil && packetProbeReportsDenial(exitCode, output) {
+			return false
+		}
+		if attempt == 1 && deadlineExceeded && len(output) == 0 {
+			continue
+		}
+		t.Fatalf("application probe could not classify network access: %s; process_exited=%t exit_code=%d deadline_exceeded=%t elapsed=%s output_bytes=%d attempts=%d", packetProbeFailureReason(output), exit != nil, exitCode, deadlineExceeded, time.Since(started).Round(time.Millisecond), len(output), attempt)
 	}
-	var exit *exec.ExitError
-	exitCode := -1
-	if errors.As(err, &exit) {
-		exitCode = exit.ExitCode()
-	}
-	if exit != nil && packetProbeReportsDenial(exitCode, output) {
-		return false
-	}
-	t.Fatalf("application probe could not classify network access: %s; process_exited=%t exit_code=%d deadline_exceeded=%t elapsed=%s output_bytes=%d", packetProbeFailureReason(output), exit != nil, exitCode, errors.Is(ctx.Err(), context.DeadlineExceeded), time.Since(started).Round(time.Millisecond), len(output))
-	return false
+	t.Fatal("application probe exhausted its bounded classification attempts")
+	return false // unreachable
 }
 
 func packetProbeReportsDenial(exitCode int, output []byte) bool {
@@ -495,10 +505,14 @@ func observeSessionRecovery(input io.Writer, lines <-chan string, limit time.Dur
 }
 
 func packetProbeCommand(ctx context.Context, namespace, binary string, args ...string) *exec.Cmd {
+	var cmd *exec.Cmd
 	if namespace != "" {
-		return exec.CommandContext(ctx, "ip", append([]string{"netns", "exec", namespace, binary}, args...)...)
+		cmd = exec.CommandContext(ctx, "ip", append([]string{"netns", "exec", namespace, binary}, args...)...)
+	} else {
+		cmd = exec.CommandContext(ctx, binary, args...)
 	}
-	return exec.CommandContext(ctx, binary, args...)
+	cmd.WaitDelay = 500 * time.Millisecond
+	return cmd
 }
 
 // HC-024/HC-027: published protocol and destination-port policy with payload checks.
