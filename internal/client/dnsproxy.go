@@ -13,6 +13,7 @@ import (
 	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
+	"golang.org/x/net/dns/dnsmessage"
 )
 
 const (
@@ -351,6 +352,9 @@ func forwardDNSQuery(ctx context.Context, upstream string, request []byte, timeo
 		return nil, err
 	}
 	response := append([]byte(nil), buf[:n]...)
+	if err := matchDNSUpstreamResponse(request, response); err != nil {
+		return nil, err
+	}
 	if len(response) >= 4 && binary.BigEndian.Uint16(response[2:4])&0x0200 != 0 {
 		return forwardDNSQueryTCP(ctx, upstream, request, timeout)
 	}
@@ -403,7 +407,35 @@ func forwardDNSQueryTCP(ctx context.Context, upstream string, request []byte, ti
 	if _, err := io.ReadFull(conn, response); err != nil {
 		return nil, err
 	}
+	if err := matchDNSUpstreamResponse(request, response); err != nil {
+		return nil, err
+	}
 	return response, nil
+}
+
+// Match the upstream message to the query before trusting its answer or TC bit.
+// Connected sockets already constrain the remote endpoint. Parse the question
+// section independently: a legitimate truncated reply need not contain complete
+// answer records, but must still belong to this transaction.
+func matchDNSUpstreamResponse(request, response []byte) error {
+	var query, reply dnsmessage.Parser
+	qh, err := query.Start(request)
+	if err != nil {
+		return errors.New("invalid DNS upstream query")
+	}
+	questions, err := query.AllQuestions()
+	if err != nil || len(questions) != 1 {
+		return errors.New("invalid DNS upstream query question")
+	}
+	rh, err := reply.Start(response)
+	if err != nil || !rh.Response || rh.ID != qh.ID || rh.OpCode != qh.OpCode {
+		return errors.New("DNS upstream response header mismatch")
+	}
+	answers, err := reply.AllQuestions()
+	if err != nil || len(answers) != 1 || answers[0].Type != questions[0].Type || answers[0].Class != questions[0].Class || !strings.EqualFold(answers[0].Name.String(), questions[0].Name.String()) {
+		return errors.New("DNS upstream response question mismatch")
+	}
+	return nil
 }
 
 // The most specific suffix owns the query, including an unavailable (empty)

@@ -227,7 +227,7 @@ func assertDNSWireType(t *testing.T, transport, address, name string, family dns
 	}
 }
 
-func dnsContractUpstream(t *testing.T, network string, truncated bool, address [4]byte) (string, func() []string, func(dnsmessage.RCode)) {
+func dnsContractUpstream(t *testing.T, network string, truncated bool, address [4]byte, mutations ...func(*dnsmessage.Message, bool)) (string, func() []string, func(dnsmessage.RCode)) {
 	t.Helper()
 	host := "127.0.0.1"
 	if network == "udp6" {
@@ -271,6 +271,9 @@ func dnsContractUpstream(t *testing.T, network string, truncated bool, address [
 		}
 		if truncated && !tcp {
 			response.Truncated, response.Answers = true, nil
+		}
+		for _, mutate := range mutations {
+			mutate(&response, tcp)
 		}
 		wire, err := response.Pack()
 		if err != nil {

@@ -2863,6 +2863,25 @@ coverage remains incomplete; this matrix does not close missing scenarios.
 
 ## Next work
 
+HC-025/HC-026: `TestControlPlaneDNSUpstreamResponseBinding` adds a real-CLI
+boundary scenario for upstream answers with the wrong transaction ID, question
+name/type/class, opcode, missing question or unset response flag. The same proxy
+process must return SERVFAIL for each invalid answer and resolve successfully
+after the fixture repairs its response. All seven faults run through IPv4/IPv6
+upstreams, direct UDP answers and TCP answers after a valid truncated UDP reply,
+with both UDP and TCP downstream queries. This is the 38th native root; its
+source-specific matrix evidence is pending (38 x 3 x 8 = 912 root outcomes).
+
+A short real-UDP regression reproduced all seven accepted unrelated answers
+before the Client fix. The proxy now checks response headers and question
+correlation before trusting an answer or its truncation bit, and checks the TCP
+fallback response too. The question parser permits DNS name compression and
+compares names case-insensitively. Connected upstream sockets constrain the
+remote endpoint. These checks implement the query-matching boundary described
+by [RFC 5452 section 9.1](https://www.rfc-editor.org/rfc/rfc5452.html#section-9.1);
+they do not establish DNSSEC, complete answer-section validation, live map reload
+or OS resolver integration. No DNS or product version was increased.
+
 The application traffic oracle now requires both exit code 2 and the exact
 `application exchange unavailable` output line before asserting denial. Exit 2
 alone also represents Go flag-parser failures and runtime panics, so it cannot
