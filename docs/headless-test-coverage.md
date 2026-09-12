@@ -101,7 +101,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
-| HC-025 | C DNS CLI/proxy, DNS wire lookup and application access by FQDN; eight-platform UDP/TCP lookup, withdrawal, restoration and split-DNS isolation | OS resolver integration, live reload, IPv6 and remaining upstream variants |
+| HC-025 | C DNS CLI/proxy, wire lookup and application access by FQDN; eight-platform UDP/TCP A/AAAA projection, withdrawal/restoration, split isolation and SERVFAIL recovery at qualified `38050bc` | OS resolver integration, live reload, pending IPv6 listener/upstream and TCP-retry variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
 | HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
 | HC-028 | C native single-Relay and two-Relay failover IPv4/IPv6 TCP/UDP, outage denial, recovery and agent restart passed all 24 native repetitions | NAT, direct/Relay transitions, existing-session failover, healthy-backup failback and remaining Relay variants |
@@ -128,8 +128,8 @@ product scope are different conditions; neither is a successful skip.
 | HC-049 | No C/R evidence audited | Certificate/publication scope and frontend/backend TLS |
 | HC-050 | U sharing/encrypted engine tests | C grant/consent/revoke/expiry/new identity against published contracts without internal access |
 | HC-051 | U service discovery/runtime | Logical service host approval, loss and actual traffic |
-| HC-052 | L/C bounded IPC waits; native independent event subscriptions/cancellation/restart passed all 24 repetitions at qualified source `88f335e` | Remaining public readiness conditions, slow consumers and noninteractive timeout results |
-| HC-053 | L/C structured IPC; native request validation, non-object rejection, body-size boundaries and event subscribers passed all 24 repetitions at qualified source `88f335e`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
+| HC-052 | L/C bounded IPC waits; independent event subscriptions/cancellation/restart and real CLI listening-timeout exit passed all 24 repetitions at qualified `38050bc`; installed absent-service failure passed all eight runners | Remaining public readiness conditions, slow consumers and stalled native IPC |
+| HC-053 | L/C structured IPC; request validation, non-object rejection, body-size boundaries, subscribers and real CLI NDJSON events passed all 24 repetitions at qualified `38050bc`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
 | HC-054 | No C/R evidence audited | Container persistent versus ephemeral lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
@@ -2600,6 +2600,44 @@ this installation evidence was recorded; it does not independently qualify the
 entire source for publication. Later IPv6 DNS upstream and TCP-retry extensions
 are absent from this source.
 
+## CLI event deadlines and split-DNS recovery qualified
+
+Run [34664269724](https://github.com/endless-net/client/actions/runs/34664269724)
+completed successfully for source `38050bc60c608d69eeed399f9e86172d270bbd0c`.
+All 24 native reports contain the same 33 scenarios: **792 PASS, zero FAIL,
+zero SKIP**. The complete platform/repetition evidence is:
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| macos-15 | [103473575844](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575844) | [103473575884](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575884) | [103473575970](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575970) |
+| macos-15-intel | [103473575948](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575948) | [103473575857](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575857) | [103473575911](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575911) |
+| ubuntu-22.04 | [103473575790](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575790) | [103473575768](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575768) | [103473575766](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575766) |
+| ubuntu-22.04-arm | [103473575838](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575838) | [103473575843](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575843) | [103473575810](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575810) |
+| ubuntu-24.04 | [103473575759](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575759) | [103473575772](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575772) | [103473575791](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575791) |
+| ubuntu-24.04-arm | [103473575822](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575822) | [103473575848](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575848) | [103473575871](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575871) |
+| windows-2022 | [103473575819](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575819) | [103473575874](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575874) | [103473575937](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575937) |
+| windows-2025 | [103473575845](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575845) | [103473575902](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575902) | [103473575833](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575833) |
+
+The [aggregate gate](https://github.com/endless-net/client/actions/runs/34664269724/job/103476199341)
+passed dependency and same-source artifact validation, explicitly reporting
+33 common scenarios across three repetitions and eight platforms. All eight
+installation jobs, three OS verification jobs and the separate Linux control-plane
+job passed. Optional external STUN compatibility was skipped and is not counted.
+This completes the source gate missing from the preceding installation snapshot.
+
+The increment confirms real CLI event subscriptions while connected and after
+a disconnected restart: complete NDJSON records, hello/current status, monotonic
+sequence, negotiated metadata, successful listening-timeout exit and retained
+intent. It also confirms split-upstream SERVFAIL propagation, isolation from the
+healthy global resolver, preserved local/public DNS and same-process recovery
+on all eight platforms. The CLI missing-hello fix has its short regression and
+installed absent-service coverage; stalled native transports remain a separate
+boundary, not an implication of healthy-stream timeout success.
+
+This source predates IPv6 DNS upstream/listener combinations, truncated UDP to
+TCP retry and nobody-account Unix permissions tests. Those remain pending their
+own source matrix. Full HC-001–HC-065 coverage is still incomplete.
+
 ## Next work
 
 HC-004/053 Unix installation acceptance now checks the pre-existing nobody
@@ -2639,7 +2677,7 @@ preserve private-domain isolation, public and local-map resolution, and recover
 the split answer in the same proxy process when its upstream resumes success.
 Exact observed upstream question counts and domains detect fallback leakage.
 This is DNS response-error recovery, not packet loss, transport timeout, OS
-resolver setup or live map reload; eight-platform qualification remains pending.
+resolver setup or live map reload; eight-platform evidence is recorded at `38050bc` above.
 
 A short CLI regression reproduced false success when an event subscription
 timed out or reached EOF before receiving hello. The command now treats those
@@ -2654,14 +2692,14 @@ requires successful timeout termination (with an outer ten-second observation
 allowance for process startup), one complete JSON event per line, hello first,
 increasing stream-local sequences, negotiated metadata and the current enrolled
 status. Public status after completion must retain the connection intent.
-This supplements SDK subscriptions; hosted evidence for this CLI path is pending.
+This supplements SDK subscriptions; hosted evidence is recorded at `38050bc` above.
 
 HC-004/052/053 now have installed-service absence assertions in both enrolled
 connection states: six public CLI read/mutation/subscription commands must fail with exit 1,
 stderr and no stdout payload within a bounded harness deadline. Restart must
 retain identity and intent, restore connected TCP access and preserve disconnected
 traffic denial without registration. This runs inside the existing eight-platform
-installation matrix; short compilation alone does not qualify the new assertions.
+installation matrix and passed all eight runners at `38050bc` above.
 
 HC-005 foreground shutdown now has an explicit Unix SIGTERM path: the agent's
 signal context handles SIGTERM as well as Interrupt. The native ownership root
