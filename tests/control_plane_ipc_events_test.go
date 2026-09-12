@@ -151,6 +151,24 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 			return event.EventType == ipc.EventTypeStatusChanged && event.Status != nil && event.Status.NodeID == id && event.Status.CachedMapValid && event.Status.UserDisconnected == disconnected
 		}
 	}
+	// Open independent connections together so authentication and initial
+	// snapshots are exercised while other subscribers are being accepted.
+	concurrent := make([]*subscription, 8)
+	for i := range concurrent {
+		concurrent[i] = subscribe()
+	}
+	for _, subscriber := range concurrent {
+		await(subscriber, func(event ipc.Event) bool { return event.EventType == ipc.EventTypeHello })
+		await(subscriber, state(false))
+	}
+	for _, subscriber := range concurrent {
+		subscriber.cancel()
+		select {
+		case <-subscriber.done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("concurrent IPC subscription cancellation did not terminate")
+		}
+	}
 	stream := subscribe()
 	await(stream, func(event ipc.Event) bool { return event.EventType == ipc.EventTypeHello })
 	await(stream, state(false))

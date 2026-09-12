@@ -2737,6 +2737,18 @@ The later post-failure public status observation is not part of this source.
 
 ## Next work
 
+Windows IPC peer inspection now locks the goroutine to one OS thread for
+impersonation, thread-token inspection and reversion. Previously it could migrate
+between those thread-scoped operations. This is a source-level correctness fix:
+[Microsoft's impersonation contract](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-impersonatenamedpipeclient)
+binds the security context to the calling thread. It does not establish that
+thread migration caused the observed Windows 2022 subscription failure.
+The common IPC-events scenario additionally opens eight independent public
+subscriptions together, requires hello and enrolled status on every connection,
+then requires cancellation of each before continuing the existing mutation and
+restart sequence. No failed subscription is retried. Native qualification of the
+fix and concurrency increment is pending; this does not prove all local roles.
+
 Source `08d5186` also failed Windows 2025 repetition 1
 ([job 103478854598](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854598)):
 two truncated-UDP DNS variants could not bind their TCP fixture to the previously

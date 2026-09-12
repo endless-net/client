@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -81,6 +82,10 @@ func windowsNamedPipeClientUser(handle windows.Handle) (string, error) {
 }
 
 func windowsNamedPipeClientSecurity(handle windows.Handle) (string, bool, error) {
+	// Impersonation and the thread token belong to one OS thread, not to a Go
+	// goroutine. Keep token inspection and RevertToSelf on that same thread.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	if err := impersonateNamedPipeClient(handle); err != nil {
 		return "", false, err
 	}
