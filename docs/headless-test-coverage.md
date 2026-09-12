@@ -95,7 +95,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners | Other paths/protocols and denied-access variants |
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
-| HC-019 | C durable route-table off/auto passed three times on all eight native platforms; native MTU CLI validation/persistence, IPC/OS agreement and IPv4/IPv6 TCP/UDP checks are executable; U configuration tests | Qualify the new MTU root; other public preferences and live mutation variants |
+| HC-019 | C durable route-table off/auto passed three times on all eight native platforms; MTU CLI validation/persistence, IPC/OS agreement and IPv4/IPv6 TCP/UDP checks passed all 24 repeats at `169b09c`; U configuration tests | Other public preferences and live mutation variants |
 | HC-020 | C NetworkSelectionBoundary passed all 24 native repetitions: enrolled network listing/selection, disconnected response before/after restart and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
 | HC-021 | C TLS trust/hostname, unchanged-key intent/traffic, connected/disconnected ordinary and interrupted map-signing rotation, and changed-key native traffic passed all 24 repetitions at qualified source `4f117a0`; expired/not-yet-valid TLS rejection before enrollment and after enrolled restart, followed by recovery, pass in all 19 available `c5bd840` reports | Complete current-source qualification; remaining origin variants and existing-session certificate lifetime semantics |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
@@ -112,7 +112,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-033 | C durable route installation disable/restore passed three times on all eight native platforms; U configuration tests | Per-resource selection and remaining route-selection semantics |
 | HC-034 | C route advertisement and platform boundary; Linux two-Client subnet forwarding with SNAT and source-preserving operator-configured forwarding, approval, withdrawal, router outage and recovery; common root passed all 24 repetitions at `92983ae`; U hook rendering | Non-Linux SNAT mode is explicitly unsupported; IPv6, independent policy and other router variants |
 | HC-035 | No C/R evidence audited | Site-to-site scope and reverse-path tests |
-| HC-036 | C native IPv4/IPv6 default-route selection, same-host reference egress hop, withdrawal and recovery | Qualify on all native runners; remote exit-peer underlay and remote control connectivity while default routes are active are not proved; production public-address and DNS observation remain release acceptance |
+| HC-036 | C native IPv4/IPv6 default-route selection, same-host reference egress hop, withdrawal and recovery passed all 24 repeats at `169b09c` | Remote exit-peer underlay and remote control connectivity while default routes are active are not proved; production public-address and DNS observation remain release acceptance |
 | HC-037 | U exit-LAN rules | LAN allowed/denied with real exit traffic |
 | HC-038 | C Linux Client IPv4 exit provider for another real Client: default-route advertisement/approval, TCP/UDP forwarding, SNAT-dependent return traffic, withdrawal and restart recovery; common root passed all 24 repetitions at `92983ae`, with explicit unsupported results outside Linux | IPv6 provider, no-SNAT, HA and production public-address observation |
 | HC-039 | No C/R evidence audited | Role-specific HA semantics and failure recovery |
@@ -5357,3 +5357,34 @@ map expiry, and Windows 2025 repeat 1 additionally fails an IPv6 TCP exchange
 3.752 seconds before consent expiry. The expiry packet-filter fix and later
 flow diagnostics are absent from this source. The overall run remains
 unqualified while the other native reports are pending.
+
+### 2026-09-12: completed 169b09c native matrix
+
+[Run 34706279754](https://github.com/endless-net/client/actions/runs/34706279754)
+completed with failure at `169b09c91a010cf2c850a6bcd58c366de2b26d9c`.
+All 24 reports have matching source identity, the same 52-root inventory,
+terminal package results and no skips: **1222 PASS, 26 FAIL, 0 SKIP**.
+
+| Native runner | Three-repeat root PASS / FAIL |
+| --- | --- |
+| Ubuntu 22.04 amd64 | 153 / 3 |
+| Ubuntu 24.04 amd64 | 153 / 3 |
+| Ubuntu 22.04 ARM64 | 153 / 3 |
+| Ubuntu 24.04 ARM64 | 153 / 3 |
+| Windows 2022 | 153 / 3 |
+| Windows 2025 | 152 / 4 |
+| macOS 15 ARM64 | 153 / 3 |
+| macOS 15 Intel | 152 / 4 |
+
+Cached-map expiry fails all 24 repeats, with both address-family leaves
+observing continued traffic after public cache invalidation (48 reproductions).
+The other two failed roots are flow consent on macOS Intel repeat 1 and Windows
+2025 repeat 1, detailed above. All other 50 roots pass every repetition. This
+qualifies the new MTU scenario and the corrected same-host exit-route scenario
+on all eight native runners; it does not prove all HC variants or release
+acceptance. The aggregate `verify` job fails as required.
+
+All eight installation jobs and the expanded container lifecycle pass. The
+packet-filter expiry fix `d97b4ab`, join-token/session transport expansions and
+later flow diagnostics are absent from this source and need their own native
+matrix. Existing evidence snapshots retain their original outcomes and limits.
