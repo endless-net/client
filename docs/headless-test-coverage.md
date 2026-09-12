@@ -112,7 +112,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-033 | C durable route installation disable/restore passed three times on all eight native platforms; U configuration tests | Per-resource selection and remaining route-selection semantics |
 | HC-034 | C native route advertisement and explicit platform boundary; Linux two-Client subnet forwarding/SNAT, approval, withdrawal, router outage and recovery are executable; U hook rendering | Qualify the common root on every runner; non-Linux router dataplane is explicitly unsupported; IPv6, no-SNAT, independent policy and other router variants |
 | HC-035 | No C/R evidence audited | Site-to-site scope and reverse-path tests |
-| HC-036 | U exit-route configuration | Egress IP and independent IPv4/IPv6 probes |
+| HC-036 | C native IPv4/IPv6 default-route selection, reference egress hop, withdrawal and recovery | Qualify on all native runners; production public-address and DNS observation remain release acceptance |
 | HC-037 | U exit-LAN rules | LAN allowed/denied with real exit traffic |
 | HC-038 | U router configuration | Real client acting as egress for another client |
 | HC-039 | No C/R evidence audited | Role-specific HA semantics and failure recovery |
