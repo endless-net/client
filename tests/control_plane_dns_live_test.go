@@ -1,7 +1,9 @@
 package tests
 
 import (
+	"net"
 	"testing"
+	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 	wg "github.com/endless-net/client-api/clientapi/wireguard"
@@ -70,5 +72,27 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 				assertDNSWireType(t, transport, "127.0.0.1:53", name, dnsmessage.TypeAAAA, code, ipv6)
 			}
 		}
+	}
+	var disconnected ipc.DisconnectResponse
+	n.Service("disconnect", &disconnected)
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.NodeID == id && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+	})
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:53", time.Second)
+	if err == nil {
+		_ = conn.Close()
+		t.Fatal("agent DNS TCP listener remained available after disconnect")
+	}
+	var connected ipc.ConnectResponse
+	n.Service("connect", &connected)
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.NodeID == id && v.NodeCredentialPresent && v.CachedMapValid &&
+			!v.UserDisconnected && v.DesiredState == ipc.DesiredConnected &&
+			v.WireGuard != nil && v.WireGuard.OK && v.State != ipc.StateDegraded
+	})
+	for _, transport := range []string{"udp", "tcp"} {
+		assertDNSWire(t, transport, "127.0.0.1:53", "live-peer.scenario.endlessnet.", dnsmessage.RCodeSuccess, "198.18.96.20")
+		assertDNSWireType(t, transport, "127.0.0.1:53", "live-peer.scenario.endlessnet.", dnsmessage.TypeAAAA, dnsmessage.RCodeSuccess, "fd96::20")
+		assertDNSWire(t, transport, "127.0.0.1:53", "renamed-peer.scenario.endlessnet.", dnsmessage.RCodeNameError, "")
 	}
 }

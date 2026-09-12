@@ -3162,6 +3162,13 @@ advance the map revision with WireGuard OK and no degraded state. UDP/TCP querie
 to the agent's `127.0.0.1:53` listener then require exact current A/AAAA answers
 and NXDOMAIN without answers for inactive names.
 
+The same test also disconnects through public IPC, requires the agent's TCP DNS
+listener to become unavailable, then reconnects without restarting the process.
+The original node identity and connected intent must return with WireGuard OK;
+UDP/TCP A/AAAA answers must recover, and the withdrawn hostname must stay absent.
+This adds bounded HC-017/HC-025 recovery. UDP listener retirement and OS resolver
+restoration are not established by the TCP unavailability check.
+
 This exercises the agent-managed DNS path, whose router reapplies the proxy on
 configuration changes. The standalone `dns serve` command still loads a single
 map at startup. The test does not inspect persisted Client state or call runtime
