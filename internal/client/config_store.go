@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
@@ -107,7 +108,16 @@ func (s *ConfigStore) Update(update func(*Config) error) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	next := clonePersistentConfig(s.config)
+	lock, err := acquireConfigWriteLock(s.path, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Close() }()
+	current, err := loadConfigFile(s.path)
+	if err != nil {
+		return err
+	}
+	next := clonePersistentConfig(current)
 	if err := update(&next); err != nil {
 		return err
 	}
@@ -130,9 +140,18 @@ func (s *ConfigStore) Save(cfg Config) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	lock, err := acquireConfigWriteLock(s.path, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Close() }()
+	current, err := loadConfigFile(s.path)
+	if err != nil {
+		return err
+	}
 	next := proposed
-	if metadataPath == s.path && metadataRevision != 0 && metadataRevision != s.revision && len(baseline) != 0 {
-		merged, err := mergeConfigChanges(baseline, proposed, s.config)
+	if metadataPath == s.path && metadataRevision != 0 && len(baseline) != 0 {
+		merged, err := mergeConfigChanges(baseline, proposed, current)
 		if err != nil {
 			return err
 		}
@@ -146,6 +165,46 @@ func (s *ConfigStore) Save(cfg Config) error {
 	s.revision++
 	updateConfigMetadata(cfg.storeMetadata, s.path, s.revision, proposed)
 	return nil
+}
+
+type configWriteLock struct {
+	file *os.File
+}
+
+func acquireConfigWriteLock(configPath string, timeout time.Duration) (*configWriteLock, error) {
+	path := configPath + ".write.lock"
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	deadline := time.Now().Add(timeout)
+	for {
+		err = tryLockFile(file)
+		if err == nil {
+			return &configWriteLock{file: file}, nil
+		}
+		if !isLockHeldError(err) || timeout <= 0 || time.Now().After(deadline) {
+			_ = file.Close()
+			return nil, fmt.Errorf("lock client state for update: %w", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (l *configWriteLock) Close() error {
+	if l == nil || l.file == nil {
+		return nil
+	}
+	err := unlockFile(l.file)
+	closeErr := l.file.Close()
+	l.file = nil
+	if err != nil {
+		return err
+	}
+	return closeErr
 }
 
 func resolveConfigPath(path string) (string, error) {

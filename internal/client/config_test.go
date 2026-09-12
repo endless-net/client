@@ -78,6 +78,68 @@ func TestConfigStoreMergesConcurrentTopLevelUpdates(t *testing.T) {
 	}
 }
 
+func TestConfigStoreMergesUpdateWrittenByAnotherProcess(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "client.json")
+	if err := SaveConfig(path, Config{ControlPlaneURLs: []string{"https://api.example.test"}, Token: "old-token"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stale, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	external := clonePersistentConfig(stale)
+	external.MapRevision = 42
+	if err := saveConfigFile(path, external); err != nil {
+		t.Fatal(err)
+	}
+	stale.Token = "new-token"
+	if err := SaveConfig(path, stale); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := loadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Token != "new-token" || got.MapRevision != 42 {
+		t.Fatalf("merged config token=%q revision=%d, want new-token and 42", got.Token, got.MapRevision)
+	}
+}
+
+func TestConfigStoreUpdateReloadsChangesWrittenByAnotherProcess(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "client.json")
+	store, err := OpenConfigStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Update(func(cfg *Config) error {
+		cfg.Token = "old-token"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	external := clonePersistentConfig(store.Read())
+	external.Token = "new-token"
+	if err := saveConfigFile(path, external); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Update(func(cfg *Config) error {
+		cfg.MapRevision = 42
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := loadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Token != "new-token" || got.MapRevision != 42 {
+		t.Fatalf("updated config token=%q revision=%d, want new-token and 42", got.Token, got.MapRevision)
+	}
+}
+
 func TestConfigStoreUpdatePersistsOneSynchronizedSnapshot(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "client.json")
 	store, err := OpenConfigStore(path)
