@@ -226,6 +226,10 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			if !t.Failed() {
 				return
 			}
+			// Capture underlay availability before this scenario stops its
+			// Client; a later subtest cannot distinguish loss during traffic
+			// from changes made during cleanup.
+			logNativeInterfaceState(t)
 			status, err := n.Status()
 			received, echoed := reference.PacketCounts()
 			initiations, responses, other := reference.HandshakeCounts()
