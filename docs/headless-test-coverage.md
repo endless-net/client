@@ -2455,6 +2455,16 @@ successful gate alone establishes full HC-001–HC-065 coverage.
 
 ## Next work
 
+The map-signing rotation root also covers a stable public
+`temporarily_unavailable` response on credential renewal for both initial intents.
+The Client must expose a recovering operation, retain its operation ID and node
+credential across agent restart, and return `already_applied` for the same
+confirmation while renewal is still unavailable. Removing the wire fault must
+complete recovery with the original identity and desired connection state.
+The test observes public recovery status/operation IDs, not a persisted recovery
+file. This adds interrupted-recovery subcases within the 33-root inventory;
+hosted qualification is pending and abrupt OS crash remains separate.
+
 The map-signing rotation root now runs both initial connection intents as separate
 native subcases. Each must preserve its intent through recovery, repeat the
 completed confirmation as `already_applied`, and preserve intent/new trust after

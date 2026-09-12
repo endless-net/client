@@ -2,6 +2,7 @@ package tests
 
 import (
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
@@ -14,12 +15,13 @@ func TestControlPlaneMapSigningRotation(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		disconnected bool
-	}{{"connected", false}, {"disconnected", true}} {
-		t.Run(tc.name, func(t *testing.T) { testMapSigningRotation(t, tc.disconnected) })
+		interrupted  bool
+	}{{"connected", false, false}, {"disconnected", true, false}, {"connected-interrupted", false, true}, {"disconnected-interrupted", true, true}} {
+		t.Run(tc.name, func(t *testing.T) { testMapSigningRotation(t, tc.disconnected, tc.interrupted) })
 	}
 }
 
-func testMapSigningRotation(t *testing.T, disconnected bool) {
+func testMapSigningRotation(t *testing.T, disconnected, interrupted bool) {
 	t.Helper()
 	s, n, id := controlScenario(t)
 	oldKey := s.Trust().ActiveKeyID
@@ -39,6 +41,15 @@ func testMapSigningRotation(t *testing.T, disconnected bool) {
 	if _, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", oldKey); err == nil {
 		t.Fatal("stale confirmation accepted a newly announced signing key")
 	}
+	if interrupted {
+		body, err := json.Marshal(api.PublicError{SchemaVersion: api.SchemaVersion, ErrorCode: api.ErrorCodeTemporarilyUnavailable, DiagnosticMessage: "fixture renewal unavailable", RequestID: "rotation-renewal-unavailable"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetResponseFault(http.MethodPost, "/nodes/register", http.StatusServiceUnavailable, "application/json", string(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	output, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", newKey)
 	var recovered ipc.TrustServerResponse
 	if err != nil || json.Unmarshal(output, &recovered) != nil || recovered.Outcome != ipc.RecoveryOutcomeAccepted || recovered.TrustedKeyID != newKey || recovered.OperationID == "" {
@@ -47,6 +58,24 @@ func testMapSigningRotation(t *testing.T, disconnected bool) {
 	desired := ipc.DesiredConnected
 	if disconnected {
 		desired = ipc.DesiredDisconnected
+	}
+	if interrupted {
+		operationID := recovered.OperationID
+		awaitRecovery := func() {
+			t.Helper()
+			n.AwaitStatus(func(v ipc.StatusResponse) bool {
+				return v.NodeID == id && v.NodeCredentialPresent && v.Recovery != nil && v.Recovery.OperationID == operationID && v.State == ipc.StateRecovering
+			})
+		}
+		awaitRecovery()
+		n.Stop()
+		n.Start()
+		awaitRecovery()
+		output, err = n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", newKey)
+		if err != nil || json.Unmarshal(output, &recovered) != nil || recovered.OperationID != operationID || recovered.Outcome != ipc.RecoveryOutcomeAlreadyApplied {
+			t.Fatal("interrupted trust recovery did not preserve its public operation identity")
+		}
+		s.ClearResponseFault(http.MethodPost, "/nodes/register")
 	}
 	awaitIntent := func() {
 		t.Helper()
