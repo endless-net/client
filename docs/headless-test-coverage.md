@@ -126,7 +126,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-047 | No C/R evidence audited | Public exposure contract, authorization and external reachability |
 | HC-048 | No C/R evidence audited | Audience restrictions, lifetime, shutdown and crash expiry |
 | HC-049 | No C/R evidence audited | Certificate/publication scope and frontend/backend TLS |
-| HC-050 | U sharing/encrypted engine tests | C grant/consent/revoke/expiry/new identity against published contracts without internal access |
+| HC-050 | C native recipient consumes a signed cross-network machine grant with exact TCP scope, expiry, renewal and withdrawal; U two-engine direct/Relay direction and key-rotation tests | Qualify the native root; new recipient identity and real source-Client variants |
 | HC-051 | C native signed two-host service DNS, actual host traffic, target isolation, host-set removal, approval loss and recovery are executable; U service discovery/runtime | Qualify the native root on every runner; health, load distribution and connection-draining semantics require product decisions |
 | HC-052 | L/C bounded IPC waits; independent event subscriptions/cancellation/restart and real CLI listening-timeout exit passed all 24 repetitions at qualified `38050bc`; installed absent-service failure passed all eight runners | Remaining public readiness conditions, slow consumers and stalled native IPC |
 | HC-053 | L/C structured IPC; request validation, non-object rejection, body-size boundaries, subscribers and real CLI NDJSON events passed all 24 repetitions at qualified `38050bc`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
