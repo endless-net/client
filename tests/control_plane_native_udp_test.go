@@ -351,6 +351,27 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	n.Start()
 	assertConnected()
 
+	// HC-021: a changed map signer must recover the same actual dataplane,
+	// including after restart, while node-credential trust remains unchanged.
+	t.Log("native lifecycle: confirm rotated map signer with retained traffic identity")
+	oldSigner := s.Trust().ActiveKeyID
+	if err := s.RotateMapSigningKey(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", oldSigner); err == nil {
+		t.Fatal("native traffic client accepted stale signing confirmation")
+	}
+	newSigner := s.Trust().ActiveKeyID
+	output, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", newSigner)
+	var trustResponse ipc.TrustServerResponse
+	if err != nil || json.Unmarshal(output, &trustResponse) != nil || trustResponse.Outcome != ipc.RecoveryOutcomeAccepted || trustResponse.TrustedKeyID != newSigner {
+		t.Fatal("native traffic client did not confirm rotated map signer")
+	}
+	assertConnected()
+	n.Stop()
+	n.Start()
+	assertConnected()
+
 	// HC-065 / IT-20: retain the reference peer's keys and routes throughout
 	// terminal retirement. Denial must follow the Client's credential handling,
 	// not a peer-map withdrawal or an application shutdown in the fixture.

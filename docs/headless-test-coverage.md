@@ -2455,6 +2455,17 @@ successful gate alone establishes full HC-001–HC-065 coverage.
 
 ## Next work
 
+The four native direct-traffic roots now rotate the map signer while connected,
+reject confirmation of the old key, explicitly confirm the new key and require
+real application traffic plus ICMP echo to recover. They restart the agent and
+repeat the traffic checks before the existing terminal credential-retirement
+phase. The reference peer keeps its keys and overlay address; only its return
+endpoint follows the public Client listening port. Existing identity and single
+enrollment assertions still apply. This extends changed-key recovery to native
+IPv4/IPv6 TCP/UDP/ICMP dataplane evidence, pending all hosted repetitions; it does
+not establish uninterrupted existing sessions during rotation. The inventory
+remains 33 roots / 792 native root outcomes.
+
 The interrupted rotation test distinguishes recovery scheduling from tunnel
 intent: a connected agent retries automatically after the renewal fault is
 removed, while an explicitly disconnected agent suppresses background control
