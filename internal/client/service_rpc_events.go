@@ -155,7 +155,7 @@ func (m *ClientRPCMutations) snapshotLocked(peer local.Peer, build *ipc.BuildIde
 			}
 		}
 		sort.Slice(status.CurrentOperations, func(i, j int) bool { return status.CurrentOperations[i].Id < status.CurrentOperations[j].Id })
-		if len(status.CurrentOperations) > 32 {
+		if len(status.CurrentOperations) > rpcMaxNonterminalOperations {
 			return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 		}
 	}

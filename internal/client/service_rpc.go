@@ -23,6 +23,7 @@ import (
 
 const rpcOperationRetention = 24 * time.Hour
 const rpcMaxOperationRecords = 4096
+const rpcMaxNonterminalOperations = 32
 
 var errRPCNoChange = errors.New("RPC durable state unchanged")
 
@@ -230,6 +231,21 @@ func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, r
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		if len(state.Operations) >= rpcMaxOperationRecords {
+			return rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+		}
+		// Check before domain preparation and ownership changes. Retries were
+		// resolved above and must remain readable even at capacity.
+		nonterminal := 0
+		for _, record := range state.Operations {
+			op := new(ipc.Operation)
+			if err := proto.Unmarshal(record.Operation, op); err != nil {
+				return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+			}
+			if !rpcOperationTerminal(op.State) {
+				nonterminal++
+			}
+		}
+		if nonterminal >= rpcMaxNonterminalOperations {
 			return rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 		}
 		if cfg.LocalOwnerID == "" && proto.GetExtension(method.Options(), ipc.E_AllowsInitialOwnershipClaim).(bool) {

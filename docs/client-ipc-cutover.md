@@ -110,8 +110,8 @@ discard stale state and reconnect in either case.
 
 The agent still needs to publish its verified map, tunnel, connection phase,
 session/credential and control-probe observations through PublishStatus. Other
-domain invalidations, capability providers, global operation bounds/Disconnect
-coalescing and production listener migration remain incomplete.
+domain invalidations, capability providers, Disconnect coalescing and production
+listener migration remain incomplete. Global operation bounds are covered below.
 
 ## Agent observation projection (2026-09-13)
 
@@ -170,3 +170,18 @@ client and observes its terminal event. Worker tests cover startup recovery,
 duplicate-worker rejection and cancellation/resumption. These checks do not yet
 prove production agent lifecycle integration, Disconnect preemption or actual
 multi-platform route cleanup.
+
+## Nonterminal operation bound (2026-09-13)
+
+Durable acceptance enforces the installation-wide bound of 32 nonterminal
+operations before domain preparation or ownership changes. Retained terminal
+records do not occupy an active slot. Idempotent replay is resolved before the
+capacity check, preserving recovery at capacity; conflicting request payloads
+still fail INVALID_ARGUMENT. Snapshot projection uses the same bound.
+
+`service_rpc_capacity_test.go` fills the journal with 32 pending operations,
+checks rejection without preparation/revision changes, exercises replay/conflict
+at capacity and verifies a terminal transition releases a slot without deleting
+its retained outcome. These are journal-level tests, not Disconnect acceptance.
+The native Disconnect provider and serialization/coalescing path still need to
+ensure Disconnect remains available at capacity; no such capability is claimed.
