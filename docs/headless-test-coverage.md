@@ -3062,6 +3062,15 @@ correction/completion additions. None of those changes is validated by this run.
 
 ## Next work
 
+Unclassified application probe failures now report whether a process exit was
+observed, its exit code, whether the parent three-second context expired,
+elapsed time and output byte count. Raw process errors/output are not printed;
+the existing fixed-message diagnostic allowlist remains. This addresses the
+missing distinction in Windows 2025 repeat 3 of run 34670764847. It does not
+retroactively identify that failure's cause. Successful/explicit-denial outcomes,
+exchange and process deadlines, and retry behavior are unchanged. Native evidence
+for the additional diagnostic is pending.
+
 Browser input correction coverage now continues after approval. For each of the
 three malformed-input variants, the fixture approves the one corrected request,
 the real CLI completes it and the agent exposes a valid cached map and credential

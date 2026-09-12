@@ -339,15 +339,20 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string,
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	args := []string{"--mode", "probe", "--network", protocol, "--address", address}
+	started := time.Now()
 	output, err := packetProbeCommand(ctx, namespace, binary, append(args, options...)...).CombinedOutput()
 	if err == nil {
 		return true
 	}
 	var exit *exec.ExitError
-	if errors.As(err, &exit) && packetProbeReportsDenial(exit.ExitCode(), output) {
+	exitCode := -1
+	if errors.As(err, &exit) {
+		exitCode = exit.ExitCode()
+	}
+	if exit != nil && packetProbeReportsDenial(exitCode, output) {
 		return false
 	}
-	t.Fatalf("application probe could not classify network access: %s: %v", packetProbeFailureReason(output), err)
+	t.Fatalf("application probe could not classify network access: %s; process_exited=%t exit_code=%d deadline_exceeded=%t elapsed=%s output_bytes=%d", packetProbeFailureReason(output), exit != nil, exitCode, errors.Is(ctx.Err(), context.DeadlineExceeded), time.Since(started).Round(time.Millisecond), len(output))
 	return false
 }
 
