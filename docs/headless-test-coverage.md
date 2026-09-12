@@ -2675,6 +2675,15 @@ recorded; this source has no successful publication qualification.
 
 ## Next work
 
+The unexplained Windows UDP nonce mismatch now has bounded probe diagnostics:
+the number of differing bytes versus the current request and zero bytes in the
+received 32-byte response. Payloads/nonces are not printed. The harness accepts
+only an exact reconstructed format with valid counter ranges; trailing or
+arbitrary child output remains withheld. The wrong-response regression still
+requires an error distinct from traffic denial and verifies a one-byte mutation.
+This improves investigation only: unknown replies remain fatal, and the observed
+native mismatch has not been attributed or fixed.
+
 Windows HC-004/053 installation now checks administrator-only local-forget using
 a restricted child CLI token in both connection states. Administrators must be
 deny-only, CLI version must execute, and local-forget must fail without a success

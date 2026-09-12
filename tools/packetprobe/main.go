@@ -185,7 +185,16 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 		reply := x.frame
 		x.filled = 0
 		if _, known := x.pending[reply]; !known {
-			return errors.New("application response mismatch")
+			different, zero := 0, 0
+			for i, value := range reply {
+				if value != request[i] {
+					different++
+				}
+				if value == 0 {
+					zero++
+				}
+			}
+			return fmt.Errorf("application response mismatch: different_bytes=%d zero_bytes=%d", different, zero)
 		}
 		delete(x.pending, reply)
 		if reply == request {

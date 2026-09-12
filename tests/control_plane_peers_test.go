@@ -347,16 +347,27 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string,
 	if errors.As(err, &exit) && exit.ExitCode() == 2 {
 		return false
 	}
-	// Report only known fixed probe errors, never arbitrary subprocess output.
-	reason := "unclassified probe failure"
-	for _, known := range []string{"application deadline setup failed", "partial application request write", "application response length mismatch", "application response mismatch", "too many outstanding application requests", "network must be tcp or udp"} {
-		if strings.TrimSpace(string(output)) == known {
-			reason = known
-			break
+	t.Fatalf("application probe could not classify network access: %s: %v", packetProbeFailureReason(output), err)
+	return false
+}
+
+func packetProbeFailureReason(output []byte) string {
+	// Reconstruct only fixed errors and bounded counters, never raw output.
+	value := strings.TrimSpace(string(output))
+	for _, known := range []string{"application deadline setup failed", "partial application request write", "application response length mismatch", "too many outstanding application requests", "network must be tcp or udp"} {
+		if value == known {
+			return known
 		}
 	}
-	t.Fatalf("application probe could not classify network access: %s: %v", reason, err)
-	return false
+	const format = "application response mismatch: different_bytes=%d zero_bytes=%d"
+	var different, zero int
+	if n, err := fmt.Sscanf(value, format, &different, &zero); err == nil && n == 2 && different >= 1 && different <= 32 && zero >= 0 && zero <= 32 {
+		canonical := fmt.Sprintf(format, different, zero)
+		if value == canonical {
+			return canonical
+		}
+	}
+	return "unclassified probe failure"
 }
 
 func startApplicationSession(t *testing.T, binary, namespace, protocol, address string) func(string) {

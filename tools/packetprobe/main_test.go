@@ -223,7 +223,7 @@ func TestProbeRejectsWrongResponseAndClosedPort(t *testing.T) {
 			_, _ = conn.Write(data)
 		}
 	}()
-	if err := probe("tcp", address); err == nil || errors.Is(err, errUnreachable) {
+	if err := probe("tcp", address); err == nil || errors.Is(err, errUnreachable) || !strings.HasPrefix(err.Error(), "application response mismatch: different_bytes=1 zero_bytes=") {
 		t.Fatal("corrupt application response was not distinguished from network rejection")
 	}
 	_ = listener.Close()
