@@ -37,10 +37,20 @@ func TestControlPlaneNativeIPv6TCPTraffic(t *testing.T) {
 }
 
 func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
-	exerciseNativeTrafficScenario(t, ipv6, protocol, false)
+	exerciseNativeTrafficScenario(t, ipv6, protocol, false, false)
 }
 
-func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flowLogs bool) {
+func TestControlPlaneNativeLogoutTraffic(t *testing.T) {
+	for _, family := range []string{"ipv4", "ipv6"} {
+		for _, protocol := range []string{"tcp", "udp"} {
+			t.Run(family+"/"+protocol, func(t *testing.T) {
+				exerciseNativeTrafficScenario(t, family == "ipv6", protocol, false, true)
+			})
+		}
+	}
+}
+
+func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flowLogs, logout bool) {
 	t.Helper()
 	requireControlScenario(t)
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
@@ -183,6 +193,45 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 	}
 	assertICMP("initial", true)
+	if logout {
+		var response ipc.LogoutResponse
+		n.Service("logout", &response)
+		if response.Outcome != ipc.LogoutOutcomeRemoteCleanupConfirmed {
+			t.Fatal("native logout did not confirm remote cleanup")
+		}
+		clean := func(v ipc.StatusResponse) bool {
+			return v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent && v.PeerCount == 0 && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+		}
+		n.AwaitStatus(clean)
+		for range 3 {
+			first("blocked")
+			second("blocked")
+			if fresh("24001") || fresh("24002") {
+				t.Fatal("confirmed logout retained fresh application access")
+			}
+		}
+		assertICMP("logout", false)
+		n.Stop()
+		n.Start()
+		n.AwaitStatus(clean)
+		if fresh("24001") || fresh("24002") {
+			t.Fatal("agent restart restored application access after logout")
+		}
+		assertICMP("logout-restart", false)
+		deleted, registered := 0, 0
+		for _, event := range s.Events() {
+			if event.Kind == "deleted" && event.NodeID == initial.NodeID {
+				deleted++
+			}
+			if event.Kind == "registered" {
+				registered++
+			}
+		}
+		if deleted != 1 || registered != 1 {
+			t.Fatal("native logout did not retain one creation and one confirmed deletion")
+		}
+		return
+	}
 	limited := peer
 	limited.ACLRestricted = true
 	limited.ACLGrants = []api.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: protocol, Port: 24002}}}}

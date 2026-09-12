@@ -2773,6 +2773,16 @@ public status observation. Those increments require their own exact-source CI.
 
 ## Next work
 
+HC-022 additionally has `TestControlPlaneNativeLogoutTraffic`: four IPv4/IPv6
+TCP/UDP variants establish real native traffic and two sessions, then require
+confirmed logout to block those sessions and fresh traffic on both ports.
+Public status must clear enrollment/map state; restart must retain that state
+and traffic denial. The TCP reference peer also checks ICMP echo denial before
+and after restart. The testserver transcript requires one original creation and
+one confirmed deletion. This uses the existing protocol peer, not another real
+Client or a backend runtime. Native evidence is pending. With this 36th root,
+the automatic matrix inventory requires 36 x 3 x 8 = 864 root outcomes.
+
 HC-022 adds `TestControlPlaneLogoutRetryAfterControlRecovery`, the 35th common
 root. Unavailable control must cause an explicitly unconfirmed logout error;
 public status must retain the original registration and credential across an
