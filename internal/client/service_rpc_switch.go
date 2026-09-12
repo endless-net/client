@@ -33,6 +33,12 @@ func (m *ClientRPCMutations) selectProfileAs(peer local.Peer, request *ipc.Selec
 		if err != nil {
 			return err
 		}
+		for _, raw := range profile.Configuration.ControlPlaneURLs {
+			origin, err := rpcProfileOrigin(raw)
+			if err != nil || origin != profile.ControlOrigin {
+				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			}
+		}
 		if cfg.RPCState.ProfileSwitch != nil {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 		}
@@ -64,7 +70,7 @@ func profileConfiguration(cfg Config) Config {
 	// These identify the installation, not a selected account/network.
 	cfg.PrivateKey = ""
 	cfg.IdentityPrivateKey = ""
-	cfg.DeviceFingerprint = ""
+	// Fingerprints include the control origin; retain each profile's binding.
 	return cfg
 }
 
@@ -161,8 +167,17 @@ func (m *ClientRPCMutations) ReconcileProfileSwitch(ctx context.Context, driver 
 			next.LocalOwnerID = cfg.LocalOwnerID
 			next.PrivateKey = cfg.PrivateKey
 			next.IdentityPrivateKey = cfg.IdentityPrivateKey
-			next.DeviceFingerprint = cfg.DeviceFingerprint
-			next.ControlPlaneURLs = []string{target.ControlOrigin}
+			// Historical URL spelling participates in the stored fingerprint.
+			// Preserve it when it still names this immutable canonical origin.
+			if len(next.ControlPlaneURLs) == 0 {
+				next.ControlPlaneURLs = []string{target.ControlOrigin}
+			}
+			for _, raw := range next.ControlPlaneURLs {
+				origin, err := rpcProfileOrigin(raw)
+				if err != nil || origin != target.ControlOrigin {
+					return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+				}
+			}
 			*cfg = next
 			state.ActiveProfileID = plan.To
 			state.ProfileSwitch.Activated = true

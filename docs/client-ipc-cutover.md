@@ -331,3 +331,18 @@ reset-to-default source and observer denial; event tests check both invalidation
 at the committed revision. Missing providers still mean the other managed
 settings are absent, not proven unlocked or policy-free. Full device/account
 policy projection and UF-20 acceptance remain outstanding.
+
+## Profile device-binding correction (2026-09-13)
+
+Inspection of the existing registration flow showed that DeviceFingerprint binds
+the installation/public key to its control URL; it is not a profile-independent
+installation value. Profile handover now saves/restores each profile's fingerprint
+instead of carrying the previous server's fingerprint into the target context.
+Installation private keys remain installation-scoped and are not duplicated.
+
+Saved control URLs are retained subject to the existing config normalization and
+must resolve to the profile's immutable canonical origin. They are not replaced
+with a differently spelled canonical origin that could change a historical device
+binding. The round-trip two-origin test verifies both fingerprints, URL bindings
+and key scope without reading real installation state. Actual cross-server
+registration and OS tunnel acceptance remain required system evidence.

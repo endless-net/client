@@ -240,3 +240,67 @@ func TestRPCProfileSwitchSameProfileAndBusy(t *testing.T) {
 		t.Fatal("same profile continuity", err)
 	}
 }
+
+func TestRPCProfileSwitchPreservesOriginBoundFingerprints(t *testing.T) {
+	m := newRPCStoreTest(t)
+	peer := local.Peer{Identity: "uid:1000"}
+	ids := []string{}
+	for _, origin := range []string{"https://a.test", "https://b.test"} {
+		r := rpcCreateRequest(t, m)
+		r.ControlOrigin = origin
+		op, err := m.createProfileAs(peer, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, op.ProfileId)
+	}
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.RPCState.ActiveProfileID = ids[0]
+		cfg.PrivateKey = "installation-key"
+		cfg.DeviceFingerprint = "fingerprint-for-origin-a"
+		cfg.ControlPlaneURLs = []string{"https://A.TEST:443/"}
+		b := cfg.RPCState.Profiles[ids[1]]
+		b.Configuration.DeviceFingerprint = "fingerprint-for-origin-b"
+		b.Configuration.ControlPlaneURLs = []string{"https://B.TEST:443/"}
+		cfg.RPCState.Profiles[ids[1]] = b
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE, nil
+	}, Start: func(context.Context, Config) error { t.Fatal("inactive intent started a tunnel"); return nil }}
+	for _, index := range []int{1, 0} {
+		if _, err := m.selectProfileAs(peer, &ipc.SelectProfileRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: &ipc.ProfileRef{ProfileId: ids[index]}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.ReconcileProfileSwitch(t.Context(), driver); err != nil {
+			t.Fatal(err)
+		}
+		cfg := m.store.Read()
+		wantFingerprint := []string{"fingerprint-for-origin-a", "fingerprint-for-origin-b"}[index]
+		wantURL := []string{"https://A.TEST:443/", "https://B.TEST:443/"}[index]
+		wantURL = (Config{ControlPlaneURLs: []string{wantURL}}).ControlURLs()[0]
+		if cfg.DeviceFingerprint != wantFingerprint || cfg.ControlPlaneURLs[0] != wantURL || cfg.PrivateKey != "installation-key" {
+			t.Fatalf("profile switch binding mismatch: fingerprint=%t url=%t key=%t", cfg.DeviceFingerprint == wantFingerprint, cfg.ControlPlaneURLs[0] == wantURL, cfg.PrivateKey == "installation-key")
+		}
+		inactive := cfg.RPCState.Profiles[ids[1-index]].Configuration
+		if inactive.DeviceFingerprint == "" || inactive.PrivateKey != "" {
+			t.Fatal("saved profile lost binding or copied installation key")
+		}
+	}
+	if err := m.store.Update(func(cfg *Config) error {
+		b := cfg.RPCState.Profiles[ids[1]]
+		b.Configuration.ControlPlaneURLs = []string{"https://different-server.test"}
+		cfg.RPCState.Profiles[ids[1]] = b
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before := m.Metadata().Revision
+	_, err := m.selectProfileAs(peer, &ipc.SelectProfileRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: &ipc.ProfileRef{ProfileId: ids[1]}})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	if m.Metadata().Revision != before || m.store.Read().RPCState.ProfileSwitch != nil {
+		t.Fatal("inconsistent target was durably accepted")
+	}
+}
