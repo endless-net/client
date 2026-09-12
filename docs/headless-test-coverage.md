@@ -2816,6 +2816,18 @@ has 36 roots and still requires its own 864-outcome matrix. This successful
 
 ## Next work
 
+HC-018 adds `TestControlPlaneInterruptedDisconnect`, the 37th common root.
+The contract peer applies one authenticated offline request but holds its HTTP
+response. While the real disconnect CLI is still waiting, the driver forcibly
+terminates the agent and requires the CLI to fail. After restart, public status
+must retain the original credential/map and disconnected intent; explicit connect
+must restore connected intent without another registration. No private persisted
+state is read. A short fixture check verifies that the hold does not block other
+requests, release is idempotent and the next offline response is not held.
+This tests one process-crash boundary, not power loss during a storage write or
+actual traffic retirement. Native evidence is pending; the required root matrix
+is now 37 x 3 x 8 = 888 outcomes.
+
 HC-022/053 request validation now calls the public native local-forget endpoint
 directly, bypassing CLI validation. Omitted/false confirmation must return the
 typed confirmation-required error; a string in place of the boolean must return

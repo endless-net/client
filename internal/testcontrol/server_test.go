@@ -60,6 +60,42 @@ func setup(t *testing.T) (*testcontrol.Server, *api.API, api.RegisterNodeRequest
 	return s, a, req, result, key
 }
 
+func TestOfflineResponseHoldLeavesOtherRequestsUsable(t *testing.T) {
+	s, a, _, result, _ := setup(t)
+	a.HTTPClient = &http.Client{Timeout: 2 * time.Second}
+	entered, release := s.HoldNextOfflineResponse(result.Node.ID)
+	defer release()
+	done := make(chan error, 1)
+	go func() {
+		_, err := a.UpdateNodeEndpointState(result.Node.ID, api.UpdateNodeEndpointRequest{Status: api.NodeStatusOffline})
+		done <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("offline request did not reach the response hold")
+	}
+	probe := api.NewAPI(s.URL(), "")
+	probe.HTTPClient = &http.Client{Timeout: time.Second}
+	_, err := probe.ServerKey()
+	check(t, err)
+	select {
+	case <-done:
+		t.Fatal("held endpoint response returned before release")
+	default:
+	}
+	release()
+	release()
+	select {
+	case err := <-done:
+		check(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("released endpoint response did not complete")
+	}
+	_, err = a.UpdateNodeEndpointState(result.Node.ID, api.UpdateNodeEndpointRequest{Status: api.NodeStatusOffline})
+	check(t, err)
+}
+
 func TestPersistentPublicErrorMatchesHTTPContract(t *testing.T) {
 	s := testcontrol.New(t)
 	for _, code := range []api.ErrorCode{api.ErrorCodeTemporarilyUnavailable, api.ErrorCodeAuthorizationDenied} {

@@ -135,6 +135,28 @@ func (n *Node) Start() {
 	n.awaitStatusWithin(30*time.Second, func(s ipc.StatusResponse) bool { return s.IPCVersion == ipc.Version })
 	n.t.Logf("agent IPC became ready after %s", time.Since(started).Round(time.Millisecond))
 }
+
+// Crash terminates the real process without a graceful shutdown signal.
+func (n *Node) Crash() {
+	n.t.Helper()
+	if n.cmd == nil {
+		n.t.Fatal("no running agent to terminate")
+	}
+	cmd := n.cmd
+	if err := cmd.Process.Kill(); err != nil {
+		n.t.Fatal("could not terminate the agent")
+	}
+	n.cmd = nil
+	select {
+	case err := <-n.done:
+		if err == nil {
+			n.t.Fatal("forced agent termination unexpectedly returned success")
+		}
+	case <-time.After(5 * time.Second):
+		n.t.Fatal("forced agent termination did not complete")
+	}
+}
+
 func (n *Node) Stop() {
 	if n.cmd == nil {
 		return

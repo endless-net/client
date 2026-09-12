@@ -98,6 +98,7 @@ type Server struct {
 	flowReports              []*rpc.ReportFlowLogRequest
 	loseFlowAcknowledgement  bool
 	setTLSValidity           func(time.Time, time.Time) error
+	offlineResponses         map[string]*offlineResponseHold
 }
 
 func New(t testing.TB) *Server {
@@ -741,7 +742,7 @@ func (s *Server) endpoint(w http.ResponseWriter, r *http.Request) {
 	// A liveness heartbeat must not manufacture a new map revision and keep
 	// the agent from ever entering its map stream.
 	if reflect.DeepEqual(m.Node, n.Map.Node) {
-		writeJSON(w, m)
+		s.writeEndpointResponseLocked(w, r, req.Status, m)
 		return
 	}
 	m.Revision.Network++
@@ -755,7 +756,7 @@ func (s *Server) endpoint(w http.ResponseWriter, r *http.Request) {
 	n.Map = m
 	n.Delta = nil
 	s.recordLocked(Event{Kind: "endpoint", NodeID: m.Node.ID})
-	writeJSON(w, m)
+	s.writeEndpointResponseLocked(w, r, req.Status, m)
 }
 
 func (s *Server) deleteNode(w http.ResponseWriter, r *http.Request) {
