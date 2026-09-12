@@ -310,11 +310,13 @@ func (n *Node) awaitStatusWithin(timeout time.Duration, match func(ipc.StatusRes
 	responses, failures := 0, 0
 	lastCategory := "none"
 	errorCategories := make(map[string]int)
+	wireGuardStates := make(map[string]int)
 	err := Await(ctx, func() bool {
 		status, category, err := n.statusWithin(ctx)
 		if err == nil {
 			responses++
 			last = status
+			wireGuardStates[wireGuardInspectionState(status.WireGuard)]++
 			return match(status)
 		}
 		failures++
@@ -323,6 +325,7 @@ func (n *Node) awaitStatusWithin(timeout time.Duration, match func(ipc.StatusRes
 		return false
 	})
 	if err != nil {
+		n.t.Logf("WireGuard inspection states during wait: %v", wireGuardStates)
 		exited, exitCode := false, -1
 		select {
 		case processErr := <-n.done:
@@ -354,6 +357,28 @@ func (n *Node) awaitStatusWithin(timeout time.Duration, match func(ipc.StatusRes
 	}
 	return last
 }
+
+// Only exact, known public IPC messages become diagnostic labels. Arbitrary
+// error text may contain sensitive context and must not enter test artifacts.
+func wireGuardInspectionState(inspection *ipc.WireGuardInspection) string {
+	if inspection == nil {
+		return "absent"
+	}
+	if inspection.OK {
+		return "ready"
+	}
+	switch inspection.Error {
+	case "wireguard-go is not running":
+		return "not-running"
+	case "wireguard-go operation in progress; inspection unavailable":
+		return "operation-in-progress"
+	case "":
+		return "not-ready"
+	default:
+		return "other-error-withheld"
+	}
+}
+
 func Await(ctx context.Context, condition func() bool) error {
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()

@@ -5216,3 +5216,22 @@ checks cover installation, transitions and withdrawal on the Client interface.
 Local short tests, vet and lint pass; native execution of this fix is pending.
 Preserving the physical `/0` does not establish off-host tunnel/control endpoint
 bypass: separate underlay routing and its evidence remain required.
+
+### 2026-09-12: Windows initial application-map wait diagnostics
+
+[Windows 2022 repeat 1](https://github.com/endless-net/client/actions/runs/34704108878/job/103581615797)
+at `cce41e6a3b91fd322f7bb9a91125a1dd3bc251c0` also fails IPv4 exit traffic:
+the selected physical default has effective metric 5 versus Client metric 10.
+The `/1` change addresses precedence independently of either metric value;
+native verification remains pending.
+
+The same job fails the first IPv4 application-map wait after 15 seconds, with
+600 successful IPC responses, revision 1, no peers or agent snapshot, and an
+unsuccessful WireGuard inspection. This reproduces the initial-application
+failure class from `92983ae`; it does not establish a DNS or grant-policy defect.
+The harness now counts public IPC inspection states throughout each wait and
+reports those counts on failure. Exact known messages distinguish an operation
+in progress from an engine not running; other error text is withheld. A short
+regression ensures an arbitrary suffix on a known message is also withheld.
+No readiness condition or deadline changes. Local short tests, vet and lint
+pass; the additional native diagnostic evidence is pending.
