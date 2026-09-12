@@ -567,6 +567,8 @@ components:
               type: string
             node_approval_state:
               type: string
+            ephemeral:
+              type: boolean
             enrollment_request_id:
               type: string
             approval_url:
