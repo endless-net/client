@@ -2502,6 +2502,16 @@ HC-001–HC-065 completion remains unproven.
 
 ## Next work
 
+The first interrupted-rotation run exposed an invalid fixture response: its body
+used `request_id=rotation-renewal-unavailable`, while `SetResponseFault` emitted
+`X-Request-ID: test-request`. The Client correctly classified this mismatch as a
+protocol failure rather than a retryable outage. The fixture now provides a
+typed `SetPublicError` helper with matching body/header IDs, and the rotation test
+uses it for stable renewal unavailability. A public HTTP regression validates
+both repeated temporary and authorization errors with the producer's decoder
+and HTTP-response validator. Client error classification is unchanged; corrected
+interrupted-recovery evidence still requires the native matrix.
+
 The native ownership test now also starts the successor agent through the file
 symlink after releasing the original owner. The same identity and connection
 intent must survive, subsequent duplicate contenders must still be rejected,

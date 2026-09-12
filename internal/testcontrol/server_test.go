@@ -60,6 +60,24 @@ func setup(t *testing.T) (*testcontrol.Server, *api.API, api.RegisterNodeRequest
 	return s, a, req, result, key
 }
 
+func TestPersistentPublicErrorMatchesHTTPContract(t *testing.T) {
+	s := testcontrol.New(t)
+	for _, code := range []api.ErrorCode{api.ErrorCodeTemporarilyUnavailable, api.ErrorCodeAuthorizationDenied} {
+		check(t, s.SetPublicError(http.MethodPost, "/nodes/register", code))
+		for range 2 {
+			response, err := http.Post(s.URL()+"/nodes/register", "application/json", strings.NewReader("{}"))
+			check(t, err)
+			problem, err := api.DecodePublicError(response.Body)
+			_ = response.Body.Close()
+			check(t, err)
+			check(t, problem.ValidateHTTPResponse(response.StatusCode, response.Header.Get("X-Request-ID")))
+			if problem.ErrorCode != code {
+				t.Fatal("persistent fixture error changed its public classification")
+			}
+		}
+	}
+}
+
 func TestMapRotationPreservesCredentialTrust(t *testing.T) {
 	s, a, _, registered, _ := setup(t)
 	oldTrust := s.Trust()

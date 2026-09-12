@@ -42,11 +42,7 @@ func testMapSigningRotation(t *testing.T, disconnected, interrupted bool) {
 		t.Fatal("stale confirmation accepted a newly announced signing key")
 	}
 	if interrupted {
-		body, err := json.Marshal(api.PublicError{SchemaVersion: api.SchemaVersion, ErrorCode: api.ErrorCodeTemporarilyUnavailable, DiagnosticMessage: "fixture renewal unavailable", RequestID: "rotation-renewal-unavailable"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := s.SetResponseFault(http.MethodPost, "/nodes/register", http.StatusServiceUnavailable, "application/json", string(body)); err != nil {
+		if err := s.SetPublicError(http.MethodPost, "/nodes/register", api.ErrorCodeTemporarilyUnavailable); err != nil {
 			t.Fatal(err)
 		}
 	}

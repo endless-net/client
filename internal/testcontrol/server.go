@@ -295,6 +295,25 @@ func (s *Server) FailNext(method, path string, code api.ErrorCode) error {
 	return nil
 }
 
+// SetPublicError supplies a valid persistent contract error, including the
+// request-ID agreement enforced by consumers. Malformed-response tests should
+// continue to use SetResponseFault directly.
+func (s *Server) SetPublicError(method, path string, code api.ErrorCode) error {
+	problem, err := api.NewPublicError(code, "fixture public error", "test-request")
+	if err != nil {
+		return err
+	}
+	body, err := api.MarshalPublicError(problem)
+	if err != nil {
+		return err
+	}
+	status, ok := code.HTTPStatus()
+	if !ok {
+		return errors.New("public error has no HTTP status")
+	}
+	return s.SetResponseFault(method, path, status, "application/json", string(body))
+}
+
 // SetResponseFault persistently replaces a single wire route with an explicit
 // negative response. Unlike FailNext it lets a process observe a stable failure.
 // Bodies are test-supplied and never included in the event transcript.
