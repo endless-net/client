@@ -336,4 +336,3 @@ capabilities, managed-policy sources, external update outcomes, and generated SD
 publication. The schema provides explicit unavailable states while these are
 unresolved. File transfer, local web UI, SSH and exit-node hosting remain outside
 this BA and this contract.
-
