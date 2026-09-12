@@ -17,7 +17,7 @@ func TestControlPlaneDNSUpstreamResponseBinding(t *testing.T) {
 				n.Stop()
 				var fault atomic.Int32
 				var udpQueries, tcpQueries atomic.Int32
-				upstream, _, _ := dnsContractUpstream(t, network, fallback, [4]byte{203, 0, 113, 4}, func(reply *dnsmessage.Message, tcp bool) {
+				upstream, _, setCode := dnsContractUpstream(t, network, fallback, [4]byte{203, 0, 113, 4}, func(reply *dnsmessage.Message, tcp bool) {
 					if tcp {
 						tcpQueries.Add(1)
 					} else {
@@ -71,6 +71,22 @@ func TestControlPlaneDNSUpstreamResponseBinding(t *testing.T) {
 						if udpQueries.Load()-beforeUDP != 1 || tcpQueries.Load()-beforeTCP != wantTCP {
 							t.Fatal("repaired upstream answer did not use the required transport path")
 						}
+					}
+					// A correlated negative answer is a valid DNS outcome. Preserve
+					// its RCODE instead of turning every upstream rejection into SERVFAIL.
+					for _, code := range []dnsmessage.RCode{dnsmessage.RCodeNameError, dnsmessage.RCodeRefused} {
+						setCode(code)
+						beforeUDP, beforeTCP := udpQueries.Load(), tcpQueries.Load()
+						assertDNSWire(t, transport, address, "public.example.", code, "")
+						wantTCP := int32(0)
+						if fallback {
+							wantTCP = 1
+						}
+						if udpQueries.Load()-beforeUDP != 1 || tcpQueries.Load()-beforeTCP != wantTCP {
+							t.Fatal("valid negative DNS answer did not use the required transport path")
+						}
+						setCode(dnsmessage.RCodeSuccess)
+						assertDNSWire(t, transport, address, "public.example.", dnsmessage.RCodeSuccess, "203.0.113.4")
 					}
 				}
 			})

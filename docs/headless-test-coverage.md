@@ -2896,6 +2896,14 @@ control-outage traffic, strict probe-denial oracle and DNS response-binding work
 
 ## Next work
 
+The native DNS response-binding scenario also distinguishes valid upstream
+negative answers from correlation failures: NXDOMAIN and REFUSED must retain
+their original RCODE and contain no answer, then the same running proxy must
+resolve successfully after upstream recovery. Wire counters verify the expected
+UDP-only or UDP-to-TCP path. Both downstream transports and both IP families run
+these cases in all six existing leaves. Their native CI evidence is pending;
+the assertions do not treat an arbitrary upstream failure as name absence.
+
 The later 2026-09-12 snapshot of run `34668955037` extends the partial evidence
 above to nineteen completed jobs with the same 37-root inventory: **701 PASS,
 2 FAIL, 0 SKIP**, including **74 PASS and 2 FAIL** flow-consent leaves. Five
