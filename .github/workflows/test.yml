@@ -388,17 +388,6 @@ jobs:
     needs: [verify-linux, verify-windows, verify-macos, installation, control-plane, control-plane-platforms, container-client]
     if: ${{ !cancelled() }}
     steps:
-      - name: Require platform verification
-        shell: bash
-        run: |
-          set -euo pipefail
-          [ "${{ needs.verify-linux.result }}" = "success" ]
-          [ "${{ needs.verify-windows.result }}" = "success" ]
-          [ "${{ needs.verify-macos.result }}" = "success" ]
-          [ "${{ needs.installation.result }}" = "success" ]
-          [ "${{ needs.control-plane.result }}" = "success" ]
-          [ "${{ needs.control-plane-platforms.result }}" = "success" ]
-          [ "${{ needs.container-client.result }}" = "success" ]
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
@@ -412,7 +401,19 @@ jobs:
           set -euo pipefail
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
             --pattern 'client-contracts-*' --dir "$RUNNER_TEMP/contract-reports"
-          go run ./tools/verify-contract-results "$RUNNER_TEMP/contract-reports" "$GITHUB_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          go run ./tools/verify-contract-results "$RUNNER_TEMP/contract-reports" "$GITHUB_SHA" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Require platform verification
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "${{ needs.verify-linux.result }}" = "success" ]
+          [ "${{ needs.verify-windows.result }}" = "success" ]
+          [ "${{ needs.verify-macos.result }}" = "success" ]
+          [ "${{ needs.installation.result }}" = "success" ]
+          [ "${{ needs.control-plane.result }}" = "success" ]
+          [ "${{ needs.control-plane-platforms.result }}" = "success" ]
+          [ "${{ needs.container-client.result }}" = "success" ]
 
   external-stun-compatibility:
     name: External STUN compatibility

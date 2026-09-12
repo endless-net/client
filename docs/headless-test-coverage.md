@@ -5073,3 +5073,12 @@ Omission regressions remove each required leaf in turn on every platform and
 verify rejection despite a passing parent, while accepting complete reports.
 These checks enforce existing scenario variants and do not substitute for their
 native execution. Local short tests, vet and lint pass.
+
+The aggregate `verify` job now inspects contract artifacts before checking
+dependency conclusions, so a failed platform no longer prevents report
+validation from running. Verifier diagnostics are included in the job summary.
+The final dependency check runs even after report validation fails and still
+requires every component, installation, control-plane, native-platform and
+container job to succeed. Either a bad report or a failed dependency keeps the
+gate red. This workflow-only reorder was reviewed with `git diff --check`;
+its hosted behavior remains pending on its own source revision.
