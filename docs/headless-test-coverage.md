@@ -3151,6 +3151,24 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+The first completed contract report from run 34673867164,
+[Ubuntu 24.04 ARM repeat 2](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753932),
+contains 38 PASS roots, one FAIL and zero SKIP at source
+`0cf6d735193f1ffc0980b68cf19bb3b602a54423`. Both Relay roots and all four flow
+consent leaves pass in this report. Four retained TCP recoveries take 507 ms,
+559 ms, 580 ms and 1.565 s after the initial failed challenge, using one or two
+additional challenges on the same socket. This is one repetition, not full
+platform qualification.
+
+The failed route-advertisement endpoint leaf exposed a testcontrol omission:
+new-node registration did not copy the request endpoint into the signed response.
+A public SDK browser-enrollment fixture regression reproduces the missing field
+without any real Client process, then passes after initializing the new node's
+endpoint from the validated request. The regression also verifies the map
+signature. Existing-node endpoint refresh remains owned by its endpoint operation.
+The native assertion is unchanged; it must pass in a later source containing this
+fixture correction. No Client runtime fix or producer behavior is claimed here.
+
 HC-005 now also races two real agent processes after stopping the existing
 owner, in both connected and disconnected states. A barrier releases both
 launches; one must exit specifically with the configuration-ownership error,

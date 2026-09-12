@@ -537,7 +537,9 @@ func TestBrowserEnrollment(t *testing.T) {
 			s := testcontrol.New(t)
 			n, _, err := s.AddNetwork("browser", "100.81.0.0/24")
 			check(t, err)
-			req, _ := request(t, n, "")
+			req, key := request(t, n, "")
+			req.Endpoint = "127.0.0.1:51820"
+			check(t, api.SetRegisterNodeIdentityProof(&req, key))
 			a := api.NewAPI(s.URL(), "")
 			e, err := a.CreateNodeEnrollmentRequest(req)
 			check(t, err)
@@ -554,6 +556,9 @@ func TestBrowserEnrollment(t *testing.T) {
 					t.Fatal("approved enrollment did not complete")
 				}
 				check(t, api.VerifyNetworkMapSignatureWithTrustBundle(*completed.Registration, s.Trust()))
+				if completed.Registration.Node.Endpoint != req.Endpoint {
+					t.Fatal("signed enrollment response lost the requested endpoint")
+				}
 				again, err := a.CompleteNodeEnrollmentRequest(e.Request.ID, e.PollToken)
 				check(t, err)
 				if again.Registration.Node.ID != completed.Registration.Node.ID {

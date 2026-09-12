@@ -683,7 +683,7 @@ func (s *Server) registerLocked(req api.RegisterNodeRequest, authorization strin
 		if !p.Contains(addr) {
 			return api.RegisterNodeResponse{}, "", errors.New("network full")
 		}
-		n = &node{Map: api.RegisterNodeResponse{Node: api.Node{ID: "node-" + rand.Text(), NetworkID: networkID, Hostname: req.Hostname, IdentityPublicKey: req.IdentityPublicKey, PublicKey: req.PublicKey, DeviceFingerprint: req.DeviceFingerprint, AssignedIP: addr.String(), ApprovalState: api.NodeApprovalApproved, Status: "online"}, Network: network, Revision: api.MapRevision{Network: 1}}}
+		n = &node{Map: api.RegisterNodeResponse{Node: api.Node{ID: "node-" + rand.Text(), NetworkID: networkID, Hostname: req.Hostname, Endpoint: req.Endpoint, IdentityPublicKey: req.IdentityPublicKey, PublicKey: req.PublicKey, DeviceFingerprint: req.DeviceFingerprint, AssignedIP: addr.String(), ApprovalState: api.NodeApprovalApproved, Status: "online"}, Network: network, Revision: api.MapRevision{Network: 1}}}
 	}
 	result := clone(n.Map)
 	result.Node.AdvertisedIPs = slices.Clone(req.AdvertisedIPs)
