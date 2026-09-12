@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -47,9 +48,12 @@ type clientRPCOperationRecord struct {
 // mutate only the supplied config: no network, device or other external effects
 // may run until acceptance commits. Runtime reconciliation executes those effects.
 type ClientRPCMutations struct {
-	store      *ConfigStore
-	instanceID string
-	now        func() time.Time
+	mu             sync.Mutex
+	store          *ConfigStore
+	instanceID     string
+	now            func() time.Time
+	observedStatus *ipc.Status
+	subscribers    map[*rpcSubscriber]struct{}
 }
 
 func NewClientRPCMutations(store *ConfigStore) (*ClientRPCMutations, error) {
@@ -136,6 +140,8 @@ func (m *ClientRPCMutations) Authorize(ctx context.Context, _ ipc.Access, proced
 }
 
 func (m *ClientRPCMutations) Metadata() *ipc.SnapshotMetadata {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	revision := uint64(1)
 	if state := m.store.Read().RPCState; state != nil {
 		revision = state.Revision
@@ -155,6 +161,8 @@ func (m *ClientRPCMutations) acceptAs(peer local.Peer, procedure string, request
 // Immediate effects are limited to this same durable config transaction. This
 // must never be used for network/device effects that can outlive a failed save.
 func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, request proto.Message, prepare func(*Config, *ipc.Operation) error, immediate bool) (*ipc.Operation, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	method := rpcMethod(procedure)
 	var accepted *ipc.Operation
 	var reused bool
@@ -262,6 +270,9 @@ func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, r
 	if err != nil && !errors.Is(err, errRPCNoChange) {
 		return nil, false, err
 	}
+	if !reused {
+		m.publishMutationLocked(accepted)
+	}
 	return accepted, reused, nil
 }
 
@@ -350,6 +361,8 @@ func validRPCOperationTransition(previous, next *ipc.Operation) bool {
 // RPC caller. Persist result/state together; external effects precede terminal
 // success. Failed persistence leaves the prior durable operation recoverable.
 func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *ipc.Operation) error) (*ipc.Operation, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if id == "" || apply == nil {
 		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
@@ -392,5 +405,6 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 	if err != nil {
 		return nil, err
 	}
+	m.publishMutationLocked(updated)
 	return updated, nil
 }

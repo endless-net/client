@@ -88,3 +88,26 @@ instance/revision/size-bound signed pagination, five-minute expiry, stable
 ordering, stale snapshot rejection and no private config disclosure.
 SelectProfile, per-profile tunnel handover and other
 runtime providers remain required work; this is not UF-16 acceptance yet.
+
+## Native status/event publication (2026-09-13)
+
+GetStatus and WatchEvents now share an atomic snapshot with durable mutation
+publication under the runtime mutation lock. A new subscription queues its first
+snapshot before registration completes. Local mutations publish refreshed
+snapshots, caller-owned operation outcomes and profile invalidations in order.
+Observers use an allowlisted projection, not a copy with selected secrets removed.
+An absent provider observation remains unknown, never a fabricated connection.
+
+`service_rpc_events_test.go` covers first/reconnect snapshots, ownership-claim
+refresh, operation kind, observer redaction, clone isolation, unchanged status,
+64-event/8-MiB overflow, cancellation and unsubscribe. The real local transport
+test consumes native snapshots, terminal operations and profile invalidations.
+Queued overflow returns LIMIT_EXCEEDED; a blocked transport write is aborted so
+it cannot keep the subscriber alive indefinitely. A transport that can no longer
+write trailers may expose reset/deadline instead of typed details; consumers must
+discard stale state and reconnect in either case.
+
+The agent still needs to publish its verified map, tunnel, connection phase,
+session/credential and control-probe observations through PublishStatus. Other
+domain invalidations, capability providers, global operation bounds/Disconnect
+coalescing and production listener migration remain incomplete.

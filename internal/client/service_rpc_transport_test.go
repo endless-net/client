@@ -59,8 +59,16 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if _, err := client.Bootstrap(ctx); err != nil {
 		t.Fatal(err)
 	}
-	_, err = client.GetStatus(ctx, connect.NewRequest(&ipc.GetStatusRequest{}))
+	_, err = client.GetSupportInfo(ctx, connect.NewRequest(&ipc.GetSupportInfoRequest{}))
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	events, err := client.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = events.Close() }()
+	if !events.Receive() || events.Msg().Sequence != 1 || events.Msg().GetSnapshot() == nil {
+		t.Fatalf("missing first native snapshot: %v", events.Err())
+	}
 	accepted, err := client.CreateProfile(ctx, connect.NewRequest(request))
 	if err != nil {
 		t.Fatal(err)
@@ -68,6 +76,16 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if m.store.Read().LocalOwnerID == "" {
 		t.Fatal("transport did not propagate OS identity into durable owner")
 	}
+	if !events.Receive() || events.Msg().Sequence != 2 || events.Msg().Metadata.Revision != accepted.Msg.Operation.Metadata.Revision {
+		t.Fatalf("missing atomic refreshed snapshot: %v", events.Err())
+	}
+	if !events.Receive() || !proto.Equal(events.Msg().GetOperationChanged(), accepted.Msg.Operation) {
+		t.Fatalf("missing native operation event: %v", events.Err())
+	}
+	if !events.Receive() || events.Msg().GetInvalidated().GetDomain() != ipc.Domain_DOMAIN_PROFILES {
+		t.Fatalf("missing native invalidation: %v", events.Err())
+	}
+	_ = events.Close()
 	lookup := &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_RequestId{RequestId: request.Mutation.RequestId}}
 	// A newly attached consumer has only its original request ID, not an op ID.
 	client.Close()

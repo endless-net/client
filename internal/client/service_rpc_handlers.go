@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
@@ -34,8 +35,16 @@ func (s *ClientRPCService) Handler() http.Handler {
 	_, handler := clientipcconnect.NewClientServiceHandler(s,
 		connect.WithInterceptors(rpc.Guard{Authorize: s.mutations.Authorize}, runtimeRPCFailureInterceptor{}),
 		connect.WithReadMaxBytes(rpc.MaxRequestBytes), connect.WithSendMaxBytes(rpc.MaxResponseBytes))
-	return handler
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		abort := func() { _ = http.NewResponseController(w).SetWriteDeadline(time.Now()); cancel() }
+		ctx = context.WithValue(ctx, rpcStreamAbortKey{}, abort)
+		handler.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
+
+type rpcStreamAbortKey struct{}
 
 // Never serialize filesystem/provider diagnostics at the local RPC boundary.
 type runtimeRPCFailureInterceptor struct{}
@@ -107,6 +116,34 @@ func (s *ClientRPCService) GetOperation(ctx context.Context, request *connect.Re
 		return nil, err
 	}
 	return connect.NewResponse(&ipc.GetOperationResponse{Operation: op}), nil
+}
+
+func (s *ClientRPCService) GetStatus(ctx context.Context, _ *connect.Request[ipc.GetStatusRequest]) (*connect.Response[ipc.GetStatusResponse], error) {
+	peer, _ := local.PeerFromContext(ctx)
+	snapshot, err := s.mutations.snapshotAs(peer, s.build)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&ipc.GetStatusResponse{Status: snapshot.Status}), nil
+}
+
+func (s *ClientRPCService) WatchEvents(ctx context.Context, _ *connect.Request[ipc.WatchEventsRequest], stream *connect.ServerStream[ipc.WatchEventsResponse]) error {
+	peer, _ := local.PeerFromContext(ctx)
+	abort, _ := ctx.Value(rpcStreamAbortKey{}).(func())
+	subscriber, err := s.mutations.subscribe(peer, s.build, abort)
+	if err != nil {
+		return err
+	}
+	defer s.mutations.unsubscribe(subscriber)
+	for {
+		event, err := subscriber.next(ctx)
+		if err != nil {
+			return err
+		}
+		if err := subscriber.send(stream, event); err != nil {
+			return err
+		}
+	}
 }
 
 func (s *ClientRPCService) CreateProfile(ctx context.Context, request *connect.Request[ipc.CreateProfileRequest]) (*connect.Response[ipc.CreateProfileResponse], error) {
