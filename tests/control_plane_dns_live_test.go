@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -202,6 +203,23 @@ func assertSystemDNSAddress(t *testing.T, binary, name, expected string) {
 	defer cancel()
 	output, err := packetProbeCommand(ctx, "", binary, "--mode", "resolve", "--address", name).CombinedOutput()
 	if err != nil {
+		probeExit := -1
+		if exit, ok := err.(*exec.ExitError); ok {
+			probeExit = exit.ExitCode()
+		}
+		probeOutcome := "other"
+		if strings.TrimSpace(string(output)) == "application exchange unavailable" {
+			probeOutcome = "unavailable"
+		}
+		if runtime.GOOS == "linux" {
+			managerCtx, managerCancel := context.WithTimeout(t.Context(), 3*time.Second)
+			managerOK := exec.CommandContext(managerCtx, "resolvectl", "query", "--", name).Run() == nil
+			managerCancel()
+			contents, _ := os.ReadFile("/etc/resolv.conf")
+			link, _ := os.Readlink("/etc/resolv.conf")
+			stub := strings.Contains(string(contents), "127.0.0.53") || strings.Contains(link, "stub-resolv.conf")
+			t.Logf("system resolver diagnostic: probe_exit=%d probe_outcome=%s resolvectl_query_ok=%t systemd_stub=%t", probeExit, probeOutcome, managerOK, stub)
+		}
 		t.Fatal("system resolver did not resolve the published Client DNS name")
 	}
 	if strings.TrimSpace(string(output)) != expected {
