@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -12,6 +13,53 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+func TestFlowSpoolConcurrentCheckpointReadAndDiscard(t *testing.T) {
+	s, err := newFlowSpool(filepath.Join(t.TempDir(), "queue"), "test-credential", "test-producer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	expires := now.Add(50 * time.Second)
+	window := &clientrpc.FlowWindow{WindowId: "concurrent-window", WindowStart: timestamppb.New(now), WindowEnd: timestamppb.New(now), Bytes: 40, Packets: 1}
+	start, results := make(chan struct{}), make(chan error, 2)
+	go func() {
+		<-start
+		for range 40 {
+			if err := s.save(7, expires, []*clientrpc.FlowWindow{window}); err != nil {
+				results <- err
+				return
+			}
+			if err := s.discard(); err != nil {
+				results <- err
+				return
+			}
+		}
+		results <- nil
+	}()
+	go func() {
+		<-start
+		for range 500 {
+			version, _, windows, err := s.load(now)
+			if err != nil {
+				results <- err
+				return
+			}
+			if len(windows) != 0 && (version != 7 || len(windows) != 1 || !proto.Equal(window, windows[0])) {
+				results <- errors.New("inconsistent checkpoint")
+				return
+			}
+			runtime.Gosched()
+		}
+		results <- nil
+	}()
+	close(start)
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Error("concurrent flow queue operation failed")
+		}
+	}
+}
 
 func TestFlowSpoolRestartRetainsIdentityAndErasesExpiredLease(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "queue")

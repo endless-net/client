@@ -2950,6 +2950,24 @@ control-outage traffic, strict probe-denial oracle and DNS response-binding work
 
 ## Next work
 
+Run `34670764847`, source `985763edf13e74fc479abb293b26420cc653e6f3`, failed
+[Verify (Windows), job 103491773672](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773672)
+on 2026-09-12 at 03:38:36 UTC in
+`TestTUNFlowProducerRetriesThroughTLSProtobuf`: opening the encrypted queue
+during the post-ACK persistence check returned access denied. This component
+failure is separate from native IPv6 UDP traffic availability.
+
+A new short Windows regression reproduced a concurrent checkpoint/read/discard
+failure before the fix. `flowSpool` now serializes save, load and discard on the
+same instance; expiry and empty-checkpoint deletion use the already-held lock.
+The regression requires each read to see either no queue or the complete original
+window while another worker repeatedly saves and deletes it. Errors are not
+retried away or reclassified, and existing ACK, encryption, lease and integrity
+checks remain. This is component-level storage evidence, not an interservice
+test or proof that the independent native flow failures share this cause.
+Cross-instance/process access and external filesystem interference are outside
+this fix's synchronization guarantee. New source-specific CI evidence is pending.
+
 HC-010 response-loss coverage now deterministically exercises changed-input
 rejection: the contract fixture drops every committed registration response,
 including automatic retries, until explicitly restored. The native

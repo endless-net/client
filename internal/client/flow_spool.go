@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	clientrpc "github.com/endless-net/client-api/clientapi/v1/clientrpc"
@@ -22,6 +23,7 @@ var errInvalidFlowSpool = errors.New("invalid encrypted flow queue")
 // flowSpool stores sealed windows only. AEAD binds the queue to the configured
 // producer scope and credential without writing either value in plaintext.
 type flowSpool struct {
+	mu    sync.Mutex
 	path  string
 	aead  cipher.AEAD
 	scope []byte
@@ -49,6 +51,12 @@ func newFlowSpool(path, credential, scope string) (*flowSpool, error) {
 }
 
 func (s *flowSpool) discard() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.discardLocked()
+}
+
+func (s *flowSpool) discardLocked() error {
 	err := os.Remove(s.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -57,8 +65,10 @@ func (s *flowSpool) discard() error {
 }
 
 func (s *flowSpool) save(version uint64, expires time.Time, windows []*clientrpc.FlowWindow) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if len(windows) == 0 {
-		return s.discard()
+		return s.discardLocked()
 	}
 	if version == 0 || len(windows) > maxFlowWindows {
 		return errInvalidFlowSpool
@@ -93,6 +103,10 @@ func (s *flowSpool) save(version uint64, expires time.Time, windows []*clientrpc
 // match its revision before importing or sending these windows. Expiry remains
 // the original lease deadline; restarting cannot extend it.
 func (s *flowSpool) load(now time.Time) (uint64, time.Time, []*clientrpc.FlowWindow, error) {
+	// Serialize reads with replacement/deletion on this queue. In particular,
+	// Windows must not open a checkpoint while its deletion is still pending.
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	file, err := os.Open(s.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, time.Time{}, nil, nil
@@ -121,7 +135,7 @@ func (s *flowSpool) load(now time.Time) (uint64, time.Time, []*clientrpc.FlowWin
 		if err := file.Close(); err != nil {
 			return 0, time.Time{}, nil, err
 		}
-		return 0, time.Time{}, nil, s.discard()
+		return 0, time.Time{}, nil, s.discardLocked()
 	}
 	if batch.ExpiresAt.After(now.Add(time.Minute)) {
 		return 0, time.Time{}, nil, errInvalidFlowSpool
