@@ -52,8 +52,11 @@ func TestControlPlaneTLSTrustBoundary(t *testing.T) {
 		t.Fatal("localhost fixture did not resolve to the TLS listener")
 	}
 	wrongName := strings.Replace(s.URL(), "127.0.0.1", "localhost", 1)
+	// The earlier failed enrollment can persist the IP origin. Use an isolated
+	// profile and an explicit origin list so failover cannot reach that valid IP.
+	wrongNode := testclient.New(t, s)
 	beforeMismatch := len(s.Events())
-	output, err := n.Run("up", "--config", n.Config, "--server", wrongName, "--network", network.Name, "--join-token", join, "--hostname", "tls-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off")
+	output, err := wrongNode.Run("up", "--config", wrongNode.Config, "--server", wrongName, "--coordinator", wrongName, "--network", network.Name, "--join-token", join, "--hostname", "tls-node", "--map-signing-trust-file", wrongNode.TrustFile, "--route-table", "off")
 	if err == nil || !strings.Contains(strings.ToLower(string(output)), "certificate") {
 		t.Fatal("trusted certificate with mismatched hostname did not return a certificate error")
 	}

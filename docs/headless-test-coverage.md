@@ -2375,6 +2375,14 @@ full-source qualification and remaining HC variants are still open.
 
 ## Next work
 
+The first hostname-mismatch run exposed fixture contamination: failed initial
+enrollment can retain the valid IP control origin, and a later `--server`
+prepends an origin rather than replacing the failover list. The mismatch probe
+now uses an isolated profile and an explicit single `--coordinator` origin.
+It must still return a certificate error and leave the HTTP transcript unchanged;
+the positive enrollment uses the original valid IP profile. Client origin
+failover behavior is unchanged. The corrected hostname assertion awaits CI.
+
 `TestControlPlaneIPCEvents` exercises the published NDJSON stream through the
 real native socket/pipe: hello, current snapshot, increasing stream-local
 sequence, timestamps, disconnect notification, subscription termination when
