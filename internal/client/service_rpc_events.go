@@ -3,6 +3,8 @@ package client
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"sort"
 	"strings"
@@ -229,10 +231,15 @@ func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation) {
 // Status is volatile across restart; only the revision is durable. Providers
 // must verify maps/deadlines and redact failure details before publishing.
 func (m *ClientRPCMutations) PublishStatus(status *ipc.Status) error {
+	return m.publishStatus(status, nil)
+}
+
+func (m *ClientRPCMutations) publishStatus(status *ipc.Status, configFingerprint *[32]byte) error {
 	if status == nil {
 		return errors.New("runtime status observation is required")
 	}
 	status = proto.Clone(status).(*ipc.Status)
+	expected := status.Metadata
 	status.Metadata = nil
 	status.CurrentOperations = nil
 	if proto.Size(status) > rpc.MaxResponseBytes-4096 {
@@ -240,10 +247,31 @@ func (m *ClientRPCMutations) PublishStatus(status *ipc.Status) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if proto.Equal(m.observedStatus, status) {
+	cfg := m.store.Read()
+	revision := uint64(1)
+	if cfg.RPCState != nil {
+		revision = cfg.RPCState.Revision
+	}
+	if expected.GetInstanceId() != m.instanceID || expected.GetRevision() != revision {
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
+	unchanged := proto.Equal(m.observedStatus, status)
+	if unchanged && configFingerprint == nil {
 		return nil
 	}
 	if err := m.store.Update(func(cfg *Config) error {
+		if configFingerprint != nil {
+			raw, err := json.Marshal(cfg)
+			if err != nil {
+				return err
+			}
+			if sha256.Sum256(raw) != *configFingerprint {
+				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			}
+		}
+		if unchanged {
+			return errRPCNoChange
+		}
 		if cfg.RPCState == nil {
 			key := make([]byte, 32)
 			if _, err := rand.Read(key); err != nil {
@@ -254,9 +282,43 @@ func (m *ClientRPCMutations) PublishStatus(status *ipc.Status) error {
 		cfg.RPCState.Revision++
 		return nil
 	}); err != nil {
+		if errors.Is(err, errRPCNoChange) {
+			return nil
+		}
 		return err
 	}
 	m.observedStatus = status
 	m.publishMutationLocked(nil)
 	return nil
+}
+
+// ObserveStatus builds outside the mutation lock so slow probes cannot block
+// Disconnect. Publish rejects an observation if its config snapshot became stale.
+func (m *ClientRPCMutations) ObserveStatus(observe func(Config) (*ipc.Status, error)) error {
+	if observe == nil {
+		return errors.New("runtime observation provider is required")
+	}
+	m.mu.Lock()
+	cfg := m.store.Read()
+	revision := uint64(1)
+	if cfg.RPCState != nil {
+		revision = cfg.RPCState.Revision
+	}
+	expected := &ipc.SnapshotMetadata{InstanceId: m.instanceID, Revision: revision}
+	m.mu.Unlock()
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	fingerprint := sha256.Sum256(raw)
+	status, err := observe(cfg)
+	if err != nil {
+		return err
+	}
+	if status == nil {
+		return errors.New("runtime observation is missing")
+	}
+	status = proto.Clone(status).(*ipc.Status)
+	status.Metadata = expected
+	return m.publishStatus(status, &fingerprint)
 }

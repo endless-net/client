@@ -82,6 +82,7 @@ func TestRPCObserverSnapshotExcludesPrivateState(t *testing.T) {
 	}
 	status := &ipc.Status{ConnectionPhase: ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTING, AccountId: "secret-account", NodeId: "secret-node", Hostname: "secret-host",
 		Session: &ipc.Session{}, Credential: &ipc.CredentialStatus{}, PendingAction: &ipc.UserAction{BrowserUrl: "https://private.test/approval"}, OverlayAddresses: []string{"10.0.0.1"}}
+	status.Metadata = m.Metadata()
 	if err := m.PublishStatus(status); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +113,9 @@ func TestRPCObserverSnapshotExcludesPrivateState(t *testing.T) {
 		t.Fatal("provider retained mutable status alias")
 	}
 	previous := m.Metadata().Revision
-	if err := m.PublishStatus(m.observedStatus); err != nil {
+	identical := proto.Clone(m.observedStatus).(*ipc.Status)
+	identical.Metadata = m.Metadata()
+	if err := m.PublishStatus(identical); err != nil {
 		t.Fatal(err)
 	}
 	if m.Metadata().Revision != previous {
@@ -164,4 +167,29 @@ func TestRPCUnsubscribeAndCancellation(t *testing.T) {
 	if len(m.subscribers) != 0 {
 		t.Fatal("subscriber leaked")
 	}
+}
+
+func TestRPCObservationRejectsConcurrentConfigChange(t *testing.T) {
+	m := newRPCStoreTest(t)
+	err := m.ObserveStatus(func(Config) (*ipc.Status, error) {
+		if err := m.store.Update(func(cfg *Config) error { cfg.NetworkID = "changed-during-probe"; return nil }); err != nil {
+			t.Fatal(err)
+		}
+		return &ipc.Status{NodeId: "stale-node"}, nil
+	})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	if m.observedStatus != nil {
+		t.Fatal("stale observation became visible")
+	}
+	err = m.ObserveStatus(func(cfg Config) (*ipc.Status, error) { return &ipc.Status{NodeId: cfg.NodeID}, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = m.ObserveStatus(func(cfg Config) (*ipc.Status, error) {
+		if err := m.store.Update(func(cfg *Config) error { cfg.NetworkID = "changed-again"; return nil }); err != nil {
+			t.Fatal(err)
+		}
+		return &ipc.Status{NodeId: cfg.NodeID}, nil
+	})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 }

@@ -111,3 +111,22 @@ The agent still needs to publish its verified map, tunnel, connection phase,
 session/credential and control-probe observations through PublishStatus. Other
 domain invalidations, capability providers, global operation bounds/Disconnect
 coalescing and production listener migration remain incomplete.
+
+## Agent observation projection (2026-09-13)
+
+`cmd/endlessnet-client/service_rpc_status.go` builds native v0 status directly
+from runtime config, verified cached maps and identity/revision-matched agent
+snapshots. It does not convert HTTP v2 responses. Readiness uses a bounded,
+credential-free probe without redirects; cached-map validity is not treated as
+proof of a live control connection. Connection phase is an explicit coordinator
+input, never inferred from registration or connected intent. Session and
+credential deadlines stay absent until authoritative providers supply them.
+
+`ObserveStatus` collects outside the mutation lock and verifies both the RPC
+revision and the complete config fingerprint inside the durable write before
+publication. Stale observations, including concurrent non-RPC config changes,
+are rejected even when the resulting status would otherwise compare equal.
+New CLI/provider tests cover unknown connectivity/deadlines, invalid cache,
+foreign/future agent snapshots, safe readiness probes and native publication.
+The agent loop still needs wiring to this provider with actual phase transitions;
+that and the production listener cutover are not established by these tests.
