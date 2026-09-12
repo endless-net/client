@@ -40,8 +40,10 @@ func (h *rpcServer) ListAccounts(_ context.Context, r *connect.Request[rpc.ListA
 	h.s.mu.Lock()
 	defer h.s.mu.Unlock()
 	if !h.session(r.Header()) {
+		h.s.recordLocked(Event{Kind: "user-accounts-denied"})
 		return nil, denied()
 	}
+	h.s.recordLocked(Event{Kind: "user-accounts-accepted"})
 	return connect.NewResponse(&rpc.ListAccountsResponse{Accounts: []*rpc.Account{{AccountId: "test-account", Name: "Test account", Status: "active"}}, Page: &rpc.PageResponse{}}), nil
 }
 func (h *rpcServer) ListNetworks(_ context.Context, r *connect.Request[rpc.ListNetworksRequest]) (*connect.Response[rpc.ListNetworksResponse], error) {

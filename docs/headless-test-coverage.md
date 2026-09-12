@@ -143,6 +143,25 @@ product scope are different conditions; neither is a successful skip.
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
+## Additional Windows failure localization — 2026-09-12
+
+At `2e04b0a`, [Windows 2022 repeat 3](https://github.com/endless-net/client/actions/runs/34713022475/job/103607014686)
+passes 52 roots but fails the IPv6 session-recovery authenticated account check
+after the second agent start. Its old message does not distinguish RPC denial,
+CLI/local failure or a missing account in successful output. The scenario now
+reports its named phase, exit code, output length, account-presence flag and
+accepted/denied account RPC counts for that invocation. Negative expiry checks
+also require an actual fixture authorization denial, not an unrelated CLI error.
+No session token or raw output is emitted.
+
+[Windows 2025 repeat 3](https://github.com/endless-net/client/actions/runs/34713022475/job/103607014652)
+passes 52 roots but times out waiting for the persistent IPv6 TCP probe. Its
+old message omits whether readiness or an exchange was expected; the shared
+session helper now includes the expected fixed marker and exchange index.
+Both reports are complete, with no skipped roots. These diagnostics preserve
+the original deadlines and assertions; neither failure has an established
+cause or a qualified fix yet.
+
 ## Windows resolver-setting updates — 2026-09-12
 
 [Windows 2022 repeat 2 at `2e04b0a`](https://github.com/endless-net/client/actions/runs/34713022475/job/103607014675)

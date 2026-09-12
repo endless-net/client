@@ -39,22 +39,41 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 		t.Helper()
 		n.MustRun("login", "--config", n.Config, "--server", s.URL(), "--token", token, "--map-signing-trust-file", n.TrustFile)
 	}
-	accounts := func(want bool) {
+	accounts := func(phase string, want bool) {
 		t.Helper()
+		before := len(s.Events())
+		started := time.Now()
 		output, err := n.Run("billing", "accounts", "--config", n.Config)
+		accepted, denied := 0, 0
+		for _, event := range s.Events()[before:] {
+			switch event.Kind {
+			case "user-accounts-accepted":
+				accepted++
+			case "user-accounts-denied":
+				denied++
+			}
+		}
+		var exit *exec.ExitError
+		exitCode := 0
+		if err != nil {
+			exitCode = -1
+			if errors.As(err, &exit) {
+				exitCode = exit.ExitCode()
+			}
+		}
+		hasAccount := strings.Contains(string(output), "test-account")
 		if want {
-			if err != nil || !strings.Contains(string(output), "test-account") {
-				t.Fatal("authenticated user RPC did not return the published account")
+			if err != nil || !hasAccount || accepted == 0 || denied != 0 {
+				t.Fatalf("authenticated user RPC did not return the published account: phase=%s exit_code=%d output_bytes=%d account_present=%t accepted=%d denied=%d elapsed=%s", phase, exitCode, len(output), hasAccount, accepted, denied, time.Since(started).Round(time.Millisecond))
 			}
 			return
 		}
-		var exit *exec.ExitError
-		if !errors.As(err, &exit) || exit.ExitCode() != 1 {
-			t.Fatal("expired user session did not fail the user RPC")
+		if !errors.As(err, &exit) || exit.ExitCode() != 1 || denied == 0 || accepted != 0 {
+			t.Fatalf("expired user session did not produce an authorization denial: phase=%s exit_code=%d accepted=%d denied=%d", phase, exitCode, accepted, denied)
 		}
 	}
 	login(s.SessionToken())
-	accounts(true)
+	accounts("initial-login", true)
 	n.MustRun("up", "--config", n.Config, "--network", network.Name, "--hostname", "session-node", "--route-table", "auto")
 	n.Start()
 	defer n.Stop()
@@ -125,7 +144,7 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 	apply()
 	reachable()
 	newSession := s.RotateSession()
-	accounts(false)
+	accounts("expired-session", false)
 	apply()
 	reachable()
 	current, err := n.Status()
@@ -138,9 +157,9 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 	n.Start()
 	apply()
 	reachable()
-	accounts(false)
+	accounts("expired-session-after-restart", false)
 	login(newSession)
-	accounts(true)
+	accounts("reauthenticated", true)
 	current, err = n.Status()
 	if err != nil || current.NodeID != nodeID || !current.NodeCredentialPresent {
 		t.Fatal("reauthentication replaced the enrolled node")

@@ -434,6 +434,7 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 		t.Logf("retained %s session recovery observation: outcome=%s attempts=%d elapsed=%s", protocol, outcome, attempts, time.Since(started).Round(time.Millisecond))
 		return outcome == "recovered"
 	}
+	exchange := 0
 	expect := func(want string) {
 		t.Helper()
 		recovery := want == "recover"
@@ -458,12 +459,13 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 				t.Fatalf("persistent %s application session reported %s, expected %s", protocol, observed, want)
 			}
 		case <-time.After(3 * time.Second):
-			t.Fatalf("persistent %s application session did not respond", protocol)
+			t.Fatalf("persistent %s application session did not respond: expected=%s exchange=%d", protocol, want, exchange)
 		}
 	}
 	expect("ready")
 	return func(want string) {
 		t.Helper()
+		exchange++
 		if _, err := fmt.Fprintln(input, "exchange"); err != nil {
 			t.Fatal("cannot command persistent application session")
 		}
