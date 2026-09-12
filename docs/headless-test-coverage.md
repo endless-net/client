@@ -81,7 +81,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-002 | L installed CLI version | Artifact/dependency failure paths |
 | HC-003 | L noninteractive installation and enrolled same-artifact reinstall on all eight runners, preserving identity, intent and real TCP access | Interrupted installation and artifact replacement variants |
 | HC-004 | L real service and IPC | Local authorization and unavailable-service outcomes |
-| HC-005 | C SingleAgentOwnership including three concurrent contenders through lexical path aliases passed three times on all eight native runners | Symbolic/hard-link aliases, concurrent startup without an existing owner and remaining termination variants |
+| HC-005 | C SingleAgentOwnership including lexical/file-symlink aliases, concurrent duplicate rejection and successor startup passed all 24 repetitions at `4f117a0`; Unix SIGTERM requires clean exit | Hard-link aliases, concurrent startup without an existing owner and remaining termination variants |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
 | HC-008 | C BrowserEnrollment; expiry recovery on six runners; pending CLI interruption/resume and active rejection/reapproval passed all 24 repetitions on eight native runners | Interactive/server-side cancellation and foreign poll authorization |
@@ -97,7 +97,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | C durable route-table off/auto passed three times on all eight native platforms; U configuration tests | Other public preferences and live mutation variants |
 | HC-020 | C NetworkSelectionBoundary passed all 24 native repetitions: enrolled network listing/selection, disconnected response before/after restart and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
-| HC-021 | C TLS trust/hostname, unchanged-key disconnected intent/traffic and initial disconnected map-signing rotation passed all 24 repetitions at qualified source `88f335e` | Connected/interrupted rotation and changed-key traffic extensions await CI; certificate expiry and remaining origin variants |
+| HC-021 | C TLS trust/hostname, unchanged-key intent/traffic, connected/disconnected ordinary and interrupted map-signing rotation, and changed-key native traffic passed all 24 repetitions at qualified source `4f117a0` | Certificate expiry and remaining origin variants |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
@@ -2526,6 +2526,48 @@ not override the failed source gate or establish interrupted recovery.
 This run predates the configuration symlink ownership/storage changes and Unix
 SIGTERM shutdown assertion. Their results must come from a later source matrix.
 
+## Interrupted trust recovery and configuration ownership qualified
+
+Run [34663088786](https://github.com/endless-net/client/actions/runs/34663088786)
+qualified source `4f117a0fcf8831d26eb59948774aaa9e0f799f36`. All 24 native
+reports contain the same 33 roots: **792 PASS, zero FAIL, zero SKIP**. All four
+map-signing rotation subcases passed in each report (96 child passes, counted
+separately from the root totals).
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| macos-15 | [103470474401](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474401) | [103470474378](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474378) | [103470474440](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474440) |
+| macos-15-intel | [103470474441](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474441) | [103470474385](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474385) | [103470474201](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474201) |
+| ubuntu-22.04 | [103470474398](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474398) | [103470474319](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474319) | [103470474435](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474435) |
+| ubuntu-22.04-arm | [103470474370](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474370) | [103470474371](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474371) | [103470474436](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474436) |
+| ubuntu-24.04 | [103470474410](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474410) | [103470474363](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474363) | [103470474423](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474423) |
+| ubuntu-24.04-arm | [103470474438](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474438) | [103470474337](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474337) | [103470474397](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474397) |
+| windows-2022 | [103470474407](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474407) | [103470474418](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474418) | [103470474505](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474505) |
+| windows-2025 | [103470474453](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474453) | [103470474366](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474366) | [103470474519](https://github.com/endless-net/client/actions/runs/34663088786/job/103470474519) |
+
+The [aggregate gate](https://github.com/endless-net/client/actions/runs/34663088786/job/103473494660)
+passed both platform dependencies and complete same-source artifact validation.
+All eight installation jobs, three OS verification jobs and the separate Linux
+control-plane job passed. Optional external STUN compatibility was skipped and
+is not counted as coverage.
+
+This source confirms ordinary and interrupted map-signing rotation while
+connected and disconnected, pending-operation survival across agent restart,
+explicit retry for disconnected recovery, same-node renewal, durable trust and
+intent, and restored IPv4/IPv6 TCP/UDP/ICMP traffic after changed-key rotation.
+The request-ID correction makes the interruption fixture contract-valid; this
+qualification supersedes the preceding failed interruption run.
+
+Configuration file symlink ownership, duplicate rejection and successor startup
+through the alias passed on all eight platforms. Unix roots also require clean
+SIGTERM exit before successor startup. Windows uses abrupt process termination
+in this root; this is not Unix signal evidence or a substitute for SCM tests.
+Hard-link aliases, concurrent first startup and real OS reboot remain separate.
+
+This source predates the stopped-service CLI assertions, CLI event timeout and
+missing-hello correction, and split-DNS SERVFAIL recovery extension. Those changes
+await their own matrix. Full HC-001–HC-065 coverage remains incomplete.
+
 ## Next work
 
 HC-025/026 DNS wire recovery now injects SERVFAIL from the selected split
@@ -2565,8 +2607,8 @@ budget before starting the successor with retained identity/intent. A fallback
 kill is cleanup only and fails this assertion. Windows continues to exercise
 abrupt process termination here; SCM shutdown belongs to installed-service tests.
 This closes a missing test boundary rather than treating the old permissive
-`Stop` helper as proof of graceful signal handling. Hosted qualification of the
-new signal behavior remains pending.
+`Stop` helper as proof of graceful signal handling. Unix hosted qualification is
+recorded at source `4f117a0` above.
 
 The first interrupted-rotation run exposed an invalid fixture response: its body
 used `request_id=rotation-renewal-unavailable`, while `SetResponseFault` emitted
@@ -2576,7 +2618,7 @@ typed `SetPublicError` helper with matching body/header IDs, and the rotation te
 uses it for stable renewal unavailability. A public HTTP regression validates
 both repeated temporary and authorization errors with the producer's decoder
 and HTTP-response validator. Client error classification is unchanged; corrected
-interrupted-recovery evidence still requires the native matrix.
+interrupted-recovery evidence passed the complete `4f117a0` native matrix above.
 
 The native ownership test now also starts the successor agent through the file
 symlink after releasing the original owner. The same identity and connection
@@ -2584,7 +2626,7 @@ intent must survive, subsequent duplicate contenders must still be rejected,
 and filesystem metadata must show that startup/mutations did not replace the
 symlink. The alias lives beside the original configuration, keeping the helper's
 public state-output directory unchanged. This checks legitimate alias use as well
-as duplicate rejection; all-platform execution of the extension remains pending.
+as duplicate rejection; all-platform execution passed at `4f117a0` above.
 
 Configuration storage and agent locking now resolve the same file location,
 including file/directory symlinks and missing profile directories beneath an
@@ -2595,16 +2637,16 @@ resolution. Linux/macOS component checks exercise shared store/lock ownership,
 alias preservation after write, missing profiles and dangling links. They do not
 run on the local Windows workstation; the strict eight-platform native alias
 probe remains the required evidence. Hard links and path replacement races are
-not covered by this change. Hosted qualification of the fix is pending.
+not covered by this change. Hosted qualification is recorded at `4f117a0` above.
 
 The native single-agent ownership root adds a file symlink naming its existing
 configuration as a fourth simultaneous contender, with a distinct IPC endpoint.
 It must receive the same ownership error as the direct and lexical paths while
 the original process retains identity, intent and map updates. Creating the alias
 uses filesystem metadata only, with no private Client state read; inability to
-create it fails the hosted test rather than skipping a platform. Current path
-resolution does not explicitly resolve symlinks, so this is an unqualified probe
-for a possible lock bypass, not a confirmed fix. Hard links and simultaneous
+create it fails the hosted test rather than skipping a platform. At introduction,
+path resolution did not explicitly resolve symlinks. The subsequent shared-path
+fix and native qualification are recorded above. Hard links and simultaneous
 startup without an existing owner remain separate gaps.
 
 The four native direct-traffic roots now rotate the map signer while connected,
@@ -2614,7 +2656,7 @@ repeat the traffic checks before the existing terminal credential-retirement
 phase. The reference peer keeps its keys and overlay address; only its return
 endpoint follows the public Client listening port. Existing identity and single
 enrollment assertions still apply. This extends changed-key recovery to native
-IPv4/IPv6 TCP/UDP/ICMP dataplane evidence, pending all hosted repetitions; it does
+IPv4/IPv6 TCP/UDP/ICMP dataplane evidence, qualified at `4f117a0`; it does
 not establish uninterrupted existing sessions during rotation. The inventory
 remains 33 roots / 792 native root outcomes.
 
