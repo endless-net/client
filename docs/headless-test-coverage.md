@@ -4960,3 +4960,13 @@ a valid certificate is restored, and exactly one enrollment. It does not claim
 retroactive invalidation of an already established TLS connection. These four
 leaves are now mandatory in every platform report, with omission regressions
 for each leaf. Current-source native qualification remains pending.
+
+HC-036 failure diagnostics now query Windows `Find-NetRoute` for the resource
+target and record default-route and interface metrics before the client stops.
+The output projects only route prefixes, numeric metrics, and whether each route
+uses the client interface. A bounded read-only diagnostic failure cannot replace
+the original scenario failure. This distinguishes OS route selection from the
+existing TCP/UDP and reference-forwarding observations; it does not establish
+the cause of the previous Windows failures or change routing behavior. Short
+tests, vet, and lint pass locally; execution of this diagnostic remains pending
+in Windows native CI.

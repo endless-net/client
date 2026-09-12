@@ -2,8 +2,12 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/netip"
+	"os/exec"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +39,11 @@ func TestControlPlaneNativeExitRoute(t *testing.T) {
 			status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
 			clientIP := netip.MustParseAddr(status.OverlayIP)
 			resourceIP := netip.MustParseAddr("203.0.113.20")
+			defer func() {
+				if t.Failed() {
+					logWindowsExitRoutes(t, n.Interface, resourceIP)
+				}
+			}()
 			peerHost, exitRoute := "198.18.92.20/32", "0.0.0.0/0"
 			if family == "ipv6" {
 				if err := s.UpdateMap(status.NodeID, func(m *api.NetworkMapSnapshot) {
@@ -115,5 +124,42 @@ func TestControlPlaneNativeExitRoute(t *testing.T) {
 			apply([]string{peerHost, exitRoute})
 			reachable()
 		})
+	}
+}
+
+// Inspect only public OS routing state, before the deferred client shutdown.
+// Find-NetRoute returns both address and route objects; retain only routes.
+// https://learn.microsoft.com/en-us/powershell/module/nettcpip/find-netroute
+func logWindowsExitRoutes(t *testing.T, interfaceName string, target netip.Addr) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return
+	}
+	family, defaultPrefix := "IPv4", "0.0.0.0/0"
+	if target.Is6() {
+		family, defaultPrefix = "IPv6", "::/0"
+	}
+	script := fmt.Sprintf(`$ErrorActionPreference='Stop';
+$clientInterface='%s';
+$selected=@(Find-NetRoute -RemoteIPAddress '%s' | Where-Object { $null -ne $_.DestinationPrefix });
+$defaults=@(Get-NetRoute -AddressFamily %s -DestinationPrefix '%s' -PolicyStore ActiveStore);
+foreach ($kind in @('selected','defaults')) {
+  $routes=if ($kind -eq 'selected') { $selected } else { $defaults };
+  foreach ($route in $routes) {
+    $interface=Get-NetIPInterface -InterfaceIndex $route.InterfaceIndex -AddressFamily %s;
+    [pscustomobject]@{ kind=$kind; clientInterface=($route.InterfaceAlias -eq $clientInterface); prefix=$route.DestinationPrefix; routeMetric=$route.RouteMetric; interfaceMetric=$interface.InterfaceMetric } | ConvertTo-Json -Compress;
+  }
+}`, strings.ReplaceAll(interfaceName, "'", "''"), target.String(), family, defaultPrefix, family)
+	// Cleanup diagnostics must still run if the scenario context expired.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
+	cmd.WaitDelay = time.Second
+	output, err := cmd.Output()
+	if err != nil {
+		t.Logf("Windows exit route diagnostics unavailable: %v", err)
+	}
+	if len(output) != 0 {
+		t.Logf("Windows exit route selection and default metrics: %s", strings.TrimSpace(string(output)))
 	}
 }
