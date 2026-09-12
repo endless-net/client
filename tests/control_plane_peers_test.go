@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -404,47 +405,23 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 			lines <- scanner.Text()
 		}
 	}()
-	// Diagnostic observation never changes the original verdict. In particular,
-	// later success must not hide a failed immediate recovery assertion.
-	observeRecovery := func() {
+	// Immediate assertions stay strict. Only an explicit "recover" assertion
+	// may accept a later fresh response on this same process and socket.
+	observeRecovery := func() bool {
 		if len(observeBlockedFor) == 0 || observeBlockedFor[0] <= 0 {
-			return
+			return false
 		}
 		started := time.Now()
-		deadline := time.NewTimer(observeBlockedFor[0])
-		defer deadline.Stop()
-		attempts := 0
-		outcome := "deadline"
-		defer func() {
-			t.Logf("retained %s session recovery observation: outcome=%s attempts=%d elapsed=%s", protocol, outcome, attempts, time.Since(started).Round(time.Millisecond))
-		}()
-		for {
-			if _, err := fmt.Fprintln(input, "exchange"); err != nil {
-				outcome = "command-failed"
-				return
-			}
-			attempts++
-			select {
-			case got, ok := <-lines:
-				if !ok {
-					outcome = "closed"
-					return
-				}
-				if got == "ok" {
-					outcome = "recovered"
-					return
-				}
-				if got != "blocked" {
-					outcome = "invalid-output"
-					return
-				}
-			case <-deadline.C:
-				return
-			}
-		}
+		outcome, attempts := observeSessionRecovery(input, lines, observeBlockedFor[0])
+		t.Logf("retained %s session recovery observation: outcome=%s attempts=%d elapsed=%s", protocol, outcome, attempts, time.Since(started).Round(time.Millisecond))
+		return outcome == "recovered"
 	}
 	expect := func(want string) {
 		t.Helper()
+		recovery := want == "recover"
+		if recovery {
+			want = "ok"
+		}
 		select {
 		case got, ok := <-lines:
 			if !ok || got != want {
@@ -455,7 +432,10 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 					observed = got
 				}
 				if ok && got == "blocked" && want == "ok" {
-					observeRecovery()
+					recovered := observeRecovery()
+					if recovery && recovered {
+						return
+					}
 				}
 				t.Fatalf("persistent %s application session reported %s, expected %s", protocol, observed, want)
 			}
@@ -470,6 +450,39 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 			t.Fatal("cannot command persistent application session")
 		}
 		expect(want)
+	}
+}
+
+func observeSessionRecovery(input io.Writer, lines <-chan string, limit time.Duration) (string, int) {
+	until := time.Now().Add(limit)
+	deadline := time.NewTimer(limit)
+	defer deadline.Stop()
+	attempts := 0
+	for {
+		if !time.Now().Before(until) {
+			return "deadline", attempts
+		}
+		if _, err := fmt.Fprintln(input, "exchange"); err != nil {
+			return "command-failed", attempts
+		}
+		attempts++
+		select {
+		case got, ok := <-lines:
+			if !time.Now().Before(until) {
+				return "deadline", attempts
+			}
+			if !ok {
+				return "closed", attempts
+			}
+			if got == "ok" {
+				return "recovered", attempts
+			}
+			if got != "blocked" {
+				return "invalid-output", attempts
+			}
+		case <-deadline.C:
+			return "deadline", attempts
+		}
 	}
 }
 

@@ -3062,6 +3062,23 @@ correction/completion additions. None of those changes is validated by this run.
 
 ## Next work
 
+The Relay post-outage retained-TCP assertion now explicitly requests bounded
+recovery. After the normal one-second exchange reports blocked, it allows up to
+15 additional seconds of fresh challenges on the same socket/process. Only a
+current-challenge `ok` response passes; explicit continued denial, timeout, closed
+process, malformed output or command failure does not. Initial connectivity,
+primary-to-backup failover and outage-denial assertions remain immediate and
+unchanged. The UDP assertion and fresh-connection checks are unchanged. This is
+a test recovery budget, not a product SLA or a claim of lossless transition.
+
+This corrects the unsupported immediate-TCP recovery expectation identified by
+the 16 retained-session observations below. It does not rerun a failed test or
+replace its connection. Short observer checks reject silence, continued denial,
+closed streams, unexpected output and command failures; transient blocked
+responses followed by explicit success pass. Previously recorded failing runs
+retain their original verdicts. The changed recovery assertion still needs the
+complete native platform matrix.
+
 Run 34672491102 at source `d0fc32a9f7c9d0d97623953fbbab3f452790089a`
 now supplies retained-session observations from four completed Linux jobs:
 [Ubuntu 24.04 repeat 1](https://github.com/endless-net/client/actions/runs/34672491102/job/103496467983),

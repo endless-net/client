@@ -182,7 +182,7 @@ func runNativeRelayTraffic(t *testing.T, failover bool) {
 			primary.SetUnavailable(false)
 			transport = primary
 			reachable()
-			tcp("ok")
+			tcp("recover")
 			udp("ok")
 			n.Stop()
 			n.Start()
