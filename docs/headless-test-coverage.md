@@ -110,7 +110,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | C RoutedResource passed three times on all eight native platforms: IPv4/IPv6 TCP/UDP through an IP forwarding peer, route withdrawal and recovery | Full Client router roles, SNAT, HA and remaining resource variants |
 | HC-033 | C durable route installation disable/restore passed three times on all eight native platforms; U configuration tests | Per-resource selection and remaining route-selection semantics |
-| HC-034 | C native route advertisement and explicit platform boundary; Linux two-Client subnet forwarding/SNAT, approval, withdrawal, router outage and recovery are executable; U hook rendering | Qualify the common root on every runner; non-Linux router dataplane is explicitly unsupported; IPv6, no-SNAT, independent policy and other router variants |
+| HC-034 | C native route advertisement and explicit platform boundary; Linux two-Client subnet forwarding with SNAT and source-preserving operator-configured forwarding, approval, withdrawal, router outage and recovery are executable; U hook rendering | Qualify the common root on every runner; non-Linux SNAT mode is explicitly unsupported; IPv6, independent policy and other router variants |
 | HC-035 | No C/R evidence audited | Site-to-site scope and reverse-path tests |
 | HC-036 | C native IPv4/IPv6 default-route selection, same-host reference egress hop, withdrawal and recovery | Qualify on all native runners; remote exit-peer underlay and remote control connectivity while default routes are active are not proved; production public-address and DNS observation remain release acceptance |
 | HC-037 | U exit-LAN rules | LAN allowed/denied with real exit traffic |
@@ -4840,3 +4840,16 @@ enrollment retain their existing checks, including exactly two distinct
 successful registrations for the whole scenario. This tests cached startup
 independence from the revoked registration token; it does not cover expired
 maps or expiry of the node credential. Hosted qualification remains pending.
+
+HC-034 now has separate Linux `snat` and `preserve-source` subtests under the
+existing common root. The latter omits `--advertise-snat`. The harness supplies
+the router namespace's IP-forwarding setting and the external LAN's return
+route as operator prerequisites. An INPUT policy on the external resource
+permits loopback probes and the exact originating Client overlay address only,
+so translated traffic cannot satisfy the TCP/UDP echo assertions. The scenario
+also removes the return route, requires fresh TCP and UDP probes to fail, then
+restores it and requires traffic to recover. Existing approval, withdrawal and
+router-restart assertions run in both modes. This is executable source-preserving
+Client forwarding coverage, not evidence of automatic host configuration in
+no-SNAT mode. Linux hosted qualification remains pending; the non-Linux branch
+continues to assert only the explicit unsupported SNAT result.

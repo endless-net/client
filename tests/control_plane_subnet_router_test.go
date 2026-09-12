@@ -27,7 +27,8 @@ func TestControlPlaneSubnetRouter(t *testing.T) {
 		testUnsupportedSubnetRouter(t)
 		return
 	}
-	testLinuxSubnetRouter(t)
+	t.Run("snat", func(t *testing.T) { testLinuxSubnetRouter(t, true) })
+	t.Run("preserve-source", func(t *testing.T) { testLinuxSubnetRouter(t, false) })
 }
 
 func testUnsupportedSubnetRouter(t *testing.T) {
@@ -50,7 +51,7 @@ func testUnsupportedSubnetRouter(t *testing.T) {
 	}
 }
 
-func testLinuxSubnetRouter(t *testing.T) {
+func testLinuxSubnetRouter(t *testing.T, snat bool) {
 	t.Helper()
 	for _, tool := range []string{"ip", "iptables"} {
 		if _, err := exec.LookPath(tool); err != nil {
@@ -78,7 +79,10 @@ func testLinuxSubnetRouter(t *testing.T) {
 		n.AgentArgs = []string{"--listen-port", "51820", "--endpoint", endpoints[i]}
 		options := []string{"--route-table", "auto"}
 		if i == 1 {
-			options = append(options, "--hostname", "subnet-router", "--advertise", "198.18.98.0/24", "--advertise-snat")
+			options = append(options, "--hostname", "subnet-router", "--advertise", "198.18.98.0/24")
+			if snat {
+				options = append(options, "--advertise-snat")
+			}
 		}
 		n.Enroll(s, network.Name, token, options...)
 		n.Start()
@@ -86,6 +90,17 @@ func testLinuxSubnetRouter(t *testing.T) {
 			return v.NodeID != "" && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK
 		})
 		nodes[i] = n
+	}
+	if !snat {
+		// In routed mode, forwarding and the LAN return route are operator
+		// prerequisites. The Client owns the tunnel and signed peer projection.
+		namespaceCommand(t, "netns", "exec", namespaces[1], "sysctl", "-w", "net.ipv4.ip_forward=1")
+		namespaceCommand(t, "-n", resourceNamespace, "route", "add", states[0].OverlayIP+"/32", "via", "198.18.98.1")
+		// Enforce source preservation at the external resource. A translated
+		// request cannot satisfy this test even if its reply would be routable.
+		namespaceCommand(t, "netns", "exec", resourceNamespace, "iptables", "-A", "INPUT", "-i", "lo", "-j", "ACCEPT")
+		namespaceCommand(t, "netns", "exec", resourceNamespace, "iptables", "-A", "INPUT", "-s", states[0].OverlayIP+"/32", "-j", "ACCEPT")
+		namespaceCommand(t, "netns", "exec", resourceNamespace, "iptables", "-A", "INPUT", "-j", "DROP")
 	}
 	routerMap, err := s.Snapshot(states[1].NodeID)
 	if err != nil {
@@ -195,6 +210,12 @@ func testLinuxSubnetRouter(t *testing.T) {
 	approved.AllowedIPs = append(approved.AllowedIPs, "198.18.98.0/24")
 	applySourceRoute(approved)
 	assertReachable()
+	if !snat {
+		namespaceCommand(t, "-n", resourceNamespace, "route", "del", states[0].OverlayIP+"/32", "via", "198.18.98.1")
+		assertBlocked()
+		namespaceCommand(t, "-n", resourceNamespace, "route", "add", states[0].OverlayIP+"/32", "via", "198.18.98.1")
+		assertReachable()
+	}
 	applySourceRoute(sourceRoute)
 	assertBlocked()
 	applySourceRoute(approved)
