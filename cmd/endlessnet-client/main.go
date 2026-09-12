@@ -902,13 +902,17 @@ func cmdUp(args []string) error {
 			return err
 		}
 	} else {
-		if err := wgkeys.ValidateHostname(req.Hostname); err != nil {
-			return fmt.Errorf("hostname: %w", err)
+		// Browser enrollment intentionally has no registration credential yet.
+		// Validate every other field through the published registration contract
+		// using a signed copy with an authorization value that is never sent.
+		validation := req
+		validation.JoinToken = "browser-input-validation"
+		validation.IdentitySignature, err = client.SignIdentity(cfg.IdentityPrivateKey, clientapi.RegistrationIdentityProofPayload(validation))
+		if err != nil {
+			return err
 		}
-		if req.Endpoint != "" {
-			if err := wgkeys.ValidateEndpoint(req.Endpoint); err != nil {
-				return fmt.Errorf("endpoint: %w", err)
-			}
+		if err := validation.Validate(); err != nil {
+			return err
 		}
 	}
 	if pending := cfg.PendingDirectRegistration; pending != nil {

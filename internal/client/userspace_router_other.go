@@ -13,3 +13,5 @@ func newWireGuardEngineRouter(_ string, _ CommandRunner, _ commandInputRunner) (
 }
 
 func platformWireGuardEngineFirewallMark(_ []netip.Prefix, _ string) uint32 { return 0 }
+
+func platformPrepareDNSProxy(_ *wireGuardEngineRouterConfig) {}

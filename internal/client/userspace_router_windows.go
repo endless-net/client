@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+func platformPrepareDNSProxy(_ *wireGuardEngineRouterConfig) {}
+
 type windowsWireGuardEngineRouter struct {
 	interfaceName string
 	runner        CommandRunner

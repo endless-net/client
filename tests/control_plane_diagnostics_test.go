@@ -17,7 +17,7 @@ import (
 // HC-053/HC-056/HC-057: inspect the public diagnostic response and exported
 // artifact, never the agent's config, snapshot or credential files.
 func TestControlPlaneDiagnosticsExport(t *testing.T) {
-	_, n, id := controlScenario(t)
+	s, n, id := controlScenario(t)
 	output, err := n.ServiceCommand("diagnostics-bundle")
 	if err == nil || !strings.Contains(string(output), "diagnostics bundle directory is not configured") {
 		t.Fatal("unconfigured diagnostic export did not report its public error")
@@ -45,6 +45,21 @@ func TestControlPlaneDiagnosticsExport(t *testing.T) {
 		}
 		return d
 	}
+	check(false)
+	s.SetUnavailable(true)
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.State == ipc.StateDegraded && v.NodeID == id && v.CachedMapValid && v.NodeCredentialPresent && v.Agent != nil && v.Agent.LastError != ""
+	})
+	var controlFailure ipc.DiagnosticsResponse
+	n.Service("diagnostics", &controlFailure)
+	failed := controlFailure.Diagnostics.Status
+	if failed.State != ipc.StateDegraded || failed.UserDisconnected || failed.NodeID != id || !failed.CachedMapValid || !failed.NodeCredentialPresent || failed.Agent == nil || failed.Agent.LastError == "" {
+		t.Fatal("diagnostics did not isolate a control failure from intent, identity and cached access")
+	}
+	s.SetUnavailable(false)
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.State == ipc.StateConnected && v.NodeID == id && v.CachedMapValid && v.NodeCredentialPresent && v.Agent != nil && v.Agent.LastError == ""
+	})
 	check(false)
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)

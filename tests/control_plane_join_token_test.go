@@ -95,7 +95,8 @@ func TestControlPlaneJoinTokenRotation(t *testing.T) {
 	existing.Start()
 	apply()
 	reachable()
-	candidate.Enroll(s, network.Name, replacement, "--hostname", "replacement-node")
+	replacementClient := testclient.New(t, s)
+	replacementClient.Enroll(s, network.Name, replacement, "--hostname", "replacement-node")
 	registrations := 0
 	registeredIDs := map[string]bool{}
 	for _, event := range s.Events() {

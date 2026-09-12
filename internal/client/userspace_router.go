@@ -36,14 +36,15 @@ func newWireGuardEngineRouter(interfaceName string, runner CommandRunner, inputR
 
 func (r *dnsAwareWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
 	r.stopDNSProxy()
+	if err := r.base.Configure(ctx, cfg); err != nil {
+		return err
+	}
+	// A platform DNS proxy may listen on an address assigned to the tunnel.
+	// Configure the interface before opening that listener.
 	if cfg.DNSProxy != nil {
 		if err := r.startDNSProxy(ctx, *cfg.DNSProxy); err != nil {
 			return err
 		}
-	}
-	if err := r.base.Configure(ctx, cfg); err != nil {
-		r.stopDNSProxy()
-		return err
 	}
 	return nil
 }
@@ -270,6 +271,7 @@ func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config,
 	}
 	if out.DNSProxy != nil {
 		out.DNSProxy.NetworkMap = originalMap
+		platformPrepareDNSProxy(&out)
 	}
 	applicationHooks := renderApplicationForwardingHooks(originalMap)
 	for _, hook := range applicationHooks {

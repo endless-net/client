@@ -58,8 +58,8 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 		status = n.AwaitStatus(func(v ipc.StatusResponse) bool { return nativeDNSMapApplied(v, id, previous) })
 	}
 	setPeer("system-peer-one", "198.18.97.20")
-	assertSystemDNSAddress(t, binary, n.Interface, "system-peer-one.scenario.endlessnet", "198.18.97.20")
-	assertSystemDNSNameAbsent(t, binary, "absent-one.scenario.endlessnet")
+	assertSystemDNSAddress(t, binary, n.Interface, clientDNSListenerAddress(status), "system-peer-one.scenario.endlessnet", "198.18.97.20")
+	assertSystemDNSNameAbsent(t, binary, clientDNSListenerAddress(status), "absent-one.scenario.endlessnet")
 
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
@@ -78,8 +78,8 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 	status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
 		return nativeDNSMapApplied(v, id, previous) && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
 	})
-	assertSystemDNSAddress(t, binary, n.Interface, "system-peer-two.scenario.endlessnet", "198.18.97.21")
-	assertSystemDNSNameAbsent(t, binary, "absent-two.scenario.endlessnet")
+	assertSystemDNSAddress(t, binary, n.Interface, clientDNSListenerAddress(status), "system-peer-two.scenario.endlessnet", "198.18.97.21")
+	assertSystemDNSNameAbsent(t, binary, clientDNSListenerAddress(status), "absent-two.scenario.endlessnet")
 }
 
 // HC-025: the running native agent applies DNS changes from signed maps.
@@ -129,6 +129,7 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 		status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
 			return nativeDNSMapApplied(v, id, previous)
 		})
+		listener := clientDNSListenerAddress(status)
 		for _, transport := range []string{"udp", "tcp"} {
 			for _, hostname := range []string{"live-peer", "renamed-peer"} {
 				code, ipv4, ipv6 := dnsmessage.RCodeNameError, "", ""
@@ -136,8 +137,8 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 					code, ipv4, ipv6 = dnsmessage.RCodeSuccess, phase.ipv4, phase.ipv6
 				}
 				name := hostname + ".scenario.endlessnet."
-				assertDNSWire(t, transport, "127.0.0.1:53", name, code, ipv4)
-				assertDNSWireType(t, transport, "127.0.0.1:53", name, dnsmessage.TypeAAAA, code, ipv6)
+				assertDNSWire(t, transport, listener, name, code, ipv4)
+				assertDNSWireType(t, transport, listener, name, dnsmessage.TypeAAAA, code, ipv6)
 			}
 		}
 	}
@@ -147,20 +148,28 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 		return v.NodeID == id && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
 	})
 	for _, transport := range []string{"udp", "tcp"} {
-		assertDNSListenerUnavailable(t, transport, "127.0.0.1:53")
+		assertDNSListenerUnavailable(t, transport, clientDNSListenerAddress(status))
 	}
 	var connected ipc.ConnectResponse
 	n.Service("connect", &connected)
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+	status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
 		return nativeDNSMapApplied(v, id, 0) && v.NodeCredentialPresent &&
 			!v.UserDisconnected && v.DesiredState == ipc.DesiredConnected &&
 			v.State != ipc.StateDegraded
 	})
+	listener := clientDNSListenerAddress(status)
 	for _, transport := range []string{"udp", "tcp"} {
-		assertDNSWire(t, transport, "127.0.0.1:53", "live-peer.scenario.endlessnet.", dnsmessage.RCodeSuccess, "198.18.96.20")
-		assertDNSWireType(t, transport, "127.0.0.1:53", "live-peer.scenario.endlessnet.", dnsmessage.TypeAAAA, dnsmessage.RCodeSuccess, "fd96::20")
-		assertDNSWire(t, transport, "127.0.0.1:53", "renamed-peer.scenario.endlessnet.", dnsmessage.RCodeNameError, "")
+		assertDNSWire(t, transport, listener, "live-peer.scenario.endlessnet.", dnsmessage.RCodeSuccess, "198.18.96.20")
+		assertDNSWireType(t, transport, listener, "live-peer.scenario.endlessnet.", dnsmessage.TypeAAAA, dnsmessage.RCodeSuccess, "fd96::20")
+		assertDNSWire(t, transport, listener, "renamed-peer.scenario.endlessnet.", dnsmessage.RCodeNameError, "")
 	}
+}
+
+func clientDNSListenerAddress(status ipc.StatusResponse) string {
+	if runtime.GOOS == "linux" {
+		return net.JoinHostPort(status.OverlayIP, "53")
+	}
+	return "127.0.0.1:53"
 }
 
 func assertDNSListenerUnavailable(t *testing.T, transport, address string) {
@@ -197,7 +206,7 @@ func assertDNSListenerUnavailable(t *testing.T, transport, address string) {
 	}
 }
 
-func assertSystemDNSAddress(t *testing.T, binary, interfaceName, name, expected string) {
+func assertSystemDNSAddress(t *testing.T, binary, interfaceName, listener, name, expected string) {
 	t.Helper()
 	// Platform DNS managers can publish a completed configuration command
 	// before their application-facing resolver view has converged.
@@ -230,16 +239,17 @@ func assertSystemDNSAddress(t *testing.T, binary, interfaceName, name, expected 
 			probeOutcome = "unavailable"
 		}
 		directCtx, directCancel := context.WithTimeout(t.Context(), 3*time.Second)
-		directOutput, directErr := packetProbeCommand(directCtx, "", binary, "--mode", "resolve", "--address", name, "--dns", "127.0.0.1:53").CombinedOutput()
+		directOutput, directErr := packetProbeCommand(directCtx, "", binary, "--mode", "resolve", "--address", name, "--dns", listener).CombinedOutput()
 		directOK := directErr == nil && strings.TrimSpace(string(directOutput)) == expected
 		directCancel()
 		if runtime.GOOS == "linux" {
+			listenerHost, _, _ := net.SplitHostPort(listener)
 			managerCtx, managerCancel := context.WithTimeout(t.Context(), 3*time.Second)
 			managerOK := exec.CommandContext(managerCtx, "resolvectl", "query", "--", name).Run() == nil
 			managerCancel()
 			dnsCtx, dnsCancel := context.WithTimeout(t.Context(), 3*time.Second)
 			dnsOutput, dnsErr := exec.CommandContext(dnsCtx, "resolvectl", "dns", interfaceName).CombinedOutput()
-			linkDNSOK := dnsErr == nil && strings.Contains(string(dnsOutput), "127.0.0.1")
+			linkDNSOK := dnsErr == nil && strings.Contains(string(dnsOutput), listenerHost)
 			dnsCancel()
 			domainCtx, domainCancel := context.WithTimeout(t.Context(), 3*time.Second)
 			domainOutput, domainErr := exec.CommandContext(domainCtx, "resolvectl", "domain", interfaceName).CombinedOutput()
@@ -279,10 +289,10 @@ func systemResolverCommand(ctx context.Context, binary, name, expected string) *
 	return exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
 }
 
-func assertSystemDNSNameAbsent(t *testing.T, binary, name string) {
+func assertSystemDNSNameAbsent(t *testing.T, binary, listener, name string) {
 	t.Helper()
 	directCtx, directCancel := context.WithTimeout(t.Context(), 3*time.Second)
-	directOutput, directErr := packetProbeCommand(directCtx, "", binary, "--mode", "resolve", "--address", name, "--dns", "127.0.0.1:53").CombinedOutput()
+	directOutput, directErr := packetProbeCommand(directCtx, "", binary, "--mode", "resolve", "--address", name, "--dns", listener).CombinedOutput()
 	directCancel()
 	directExit, directExitOK := directErr.(*exec.ExitError)
 	if !directExitOK || directExit.ExitCode() != 3 || strings.TrimSpace(string(directOutput)) != "DNS name not found" {

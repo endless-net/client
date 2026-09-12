@@ -132,7 +132,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-053 | L/C structured IPC; request validation, non-object rejection, body-size boundaries, subscribers and real CLI NDJSON events passed all 24 repetitions at qualified `38050bc`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
 | HC-054 | No C/R evidence audited | Container persistent versus ephemeral lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
-| HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
+| HC-056 | C public diagnostics export plus executable control-outage isolation and recovery; U path diagnostics | Qualify expanded root; distinguish peer path, DNS and application failures through public commands |
 | HC-057 | C export/reuse, retention and IPv4 UDP flow consent/retry/expiry passed all 24 native repetitions at `a9a1a21`; D FlowConsentAndIdempotency; U flow tests | Crash recovery, comprehensive redaction and remaining retention/flow variants |
 | HC-058 | L version and runtime platform; native IPC negotiation/restart passed all 24 repetitions at `a9a1a21` | Artifact mismatch and exact release identity |
 | HC-059 | No qualified independent client-endorsed node-admission evidence; server trust/recovery tests belong to HC-021 | BR-05 / Q-05 product decision: independently signed node admission, unsigned-node denial, signing-device loss and recovery |
@@ -4638,6 +4638,30 @@ registration because the current forwarding hooks are Linux-only; the CLI no
 longer silently accepts a nonfunctional setting. IPv6, no-SNAT, independent
 route policy and HA remain separate variants. This raises the pending common
 inventory to 46 roots / 1,104 native outcomes.
+
+The existing diagnostics root now adds a bounded HC-056 control-layer failure.
+With a connected Client, the testserver becomes unavailable and public IPC must
+report a degraded agent with an error while keeping connected intent, the same
+node identity, its credential and the verified cached map. Restoring control
+must return diagnostics to connected state without registration. This separates
+a control outage from explicit user disconnect in the same root. Peer-path, DNS
+and application-layer localization remain separate pending increments; the
+common inventory stays at 46 roots.
+
+The still-running matrix for source `00de988c019b27635c6392dedf9cbf75e0765e71`
+exposed three repeated client-suite failures. Browser enrollment did not validate
+attributes through the full published registration request contract; the
+rotation scenario tried to reuse a denied durable operation with a different
+token despite the unchanged-operation rule; and Ubuntu 22.04's `systemd-resolved` could
+not reach a link-scoped loopback DNS server. The client now validates a signed
+authorization-bearing copy without sending its synthetic credential, the
+rotation scenario uses a distinct replacement client, and Linux publishes the
+Client DNS proxy at the tunnel's assigned IPv4 address. The Linux choice also
+covers the older loopback-ifindex defect fixed upstream in
+[systemd PR 25438](https://github.com/systemd/systemd/pull/25438). A local native
+Linux probe confirmed that the proxy answered at the tunnel address and
+`resolvectl query` selected it; qualification still requires all 24 exact-source
+CI reports.
 
 Run [34690909647](https://github.com/endless-net/client/actions/runs/34690909647)
 completed at source `73ebdf2699fd89bb66ce52183178e5a9421fe2a6`.

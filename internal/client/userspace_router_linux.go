@@ -39,6 +39,24 @@ func platformWireGuardEngineFirewallMark(routes []netip.Prefix, routeTable strin
 	return 0
 }
 
+// Older systemd-resolved releases send a link-scoped loopback DNS server
+// through the VPN interface. Use the tunnel's own address so every supported
+// resolved version reaches the Client listener through the configured link.
+func platformPrepareDNSProxy(cfg *wireGuardEngineRouterConfig) {
+	if cfg == nil || cfg.DNSProxy == nil {
+		return
+	}
+	for _, prefix := range cfg.Addresses {
+		address := prefix.Addr().Unmap()
+		if !address.Is4() {
+			continue
+		}
+		cfg.DNS = []netip.Addr{address}
+		cfg.DNSProxy.ListenAddr = netip.AddrPortFrom(address, 53).String()
+		return
+	}
+}
+
 func (r *linuxWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
 	if r.configured {
 		r.cleanup(ctx, r.current)

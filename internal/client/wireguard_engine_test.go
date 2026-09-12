@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/netip"
 	"reflect"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -659,7 +660,11 @@ func TestBuildWireGuardEngineRouterConfigRestoresEffectiveDNS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.DNSConfigPresent || cfg.DNSOverride || len(cfg.DNS) != 1 || cfg.DNS[0].String() != "127.0.0.1" || cfg.DNSProxy == nil {
+	wantDNS, wantListen := "127.0.0.1", "127.0.0.1:53"
+	if runtime.GOOS == "linux" {
+		wantDNS, wantListen = "100.64.0.2", "100.64.0.2:53"
+	}
+	if !cfg.DNSConfigPresent || cfg.DNSOverride || len(cfg.DNS) != 1 || cfg.DNS[0].String() != wantDNS || cfg.DNSProxy == nil || cfg.DNSProxy.ListenAddr != wantListen {
 		t.Fatalf("effective DNS router config = %#v", cfg)
 	}
 	if !cfg.DNSProxy.ServePeerDNS || !slices.Equal(cfg.DNSProxy.UpstreamAddrs, []string{"192.0.2.53:53", "192.0.2.54:53"}) || cfg.DNSProxy.SearchDomain != "prod.endlessnet" || len(cfg.DNSProxy.SplitRules) != 1 || !reflect.DeepEqual(cfg.DNSProxy.SplitRules[0], SplitDNSRule{Domain: "corp.example", Upstreams: []string{"198.51.100.53:53", "198.51.100.54:53"}}) {

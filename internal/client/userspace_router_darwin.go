@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+func platformPrepareDNSProxy(_ *wireGuardEngineRouterConfig) {}
+
 type darwinWireGuardEngineRouter struct {
 	interfaceName string
 	runner        CommandRunner
