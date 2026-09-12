@@ -4663,6 +4663,15 @@ Linux probe confirmed that the proxy answered at the tunnel address and
 `resolvectl query` selected it; qualification still requires all 24 exact-source
 CI reports.
 
+Completed Windows reports from the same run also exposed a shared application
+and service-catalog failure. A signed DNS projection change was included in the
+platform router equality check, so Windows treated a DNS answer update as a
+full interface change and removed/recreated its addresses instead of applying a
+route delta. The DNS-aware wrapper remains responsible for restarting the proxy;
+Windows and Darwin platform routers now compare only OS-installed state. Unit
+checks require a proxy-only projection update to issue no interface commands.
+Native qualification remains pending in the next exact-source matrix.
+
 Run [34690909647](https://github.com/endless-net/client/actions/runs/34690909647)
 completed at source `73ebdf2699fd89bb66ce52183178e5a9421fe2a6`.
 All 24 reports contained the same 41-root inventory: 970 PASS, 14 FAIL and

@@ -33,7 +33,7 @@ func (r *windowsWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGu
 	if r.configured {
 		withoutRouteChange := cfg
 		withoutRouteChange.Routes = r.current.Routes
-		if wireGuardEngineRouterConfigsEqual(withoutRouteChange, r.current) {
+		if wireGuardEnginePlatformRouterConfigsEqual(withoutRouteChange, r.current) {
 			if slices.Equal(cfg.Routes, r.current.Routes) {
 				return nil
 			}

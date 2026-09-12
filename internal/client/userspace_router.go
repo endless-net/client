@@ -111,6 +111,15 @@ func wireGuardEngineRouterConfigsEqual(a, b wireGuardEngineRouterConfig) bool {
 		slices.Equal(a.PreDown, b.PreDown)
 }
 
+// The DNS-aware wrapper owns the proxy process and its signed projection.
+// Platform routers compare only state they install in the operating system so
+// a DNS answer update cannot force interface address removal and recreation.
+func wireGuardEnginePlatformRouterConfigsEqual(a, b wireGuardEngineRouterConfig) bool {
+	a.DNSProxy = nil
+	b.DNSProxy = nil
+	return wireGuardEngineRouterConfigsEqual(a, b)
+}
+
 type wireGuardEngineRouterConfig struct {
 	Interface        string
 	MTU              int

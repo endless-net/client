@@ -43,7 +43,7 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 	if r.configured {
 		withoutRouteChange := cfg
 		withoutRouteChange.Routes = r.current.Routes
-		if wireGuardEngineRouterConfigsEqual(withoutRouteChange, r.current) {
+		if wireGuardEnginePlatformRouterConfigsEqual(withoutRouteChange, r.current) {
 			return r.reconcileRoutes(ctx, cfg)
 		}
 	}

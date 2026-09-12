@@ -99,3 +99,29 @@ func TestDarwinRouteUpdatePreservesLiveInterfaceAndSupportsRollback(t *testing.T
 		}
 	}
 }
+
+func TestDarwinDNSProjectionUpdateDoesNotRecreateInterface(t *testing.T) {
+	original := wireGuardEngineRouterConfig{
+		Interface: "utun99", MTU: 1280,
+		Addresses: []netip.Prefix{netip.MustParsePrefix("198.18.94.1/32")},
+		Routes:    []netip.Prefix{netip.MustParsePrefix("198.18.94.20/32")},
+		DNSProxy:  &DNSProxyOptions{ListenAddr: "127.0.0.1:53", SearchDomain: "scenario.endlessnet"},
+	}
+	next := cloneWireGuardEngineRouterConfig(original)
+	next.DNSProxy.NetworkMap.Revision.Network = 2
+	var commands []string
+	r := &darwinWireGuardEngineRouter{interfaceName: original.Interface, configured: true, current: original,
+		runner: func(_ context.Context, name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			return nil, nil
+		}, inputRunner: func(_ context.Context, _ string, name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			return nil, nil
+		}}
+	if err := r.Configure(t.Context(), next); err != nil {
+		t.Fatal(err)
+	}
+	if len(commands) != 0 || !wireGuardEngineRouterConfigsEqual(r.current, original) {
+		t.Fatal("DNS projection update disturbed Darwin interface state")
+	}
+}
