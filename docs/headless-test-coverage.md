@@ -97,7 +97,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | C durable route-table off/auto passed three times on all eight native platforms; U configuration tests | Other public preferences and live mutation variants |
 | HC-020 | C NetworkSelectionBoundary passed all 24 native repetitions: enrolled network listing/selection, disconnected response before/after restart and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
-| HC-021 | U control-endpoint security; TLS trust and hostname rejection passed all 24 native executions at `1d84184` (artifact gate failed) | Certificate expiry, new map-signing rotation/intent extensions and remaining origin variants |
+| HC-021 | C TLS trust/hostname, unchanged-key disconnected intent/traffic and initial disconnected map-signing rotation passed all 24 repetitions at qualified source `88f335e` | Connected/interrupted rotation and changed-key traffic extensions await CI; certificate expiry and remaining origin variants |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
@@ -128,8 +128,8 @@ product scope are different conditions; neither is a successful skip.
 | HC-049 | No C/R evidence audited | Certificate/publication scope and frontend/backend TLS |
 | HC-050 | U sharing/encrypted engine tests | C grant/consent/revoke/expiry/new identity against published contracts without internal access |
 | HC-051 | U service discovery/runtime | Logical service host approval, loss and actual traffic |
-| HC-052 | L/C bounded IPC waits; native event subscription/cancellation/restart passed all 24 executions at `1d84184` (artifact gate failed) | Simultaneous subscription extension, remaining public readiness conditions and noninteractive timeout results |
-| HC-053 | L/C structured IPC; native request validation including non-object rejection passed all 24 executions at `1d84184` (artifact gate failed); D RPC authorization | Body-size and simultaneous event-subscriber extensions await hosted evidence; remaining machine output/errors |
+| HC-052 | L/C bounded IPC waits; native independent event subscriptions/cancellation/restart passed all 24 repetitions at qualified source `88f335e` | Remaining public readiness conditions, slow consumers and noninteractive timeout results |
+| HC-053 | L/C structured IPC; native request validation, non-object rejection, body-size boundaries and event subscribers passed all 24 repetitions at qualified source `88f335e`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
 | HC-054 | No C/R evidence audited | Container persistent versus ephemeral lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
@@ -2452,6 +2452,53 @@ AAAA DNS records, trust-confirmation intent repair and map-signing rotation.
 Those additions require their own hosted evidence. The current working inventory
 is 33 roots / 792 outcomes; neither the 32-root execution evidence nor a future
 successful gate alone establishes full HC-001–HC-065 coverage.
+
+## Qualified 33-root eight-platform source
+
+Run [34661280214](https://github.com/endless-net/client/actions/runs/34661280214)
+completed successfully at source `88f335e5b4a2fee0fe8c96a13856718398b0f58c`.
+All 24 native job logs were inspected: identical 33-root inventories, **792 PASS,
+0 FAIL, 0 SKIP**. All eight installation jobs, three OS verification jobs and the
+separate Linux control-plane suite also passed. Optional external STUN was skipped
+and is not included in the native count or this qualification.
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| macos-15 | [103464356392](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356392) | [103464356641](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356641) | [103464356523](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356523) |
+| macos-15-intel | [103464356484](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356484) | [103464356583](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356583) | [103464356598](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356598) |
+| ubuntu-22.04 | [103464356356](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356356) | [103464356363](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356363) | [103464356418](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356418) |
+| ubuntu-22.04-arm | [103464356434](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356434) | [103464356379](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356379) | [103464356402](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356402) |
+| ubuntu-24.04 | [103464356408](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356408) | [103464356582](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356582) | [103464356376](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356376) |
+| ubuntu-24.04-arm | [103464356432](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356432) | [103464356417](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356417) | [103464356439](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356439) |
+| windows-2022 | [103464356461](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356461) | [103464356612](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356612) | [103464356472](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356472) |
+| windows-2025 | [103464356520](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356520) | [103464356618](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356618) | [103464356445](https://github.com/endless-net/client/actions/runs/34661280214/job/103464356445) |
+
+The [required aggregate gate](https://github.com/endless-net/client/actions/runs/34661280214/job/103467144576)
+passed both dependency verification and complete artifact validation. Its report
+confirmed 33 common scenarios across three repetitions and eight platforms with
+792 passing outcomes and no skips. Unlike the preceding source's missing upload,
+this run supplied the complete evidence set and qualifies the cited source under
+the current Client source-publication gate.
+
+This increment confirms on all eight runners:
+
+- Existing and boundary-size IPC mutation requests, including the non-object
+  rejection fix, plus independent event subscriptions, cancellation and restart.
+- AAAA DNS record lookup, withdrawal and restoration over UDP/TCP, retaining
+  private-domain upstream isolation; this is not OS resolver installation.
+- The trust-confirmation intent fix: repeating confirmation of the current key
+  while disconnected preserves intent and native IPv4/IPv6 TCP/UDP/ICMP denial.
+- The initial map-signing rotation case: separate credential trust, stale-key
+  rejection, explicit new-key confirmation while disconnected, same-node renewal,
+  durable trust/intent after restart and a fresh signed map after explicit connect.
+
+This source predates the connected/interrupted rotation subcases, explicit retry
+for disconnected pending recovery, and real traffic checks after changed-key
+rotation. Those extensions await their own complete source matrix. HC-059 remains
+a separate independent node-endorsement product decision; server identity tests
+belong to HC-021. Installation privilege failures, interrupted installation, actual
+OS reboot and other open HC variants are not qualified by this green run. Full
+HC-001–HC-065 completion remains unproven.
 
 ## Next work
 
