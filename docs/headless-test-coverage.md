@@ -2414,6 +2414,18 @@ HC-001–HC-065 coverage and the remaining platform variants are still open.
 
 ## Next work
 
+`TestControlPlaneMapSigningRotation` changes the testserver's map-signing key
+while retaining node-credential and relay trust. A public-wire fixture check
+verifies the old credential still authorizes map streaming, the old map trust
+rejects the new signature, and the new announced map trust verifies it. The
+native Client test inspects the changed identity, rejects stale confirmation,
+explicitly confirms the new key while disconnected, recovers the same enrollment,
+restarts with durable disconnected intent/new trust, then explicitly reconnects
+and consumes a newly signed map. It checks published CLI/IPC and server events
+without reading private Client state. The inventory is now 33 roots / 792 native
+outcomes. This is pending hosted evidence; interrupted rotation, traffic during
+rotation and additional signing-scope combinations remain separate variants.
+
 The four native direct-traffic roots now reaffirm the current signing key twice
 after disconnect, then require IPv4/IPv6 TCP/UDP and ICMP echo denial to remain
 effective. The reference peer stays available; if public IPC exposes a newly

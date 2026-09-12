@@ -60,6 +60,30 @@ func setup(t *testing.T) (*testcontrol.Server, *api.API, api.RegisterNodeRequest
 	return s, a, req, result, key
 }
 
+func TestMapRotationPreservesCredentialTrust(t *testing.T) {
+	s, a, _, registered, _ := setup(t)
+	oldTrust := s.Trust()
+	check(t, s.RotateMapSigningKey())
+	announced, err := a.ServerKey()
+	check(t, err)
+	if announced.TrustBundle.ActiveKeyID == oldTrust.ActiveKeyID || announced.NodeCredentialTrustBundle.ActiveKeyID != oldTrust.ActiveKeyID || announced.RelayTrustBundle.ActiveKeyID != oldTrust.ActiveKeyID {
+		t.Fatal("map rotation changed an independent signing scope")
+	}
+	base := registered.Snapshot()
+	event, err := a.ReadMapStreamEvent(registered.Node.ID, api.MapCursor{Revision: base.Revision, MapHash: base.MapSignature.PayloadHash}, time.Second)
+	check(t, err)
+	if _, err := api.ApplyMapStreamEvent(base, event, oldTrust, time.Now()); err == nil {
+		t.Fatal("old map trust accepted the rotated signature")
+	}
+	current, err := api.ApplyMapStreamEvent(base, event, announced.TrustBundle, time.Now())
+	check(t, err)
+	if current.Node.ID != registered.Node.ID || current.Revision.Network <= base.Revision.Network {
+		t.Fatal("rotation did not preserve node identity with a fresh map")
+	}
+	_, err = api.VerifyNodeCredentialWithTrustBundle(registered.NodeCredential, announced.NodeCredentialTrustBundle, "node:map", time.Now())
+	check(t, err)
+}
+
 func TestRegistrationFaultPreservesCommittedReplay(t *testing.T) {
 	for _, fault := range []string{"operation", "binding", "fingerprint", "credential-node", "credential-network", "map-signature"} {
 		t.Run(fault, func(t *testing.T) {

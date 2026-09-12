@@ -73,6 +73,8 @@ type Server struct {
 	mu                       sync.Mutex
 	key                      ed25519.PrivateKey
 	trust                    api.SigningTrustBundle
+	mapKey                   ed25519.PrivateKey
+	mapTrust                 api.SigningTrustBundle
 	session                  string
 	networks                 map[string]api.Network
 	joins                    map[string]string
@@ -113,7 +115,7 @@ func NewWithListener(t testing.TB, listener net.Listener) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{key: key, trust: trust, session: rand.Text(), networks: map[string]api.Network{}, joins: map[string]string{}, nodes: map[string]*node{}, operations: map[string]operation{}, enrollments: map[string]*enrollment{}, changed: make(chan struct{}), streams: make(chan struct{}), closed: make(chan struct{}), faults: map[string]api.ErrorCode{}, mapFaults: map[string]string{}}
+	s := &Server{key: key, trust: trust, mapKey: key, mapTrust: trust, session: rand.Text(), networks: map[string]api.Network{}, joins: map[string]string{}, nodes: map[string]*node{}, operations: map[string]operation{}, enrollments: map[string]*enrollment{}, changed: make(chan struct{}), streams: make(chan struct{}), closed: make(chan struct{}), faults: map[string]api.ErrorCode{}, mapFaults: map[string]string{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /client/readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /server-key", s.serverKey)
@@ -184,8 +186,34 @@ func (s *Server) TLSCertificatePEM() []byte {
 	}
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.HTTP.Certificate().Raw})
 }
-func (s *Server) Trust() api.SigningTrustBundle { return api.CloneSigningTrustBundle(s.trust) }
-func (s *Server) SessionToken() string          { s.mu.Lock(); defer s.mu.Unlock(); return s.session }
+func (s *Server) Trust() api.SigningTrustBundle {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return api.CloneSigningTrustBundle(s.mapTrust)
+}
+
+// RotateMapSigningKey changes only the published map-signing identity.
+// Node credential and relay trust remain independent and unchanged.
+func (s *Server) RotateMapSigningKey() error {
+	pub, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return err
+	}
+	trust, err := api.NewSigningTrustBundle(base64.RawURLEncoding.EncodeToString(pub))
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mapKey, s.mapTrust = key, trust
+	for id := range s.nodes {
+		if err := s.updateMapLocked(id, func(*api.NetworkMapSnapshot) {}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (s *Server) SessionToken() string { s.mu.Lock(); defer s.mu.Unlock(); return s.session }
 
 func clone[T any](v T) T {
 	b, err := json.Marshal(v)
@@ -371,7 +399,7 @@ func (s *Server) updateMapLocked(id string, edit func(*api.NetworkMapSnapshot)) 
 	if err := api.ValidateNetworkMapSnapshot(m); err != nil {
 		return err
 	}
-	sig, err := api.SignNetworkMapSnapshot(s.key, m)
+	sig, err := api.SignNetworkMapSnapshot(s.mapKey, m)
 	if err != nil {
 		return err
 	}
@@ -444,7 +472,9 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 func (s *Server) serverKey(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, api.ServerKeyResponse{TrustBundle: s.Trust(), NodeCredentialTrustBundle: s.Trust(), RelayTrustBundle: s.Trust()})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	writeJSON(w, api.ServerKeyResponse{TrustBundle: api.CloneSigningTrustBundle(s.mapTrust), NodeCredentialTrustBundle: api.CloneSigningTrustBundle(s.trust), RelayTrustBundle: api.CloneSigningTrustBundle(s.trust)})
 }
 
 func (s *Server) credentialLocked(value, id, scope string) (*node, api.ErrorCode) {
@@ -523,7 +553,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 			result.NodeCredential, err = api.SignNodeCredential(s.key, "different-network", result.Node.ID, []string{"node:map"}, time.Now().Add(time.Hour))
 		}
 		if err == nil {
-			result.MapSignature, err = api.SignNetworkMap(s.key, result)
+			result.MapSignature, err = api.SignNetworkMap(s.mapKey, result)
 		}
 		if err != nil {
 			http.Error(w, "test response signing failed", 500)
@@ -606,7 +636,7 @@ func (s *Server) registerLocked(req api.RegisterNodeRequest, authorization strin
 		return result, "", err
 	}
 	result.NodeCredential = credential
-	result.MapSignature, err = api.SignNetworkMap(s.key, result)
+	result.MapSignature, err = api.SignNetworkMap(s.mapKey, result)
 	if err != nil {
 		return result, "", err
 	}
@@ -667,7 +697,7 @@ func (s *Server) endpoint(w http.ResponseWriter, r *http.Request) {
 	}
 	m.Revision.Network++
 	m.Network.Revision = m.Revision.Network
-	sig, err := api.SignNetworkMap(s.key, m)
+	sig, err := api.SignNetworkMap(s.mapKey, m)
 	if err != nil {
 		http.Error(w, "signing failed", 500)
 		return
@@ -743,6 +773,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		m := clone(n.Map.Snapshot())
 		changed := s.changed
 		fault := s.mapFaults[id]
+		mapKey := s.mapKey
 		if !m.Revision.Equal(cursor.Revision) || m.MapSignature.PayloadHash != cursor.MapHash || fault != "" {
 			delete(s.mapFaults, id)
 			var delta *api.MapStreamEvent
@@ -759,7 +790,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 			case "unknown-key":
 				m.MapSignature.KeyID = "unknown-test-key"
 			case "expired":
-				sig, err := api.SignNetworkMapSnapshotAt(s.key, m, time.Now().Add(-2*time.Hour), time.Hour)
+				sig, err := api.SignNetworkMapSnapshotAt(mapKey, m, time.Now().Add(-2*time.Hour), time.Hour)
 				if err != nil {
 					http.Error(w, "signing failed", 500)
 					return
