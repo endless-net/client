@@ -28,6 +28,39 @@ func TestDarwinTUNAddressesIncludeIPv4PointToPointDestination(t *testing.T) {
 	}
 }
 
+func TestDarwinDefaultRoutesPreservePhysicalInterfaceDefaults(t *testing.T) {
+	var commands []string
+	r := &darwinWireGuardEngineRouter{runner: func(_ context.Context, name string, args ...string) ([]byte, error) {
+		commands = append(commands, name+" "+strings.Join(args, " "))
+		return nil, nil
+	}}
+	cfg := wireGuardEngineRouterConfig{
+		Interface: "utun99", MTU: 1280,
+		Routes: []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")},
+	}
+	if err := r.Configure(t.Context(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Down(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"ifconfig utun99 mtu 1280 up",
+		"route -n add -inet 0.0.0.0/1 -interface utun99",
+		"route -n add -inet 128.0.0.0/1 -interface utun99",
+		"route -n add -inet6 ::/1 -interface utun99",
+		"route -n add -inet6 8000::/1 -interface utun99",
+		"route -n delete -inet 0.0.0.0/1 -interface utun99",
+		"route -n delete -inet 128.0.0.0/1 -interface utun99",
+		"route -n delete -inet6 ::/1 -interface utun99",
+		"route -n delete -inet6 8000::/1 -interface utun99",
+		"ifconfig utun99 down",
+	}
+	if !slices.Equal(commands, want) {
+		t.Fatalf("default route lifecycle disturbed physical defaults: %v", commands)
+	}
+}
+
 func TestDarwinUserspaceDNSPreservesScopedAndSearchDomains(t *testing.T) {
 	script := darwinUserspaceDNSCommands(wireGuardEngineRouterConfig{
 		Interface:        "utun99",

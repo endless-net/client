@@ -73,7 +73,7 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 			return fail(fmt.Errorf("configure darwin TUN address: %s", commandError(err, out)))
 		}
 	}
-	for _, route := range cfg.Routes {
+	for _, route := range darwinSystemRoutes(cfg.Routes) {
 		family := "-inet"
 		if route.Addr().Is6() {
 			family = "-inet6"
@@ -96,13 +96,28 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 // events can stop WireGuard while its new peer configuration is being applied.
 func (r *darwinWireGuardEngineRouter) reconcileRoutes(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
 	change := func(operation string, route netip.Prefix) error {
-		family := "-inet"
-		if route.Addr().Is6() {
-			family = "-inet6"
-		}
-		out, err := r.runner(ctx, "route", "-n", operation, family, route.String(), "-interface", cfg.Interface)
-		if err != nil {
-			return fmt.Errorf("%s darwin TUN route: %s", operation, commandError(err, out))
+		changed := make([]netip.Prefix, 0, 2)
+		for _, systemRoute := range darwinSystemRoutes([]netip.Prefix{route}) {
+			family := "-inet"
+			if systemRoute.Addr().Is6() {
+				family = "-inet6"
+			}
+			out, err := r.runner(ctx, "route", "-n", operation, family, systemRoute.String(), "-interface", cfg.Interface)
+			if err != nil {
+				rollback := "delete"
+				if operation == "delete" {
+					rollback = "add"
+				}
+				for i := len(changed) - 1; i >= 0; i-- {
+					rollbackFamily := "-inet"
+					if changed[i].Addr().Is6() {
+						rollbackFamily = "-inet6"
+					}
+					_, _ = r.runner(ctx, "route", "-n", rollback, rollbackFamily, changed[i].String(), "-interface", cfg.Interface)
+				}
+				return fmt.Errorf("%s darwin TUN route: %s", operation, commandError(err, out))
+			}
+			changed = append(changed, systemRoute)
 		}
 		return nil
 	}
@@ -128,6 +143,26 @@ func (r *darwinWireGuardEngineRouter) reconcileRoutes(ctx context.Context, cfg w
 	return nil
 }
 
+// Darwin already has a default route for the physical interface. Installing a
+// second /0 either fails with EEXIST or replaces the route that keeps the host
+// online. Two /1 routes win by longest-prefix match while leaving that default
+// route intact for peer endpoints and for immediate recovery on withdrawal.
+func darwinSystemRoutes(routes []netip.Prefix) []netip.Prefix {
+	result := make([]netip.Prefix, 0, len(routes)+2)
+	for _, route := range routes {
+		if route.Bits() != 0 {
+			result = append(result, route)
+			continue
+		}
+		if route.Addr().Is4() {
+			result = append(result, netip.MustParsePrefix("0.0.0.0/1"), netip.MustParsePrefix("128.0.0.0/1"))
+		} else {
+			result = append(result, netip.MustParsePrefix("::/1"), netip.MustParsePrefix("8000::/1"))
+		}
+	}
+	return result
+}
+
 func (r *darwinWireGuardEngineRouter) Down(ctx context.Context) error {
 	if !r.configured {
 		return nil
@@ -142,7 +177,7 @@ func (r *darwinWireGuardEngineRouter) cleanup(ctx context.Context, cfg wireGuard
 	if darwinShouldConfigureDNS(cfg) {
 		_, _ = r.inputRunner(ctx, darwinUserspaceDNSRemoveCommands(cfg.Interface), "scutil")
 	}
-	for _, route := range cfg.Routes {
+	for _, route := range darwinSystemRoutes(cfg.Routes) {
 		family := "-inet"
 		if route.Addr().Is6() {
 			family = "-inet6"
