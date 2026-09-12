@@ -5292,3 +5292,18 @@ expansion after `cce41e6`, including its lifecycle, policy and endpoint-change
 checks inside Ubuntu 24.04 with NET_ADMIN and `/dev/net/tun`. Process restart
 inside the same container does not establish actual container recreation,
 sidecar integration, other network modes or orchestration lifecycle behavior.
+
+### 2026-09-12: expired map authority also gates ordinary peer traffic
+
+Code inspection found that the application packet filter allowed ordinary
+unprotected peer packets before reaching its map-signature expiry check.
+`TestExpiredMapDeniesOrdinaryPeerPackets` reproduced this defect for IPv4 and
+IPv6 before the fix. The filter now checks signed-map expiry before classifying
+destinations, covering both inbound and outbound traffic independently of
+control synchronization. The regression checks TCP and UDP immediately before,
+at and after the deadline, plus recovery under a fresh map expiry. This is a
+component-level packet-filter proof; the public-contract
+`TestControlPlaneNativeCachedMapExpiry` remains the native acceptance test for
+the running Client, offline CLI rejection, restart and control recovery.
+The fix does not by itself prove OS route retirement, credential expiry or
+release acceptance, and is absent from the running `169b09c` matrix.

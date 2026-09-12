@@ -26,6 +26,7 @@ type applicationPacketFilter struct {
 	protected     map[netip.Prefix]bool
 	grants        []applicationGrant
 	expires       time.Time
+	signed        bool
 	saturated     bool
 	connectorEver bool
 	local         []netip.Addr
@@ -49,6 +50,7 @@ func (f *applicationPacketFilter) update(m clientapi.RegisterNodeResponse) {
 	defer f.mu.Unlock()
 	f.grants = nil
 	f.expires = time.Time{}
+	f.signed = m.MapSignature != nil
 	if m.MapSignature != nil {
 		f.expires = m.MapSignature.ExpiresAt
 	}
@@ -179,6 +181,11 @@ func parseApplicationPacket(raw []byte) (applicationPacket, bool) {
 func (f *applicationPacketFilter) allows(raw []byte, inbound bool, now time.Time) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+	// A map's authority expires for ordinary peers as well as application
+	// destinations, even while control is unavailable or an update is stalled.
+	if f.signed && !now.Before(f.expires) {
+		return false
+	}
 	var source, destination netip.Addr
 	switch {
 	case len(raw) >= 20 && raw[0]>>4 == 4:
