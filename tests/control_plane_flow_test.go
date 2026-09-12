@@ -14,10 +14,16 @@ import (
 )
 
 func TestControlPlaneNativeFlowConsent(t *testing.T) {
-	exerciseNativeTrafficScenario(t, false, "udp", true, "")
+	for _, family := range []string{"ipv4", "ipv6"} {
+		for _, protocol := range []string{"tcp", "udp"} {
+			t.Run(family+"/"+protocol, func(t *testing.T) {
+				exerciseNativeTrafficScenario(t, family == "ipv6", protocol, true, "")
+			})
+		}
+	}
 }
 
-func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clientIP, peerIP netip.Addr, fresh func(string) bool) {
+func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id, protocol string, clientIP, peerIP netip.Addr, fresh func(string) bool) {
 	t.Helper()
 	awaitPolicy := func(kind string, after int) {
 		t.Helper()
@@ -118,7 +124,7 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clie
 			}
 			for _, report := range s.FlowReports()[beforeReports:] {
 				w := report.Window
-				if report.NodeId == id && report.ConsentVersion == 1 && w != nil && w.Source == clientIP.String() && w.Destination == peerIP.String() && w.DestinationPort == 24001 && w.Protocol == "udp" && w.Decision == "observed" && w.Packets > 0 && w.Bytes >= 32 {
+				if report.NodeId == id && report.ConsentVersion == 1 && w != nil && w.Source == clientIP.String() && w.Destination == peerIP.String() && w.DestinationPort == 24001 && w.Protocol == protocol && w.Decision == "observed" && w.Packets > 0 && w.Bytes >= 32 {
 					if w.WindowStart == nil || w.WindowEnd == nil || w.WindowStart.AsTime().Before(from) || w.WindowEnd.AsTime().After(until) {
 						t.Fatal("client reported traffic outside its consent interval")
 					}
@@ -131,7 +137,7 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clie
 			}
 			return false
 		}); err != nil {
-			t.Fatal("client did not report real UDP flow metadata under consent")
+			t.Fatalf("client did not report real %s flow metadata under consent", protocol)
 		}
 		return until
 	}

@@ -2816,6 +2816,19 @@ has 36 roots and still requires its own 864-outcome matrix. This successful
 
 ## Next work
 
+HC-057 native flow consent now runs all four IPv4/IPv6 TCP/UDP combinations.
+Each variant requires real application traffic, no reporting before consent,
+accepted public RPC windows matching the exact source/destination/protocol/port,
+unchanged retry after a lost acknowledgement, silence after revocation and
+expiry, and renewed collection after a new grant. Application access must survive
+all consent changes. The root count remains 36; all four leaves are mandatory.
+These additional real-time grant/expiry lifecycles, together with eight cleanup
+traffic variants, increase the whole native repetition budget from 15 to 25
+minutes and its job budget from 20 to 30 minutes. Individual operation deadlines,
+consent windows, failure classifications and required repetitions are unchanged.
+This budgets new coverage; it does not resolve or reclassify prior timeouts.
+Native qualification of the expanded flow matrix is pending.
+
 HC-022 additionally has `TestControlPlaneNativeLogoutTraffic`: eight variants,
 with confirmed logout and forced local-forget independently covering IPv4/IPv6
 TCP/UDP. Each variant establishes real native traffic and two sessions, then requires

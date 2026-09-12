@@ -193,7 +193,9 @@ jobs:
   control-plane-platforms:
     name: Client contracts (${{ matrix.os }}, repeat ${{ matrix.repetition }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # Four real-time flow-consent lifecycles and eight cleanup traffic variants
+    # extend the suite; individual CLI/RPC/probe deadlines remain unchanged.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -254,7 +256,7 @@ jobs:
             ENDLESSNET_CONTROL_TEST=1 ENDLESSNET_TEST_BINARY="$RUNNER_TEMP/client-contracts/client.exe" \
             ENDLESSNET_PACKET_PROBE="$RUNNER_TEMP/client-contracts/packetprobe.exe" \
             "$RUNNER_TEMP/client-contracts/contracts.test.exe" \
-            -test.run='^TestControlPlane' -test.count=1 -test.v -test.timeout=15m \
+            -test.run='^TestControlPlane' -test.count=1 -test.v -test.timeout=25m \
             2>&1 | tee "$RUNNER_TEMP/client-contracts/results.log"
       - name: Run isolated contract repetition (Windows)
         if: runner.os == 'Windows'
@@ -264,7 +266,7 @@ jobs:
         run: |
           $env:ENDLESSNET_TEST_BINARY = Join-Path $env:RUNNER_TEMP 'client-contracts/client.exe'
           $env:ENDLESSNET_PACKET_PROBE = Join-Path $env:RUNNER_TEMP 'client-contracts/packetprobe.exe'
-          & "$env:RUNNER_TEMP/client-contracts/contracts.test.exe" '-test.run=^TestControlPlane' '-test.count=1' '-test.v' '-test.timeout=15m' 2>&1 |
+          & "$env:RUNNER_TEMP/client-contracts/contracts.test.exe" '-test.run=^TestControlPlane' '-test.count=1' '-test.v' '-test.timeout=25m' 2>&1 |
             Tee-Object -FilePath "$env:RUNNER_TEMP/client-contracts/results.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Produce machine-readable contract report

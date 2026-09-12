@@ -172,7 +172,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 	}
 	if flowLogs {
-		checkNativeFlowConsent(t, s, initial.NodeID, clientIP, peerIP, fresh)
+		checkNativeFlowConsent(t, s, initial.NodeID, protocol, clientIP, peerIP, fresh)
 		return
 	}
 	first := startApplicationSession(t, binary, "", protocol, address("24001"))
