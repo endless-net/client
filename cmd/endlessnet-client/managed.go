@@ -143,7 +143,10 @@ func (e enrollmentApprovalRequiredError) Error() string {
 	return "browser approval is required: " + e.ApprovalURL
 }
 
-func waitForBrowserEnrollmentApproval(api *clientapi.API, cfg *client.Config, configPath string, req *clientapi.RegisterNodeRequest, timeout time.Duration) (clientapi.RegisterNodeResponse, error) {
+func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, cfg *client.Config, configPath string, req *clientapi.RegisterNodeRequest, timeout time.Duration) (clientapi.RegisterNodeResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return clientapi.RegisterNodeResponse{}, err
+	}
 	requestID := strings.TrimSpace(cfg.EnrollmentRequestID)
 	pollToken := strings.TrimSpace(cfg.EnrollmentPollToken)
 	approvalURL := strings.TrimSpace(cfg.ApprovalURL)
@@ -182,7 +185,10 @@ func waitForBrowserEnrollmentApproval(api *clientapi.API, cfg *client.Config, co
 				if err := clearBrowserEnrollmentRequest(cfg, configPath); err != nil {
 					return clientapi.RegisterNodeResponse{}, err
 				}
-				return waitForBrowserEnrollmentApproval(api, cfg, configPath, req, timeout)
+				return waitForBrowserEnrollmentApproval(ctx, api, cfg, configPath, req, timeout)
+			}
+			if ctx.Err() != nil {
+				return clientapi.RegisterNodeResponse{}, ctx.Err()
 			}
 			if timeout == 0 {
 				return clientapi.RegisterNodeResponse{}, enrollmentApprovalRequiredError{RequestID: requestID, ApprovalURL: approvalURL}
@@ -228,7 +234,7 @@ func waitForBrowserEnrollmentApproval(api *clientapi.API, cfg *client.Config, co
 				return clientapi.RegisterNodeResponse{}, err
 			}
 			*req = replacement
-			return waitForBrowserEnrollmentApproval(api, cfg, configPath, req, timeout)
+			return waitForBrowserEnrollmentApproval(ctx, api, cfg, configPath, req, timeout)
 		}
 	}
 	if timeout == 0 {
@@ -240,6 +246,9 @@ func waitForBrowserEnrollmentApproval(api *clientapi.API, cfg *client.Config, co
 	}
 	deadline := time.Now().Add(timeout)
 	for {
+		if err := ctx.Err(); err != nil {
+			return clientapi.RegisterNodeResponse{}, err
+		}
 		status, err := api.NodeEnrollmentRequestStatus(requestID, pollToken)
 		if err != nil {
 			return clientapi.RegisterNodeResponse{}, err
@@ -270,7 +279,13 @@ func waitForBrowserEnrollmentApproval(api *clientapi.API, cfg *client.Config, co
 			sleep = remaining
 		}
 		if sleep > 0 {
-			time.Sleep(sleep)
+			timer := time.NewTimer(sleep)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return clientapi.RegisterNodeResponse{}, ctx.Err()
+			case <-timer.C:
+			}
 		}
 	}
 }

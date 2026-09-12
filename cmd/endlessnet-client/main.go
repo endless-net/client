@@ -788,7 +788,7 @@ func cmdUp(args []string) error {
 	if *advertiseSNAT {
 		cfg.SubnetRouterSNAT = true
 	}
-	return enrollConfiguredClient(cfg, clientEnrollmentOptions{
+	return enrollConfiguredClient(context.Background(), cfg, clientEnrollmentOptions{
 		ConfigPath: *configPath, JoinToken: effectiveJoinToken, IdempotencyKey: *idempotencyKey,
 		Hostname: *hostname, HostnameExplicit: flagWasSet(fs, "hostname"), Network: *network,
 		Endpoint: *endpoint, AdvertisedIPs: advertise, Tags: tags, ApprovalTimeout: approvalTimeout,
@@ -818,7 +818,10 @@ type clientEnrollmentOptions struct {
 	Report           func(clientapi.RegisterNodeResponse)
 }
 
-func enrollConfiguredClient(cfg client.Config, options clientEnrollmentOptions) error {
+func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clientEnrollmentOptions) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	configPath, idempotencyKey := &options.ConfigPath, &options.IdempotencyKey
 	hostname, network, endpoint := &options.Hostname, &options.Network, &options.Endpoint
 	effectiveJoinToken := options.JoinToken
@@ -854,6 +857,7 @@ func enrollConfiguredClient(cfg client.Config, options clientEnrollmentOptions) 
 		}
 	}
 	api := apiFromConfig(cfg)
+	api.HTTPClient.Transport = enrollmentContextTransport{lifetime: ctx, base: api.HTTPClient.Transport}
 	if !client.HasSigningTrust(cfg) {
 		if strings.TrimSpace(effectiveJoinToken) == "" && strings.TrimSpace(cfg.Token) == "" && !browserEnrollment {
 			return errors.New("map signing trust anchor is required")
@@ -966,7 +970,7 @@ func enrollConfiguredClient(cfg client.Config, options clientEnrollmentOptions) 
 	}
 	var response clientapi.RegisterNodeResponse
 	if browserEnrollment {
-		response, err = waitForBrowserEnrollmentApproval(api, &cfg, *configPath, &req, approvalTimeout)
+		response, err = waitForBrowserEnrollmentApproval(ctx, api, &cfg, *configPath, &req, approvalTimeout)
 	} else {
 		cfg.PendingDirectRegistration = &client.PendingDirectRegistration{Origin: firstControlPlaneURL(cfg), Request: req}
 		if err := client.SaveConfig(*configPath, cfg); err != nil {

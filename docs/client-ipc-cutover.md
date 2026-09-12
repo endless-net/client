@@ -361,3 +361,11 @@ verify the refactored path. Native Enroll is not yet bound: durable RPC workflow
 acceptance, context cancellation, browser action projection, per-profile commit
 coordination and operation outcomes still need integration. This extraction does
 not establish UF-04 acceptance or production cutover.
+
+The typed workflow now requires a caller context. A transport wrapper combines
+that lifecycle with each request's original deadline and retains it until the
+response body is consumed/closed, not merely until headers arrive. Browser polling
+uses cancellable timers and does not translate lifecycle cancellation into a
+pending-approval result. Tests cover header/body lifetime, in-flight cancellation,
+deadline preservation and cancellation before any local config write. Native RPC
+acceptance/recovery integration and browser action projection remain unfinished.

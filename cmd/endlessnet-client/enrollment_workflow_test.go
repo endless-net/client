@@ -20,7 +20,7 @@ func TestTypedEnrollmentWorkflowPersistsVerifiedPendingIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.ControlPlaneURLs = []string{server.URL}
-	if err := enrollConfiguredClient(cfg, clientEnrollmentOptions{ConfigPath: path, JoinToken: "synthetic-join-token", Hostname: "typed-client", HostnameExplicit: true, Network: defaultNetworkName}); err != nil {
+	if err := enrollConfiguredClient(t.Context(), cfg, clientEnrollmentOptions{ConfigPath: path, JoinToken: "synthetic-join-token", Hostname: "typed-client", HostnameExplicit: true, Network: defaultNetworkName}); err != nil {
 		t.Fatal(err)
 	}
 	saved, err := client.LoadConfig(path)
@@ -49,7 +49,7 @@ func TestTypedEnrollmentWorkflowRejectsSubstitutedIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.ControlPlaneURLs = []string{server.URL}
-	if err := enrollConfiguredClient(cfg, clientEnrollmentOptions{ConfigPath: path, JoinToken: "synthetic-join-token", Hostname: "typed-client", Network: defaultNetworkName}); err == nil {
+	if err := enrollConfiguredClient(t.Context(), cfg, clientEnrollmentOptions{ConfigPath: path, JoinToken: "synthetic-join-token", Hostname: "typed-client", Network: defaultNetworkName}); err == nil {
 		t.Fatal("substituted node identity accepted")
 	}
 	saved, err := client.LoadConfig(path)
