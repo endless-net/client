@@ -101,7 +101,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
-| HC-025 | C DNS CLI/proxy, wire lookup and application access by FQDN; eight-platform UDP/TCP A/AAAA projection, withdrawal/restoration, split isolation and SERVFAIL recovery at qualified `38050bc`; native system-resolver selection, negative outcome and reconnect/map-change recovery are executable | Qualify the system-resolver root on every runner; pending IPv6 listener/upstream and TCP-retry variants |
+| HC-025 | C DNS CLI/proxy, wire lookup and application access by FQDN; UDP/TCP A/AAAA projection, withdrawal/restoration, split isolation, SERVFAIL recovery, IPv4/IPv6 listener/upstream and truncated-UDP TCP retry are executable; all eight wire variants pass in each of the 19 available `c5bd840` reports; native system-resolver selection and recovery are executable | Complete current-source qualification on every runner; wire-proxy evidence does not replace native system-resolver evidence |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
 | HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
 | HC-028 | C native single-Relay and two-Relay failover IPv4/IPv6 TCP/UDP, outage denial, recovery and agent restart passed all 24 native repetitions | NAT, direct/Relay transitions, existing-session failover, healthy-backup failback and remaining Relay variants |
@@ -4936,3 +4936,11 @@ lifecycle helper invokes the native ICMP probe before and during its traffic
 checks. Missing `ping` is an execution failure, not a valid denied-packet result.
 This dependency was found by source inspection before a successful container
 workload run. No additional container capabilities are added by this change.
+
+A follow-up HC-025 ledger audit found that the summary row still listed IPv6
+listener/upstream and truncated-UDP TCP retry as missing, although
+`TestControlPlaneDNSWireRecovery` already executes their eight combinations.
+Each of the 19 downloaded `c5bd840` reports contains all eight successful leaf
+outcomes (152 PASS leaves). The summary now reflects that evidence without
+claiming the absent five reports or the current source are qualified. Existing
+full-matrix historical DNS evidence above retains its original source boundary.
