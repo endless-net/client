@@ -94,7 +94,7 @@ func TestWindowsDNSProjectionUpdateDoesNotRecreateInterface(t *testing.T) {
 	if err := r.Configure(t.Context(), next); err != nil {
 		t.Fatal(err)
 	}
-	if len(scripts) != 0 || !wireGuardEngineRouterConfigsEqual(r.current, original) {
+	if len(scripts) != 0 || !wireGuardEnginePlatformRouterConfigsEqual(r.current, original) {
 		t.Fatal("DNS projection update disturbed Windows interface state")
 	}
 }
