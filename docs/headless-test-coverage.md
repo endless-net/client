@@ -2996,6 +2996,19 @@ separate from the Windows component queue access-denied failure below.
 
 ## Next work
 
+Browser advertisement validation exposed another Client input defect: a short
+CLI-command/testserver test proved malformed CIDR reached the browser enrollment
+endpoint. Direct registration's validation did not protect this branch. The CLI
+now validates each advertised prefix before loading configuration or initiating
+enrollment, using `wireguard.ValidatePrefix` from the pinned public contract
+module. Correcting the same profile reaches exactly one pending approval request.
+The native `RouteAdvertisement/browser-invalid-input-recovery` case requires
+the real CLI to reject invalid input without an enrollment POST, then report
+approval required for corrected input without registering an unapproved node.
+The short regression failed before the fix and passes after it; the new native
+branch awaits CI. This proves input correction, not approval completion, route
+authorization or forwarding. No producer implementation or contract version changed.
+
 Further results from source `985763edf13e74fc479abb293b26420cc653e6f3`
 show the immediate retained-TCP recovery failure also on Windows 2025:
 [repeat 1](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773671)

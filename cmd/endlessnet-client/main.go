@@ -751,6 +751,11 @@ func cmdUp(args []string) error {
 	if err != nil {
 		return err
 	}
+	for i, prefix := range advertise {
+		if err := wgkeys.ValidatePrefix(fmt.Sprintf("advertised_ips[%d]", i), prefix); err != nil {
+			return err
+		}
+	}
 	effectiveJoinToken, err := secretFlagValue("join-token", *joinToken, *joinTokenFile)
 	if err != nil {
 		return err

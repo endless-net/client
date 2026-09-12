@@ -1,12 +1,47 @@
 package main
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/endless-net/client/internal/testcontrol"
 )
+
+func TestInvalidBrowserAdvertisementCanBeCorrected(t *testing.T) {
+	setInstallationStateDirForTest(t, t.TempDir())
+	s := testcontrol.New(t)
+	network, _, err := s.AddNetwork("browser-advertisement", "100.95.0.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(t.TempDir(), "client.json")
+	args := []string{"--config", config, "--server", s.URL(), "--network", network.Name, "--hostname", "route-node", "--approval-timeout", "0", "--advertise"}
+	_, err = captureStdout(t, func() error { return cmdUp(append(args, "not-a-cidr")) })
+	if err == nil {
+		t.Fatal("invalid browser advertisement was accepted")
+	}
+	for _, event := range s.Events() {
+		if event.Kind == "request" && event.Path == "POST /nodes/enrollment-requests" {
+			t.Fatal("invalid browser advertisement was sent to enrollment")
+		}
+	}
+	_, err = captureStdout(t, func() error { return cmdUp(append(args, "192.0.2.0/24")) })
+	var approval enrollmentApprovalRequiredError
+	if !errors.As(err, &approval) || approval.RequestID == "" {
+		t.Fatal("corrected browser advertisement did not reach approval")
+	}
+	created := 0
+	for _, event := range s.Events() {
+		if event.Kind == "enrollment" {
+			created++
+		}
+	}
+	if created != 1 {
+		t.Fatal("corrected browser input did not create exactly one approval request")
+	}
+}
 
 func TestInvalidAdvertisementCanBeCorrectedWithoutForgettingEnrollment(t *testing.T) {
 	setInstallationStateDirForTest(t, t.TempDir())
