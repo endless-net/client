@@ -253,20 +253,44 @@ func dnsContractUpstream(t *testing.T, network string, truncated bool, address [
 	}
 	endpoint := net.JoinHostPort(host, "0")
 	var listener net.Listener
+	var conn net.PacketConn
+	var err error
 	if truncated {
-		// Let TCP allocate its own port, respecting existing TCP connections and
-		// TIME_WAIT. A UDP-allocated port need not be available to TCP on Windows.
-		var err error
-		listener, err = net.Listen(strings.Replace(network, "udp", "tcp", 1), endpoint)
+		// An ephemeral port available to one transport can be excluded for the
+		// other. Allocate both before publishing the fixture endpoint, releasing
+		// every partial pair. This retries setup only, never a Client exchange.
+		for attempt := range 16 {
+			if attempt%2 == 0 {
+				listener, err = net.Listen(strings.Replace(network, "udp", "tcp", 1), endpoint)
+				if err != nil {
+					t.Fatal("could not allocate DNS TCP fallback fixture")
+				}
+				conn, err = net.ListenPacket(network, listener.Addr().String())
+				if err == nil {
+					break
+				}
+				_ = listener.Close()
+			} else {
+				conn, err = net.ListenPacket(network, endpoint)
+				if err != nil {
+					t.Fatal("could not allocate DNS UDP fixture")
+				}
+				listener, err = net.Listen(strings.Replace(network, "udp", "tcp", 1), conn.LocalAddr().String())
+				if err == nil {
+					break
+				}
+				_ = conn.Close()
+			}
+		}
 		if err != nil {
-			t.Fatal("could not allocate DNS TCP fallback fixture")
+			t.Fatal("could not allocate paired DNS UDP/TCP fixture after 16 attempts")
 		}
 		t.Cleanup(func() { _ = listener.Close() })
-		endpoint = listener.Addr().String()
-	}
-	conn, err := net.ListenPacket(network, endpoint)
-	if err != nil {
-		t.Fatal("could not bind DNS UDP fixture at the selected endpoint")
+	} else {
+		conn, err = net.ListenPacket(network, endpoint)
+		if err != nil {
+			t.Fatal("could not bind DNS UDP fixture")
+		}
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	var mu sync.Mutex

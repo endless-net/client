@@ -3151,6 +3151,22 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+### Windows DNS participant port allocation: fixture correction pending CI
+
+[Windows 2025 repeat 2](https://github.com/endless-net/client/actions/runs/34678240275/job/103513677174)
+at source `6f0bdf3bb4d801804572f7d234314487c1f6843b` fails only
+`DNSWireRecovery/udp6/::1/truncated-udp`. At 2026-09-12 06:46:15.681 UTC the
+upstream fixture cannot bind UDP to its TCP-selected ephemeral port. This is
+participant setup failure, not a failed Client DNS answer. Repetitions 1 and 3
+pass all roots, including the new TLS lifetime and DNS rename/address phases.
+
+The fixture now allocates a complete UDP/TCP pair before returning its endpoint,
+alternating which transport chooses the ephemeral port, with at most 16 attempts.
+Every unsuccessful partial pair is closed. Failure to allocate the first socket
+or exhaustively allocate a pair remains fatal. This is bounded fixture setup,
+not a Client exchange retry, timeout change or successful skip. Native Windows
+validation of the correction remains pending; ownership stays in Client tests.
+
 ### Computed-zero IPv6 UDP checksum: Client fix awaiting native validation
 
 [Ubuntu 24.04 repeat 1](https://github.com/endless-net/client/actions/runs/34678240275/job/103513677025)
