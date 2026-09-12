@@ -2712,6 +2712,14 @@ probe-mismatch counters were introduced after this source.
 
 ## Next work
 
+Failed harness Service commands now trigger one public status query with a
+separate two-second outer deadline. Logs contain only boolean intent/credential/
+cache/WireGuard presence and health, or a fixed status-error category. The
+original command duration and fatal outcome are preserved. This may distinguish
+responsive IPC with persisted intent from an unavailable status path on another
+disconnect failure; it does not establish which internal stage stalled and does
+not qualify the previous Windows timeout as fixed.
+
 The unexplained Windows UDP nonce mismatch now has bounded probe diagnostics:
 the number of differing bytes versus the current request and zero bytes in the
 received 32-byte response. Payloads/nonces are not printed. The harness accepts

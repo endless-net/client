@@ -196,6 +196,7 @@ func (n *Node) Service(operation string, target any) {
 	started := time.Now()
 	out, err := n.ServiceCommand(operation)
 	if err != nil {
+		operationElapsed := time.Since(started).Round(time.Millisecond)
 		category := "unclassified"
 		for _, known := range []string{"context deadline exceeded", "connection refused", "Access is denied", "The pipe is being closed"} {
 			if strings.Contains(string(out), known) {
@@ -203,8 +204,19 @@ func (n *Node) Service(operation string, target any) {
 				break
 			}
 		}
+		// Preserve the original failure while observing only public IPC. This
+		// distinguishes a still-responsive service from a blocked status path;
+		// neither outcome diagnoses an internal teardown stage by itself.
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		status, statusCategory, statusErr := n.statusWithin(ctx)
+		cancel()
+		if statusErr == nil {
+			n.t.Logf("public status after failed %s: disconnected=%t desired_disconnected=%t credential_present=%t cache_valid=%t wireguard_present=%t wireguard_ok=%t", operation, status.UserDisconnected, status.DesiredState == ipc.DesiredDisconnected, status.NodeCredentialPresent, status.CachedMapValid, status.WireGuard != nil, status.WireGuard != nil && status.WireGuard.OK)
+		} else {
+			n.t.Logf("public status after failed %s unavailable: %s", operation, statusCategory)
+		}
 		// Never print arbitrary CLI output, errors, credentials or file content.
-		n.t.Fatalf("client service %s failed after %s: %s (output withheld)", operation, time.Since(started).Round(time.Millisecond), category)
+		n.t.Fatalf("client service %s failed after %s: %s (output withheld)", operation, operationElapsed, category)
 	}
 	if elapsed := time.Since(started); elapsed >= 3*time.Second {
 		n.t.Logf("client service %s completed after %s using the default CLI timeout", operation, elapsed.Round(time.Millisecond))
