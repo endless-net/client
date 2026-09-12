@@ -119,6 +119,10 @@ func TestApplicationSourceRoutesDNSAndSignature(t *testing.T) {
 	if err != nil || dnsTestAAnswer(t, response) != "10.1.2.3" {
 		t.Fatal("signed DNS missing", err)
 	}
+	response, err = DNSProxyResponse(t.Context(), dnsTestQuery(t, 2, "portal.example", dnsTypeAAAA), *router.DNSProxy, time.Second)
+	if err != nil || dnsTestRCode(response) != dnsRCodeNoErr || binary.BigEndian.Uint16(response[6:8]) != 0 {
+		t.Fatal("existing IPv4-only application name did not return empty AAAA success", err)
+	}
 	filter := newApplicationPacketFilter()
 	filter.update(m)
 	if !filter.allows(applicationTCPPacket("100.64.0.1", "10.1.2.3", 40000, 443), false, time.Now()) {
@@ -138,7 +142,7 @@ func TestApplicationSourceRoutesDNSAndSignature(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err = DNSProxyResponse(t.Context(), dnsTestQuery(t, 1, "portal.example", dnsTypeA), *router.DNSProxy, time.Second)
+	response, err = DNSProxyResponse(t.Context(), dnsTestQuery(t, 3, "portal.example", dnsTypeA), *router.DNSProxy, time.Second)
 	if err != nil || dnsTestRCode(response) != dnsRCodeNX {
 		t.Fatal("withdrawn app fell through DNS", err)
 	}

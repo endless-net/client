@@ -91,7 +91,11 @@ func TestServiceDiscoveryUsesSignedHosts(t *testing.T) {
 			t.Fatal("wrong approved host address")
 		}
 	}
-	response, err := DNSProxyResponse(t.Context(), dnsTestQuery(t, 1, "_db._tcp.db.account.endlessnet", 33), opts, time.Second)
+	response, err := DNSProxyResponse(t.Context(), dnsTestQuery(t, 2, "db.account.endlessnet", dnsTypeAAAA), opts, time.Second)
+	if err != nil || dnsTestRCode(response) != dnsRCodeNoErr || binary.BigEndian.Uint16(response[6:8]) != 0 {
+		t.Fatal("existing IPv4-only service name did not return empty AAAA success", err)
+	}
+	response, err = DNSProxyResponse(t.Context(), dnsTestQuery(t, 3, "_db._tcp.db.account.endlessnet", 33), opts, time.Second)
 	if err != nil || dnsTestRCode(response) != dnsRCodeNoErr || binary.BigEndian.Uint16(response[6:8]) != 1 {
 		t.Fatal("SRV discovery failed", err)
 	}

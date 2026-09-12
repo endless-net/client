@@ -199,15 +199,33 @@ func assertDNSListenerUnavailable(t *testing.T, transport, address string) {
 
 func assertSystemDNSAddress(t *testing.T, binary, interfaceName, name, expected string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	output, err := packetProbeCommand(ctx, "", binary, "--mode", "resolve", "--address", name).CombinedOutput()
+	// Platform DNS managers can publish a completed configuration command
+	// before their application-facing resolver view has converged.
+	deadline := time.Now().Add(10 * time.Second)
+	var output []byte
+	var err error
+	for {
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		output, err = systemResolverCommand(ctx, binary, name, expected).CombinedOutput()
+		cancel()
+		if err == nil || !time.Now().Before(deadline) {
+			break
+		}
+		select {
+		case <-time.After(200 * time.Millisecond):
+		case <-t.Context().Done():
+			t.Fatal("system resolver convergence wait interrupted")
+		}
+	}
 	if err != nil {
 		probeExit := -1
 		if exit, ok := err.(*exec.ExitError); ok {
 			probeExit = exit.ExitCode()
 		}
 		probeOutcome := "other"
+		if runtime.GOOS == "windows" {
+			probeOutcome = "native-api"
+		}
 		if strings.TrimSpace(string(output)) == "application exchange unavailable" {
 			probeOutcome = "unavailable"
 		}
@@ -251,8 +269,35 @@ func assertSystemDNSAddress(t *testing.T, binary, interfaceName, name, expected 
 	}
 }
 
+func systemResolverCommand(ctx context.Context, binary, name, expected string) *exec.Cmd {
+	if runtime.GOOS != "windows" {
+		return packetProbeCommand(ctx, "", binary, "--mode", "resolve", "--address", name)
+	}
+	quotedName := strings.ReplaceAll(name, "'", "''")
+	quotedExpected := strings.ReplaceAll(expected, "'", "''")
+	script := "$r=@(Resolve-DnsName -Name '" + quotedName + "' -Type A -DnsOnly -NoHostsFile -ErrorAction Stop | Where-Object {$_.IPAddress} | ForEach-Object {$_.IPAddress}); if($r.Count -ne 1 -or $r[0] -ne '" + quotedExpected + "'){exit 2}; [Console]::Out.Write($r[0])"
+	return exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
+}
+
 func assertSystemDNSNameAbsent(t *testing.T, binary, name string) {
 	t.Helper()
+	directCtx, directCancel := context.WithTimeout(t.Context(), 3*time.Second)
+	directOutput, directErr := packetProbeCommand(directCtx, "", binary, "--mode", "resolve", "--address", name, "--dns", "127.0.0.1:53").CombinedOutput()
+	directCancel()
+	directExit, directExitOK := directErr.(*exec.ExitError)
+	if !directExitOK || directExit.ExitCode() != 3 || strings.TrimSpace(string(directOutput)) != "DNS name not found" {
+		t.Fatal("Client DNS listener did not return the name-not-found outcome")
+	}
+	if runtime.GOOS == "windows" {
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		quotedName := strings.ReplaceAll(name, "'", "''")
+		script := "try { $r=@(Resolve-DnsName -Name '" + quotedName + "' -Type A -DnsOnly -NoHostsFile -ErrorAction Stop | Where-Object {$_.IPAddress}); if($r.Count -eq 0){exit 0}; exit 2 } catch { if($_.FullyQualifiedErrorId -like 'DNS_ERROR_RCODE_NAME_ERROR*'){exit 0}; exit 2 }"
+		if err := exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script).Run(); err != nil {
+			t.Fatal("Windows system resolver did not return the Client DNS name-not-found outcome")
+		}
+		return
+	}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	output, err := packetProbeCommand(ctx, "", binary, "--mode", "resolve", "--address", name).CombinedOutput()

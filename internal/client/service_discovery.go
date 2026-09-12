@@ -50,6 +50,13 @@ func serviceDNSResponse(request []byte, question dnsQuestion, opts DNSProxyOptio
 	}
 	hosts := append([]clientapi.ServiceHost(nil), service.Hosts...)
 	sort.Slice(hosts, func(i, j int) bool { return hosts[i].NodeID < hosts[j].NodeID })
+	name := normalizeDNSName(question.Name)
+	ownerExists := name == normalizeDNSName(service.DNSName)
+	for _, host := range hosts {
+		if name == normalizeDNSName(DNSLabel(host.NodeID)+"."+service.DNSName) {
+			ownerExists = true
+		}
+	}
 	var answers []byte
 	count := uint16(0)
 	limit := opts.responseLimit
@@ -67,7 +74,6 @@ func serviceDNSResponse(request []byte, question dnsQuestion, opts DNSProxyOptio
 			continue
 		}
 		target := DNSLabel(host.NodeID) + "." + service.DNSName
-		name := normalizeDNSName(question.Name)
 		var data []byte
 		switch question.Type {
 		case dnsTypeA, dnsTypeAAAA:
@@ -119,6 +125,9 @@ func serviceDNSResponse(request []byte, question dnsQuestion, opts DNSProxyOptio
 		count++
 	}
 	if count == 0 {
+		if ownerExists && (question.Type == dnsTypeA || question.Type == dnsTypeAAAA) {
+			return dnsResponseHeader(request, dnsRCodeNoErr, 0, nil), true
+		}
 		return dnsErrorResponse(request, dnsRCodeNX), true
 	}
 	return dnsResponseHeader(request, dnsRCodeNoErr, count, answers), true

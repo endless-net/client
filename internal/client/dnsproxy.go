@@ -247,6 +247,11 @@ func dnsPeerResponse(request []byte, question dnsQuestion, networkMap clientapi.
 	}
 	resolution, err := ResolvePeerDNSName(networkMap, question.Name, searchDomain, family)
 	if err != nil {
+		if peerDNSNameExists(networkMap, question.Name, searchDomain) {
+			// The owner name exists but has no address in the requested family.
+			// NXDOMAIN would poison the other family in validating/system caches.
+			return dnsResponseHeader(request, dnsRCodeNoErr, 0, nil)
+		}
 		return dnsErrorResponse(request, dnsRCodeNX)
 	}
 	addr, err := netip.ParseAddr(resolution.Address)
@@ -269,6 +274,19 @@ func dnsPeerResponse(request []byte, question dnsQuestion, networkMap clientapi.
 	answer = binary.BigEndian.AppendUint16(answer, uint16(len(rdata)))
 	answer = append(answer, rdata...)
 	return dnsResponseHeader(request, dnsRCodeNoErr, 1, answer)
+}
+
+func peerDNSNameExists(networkMap clientapi.RegisterNodeResponse, query, searchDomain string) bool {
+	label, _, err := resolveDNSQueryLabel(query, normalizeDNSName(searchDomain))
+	if err != nil {
+		return false
+	}
+	for _, record := range peerDNSRecords(networkMap) {
+		if record.label == label {
+			return true
+		}
+	}
+	return false
 }
 
 func parseDNSQuestion(packet []byte) (dnsQuestion, error) {

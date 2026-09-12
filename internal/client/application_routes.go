@@ -139,6 +139,7 @@ func applicationDNSResponse(request []byte, q dnsQuestion, opts DNSProxyOptions)
 		return dnsResponseHeader(request, dnsRCodeNoErr, 0, nil), true
 	}
 	seen := map[netip.Addr]bool{}
+	nameExists := false
 	for _, app := range opts.NetworkMap.Network.Applications {
 		target, _ := clientapi.ParseApplicationTarget(app.TargetType, app.Target)
 		if target.Domain != normalizeDNSName(q.Name) || !slices.Contains(app.Sources, applicationSelf(opts.NetworkMap)) {
@@ -150,6 +151,9 @@ func applicationDNSResponse(request []byte, q dnsQuestion, opts DNSProxyOptions)
 			}
 			for _, cidr := range route.CIDRs {
 				p, err := netip.ParsePrefix(cidr)
+				if err == nil {
+					nameExists = true
+				}
 				if err == nil && (q.Type == dnsTypeA && p.Addr().Is4() || q.Type == dnsTypeAAAA && p.Addr().Is6()) {
 					seen[p.Addr()] = true
 				}
@@ -175,6 +179,9 @@ func applicationDNSResponse(request []byte, q dnsQuestion, opts DNSProxyOptions)
 		answers = appendServiceDNSAnswer(answers, q.Type, 0, addr.AsSlice())
 	}
 	if len(addresses) == 0 {
+		if nameExists {
+			return dnsResponseHeader(request, dnsRCodeNoErr, 0, nil), true
+		}
 		return dnsErrorResponse(request, dnsRCodeNX), true
 	}
 	return dnsResponseHeader(request, dnsRCodeNoErr, uint16(len(addresses)), answers), true

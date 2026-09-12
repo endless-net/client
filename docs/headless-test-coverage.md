@@ -4591,3 +4591,17 @@ agent restart must retain that identity and traffic. The testserver exposes the
 standard discovery document and a fixture-only session-rotation control; the
 test never reads the Client config or service state. This raises the pending
 common inventory to 44 roots / 1,056 native outcomes.
+
+The first diagnostic Ubuntu 22.04 results exposed a Client DNS protocol defect,
+not merely runner delay. An existing IPv4-only peer name returned NXDOMAIN to
+an AAAA question. A validating system resolver can cache that response for the
+owner name and discard the successful A result. Peer, Application and service
+DNS now return NOERROR with an empty answer (NODATA) when the signed owner name
+exists but has no address in the requested family; truly absent or withdrawn
+names still return NXDOMAIN. Component regressions cover all three projections.
+The native root keeps an IPv4-only peer so the combined system-resolver path
+exercises this distinction. On Windows, the diagnostic run showed a present
+NRPT rule and successful `Resolve-DnsName` while the Go packet probe bypassed
+that platform path; Windows assertions now use the native resolver API and
+also require the Client listener's exact negative wire outcome. The correction
+and bounded OS resolver convergence wait require a new complete matrix.

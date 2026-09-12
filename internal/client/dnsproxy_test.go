@@ -36,6 +36,20 @@ func TestDNSProxyAnswersPeerFromSignedMap(t *testing.T) {
 	if got := dnsTestAAnswer(t, response); got != "100.64.0.3" {
 		t.Fatalf("A answer = %s, want 100.64.0.3", got)
 	}
+	response, err = DNSProxyResponse(context.Background(), dnsTestQuery(t, 0x1002, "node-b.default.endlessnet", dnsTypeAAAA), DNSProxyOptions{
+		NetworkMap:   networkMap,
+		ServePeerDNS: true,
+	}, time.Second)
+	if err != nil || dnsTestRCode(response) != dnsRCodeNoErr || binary.BigEndian.Uint16(response[6:8]) != 0 {
+		t.Fatal("existing IPv4-only peer name did not return empty AAAA success", err)
+	}
+	response, err = DNSProxyResponse(context.Background(), dnsTestQuery(t, 0x1003, "absent.default.endlessnet", dnsTypeAAAA), DNSProxyOptions{
+		NetworkMap:   networkMap,
+		ServePeerDNS: true,
+	}, time.Second)
+	if err != nil || dnsTestRCode(response) != dnsRCodeNX {
+		t.Fatal("absent peer name did not return name error", err)
+	}
 }
 
 func TestDNSProxyDoesNotServePeerNamesWhenMagicDNSIsDisabled(t *testing.T) {
