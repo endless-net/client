@@ -82,7 +82,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-003 | L noninteractive installation and enrolled same-artifact reinstall on all eight runners, preserving identity, intent and real TCP access | Interrupted installation and artifact replacement variants |
 | HC-004 | L real service and IPC; stopped-service read/mutation/subscription failure and same-identity/intent recovery passed all eight installation runners at `38050bc` | Local authorization and remaining unavailable-service variants |
 | HC-005 | C SingleAgentOwnership including lexical/file-symlink aliases, concurrent duplicate rejection and successor startup passed all 24 repetitions at `4f117a0`; Unix SIGTERM requires clean exit | Hard-link aliases, concurrent startup without an existing owner and remaining termination variants |
-| HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
+| HC-006 | L service restart without interactive login; connected cached-map TCP startup without control and later control recovery passed all eight installation runners at `0cf6d73` | Actual machine reboot and other late-network availability variants |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
 | HC-008 | C BrowserEnrollment; expiry recovery on six runners; pending CLI interruption/resume and active rejection/reapproval passed all 24 repetitions on eight native runners | Interactive/server-side cancellation and foreign poll authorization |
 | HC-009 | C enrollment; P wrong/expired join authorization; R two real CLI registrations | Full authorized/denied attribute and platform variants |
@@ -106,7 +106,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
 | HC-028 | C native single-Relay and two-Relay failover IPv4/IPv6 TCP/UDP, outage denial, recovery and agent restart passed all 24 native repetitions | NAT, direct/Relay transitions, existing-session failover, healthy-backup failback and remaining Relay variants |
 | HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
-| HC-030 | C typed/malformed errors; R fresh and established direct TCP/UDP survive short Signing dependency and Coordinator process outages and recover without registration | Map/lease expiry, edge/transport/storage outage and remaining variants |
+| HC-030 | C typed/malformed errors; L connected cached-map TCP startup without control, later map advancement and disconnected no-auto-connect passed all eight installation runners at `0cf6d73`; historical R short dependency/process outages | Map/lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | C RoutedResource passed three times on all eight native platforms: IPv4/IPv6 TCP/UDP through an IP forwarding peer, route withdrawal and recovery | Full Client router roles, SNAT, HA and remaining resource variants |
 | HC-033 | C durable route installation disable/restore passed three times on all eight native platforms; U configuration tests | Per-resource selection and remaining route-selection semantics |
@@ -138,7 +138,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-059 | No qualified independent client-endorsed node-admission evidence; server trust/recovery tests belong to HC-021 | BR-05 / Q-05 product decision: independently signed node admission, unsigned-node denial, signing-device loss and recovery |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
-| HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
+| HC-062 | L missing-executable repair preserves identity and connected/disconnected traffic intent on all eight installation runners at `0cf6d73` | Other installation damage and interrupted-repair variants; full identity reset is separate |
 | HC-063 | U local-forget/recovery tests; local forget deliberately retains identity | Full identity-reset product/interface gap; do not infer it from local forget |
 | HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
@@ -3142,7 +3142,7 @@ endpoint-refresh HTTP attempts, remains disconnected when control returns, and
 resumes traffic only after explicit connect. Assertions use public CLI/IPC,
 contract-participant transcripts and observed traffic.
 
-This qualifies the bounded HC-006/HC-030 service restart and HC-004 repair
+This qualifies the bounded HC-006/HC-030 service restart and HC-062 repair
 increments at this source. It does not prove physical machine reboot, cross-version
 upgrade, every corruption mode, or the complete HC scenarios. Native contract
 repetitions and the aggregate source gate are still outstanding at this snapshot;
