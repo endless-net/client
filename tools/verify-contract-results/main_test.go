@@ -51,6 +51,8 @@ func TestRejectIncompleteOrUnequalExecution(t *testing.T) {
 		"missing scenario":    string(goodReport(names[:1], 1)),
 		"undeclared scenario": strings.ReplaceAll(good, "TestControlPlaneBeta", "TestControlPlaneOther"),
 		"wrong package":       strings.ReplaceAll(good, "client/contracts", "another/package"),
+		"unfinished child":    strings.Replace(good, `"Action":"pass","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, `"Action":"output","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, 1),
+		"unstarted child":     strings.Replace(good, `"Action":"run","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, `"Action":"output","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, 1),
 		"skipped child":       strings.Replace(good, `"Action":"pass","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, `"Action":"skip","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, 1),
 		"failed child":        strings.Replace(good, `"Action":"pass","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, `"Action":"fail","Package":"client/contracts","Test":"TestControlPlaneAlpha/case"`, 1),
 		"missing start":       strings.Replace(good, `"Action":"run","Package":"client/contracts","Test":"TestControlPlaneAlpha"`, `"Action":"output","Package":"client/contracts","Test":"TestControlPlaneAlpha"`, 1),

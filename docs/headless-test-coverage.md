@@ -2816,6 +2816,15 @@ has 36 roots and still requires its own 864-outcome matrix. This successful
 
 ## Next work
 
+The aggregate report verifier now requires one matching run/PASS pair for every
+observed subtest as well as each compiled root. Two short regressions replaced
+either the child's run or PASS with an output event while leaving the parent and
+package successful; both invalid reports were accepted before the fix. Missing,
+duplicate or incomplete child executions now fail verification. The recorded
+test2json subtest fixture remains an acceptance check. This strengthens report
+integrity; it cannot detect an intended variant absent from both code and report,
+so the HC/variant audit is still required. New gate execution in CI is pending.
+
 HC-058 native builds now embed the exact GitHub source SHA in `main.commit`.
 The IPC-negotiation root requires the CLI `version` commit and OS/architecture
 to match that source and runner, and requires the running agent's public IPC

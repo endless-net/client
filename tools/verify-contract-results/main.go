@@ -139,7 +139,11 @@ func verifyEvents(reader io.Reader, names []string) error {
 			if !state.active {
 				return errors.New("subtest event outside an active root scenario")
 			}
-			continue
+			state, ok = states[e.Test]
+			if !ok {
+				state = &outcome{}
+				states[e.Test] = state
+			}
 		}
 		switch e.Action {
 		case "run":
@@ -159,8 +163,7 @@ func verifyEvents(reader io.Reader, names []string) error {
 	if !packagePass {
 		return errors.New("execution report has no successful package completion")
 	}
-	for _, name := range names {
-		state := states[name]
+	for name, state := range states {
 		if state.active || state.runs != 1 || state.passes != 1 {
 			return fmt.Errorf("%s: expected exactly one complete successful execution in this repetition", name)
 		}
