@@ -2816,6 +2816,16 @@ has 36 roots and still requires its own 864-outcome matrix. This successful
 
 ## Next work
 
+The UDP probe now retains a bounded history of 128 completed replies per
+connection. A duplicate of one of those known replies is discarded while waiting
+for the current nonce; it cannot establish access. A short real-UDP regression
+failed before the fix for both duplicate-plus-current and duplicate-only cases.
+It now requires success only with the current reply, timeout/denial when only an
+old duplicate arrives, and a distinct fatal error for an unknown modified reply.
+TCP behavior and unknown-response failure handling are unchanged. This fixes
+duplicate handling within a retained UDP connection; it does not attribute or
+fix the CI mismatch in a fresh probe process, which has no completed history.
+
 Run `34668100780`, source `8a0d75cf3294db832828ebdd4c7da0c02509a032`, failed
 the native logout root on Ubuntu 22.04 ARM repetition 2
 ([job 103484236542](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236542)).

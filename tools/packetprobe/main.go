@@ -133,10 +133,13 @@ func probeDNS(network, address, dnsServer string) error {
 // Keep known outstanding requests and partial TCP frames across deadlines.
 // A delayed echo can be discarded, but only the current nonce proves success.
 type applicationExchange struct {
-	datagram bool
-	pending  map[[32]byte]struct{}
-	frame    [32]byte
-	filled   int
+	datagram      bool
+	pending       map[[32]byte]struct{}
+	completed     map[[32]byte]struct{}
+	recent        [128][32]byte
+	nextCompleted int
+	frame         [32]byte
+	filled        int
 }
 
 func (x *applicationExchange) exchange(conn net.Conn) error {
@@ -185,6 +188,11 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 		reply := x.frame
 		x.filled = 0
 		if _, known := x.pending[reply]; !known {
+			if x.datagram {
+				if _, duplicate := x.completed[reply]; duplicate {
+					continue
+				}
+			}
 			different, zero := 0, 0
 			for i, value := range reply {
 				if value != request[i] {
@@ -197,6 +205,15 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 			return fmt.Errorf("application response mismatch: different_bytes=%d zero_bytes=%d", different, zero)
 		}
 		delete(x.pending, reply)
+		if x.datagram {
+			if x.completed == nil {
+				x.completed = make(map[[32]byte]struct{})
+			}
+			delete(x.completed, x.recent[x.nextCompleted])
+			x.recent[x.nextCompleted] = reply
+			x.nextCompleted = (x.nextCompleted + 1) % len(x.recent)
+			x.completed[reply] = struct{}{}
+		}
 		if reply == request {
 			return nil
 		}

@@ -12,6 +12,67 @@ import (
 	"golang.org/x/net/dns/dnsmessage"
 )
 
+func TestUDPPreviouslyCompletedEchoCannotSatisfyNewExchange(t *testing.T) {
+	for _, mode := range []string{"duplicate-and-current", "duplicate-only", "unknown-reply"} {
+		t.Run(mode, func(t *testing.T) {
+			server, err := net.ListenPacket("udp4", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = server.Close() }()
+			go func() {
+				var previous []byte
+				for i := range 2 {
+					packet := make([]byte, 33)
+					n, address, err := server.ReadFrom(packet)
+					if err != nil || n != 32 {
+						return
+					}
+					packet = packet[:n]
+					if i == 0 {
+						previous = append([]byte(nil), packet...)
+						_, _ = server.WriteTo(packet, address)
+						continue
+					}
+					if mode == "unknown-reply" {
+						packet[0] ^= 1
+						_, _ = server.WriteTo(packet, address)
+						return
+					}
+					_, _ = server.WriteTo(previous, address)
+					if mode == "duplicate-and-current" {
+						_, _ = server.WriteTo(packet, address)
+					}
+				}
+			}()
+			conn, err := net.Dial("udp4", server.LocalAddr().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = conn.Close() }()
+			exchange := applicationExchange{datagram: true}
+			if err := exchange.exchange(conn); err != nil {
+				t.Fatal("initial UDP exchange failed")
+			}
+			err = exchange.exchange(conn)
+			switch mode {
+			case "duplicate-and-current":
+				if err != nil {
+					t.Fatal("a known completed echo prevented the current UDP exchange")
+				}
+			case "duplicate-only":
+				if !errors.Is(err, errUnreachable) {
+					t.Fatal("a duplicate without a current echo did not remain traffic denial")
+				}
+			case "unknown-reply":
+				if err == nil || errors.Is(err, errUnreachable) {
+					t.Fatal("an unknown reply was accepted or classified as denial")
+				}
+			}
+		})
+	}
+}
+
 func TestApplicationDeadlineFailureIsNotTrafficDenial(t *testing.T) {
 	local, remote := net.Pipe()
 	if err := local.Close(); err != nil {
