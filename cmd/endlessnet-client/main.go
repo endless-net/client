@@ -886,6 +886,14 @@ func cmdUp(args []string) error {
 		return err
 	}
 	req.IdentitySignature = identitySignature
+	// Reject locally invalid direct enrollment input before persisting an
+	// operation that must be retried verbatim after a potentially lost response.
+	// No request has been sent yet, so corrected input must remain usable.
+	if !browserEnrollment {
+		if err := req.Validate(); err != nil {
+			return err
+		}
+	}
 	if pending := cfg.PendingDirectRegistration; pending != nil {
 		original, marshalErr := json.Marshal(pending.Request)
 		if marshalErr != nil {

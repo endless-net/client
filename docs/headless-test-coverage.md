@@ -2896,6 +2896,16 @@ control-outage traffic, strict probe-denial oracle and DNS response-binding work
 
 ## Next work
 
+The new advertisement recovery case exposed a Client CLI defect in a short
+test: malformed CIDR input was rejected without sending registration, but left
+a pending direct operation that prevented correction on the same profile.
+`up` now validates the signed direct-registration request before persisting that
+operation. A short command/testserver regression requires rejection without an
+HTTP registration request, then successful corrected enrollment exactly once,
+without local-forget or inspection of configuration contents. Requests already
+sent remain subject to the existing unchanged-input replay rule. Native coverage
+is the pending `RouteAdvertisement` root; this is not new platform evidence.
+
 HC-012/HC-034 now has `TestControlPlaneRouteAdvertisement`: the real CLI must
 reject a malformed advertised CIDR before a registration request reaches the
 contract fixture. Retrying the same profile with one IPv4 and one IPv6 prefix
