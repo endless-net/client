@@ -2863,6 +2863,25 @@ coverage remains incomplete; this matrix does not close missing scenarios.
 
 ## Next work
 
+Run `34668955037`, source `4a8011f90d839e6771d05999933a7738bc9a315f`, has
+confirmed `NativeFlowConsent/ipv6/udp` failures on
+[Ubuntu 24.04 repetition 3](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108890)
+and [Ubuntu 22.04 ARM repetition 3](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108946).
+The consented-traffic probe reported unavailability at 03:10:34 UTC and
+03:08:26 UTC on 2026-09-12 respectively. These are traffic-availability failures,
+not evidence of an incorrect flow payload or the earlier unknown-nonce error.
+Other matrix jobs were still live when these failures were recorded; this run
+cannot qualify the four-way consent expansion. The source predates the stricter
+exit-code/output oracle, so the old classification alone does not prove a
+network-level cause. No root cause is assigned yet.
+
+On native flow failures the fixture now records bounded reference packet and
+handshake counters plus public IPC availability, cached-map validity, intent,
+WireGuard health/byte counters and whether an agent error is present. It does
+not log error text, payloads or credentials, and leaves all failure criteria and
+deadlines unchanged. This supplies context for the next native failure without
+reading Client-private state.
+
 HC-025/HC-026: `TestControlPlaneDNSUpstreamResponseBinding` adds a real-CLI
 boundary scenario for upstream answers with the wrong transaction ID, question
 name/type/class, opcode, missing question or unset response flag. The same proxy

@@ -172,6 +172,28 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 	}
 	if flowLogs {
+		defer func() {
+			if !t.Failed() {
+				return
+			}
+			status, err := n.Status()
+			received, echoed := reference.PacketCounts()
+			initiations, responses, other := reference.HandshakeCounts()
+			var wgOK, handshake, agentError bool
+			var rx, tx uint64
+			if status.WireGuard != nil {
+				wgOK = status.WireGuard.OK
+				for _, p := range status.WireGuard.Peers {
+					handshake = handshake || p.LatestHandshakeUnix > 0
+					rx += p.TransferRXBytes
+					tx += p.TransferTXBytes
+				}
+			}
+			if status.Agent != nil {
+				agentError = status.Agent.LastError != ""
+			}
+			t.Logf("flow failure: protocol=%s ipv6=%t status_available=%t cached_map_valid=%t disconnected=%t wireguard_ok=%t handshake=%t agent_error_present=%t rx=%d tx=%d reference_received=%d reference_echoed=%d initiations=%d responses=%d other=%d", protocol, ipv6, err == nil, status.CachedMapValid, status.UserDisconnected, wgOK, handshake, agentError, rx, tx, received, echoed, initiations, responses, other)
+		}()
 		checkNativeFlowConsent(t, s, initial.NodeID, protocol, clientIP, peerIP, fresh)
 		return
 	}
