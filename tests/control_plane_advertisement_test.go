@@ -20,6 +20,7 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 		{"--advertise", "not-a-cidr", "192.0.2.0/24"},
 		{"--hostname", "invalid hostname", "route-node"},
 		{"--endpoint", "not-an-endpoint", "127.0.0.1:51820"},
+		{"--tag", "invalid\ntag", "role-router"},
 	} {
 		t.Run("browser-invalid-input-recovery/"+strings.TrimPrefix(tc.flag, "--"), func(t *testing.T) {
 			s := testcontrol.New(t)
@@ -92,6 +93,9 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 			}
 			if tc.flag == "--advertise" && !slices.Equal(projection.Node.AdvertisedIPs, []string{tc.valid}) {
 				t.Fatal("approved browser enrollment lost the corrected prefix")
+			}
+			if tc.flag == "--tag" && !slices.Equal(projection.Node.RequestedTags, []string{tc.valid}) {
+				t.Fatal("approved browser enrollment lost the corrected requested tag")
 			}
 			created, registered := 0, 0
 			for _, event := range s.Events() {

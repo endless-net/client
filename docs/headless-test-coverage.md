@@ -88,7 +88,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-009 | C enrollment; P wrong/expired join authorization; R two real CLI registrations | Full authorized/denied attribute and platform variants |
 | HC-010 | C RegistrationResponseLoss; D ResponseLossPreservesOperation; historical R distinct node IDs | Client image-cloning and batch variants; historical producer replay failure is an external constraint |
 | HC-011 | CLI join-token --ephemeral forwarding has a component test; no C/R lifecycle evidence | Define client normal/crash lifecycle observations; token-option forwarding does not prove expiry |
-| HC-012 | D request/proof tests | Real Client allowed/denied registration attributes and effective access against published contract responses |
+| HC-012 | C real Client rejects invalid and preserves corrected hostname, endpoint, advertised-prefix and requested-tag registration inputs through browser approval; D request/proof tests | Qualify the expanded native root; effective tag/route authorization and additional platform attributes against published responses |
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
 | HC-014 | C user-session rotation, user-RPC denial, node-credential independence, reauthentication and same-node traffic/restart recovery are executable; U recovery matrix | Qualify the native root on every runner; browser/OIDC refresh and other session-expiry timing variants |
 | HC-015 | C join-token rotation denies a new real Client, preserves the existing node credential, signed-map advancement, native traffic and restart, then replacement-token enrollment is executable; historical R revoked join key | Qualify the native root on every runner; token expiry and offline variants; node revocation remains separate |
@@ -4615,3 +4615,12 @@ then enroll exactly one distinct node. The fixture control models token
 revocation without reading a producer database, and the test observes only CLI,
 IPC, signed-map and traffic outcomes. Token expiry and offline enrollment remain
 separate. The pending common inventory is now 45 roots / 1,080 outcomes.
+
+The HC-012 browser-registration matrix now includes requested tags alongside
+hostname, endpoint and advertised prefixes. A tag containing a forbidden line
+break must be rejected before an enrollment request reaches the testserver.
+Correcting it must create one request, preserve the requested tag in the signed
+registration result and complete exactly one node registration after approval.
+This verifies Client input and projection behavior; it does not infer effective
+policy authorization from the requested attribute. The common root count stays
+45 while the expanded root awaits native qualification.

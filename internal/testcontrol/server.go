@@ -718,6 +718,7 @@ func (s *Server) registerLocked(req api.RegisterNodeRequest, authorization strin
 	}
 	result := clone(n.Map)
 	result.Node.AdvertisedIPs = slices.Clone(req.AdvertisedIPs)
+	result.Node.RequestedTags = slices.Clone(req.Tags)
 	result.SchemaVersion = api.SchemaVersion
 	result.IdempotencyID = req.IdempotencyID
 	result.RegistrationBinding = binding
