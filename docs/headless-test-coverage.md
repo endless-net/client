@@ -2780,7 +2780,10 @@ stalled pre-hello response, empty EOF and malformed event must each produce exit
 1, empty stdout and nonempty stderr within the outer deadline. The stalled case
 must honor the explicit two-second CLI deadline; the fixture must have observed
 the public events request so a dial/setup failure cannot satisfy the test.
-This proves CLI consumer behavior only, not agent authorization or recovery.
+After each failure, the same listening endpoint switches to a valid hello and
+keeps the stream open. A fresh real CLI invocation must emit exactly that hello,
+leave stderr empty and exit successfully at its two-second listening deadline.
+This proves CLI consumer recovery only, not agent authorization or recovery.
 The existing real-agent subscription/restart scenario remains separate. CI
 discovers this root in all 24 native jobs and requires the same source inventory;
 the new total is 34 x 3 x 8 = 816 root outcomes. Native evidence is pending.

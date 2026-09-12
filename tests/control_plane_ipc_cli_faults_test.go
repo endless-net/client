@@ -3,10 +3,12 @@ package tests
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os/exec"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,6 +29,7 @@ func TestControlPlaneCLIIPCFailureBoundary(t *testing.T) {
 				t.Fatal("could not create native IPC fault fixture")
 			}
 			observed := make(chan bool, 1)
+			var recovered atomic.Bool
 			server := &http.Server{ReadHeaderTimeout: 3 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				select {
 				case observed <- r.Method == http.MethodGet && r.URL.Path == ipc.PathEvents:
@@ -35,6 +38,12 @@ func TestControlPlaneCLIIPCFailureBoundary(t *testing.T) {
 				w.Header().Set("Content-Type", "application/x-ndjson")
 				w.WriteHeader(http.StatusOK)
 				w.(http.Flusher).Flush()
+				if recovered.Load() {
+					_ = json.NewEncoder(w).Encode(ipc.Event{Metadata: ipc.NewMetadata(ipc.Version), EventType: ipc.EventTypeHello, Sequence: 1, GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+					w.(http.Flusher).Flush()
+					<-r.Context().Done()
+					return
+				}
 				switch mode {
 				case "timeout-before-hello":
 					<-r.Context().Done()
@@ -75,6 +84,31 @@ func TestControlPlaneCLIIPCFailureBoundary(t *testing.T) {
 				}
 			default:
 				t.Fatal("CLI failure occurred before reaching the native IPC fixture")
+			}
+			// Repair the response at the same endpoint. A fresh invocation must
+			// now establish the subscription and exit normally at its deadline.
+			recovered.Store(true)
+			recoveryCtx, recoveryCancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer recoveryCancel()
+			cmd = exec.CommandContext(recoveryCtx, n.Binary, args...)
+			stdout.Reset()
+			stderr.Reset()
+			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			started = time.Now()
+			if err := cmd.Run(); err != nil || recoveryCtx.Err() != nil || time.Since(started) < 2*time.Second || stderr.Len() != 0 {
+				t.Fatal("CLI did not recover a successful listening deadline after IPC repair (output withheld)")
+			}
+			var hello ipc.Event
+			if json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &hello) != nil || hello.EventType != ipc.EventTypeHello || hello.Sequence != 1 || hello.IPCProtocol != ipc.Protocol || hello.IPCNegotiatedVersion != ipc.Version {
+				t.Fatal("recovered CLI did not emit exactly one valid hello record")
+			}
+			select {
+			case valid := <-observed:
+				if !valid {
+					t.Fatal("recovered CLI requested an unexpected endpoint")
+				}
+			default:
+				t.Fatal("recovered CLI did not reach the same native fixture")
 			}
 		})
 	}
