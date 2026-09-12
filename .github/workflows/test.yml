@@ -211,9 +211,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Four real-time flow-consent lifecycles and eight cleanup traffic variants
     # extend the suite; individual CLI/RPC/probe deadlines remain unchanged.
-    # The Go test deadline remains 30m. Terminate a lingering shell/child process
-    # at the step boundary, leaving time for setup and partial-report upload.
-    timeout-minutes: 45
+    # The 53-root suite needs more than 30m on Windows (run 34710382160).
+    # Bound execution to 40m; preserve setup and partial-report upload time.
+    timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
@@ -268,7 +268,7 @@ jobs:
       - name: Run isolated contract repetition (Unix)
         if: runner.os != 'Windows'
         shell: bash
-        timeout-minutes: 31
+        timeout-minutes: 41
         run: |
           set -euo pipefail
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
@@ -276,19 +276,19 @@ jobs:
             ENDLESSNET_TEST_COMMIT="$GITHUB_SHA" \
             ENDLESSNET_PACKET_PROBE="$RUNNER_TEMP/client-contracts/packetprobe.exe" \
             "$RUNNER_TEMP/client-contracts/contracts.test.exe" \
-            -test.run='^TestControlPlane' -test.count=1 -test.v -test.timeout=30m \
+            -test.run='^TestControlPlane' -test.count=1 -test.v -test.timeout=40m \
             2>&1 | tee "$RUNNER_TEMP/client-contracts/results.log"
       - name: Run isolated contract repetition (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        timeout-minutes: 31
+        timeout-minutes: 41
         env:
           ENDLESSNET_CONTROL_TEST: '1'
         run: |
           $env:ENDLESSNET_TEST_BINARY = Join-Path $env:RUNNER_TEMP 'client-contracts/client.exe'
           $env:ENDLESSNET_TEST_COMMIT = $env:GITHUB_SHA
           $env:ENDLESSNET_PACKET_PROBE = Join-Path $env:RUNNER_TEMP 'client-contracts/packetprobe.exe'
-          & "$env:RUNNER_TEMP/client-contracts/contracts.test.exe" '-test.run=^TestControlPlane' '-test.count=1' '-test.v' '-test.timeout=30m' 2>&1 |
+          & "$env:RUNNER_TEMP/client-contracts/contracts.test.exe" '-test.run=^TestControlPlane' '-test.count=1' '-test.v' '-test.timeout=40m' 2>&1 |
             Tee-Object -FilePath "$env:RUNNER_TEMP/client-contracts/results.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Produce machine-readable contract report

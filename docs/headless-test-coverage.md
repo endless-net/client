@@ -143,6 +143,30 @@ product scope are different conditions; neither is a successful skip.
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
+## Windows evidence and complete-suite budget — 2026-09-12
+
+At source `f71587a`, [Windows 2025 repeat 2](https://github.com/endless-net/client/actions/runs/34710382160/job/103600590944)
+fails the initial IPv4 application-map wait. Public stage logs show TUN creation
+and device activation completed, followed by `routes begin` without completion
+at inspection. This locates the delay in route configuration; it does not yet
+identify the slow PowerShell/OS operation. The 15-second readiness limit remains.
+The same report has an IPv6 TCP flow-consent probe failure from 2.857 seconds
+before consent expiry until 1.844 seconds before expiry, after 1290 successful
+probes. Reference traffic counters do not advance for that exchange. Public
+inspection reports a 99.297-second handshake age, valid cache, healthy WireGuard
+and available physical IPv4 interfaces before cleanup. Cause remains open.
+
+[Windows 2025 repeat 3](https://github.com/endless-net/client/actions/runs/34710382160/job/103600590934)
+also fails the DNS diagnostic assertion and reaches the overall 30-minute Go
+test deadline. Its 52 completed roots total 1794.25 seconds; the final
+`TrustConfirmation` root has run for only six seconds at cancellation. This
+report does not establish a failure in trust confirmation and is incomplete.
+The complete 53-root suite now has a 40-minute Go deadline, a 41-minute execution
+step limit and a 55-minute job limit for setup and report preservation. These
+are suite execution budgets; CLI, IPC, traffic, readiness and lease deadlines
+are unchanged, as are all required tests and the eight-platform/three-repeat
+matrix. The revised budget still requires CI validation.
+
 ## DNS diagnostic revision synchronization — 2026-09-12
 
 In the first 16 downloaded reports of [run 34710382160](https://github.com/endless-net/client/actions/runs/34710382160),
