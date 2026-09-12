@@ -146,13 +146,18 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(applied.WireGuard.ListenPort)))
 	}
 	address := func(port string) string { return net.JoinHostPort(peerIP.String(), port) }
+	flowObservationStarted := false
 	fresh := func(port string) bool {
 		beforeReceived, beforeEchoed := reference.PacketCounts()
-		ok := applicationProbe(t, binary, "", protocol, address(port))
-		if flowLogs && !ok {
-			afterReceived, afterEchoed := reference.PacketCounts()
-			t.Logf("flow denied exchange: protocol=%s ipv6=%t port=%s reference_received_delta=%d reference_echoed_delta=%d", protocol, ipv6, port, afterReceived-beforeReceived, afterEchoed-beforeEchoed)
-		}
+		classified, ok := false, false
+		defer func() {
+			if flowLogs && flowObservationStarted && (!classified || !ok) {
+				afterReceived, afterEchoed := reference.PacketCounts()
+				t.Logf("flow failed exchange: protocol=%s ipv6=%t port=%s classified=%t reference_received_delta=%d reference_echoed_delta=%d", protocol, ipv6, port, classified, afterReceived-beforeReceived, afterEchoed-beforeEchoed)
+			}
+		}()
+		ok = applicationProbe(t, binary, "", protocol, address(port))
+		classified = true
 		return ok
 	}
 	apply(peer)
@@ -180,6 +185,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 	}
 	if flowLogs {
+		flowObservationStarted = true
 		defer func() {
 			if !t.Failed() {
 				return

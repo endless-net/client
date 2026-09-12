@@ -3062,6 +3062,14 @@ correction/completion additions. None of those changes is validated by this run.
 
 ## Next work
 
+Per-exchange flow diagnostics now run in a defer, so an unclassified fatal probe
+exit also records reference received/echoed deltas. `classified=false` preserves
+the distinction from explicit network denial; such failures still fail the test.
+Logging starts only after initial peer reachability is established, excluding
+expected connection-establishment retries from consent-failure diagnostics.
+Counters remain aggregate observations of the reference participant, not proof
+of a particular packet's fate. Pass conditions and deadlines are unchanged.
+
 The browser endpoint-correction variant now checks that the signed enrollment
 projection contains the corrected endpoint before starting the agent. Later
 endpoint discovery may legitimately replace this value. The assertion uses the
