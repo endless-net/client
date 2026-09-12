@@ -35,7 +35,7 @@ func TestControlPlaneDNSWireRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	peer := api.Peer{ID: "dns-wire-peer", Hostname: "wire-peer", PublicKey: public, AllowedIPs: []string{"100.90.0.20/32"}}
+	peer := api.Peer{ID: "dns-wire-peer", Hostname: "wire-peer", PublicKey: public, AllowedIPs: []string{"100.90.0.20/32", "fd7a:115c:a1e0::20/128"}}
 	globalAddress, globalQueries := dnsContractUpstream(t, [4]byte{203, 0, 113, 4})
 	splitAddress, splitQueries := dnsContractUpstream(t, [4]byte{198, 51, 100, 7})
 	for _, present := range []bool{true, false, true} {
@@ -54,6 +54,12 @@ func TestControlPlaneDNSWireRecovery(t *testing.T) {
 				peerCode, peerAddress = dnsmessage.RCodeSuccess, "100.90.0.20"
 			}
 			assertDNSWire(t, transport, address, "wire-peer.scenario.endlessnet.", peerCode, peerAddress)
+			peerIPv6 := ""
+			if present {
+				peerIPv6 = "fd7a:115c:a1e0::20"
+			}
+			assertDNSWireType(t, transport, address, "wire-peer.scenario.endlessnet.", dnsmessage.TypeAAAA, peerCode, peerIPv6)
+			assertDNSWireType(t, transport, address, "absent.scenario.endlessnet.", dnsmessage.TypeAAAA, dnsmessage.RCodeNameError, "")
 			assertDNSWire(t, transport, address, "absent.scenario.endlessnet.", dnsmessage.RCodeNameError, "")
 			assertDNSWire(t, transport, address, "public.example.", dnsmessage.RCodeSuccess, "203.0.113.4")
 			assertDNSWire(t, transport, address, "db.corp.test.", dnsmessage.RCodeSuccess, "198.51.100.7")
@@ -118,11 +124,16 @@ func startClientDNS(t *testing.T, n *testclient.Node, options ...string) (string
 
 func assertDNSWire(t *testing.T, transport, address, name string, code dnsmessage.RCode, expected string) {
 	t.Helper()
+	assertDNSWireType(t, transport, address, name, dnsmessage.TypeA, code, expected)
+}
+
+func assertDNSWireType(t *testing.T, transport, address, name string, family dnsmessage.Type, code dnsmessage.RCode, expected string) {
+	t.Helper()
 	qname, err := dnsmessage.NewName(name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	query := dnsmessage.Message{Header: dnsmessage.Header{ID: 0x6142, RecursionDesired: true}, Questions: []dnsmessage.Question{{Name: qname, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}}}
+	query := dnsmessage.Message{Header: dnsmessage.Header{ID: 0x6142, RecursionDesired: true}, Questions: []dnsmessage.Question{{Name: qname, Type: family, Class: dnsmessage.ClassINET}}}
 	wire, err := query.Pack()
 	if err != nil {
 		t.Fatal(err)
@@ -175,8 +186,15 @@ func assertDNSWire(t *testing.T, transport, address, name string, code dnsmessag
 	if len(response.Answers) != 1 {
 		t.Fatal("DNS did not return exactly one address")
 	}
-	a, ok := response.Answers[0].Body.(*dnsmessage.AResource)
-	if !ok || netip.AddrFrom4(a.A).String() != expected {
+	answer := response.Answers[0]
+	var actual netip.Addr
+	switch body := answer.Body.(type) {
+	case *dnsmessage.AResource:
+		actual = netip.AddrFrom4(body.A)
+	case *dnsmessage.AAAAResource:
+		actual = netip.AddrFrom16(body.AAAA)
+	}
+	if answer.Header.Name != qname || answer.Header.Type != family || answer.Header.Class != dnsmessage.ClassINET || !actual.IsValid() || actual.String() != expected {
 		t.Fatal("DNS address does not match the published map or selected upstream")
 	}
 }

@@ -2414,6 +2414,16 @@ HC-001–HC-065 coverage and the remaining platform variants are still open.
 
 ## Next work
 
+The DNS wire root now also queries AAAA records over both UDP and TCP for a
+dual-stack peer, withdraws that peer and requires NXDOMAIN, then restores its
+IPv6 answer. Absent private AAAA names must also return NXDOMAIN. Existing
+upstream transcript checks remain exact, so these additional private queries
+must not leak to global or split upstreams. Answer owner, type, class and address
+are checked against the question and published map. This is IPv6 DNS record
+coverage over a loopback IPv4 DNS transport, not IPv6 underlay, system resolver
+installation or live reload: each CLI proxy still loads a fresh map. Hosted
+qualification is pending; the inventory remains 32 roots / 768 outcomes.
+
 The native IPC event root now opens two simultaneous subscriptions. Each must
 receive its own hello, current snapshot and the subsequent disconnect event,
 with independently increasing sequence numbers. After explicit cancellation
