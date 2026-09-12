@@ -2673,6 +2673,43 @@ skip. No speculative runtime fix or relaxed probe assertion is justified by
 this log alone. The remaining matrix was still running when this evidence was
 recorded; this source has no successful publication qualification.
 
+## Complete DNS-family matrix: two Windows failures
+
+Run [34665159849](https://github.com/endless-net/client/actions/runs/34665159849)
+completed with failure for source `c36c0db57b4d814053ac261f466c36e2bfcbe73b`.
+All 24 reports contain the same 33 roots: **790 PASS, 2 FAIL, zero SKIP**.
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| macos-15 | [103476274434](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274434) | [103476274296](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274296) | [103476274285](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274285) |
+| macos-15-intel | [103476274293](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274293) | [103476274324](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274324) | [103476274333](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274333) |
+| ubuntu-22.04 | [103476274288](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274288) | [103476274245](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274245) | [103476274279](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274279) |
+| ubuntu-22.04-arm | [103476274271](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274271) | [103476274274](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274274) | [103476274343](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274343) |
+| ubuntu-24.04 | [103476274312](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274312) | [103476274326](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274326) | [103476274241](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274241) |
+| ubuntu-24.04-arm | [103476274295](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274295) | [103476274273](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274273) | [103476274357](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274357) |
+| windows-2022 | [103476274395](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274395) | [103476274268](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274268) | [103476274287](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274287) |
+| windows-2025 | [103476274338](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274338) — FAIL | [103476274398](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274398) | [103476274315](https://github.com/endless-net/client/actions/runs/34665159849/job/103476274315) — FAIL |
+
+Windows 2025 repeat 1 failed DiagnosticsExport because the real CLI disconnect
+exceeded its default 30-second timeout (30.018 seconds observed). Repeat 3 failed
+NativeUDPTraffic after reconnect with an application response mismatch. These
+are distinct unresolved failures. The existing log does not identify whether
+disconnect waited on control-plane notification, engine locking, or OS teardown.
+Neither increasing its timeout nor relaxing nonce comparison is established as
+a correction. Later bounded nonce diagnostics do not retroactively identify
+this run's cause.
+
+All **192 DNS leaf outcomes passed**: eight listener/upstream/truncation variants
+on each of 24 runners. This confirms IPv4/IPv6 UDP/TCP listener access, independent
+IPv4/IPv6 upstreams, TCP retry after truncated UDP, local A/AAAA map changes,
+split isolation and upstream SERVFAIL recovery for this source's DNS scenario.
+It does not override the two other failures. All eight installation jobs and
+three OS verification jobs passed, including the six Unix permission checks
+recorded above. The [aggregate gate](https://github.com/endless-net/client/actions/runs/34665159849/job/103478839514)
+failed; the source is not qualified for publication. Optional external STUN was
+skipped and supplies no evidence. Windows restricted-token tests and bounded
+probe-mismatch counters were introduced after this source.
+
 ## Next work
 
 The unexplained Windows UDP nonce mismatch now has bounded probe diagnostics:
