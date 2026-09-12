@@ -2814,6 +2814,53 @@ fix, logout retry and native logout/local-forget traffic roots. Current source
 has 36 roots and still requires its own 864-outcome matrix. This successful
 33-root run does not complete HC-001–HC-065 or qualify those later increments.
 
+## Native matrix evidence: cleanup and CLI fault boundaries
+
+[Run 34668100780](https://github.com/endless-net/client/actions/runs/34668100780)
+completed against source `8a0d75cf3294db832828ebdd4c7da0c02509a032`.
+All 24 job logs contain the same 36 root scenarios: **863 PASS, 1 FAIL, 0 SKIP**.
+The four CLI IPC fault/recovery leaves passed in every job (96 PASS).
+Native logout/local-forget leaves produced 191 PASS and 1 FAIL across the
+192 family/transport/cleanup variants. The failure is the initial fresh UDP
+traffic baseline on Ubuntu 22.04 ARM repetition 2, before cleanup; details below.
+The [aggregate gate](https://github.com/endless-net/client/actions/runs/34668100780/job/103487094061)
+failed. All eight installation jobs, three OS verification jobs and the separate
+Client control-plane job passed. Optional external STUN was skipped and supplies
+no compatibility evidence.
+
+| Runner and repetition | Job | Root outcomes |
+| --- | --- | --- |
+| macos-15-intel, repeat 1 | [103484236357](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236357) | 36 PASS |
+| macos-15-intel, repeat 2 | [103484236551](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236551) | 36 PASS |
+| macos-15-intel, repeat 3 | [103484236549](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236549) | 36 PASS |
+| macos-15, repeat 1 | [103484236522](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236522) | 36 PASS |
+| macos-15, repeat 2 | [103484236592](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236592) | 36 PASS |
+| macos-15, repeat 3 | [103484236572](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236572) | 36 PASS |
+| ubuntu-22.04-arm, repeat 1 | [103484236358](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236358) | 36 PASS |
+| ubuntu-22.04-arm, repeat 2 | [103484236542](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236542) | 35 PASS, 1 FAIL |
+| ubuntu-22.04-arm, repeat 3 | [103484236559](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236559) | 36 PASS |
+| ubuntu-22.04, repeat 1 | [103484236450](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236450) | 36 PASS |
+| ubuntu-22.04, repeat 2 | [103484236382](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236382) | 36 PASS |
+| ubuntu-22.04, repeat 3 | [103484236577](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236577) | 36 PASS |
+| ubuntu-24.04-arm, repeat 1 | [103484236378](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236378) | 36 PASS |
+| ubuntu-24.04-arm, repeat 2 | [103484236537](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236537) | 36 PASS |
+| ubuntu-24.04-arm, repeat 3 | [103484236629](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236629) | 36 PASS |
+| ubuntu-24.04, repeat 1 | [103484236397](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236397) | 36 PASS |
+| ubuntu-24.04, repeat 2 | [103484236394](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236394) | 36 PASS |
+| ubuntu-24.04, repeat 3 | [103484236474](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236474) | 36 PASS |
+| windows-2022, repeat 1 | [103484236346](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236346) | 36 PASS |
+| windows-2022, repeat 2 | [103484236439](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236439) | 36 PASS |
+| windows-2022, repeat 3 | [103484236591](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236591) | 36 PASS |
+| windows-2025, repeat 1 | [103484236319](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236319) | 36 PASS |
+| windows-2025, repeat 2 | [103484236540](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236540) | 36 PASS |
+| windows-2025, repeat 3 | [103484236530](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236530) | 36 PASS |
+
+This run does not qualify the later 37th interrupted-disconnect root, four-way
+flow-consent expansion, direct IPC cleanup confirmation, exact build-commit
+assertions, stricter child-outcome verifier, or UDP completed-reply history.
+Those changes require evidence from their own source revision. Full HC-001–HC-065
+coverage remains incomplete; this matrix does not close missing scenarios.
+
 ## Next work
 
 The UDP probe now retains a bounded history of 128 completed replies per
