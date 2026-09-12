@@ -898,6 +898,15 @@ func cmdUp(args []string) error {
 		if err := req.Validate(); err != nil {
 			return err
 		}
+	} else {
+		if err := wgkeys.ValidateHostname(req.Hostname); err != nil {
+			return fmt.Errorf("hostname: %w", err)
+		}
+		if req.Endpoint != "" {
+			if err := wgkeys.ValidateEndpoint(req.Endpoint); err != nil {
+				return fmt.Errorf("endpoint: %w", err)
+			}
+		}
 	}
 	if pending := cfg.PendingDirectRegistration; pending != nil {
 		original, marshalErr := json.Marshal(pending.Request)

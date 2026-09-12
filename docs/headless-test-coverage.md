@@ -2996,6 +2996,18 @@ separate from the Windows component queue access-denied failure below.
 
 ## Next work
 
+The browser input regression now also covers invalid hostname and endpoint.
+Both new short cases failed before the fix because an enrollment POST was sent.
+The browser branch now checks the effective request hostname and optional
+endpoint with the pinned public WireGuard validators before creating or resuming
+an approval request. Direct credential renewal still validates its effective
+saved hostname through the existing request validator. The native
+`RouteAdvertisement/browser-invalid-input-recovery` branch has three named
+variants: advertise, hostname and endpoint. Each rejects invalid input without
+an enrollment POST and then reaches exactly one unapproved request after
+correction. Native evidence remains pending; these are input-shape checks, not
+proof of endpoint reachability or server authorization.
+
 Browser advertisement validation exposed another Client input defect: a short
 CLI-command/testserver test proved malformed CIDR reached the browser enrollment
 endpoint. Direct registration's validation did not protect this branch. The CLI

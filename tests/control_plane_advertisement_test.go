@@ -16,43 +16,49 @@ import (
 // Advertising a prefix alone does not prove approval or effective routing.
 func TestControlPlaneRouteAdvertisement(t *testing.T) {
 	requireControlScenario(t)
-	t.Run("browser-invalid-input-recovery", func(t *testing.T) {
-		s := testcontrol.New(t)
-		network, _, err := s.AddNetwork("browser-advertisement", "100.90.0.0/24")
-		if err != nil {
-			t.Fatal(err)
-		}
-		n := testclient.New(t, s)
-		args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--hostname", "route-node", "--map-signing-trust-file", n.TrustFile, "--approval-timeout", "0", "--advertise"}
-		_, err = n.Run(append(args, "not-a-cidr")...)
-		var exit *exec.ExitError
-		if !errors.As(err, &exit) || exit.ExitCode() != 1 {
-			t.Fatal("invalid browser advertisement was not rejected by the CLI")
-		}
-		for _, event := range s.Events() {
-			if event.Kind == "request" && event.Path == "POST /nodes/enrollment-requests" {
-				t.Fatal("invalid browser advertisement reached enrollment")
+	for _, tc := range []struct{ flag, invalid, valid string }{
+		{"--advertise", "not-a-cidr", "192.0.2.0/24"},
+		{"--hostname", "invalid hostname", "route-node"},
+		{"--endpoint", "not-an-endpoint", "127.0.0.1:51820"},
+	} {
+		t.Run("browser-invalid-input-recovery/"+strings.TrimPrefix(tc.flag, "--"), func(t *testing.T) {
+			s := testcontrol.New(t)
+			network, _, err := s.AddNetwork("browser-advertisement", "100.90.0.0/24")
+			if err != nil {
+				t.Fatal(err)
 			}
-		}
-		// No approval is granted: correction must create exactly one pending
-		// request instead of remaining bound to the invalid input.
-		output, err := n.Run(append(args, "192.0.2.0/24")...)
-		if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(output), "browser approval is required") {
-			t.Fatal("corrected browser advertisement did not report approval required (output withheld)")
-		}
-		created := 0
-		for _, event := range s.Events() {
-			if event.Kind == "enrollment" {
-				created++
+			n := testclient.New(t, s)
+			args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--hostname", "route-node", "--map-signing-trust-file", n.TrustFile, "--approval-timeout", "0", tc.flag}
+			_, err = n.Run(append(args, tc.invalid)...)
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+				t.Fatal("invalid browser input was not rejected by the CLI")
 			}
-			if event.Kind == "registered" {
-				t.Fatal("browser advertisement enrolled without approval")
+			for _, event := range s.Events() {
+				if event.Kind == "request" && event.Path == "POST /nodes/enrollment-requests" {
+					t.Fatal("invalid browser input reached enrollment")
+				}
 			}
-		}
-		if created != 1 {
-			t.Fatal("corrected browser advertisement did not create one approval request")
-		}
-	})
+			// No approval is granted: correction must create exactly one pending
+			// request instead of remaining bound to the invalid input.
+			output, err := n.Run(append(args, tc.valid)...)
+			if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(output), "browser approval is required") {
+				t.Fatal("corrected browser input did not report approval required (output withheld)")
+			}
+			created := 0
+			for _, event := range s.Events() {
+				if event.Kind == "enrollment" {
+					created++
+				}
+				if event.Kind == "registered" {
+					t.Fatal("browser input enrolled without approval")
+				}
+			}
+			if created != 1 {
+				t.Fatal("corrected browser input did not create one approval request")
+			}
+		})
+	}
 	s := testcontrol.New(t)
 	network, token, err := s.AddNetwork("advertisement", "100.90.0.0/24")
 	if err != nil {
