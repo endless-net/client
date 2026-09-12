@@ -294,9 +294,31 @@ fields, unspecified/unknown lifecycle enums and malformed reset key lists are
 rejected without a partial result. Reset requires nonempty unique known keys.
 Tests cover all eight preference keys and input immutability.
 
-These helpers are not yet bound to Set/ResetPreferences and do not persist or
-apply settings. Per-profile overrides, effective policy projection, provider
+Structural validation alone does not persist or apply settings. The UI_QUIT
+binding is described below. Other per-profile overrides, effective policy projection, provider
 support checks, atomic application/rollback and lifecycle adapters remain needed.
 In particular, a structurally known PLATFORM_MANAGED enum does not authorize a
 user override; the applicable provider's allowed values must still be enforced.
 UF-18/UF-21 acceptance is not established by these structural tests.
+
+## Graceful UI quit preferences (2026-09-13)
+
+Get/Set/ResetPreferences now support the per-profile UI_QUIT setting with
+KEEP_INTENT (default) and DISCONNECT values. Reset removes the user override;
+requested presence and DEFAULT/USER source are distinct. A patch containing other
+unsupported keys is rejected in full, without changing UI_QUIT. Other preference
+projections remain absent rather than fabricated effective values.
+
+NotifyLifecycle accepts only explicit UI_QUIT for the active profile. KEEP_INTENT
+finishes as an atomic no-change operation. DISCONNECT persists intent and a
+NOTIFY_LIFECYCLE operation, preempts in-flight apply and completes through the
+same Down executor as Disconnect. It keeps its original operation kind throughout.
+Neither dropping a connection nor crashing the UI sends this command automatically.
+Preference changes publish profile-scoped preference invalidations.
+
+Tests cover default keep, persisted override/replay, disk reload, reset,
+mixed-patch rejection, invalid lifecycle events and executed Down. The real local
+transport exercises preference reads/writes/reset and NotifyLifecycle. Wiring
+graceful UI exit in client-ui, managed setting constraints, the remaining seven
+preferences, OS lifecycle adapters and production/system acceptance remain open;
+this is not complete UF-18/UF-21 acceptance.

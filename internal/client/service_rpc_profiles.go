@@ -82,10 +82,11 @@ func (m *ClientRPCMutations) listProfilesWithSelectionAs(peer local.Peer, reques
 // state lives in the top-level Config until a safe tunnel-context switch saves
 // it here. Never expose Configuration through the local contract.
 type clientRPCProfile struct {
-	ID            string `json:"id"`
-	DisplayName   string `json:"display_name"`
-	ControlOrigin string `json:"control_origin"`
-	Configuration Config `json:"configuration"`
+	ID            string                 `json:"id"`
+	DisplayName   string                 `json:"display_name"`
+	ControlOrigin string                 `json:"control_origin"`
+	Configuration Config                 `json:"configuration"`
+	UIQuit        *ipc.LifecycleBehavior `json:"ui_quit,omitempty"`
 }
 
 func rpcProfileDisplayName(value string) (string, error) {
@@ -152,6 +153,9 @@ func (m *ClientRPCMutations) createProfileAs(peer local.Peer, request *ipc.Creat
 func rpcFindProfile(cfg *Config, ref *ipc.ProfileRef) (clientRPCProfile, error) {
 	if ref.GetProfileId() == "" {
 		return clientRPCProfile{}, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+	}
+	if cfg.RPCState == nil {
+		return clientRPCProfile{}, rpc.Error(connect.CodeNotFound, ipc.ErrorCode_ERROR_CODE_NOT_FOUND)
 	}
 	profile, exists := cfg.RPCState.Profiles[ref.ProfileId]
 	if !exists {

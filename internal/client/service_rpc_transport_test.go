@@ -198,6 +198,22 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 			if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.Kind != ipc.OperationKind_OPERATION_KIND_CONNECT {
 				t.Fatal("native Connect failed")
 			}
+			_, err := client.SetPreferences(ctx, connect.NewRequest(&ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT.Enum()}}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			preferences, err := client.GetPreferences(ctx, connect.NewRequest(&ipc.GetPreferencesRequest{Profile: selection.Profile}))
+			if err != nil || preferences.Msg.Preferences.Lifecycle.UiQuit.Requested == nil || preferences.Msg.Preferences.Lifecycle.UiQuit.Control.Source != ipc.SettingSource_SETTING_SOURCE_USER {
+				t.Fatal("native user preference projection", err)
+			}
+			_, err = client.ResetPreferences(ctx, connect.NewRequest(&ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT}}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			quit, err := client.NotifyLifecycle(ctx, connect.NewRequest(&ipc.NotifyLifecycleRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Event: ipc.LifecycleEvent_LIFECYCLE_EVENT_UI_QUIT}))
+			if err != nil || quit.Msg.Operation.Kind != ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE || quit.Msg.Operation.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+				t.Fatal("native lifecycle notification", err)
+			}
 			return
 		}
 	}

@@ -13,30 +13,34 @@ import (
 
 func (m *ClientRPCMutations) disconnectAs(peer local.Peer, request *ipc.DisconnectRequest) (*ipc.Operation, error) {
 	op, _, err := m.acceptAs(peer, "/client.v0.ClientService/Disconnect", request, func(cfg *Config, op *ipc.Operation) error {
-		profile, err := rpcFindProfile(cfg, request.Profile)
-		if err != nil {
-			return err
-		}
-		state := cfg.RPCState
-		if state.DisconnectOperationID != "" {
-			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
-		}
-		if profile.ID != state.ActiveProfileID && (state.ProfileSwitch == nil || profile.ID != state.ProfileSwitch.To) {
-			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
-		}
-		op.ProfileId = profile.ID
-		state.DisconnectOperationID = op.Id
-		intent := &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "user_disconnect", UpdatedAt: m.now().UTC().Format(time.RFC3339Nano)}
-		cfg.ConnectionIntent = intent
-		// A pending switch must not restore the target's saved connected intent.
-		if state.ProfileSwitch != nil {
-			target := state.Profiles[state.ProfileSwitch.To]
-			target.Configuration.ConnectionIntent = &ConnectionIntent{DesiredState: intent.DesiredState, Reason: intent.Reason, UpdatedAt: intent.UpdatedAt}
-			state.Profiles[target.ID] = target
-		}
-		return nil
+		return m.prepareDisconnect(cfg, op, request.Profile)
 	})
 	return op, err
+}
+
+func (m *ClientRPCMutations) prepareDisconnect(cfg *Config, op *ipc.Operation, ref *ipc.ProfileRef) error {
+	profile, err := rpcFindProfile(cfg, ref)
+	if err != nil {
+		return err
+	}
+	state := cfg.RPCState
+	if state.DisconnectOperationID != "" {
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+	}
+	if profile.ID != state.ActiveProfileID && (state.ProfileSwitch == nil || profile.ID != state.ProfileSwitch.To) {
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
+	op.ProfileId = profile.ID
+	state.DisconnectOperationID = op.Id
+	intent := &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "user_disconnect", UpdatedAt: m.now().UTC().Format(time.RFC3339Nano)}
+	cfg.ConnectionIntent = intent
+	// A pending switch must not restore the target's saved connected intent.
+	if state.ProfileSwitch != nil {
+		target := state.Profiles[state.ProfileSwitch.To]
+		target.Configuration.ConnectionIntent = &ConnectionIntent{DesiredState: intent.DesiredState, Reason: intent.Reason, UpdatedAt: intent.UpdatedAt}
+		state.Profiles[target.ID] = target
+	}
+	return nil
 }
 
 // ReconcileDisconnect stops the actual current tunnel, retaining registration.
@@ -69,7 +73,7 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 			break
 		}
 	}
-	if current == nil || current.Kind != ipc.OperationKind_OPERATION_KIND_DISCONNECT {
+	if current == nil || (current.Kind != ipc.OperationKind_OPERATION_KIND_DISCONNECT && current.Kind != ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE) {
 		return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
 	}
 	resuming := current.State == ipc.OperationState_OPERATION_STATE_RUNNING
