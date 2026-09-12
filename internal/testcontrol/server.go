@@ -79,6 +79,7 @@ type Server struct {
 	session                   string
 	networks                  map[string]api.Network
 	joins                     map[string]string
+	joinExpiries              map[string]time.Time
 	ephemeralJoins            map[string]bool
 	nodes                     map[string]*node
 	operations                map[string]operation
@@ -319,6 +320,7 @@ func (s *Server) RotateJoinToken(token string) (string, error) {
 		return "", errors.New("unknown join token")
 	}
 	delete(s.joins, token)
+	delete(s.joinExpiries, token)
 	ephemeral := s.ephemeralJoins[token]
 	delete(s.ephemeralJoins, token)
 	replacement := rand.Text()
@@ -328,6 +330,21 @@ func (s *Server) RotateJoinToken(token string) (string, error) {
 	}
 	s.recordLocked(Event{Kind: "join-token-rotated"})
 	return replacement, nil
+}
+
+// SetJoinTokenExpiry models the registration authority's token lifetime.
+// Existing node credentials and successful idempotent results remain independent.
+func (s *Server) SetJoinTokenExpiry(token string, expires time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.joins[token]; !ok || expires.IsZero() {
+		return errors.New("join token expiry requires a known token and deadline")
+	}
+	if s.joinExpiries == nil {
+		s.joinExpiries = make(map[string]time.Time)
+	}
+	s.joinExpiries[token] = expires
+	return nil
 }
 
 func (s *Server) Events() []Event    { s.mu.Lock(); defer s.mu.Unlock(); return clone(s.events) }
@@ -730,6 +747,10 @@ func (s *Server) registerLocked(req api.RegisterNodeRequest, authorization strin
 		var ok bool
 		networkID, ok = s.joins[req.JoinToken]
 		if !ok {
+			return api.RegisterNodeResponse{}, api.ErrorCodeAuthorizationDenied, nil
+		}
+		if expires := s.joinExpiries[req.JoinToken]; !expires.IsZero() && !time.Now().Before(expires) {
+			s.recordLocked(Event{Kind: "join-token-expired"})
 			return api.RegisterNodeResponse{}, api.ErrorCodeAuthorizationDenied, nil
 		}
 		if req.NetworkID != "" && req.NetworkID != networkID {

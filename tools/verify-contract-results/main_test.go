@@ -148,6 +148,7 @@ func TestRequireNativeAddressAndProtocolVariants(t *testing.T) {
 		"TestControlPlaneNativeServiceCatalog", "TestControlPlaneNativeMTUPreference",
 		"TestControlPlaneNativeCachedMapExpiry",
 		"TestControlPlaneJoinTokenRotation",
+		"TestControlPlaneJoinTokenExpiryRecovery",
 		"TestControlPlaneSessionExpiryRecovery",
 	} {
 		t.Run(root, func(t *testing.T) { checkRequiredLeaves(t, root, []string{"ipv4", "ipv6"}) })

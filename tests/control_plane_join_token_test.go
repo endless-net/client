@@ -22,11 +22,18 @@ import (
 func TestControlPlaneJoinTokenRotation(t *testing.T) {
 	requireControlScenario(t)
 	for _, family := range []string{"ipv4", "ipv6"} {
-		t.Run(family, func(t *testing.T) { exerciseJoinTokenRotation(t, family) })
+		t.Run(family, func(t *testing.T) { exerciseJoinTokenRetirement(t, family, false) })
 	}
 }
 
-func exerciseJoinTokenRotation(t *testing.T, family string) {
+func TestControlPlaneJoinTokenExpiryRecovery(t *testing.T) {
+	requireControlScenario(t)
+	for _, family := range []string{"ipv4", "ipv6"} {
+		t.Run(family, func(t *testing.T) { exerciseJoinTokenRetirement(t, family, true) })
+	}
+}
+
+func exerciseJoinTokenRetirement(t *testing.T, family string, expire bool) {
 	t.Helper()
 	s := testcontrol.New(t)
 	network, token, err := s.AddNetwork("join-token-rotation", "198.18.89.0/24")
@@ -103,22 +110,46 @@ func exerciseJoinTokenRotation(t *testing.T, family string) {
 	}
 	apply()
 	reachable()
-	replacement, err := s.RotateJoinToken(token)
-	if err != nil {
-		t.Fatal(err)
+	var replacement string
+	if expire {
+		deadline := time.Now().Add(250 * time.Millisecond)
+		if err := s.SetJoinTokenExpiry(token, deadline); err != nil {
+			t.Fatal(err)
+		}
+		timer := time.NewTimer(time.Until(deadline))
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-t.Context().Done():
+			t.Fatal("join-token expiry observation interrupted")
+		}
+	} else {
+		replacement, err = s.RotateJoinToken(token)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	candidate := testclient.New(t, s)
 	_, err = candidate.Run("up", "--config", candidate.Config, "--server", s.URL(), "--network", network.Name, "--join-token", token, "--hostname", "replacement-node", "--map-signing-trust-file", candidate.TrustFile, "--route-table", "off")
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
-		t.Fatal("rotated join token still enrolled a new client")
+		t.Fatal("retired join token still enrolled a new client")
+	}
+	if expire {
+		expiryObserved := false
+		for _, event := range s.Events() {
+			expiryObserved = expiryObserved || event.Kind == "join-token-expired"
+		}
+		if !expiryObserved {
+			t.Fatal("registration did not exercise the token deadline")
+		}
 	}
 	apply()
 	reachable()
 	if current, statusErr := existing.Status(); statusErr != nil || current.NodeID != nodeID || !current.NodeCredentialPresent {
-		t.Fatal("join-token rotation changed the existing node credential")
+		t.Fatal("join-token retirement changed the existing node credential")
 	}
-	// The revoked join token must not become a startup dependency when the
+	// The retired join token must not become a startup dependency when the
 	// existing node restarts from its still-valid map during a control outage.
 	s.SetUnavailable(true)
 	defer s.SetUnavailable(false)
@@ -134,6 +165,12 @@ func exerciseJoinTokenRotation(t *testing.T, family string) {
 	s.SetUnavailable(false)
 	apply()
 	reachable()
+	if expire {
+		replacement, err = s.RotateJoinToken(token)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	replacementClient := testclient.New(t, s)
 	replacementClient.Enroll(s, network.Name, replacement, "--hostname", "replacement-node")
 	registrations := 0

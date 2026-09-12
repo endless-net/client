@@ -125,6 +125,7 @@ func requiredPlatformSubtests(platform string, names []string) []string {
 		"TestControlPlaneNativeServiceCatalog", "TestControlPlaneNativeMTUPreference",
 		"TestControlPlaneNativeCachedMapExpiry",
 		"TestControlPlaneJoinTokenRotation",
+		"TestControlPlaneJoinTokenExpiryRecovery",
 		"TestControlPlaneSessionExpiryRecovery",
 	} {
 		if slices.Contains(names, root) {

@@ -143,6 +143,26 @@ product scope are different conditions; neither is a successful skip.
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
+## Join-token expiry increment — 2026-09-12
+
+`TestControlPlaneJoinTokenExpiryRecovery` adds a separate HC-015 native root
+with mandatory IPv4 and IPv6 leaves. After successful enrollment and real TCP
+and UDP echoes, the fixture assigns a near-future registration-token deadline.
+The test waits for that deadline, requires a new real CLI registration to fail
+and confirms the expiry branch handled its request. The existing node must
+continue applying signed maps and exchanging TCP/UDP traffic, including a
+cached restart during a control outage. A fresh replacement token must then
+enroll exactly one distinct node.
+
+The fixture models the public authorization-denied response for an expired
+registration credential; it does not test a provider's expiration scheduler.
+Successful idempotent registration results and issued node credentials remain
+independent of that deadline. A short fixture check protects successful replay,
+new-identity denial and replacement-token recovery. CI discovers the new root
+in the Client contract inventory; the result verifier requires both address
+families. Native qualification is pending, so the HC-015 evidence row continues
+to claim only the previously completed rotation variant.
+
 ## Complete credential and IPC increment evidence — 2026-09-12
 
 [Run 34710382160](https://github.com/endless-net/client/actions/runs/34710382160)

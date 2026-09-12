@@ -60,6 +60,35 @@ func setup(t *testing.T) (*testcontrol.Server, *api.API, api.RegisterNodeRequest
 	return s, a, req, result, key
 }
 
+func TestJoinTokenExpiryPreservesSuccessfulOperation(t *testing.T) {
+	s, a, original, registered, _ := setup(t)
+	check(t, s.SetJoinTokenExpiry(original.JoinToken, time.Now().Add(-time.Second)))
+	replayed, err := a.RegisterNode(original)
+	check(t, err)
+	if replayed.Node.ID != registered.Node.ID {
+		t.Fatal("expired join token changed an already completed operation")
+	}
+	fresh, _ := request(t, registered.Network, original.JoinToken)
+	if _, err := a.RegisterNode(fresh); err == nil {
+		t.Fatal("expired join token authorized a new identity")
+	}
+	observed := false
+	for _, event := range s.Events() {
+		observed = observed || event.Kind == "join-token-expired"
+	}
+	if !observed {
+		t.Fatal("new registration failed without exercising expiry")
+	}
+	replacement, err := s.RotateJoinToken(original.JoinToken)
+	check(t, err)
+	fresh, _ = request(t, registered.Network, replacement)
+	recovered, err := a.RegisterNode(fresh)
+	check(t, err)
+	if recovered.Node.ID == registered.Node.ID {
+		t.Fatal("replacement join token did not enroll the new identity")
+	}
+}
+
 func TestEphemeralJoinTokenSurvivesRotation(t *testing.T) {
 	s := testcontrol.New(t)
 	network, token, err := s.AddNetwork("ephemeral", "100.80.1.0/24")
