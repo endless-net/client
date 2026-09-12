@@ -422,11 +422,21 @@ func cmdServiceIPCEvents(command string, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	encoder := json.NewEncoder(os.Stdout)
+	receivedHello := false
 	err = newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket).Stream(ctx, http.MethodGet, ipc.PathEvents, nil, func(event ipc.Event) error {
-		return encoder.Encode(event)
-	})
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		if err := encoder.Encode(event); err != nil {
+			return err
+		}
+		if event.EventType == ipc.EventTypeHello {
+			receivedHello = true
+		}
 		return nil
+	})
+	if receivedHello && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+		return nil
+	}
+	if err == nil && !receivedHello {
+		return errors.New("service IPC event stream ended before hello")
 	}
 	return err
 }

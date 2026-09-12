@@ -2862,6 +2862,51 @@ func TestCmdServiceEventsStreamsNDJSON(t *testing.T) {
 	}
 }
 
+func TestCmdServiceEventsRequiresHelloBeforeSuccessfulCompletion(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		hello bool
+		wait  bool
+	}{
+		{name: "timeout-before-hello", wait: true},
+		{name: "eof-before-hello"},
+		{name: "timeout-after-hello", hello: true, wait: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(client.NewServiceIPCHandler(client.ServiceIPCHandlers{
+				Events: func(ctx context.Context, _ ipc.EventsRequest, writer client.ServiceIPCEventWriter) error {
+					if tc.hello {
+						if err := writer.Send(ipc.Event{EventType: ipc.EventTypeHello, Sequence: 1}); err != nil {
+							return err
+						}
+					}
+					if tc.wait {
+						<-ctx.Done()
+					}
+					return nil
+				},
+			}))
+			defer server.Close()
+			original := newServiceIPCClient
+			newServiceIPCClient = func(string) *ipc.Client {
+				local := ipc.NewClient(server.Client())
+				local.BaseURL = server.URL
+				return local
+			}
+			defer func() { newServiceIPCClient = original }()
+			out, err := captureStdout(t, func() error {
+				return cmdService([]string{"events", "--ipc-pipe", "test-pipe", "--timeout", "1s"})
+			})
+			if (err == nil) != tc.hello {
+				t.Fatal("event command success did not distinguish an opened stream from a missing hello")
+			}
+			if !tc.hello && out != "" {
+				t.Fatal("unopened event subscription emitted output")
+			}
+		})
+	}
+}
+
 func TestCmdServiceRenderSystemdWritesArtifacts(t *testing.T) {
 	outputDir := t.TempDir()
 	if err := cmdService([]string{

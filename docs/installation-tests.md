@@ -35,7 +35,7 @@ The suite checks:
 
 While enrolled, the suite also stops the service in both connected and
 disconnected states. Real CLI `status`, `networks`, `diagnostics`, `connect` and
-`disconnect` requests use a two-second IPC timeout and must exit with code 1,
+`disconnect` and `events` requests use a two-second IPC timeout and must exit with code 1,
 empty stdout and nonempty stderr before a separate ten-second harness deadline.
 After service startup, the original identity and intent must remain, with real
 TCP access restored only for connected intent. This checks service absence; it

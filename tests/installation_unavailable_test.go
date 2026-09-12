@@ -14,7 +14,7 @@ import (
 // inspecting state files or relying on platform-specific transport messages.
 func assertStoppedServiceCommands(t *testing.T, binary string) {
 	t.Helper()
-	for _, operation := range []string{"status", "networks", "diagnostics", "connect", "disconnect"} {
+	for _, operation := range []string{"status", "networks", "diagnostics", "connect", "disconnect", "events"} {
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		cmd := exec.CommandContext(ctx, binary, "service", operation, "--timeout", "2s")
 		var stdout, stderr bytes.Buffer

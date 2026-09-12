@@ -2528,6 +2528,13 @@ SIGTERM shutdown assertion. Their results must come from a later source matrix.
 
 ## Next work
 
+A short CLI regression reproduced false success when an event subscription
+timed out or reached EOF before receiving hello. The command now treats those
+unopened streams as errors while preserving successful listening-timeout exit
+after a received hello. Both negative cases failed before the correction; the
+positive timeout case guards normal CLI behavior. This component regression
+does not itself qualify stalled native IPC transports on hosted platforms.
+
 The HC-052/053 event scenario now also executes real `service events --timeout
 2s` commands while connected and after restarting a disconnected agent. It
 requires successful timeout termination (with an outer ten-second observation
@@ -2537,7 +2544,7 @@ status. Public status after completion must retain the connection intent.
 This supplements SDK subscriptions; hosted evidence for this CLI path is pending.
 
 HC-004/052/053 now have installed-service absence assertions in both enrolled
-connection states: five public CLI read/mutation commands must fail with exit 1,
+connection states: six public CLI read/mutation/subscription commands must fail with exit 1,
 stderr and no stdout payload within a bounded harness deadline. Restart must
 retain identity and intent, restore connected TCP access and preserve disconnected
 traffic denial without registration. This runs inside the existing eight-platform
