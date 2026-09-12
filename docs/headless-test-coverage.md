@@ -129,12 +129,12 @@ product scope are different conditions; neither is a successful skip.
 | HC-050 | U sharing/encrypted engine tests | C grant/consent/revoke/expiry/new identity against published contracts without internal access |
 | HC-051 | U service discovery/runtime | Logical service host approval, loss and actual traffic |
 | HC-052 | L/C bounded IPC waits | Public readiness conditions and noninteractive timeout results |
-| HC-053 | L/C structured IPC; D RPC authorization | Public machine output/errors and repeated report acceptance |
+| HC-053 | L/C structured IPC; native request validation passed all 24 repetitions at `a9a1a21`; D RPC authorization | Non-object/body-size extensions and event stream await hosted evidence; remaining machine output/errors |
 | HC-054 | No C/R evidence audited | Container persistent versus ephemeral lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
-| HC-057 | C export/reuse has historical 24-repetition evidence; retention and IPv4 UDP flow consent/retry/expiry passed 23/24 native repetitions at `1af0278`; D FlowConsentAndIdempotency; U flow tests | Missing macOS Intel repetition, crash recovery, comprehensive redaction and remaining retention/flow variants |
-| HC-058 | L version and runtime platform; native IPC negotiation/restart passed 23/24 repetitions at `1af0278` | Missing macOS Intel repetition, artifact mismatch and exact release identity |
+| HC-057 | C export/reuse, retention and IPv4 UDP flow consent/retry/expiry passed all 24 native repetitions at `a9a1a21`; D FlowConsentAndIdempotency; U flow tests | Crash recovery, comprehensive redaction and remaining retention/flow variants |
+| HC-058 | L version and runtime platform; native IPC negotiation/restart passed all 24 repetitions at `a9a1a21` | Artifact mismatch and exact release identity |
 | HC-059 | U trust/recovery matrix; C TrustConfirmation rejection passed three times on all eight native platforms | Successful rotation, interrupted recovery and independent signing scopes |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
@@ -2372,6 +2372,45 @@ recur, but its cause remains unidentified. This run predates the probe deadline
 category, dependency-download retry, TLS hostname mismatch and IPC request
 validation additions. The current inventory is 31 roots / 744 expected outcomes;
 full-source qualification and remaining HC variants are still open.
+
+## Complete 31-root platform evidence: hostname fixture failure
+
+Run [34659063792](https://github.com/endless-net/client/actions/runs/34659063792)
+completed with failure at source `a9a1a218f32f999a2ac3fbbe10401f8c71e86b39`.
+All 24 native reports were inspected: identical 31-root inventories, **720 PASS,
+24 FAIL, 0 SKIP**. Every failed root is `TestControlPlaneTLSTrustBoundary`, and
+every job contains the hostname-mismatch certificate-error assertion failure.
+The other 30 roots passed in every repetition. Job links below identify repeats
+1, 2 and 3 respectively; each job has 30 passes and one TLS failure.
+
+| Platform | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| Ubuntu 22.04 x64 | [103458324775](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324775) | [103458324609](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324609) | [103458324710](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324710) |
+| Ubuntu 24.04 x64 | [103458324660](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324660) | [103458324620](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324620) | [103458324725](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324725) |
+| Ubuntu 22.04 ARM64 | [103458324729](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324729) | [103458324900](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324900) | [103458324662](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324662) |
+| Ubuntu 24.04 ARM64 | [103458324756](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324756) | [103458324690](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324690) | [103458324675](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324675) |
+| Windows 2022 | [103458324784](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324784) | [103458324751](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324751) | [103458324831](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324831) |
+| Windows 2025 | [103458324768](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324768) | [103458324726](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324726) | [103458324781](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324781) |
+| macOS 15 Intel | [103458324754](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324754) | [103458324709](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324709) | [103458324825](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324825) |
+| macOS 15 ARM64 | [103458324679](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324679) | [103458324617](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324617) | [103458324796](https://github.com/endless-net/client/actions/runs/34659063792/job/103458324796) |
+
+This supplies all 24 repetitions for diagnostic export retention, native IPC
+negotiation/restart and IPv4 UDP flow consent/retry/expiry, including the macOS
+Intel repetition missing from the preceding run. The initial IPC request
+validation root also passes all 24: wrong method, unknown route, malformed JSON,
+unknown fields and trailing JSON, unchanged intent, then valid disconnect/connect.
+It predates the non-object rejection fix, event subscriptions, isolated TLS
+hostname fixture and request-size boundary extension. Those changes need their
+own hosted evidence.
+
+All eight install/smoke jobs, three OS verification jobs and the separate Linux
+control-plane job passed. Required aggregate `verify` failed; optional external
+STUN was skipped. The source is not qualified for publication. The TLS fixture
+was corrected in `1d841847390288d7ab7804624dd777374a0abbf4`: isolate the mismatch
+profile and explicitly restrict its origin list, preventing failover to the
+valid IP origin retained after the first enrollment attempt. This is a fixture
+correction, not evidence of bypassed Client certificate validation. Complete
+HC-001–HC-065 coverage and the remaining platform variants are still open.
 
 ## Next work
 
