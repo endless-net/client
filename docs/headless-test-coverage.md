@@ -2994,6 +2994,72 @@ existing-session recovery, or relax the assertion without establishing the
 intended recovery bound and collecting evidence. These native failures are
 separate from the Windows component queue access-denied failure below.
 
+## Final 39-scenario matrix at 985763e
+
+Run [34670764847](https://github.com/endless-net/client/actions/runs/34670764847),
+source `985763edf13e74fc479abb293b26420cc653e6f3`, completed with failure on
+2026-09-12. All 24 reports contain the same 39 root names: **906 PASS, 30 FAIL,
+0 SKIP** (936 outcomes). Nine contract jobs passed and fifteen failed.
+The earlier partial snapshots above remain historical observations.
+
+| Platform / repetition | Job | Root outcomes |
+| --- | --- | --- |
+| windows-2022, repeat 3 | [103491773657](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773657) | 39 PASS |
+| windows-2022, repeat 2 | [103491773669](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773669) | 39 PASS |
+| windows-2025, repeat 1 | [103491773671](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773671) | 38 PASS, 1 FAIL |
+| windows-2025, repeat 2 | [103491773682](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773682) | 38 PASS, 1 FAIL |
+| windows-2025, repeat 3 | [103491773684](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773684) | 36 PASS, 3 FAIL |
+| ubuntu-22.04-arm, repeat 2 | [103491773689](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773689) | 36 PASS, 3 FAIL |
+| macos-15, repeat 2 | [103491773696](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773696) | 39 PASS |
+| macos-15-intel, repeat 3 | [103491773697](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773697) | 39 PASS |
+| macos-15-intel, repeat 2 | [103491773698](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773698) | 39 PASS |
+| macos-15-intel, repeat 1 | [103491773701](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773701) | 39 PASS |
+| macos-15, repeat 3 | [103491773708](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773708) | 39 PASS |
+| macos-15, repeat 1 | [103491773717](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773717) | 39 PASS |
+| windows-2022, repeat 1 | [103491773721](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773721) | 39 PASS |
+| ubuntu-24.04-arm, repeat 3 | [103491773761](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773761) | 37 PASS, 2 FAIL |
+| ubuntu-22.04-arm, repeat 3 | [103491773787](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773787) | 37 PASS, 2 FAIL |
+| ubuntu-22.04, repeat 3 | [103491773808](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773808) | 37 PASS, 2 FAIL |
+| ubuntu-22.04-arm, repeat 1 | [103491773814](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773814) | 37 PASS, 2 FAIL |
+| ubuntu-24.04, repeat 3 | [103491773818](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773818) | 37 PASS, 2 FAIL |
+| ubuntu-24.04, repeat 1 | [103491773822](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773822) | 37 PASS, 2 FAIL |
+| ubuntu-24.04-arm, repeat 1 | [103491773837](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773837) | 37 PASS, 2 FAIL |
+| ubuntu-24.04, repeat 2 | [103491773854](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773854) | 37 PASS, 2 FAIL |
+| ubuntu-22.04, repeat 2 | [103491773875](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773875) | 37 PASS, 2 FAIL |
+| ubuntu-22.04, repeat 1 | [103491773880](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773880) | 37 PASS, 2 FAIL |
+| ubuntu-24.04-arm, repeat 2 | [103491774023](https://github.com/endless-net/client/actions/runs/34670764847/job/103491774023) | 37 PASS, 2 FAIL |
+
+All twelve Linux jobs fail both Relay roots. Windows 2025 repeat 1 and repeat 2
+fail Relay failover; repeat 3 fails both Relay roots. These account for 28 failed
+roots. The remaining failures are IPv6 UDP flow consent on Ubuntu 22.04 ARM
+repeat 2 and the local-forget IPv4 UDP child of NativeLogoutTraffic on Windows
+2025 repeat 3. All macOS and Windows 2022 repetitions pass. No other root or
+child failure or skip appears in these reports.
+
+The Windows 2025 repeat 3 cleanup failure occurs at 04:11:34 UTC in
+`control_plane_native_udp_test.go:149`, during initial application reachability
+before local-forget. The probe exits 1 with an unclassified failure; it does
+not satisfy the strict explicit-denial oracle. This does not establish a
+local-forget defect, response mismatch, network denial or shared cause with
+the separate IPv6 flow failure. The saved diagnostic does not distinguish
+process timeout from other unclassified failures. Its three Relay child failures
+occur at the already-recorded post-outage retained-TCP assertion.
+
+All eight installation jobs pass the root and four installation children
+(40 PASS records, no FAIL/SKIP). Linux and macOS Verify and the separate Client
+control-plane job pass; Windows Verify fails with the queue access-denied
+component failure recorded below. Optional external STUN compatibility is skipped
+and supplies no evidence. The required aggregate
+[verify gate 103496452447](https://github.com/endless-net/client/actions/runs/34670764847/job/103496452447)
+fails, so this source is not qualified for publication.
+
+The DNS upstream response-binding and route-advertisement roots pass in every
+report, as do all other roots outside the four named above. Those bounded
+results do not qualify the full source or all HC requirements. This run predates
+the flow queue mutex fix, retained-TCP observation, per-probe flow counters,
+missing-executable repair, installed startup without control and browser input
+correction/completion additions. None of those changes is validated by this run.
+
 ## Next work
 
 Browser input correction coverage now continues after approval. For each of the
