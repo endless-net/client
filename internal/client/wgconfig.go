@@ -228,14 +228,10 @@ func renderSubnetRouterSNATHooks(response clientapi.RegisterNodeResponse, enable
 
 func subnetRouterSNATProbeAddress(prefix netip.Prefix) netip.Addr {
 	prefix = prefix.Masked()
-	addr := prefix.Addr()
-	if prefix.Bits() < addr.BitLen() {
-		next := addr.Next()
-		if next.IsValid() && prefix.Contains(next) {
-			return next
-		}
-	}
-	return addr
+	// Probe the route prefix itself. The first host address is commonly assigned
+	// to this router, in which case `ip route get` reports the local/loopback
+	// route and installs forwarding and SNAT rules on the wrong interface.
+	return prefix.Addr()
 }
 
 func renderExitLANFirewallHooks(peers []clientapi.Peer, enabled bool) []string {

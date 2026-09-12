@@ -439,7 +439,7 @@ func TestRenderWireGuardSubnetRouterSNATHooksAreOptIn(t *testing.T) {
 	})
 	for _, want := range []string{
 		"sysctl -w net.ipv4.ip_forward=1",
-		"ip route get 10.98.0.1",
+		"ip route get 10.98.0.0",
 		"FORWARD -i %i -o \"$lan_if\" -s 100.91.0.0/24 -d 10.98.0.0/24 -j ACCEPT",
 		"FORWARD -i \"$lan_if\" -o %i -s 10.98.0.0/24 -d 100.91.0.0/24 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
 		"POSTROUTING -s 100.91.0.0/24 -d 10.98.0.0/24",
