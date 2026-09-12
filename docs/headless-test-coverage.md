@@ -5307,3 +5307,21 @@ component-level packet-filter proof; the public-contract
 the running Client, offline CLI rejection, restart and control recovery.
 The fix does not by itself prove OS route retirement, credential expiry or
 release acceptance, and is absent from the running `169b09c` matrix.
+
+### 2026-09-12: first native cached-map expiry failure
+
+[macOS Intel repeat 1](https://github.com/endless-net/client/actions/runs/34706279754/job/103587387376)
+at `169b09c91a010cf2c850a6bcd58c366de2b26d9c` reports 50 passing and two failing
+roots out of 52. `TestControlPlaneNativeCachedMapExpiry` reaches the expired
+public-cache state but still observes application traffic for both IPv4 and
+IPv6. This supplies real-Client evidence of the expiry bypass reproduced by
+the component regression; fix `d97b4ab` is not included in this run. MTU
+preference persistence, rejection and recovery pass for both address families
+in this report, without establishing the remaining platform repetitions.
+
+The other failed root is native flow consent: an IPv4 TCP exchange fails after
+earlier reference forwarding, and the three subsequent variants cannot find a
+usable IPv4 underlay. The interface inventory reports the physical interfaces
+without IPv4; the remaining IPv4 interface is point-to-point. This is a repeated
+failure class requiring investigation, not proof that Client configuration or
+consent expiry caused the underlay loss. The other matrix reports are pending.
