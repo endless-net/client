@@ -169,13 +169,13 @@ func TestRPCDisconnectFailureAndCancellation(t *testing.T) {
 				t.Fatal(err)
 			}
 			driver.Stop = func(context.Context) (ipc.ConnectionContinuity, error) {
-				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
+				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE, nil
 			}
 			if err := restarted.ReconcileDisconnect(t.Context(), driver); err != nil {
 				t.Fatal(err)
 			}
 			recovered, err := restarted.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
-			if err != nil || recovered.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || restarted.store.Read().RPCState.DisconnectOperationID != "" {
+			if err != nil || recovered.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || recovered.Continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN || restarted.store.Read().RPCState.DisconnectOperationID != "" {
 				t.Fatal("restart did not finish durable disconnect", err)
 			}
 		} else if final.State != ipc.OperationState_OPERATION_STATE_FAILED || final.GetFailure().Code != ipc.ErrorCode_ERROR_CODE_APPLY_FAILED || final.Continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN {

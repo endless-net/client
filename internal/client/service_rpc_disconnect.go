@@ -72,6 +72,7 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 	if current == nil || current.Kind != ipc.OperationKind_OPERATION_KIND_DISCONNECT {
 		return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
 	}
+	resuming := current.State == ipc.OperationState_OPERATION_STATE_RUNNING
 	if current.State == ipc.OperationState_OPERATION_STATE_PENDING {
 		if _, err := m.ReconcileOperation(id, func(_ *Config, op *ipc.Operation) error {
 			op.State = ipc.OperationState_OPERATION_STATE_RUNNING
@@ -87,6 +88,11 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 		return err
 	}
 	if continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED && continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE {
+		continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN
+	}
+	if resuming && continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED {
+		// Down may have succeeded before the previous process could commit its
+		// outcome. An absent tunnel now cannot prove no earlier interruption.
 		continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN
 	}
 	_, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {

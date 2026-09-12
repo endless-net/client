@@ -207,3 +207,14 @@ cancellation. The real local-transport test invokes Disconnect with the generate
 client and checks its native terminal outcome. Production wiring, provider
 timeouts/preemption, restart with real OS state and full multi-platform route
 acceptance remain required; these local checks do not establish release readiness.
+
+Disconnect recovery treats a currently absent tunnel as UNKNOWN continuity when
+resuming RUNNING: the previous process may already have interrupted connectivity
+before persisting its outcome. The cancellation/restart test explicitly returns
+NOT_APPLICABLE from the replacement driver and verifies it cannot erase this
+uncertainty.
+
+At inspection on 2026-09-13, the [Test run for a4b5319](https://github.com/endless-net/client/actions/runs/34724571973)
+was pending and its [Protobuf contract run](https://github.com/endless-net/client/actions/runs/34724571995)
+was queued. Local green checks are not evidence that these cross-platform CI
+gates passed; no runner or infrastructure changes were made.
