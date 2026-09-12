@@ -280,6 +280,7 @@ func (t *applicationTUN) Read(bufs [][]byte, sizes []int, offset int) (int, erro
 			}
 			now := time.Now()
 			packet := bufs[i][offset : offset+sizes[i]]
+			normalizeIPv6UDPChecksum(packet)
 			allowed := t.peerACL.allows(packet) && t.filter.allows(packet, false, now) && t.sharing.allows(packet, false, now)
 			t.flows.observe(packet, allowed, now)
 			if !allowed {

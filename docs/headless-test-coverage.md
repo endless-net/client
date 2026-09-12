@@ -3151,6 +3151,35 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+### Computed-zero IPv6 UDP checksum: Client fix awaiting native validation
+
+[Ubuntu 24.04 repeat 1](https://github.com/endless-net/client/actions/runs/34678240275/job/103513677025)
+at source `6f0bdf3bb4d801804572f7d234314487c1f6843b` fails
+`NativeFlowConsent/ipv6/udp` at 2026-09-12 06:52:52.804 UTC in the consented
+traffic loop. Received/echoed deltas are 1/0. Rejected packet index 501 matches
+the final received count: 80-byte IPv6, next header UDP, both expected addresses,
+destination port 24001, UDP length 40, **checksum zero**. Earlier rejected packets
+are ICMPv6 at indices 7–11. Public inspection is present, WireGuard OK, one peer,
+handshake present, no inspection/agent error and valid connected cache. This
+locates the echo rejection; the packet payload itself was not logged.
+
+The pinned [WireGuard TUN checksum completion](https://github.com/tailscale/wireguard-go/blob/ae172d45f0f7/tun/offload.go)
+can emit a computed zero without mapping it to FFFF. A deterministic component
+test constructs this arithmetic edge, runs the pinned public `GSOSplit` API,
+then the Client TUN wrapper at a nonzero buffer offset. It failed before the
+Client fix. [RFC 8200 section 8.1](https://www.rfc-editor.org/rfc/rfc8200.html#section-8.1)
+requires FFFF when the computed IPv6 UDP checksum is zero.
+
+Client now normalizes that value after native TUN read only for complete
+fixed-header IPv6 UDP packets whose full pseudoheader/datagram sum confirms the
+computed-zero case. Invalid checksums, nonzero fields, mismatched lengths,
+extension headers, IPv4 and truncated packets remain untouched and have component
+checks. No dependency/version change or reference-echo relaxation is involved.
+This proves the arithmetic defect and Client correction at component level;
+the observed CI packet's full checksum sum was not recorded, so confirming the
+native failure mechanism and recovery still requires the next platform matrix.
+Other TCP and unexpected-reply failures are not explained by this correction.
+
 ### Running agent DNS map updates: native validation pending
 
 New root `TestControlPlaneNativeDNSMapUpdates` extends HC-025 through the real
