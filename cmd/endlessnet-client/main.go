@@ -788,6 +788,42 @@ func cmdUp(args []string) error {
 	if *advertiseSNAT {
 		cfg.SubnetRouterSNAT = true
 	}
+	return enrollConfiguredClient(cfg, clientEnrollmentOptions{
+		ConfigPath: *configPath, JoinToken: effectiveJoinToken, IdempotencyKey: *idempotencyKey,
+		Hostname: *hostname, HostnameExplicit: flagWasSet(fs, "hostname"), Network: *network,
+		Endpoint: *endpoint, AdvertisedIPs: advertise, Tags: tags, ApprovalTimeout: approvalTimeout,
+		Report: func(response clientapi.RegisterNodeResponse) {
+			if strings.EqualFold(strings.TrimSpace(response.Node.ApprovalState), clientapi.NodeApprovalPending) {
+				fmt.Printf("node %s is pending approval\n", response.Node.ID)
+			} else {
+				fmt.Printf("enrolled node %s (%s); wireguard-go runtime is managed by the agent\n", response.Node.Hostname, response.Node.AssignedIP)
+			}
+		},
+	})
+}
+
+// The registration workflow consumes typed input, not command-line arguments or
+// HTTP IPC DTOs. The CLI supplies reporting; native runtime callers omit it.
+type clientEnrollmentOptions struct {
+	ConfigPath       string
+	JoinToken        string
+	IdempotencyKey   string
+	Hostname         string
+	HostnameExplicit bool
+	Network          string
+	Endpoint         string
+	AdvertisedIPs    []string
+	Tags             []string
+	ApprovalTimeout  time.Duration
+	Report           func(clientapi.RegisterNodeResponse)
+}
+
+func enrollConfiguredClient(cfg client.Config, options clientEnrollmentOptions) error {
+	configPath, idempotencyKey := &options.ConfigPath, &options.IdempotencyKey
+	hostname, network, endpoint := &options.Hostname, &options.Network, &options.Endpoint
+	effectiveJoinToken := options.JoinToken
+	advertise, tags, approvalTimeout := options.AdvertisedIPs, options.Tags, options.ApprovalTimeout
+	var err error
 	if len(cfg.ControlURLs()) == 0 {
 		return fmt.Errorf("server URL is required; run login first or pass --server")
 	}
@@ -877,7 +913,7 @@ func cmdUp(args []string) error {
 			req.RegistrationBinding = cfg.CachedMap.RegistrationBinding
 			// Credential renewal retains the enrolled name, including a custom
 			// name or one established before the operating-system host was renamed.
-			if !flagWasSet(fs, "hostname") {
+			if !options.HostnameExplicit {
 				req.Hostname = cfg.CachedMap.Node.Hostname
 			}
 		}
@@ -989,7 +1025,9 @@ func cmdUp(args []string) error {
 		if approvalState == clientapi.NodeApprovalRejected {
 			return errors.New("node enrollment was rejected")
 		}
-		fmt.Printf("node %s is pending approval\n", response.Node.ID)
+		if options.Report != nil {
+			options.Report(response)
+		}
 		return nil
 	}
 	if err := cacheNetworkMapChecked(&cfg, response); err != nil {
@@ -1011,7 +1049,9 @@ func cmdUp(args []string) error {
 	if err := client.SaveConfig(*configPath, cfg); err != nil {
 		return err
 	}
-	fmt.Printf("enrolled node %s (%s); wireguard-go runtime is managed by the agent\n", response.Node.Hostname, response.Node.AssignedIP)
+	if options.Report != nil {
+		options.Report(response)
+	}
 	return nil
 }
 

@@ -346,3 +346,18 @@ with a differently spelled canonical origin that could change a historical devic
 binding. The round-trip two-origin test verifies both fingerprints, URL bindings
 and key scope without reading real installation state. Actual cross-server
 registration and OS tunnel acceptance remain required system evidence.
+
+## Typed registration workflow extraction (2026-09-13)
+
+The `up` CLI now parses flags/configuration and calls `enrollConfiguredClient`
+with typed options. Registration, identity proof, response binding/signature and
+credential verification, durable pending request handling and restricted approval
+state remain in that shared workflow; it consumes neither HTTP v2 DTOs nor CLI
+argument arrays. CLI reporting is an optional callback at its completion points.
+
+Direct workflow tests exercise verified pending enrollment and reject substituted
+node identity before saving enrollment authority. Existing CLI tests remain and
+verify the refactored path. Native Enroll is not yet bound: durable RPC workflow
+acceptance, context cancellation, browser action projection, per-profile commit
+coordination and operation outcomes still need integration. This extraction does
+not establish UF-04 acceptance or production cutover.
