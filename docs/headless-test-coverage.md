@@ -5107,3 +5107,42 @@ This qualifies the implemented HC-060/063/064 upgrade, identity/intent retention
 traffic, explicit state removal, distinct reenrollment and uninstall assertions
 on the eight specified runners. It does not qualify their remaining failure
 variants, later source commits, or the still-failing contract matrix.
+
+### 2026-09-12: completed native matrix for `92983ae`
+
+[Run 34701403560](https://github.com/endless-net/client/actions/runs/34701403560)
+is terminal with conclusion `failure`; aggregate job `verify` also failed.
+All 24 contract artifacts were downloaded. Source and repetition identities
+match, every artifact has a package terminal outcome, and no test/subtest is
+skipped. The 50 common roots produce the following outcomes:
+
+| Platform group | Reports | PASS roots | FAIL roots |
+| --- | ---: | ---: | ---: |
+| Ubuntu 22.04 amd64 | 3 | 150 | 0 |
+| Ubuntu 24.04 amd64 | 3 | 150 | 0 |
+| Ubuntu 22.04 ARM | 3 | 150 | 0 |
+| Ubuntu 24.04 ARM | 3 | 149 | 1 |
+| Windows 2022 | 3 | 146 | 4 |
+| Windows 2025 | 3 | 147 | 3 |
+| macOS ARM | 3 | 150 | 0 |
+| macOS Intel | 3 | 149 | 1 |
+| Total | 24 | 1191 | 9 |
+
+The failed roots are: IPv4 exit routing in all three Windows 2022 repetitions
+and Windows 2025 repetitions 2–3; application-route initialization in Windows
+2022 repetition 1; application-route recovery DNS in Ubuntu 24.04 ARM
+repetition 3; and flow consent in Windows 2025 repetition 2 and macOS Intel
+repetition 2. Windows 2025 repetition 1 passes all roots, so its exit-routing
+result varies between runners. The macOS Intel flow root has two failing leaves:
+IPv6 TCP loses reachability and the subsequent IPv6 UDP setup finds no usable
+IPv4 underlay interface. This does not establish why the interface became
+unavailable or connect that loss causally to consent expiry.
+
+Installation passes on all eight runners as documented above. The separate
+container lifecycle job fails during Go VCS stamping before its scenarios run;
+later container checkout/dependency fixes remain unqualified by this source.
+No full-matrix acceptance or 65-scenario completion is claimed. The next queued
+[run 34704108878](https://github.com/endless-net/client/actions/runs/34704108878)
+targets `cce41e6a3b91fd322f7bb9a91125a1dd3bc251c0` and includes the accumulated
+diagnostics, scenario extensions and aggregate-verifier changes; its results
+must be evaluated separately.
