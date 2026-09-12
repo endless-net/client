@@ -61,46 +61,57 @@ func verifyReports(dir, sha string) (int, error) {
 		return 0, errors.New("expected source must be a full commit SHA")
 	}
 	var common []string
+	var failures []error
 	for _, platformName := range platforms {
 		for repetition := 1; repetition <= 3; repetition++ {
 			platform := fmt.Sprintf("%s-%d", platformName, repetition)
-			root := filepath.Join(dir, "client-contracts-"+platform)
-			shard, err := os.ReadFile(filepath.Join(root, "shard.txt"))
-			if err != nil || strings.TrimSpace(string(shard)) != platform {
-				return 0, fmt.Errorf("%s: missing or mismatched repetition identity", platform)
-			}
-			source, err := os.ReadFile(filepath.Join(root, "source.txt"))
-			if err != nil || strings.TrimSpace(string(source)) != sha {
-				return 0, fmt.Errorf("%s: missing or mismatched source identity", platform)
-			}
-			inventory, err := os.ReadFile(filepath.Join(root, "expected-tests.txt"))
+			names, err := verifyPlatformReport(dir, platformName, platform, sha)
 			if err != nil {
-				return 0, fmt.Errorf("%s: missing compiled test inventory", platform)
+				failures = append(failures, fmt.Errorf("%s: %w", platform, err))
 			}
-			names, err := declaredTests(inventory)
-			if err != nil {
-				return 0, fmt.Errorf("%s: %w", platform, err)
+			if names == nil {
+				continue
 			}
 			if common == nil {
 				common = names
 			} else if !slices.Equal(common, names) {
-				return 0, fmt.Errorf("%s: compiled scenario inventory differs across platforms", platform)
-			}
-			file, err := os.Open(filepath.Join(root, "results.jsonl"))
-			if err != nil {
-				return 0, fmt.Errorf("%s: missing execution report", platform)
-			}
-			err = verifyEvents(file, names, requiredPlatformSubtests(platformName, names)...)
-			closeErr := file.Close()
-			if err != nil {
-				return 0, fmt.Errorf("%s: %w", platform, err)
-			}
-			if closeErr != nil {
-				return 0, fmt.Errorf("%s: report close failed", platform)
+				failures = append(failures, fmt.Errorf("%s: compiled scenario inventory differs across platforms", platform))
 			}
 		}
 	}
+	if len(failures) != 0 {
+		return 0, errors.Join(failures...)
+	}
 	return len(common), nil
+}
+
+func verifyPlatformReport(dir, platformName, platform, sha string) ([]string, error) {
+	root := filepath.Join(dir, "client-contracts-"+platform)
+	shard, err := os.ReadFile(filepath.Join(root, "shard.txt"))
+	if err != nil || strings.TrimSpace(string(shard)) != platform {
+		return nil, errors.New("missing or mismatched repetition identity")
+	}
+	source, err := os.ReadFile(filepath.Join(root, "source.txt"))
+	if err != nil || strings.TrimSpace(string(source)) != sha {
+		return nil, errors.New("missing or mismatched source identity")
+	}
+	inventory, err := os.ReadFile(filepath.Join(root, "expected-tests.txt"))
+	if err != nil {
+		return nil, errors.New("missing compiled test inventory")
+	}
+	names, err := declaredTests(inventory)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.Open(filepath.Join(root, "results.jsonl"))
+	if err != nil {
+		return names, errors.New("missing execution report")
+	}
+	err = verifyEvents(file, names, requiredPlatformSubtests(platformName, names)...)
+	if closeErr := file.Close(); closeErr != nil {
+		err = errors.Join(err, errors.New("report close failed"))
+	}
+	return names, err
 }
 
 func requiredPlatformSubtests(platform string, names []string) []string {

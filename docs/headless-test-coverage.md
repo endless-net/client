@@ -5082,3 +5082,12 @@ requires every component, installation, control-plane, native-platform and
 container job to succeed. Either a bad report or a failed dependency keeps the
 gate red. This workflow-only reorder was reviewed with `git diff --check`;
 its hosted behavior remains pending on its own source revision.
+
+Report validation now continues across all 24 platform/repetition slots and
+returns their combined errors instead of stopping at the first bad artifact.
+Source identity, compiled inventory, mandatory leaves and complete execution
+remain required. A regression places a wrong source in Linux, a failed test in
+Windows and a missing execution report in macOS simultaneously; the aggregate
+must retain all three errors and return no verified scenario count. Complete
+valid reports still pass. Local short tests, vet and lint pass; hosted aggregate
+execution on this source remains pending.

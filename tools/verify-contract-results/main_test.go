@@ -163,7 +163,7 @@ func TestRequireThreeIsolatedReportsOnEightPlatforms(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, mutation := range []string{"none", "missing-platform", "missing-linux-arm", "missing-repetition", "wrong-shard", "missing-shard", "missing-report", "missing-inventory", "source", "inventory", "empty-inventory", "duplicate-inventory", "repeated-in-one-shard"} {
+	for _, mutation := range []string{"none", "multiple-platform-errors", "missing-platform", "missing-linux-arm", "missing-repetition", "wrong-shard", "missing-shard", "missing-report", "missing-inventory", "source", "inventory", "empty-inventory", "duplicate-inventory", "repeated-in-one-shard"} {
 		t.Run(mutation, func(t *testing.T) {
 			dir := t.TempDir()
 			for _, platform := range platforms {
@@ -186,6 +186,18 @@ func TestRequireThreeIsolatedReportsOnEightPlatforms(t *testing.T) {
 					write(filepath.Join(root, "shard.txt"), []byte(shard+"\n"))
 					write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneAlpha\n"))
 					write(filepath.Join(root, "results.jsonl"), goodReport([]string{"TestControlPlaneAlpha"}, 1))
+					if mutation == "multiple-platform-errors" {
+						switch shard {
+						case "ubuntu-22.04-1":
+							write(filepath.Join(root, "source.txt"), []byte(strings.Repeat("f", 40)))
+						case "windows-2025-2":
+							write(filepath.Join(root, "results.jsonl"), bytes.Replace(goodReport([]string{"TestControlPlaneAlpha"}, 1), []byte(`"pass"`), []byte(`"fail"`), 1))
+						case "macos-15-intel-3":
+							if err := os.Remove(filepath.Join(root, "results.jsonl")); err != nil {
+								t.Fatal(err)
+							}
+						}
+					}
 					if platform != "windows-2025" || repetition != 2 {
 						continue
 					}
@@ -223,6 +235,20 @@ func TestRequireThreeIsolatedReportsOnEightPlatforms(t *testing.T) {
 				}
 			} else if err == nil {
 				t.Fatal("invalid platform reports were accepted")
+			}
+			if mutation == "multiple-platform-errors" {
+				for _, expected := range []string{
+					"ubuntu-22.04-1: missing or mismatched source identity",
+					"windows-2025-2: report contains a failed or skipped test",
+					"macos-15-intel-3: missing execution report",
+				} {
+					if !strings.Contains(err.Error(), expected) {
+						t.Fatalf("aggregate omitted %q: %v", expected, err)
+					}
+				}
+				if n != 0 || len(strings.Split(err.Error(), "\n")) != 3 {
+					t.Fatalf("unexpected aggregate result: count=%d error=%v", n, err)
+				}
 			}
 		})
 	}
