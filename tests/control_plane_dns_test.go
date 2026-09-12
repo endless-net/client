@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"io"
 	"net"
@@ -24,11 +25,14 @@ import (
 // this does not claim live reload or system resolver configuration.
 func TestControlPlaneDNSWireRecovery(t *testing.T) {
 	for _, network := range []string{"udp4", "udp6"} {
-		t.Run(network, func(t *testing.T) { exerciseDNSWireRecovery(t, network) })
+		t.Run(network, func(t *testing.T) {
+			t.Run("complete-udp", func(t *testing.T) { exerciseDNSWireRecovery(t, network, false) })
+			t.Run("truncated-udp", func(t *testing.T) { exerciseDNSWireRecovery(t, network, true) })
+		})
 	}
 }
 
-func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork string) {
+func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork string, truncated bool) {
 	t.Helper()
 	s, n, id := controlScenario(t)
 	var disconnected ipc.DisconnectResponse
@@ -43,8 +47,8 @@ func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork string) {
 		t.Fatal(err)
 	}
 	peer := api.Peer{ID: "dns-wire-peer", Hostname: "wire-peer", PublicKey: public, AllowedIPs: []string{"100.90.0.20/32", "fd7a:115c:a1e0::20/128"}}
-	globalAddress, globalQueries, _ := dnsContractUpstream(t, upstreamNetwork, [4]byte{203, 0, 113, 4})
-	splitAddress, splitQueries, setSplitCode := dnsContractUpstream(t, upstreamNetwork, [4]byte{198, 51, 100, 7})
+	globalAddress, globalQueries, _ := dnsContractUpstream(t, upstreamNetwork, truncated, [4]byte{203, 0, 113, 4})
+	splitAddress, splitQueries, setSplitCode := dnsContractUpstream(t, upstreamNetwork, truncated, [4]byte{198, 51, 100, 7})
 	for _, present := range []bool{true, false, true} {
 		var peers []api.Peer
 		if present {
@@ -91,7 +95,11 @@ func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork string) {
 	}{
 		{globalQueries(), "public.example.", 12}, {splitQueries(), "db.corp.test.", 18},
 	} {
-		if len(observation.queries) != observation.count {
+		count := observation.count
+		if truncated {
+			count *= 2 // Every question must reach both UDP and TCP.
+		}
+		if len(observation.queries) != count {
 			t.Fatal("unexpected DNS upstream query count")
 		}
 		for _, query := range observation.queries {
@@ -215,7 +223,7 @@ func assertDNSWireType(t *testing.T, transport, address, name string, family dns
 	}
 }
 
-func dnsContractUpstream(t *testing.T, network string, address [4]byte) (string, func() []string, func(dnsmessage.RCode)) {
+func dnsContractUpstream(t *testing.T, network string, truncated bool, address [4]byte) (string, func() []string, func(dnsmessage.RCode)) {
 	t.Helper()
 	host := "127.0.0.1"
 	if network == "udp6" {
@@ -229,6 +237,60 @@ func dnsContractUpstream(t *testing.T, network string, address [4]byte) (string,
 	var mu sync.Mutex
 	var queries []string
 	code := dnsmessage.RCodeSuccess
+	answer := func(raw []byte, tcp bool) []byte {
+		var query dnsmessage.Message
+		if query.Unpack(raw) != nil || len(query.Questions) != 1 {
+			return nil
+		}
+		q := query.Questions[0]
+		mu.Lock()
+		queries = append(queries, q.Name.String())
+		responseCode := code
+		mu.Unlock()
+		response := dnsmessage.Message{Header: dnsmessage.Header{ID: query.ID, Response: true, RCode: responseCode}, Questions: query.Questions,
+			Answers: []dnsmessage.Resource{{Header: dnsmessage.ResourceHeader{Name: q.Name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}, Body: &dnsmessage.AResource{A: address}}}}
+		if responseCode != dnsmessage.RCodeSuccess {
+			response.Answers = nil
+		}
+		if truncated && !tcp {
+			response.Truncated, response.Answers = true, nil
+		}
+		wire, err := response.Pack()
+		if err != nil {
+			return nil
+		}
+		return wire
+	}
+	if truncated {
+		listener, err := net.Listen(strings.Replace(network, "udp", "tcp", 1), conn.LocalAddr().String())
+		if err != nil {
+			t.Fatal("could not bind DNS TCP fallback fixture on the UDP port")
+		}
+		t.Cleanup(func() { _ = listener.Close() })
+		go func() {
+			for {
+				stream, err := listener.Accept()
+				if err != nil {
+					return
+				}
+				func() {
+					defer func() { _ = stream.Close() }()
+					_ = stream.SetDeadline(time.Now().Add(3 * time.Second))
+					var size [2]byte
+					if _, err := io.ReadFull(stream, size[:]); err != nil {
+						return
+					}
+					raw := make([]byte, binary.BigEndian.Uint16(size[:]))
+					if _, err := io.ReadFull(stream, raw); err != nil {
+						return
+					}
+					wire := answer(raw, true)
+					binary.BigEndian.PutUint16(size[:], uint16(len(wire)))
+					_, _ = io.Copy(stream, bytes.NewReader(append(size[:], wire...)))
+				}()
+			}
+		}()
+	}
 	go func() {
 		buffer := make([]byte, 4096)
 		for {
@@ -236,22 +298,7 @@ func dnsContractUpstream(t *testing.T, network string, address [4]byte) (string,
 			if err != nil {
 				return
 			}
-			var query dnsmessage.Message
-			if query.Unpack(buffer[:n]) != nil || len(query.Questions) != 1 {
-				continue
-			}
-			q := query.Questions[0]
-			mu.Lock()
-			queries = append(queries, q.Name.String())
-			responseCode := code
-			mu.Unlock()
-			response := dnsmessage.Message{Header: dnsmessage.Header{ID: query.ID, Response: true, RCode: responseCode}, Questions: query.Questions,
-				Answers: []dnsmessage.Resource{{Header: dnsmessage.ResourceHeader{Name: q.Name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}, Body: &dnsmessage.AResource{A: address}}}}
-			if responseCode != dnsmessage.RCodeSuccess {
-				response.Answers = nil
-			}
-			wire, err := response.Pack()
-			if err == nil {
+			if wire := answer(buffer[:n], false); wire != nil {
 				_, _ = conn.WriteTo(wire, remote)
 			}
 		}

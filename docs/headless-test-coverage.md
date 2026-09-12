@@ -2570,13 +2570,21 @@ await their own matrix. Full HC-001–HC-065 coverage remains incomplete.
 
 ## Next work
 
+HC-025/026 also runs both upstream address families with truncated UDP answers.
+The fixture binds TCP on the same endpoint, supplies no UDP answer records and
+requires the Client to repeat the DNS question over length-framed TCP. Domain
+observations and doubled query counts cover successful resolution and split
+SERVFAIL/recovery without leaking to the global resolver. This is normal DNS
+transport retry, not a legacy protocol fallback. Native qualification is pending.
+
 The native HC-025/026 DNS scenario now runs separately with UDP upstreams bound
 to IPv4 and IPv6 loopback. Each variant repeats A/AAAA local-map projection,
 withdrawal/restoration, global/split selection, blocked-domain denial and split
 SERVFAIL/recovery with exact wire-query isolation checks. Failure to bind the
 required upstream family fails the scenario rather than skipping it. Requests
 to the Client proxy still use IPv4 loopback over UDP/TCP; this does not establish
-an IPv6 proxy listener or upstream TCP fallback. Hosted qualification is pending.
+an IPv6 proxy listener. TCP retry is covered by the separate truncated-answer
+variants above. Hosted qualification is pending.
 
 HC-025/026 DNS wire recovery now injects SERVFAIL from the selected split
 resolver while keeping the global resolver healthy. UDP and TCP requests must
