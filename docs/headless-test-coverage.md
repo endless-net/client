@@ -2950,6 +2950,22 @@ control-outage traffic, strict probe-denial oracle and DNS response-binding work
 
 ## Next work
 
+HC-010 response-loss coverage now deterministically exercises changed-input
+rejection: the contract fixture drops every committed registration response,
+including automatic retries, until explicitly restored. The native
+`RegistrationResponseLoss` root requires the first CLI process to fail, rejects
+a changed hostname without any HTTP registration request, then recovers the
+original operation with unchanged request hash and exactly one registered node.
+The previous conditional branch could bypass this negative assertion if the SDK
+recovered within its first invocation. Existing evidence therefore does not
+prove this now-unconditional branch on every platform.
+
+A short command/testserver regression also proves that a changed valid route
+prefix is rejected after a lost response, while retrying the original prefix
+recovers the same operation. Together with the malformed-input regression, this
+checks both sides of the early-validation fix without reading pending state.
+Short checks pass; the strengthened native branch requires new CI evidence.
+
 The new advertisement recovery case exposed a Client CLI defect in a short
 test: malformed CIDR input was rejected without sending registration, but left
 a pending direct operation that prevented correction on the same profile.

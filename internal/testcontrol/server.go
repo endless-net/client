@@ -70,35 +70,36 @@ type enrollment struct {
 
 // Server owns all mutable state. Callers receive independent copies.
 type Server struct {
-	HTTP                     *httptest.Server
-	mu                       sync.Mutex
-	key                      ed25519.PrivateKey
-	trust                    api.SigningTrustBundle
-	mapKey                   ed25519.PrivateKey
-	mapTrust                 api.SigningTrustBundle
-	session                  string
-	networks                 map[string]api.Network
-	joins                    map[string]string
-	nodes                    map[string]*node
-	operations               map[string]operation
-	enrollments              map[string]*enrollment
-	events                   []Event
-	changed                  chan struct{}
-	streams                  chan struct{}
-	closed                   chan struct{}
-	closeOnce                sync.Once
-	unavailable              bool
-	faults                   map[string]api.ErrorCode
-	responseFaults           map[string]responseFault
-	mapFaults                map[string]string
-	active                   int
-	dropRegistrationResponse bool
-	registrationFault        string
-	flows                    map[string]*flowState
-	flowReports              []*rpc.ReportFlowLogRequest
-	loseFlowAcknowledgement  bool
-	setTLSValidity           func(time.Time, time.Time) error
-	offlineResponses         map[string]*offlineResponseHold
+	HTTP                      *httptest.Server
+	mu                        sync.Mutex
+	key                       ed25519.PrivateKey
+	trust                     api.SigningTrustBundle
+	mapKey                    ed25519.PrivateKey
+	mapTrust                  api.SigningTrustBundle
+	session                   string
+	networks                  map[string]api.Network
+	joins                     map[string]string
+	nodes                     map[string]*node
+	operations                map[string]operation
+	enrollments               map[string]*enrollment
+	events                    []Event
+	changed                   chan struct{}
+	streams                   chan struct{}
+	closed                    chan struct{}
+	closeOnce                 sync.Once
+	unavailable               bool
+	faults                    map[string]api.ErrorCode
+	responseFaults            map[string]responseFault
+	mapFaults                 map[string]string
+	active                    int
+	dropRegistrationResponse  bool
+	dropRegistrationResponses bool
+	registrationFault         string
+	flows                     map[string]*flowState
+	flowReports               []*rpc.ReportFlowLogRequest
+	loseFlowAcknowledgement   bool
+	setTLSValidity            func(time.Time, time.Time) error
+	offlineResponses          map[string]*offlineResponseHold
 }
 
 func New(t testing.TB) *Server {
@@ -381,6 +382,14 @@ func (s *Server) DropNextRegistrationResponse() {
 	s.dropRegistrationResponse = true
 }
 
+// SetRegistrationResponsesDropped commits registrations but withholds every
+// successful response, including automatic retries, until explicitly restored.
+func (s *Server) SetRegistrationResponsesDropped(value bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dropRegistrationResponses = value
+}
+
 func (s *Server) Revoke(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -579,7 +588,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid registration", 400)
 		return
 	}
-	if s.dropRegistrationResponse {
+	if s.dropRegistrationResponse || s.dropRegistrationResponses {
 		s.dropRegistrationResponse = false
 		s.recordLocked(Event{Kind: "registration-response-dropped", NodeID: result.Node.ID})
 		// The test peer serves HTTP/1 over its own listener. Abort after commit,

@@ -189,31 +189,33 @@ func TestControlPlaneRegistrationResponseLoss(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
-	s.DropNextRegistrationResponse()
+	s.SetRegistrationResponsesDropped(true)
 	args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--join-token", token, "--hostname", "retry-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off"}
-	// The client may retry within the first command. If it exits, the second
-	// command is the process-restart variant of the same operation.
+	// Even automatic SDK retries lose their responses, so the negative branch
+	// must execute on every platform before the original operation is recovered.
+	if _, err = n.Run(args...); err == nil {
+		t.Fatal("registration succeeded despite losing every committed response")
+	}
+	s.SetRegistrationResponsesDropped(false)
+	// Changed input must fail before another registration is sent. The
+	// original operation remains recoverable after this rejected command.
+	changed := append([]string(nil), args...)
+	for i := range changed {
+		if changed[i] == "retry-node" {
+			changed[i] = "different-node"
+		}
+	}
+	before := len(s.Events())
+	if _, changedErr := n.Run(changed...); changedErr == nil {
+		t.Fatal("changed pending registration was accepted")
+	}
+	for _, event := range s.Events()[before:] {
+		if event.Kind == "registration-request" || event.Kind == "request" && event.Path == "POST /nodes/register" {
+			t.Fatal("changed pending request reached registration endpoint")
+		}
+	}
 	if _, err = n.Run(args...); err != nil {
-		// Changed input must fail before another registration is sent. The
-		// original operation remains recoverable after this rejected command.
-		changed := append([]string(nil), args...)
-		for i := range changed {
-			if changed[i] == "retry-node" {
-				changed[i] = "different-node"
-			}
-		}
-		before := len(s.Events())
-		if _, changedErr := n.Run(changed...); changedErr == nil {
-			t.Fatal("changed pending registration was accepted")
-		}
-		for _, event := range s.Events()[before:] {
-			if event.Kind == "registration-request" {
-				t.Fatal("changed pending request reached registration endpoint")
-			}
-		}
-		if _, err = n.Run(args...); err != nil {
-			t.Fatal("registration did not recover after response loss")
-		}
+		t.Fatal("registration did not recover after response loss")
 	}
 	n.Start()
 	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
