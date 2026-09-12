@@ -341,13 +341,46 @@ jobs:
               "$1" -test.run="^TestClientDataplane" -test.count=3 -test.v -test.timeout=8m
             ' bash "$RUNNER_TEMP/control-tests"
 
+  container-client:
+    name: Container client lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: ubuntu:24.04
+      options: --cap-add=NET_ADMIN --device=/dev/net/tun
+    steps:
+      - name: Install container test dependencies
+        run: apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git iproute2 iptables
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build real client and container scenario
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -o "$RUNNER_TEMP/container-client" ./cmd/endlessnet-client
+          go build -o "$RUNNER_TEMP/container-packetprobe" ./tools/packetprobe
+          go test -c -o "$RUNNER_TEMP/container-tests" ./tests
+      - name: Exercise persistent and ephemeral container workloads
+        shell: bash
+        env:
+          ENDLESSNET_CONTAINER_TEST: '1'
+          ENDLESSNET_CONTROL_TEST: '1'
+          ENDLESSNET_TEST_BINARY: ${{ runner.temp }}/container-client
+          ENDLESSNET_PACKET_PROBE: ${{ runner.temp }}/container-packetprobe
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/container-tests" -test.run='^TestContainerWorkload$' -test.count=1 -test.v -test.timeout=10m
+
   verify:
     name: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
-    needs: [verify-linux, verify-windows, verify-macos, installation, control-plane, control-plane-platforms]
+    needs: [verify-linux, verify-windows, verify-macos, installation, control-plane, control-plane-platforms, container-client]
     if: ${{ !cancelled() }}
     steps:
       - name: Require platform verification
@@ -360,6 +393,7 @@ jobs:
           [ "${{ needs.installation.result }}" = "success" ]
           [ "${{ needs.control-plane.result }}" = "success" ]
           [ "${{ needs.control-plane-platforms.result }}" = "success" ]
+          [ "${{ needs.container-client.result }}" = "success" ]
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:

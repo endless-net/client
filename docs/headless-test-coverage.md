@@ -130,7 +130,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-051 | C native signed two-host service DNS, actual host traffic, target isolation, host-set removal, approval loss and recovery are executable; U service discovery/runtime | Qualify the native root on every runner; health, load distribution and connection-draining semantics require product decisions |
 | HC-052 | L/C bounded IPC waits; independent event subscriptions/cancellation/restart and real CLI listening-timeout exit passed all 24 repetitions at qualified `38050bc`; installed absent-service failure passed all eight runners | Remaining public readiness conditions, slow consumers and stalled native IPC |
 | HC-053 | L/C structured IPC; request validation, non-object rejection, body-size boundaries, subscribers and real CLI NDJSON events passed all 24 repetitions at qualified `38050bc`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
-| HC-054 | No C/R evidence audited | Container persistent versus ephemeral lifecycle |
+| HC-054 | L/C dedicated privileged Ubuntu container runs a real Client and workload: persistent state restart plus ephemeral retirement/recreation with native TCP evidence | Qualify the new required container job; host/sidecar split, reduced capabilities, container network modes and orchestration lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C public diagnostics export plus executable control-outage isolation and recovery; U path diagnostics | Qualify expanded root; distinguish peer path, DNS and application failures through public commands |
 | HC-057 | C export/reuse, retention and IPv4 UDP flow consent/retry/expiry passed all 24 native repetitions at `a9a1a21`; D FlowConsentAndIdempotency; U flow tests | Crash recovery, comprehensive redaction and remaining retention/flow variants |
@@ -4750,3 +4750,15 @@ remain unchanged. Subsequent repair and reinstall operations use the upgraded
 artifact. This establishes native replacement behavior without claiming
 compatibility between different source revisions, rollback, interrupted
 upgrades, low-disk behavior or immutable release-manifest acceptance.
+
+`TestContainerWorkload` adds a dedicated HC-054 acceptance boundary. A required
+Ubuntu 24.04 container job receives only the TUN device and `NET_ADMIN`, builds
+the tested Client source, and runs the real Client and workload inside that
+container. The persistent case carries a fresh TCP payload, restarts the agent
+with its saved identity and reconnects after endpoint change. The ephemeral case
+carries traffic, crashes, consumes the provider's published terminal outcome and
+requires a replacement workload to receive a different node identity. The job
+is an explicit dependency of aggregate `verify`; it is separate from the common
+24-run native inventory so ordinary platform reports cannot turn absence of a
+container runtime into a successful skip. Host/sidecar separation, capability
+denial and orchestrator-specific volumes/restarts remain separate variants.

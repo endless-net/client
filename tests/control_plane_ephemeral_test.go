@@ -18,6 +18,11 @@ import (
 // carries traffic during the job, retires local access after the provider's
 // terminal cleanup response, and permits a fresh job identity to enroll.
 func TestControlPlaneEphemeralLifecycle(t *testing.T) {
+	exerciseEphemeralLifecycle(t)
+}
+
+func exerciseEphemeralLifecycle(t *testing.T) {
+	t.Helper()
 	requireControlScenario(t)
 	s := testcontrol.New(t)
 	network, token, err := s.AddNetwork("ephemeral", "198.18.90.0/24")
