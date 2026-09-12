@@ -1,0 +1,566 @@
+// Draft producer-owned local RPC surface. Authorization annotations are normative.
+syntax = "proto3";
+
+package client.v0;
+
+import "client/v0/common.proto";
+import "client/v0/features.proto";
+import "client/v0/runtime.proto";
+
+option go_package = "github.com/endless-net/client/clientipc/v0;clientipc";
+
+service ClientService {
+  // UF-04, UF-20, UF-22, UF-23: installed identity and caller-filtered capabilities.
+  rpc GetRuntimeInfo(GetRuntimeInfoRequest) returns (GetRuntimeInfoResponse) {
+    option (access) = ACCESS_OBSERVER;
+  }
+  // UF-04, UF-09: authoritative active-context snapshot.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {
+    option (access) = ACCESS_OBSERVER;
+  }
+  // UF-04, UF-09, UF-15: snapshot first, then typed changes; no replay cursor.
+  rpc WatchEvents(WatchEventsRequest) returns (stream WatchEventsResponse) {
+    option (access) = ACCESS_OBSERVER;
+  }
+  // Read a caller-owned operation after timeout or reconnection.
+  rpc GetOperation(GetOperationRequest) returns (GetOperationResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-03: initial unowned installation uses the ownership-claim exception.
+  rpc Enroll(EnrollRequest) returns (EnrollResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-05: persist connected intent, then reconcile runtime.
+  rpc Connect(ConnectRequest) returns (ConnectResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-05: persist disconnected intent; retain registration.
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-10: review announced and trusted identity for a profile.
+  rpc GetServerIdentity(GetServerIdentityRequest) returns (GetServerIdentityResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-10: fixed-purpose privileged operation, matching the current announcement.
+  rpc TrustServerIdentity(TrustServerIdentityRequest) returns (TrustServerIdentityResponse) {
+    option (access) = ACCESS_ADMINISTRATOR;
+  }
+  // UF-12: remote confirmation is required before deleting local registration.
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-12: explicit local-only cleanup; never claims remote revocation.
+  rpc ForgetLocalEnrollment(ForgetLocalEnrollmentRequest) returns (ForgetLocalEnrollmentResponse) {
+    option (access) = ACCESS_ADMINISTRATOR;
+  }
+  // UF-07: only already granted networks for this profile.
+  rpc ListNetworks(ListNetworksRequest) returns (ListNetworksResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-07: select an enrolled network by stable ID.
+  rpc SelectNetwork(SelectNetworkRequest) returns (SelectNetworkResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-06, UF-19: filtered peer search and path inspection.
+  rpc ListPeers(ListPeersRequest) returns (ListPeersResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-11: bounded producer-redacted snapshot.
+  rpc GetDiagnostics(GetDiagnosticsRequest) returns (GetDiagnosticsResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-11: local-only redacted archive, no upload or packet capture.
+  rpc CreateDiagnosticsBundle(CreateDiagnosticsBundleRequest) returns (CreateDiagnosticsBundleResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-11: caller-bound handle; bounded chunks, no filesystem path input.
+  rpc ReadDiagnosticsBundle(ReadDiagnosticsBundleRequest) returns (ReadDiagnosticsBundleResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-11: bounded redacted log entries.
+  rpc ListRecentLogs(ListRecentLogsRequest) returns (ListRecentLogsResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-16: local owner profiles, one active at most.
+  rpc ListProfiles(ListProfilesRequest) returns (ListProfilesResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-16: create empty context; enrollment is a separate explicit action.
+  rpc CreateProfile(CreateProfileRequest) returns (CreateProfileResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-16: atomic context switch, report actual connection interruption.
+  rpc SelectProfile(SelectProfileRequest) returns (SelectProfileResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-16: change display name only; identity and origin are immutable.
+  rpc RenameProfile(RenameProfileRequest) returns (RenameProfileResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-16: only inactive profiles with no remaining registration/session.
+  rpc RemoveProfile(RemoveProfileRequest) returns (RemoveProfileResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-17: expiry, warning deadline and renewal availability.
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-17: no caller-supplied callback URL or browser credential.
+  rpc RenewSession(RenewSessionRequest) returns (RenewSessionResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-08: list authorized consumer-side egress choices.
+  rpc ListExitNodes(ListExitNodesRequest) returns (ListExitNodesResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-08: requested/effective selection, LAN policy and apply outcome.
+  rpc GetExitNode(GetExitNodeRequest) returns (GetExitNodeResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-08: only an authorized catalog ID; never arbitrary routes.
+  rpc SelectExitNode(SelectExitNodeRequest) returns (SelectExitNodeResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-08: explicit removal of consumer-side egress selection.
+  rpc ClearExitNode(ClearExitNodeRequest) returns (ClearExitNodeResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-18, UF-21: effective values, user overrides and locks.
+  rpc GetPreferences(GetPreferencesRequest) returns (GetPreferencesResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-18, UF-21: nonempty typed patch, all-or-nothing validation.
+  rpc SetPreferences(SetPreferencesRequest) returns (SetPreferencesResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-18, UF-21: remove named user overrides; managed values remain.
+  rpc ResetPreferences(ResetPreferencesRequest) returns (ResetPreferencesResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-20: read-only effective runtime policy and next-action owner.
+  rpc ListManagedSettings(ListManagedSettingsRequest) returns (ListManagedSettingsResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-19: granted catalog, availability, overlaps and local selection.
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-19: local subset selection cannot expand backend authorization.
+  rpc SetResourceEnabled(SetResourceEnabledRequest) returns (SetResourceEnabledResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-21: explicit graceful UI quit only; OS lifecycle comes from runtime adapters.
+  rpc NotifyLifecycle(NotifyLifecycleRequest) returns (NotifyLifecycleResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-22: verified distribution projection and installed-pair compatibility.
+  rpc GetUpdateInfo(GetUpdateInfoRequest) returns (GetUpdateInfoResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // UF-23: validated product links and offline-help key.
+  rpc GetSupportInfo(GetSupportInfoRequest) returns (GetSupportInfoResponse) {
+    option (access) = ACCESS_OBSERVER;
+  }
+}
+
+message GetRuntimeInfoRequest {}
+
+message GetRuntimeInfoResponse {
+  RuntimeInfo runtime = 1;
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  Status status = 1;
+}
+
+message WatchEventsRequest {}
+
+message GetOperationRequest {
+  // Request-ID lookup recovers an accepted command whose response was lost.
+  oneof lookup {
+    string operation_id = 1;
+    string request_id = 2;
+  }
+}
+
+message GetOperationResponse {
+  Operation operation = 1;
+}
+
+message EnrollRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  EnrollmentMode mode = 3;
+  string hostname = 4;
+  oneof authentication {
+    string enrollment_token = 5;
+    bool browser_login = 6;
+  }
+}
+
+message EnrollResponse {
+  Operation operation = 1;
+}
+
+message ConnectRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+}
+
+message ConnectResponse {
+  Operation operation = 1;
+}
+
+message DisconnectRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+}
+
+message DisconnectResponse {
+  Operation operation = 1;
+}
+
+message GetServerIdentityRequest {
+  ProfileRef profile = 1;
+}
+
+message GetServerIdentityResponse {
+  ServerIdentity identity = 1;
+  SnapshotMetadata metadata = 2;
+}
+
+message TrustServerIdentityRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  string confirmed_control_origin = 3;
+  string confirmed_key_id = 4;
+  string confirmed_announcement_id = 5;
+}
+
+message TrustServerIdentityResponse {
+  Operation operation = 1;
+}
+
+message LogoutRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+}
+
+message LogoutResponse {
+  Operation operation = 1;
+}
+
+message ForgetLocalEnrollmentRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  bool confirmed = 3;
+}
+
+message ForgetLocalEnrollmentResponse {
+  Operation operation = 1;
+}
+
+message ListNetworksRequest {
+  ProfileRef profile = 1;
+  PageRequest page = 2;
+}
+
+message ListNetworksResponse {
+  repeated Network networks = 1;
+  string selected_network_id = 2;
+  PageResponse page = 3;
+}
+
+message SelectNetworkRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  string network_id = 3;
+}
+
+message SelectNetworkResponse {
+  Operation operation = 1;
+}
+
+message ListPeersRequest {
+  ProfileRef profile = 1;
+  PageRequest page = 2;
+  string search = 3;
+}
+
+message ListPeersResponse {
+  repeated Peer peers = 1;
+  PageResponse page = 2;
+  AgentSnapshotState snapshot_state = 3;
+  uint64 map_revision = 4;
+  uint64 target_map_revision = 5;
+}
+
+message GetDiagnosticsRequest {
+  ProfileRef profile = 1;
+}
+
+message GetDiagnosticsResponse {
+  Diagnostics diagnostics = 1;
+}
+
+message CreateDiagnosticsBundleRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+}
+
+message CreateDiagnosticsBundleResponse {
+  Operation operation = 1;
+}
+
+message ReadDiagnosticsBundleRequest {
+  string bundle_id = 1;
+  uint64 offset = 2;
+  uint32 max_bytes = 3;
+}
+
+message ReadDiagnosticsBundleResponse {
+  bytes data = 1;
+  uint64 next_offset = 2;
+  bool eof = 3;
+}
+
+message ListRecentLogsRequest {
+  ProfileRef profile = 1;
+  PageRequest page = 2;
+}
+
+message ListRecentLogsResponse {
+  repeated LogEntry logs = 1;
+  PageResponse page = 2;
+}
+
+message ListProfilesRequest {
+  PageRequest page = 1;
+}
+
+message ListProfilesResponse {
+  repeated Profile profiles = 1;
+  string active_profile_id = 2;
+  PageResponse page = 3;
+}
+
+message CreateProfileRequest {
+  MutationContext mutation = 1;
+  string display_name = 2;
+  string control_origin = 3;
+}
+
+message CreateProfileResponse {
+  Operation operation = 1;
+}
+
+message SelectProfileRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+}
+
+message SelectProfileResponse {
+  Operation operation = 1;
+}
+
+message RenameProfileRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  string display_name = 3;
+}
+
+message RenameProfileResponse {
+  Operation operation = 1;
+}
+
+message RemoveProfileRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+}
+
+message RemoveProfileResponse {
+  Operation operation = 1;
+}
+
+message GetSessionRequest {
+  ProfileRef profile = 1;
+}
+
+message GetSessionResponse {
+  Session session = 1;
+  SnapshotMetadata metadata = 2;
+}
+
+message RenewSessionRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+}
+
+message RenewSessionResponse {
+  Operation operation = 1;
+}
+
+message ListExitNodesRequest {
+  ProfileRef profile = 1;
+  PageRequest page = 2;
+}
+
+message ListExitNodesResponse {
+  repeated ExitNode exit_nodes = 1;
+  PageResponse page = 2;
+}
+
+message GetExitNodeRequest {
+  ProfileRef profile = 1;
+}
+
+message GetExitNodeResponse {
+  ExitNodeStatus status = 1;
+}
+
+message SelectExitNodeRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  string exit_node_id = 3;
+  LanAccess lan_access = 4;
+}
+
+message SelectExitNodeResponse {
+  Operation operation = 1;
+}
+
+message ClearExitNodeRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+}
+
+message ClearExitNodeResponse {
+  Operation operation = 1;
+}
+
+message GetPreferencesRequest {
+  ProfileRef profile = 1;
+}
+
+message GetPreferencesResponse {
+  Preferences preferences = 1;
+}
+
+message SetPreferencesRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  PreferencesPatch patch = 3;
+}
+
+message SetPreferencesResponse {
+  Operation operation = 1;
+}
+
+message ResetPreferencesRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  repeated PreferenceKey keys = 3;
+}
+
+message ResetPreferencesResponse {
+  Operation operation = 1;
+}
+
+message ListManagedSettingsRequest {
+  ProfileRef profile = 1;
+}
+
+message ListManagedSettingsResponse {
+  repeated ManagedSetting settings = 1;
+  SnapshotMetadata metadata = 2;
+}
+
+message ListResourcesRequest {
+  ProfileRef profile = 1;
+  PageRequest page = 2;
+  string search = 3;
+  repeated ResourceKind kinds = 4;
+}
+
+message ListResourcesResponse {
+  repeated Resource resources = 1;
+  PageResponse page = 2;
+}
+
+message SetResourceEnabledRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  string resource_id = 3;
+  bool enabled = 4;
+}
+
+message SetResourceEnabledResponse {
+  Operation operation = 1;
+}
+
+message NotifyLifecycleRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  LifecycleEvent event = 3;
+}
+
+message NotifyLifecycleResponse {
+  Operation operation = 1;
+}
+
+message GetUpdateInfoRequest {
+  BuildIdentity reported_ui = 1;
+}
+
+message GetUpdateInfoResponse {
+  UpdateInfo info = 1;
+}
+
+message GetSupportInfoRequest {}
+
+message GetSupportInfoResponse {
+  SupportInfo info = 1;
+}
+
+// First event is always SnapshotEvent. Sequence starts at 1 per connection.
+// Invalidation means fetch the named domain again; no unordered delta merge.
+message WatchEventsResponse {
+  uint64 sequence = 1;
+  SnapshotMetadata metadata = 2;
+  oneof event {
+    SnapshotEvent snapshot = 3;
+    Status status_changed = 4;
+    DomainInvalidated invalidated = 5;
+    Operation operation_changed = 6;
+    Failure failure = 7;
+    Session session_changed = 8;
+  }
+}
+
+message SnapshotEvent {
+  RuntimeInfo runtime = 1;
+  Status status = 2;
+}
+
+enum Domain {
+  DOMAIN_UNSPECIFIED = 0;
+  DOMAIN_PROFILES = 1;
+  DOMAIN_NETWORKS = 2;
+  DOMAIN_PEERS = 3;
+  DOMAIN_EXIT_NODE = 4;
+  DOMAIN_PREFERENCES = 5;
+  DOMAIN_MANAGED_SETTINGS = 6;
+  DOMAIN_RESOURCES = 7;
+  DOMAIN_UPDATES = 8;
+  DOMAIN_SUPPORT = 9;
+  DOMAIN_SERVER_IDENTITY = 10;
+  DOMAIN_SESSION = 11;
+}
+
+message DomainInvalidated {
+  Domain domain = 1;
+  string profile_id = 2;
+}

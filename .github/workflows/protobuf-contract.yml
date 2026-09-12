@@ -1,0 +1,41 @@
+name: Protobuf contract
+
+on:
+  pull_request:
+    paths:
+      - "proto/**"
+      - "buf.yaml"
+      - ".github/workflows/protobuf-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "proto/**"
+      - "buf.yaml"
+      - ".github/workflows/protobuf-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: 1.72.0
+          setup_only: true
+      - name: Check canonical formatting
+        run: buf format --diff --exit-code
+      - name: Lint contract
+        run: buf lint
+      - name: Compile descriptor
+        run: buf build -o client-ipc-v0.binpb
+      - uses: actions/upload-artifact@v7
+        with:
+          name: client-ipc-v0-draft-descriptor
+          path: client-ipc-v0.binpb
+          if-no-files-found: error

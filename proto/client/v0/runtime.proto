@@ -1,0 +1,336 @@
+// Draft: common desktop/mobile runtime state. No platform parity is implied.
+syntax = "proto3";
+
+package client.v0;
+
+import "client/v0/common.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/endless-net/client/clientipc/v0;clientipc";
+
+enum ServiceState {
+  SERVICE_STATE_UNSPECIFIED = 0;
+  SERVICE_STATE_CONNECTED = 1;
+  SERVICE_STATE_DISCONNECTED = 2;
+  SERVICE_STATE_DEGRADED = 3;
+  SERVICE_STATE_ERROR = 4;
+  SERVICE_STATE_NEEDS_ENROLLMENT = 5;
+  SERVICE_STATE_NEEDS_APPROVAL = 6;
+  SERVICE_STATE_SERVER_IDENTITY_CHANGED = 7;
+  SERVICE_STATE_RECOVERING = 8;
+  SERVICE_STATE_RECOVERY_BLOCKED = 9;
+  SERVICE_STATE_POLICY_BLOCKED = 10;
+  SERVICE_STATE_NEEDS_LOGIN = 11;
+}
+
+enum ControlState {
+  CONTROL_STATE_UNSPECIFIED = 0;
+  CONTROL_STATE_PENDING_APPROVAL = 1;
+  CONTROL_STATE_DEGRADED = 2;
+  CONTROL_STATE_OFFLINE_CACHE = 3;
+  CONTROL_STATE_READY = 4;
+  CONTROL_STATE_REGISTERED = 5;
+  CONTROL_STATE_CACHE_INVALID = 6;
+  CONTROL_STATE_ERROR = 7;
+  CONTROL_STATE_NOT_REGISTERED = 8;
+  CONTROL_STATE_DISCONNECTED = 9;
+  CONTROL_STATE_SERVER_IDENTITY_CHANGED = 10;
+  CONTROL_STATE_RECOVERING = 11;
+  CONTROL_STATE_RECOVERY_BLOCKED = 12;
+  CONTROL_STATE_POLICY_BLOCKED = 13;
+  CONTROL_STATE_NEEDS_LOGIN = 14;
+}
+
+enum DesiredState {
+  DESIRED_STATE_UNSPECIFIED = 0;
+  DESIRED_STATE_CONNECTED = 1;
+  DESIRED_STATE_DISCONNECTED = 2;
+}
+
+enum AgentSnapshotState {
+  AGENT_SNAPSHOT_STATE_UNSPECIFIED = 0;
+  AGENT_SNAPSHOT_STATE_ABSENT = 1;
+  AGENT_SNAPSHOT_STATE_CURRENT = 2;
+  AGENT_SNAPSHOT_STATE_PREVIOUS = 3;
+}
+
+enum PathKind {
+  PATH_KIND_UNSPECIFIED = 0;
+  PATH_KIND_DIRECT = 1;
+  PATH_KIND_RELAY = 2;
+}
+
+enum PathHealth {
+  PATH_HEALTH_UNSPECIFIED = 0;
+  PATH_HEALTH_UNKNOWN = 1;
+  PATH_HEALTH_CHECKING = 2;
+  PATH_HEALTH_REACHABLE = 3;
+  PATH_HEALTH_UNREACHABLE = 4;
+}
+
+enum SessionState {
+  SESSION_STATE_UNSPECIFIED = 0;
+  SESSION_STATE_NOT_AUTHENTICATED = 1;
+  SESSION_STATE_ACTIVE = 2;
+  SESSION_STATE_EXPIRING = 3;
+  SESSION_STATE_EXPIRED = 4;
+  SESSION_STATE_RENEWING = 5;
+}
+
+enum EnrollmentMode {
+  ENROLLMENT_MODE_UNSPECIFIED = 0;
+  ENROLLMENT_MODE_WORKSTATION = 1;
+  ENROLLMENT_MODE_SERVER = 2;
+  ENROLLMENT_MODE_SUBNET_ROUTER = 3;
+  ENROLLMENT_MODE_INTERACTIVE = 4;
+}
+
+enum ProfileState {
+  PROFILE_STATE_UNSPECIFIED = 0;
+  PROFILE_STATE_EMPTY = 1;
+  PROFILE_STATE_REGISTERED = 2;
+  PROFILE_STATE_NEEDS_LOGIN = 3;
+  PROFILE_STATE_NEEDS_APPROVAL = 4;
+  PROFILE_STATE_BLOCKED = 5;
+}
+
+message ConnectionIntent {
+  DesiredState desired_state = 1;
+  string reason_key = 2;
+  google.protobuf.Timestamp updated_at = 3;
+}
+
+message StoredStatePresence {
+  bool cached_map_present = 1;
+  bool cached_map_valid = 2;
+  bool map_signing_trust_present = 3;
+  bool token_present = 4;
+  bool node_credential_present = 5;
+  bool device_fingerprint_present = 6;
+  bool identity_private_key_present = 7;
+  bool tunnel_private_key_present = 8;
+}
+
+message Network {
+  string id = 1;
+  string name = 2;
+  string account_id = 3;
+  string ipv4_cidr = 4;
+  string ipv6_cidr = 5;
+  Restriction selection = 6;
+}
+
+message Profile {
+  string id = 1;
+  string display_name = 2;
+  // Canonical HTTPS origin. Immutable after creation.
+  string control_origin = 3;
+  string account_id = 4;
+  string identity_display_name = 5;
+  ProfileState state = 6;
+  bool active = 7;
+  string selected_network_id = 8;
+  Restriction selection = 9;
+}
+
+message Session {
+  SessionState state = 1;
+  // Absence means no authoritative deadline, never "already expired".
+  google.protobuf.Timestamp expires_at = 2;
+  google.protobuf.Timestamp warning_at = 3;
+  Restriction renewal = 4;
+  // Claim is supplied only when supported by the runtime/provider.
+  bool seamless_renewal_supported = 5;
+  string renewal_operation_id = 6;
+}
+
+message Recovery {
+  string operation_id = 1;
+  ServiceState state = 2;
+  Failure failure = 3;
+}
+
+message ServerIdentity {
+  string profile_id = 1;
+  string control_origin = 2;
+  string trusted_key_id = 3;
+  string announced_key_id = 4;
+  bool changed = 5;
+  // Opaque revision bound to the announcement; confirmation must match all fields.
+  string announcement_id = 6;
+}
+
+message Endpoint {
+  string id = 1;
+  string address = 2;
+  string protocol = 3;
+  uint32 priority = 4;
+}
+
+message PathCandidate {
+  PathKind kind = 1;
+  PathHealth health = 2;
+  string endpoint = 3;
+  string relay_id = 4;
+  string protocol = 5;
+  uint32 priority = 6;
+  google.protobuf.Duration rtt = 7;
+  google.protobuf.Timestamp checked_at = 8;
+  google.protobuf.Timestamp last_reachable_at = 9;
+  uint32 consecutive_failures = 10;
+  string reason_key = 11;
+  string tier = 12;
+}
+
+message Peer {
+  string id = 1;
+  string hostname = 2;
+  repeated string overlay_addresses = 3;
+  repeated PathCandidate candidates = 4;
+  PathKind selected_path = 5;
+  string selected_endpoint = 6;
+  google.protobuf.Timestamp last_transition_at = 7;
+  string selection_reason_key = 8;
+}
+
+message AgentStatus {
+  AgentSnapshotState snapshot_state = 1;
+  uint64 map_revision = 2;
+  uint64 target_map_revision = 3;
+  google.protobuf.Timestamp generated_at = 4;
+  bool connection_paused = 5;
+  string node_id = 6;
+  string network_id = 7;
+  repeated string overlay_addresses = 8;
+  uint32 peer_count = 9;
+  bool stun_ok = 10;
+  bool relay_ok = 11;
+  Endpoint selected_relay = 12;
+  uint32 relay_attempt_count = 13;
+  uint32 direct_path_count = 14;
+  uint32 relay_path_count = 15;
+  Failure last_failure = 16;
+}
+
+message ControlProbe {
+  bool ok = 1;
+  string origin = 2;
+  uint32 http_status = 3;
+  Failure failure = 4;
+  repeated ControlProbe attempts = 5;
+}
+
+message Status {
+  SnapshotMetadata metadata = 1;
+  ServiceState service_state = 2;
+  ControlState control_state = 3;
+  ConnectionIntent intent = 4;
+  bool user_disconnected = 5;
+  string active_profile_id = 6;
+  string account_id = 7;
+  string node_id = 8;
+  string hostname = 9;
+  Network network = 10;
+  bool ephemeral = 11;
+  string enrollment_request_id = 12;
+  UserAction pending_action = 13;
+  repeated string overlay_addresses = 14;
+  uint64 map_revision = 15;
+  uint32 peer_count = 16;
+  StoredStatePresence stored_state = 17;
+  Recovery recovery = 18;
+  Session session = 19;
+  AgentStatus agent = 20;
+  ControlProbe control = 21;
+  repeated Endpoint stun_endpoints = 22;
+  repeated Endpoint relay_endpoints = 23;
+  repeated Failure failures = 24;
+  // Read-only runtime route-table identifier, never a caller-selected path.
+  string route_table = 25;
+}
+
+message TunnelPeer {
+  string peer_id = 1;
+  string public_key = 2;
+  string endpoint = 3;
+  repeated string allowed_ips = 4;
+  google.protobuf.Timestamp latest_handshake = 5;
+  uint64 received_bytes = 6;
+  uint64 transmitted_bytes = 7;
+  google.protobuf.Duration persistent_keepalive = 8;
+}
+
+message TunnelInspection {
+  bool ok = 1;
+  string interface_name = 2;
+  uint32 mtu = 3;
+  uint32 listen_port = 4;
+  repeated TunnelPeer peers = 5;
+  Failure failure = 6;
+}
+
+message Interface {
+  string name = 1;
+  uint32 index = 2;
+  uint32 mtu = 3;
+  repeated string addresses = 4;
+  repeated string prefixes = 5;
+  repeated string flags = 6;
+  Failure failure = 7;
+}
+
+message RouteInspection {
+  string target = 1;
+  string interface_name = 2;
+  bool uses_interface = 3;
+  string peer_id = 4;
+  Failure failure = 5;
+}
+
+message RouteConflict {
+  string overlay_cidr = 1;
+  string local_prefix = 2;
+  string interface_name = 3;
+  string reason_key = 4;
+}
+
+message DnsRecord {
+  string node_id = 1;
+  string hostname = 2;
+  string label = 3;
+  string fqdn = 4;
+  repeated string addresses = 5;
+}
+
+message DnsDiagnostics {
+  string search_domain = 1;
+  google.protobuf.Duration ttl = 2;
+  repeated string servers = 3;
+  repeated DnsRecord records = 4;
+}
+
+message LogEntry {
+  google.protobuf.Timestamp timestamp = 1;
+  // Bounded producer-redacted diagnostic; never localized as business state.
+  string message = 2;
+}
+
+message Diagnostics {
+  SnapshotMetadata metadata = 1;
+  BuildIdentity client = 2;
+  string os_name = 3;
+  string os_version = 4;
+  string go_version = 5;
+  Status status = 6;
+  TunnelInspection tunnel = 7;
+  repeated Interface interfaces = 8;
+  repeated RouteInspection routes = 9;
+  repeated RouteConflict route_conflicts = 10;
+  DnsDiagnostics dns = 11;
+  repeated LogEntry recent_logs = 12;
+  repeated Failure failures = 13;
+  bool truncated = 14;
+  repeated Peer peers = 15;
+  bool default_route_present = 16;
+}

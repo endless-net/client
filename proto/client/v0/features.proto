@@ -1,0 +1,267 @@
+// Draft extensions for UF-08 and UF-16..UF-23.
+syntax = "proto3";
+
+package client.v0;
+
+import "client/v0/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/endless-net/client/clientipc/v0;clientipc";
+
+enum SettingSource {
+  SETTING_SOURCE_UNSPECIFIED = 0;
+  SETTING_SOURCE_DEFAULT = 1;
+  SETTING_SOURCE_USER = 2;
+  SETTING_SOURCE_DEVICE_POLICY = 3;
+  SETTING_SOURCE_ACCOUNT_POLICY = 4;
+  SETTING_SOURCE_PLATFORM = 5;
+}
+
+message SettingControl {
+  SettingSource source = 1;
+  bool locked = 2;
+  Restriction mutation = 3;
+  string policy_id = 4;
+}
+
+message BooleanSetting {
+  bool effective = 1;
+  optional bool requested = 2;
+  SettingControl control = 3;
+}
+
+enum LifecycleBehavior {
+  LIFECYCLE_BEHAVIOR_UNSPECIFIED = 0;
+  LIFECYCLE_BEHAVIOR_KEEP_INTENT = 1;
+  LIFECYCLE_BEHAVIOR_CONNECT = 2;
+  LIFECYCLE_BEHAVIOR_DISCONNECT = 3;
+  LIFECYCLE_BEHAVIOR_PLATFORM_MANAGED = 4;
+}
+
+message LifecycleSetting {
+  LifecycleBehavior effective = 1;
+  optional LifecycleBehavior requested = 2;
+  SettingControl control = 3;
+  repeated LifecycleBehavior allowed_values = 4;
+}
+
+message RuntimeLifecycle {
+  // These concern tunnel intent, not whether the UI window starts or closes.
+  LifecycleSetting runtime_start = 1;
+  LifecycleSetting ui_quit = 2;
+  LifecycleSetting user_logoff = 3;
+  LifecycleSetting suspend = 4;
+  LifecycleSetting resume = 5;
+}
+
+message Preferences {
+  SnapshotMetadata metadata = 1;
+  string profile_id = 2;
+  // This switch may only restrict traffic already permitted by backend policy.
+  BooleanSetting allow_inbound = 3;
+  BooleanSetting accept_dns = 4;
+  BooleanSetting accept_routes = 5;
+  RuntimeLifecycle lifecycle = 6;
+}
+
+// Presence means "set user preference", omission means "leave unchanged".
+// ResetPreferences removes user overrides instead of setting false/default.
+message PreferencesPatch {
+  optional bool allow_inbound = 1;
+  optional bool accept_dns = 2;
+  optional bool accept_routes = 3;
+  optional LifecycleBehavior runtime_start = 4;
+  optional LifecycleBehavior ui_quit = 5;
+  optional LifecycleBehavior user_logoff = 6;
+  optional LifecycleBehavior suspend = 7;
+  optional LifecycleBehavior resume = 8;
+}
+
+enum PreferenceKey {
+  PREFERENCE_KEY_UNSPECIFIED = 0;
+  PREFERENCE_KEY_ALLOW_INBOUND = 1;
+  PREFERENCE_KEY_ACCEPT_DNS = 2;
+  PREFERENCE_KEY_ACCEPT_ROUTES = 3;
+  PREFERENCE_KEY_RUNTIME_START = 4;
+  PREFERENCE_KEY_UI_QUIT = 5;
+  PREFERENCE_KEY_USER_LOGOFF = 6;
+  PREFERENCE_KEY_SUSPEND = 7;
+  PREFERENCE_KEY_RESUME = 8;
+}
+
+message ManagedSetting {
+  // Closed keys for runtime-owned settings; UI-only preferences stay in UI.
+  PreferenceKey key = 1;
+  SettingControl control = 2;
+  oneof effective_value {
+    bool boolean_value = 3;
+    LifecycleBehavior lifecycle_value = 4;
+  }
+}
+
+enum LanAccess {
+  LAN_ACCESS_UNSPECIFIED = 0;
+  LAN_ACCESS_BLOCK = 1;
+  LAN_ACCESS_ALLOW = 2;
+}
+
+message ExitNode {
+  string id = 1;
+  string display_name = 2;
+  string peer_id = 3;
+  Restriction selection = 4;
+  repeated LanAccess allowed_lan_access = 5;
+}
+
+enum ApplyState {
+  APPLY_STATE_UNSPECIFIED = 0;
+  APPLY_STATE_PENDING = 1;
+  APPLY_STATE_APPLIED = 2;
+  APPLY_STATE_FAILED = 3;
+}
+
+message ExitNodeStatus {
+  SnapshotMetadata metadata = 1;
+  string profile_id = 2;
+  optional string requested_exit_node_id = 3;
+  optional string effective_exit_node_id = 4;
+  LanAccess requested_lan_access = 5;
+  LanAccess effective_lan_access = 6;
+  ApplyState apply_state = 7;
+  SettingControl control = 8;
+  Failure failure = 9;
+  // On path loss, traffic cannot silently escape via a direct default route.
+  bool fail_closed = 10;
+}
+
+enum ResourceKind {
+  RESOURCE_KIND_UNSPECIFIED = 0;
+  RESOURCE_KIND_HOST = 1;
+  RESOURCE_KIND_SUBNET = 2;
+  RESOURCE_KIND_SERVICE = 3;
+  RESOURCE_KIND_APPLICATION = 4;
+}
+
+message HostTarget {
+  repeated string addresses = 1;
+  string hostname = 2;
+}
+
+message SubnetTarget {
+  string cidr = 1;
+}
+
+message ServiceTarget {
+  string hostname = 1;
+  uint32 port = 2;
+  string protocol = 3;
+}
+
+message ApplicationTarget {
+  string display_address = 1;
+  // Validated HTTPS link when the authorized resource supports a browser.
+  string browser_url = 2;
+}
+
+message Resource {
+  string id = 1;
+  string display_name = 2;
+  ResourceKind kind = 3;
+  string network_id = 4;
+  Restriction availability = 5;
+  BooleanSetting enabled = 6;
+  // IDs refer only to resources disclosed to this caller; never hidden resources.
+  repeated string overlapping_resource_ids = 7;
+  string overlap_reason_key = 8;
+  oneof target {
+    HostTarget host = 10;
+    SubnetTarget subnet = 11;
+    ServiceTarget service = 12;
+    ApplicationTarget application = 13;
+  }
+}
+
+enum UpdateClassification {
+  UPDATE_CLASSIFICATION_UNSPECIFIED = 0;
+  UPDATE_CLASSIFICATION_ORDINARY = 1;
+  UPDATE_CLASSIFICATION_SECURITY = 2;
+  UPDATE_CLASSIFICATION_MANDATORY = 3;
+}
+
+enum DistributionChannel {
+  DISTRIBUTION_CHANNEL_UNSPECIFIED = 0;
+  DISTRIBUTION_CHANNEL_VENDOR_PACKAGE = 1;
+  DISTRIBUTION_CHANNEL_PACKAGE_MANAGER = 2;
+  DISTRIBUTION_CHANNEL_APP_STORE = 3;
+  DISTRIBUTION_CHANNEL_ENTERPRISE = 4;
+}
+
+enum CompatibilityState {
+  COMPATIBILITY_STATE_UNSPECIFIED = 0;
+  COMPATIBILITY_STATE_COMPATIBLE = 1;
+  COMPATIBILITY_STATE_INCOMPATIBLE = 2;
+  COMPATIBILITY_STATE_UNKNOWN = 3;
+}
+
+message Compatibility {
+  CompatibilityState state = 1;
+  string reason_key = 2;
+  uint32 minimum_ipc_version = 3;
+  uint32 maximum_ipc_version = 4;
+  repeated string accepted_contract_sha256 = 5;
+}
+
+message VerifiedUpdate {
+  // Producer verifies signature, expiry, target and pairing before disclosure.
+  string release_id = 1;
+  string manifest_sha256 = 2;
+  string signing_key_id = 3;
+  google.protobuf.Timestamp verified_at = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  BuildIdentity runtime = 6;
+  string paired_ui_version = 7;
+  Compatibility compatibility = 8;
+  UpdateClassification classification = 9;
+  DistributionChannel channel = 10;
+  google.protobuf.Timestamp mandatory_after = 11;
+  // Validated destination for the platform package/store owner.
+  string action_url = 12;
+  string release_notes_url = 13;
+}
+
+enum UpdateState {
+  UPDATE_STATE_UNSPECIFIED = 0;
+  UPDATE_STATE_UNKNOWN = 1;
+  UPDATE_STATE_UP_TO_DATE = 2;
+  UPDATE_STATE_AVAILABLE = 3;
+  UPDATE_STATE_EXTERNAL_MANAGER_REQUIRED = 4;
+  UPDATE_STATE_SOURCE_UNAVAILABLE = 5;
+  UPDATE_STATE_VERIFICATION_FAILED = 6;
+}
+
+message UpdateInfo {
+  SnapshotMetadata metadata = 1;
+  BuildIdentity installed_runtime = 2;
+  // UI identity is a caller claim for pairing checks, never runtime attestation.
+  BuildIdentity reported_ui = 3;
+  Compatibility installed_pair = 4;
+  UpdateState state = 5;
+  VerifiedUpdate available = 6;
+  Restriction discovery = 7;
+}
+
+message SupportInfo {
+  BuildIdentity runtime = 1;
+  string product_name = 2;
+  string documentation_url = 3;
+  string support_url = 4;
+  string privacy_url = 5;
+  string license_url = 6;
+  // Stable offline resource key, with translated content shipped in the UI.
+  string offline_help_key = 7;
+}
+
+enum LifecycleEvent {
+  LIFECYCLE_EVENT_UNSPECIFIED = 0;
+  LIFECYCLE_EVENT_UI_QUIT = 1;
+}

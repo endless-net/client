@@ -1,0 +1,269 @@
+// Draft producer-owned IPC contract. Not served by the current runtime.
+// See docs/client-ipc-protobuf.md for normative semantics and adoption gates.
+syntax = "proto3";
+
+package client.v0;
+
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/endless-net/client/clientipc/v0;clientipc";
+
+enum Access {
+  ACCESS_UNSPECIFIED = 0;
+  ACCESS_OBSERVER = 1;
+  ACCESS_OWNER = 2;
+  ACCESS_ADMINISTRATOR = 3;
+}
+
+extend google.protobuf.MethodOptions {
+  // Minimum role, derived from authenticated local peer identity, never payload.
+  Access access = 51000;
+}
+
+enum Platform {
+  PLATFORM_UNSPECIFIED = 0;
+  PLATFORM_WINDOWS = 1;
+  PLATFORM_MACOS = 2;
+  PLATFORM_LINUX = 3;
+  PLATFORM_ANDROID = 4;
+  PLATFORM_IOS = 5;
+}
+
+enum Capability {
+  CAPABILITY_UNSPECIFIED = 0;
+  CAPABILITY_ENROLLMENT = 1;
+  CAPABILITY_CONNECTION = 2;
+  CAPABILITY_PEERS = 3;
+  CAPABILITY_NETWORK_SELECTION = 4;
+  CAPABILITY_EXIT_NODE = 5;
+  CAPABILITY_IDENTITY_RECOVERY = 6;
+  CAPABILITY_DIAGNOSTICS = 7;
+  CAPABILITY_LOGOUT = 8;
+  CAPABILITY_LOCAL_FORGET = 9;
+  CAPABILITY_PROFILES = 10;
+  CAPABILITY_SESSION_RENEWAL = 11;
+  CAPABILITY_PREFERENCES = 12;
+  CAPABILITY_RESOURCES = 13;
+  CAPABILITY_MANAGED_SETTINGS = 14;
+  CAPABILITY_RUNTIME_LIFECYCLE = 15;
+  CAPABILITY_UPDATE_DISCOVERY = 16;
+  CAPABILITY_SUPPORT_INFO = 17;
+}
+
+enum Availability {
+  AVAILABILITY_UNSPECIFIED = 0;
+  AVAILABILITY_AVAILABLE = 1;
+  AVAILABILITY_UNSUPPORTED = 2;
+  AVAILABILITY_POLICY_BLOCKED = 3;
+  AVAILABILITY_PERMISSION_REQUIRED = 4;
+  AVAILABILITY_TEMPORARILY_UNAVAILABLE = 5;
+}
+
+enum ActionOwner {
+  ACTION_OWNER_UNSPECIFIED = 0;
+  ACTION_OWNER_USER = 1;
+  ACTION_OWNER_DEVICE_ADMINISTRATOR = 2;
+  ACTION_OWNER_ACCESS_ADMINISTRATOR = 3;
+  ACTION_OWNER_SUPPORT = 4;
+}
+
+message Restriction {
+  Availability availability = 1;
+  // Stable localization key; never arbitrary server text or a secret.
+  string reason_key = 2;
+  ActionOwner action_owner = 3;
+}
+
+message CapabilityStatus {
+  Capability capability = 1;
+  Restriction restriction = 2;
+  // Indicates applicability on this runtime, not a promise of release support.
+  Platform platform = 3;
+}
+
+message BuildIdentity {
+  string version = 1;
+  string commit = 2;
+  string build_date = 3;
+  Platform platform = 4;
+  string architecture = 5;
+}
+
+message RuntimeInfo {
+  BuildIdentity build = 1;
+  // Opaque identifier changes on every runtime start.
+  string instance_id = 2;
+  repeated CapabilityStatus capabilities = 3;
+  Access caller_access = 4;
+  // Exact draft contract revision/hash. Version number alone cannot pair artifacts.
+  string contract_sha256 = 5;
+  string protocol = 6; // Must be endlessnet-client-ipc.
+  uint32 ipc_version = 7; // Must be 0, as explicitly selected for this new contract.
+}
+
+message SnapshotMetadata {
+  string instance_id = 1;
+  uint64 revision = 2;
+  google.protobuf.Timestamp generated_at = 3;
+}
+
+message ProfileRef {
+  string profile_id = 1;
+}
+
+// Mandatory on every mutation. Never contains credentials or claimed roles.
+message MutationContext {
+  // UUID, scoped to authenticated installation owner. Durable for at least 24h.
+  string request_id = 1;
+  // Both required; stale values fail before side effects.
+  string expected_instance_id = 2;
+  uint64 expected_revision = 3;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_INVALID_ARGUMENT = 1;
+  ERROR_CODE_UNAUTHENTICATED = 2;
+  ERROR_CODE_OWNER_REQUIRED = 3;
+  ERROR_CODE_ADMINISTRATOR_REQUIRED = 4;
+  ERROR_CODE_UNSUPPORTED = 5;
+  ERROR_CODE_NOT_FOUND = 6;
+  ERROR_CODE_STALE_STATE = 7;
+  ERROR_CODE_POLICY_BLOCKED = 8;
+  ERROR_CODE_PERMISSION_REQUIRED = 9;
+  ERROR_CODE_BUSY = 10;
+  ERROR_CODE_LIMIT_EXCEEDED = 11;
+  ERROR_CODE_UNAVAILABLE = 12;
+  ERROR_CODE_DEADLINE_EXCEEDED = 13;
+  ERROR_CODE_CANCELLED = 14;
+  ERROR_CODE_INTERNAL = 15;
+  ERROR_CODE_NEEDS_ENROLLMENT = 16;
+  ERROR_CODE_NEEDS_LOGIN = 17;
+  ERROR_CODE_APPROVAL_REQUIRED = 18;
+  ERROR_CODE_APPROVAL_REJECTED = 19;
+  ERROR_CODE_SERVER_IDENTITY_CHANGED = 20;
+  ERROR_CODE_IDENTITY_CONFIRMATION_MISMATCH = 21;
+  ERROR_CODE_REMOTE_CLEANUP_REQUIRED = 22;
+  ERROR_CODE_LOCAL_FORGET_CONFIRMATION_REQUIRED = 23;
+  ERROR_CODE_APPLY_FAILED = 24;
+  ERROR_CODE_PROFILE_ACTIVE = 25;
+  ERROR_CODE_RESOURCE_CONFLICT = 26;
+  ERROR_CODE_CONTRACT_MISMATCH = 27;
+}
+
+message Failure {
+  ErrorCode code = 1;
+  string reason_key = 2;
+  // Correlation IDs only; no diagnostic payload, bearer token or credentials.
+  string control_request_id = 3;
+  bool retryable = 4;
+  google.protobuf.Duration retry_after = 5;
+  ActionOwner action_owner = 6;
+  repeated string field_paths = 7;
+}
+
+// Transport error details carry Failure. Completed operations use Failure too.
+enum OperationState {
+  OPERATION_STATE_UNSPECIFIED = 0;
+  OPERATION_STATE_PENDING = 1;
+  OPERATION_STATE_RUNNING = 2;
+  OPERATION_STATE_WAITING_FOR_USER = 3;
+  OPERATION_STATE_SUCCEEDED = 4;
+  OPERATION_STATE_FAILED = 5;
+  OPERATION_STATE_CANCELLED = 6;
+}
+
+enum ConnectionContinuity {
+  CONNECTION_CONTINUITY_UNSPECIFIED = 0;
+  CONNECTION_CONTINUITY_NOT_APPLICABLE = 1;
+  CONNECTION_CONTINUITY_PRESERVED = 2;
+  CONNECTION_CONTINUITY_INTERRUPTED = 3;
+  CONNECTION_CONTINUITY_UNKNOWN = 4;
+}
+
+enum CleanupOutcome {
+  CLEANUP_OUTCOME_UNSPECIFIED = 0;
+  CLEANUP_OUTCOME_REMOTE_CONFIRMED = 1;
+  CLEANUP_OUTCOME_REMOTE_UNCONFIRMED = 2;
+  CLEANUP_OUTCOME_NOT_REGISTERED = 3;
+}
+
+message UserAction {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_OPEN_BROWSER = 1;
+    KIND_WAIT_FOR_APPROVAL = 2;
+    KIND_GRANT_VPN_PERMISSION = 3;
+    KIND_USE_PRIVILEGED_HELPER = 4;
+    KIND_CONTACT_ACCESS_ADMINISTRATOR = 5;
+  }
+  Kind kind = 1;
+  // Optional validated HTTPS browser URL; sensitive and excluded from logs.
+  string browser_url = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  string reason_key = 4;
+}
+
+message ChangeResult {
+  bool changed = 1;
+}
+
+message EnrollmentResult {
+  string profile_id = 1;
+  string node_id = 2;
+}
+
+message SelectionResult {
+  string selected_id = 1; // Empty means cleared, only for exit-node selection.
+}
+
+message CleanupResult {
+  CleanupOutcome outcome = 1;
+  bool local_registration_removed = 2;
+  string control_request_id = 3;
+}
+
+message RenewalResult {
+  google.protobuf.Timestamp expires_at = 1;
+}
+
+message BundleResult {
+  // Opaque, caller-bound handle; never an arbitrary filesystem path.
+  string bundle_id = 1;
+  google.protobuf.Timestamp created_at = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  uint64 size_bytes = 4;
+  string sha256 = 5;
+  bool reused = 6;
+}
+
+message Operation {
+  string id = 1;
+  string request_id = 2;
+  string profile_id = 3;
+  OperationState state = 4;
+  SnapshotMetadata metadata = 5;
+  UserAction user_action = 6;
+  ConnectionContinuity continuity = 7;
+  oneof outcome {
+    Failure failure = 10;
+    ChangeResult change = 11;
+    EnrollmentResult enrollment = 12;
+    SelectionResult selection = 13;
+    CleanupResult cleanup = 14;
+    RenewalResult renewal = 15;
+    BundleResult bundle = 16;
+  }
+}
+
+message PageRequest {
+  uint32 page_size = 1; // 0 = 100; max 500.
+  string page_token = 2; // Opaque, caller/query/profile/revision-bound.
+}
+
+message PageResponse {
+  string next_page_token = 1;
+  SnapshotMetadata metadata = 2;
+}
