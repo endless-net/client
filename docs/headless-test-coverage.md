@@ -101,7 +101,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
-| HC-025 | C DNS CLI/proxy, wire lookup and application access by FQDN; UDP/TCP A/AAAA projection, withdrawal/restoration, split isolation, SERVFAIL recovery, IPv4/IPv6 listener/upstream and truncated-UDP TCP retry are executable; all eight wire variants, native system-resolver selection/recovery and signed DNS map updates passed all 24 repeats at `90f8a28` | Later DNS diagnostic-projection assertions await qualification; remaining DNS variants |
+| HC-025 | C DNS CLI/proxy, wire lookup and application access by FQDN; UDP/TCP A/AAAA projection, withdrawal/restoration, split isolation, SERVFAIL recovery, IPv4/IPv6 listener/upstream and truncated-UDP TCP retry are executable; all eight wire variants, native system-resolver selection/recovery and signed DNS map updates passed all 24 repeats at `90f8a28`; corrected revision synchronization and DNS diagnostic projection passed all 24 at `2e04b0a` | Remaining DNS variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
 | HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
 | HC-028 | C native single-Relay and two-Relay failover IPv4/IPv6 TCP/UDP, outage denial, recovery and agent restart passed all 24 native repetitions | NAT, direct/Relay transitions, existing-session failover, healthy-backup failback and remaining Relay variants |
@@ -142,6 +142,28 @@ product scope are different conditions; neither is a successful skip.
 | HC-063 | L/C explicit native state removal, fresh `NeedsEnrollment`, and reenrollment with a different node identity passed all eight installation runners at `92983ae`; local forget deliberately retains identity | Standalone reset without uninstall and provider-side removal remain separate |
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
+
+## Complete DNS synchronization qualification — 2026-09-12
+
+[Run 34713022475](https://github.com/endless-net/client/actions/runs/34713022475)
+produced all 24 native reports at the identical source
+`2e04b0ade08d54b9d87fe240f2b9545b80c5ecaf`: 1269 passing roots, three failing
+roots, no skipped tests and no missing root outcomes. Every report completes
+all 53 required roots. All Linux and macOS reports pass; Windows has the three
+failures detailed below (application-map apply, session recovery, IPv6 TCP).
+The complete-suite gate therefore remains failing.
+
+`TestControlPlaneNativeDNSMapUpdates` passes in every report. This qualifies
+the corrected revision synchronization together with public diagnostic DNS
+projection and real UDP/TCP lookup assertions on all eight native platforms,
+three times each. The 40-minute suite budget preserves a complete outcome for
+every root in this run; it does not relax individual operation deadlines.
+
+All eight installation jobs, all three platform verification jobs, control-plane
+scenarios and container lifecycle pass. External STUN is skipped and contributes
+no evidence. Later join-token expiry/same-client retry, Linux LAN policy,
+Windows resolver-setting optimization and additional failure diagnostics are
+absent from this source and still require their own qualification.
 
 ## Additional Windows failure localization — 2026-09-12
 
