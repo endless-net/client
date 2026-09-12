@@ -3106,6 +3106,49 @@ remain awaiting evidence from a source containing those changes. Follow-up
 implementation and native validation remain owned by `endless-net/client` on
 `main`; no provider or infrastructure validation is claimed.
 
+## Cached service startup and executable repair qualified on eight runners
+
+Run [34673867164](https://github.com/endless-net/client/actions/runs/34673867164),
+source `0cf6d735193f1ffc0980b68cf19bb3b602a54423`, passes all eight installation
+jobs. Each report has `TestInstalledClient` and its four children (fresh install,
+disconnected service restart, enrolled reinstall, uninstall): **40 PASS records,
+0 FAIL, 0 SKIP**. Parent and child records are counted together here, not as 40
+independent scenarios.
+
+| Runner | Installation evidence |
+| --- | --- |
+| ubuntu-22.04 | [103500753829](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753829) |
+| ubuntu-24.04 | [103500753841](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753841) |
+| ubuntu-22.04-arm | [103500753790](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753790) |
+| ubuntu-24.04-arm | [103500753825](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753825) |
+| windows-2022 | [103500753819](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753819) |
+| windows-2025 | [103500753820](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753820) |
+| macos-15 | [103500753886](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753886) |
+| macos-15-intel | [103500753911](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753911) |
+
+The enrolled-reinstall sequence now demonstrates missing-executable repair in
+both connected and disconnected states. It stops the service, removes only the
+known installed executable on the disposable runner, verifies launch fails with
+executable absence, repairs it, and checks public identity and traffic behavior.
+Linux repair explicitly starts the restored service because package installation
+preserves a previously stopped service.
+
+After a connected service restart with control unavailable, public status remains
+degraded with the original identity and valid cached map, and actual TCP traffic
+passes through the configured peer. Restoring control advances the map revision,
+clears degraded state, and preserves traffic. The disconnected variant rejects
+traffic after repair and startup without control, makes no registration or
+endpoint-refresh HTTP attempts, remains disconnected when control returns, and
+resumes traffic only after explicit connect. Assertions use public CLI/IPC,
+contract-participant transcripts and observed traffic.
+
+This qualifies the bounded HC-006/HC-030 service restart and HC-004 repair
+increments at this source. It does not prove physical machine reboot, cross-version
+upgrade, every corruption mode, or the complete HC scenarios. Native contract
+repetitions and the aggregate source gate are still outstanding at this snapshot;
+the full source is not yet qualified. Further coverage and validation remain
+owned by `endless-net/client` on `main`.
+
 ## Next work
 
 Per-exchange flow diagnostics now run in a defer, so an unclassified fatal probe
