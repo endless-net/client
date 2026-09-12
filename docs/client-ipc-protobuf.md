@@ -160,6 +160,10 @@ always be safely rolled back.
 
 `PENDING -> RUNNING -> [WAITING_FOR_USER -> RUNNING] -> terminal`.
 Terminals are SUCCEEDED, FAILED or CANCELLED (provider/OS cancellation).
+For local-only changes, the lifecycle can complete within one atomic config
+transaction: intermediate states need not be externally visible. The terminal
+outcome and actual effect must be durable together before returning SUCCEEDED.
+This does not permit early success for asynchronous network or device effects.
 WAITING_FOR_USER has a typed `UserAction`. Nonterminal operations have no outcome;
 FAILED/CANCELLED have `Failure`; SUCCEEDED has exactly one success outcome.
 Terminal outcome and actual continuity are immutable. Success means the requested
@@ -220,6 +224,10 @@ registration, selected network, requested preferences and connection intent.
 At most one profile is active; at most one tunnel context may apply routes.
 Creating a profile creates an empty inactive context. `Enroll` binds an empty
 profile to an authorized identity; account identity cannot be edited by renaming.
+The runtime bounds the local catalog at 128 profiles. Display names are trimmed,
+nonempty, at most 128 Unicode code points, and contain no control characters.
+Origins must be HTTPS origins without userinfo, query, fragment or service path;
+the host is canonicalized to lowercase and explicit default port 443 is removed.
 An inactive profile must be selected before enrollment, connection, renewal,
 network/exit selection, resource changes or preference application.
 

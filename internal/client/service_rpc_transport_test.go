@@ -9,48 +9,18 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
-	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
-	"github.com/endless-net/client/clientipc/v0/clientipcconnect"
 	"google.golang.org/protobuf/proto"
 )
 
-// This fixture exercises the real acceptance/store boundary. It deliberately
-// does not claim to implement a profile provider or full production runtime.
-type rpcAcceptanceFixture struct {
-	clientipcconnect.UnimplementedClientServiceHandler
-	mutations    *ClientRPCMutations
-	preparations atomic.Int32
-}
-
-func (s *rpcAcceptanceFixture) CreateProfile(ctx context.Context, req *connect.Request[ipc.CreateProfileRequest]) (*connect.Response[ipc.CreateProfileResponse], error) {
-	op, _, err := s.mutations.Accept(ctx, rpcCreateProfile, req.Msg, func(cfg *Config, op *ipc.Operation) error {
-		s.preparations.Add(1)
-		return rpcPrepareTest(cfg, op)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return connect.NewResponse(&ipc.CreateProfileResponse{Operation: op}), nil
-}
-
-func (s *rpcAcceptanceFixture) GetOperation(ctx context.Context, req *connect.Request[ipc.GetOperationRequest]) (*connect.Response[ipc.GetOperationResponse], error) {
-	op, err := s.mutations.GetOperation(ctx, req.Msg)
-	if err != nil {
-		return nil, err
-	}
-	return connect.NewResponse(&ipc.GetOperationResponse{Operation: op}), nil
-}
-
 func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	m := newRPCStoreTest(t)
-	fixture := &rpcAcceptanceFixture{mutations: m}
+	service := NewClientRPCService(m, &ipc.BuildIdentity{Version: "test"})
 	endpoint := fmt.Sprintf(`\\.\pipe\endlessnet-acceptance-test-%d`, time.Now().UnixNano())
 	if runtime.GOOS != "windows" {
 		dir, err := os.MkdirTemp("/tmp", "en-rpc-")
@@ -68,10 +38,7 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, handler := clientipcconnect.NewClientServiceHandler(fixture,
-		connect.WithInterceptors(rpc.Guard{Authorize: m.Authorize}),
-		connect.WithReadMaxBytes(rpc.MaxRequestBytes), connect.WithSendMaxBytes(rpc.MaxResponseBytes))
-	server := local.NewServer(handler)
+	server := local.NewServer(service.Handler())
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
 	defer func() {
@@ -88,6 +55,12 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	request := rpcCreateRequest(t, m)
+	request.ControlOrigin = "https://control.example.test"
+	if _, err := client.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.GetStatus(ctx, connect.NewRequest(&ipc.GetStatusRequest{}))
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	accepted, err := client.CreateProfile(ctx, connect.NewRequest(request))
 	if err != nil {
 		t.Fatal(err)
@@ -109,13 +82,13 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !proto.Equal(replayed.Msg.Operation, recovered.Msg.Operation) || fixture.preparations.Load() != 1 {
+	if !proto.Equal(replayed.Msg.Operation, recovered.Msg.Operation) || len(m.store.Read().RPCState.Profiles) != 1 {
 		t.Fatal("transport retry ran the mutation twice")
 	}
 	request.DisplayName = "different payload"
 	_, err = client.CreateProfile(ctx, connect.NewRequest(request))
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
-	if fixture.preparations.Load() != 1 {
+	if len(m.store.Read().RPCState.Profiles) != 1 {
 		t.Fatal("conflicting request performed side effects")
 	}
 }

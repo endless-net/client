@@ -29,9 +29,11 @@ var errRPCNoChange = errors.New("RPC durable state unchanged")
 // Request payloads are not retained: a keyed digest prevents token disclosure
 // and offline guessing from an unkeyed enrollment-request hash.
 type ClientRPCState struct {
-	Revision   uint64                              `json:"revision"`
-	DigestKey  []byte                              `json:"digest_key"`
-	Operations map[string]clientRPCOperationRecord `json:"operations"`
+	Revision        uint64                              `json:"revision"`
+	DigestKey       []byte                              `json:"digest_key"`
+	Operations      map[string]clientRPCOperationRecord `json:"operations"`
+	Profiles        map[string]clientRPCProfile         `json:"profiles,omitempty"`
+	ActiveProfileID string                              `json:"active_profile_id,omitempty"`
 }
 
 type clientRPCOperationRecord struct {
@@ -147,6 +149,12 @@ func (m *ClientRPCMutations) Accept(ctx context.Context, procedure string, reque
 }
 
 func (m *ClientRPCMutations) acceptAs(peer local.Peer, procedure string, request proto.Message, prepare func(*Config, *ipc.Operation) error) (*ipc.Operation, bool, error) {
+	return m.acceptInternal(peer, procedure, request, prepare, false)
+}
+
+// Immediate effects are limited to this same durable config transaction. This
+// must never be used for network/device effects that can outlive a failed save.
+func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, request proto.Message, prepare func(*Config, *ipc.Operation) error, immediate bool) (*ipc.Operation, bool, error) {
 	method := rpcMethod(procedure)
 	var accepted *ipc.Operation
 	var reused bool
@@ -227,9 +235,20 @@ func (m *ClientRPCMutations) acceptAs(peer local.Peer, procedure string, request
 		if err := prepare(cfg, accepted); err != nil {
 			return err
 		}
-		// A preparation callback cannot change acceptance identity or claim success.
-		if cfg.RPCState != state || cfg.LocalOwnerID != owner || accepted.Id != id || accepted.RequestId != requestID || accepted.Kind != kind || accepted.State != ipc.OperationState_OPERATION_STATE_PENDING || accepted.Outcome != nil {
+		// Preparation cannot change identity or the lifecycle managed here.
+		if cfg.RPCState != state || cfg.LocalOwnerID != owner || accepted.Id != id || accepted.RequestId != requestID || accepted.Kind != kind || accepted.State != ipc.OperationState_OPERATION_STATE_PENDING || accepted.UserAction != nil || (!immediate && accepted.Outcome != nil) {
 			return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+		}
+		var completedAt *time.Time
+		if immediate {
+			previous := proto.Clone(accepted).(*ipc.Operation)
+			previous.State = ipc.OperationState_OPERATION_STATE_RUNNING
+			previous.Outcome = nil
+			accepted.State = ipc.OperationState_OPERATION_STATE_SUCCEEDED
+			if !validRPCOperationTransition(previous, accepted) {
+				return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+			}
+			completedAt = &now
 		}
 		state.Revision++
 		accepted.Metadata = &ipc.SnapshotMetadata{InstanceId: m.instanceID, Revision: state.Revision, GeneratedAt: timestamppb.New(now)}
@@ -237,7 +256,7 @@ func (m *ClientRPCMutations) acceptAs(peer local.Peer, procedure string, request
 		if err != nil {
 			return err
 		}
-		state.Operations[requestID] = clientRPCOperationRecord{Owner: peer.Identity, Digest: digest, Operation: encoded}
+		state.Operations[requestID] = clientRPCOperationRecord{Owner: peer.Identity, Digest: digest, Operation: encoded, CompletedAt: completedAt}
 		return nil
 	})
 	if err != nil && !errors.Is(err, errRPCNoChange) {

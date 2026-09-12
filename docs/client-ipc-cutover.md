@@ -11,7 +11,7 @@
 | Gate | Required result | Current state |
 | --- | --- | --- |
 | Transport | Authenticated local gRPC on Windows pipe and Unix sockets; Go/Dart interoperability | in progress |
-| Runtime | All specified v0 capabilities backed by real providers and durable state | pending |
+| Runtime | All specified v0 capabilities backed by real providers and durable state | in progress |
 | Consumers | CLI, helper, Flutter UI and emulator use generated v0 API | pending |
 | Retirement | Delete old schema, IPC implementation, routes, DTOs and obsolete tests | pending |
 | Distribution | New descriptor/digest and generated SDK pins in core/UI pairing | pending |
@@ -37,8 +37,11 @@ claim a specified capability is implemented.
 - Local Windows `go test -short ./...` and `go vet ./...` passed in `clientipc`.
   Linux/macOS execution is assigned to the three-platform contract CI matrix;
   adding the matrix is not evidence of a successful run.
-- Production runtime, Dart local transport and consumer migration are still
-  pending. These foundation tests do not close system acceptance scenarios.
+- Go/Dart local transport subsequently passed on Windows/Linux/macOS in
+  [client-ui 665beee](https://github.com/endless-net/client-ui/actions/runs/34721678102).
+  Its pinned producer is dc560f8. This is bootstrap/unary/streaming/error and
+  shutdown evidence using synthetic scripts, not full system acceptance.
+  Production listener and complete consumer migration are still pending.
 
 ## Durable mutation foundation (2026-09-13)
 
@@ -59,9 +62,26 @@ These are storage/domain unit tests, not full runtime, provider or UI acceptance
 local gRPC guard and ConfigStore acceptance: OS identity becomes the durable
 owner, reconnect recovers a request by its original ID, an identical retry does
 not prepare again, and a conflicting payload returns typed INVALID_ARGUMENT.
-Its preparation fixture is not an implementation of the profile provider.
+It now uses the native v0 ClientRPCService and real profile creation, not a
+preparation fixture or the HTTP v2 handler.
 
 The corrected descriptor and transport pipeline passed all jobs on
 [client commit b3929b7](https://github.com/endless-net/client/actions/runs/34720790036).
 That run includes Windows/Linux/macOS local transport, Buf baseline checks,
 generated drift and Dart analysis; it predates the durable mutation foundation.
+
+## Local profile handlers (2026-09-13)
+
+`service_rpc_handlers.go` exposes native GetRuntimeInfo, GetOperation and
+Create/Rename/RemoveProfile handlers with strict guard, message bounds and typed
+error sanitization. The production listener has not switched to this service;
+remaining methods are unimplemented and no complete capability is advertised.
+
+Local-only profile changes and SUCCEEDED outcomes share one config transaction.
+Create makes an empty inactive context with immutable canonical HTTPS origin;
+rename cannot change origin/identity; remove rejects active, enrolled or busy
+profiles and retains installation ownership. The producer bounds profile count
+at 128 and display names at 128 Unicode code points without control characters.
+`service_rpc_profiles_test.go` verifies these invariants, durable terminal
+records and idempotent replay. List/select, per-profile tunnel handover and other
+runtime providers remain required work; this is not UF-16 acceptance yet.
