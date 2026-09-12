@@ -2375,6 +2375,15 @@ full-source qualification and remaining HC variants are still open.
 
 ## Next work
 
+The IPC schema now documents the existing 65536-byte JSON mutation body limit,
+including whitespace, and HTTP 413 / `request_too_large` before action dispatch.
+The native request-validation root sends a valid object one byte above that
+limit and verifies unchanged identity/intent, then sends a valid object exactly
+at the limit and requires successful disconnect followed by normal reconnect.
+This publishes and tests existing behavior without a protocol version increase.
+The boundary extension awaits hosted evidence; unauthorized local-user access
+remains a separate variant. The inventory remains 32 roots / 768 outcomes.
+
 The first hostname-mismatch run exposed fixture contamination: failed initial
 enrollment can retain the valid IP control origin, and a later `--server`
 prepends an origin rather than replacing the failover list. The mismatch probe

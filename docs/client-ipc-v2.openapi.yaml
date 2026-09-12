@@ -16,6 +16,10 @@ info:
     administrators/root; initial enrollment claims an owner when none exists.
     An existing ownerless enrollment requires an administrator/root peer to
     claim ownership. Administrator operations always require such a peer.
+    JSON mutation request bodies are limited to 65536 bytes, including JSON
+    whitespace. Larger bodies return HTTP 413 with request_too_large before
+    invoking the requested action. A body exactly at the limit is accepted
+    when it otherwise satisfies the operation schema.
 servers:
   - url: http://endlessnet.local
     description: Placeholder authority used by local IPC clients.

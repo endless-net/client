@@ -41,6 +41,8 @@ func TestControlPlaneIPCRequestValidation(t *testing.T) {
 		{"boolean", http.MethodPost, ipc.PathDisconnect, "true", ipc.ErrorInvalidJSON, http.StatusBadRequest},
 		{"number", http.MethodPost, ipc.PathDisconnect, "42", ipc.ErrorInvalidJSON, http.StatusBadRequest},
 		{"string", http.MethodPost, ipc.PathDisconnect, `"disconnect"`, ipc.ErrorInvalidJSON, http.StatusBadRequest},
+		// The published IPC contract counts whitespace toward its 65536-byte limit.
+		{"oversized-object", http.MethodPost, ipc.PathDisconnect, "{}" + strings.Repeat(" ", 65535), ipc.ErrorRequestTooLarge, http.StatusRequestEntityTooLarge},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -72,8 +74,26 @@ func TestControlPlaneIPCRequestValidation(t *testing.T) {
 			}
 		})
 	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, local.BaseURL+ipc.PathDisconnect, strings.NewReader("{}"+strings.Repeat(" ", 65534)))
+	if err != nil {
+		t.Fatal("could not construct boundary-size IPC request")
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(ipc.ProtocolHeader, ipc.Protocol)
+	request.Header.Set(ipc.VersionHeader, strconv.Itoa(ipc.Version))
+	request.Header.Set(ipc.MinVersionHeader, strconv.Itoa(ipc.MinSupportedVersion))
+	response, err := local.HTTPClient.Do(request)
+	if err != nil {
+		t.Fatal("boundary-size IPC request failed at the transport")
+	}
+	defer func() { _ = response.Body.Close() }()
+	body, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
 	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
+	if err != nil || len(body) > 1<<20 || response.StatusCode != http.StatusOK || json.Unmarshal(body, &disconnected) != nil {
+		t.Fatal("valid boundary-size IPC request was not accepted")
+	}
 	n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.UserDisconnected })
 	var connected ipc.ConnectResponse
 	n.Service("connect", &connected)
