@@ -3,10 +3,13 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -198,8 +201,22 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	if cleanup != "" {
 		wantDeleted := 1
 		if cleanup == "local-forget" {
+			output, err := n.ServiceCommand("local-forget")
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(output), "local-forget requires --confirm-local-forget") {
+				t.Fatal("unconfirmed local-forget did not fail with the required confirmation diagnostic (output withheld)")
+			}
+			n.AwaitStatus(func(v ipc.StatusResponse) bool {
+				return v.NodeID == initial.NodeID && v.NodeCredentialPresent && v.CachedMapValid && !v.UserDisconnected
+			})
+			first("ok")
+			second("ok")
+			if !fresh("24001") || !fresh("24002") {
+				t.Fatal("rejected local-forget changed application access")
+			}
+			assertICMP("local-forget-confirmation-required", true)
 			s.SetUnavailable(true)
-			output, err := n.ServiceCommand("local-forget", "--confirm-local-forget")
+			output, err = n.ServiceCommand("local-forget", "--confirm-local-forget")
 			var response ipc.LocalForgetResponse
 			if err != nil || json.Unmarshal(output, &response) != nil || response.Outcome != ipc.LogoutOutcomeRemoteCleanupUnconfirmed {
 				t.Fatal("native local cleanup failed or claimed confirmed remote cleanup (output withheld)")

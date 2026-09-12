@@ -2782,6 +2782,9 @@ and traffic denial. The TCP reference peer also checks ICMP echo denial before
 and after restart. The testserver transcript requires one original creation and
 one confirmed deletion for logout. Local-forget runs while control is unavailable,
 must report unconfirmed remote cleanup and must record no remote deletion/logout.
+Before that cleanup, the real CLI invocation without confirmation must return
+exit 1 and its confirmation diagnostic while preserving the original registration,
+both established sessions, fresh traffic on both ports and applicable ICMP echo.
 Control is restored before restart, which must still retain traffic denial.
 This uses the existing protocol peer, not another real
 Client or a backend runtime. Native evidence is pending. With this 36th root,
