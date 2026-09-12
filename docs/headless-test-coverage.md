@@ -2455,6 +2455,15 @@ successful gate alone establishes full HC-001–HC-065 coverage.
 
 ## Next work
 
+The map-signing rotation root now runs both initial connection intents as separate
+native subcases. Each must preserve its intent through recovery, repeat the
+completed confirmation as `already_applied`, and preserve intent/new trust after
+restart. The connected case also requires a healthy public WireGuard inspection;
+only the disconnected case issues an explicit connect before the final fresh-map
+check. This remains control/IPC recovery evidence, not independent traffic proof
+for changed-key rotation. Both subcases await hosted qualification within the
+same 33-root inventory / 792 native root outcomes.
+
 Requirement mapping correction: the architecture catalog defines HC-059 as node
 admission endorsed independently of the control plane (the B20 / Tailnet Lock
 comparison), whereas HC-021 explicitly includes control endpoint, TLS and server

@@ -11,10 +11,22 @@ import (
 // HC-021: explicit map-signing trust recovery preserves enrollment and intent;
 // node credential trust remains an independent published server-key field.
 func TestControlPlaneMapSigningRotation(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		disconnected bool
+	}{{"connected", false}, {"disconnected", true}} {
+		t.Run(tc.name, func(t *testing.T) { testMapSigningRotation(t, tc.disconnected) })
+	}
+}
+
+func testMapSigningRotation(t *testing.T, disconnected bool) {
+	t.Helper()
 	s, n, id := controlScenario(t)
 	oldKey := s.Trust().ActiveKeyID
-	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
+	if disconnected {
+		var response ipc.DisconnectResponse
+		n.Service("disconnect", &response)
+	}
 	if err := s.RotateMapSigningKey(); err != nil {
 		t.Fatal(err)
 	}
@@ -32,22 +44,33 @@ func TestControlPlaneMapSigningRotation(t *testing.T) {
 	if err != nil || json.Unmarshal(output, &recovered) != nil || recovered.Outcome != ipc.RecoveryOutcomeAccepted || recovered.TrustedKeyID != newKey || recovered.OperationID == "" {
 		t.Fatal("explicit signing identity recovery failed")
 	}
-	awaitDisconnected := func() {
+	desired := ipc.DesiredConnected
+	if disconnected {
+		desired = ipc.DesiredDisconnected
+	}
+	awaitIntent := func() {
 		t.Helper()
 		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == id && v.NodeCredentialPresent && v.CachedMapValid && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+			return v.NodeID == id && v.NodeCredentialPresent && v.CachedMapValid && v.UserDisconnected == disconnected && v.DesiredState == desired && (disconnected || (v.WireGuard != nil && v.WireGuard.OK))
 		})
 	}
-	awaitDisconnected()
+	awaitIntent()
+	output, err = n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", newKey)
+	if err != nil || json.Unmarshal(output, &recovered) != nil || recovered.Outcome != ipc.RecoveryOutcomeAlreadyApplied || recovered.TrustedKeyID != newKey {
+		t.Fatal("completed signing recovery was not repeatable")
+	}
+	awaitIntent()
 	n.Stop()
 	n.Start()
-	awaitDisconnected()
+	awaitIntent()
 	n.Service("server-identity", &identity)
 	if identity.Changed || identity.TrustedKeyID != newKey || identity.AnnouncedKeyID != newKey {
 		t.Fatal("confirmed map trust did not survive agent restart")
 	}
-	var connected ipc.ConnectResponse
-	n.Service("connect", &connected)
+	if disconnected {
+		var connected ipc.ConnectResponse
+		n.Service("connect", &connected)
+	}
 	if err := s.UpdateMap(id, func(m *api.NetworkMapSnapshot) { m.Network.Name = "after-map-rotation" }); err != nil {
 		t.Fatal(err)
 	}
