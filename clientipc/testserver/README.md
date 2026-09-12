@@ -59,6 +59,13 @@ rejected without echoing script contents. Scripts are limited to 8 MiB and 4096
 steps. Streaming responses are emitted in array order. JSON scripts do not
 support the in-process `Release` synchronization primitive.
 
+For WatchEvents, `"hold_open": true` sends the declared responses and then waits
+for consumer cancellation. Other RPCs can run while that subscription remains
+active. This supports a live snapshot → mutation scenario without artificial
+EOF or sleeps. It cannot be combined with a terminal scripted RPC failure or
+used for unary methods. Close/cancel the stream before asking the host to Verify;
+an active held stream must fail verification.
+
 The parent keeps stdin open and waits for the stdout JSON `ready` event, which
 includes `contract_sha256`, before connecting. After completing its assertions
 and closing consumer channels, it writes `verify` followed by a newline to stdin.

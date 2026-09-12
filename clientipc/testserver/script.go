@@ -25,6 +25,7 @@ type ScriptStep struct {
 	Request   json.RawMessage   `json:"request"`
 	Responses []json.RawMessage `json:"responses"`
 	Failure   *ScriptFailure    `json:"failure,omitempty"`
+	HoldOpen  bool              `json:"hold_open,omitempty"`
 }
 
 type ScriptFailure struct {
@@ -57,7 +58,7 @@ func Load(reader io.Reader) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
-		step := Step{Method: input.Method, Request: request}
+		step := Step{Method: input.Method, Request: request, HoldOpen: input.HoldOpen}
 		for _, raw := range input.Responses {
 			response, err := decodeMessage(method.Output(), raw)
 			if err != nil {

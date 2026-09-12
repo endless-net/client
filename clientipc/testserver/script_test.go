@@ -40,6 +40,8 @@ func TestInvalidScriptDoesNotExposeInput(t *testing.T) {
 		`{"steps":[{"method":"GetStatus","request":{},"responses":[null]}]}`,
 		`{"steps":[{"method":"GetStatus","request":{},"failure":{"rpc_code":"synthetic-sensitive-marker","detail":{}}}]}`,
 		`{"steps":[{"method":"GetStatus","request":{},"failure":{"rpc_code":"unavailable","detail":{}}}]}`,
+		`{"steps":[{"method":"GetStatus","request":{},"responses":[{}],"hold_open":true}]}`,
+		`{"steps":[{"method":"WatchEvents","request":{},"hold_open":true,"failure":{"rpc_code":"unavailable","detail":{"code":"ERROR_CODE_UNAVAILABLE"}}}]}`,
 	} {
 		server, err := Load(strings.NewReader(raw))
 		if err == nil || server != nil {

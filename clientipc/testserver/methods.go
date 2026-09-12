@@ -37,6 +37,10 @@ func (s *Server) WatchEvents(ctx context.Context, request *connect.Request[pb.Wa
 			return err
 		}
 	}
+	if step.HoldOpen {
+		<-ctx.Done()
+		return ctx.Err()
+	}
 	return step.Err
 }
 

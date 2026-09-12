@@ -25,6 +25,8 @@ type Step struct {
 	Responses []proto.Message
 	Err       error
 	Release   <-chan struct{}
+	// HoldOpen keeps a stream active after its scripted responses until cancellation.
+	HoldOpen bool
 }
 
 // Server implements every v0 RPC. Calls consume per-method FIFO expectations;
@@ -45,6 +47,9 @@ func (s *Server) Expect(step Step) error {
 	method := pb.File_client_v0_service_proto.Services().ByName("ClientService").Methods().ByName(protoreflect.Name(step.Method))
 	if method == nil {
 		return errors.New("unknown Client v0 method")
+	}
+	if step.HoldOpen && (!method.IsStreamingServer() || step.Err != nil) {
+		return errors.New("hold_open requires a stream without a terminal error")
 	}
 	if step.Request == nil || !step.Request.ProtoReflect().IsValid() || step.Request.ProtoReflect().Descriptor().FullName() != method.Input().FullName() {
 		return errors.New("script request type does not match method")

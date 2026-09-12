@@ -2,9 +2,11 @@ package testserver
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/rpc"
@@ -550,6 +552,54 @@ func TestDelayHonorsCancellation(t *testing.T) {
 	cancel()
 	if _, err := server.GetStatus(ctx, connect.NewRequest(&pb.GetStatusRequest{})); err != context.Canceled {
 		t.Fatalf("cancelled wait: %v", err)
+	}
+	if err := server.Verify(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHoldOpenAllowsUnaryAndRequiresCancellation(t *testing.T) {
+	server, err := Load(strings.NewReader(`{"steps":[
+	 {"method":"WatchEvents","request":{},"responses":[{"sequence":"1"}],"hold_open":true},
+	 {"method":"GetStatus","request":{},"responses":[{}]}
+	]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	handler := server.Handler(func(context.Context, pb.Access, string) error { return nil })
+	host := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/WatchEvents") {
+			defer close(done)
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	host.EnableHTTP2 = true
+	host.StartTLS()
+	defer host.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	client := clientipcconnect.NewClientServiceClient(host.Client(), host.URL, connect.WithGRPC(), connect.WithInterceptors(rpc.ClientHeaders{}))
+	stream, err := client.WatchEvents(ctx, connect.NewRequest(&pb.WatchEventsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stream.Receive() || stream.Msg().GetSequence() != 1 {
+		t.Fatal("missing initial held-stream event")
+	}
+	if _, err := client.GetStatus(ctx, connect.NewRequest(&pb.GetStatusRequest{})); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Verify(); err == nil {
+		t.Fatal("active held stream passed verification")
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("held stream did not finish after cancellation")
 	}
 	if err := server.Verify(); err != nil {
 		t.Fatal(err)
