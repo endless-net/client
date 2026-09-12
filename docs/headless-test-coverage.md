@@ -2996,6 +2996,16 @@ separate from the Windows component queue access-denied failure below.
 
 ## Next work
 
+Relay TCP session probes now collect a bounded diagnostic observation when an
+expected immediate exchange returns `blocked`. The same probe process and socket
+send fresh challenges for up to 15 additional seconds, recording only a fixed
+outcome, attempt count and elapsed time. Later success still fails the original
+assertion; the one-second exchange deadline and pass criteria are unchanged.
+This distinguishes eventual retained-session recovery from continued denial or
+probe termination without reading Client internals. Native evidence is pending
+in the parallel hosted-runner matrix; this is instrumentation, not a Relay fix
+or a newly approved recovery SLA.
+
 HC-006/HC-030 installed-service coverage now stops an enrolled service, makes
 the contract control endpoint unavailable and starts it through the real OS
 service manager. Public IPC must show degraded control with the original

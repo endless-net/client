@@ -159,7 +159,7 @@ func runNativeRelayTraffic(t *testing.T, failover bool) {
 			reachable()
 			// Establish both sockets through the primary Relay. Keep these exact
 			// probe processes and connections through failover and outage recovery.
-			tcp := startApplicationSession(t, binary, "", "tcp", address)
+			tcp := startApplicationSession(t, binary, "", "tcp", address, 15*time.Second)
 			udp := startApplicationSession(t, binary, "", "udp", address)
 			tcp("ok")
 			udp("ok")

@@ -376,7 +376,7 @@ func packetProbeFailureReason(output []byte) string {
 	return "unclassified probe failure"
 }
 
-func startApplicationSession(t *testing.T, binary, namespace, protocol, address string) func(string) {
+func startApplicationSession(t *testing.T, binary, namespace, protocol, address string, observeBlockedFor ...time.Duration) func(string) {
 	t.Helper()
 	cmd := packetProbeCommand(context.Background(), namespace, binary, "--mode", "session", "--network", protocol, "--address", address)
 	input, err := cmd.StdinPipe()
@@ -399,6 +399,45 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 			lines <- scanner.Text()
 		}
 	}()
+	// Diagnostic observation never changes the original verdict. In particular,
+	// later success must not hide a failed immediate recovery assertion.
+	observeRecovery := func() {
+		if len(observeBlockedFor) == 0 || observeBlockedFor[0] <= 0 {
+			return
+		}
+		started := time.Now()
+		deadline := time.NewTimer(observeBlockedFor[0])
+		defer deadline.Stop()
+		attempts := 0
+		outcome := "deadline"
+		defer func() {
+			t.Logf("retained %s session recovery observation: outcome=%s attempts=%d elapsed=%s", protocol, outcome, attempts, time.Since(started).Round(time.Millisecond))
+		}()
+		for {
+			if _, err := fmt.Fprintln(input, "exchange"); err != nil {
+				outcome = "command-failed"
+				return
+			}
+			attempts++
+			select {
+			case got, ok := <-lines:
+				if !ok {
+					outcome = "closed"
+					return
+				}
+				if got == "ok" {
+					outcome = "recovered"
+					return
+				}
+				if got != "blocked" {
+					outcome = "invalid-output"
+					return
+				}
+			case <-deadline.C:
+				return
+			}
+		}
+	}
 	expect := func(want string) {
 		t.Helper()
 		select {
@@ -409,6 +448,9 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 					observed = "closed"
 				} else if got == "ok" || got == "blocked" || got == "ready" {
 					observed = got
+				}
+				if ok && got == "blocked" && want == "ok" {
+					observeRecovery()
 				}
 				t.Fatalf("persistent %s application session reported %s, expected %s", protocol, observed, want)
 			}
