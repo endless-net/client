@@ -136,11 +136,11 @@ product scope are different conditions; neither is a successful skip.
 | HC-057 | C export/reuse, agent-crash recovery, retention and IPv4 UDP flow consent/retry/expiry; D FlowConsentAndIdempotency; U flow tests | Qualify expanded diagnostics root; comprehensive redaction and remaining retention/flow variants |
 | HC-058 | L version and runtime platform; native IPC negotiation/restart passed all 24 repetitions at `a9a1a21` | Artifact mismatch and exact release identity |
 | HC-059 | No qualified independent client-endorsed node-admission evidence; server trust/recovery tests belong to HC-021 | BR-05 / Q-05 product decision: independently signed node admission, unsigned-node denial, signing-device loss and recovery |
-| HC-060 | L/C two-version native package/service upgrade preserves the enrolled identity, connected intent and real traffic on every installation runner | Qualify the new upgrade assertions; incompatible-state rollback and insufficient space/privileges |
+| HC-060 | L/C two-version native package/service upgrade preserves the enrolled identity, connected intent and real traffic; passed all eight installation runners at `92983ae` | Incompatible-state rollback and insufficient space/privileges |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
 | HC-062 | L missing-executable repair preserves identity and connected/disconnected traffic intent on all eight installation runners at `0cf6d73` | Other installation damage and interrupted-repair variants; full identity reset is separate |
-| HC-063 | L/C explicit native state removal, fresh `NeedsEnrollment`, and reenrollment with a different node identity on every installation runner; local forget deliberately retains identity | Qualify the new assertions; standalone reset without uninstall and provider-side removal remain separate |
-| HC-064 | L native uninstall now checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal on all eight installation runners | Qualification of the new assertions; Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
+| HC-063 | L/C explicit native state removal, fresh `NeedsEnrollment`, and reenrollment with a different node identity passed all eight installation runners at `92983ae`; local forget deliberately retains identity | Standalone reset without uninstall and provider-side removal remain separate |
+| HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
 ## Current implementation increment
@@ -5091,3 +5091,19 @@ Windows and a missing execution report in macOS simultaneously; the aggregate
 must retain all three errors and return no verified scenario count. Complete
 valid reports still pass. Local short tests, vet and lint pass; hosted aggregate
 execution on this source remains pending.
+
+### 2026-09-12: all eight installation reports for `92983ae`
+
+All eight `installation-*` artifacts from
+[run 34701403560](https://github.com/endless-net/client/actions/runs/34701403560)
+were downloaded and inspected. Each contains exactly one successful
+`TestInstalledClient`, four successful subtests (fresh installation, disconnected
+service restart, enrolled reinstall/upgrade and uninstall), the connected enrolled
+upgrade phase, and no FAIL or SKIP outcomes. The run identifies source
+`92983ae0adf6c0746e25c56ed027b8576e932f50`; unlike the contract artifacts, these
+installation logs do not contain independent source/shard files.
+
+This qualifies the implemented HC-060/063/064 upgrade, identity/intent retention,
+traffic, explicit state removal, distinct reenrollment and uninstall assertions
+on the eight specified runners. It does not qualify their remaining failure
+variants, later source commits, or the still-failing contract matrix.
