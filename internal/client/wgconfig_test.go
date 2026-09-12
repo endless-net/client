@@ -452,6 +452,20 @@ func TestRenderWireGuardSubnetRouterSNATHooksAreOptIn(t *testing.T) {
 	}
 }
 
+func TestRenderWireGuardExitRouterSNATSelectsDefaultInterface(t *testing.T) {
+	response := clientapi.RegisterNodeResponse{
+		Network: clientapi.Network{CIDR: "100.91.0.0/24"},
+		Node:    clientapi.Node{AssignedIP: "100.91.0.2", AdvertisedIPs: []string{"0.0.0.0/0"}},
+	}
+	rendered := renderWireGuardValidated("private-key", response, WireGuardRenderOptions{SubnetRouterSNAT: true})
+	if !strings.Contains(rendered, "ip route get 0.0.0.1") {
+		t.Fatalf("exit router did not probe a concrete address through the default route:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "ip route get 0.0.0.0") {
+		t.Fatalf("exit router probed the locally routed unspecified address:\n%s", rendered)
+	}
+}
+
 func TestRenderWireGuardExitLANBlockHooksAreOptIn(t *testing.T) {
 	response := clientapi.RegisterNodeResponse{
 		Node: clientapi.Node{AssignedIP: "100.91.0.2"},

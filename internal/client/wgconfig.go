@@ -228,6 +228,12 @@ func renderSubnetRouterSNATHooks(response clientapi.RegisterNodeResponse, enable
 
 func subnetRouterSNATProbeAddress(prefix netip.Prefix) netip.Addr {
 	prefix = prefix.Masked()
+	if prefix.Bits() == 0 {
+		// The unspecified network address is locally routed on Linux. A concrete
+		// address selects the host's real default-route interface for exit-node
+		// forwarding and SNAT rules.
+		return prefix.Addr().Next()
+	}
 	// Probe the route prefix itself. The first host address is commonly assigned
 	// to this router, in which case `ip route get` reports the local/loopback
 	// route and installs forwarding and SNAT rules on the wrong interface.

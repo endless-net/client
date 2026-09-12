@@ -114,7 +114,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-035 | No C/R evidence audited | Site-to-site scope and reverse-path tests |
 | HC-036 | C native IPv4/IPv6 default-route selection, reference egress hop, withdrawal and recovery | Qualify on all native runners; production public-address and DNS observation remain release acceptance |
 | HC-037 | U exit-LAN rules | LAN allowed/denied with real exit traffic |
-| HC-038 | U router configuration | Real client acting as egress for another client |
+| HC-038 | C real Linux Client acting as an IPv4 exit provider for another real Client, including default-route advertisement/approval, TCP/UDP forwarding, SNAT-dependent return traffic, withdrawal and provider restart recovery; non-Linux clients return an executable unsupported result | Qualify the new root on every runner; IPv6 provider, no-SNAT, HA and production public-address observation |
 | HC-039 | No C/R evidence audited | Role-specific HA semantics and failure recovery |
 | HC-040 | C native signed application route, DNS, connector traffic, target isolation, withdrawal, expiry and recovery are executable; U application discovery/runtime | Qualify the native root on every runner; connector discovery report, DNS-address change, CNAME, multiple-IP and connector-outage variants |
 | HC-041 | No C/R evidence audited | Overlap product decision and unambiguous target tests |
@@ -4724,3 +4724,17 @@ a distinct node identity. The fixture controls token metadata and the cleanup
 decision but the assertions read only CLI/IPC, signed maps and traffic. Provider
 absence detection and cleanup timing are deliberately not claimed. This raises
 the pending common inventory to 47 roots / 1,128 native outcomes.
+
+`TestControlPlaneExitProvider` adds Client-owned HC-038 coverage. On Linux, two
+real Client processes run in isolated namespaces. The provider registers the
+published `0.0.0.0/0` advertisement and SNAT intent; the consumer receives the
+default route only after an explicit signed map update. Fresh TCP and UDP
+payloads must then reach an address hosted beyond the provider and return
+through its forwarding hop. Removing the default route closes both protocols;
+restoring it and restarting the provider restores access without registration.
+The external namespace has no route to the consumer overlay, so successful
+replies also depend on the provider's SNAT behavior. Windows and macOS execute
+the CLI path and require the documented unsupported result before registration.
+IPv6 exit provision, HA and observation against a public Internet service remain
+separate acceptance work. The pending common inventory is now 50 roots / 1,200
+native outcomes across the 24-run matrix.
