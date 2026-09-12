@@ -80,7 +80,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-001 | L supported installation matrix | Unsupported platform/privilege outcomes and explicit supported variants |
 | HC-002 | L installed CLI version | Artifact/dependency failure paths |
 | HC-003 | L noninteractive installation and enrolled same-artifact reinstall on all eight runners, preserving identity, intent and real TCP access | Interrupted installation and artifact replacement variants |
-| HC-004 | L real service and IPC | Local authorization and unavailable-service outcomes |
+| HC-004 | L real service and IPC; stopped-service read/mutation/subscription failure and same-identity/intent recovery passed all eight installation runners at `38050bc` | Local authorization and remaining unavailable-service variants |
 | HC-005 | C SingleAgentOwnership including lexical/file-symlink aliases, concurrent duplicate rejection and successor startup passed all 24 repetitions at `4f117a0`; Unix SIGTERM requires clean exit | Hard-link aliases, concurrent startup without an existing owner and remaining termination variants |
 | HC-006 | L service restart without interactive login | Actual machine reboot and late-network availability |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
@@ -2567,6 +2567,38 @@ Hard-link aliases, concurrent first startup and real OS reboot remain separate.
 This source predates the stopped-service CLI assertions, CLI event timeout and
 missing-hello correction, and split-DNS SERVFAIL recovery extension. Those changes
 await their own matrix. Full HC-001–HC-065 coverage remains incomplete.
+
+## Installed CLI absence checks: eight-platform execution evidence
+
+Source `38050bc60c608d69eeed399f9e86172d270bbd0c` in run
+[34664269724](https://github.com/endless-net/client/actions/runs/34664269724)
+passed all eight installation jobs. Each report contains PASS for the root and
+its fresh-install, disconnect-survives-service-restart, enrolled-reinstall and
+uninstall subcases, with no failed or skipped installation cases.
+
+| Runner | Installation report |
+| --- | --- |
+| macos-15-intel | [103473575709](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575709) |
+| macos-15 | [103473575697](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575697) |
+| ubuntu-22.04-arm | [103473575732](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575732) |
+| ubuntu-22.04 | [103473575773](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575773) |
+| ubuntu-24.04-arm | [103473575699](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575699) |
+| ubuntu-24.04 | [103473575799](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575799) |
+| windows-2022 | [103473575736](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575736) |
+| windows-2025 | [103473575809](https://github.com/endless-net/client/actions/runs/34664269724/job/103473575809) |
+
+The enrolled-reinstall subcase at this source includes stopped-service checks
+for status, networks, diagnostics, connect, disconnect and events, in both
+connection states. Every invocation must fail with code 1, stderr and no stdout
+payload. Restart retains the original identity and intent, restores connected
+TCP traffic and preserves disconnected traffic denial without registration.
+These observations qualify that bounded HC-004/052/053 installed-service variant.
+They do not test an unauthorized local user or a stalled but reachable IPC peer.
+
+The common 24-report contract matrix and aggregate gate had not completed when
+this installation evidence was recorded; it does not independently qualify the
+entire source for publication. Later IPv6 DNS upstream and TCP-retry extensions
+are absent from this source.
 
 ## Next work
 
