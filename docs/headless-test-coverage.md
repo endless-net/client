@@ -4944,3 +4944,9 @@ Each of the 19 downloaded `c5bd840` reports contains all eight successful leaf
 outcomes (152 PASS leaves). The summary now reflects that evidence without
 claiming the absent five reports or the current source are qualified. Existing
 full-matrix historical DNS evidence above retains its original source boundary.
+
+The aggregate report verifier now also requires all eight DNS wire leaves on
+every platform and repetition. A passing DNS root with any listener/upstream/
+truncation combination absent is rejected. Verifier regressions omit each leaf
+in turn for every platform identifier and accept the complete set. This enforces
+the audited DNS inventory without adding duplicate network scenarios.

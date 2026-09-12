@@ -104,10 +104,20 @@ func verifyReports(dir, sha string) (int, error) {
 }
 
 func requiredPlatformSubtests(platform string, names []string) []string {
+	var required []string
 	if strings.HasPrefix(platform, "ubuntu-") && slices.Contains(names, "TestControlPlaneSubnetRouter") {
-		return []string{"TestControlPlaneSubnetRouter/snat", "TestControlPlaneSubnetRouter/preserve-source"}
+		required = append(required, "TestControlPlaneSubnetRouter/snat", "TestControlPlaneSubnetRouter/preserve-source")
 	}
-	return nil
+	if slices.Contains(names, "TestControlPlaneDNSWireRecovery") {
+		for _, upstream := range []string{"udp4", "udp6"} {
+			for _, listener := range []string{"127.0.0.1", "::1"} {
+				for _, answer := range []string{"complete-udp", "truncated-udp"} {
+					required = append(required, "TestControlPlaneDNSWireRecovery/"+upstream+"/"+listener+"/"+answer)
+				}
+			}
+		}
+	}
+	return required
 }
 
 func verifyEvents(reader io.Reader, names []string, requiredSubtests ...string) error {

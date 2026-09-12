@@ -97,6 +97,40 @@ func TestRequireBothLinuxSubnetRouterModes(t *testing.T) {
 	}
 }
 
+func TestRequireEveryDNSWireVariant(t *testing.T) {
+	names := []string{"TestControlPlaneDNSWireRecovery"}
+	leaves := []string{
+		"udp4/127.0.0.1/complete-udp", "udp4/127.0.0.1/truncated-udp",
+		"udp4/::1/complete-udp", "udp4/::1/truncated-udp",
+		"udp6/127.0.0.1/complete-udp", "udp6/127.0.0.1/truncated-udp",
+		"udp6/::1/complete-udp", "udp6/::1/truncated-udp",
+	}
+	for _, platform := range platforms {
+		required := requiredPlatformSubtests(platform, names)
+		for missing := -1; missing < len(leaves); missing++ {
+			var report bytes.Buffer
+			encoder := json.NewEncoder(&report)
+			write := func(action, test string) {
+				_ = encoder.Encode(event{Action: action, Test: test, Package: "client/contracts"})
+			}
+			write("run", names[0])
+			for index, leaf := range leaves {
+				if index == missing {
+					continue
+				}
+				write("run", names[0]+"/"+leaf)
+				write("pass", names[0]+"/"+leaf)
+			}
+			write("pass", names[0])
+			write("pass", "")
+			err := verifyEvents(&report, names, required...)
+			if (err != nil) != (missing >= 0) {
+				t.Fatalf("platform=%s missing=%d: %v", platform, missing, err)
+			}
+		}
+	}
+}
+
 func TestRequireThreeIsolatedReportsOnEightPlatforms(t *testing.T) {
 	const sha = "0123456789012345678901234567890123456789"
 	write := func(path string, value []byte) {
