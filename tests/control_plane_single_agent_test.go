@@ -91,6 +91,27 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 		if err != nil || info.Mode()&os.ModeSymlink == 0 {
 			t.Fatal("agent startup or mutation replaced the configuration symlink")
 		}
+		// Kill the alias-started owner without a shutdown handler. The next
+		// process uses the canonical path and the same IPC endpoint; neither
+		// stale ownership nor a leftover socket may prevent recovery.
+		state := "connected"
+		if disconnected {
+			state = "disconnected"
+		}
+		t.Logf("checking forced termination and successor startup: %s", state)
+		n.Crash()
+		n.Start()
+		recovered := n.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid
+		})
+		if !disconnected {
+			if err := s.UpdateMap(id, func(m *api.NetworkMapSnapshot) {}); err != nil {
+				t.Fatal(err)
+			}
+			n.AwaitStatus(func(v ipc.StatusResponse) bool {
+				return v.NodeID == id && v.MapRevision > recovered.MapRevision && v.CachedMapValid
+			})
+		}
 	}
 	created := 0
 	for _, event := range s.Events() {

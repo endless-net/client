@@ -2863,6 +2863,16 @@ coverage remains incomplete; this matrix does not close missing scenarios.
 
 ## Next work
 
+`TestControlPlaneSingleAgentOwnership` now adds `crash-connected` and
+`crash-disconnected` variants: forcibly terminate the alias-started agent, then
+start its successor with the canonical configuration path and the same IPC
+endpoint. Public status must retain the enrolled node, network, credential,
+cached map and connection intent; the connected successor must consume a newer
+signed map. The existing registration-event assertion still requires exactly one
+enrollment across all restarts. This checks process ownership and IPC recovery
+without inspecting lock files or persisted identity. Native matrix evidence is
+pending; it does not establish host-reboot, crash-during-write or traffic recovery.
+
 The UDP probe now retains a bounded history of 128 completed replies per
 connection. A duplicate of one of those known replies is discarded while waiting
 for the current nonce; it cannot establish access. A short real-UDP regression
