@@ -3151,6 +3151,31 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+### IPv6 UDP consent failure with inspection present at 28cf961
+
+[Ubuntu 22.04 repeat 3](https://github.com/endless-net/client/actions/runs/34676671634/job/103509328557)
+at exact source `28cf961b8b796aa1dbe0b1ff8b9464c9f981defd` contains 38 PASS roots
+and one FAIL root, `NativeFlowConsent/ipv6/udp`. At 2026-09-12 06:18:23.706 UTC,
+the consented-traffic loop fails a classified UDP exchange to port 24001.
+This is before the expiry loop. Reference received delta is 1 and echoed delta
+is 0. Public IPC inspection is present without an inspection error, has one peer,
+reports WireGuard OK and a handshake, and retains valid cache/connected intent;
+the agent is present without a reported error. Aggregate RX/TX are 59228/64712.
+
+The new diagnostics exclude absent inspection as an explanation for this status
+snapshot; they do not prove continuous tunnel health. Reference received counts
+all IP packets entering its TUN, whereas echoed counts accepted replies queued
+for transmission. The single packet is not correlated to the failed request.
+The 128-record history contains accepted UDP requests only, and this classified
+timeout has no unexpected-reply digest to correlate. No evidence yet separates
+an unrelated packet, a rejected request, scheduling delay or loss elsewhere.
+Do not infer a flow-consent or Client runtime cause from temporal proximity.
+
+Client-owned follow-up is to observe rejected reference packet shapes/reasons
+without exposing payloads or reading Client state, then revalidate on native CI.
+The report does not qualify the full source; other repetitions are still running.
+Assertions remain strict and no retry or runtime change is justified yet.
+
 ### DNS peer rename and address replacement: native validation pending
 
 `TestControlPlaneDNSWireRecovery` now keeps one peer ID/public key through six
