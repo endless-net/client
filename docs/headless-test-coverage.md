@@ -5400,3 +5400,17 @@ the diagnostic summary. No private Client state is read. Short tests, vet and
 lint pass; this extension is pending native execution and is absent from
 `90f8a28`. The summary contract describes configuration, not upstream health;
 these checks do not establish DNS/peer-path/application failure classification.
+
+### 2026-09-12: stalled unary IPC request and recovery
+
+`TestControlPlaneCLIIPCUnaryTimeout` runs the shipping `service status` CLI
+against the published HTTP IPC endpoint over a Unix socket or Windows named
+pipe. The participant stalls before response headers or after a partial JSON
+body. With a one-second request timeout, the CLI must return exit 1 with a
+diagnostic and no result, independently of the outer process watchdog; the
+request-to-exit bound allows two additional seconds for runner scheduling.
+A subsequent invocation at the same endpoint must return valid typed status
+after the participant repairs its response. Both leaves are required in native
+CI reports. Short tests, vet and lint pass; hosted execution is pending. This
+tests Client timeout handling, not how a real agent becomes stalled, and does
+not replace event-stream or mutation-side-effect acceptance.

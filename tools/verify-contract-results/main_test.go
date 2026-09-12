@@ -141,6 +141,7 @@ func checkRequiredLeaves(t *testing.T, root string, leaves []string) {
 }
 
 func TestRequireNativeAddressAndProtocolVariants(t *testing.T) {
+	checkRequiredLeaves(t, "TestControlPlaneCLIIPCUnaryTimeout", []string{"before-headers", "partial-body"})
 	for _, root := range []string{
 		"TestControlPlaneNativeApplicationRoute", "TestControlPlaneNativeExitRoute",
 		"TestControlPlaneNativeMachineSharing", "TestControlPlaneRoutedResource",

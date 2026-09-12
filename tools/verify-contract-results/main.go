@@ -116,6 +116,9 @@ func verifyPlatformReport(dir, platformName, platform, sha string) ([]string, er
 
 func requiredPlatformSubtests(platform string, names []string) []string {
 	var required []string
+	if slices.Contains(names, "TestControlPlaneCLIIPCUnaryTimeout") {
+		required = append(required, "TestControlPlaneCLIIPCUnaryTimeout/before-headers", "TestControlPlaneCLIIPCUnaryTimeout/partial-body")
+	}
 	for _, root := range []string{
 		"TestControlPlaneNativeApplicationRoute", "TestControlPlaneNativeExitRoute",
 		"TestControlPlaneNativeMachineSharing", "TestControlPlaneRoutedResource",
