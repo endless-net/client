@@ -211,10 +211,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Four real-time flow-consent lifecycles and eight cleanup traffic variants
     # extend the suite; individual CLI/RPC/probe deadlines remain unchanged.
-    # The Windows suite currently spends about 22-25 minutes in bounded native
-    # lifecycle checks. Keep enough outer time to upload the partial report if
-    # the Go process reaches its own deadline.
-    timeout-minutes: 35
+    # The Go test deadline remains 30m. Terminate a lingering shell/child process
+    # at the step boundary, leaving time for setup and partial-report upload.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -269,6 +268,7 @@ jobs:
       - name: Run isolated contract repetition (Unix)
         if: runner.os != 'Windows'
         shell: bash
+        timeout-minutes: 31
         run: |
           set -euo pipefail
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
@@ -281,6 +281,7 @@ jobs:
       - name: Run isolated contract repetition (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        timeout-minutes: 31
         env:
           ENDLESSNET_CONTROL_TEST: '1'
         run: |

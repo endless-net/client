@@ -4862,3 +4862,16 @@ branch. Component verifier tests cover both missing variants, complete absence,
 and complete execution across all eight platform identifiers. Other scenario
 subtest inventories still need an explicit requirement-by-requirement audit;
 rejecting observed skips alone does not prove that every variant ran.
+
+The [macOS ARM repetition 1 check](https://github.com/endless-net/client/actions/runs/34698630395/job/103567055181)
+was cancelled by GitHub's 35-minute job timeout, as confirmed by its check
+annotation. Its execution step never reached report conversion or upload.
+Repetitions 2 and 3 are also cancelled; they are not qualified passes. The cause
+of the long-running execution is not established by this annotation.
+
+The workflow now bounds each native execution step at 31 minutes while keeping
+the Go test deadline at 30 minutes. The outer job allows 45 minutes for setup,
+execution termination and the existing `always()` report steps. A timed-out
+execution still fails the job and cannot pass the aggregate gate. This is a
+report-preservation change, not a fix or qualification of the stalled native
+scenario. Artifact upload after timeout remains to be verified on hosted CI.
