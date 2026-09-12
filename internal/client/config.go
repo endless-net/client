@@ -33,6 +33,7 @@ type Config struct {
 	StateFormat               string                          `json:"state_format"`
 	StateVersion              int                             `json:"state_version"`
 	LocalOwnerID              string                          `json:"local_owner_id,omitempty"`
+	RPCState                  *ClientRPCState                 `json:"rpc_state,omitempty"`
 	ControlPlaneURLs          []string                        `json:"control_plane_urls,omitempty"`
 	ManagementURL             string                          `json:"management_url,omitempty"`
 	Token                     string                          `json:"token"`

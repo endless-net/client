@@ -6,6 +6,7 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/endless-net/client-api/clientapi v1.12.0
+	github.com/endless-net/client/clientipc v0.0.0
 	github.com/endless-net/relay v1.2.0
 	github.com/tailscale/wireguard-go v0.0.0-20260622164646-ae172d45f0f7
 	golang.org/x/crypto v0.53.0
@@ -13,6 +14,8 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gvisor.dev/gvisor v0.0.0-20230927004350-cbd86285d259
 )
+
+replace github.com/endless-net/client/clientipc => ./clientipc
 
 require (
 	github.com/google/btree v1.0.1 // indirect
