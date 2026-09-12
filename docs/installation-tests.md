@@ -33,6 +33,14 @@ The suite checks:
    and macOS service uninstallers deliberately retain the separately copied
    binary and state, and IPC must no longer respond.
 
+While enrolled, the suite also stops the service in both connected and
+disconnected states. Real CLI `status`, `networks`, `diagnostics`, `connect` and
+`disconnect` requests use a two-second IPC timeout and must exit with code 1,
+empty stdout and nonempty stderr before a separate ten-second harness deadline.
+After service startup, the original identity and intent must remain, with real
+TCP access restored only for connected intent. This checks service absence; it
+does not establish local-user authorization or a strict process-startup latency.
+
 Cleanup runs after failures as well. Only the test report is uploaded; private
 configuration, generated identity material and raw IPC responses are not logged.
 Ordinary `go test -short ./...` compiles the suite but skips machine installation.

@@ -2528,6 +2528,13 @@ SIGTERM shutdown assertion. Their results must come from a later source matrix.
 
 ## Next work
 
+HC-004/052/053 now have installed-service absence assertions in both enrolled
+connection states: five public CLI read/mutation commands must fail with exit 1,
+stderr and no stdout payload within a bounded harness deadline. Restart must
+retain identity and intent, restore connected TCP access and preserve disconnected
+traffic denial without registration. This runs inside the existing eight-platform
+installation matrix; short compilation alone does not qualify the new assertions.
+
 HC-005 foreground shutdown now has an explicit Unix SIGTERM path: the agent's
 signal context handles SIGTERM as well as Interrupt. The native ownership root
 requires a zero exit code within the helper's existing five-second shutdown

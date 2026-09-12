@@ -89,6 +89,10 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	t.Log("reinstall: connected enrolled service")
 	reinstall(t)
 	connected("connected reinstall")
+	stop(t)
+	assertStoppedServiceCommands(t, binary)
+	start(t)
+	connected("restart after unavailable IPC while connected")
 
 	var disconnected ipc.DisconnectResponse
 	request(t, binary, "disconnect", &disconnected)
@@ -117,6 +121,13 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	assertDisconnected("disconnected reinstall")
 	if registrationRequests() != before {
 		t.Fatal("disconnected reinstall attempted registration or refresh")
+	}
+	stop(t)
+	assertStoppedServiceCommands(t, binary)
+	start(t)
+	assertDisconnected("restart after unavailable IPC while disconnected")
+	if registrationRequests() != before {
+		t.Fatal("failed IPC commands or disconnected restart attempted registration or refresh")
 	}
 	request(t, binary, "connect", &response)
 	connected("reconnect after reinstall")
