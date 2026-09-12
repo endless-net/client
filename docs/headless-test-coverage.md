@@ -3062,6 +3062,27 @@ correction/completion additions. None of those changes is validated by this run.
 
 ## Next work
 
+Run 34672491102 at source `d0fc32a9f7c9d0d97623953fbbab3f452790089a`
+exposed an installation-fixture sequencing error: Linux missing-executable repair
+reinstalled the Debian package after explicitly stopping the service, then waited
+for IPC without starting it. Package postinst restarts only a previously active
+service marked by preinst; stopped state is preserved. Ubuntu 24.04 ARM
+[job 103496467902](https://github.com/endless-net/client/actions/runs/34672491102/job/103496467902)
+and Ubuntu 22.04
+[job 103496467951](https://github.com/endless-net/client/actions/runs/34672491102/job/103496467951)
+report zero IPC responses at the repaired-service phase. Repair now explicitly
+starts the Linux service after reinstall; package lifecycle behavior is unchanged.
+
+Windows 2022
+[job 103496467913](https://github.com/endless-net/client/actions/runs/34672491102/job/103496467913)
+passes connected repair but times out at cached traffic after startup without
+control. Public status is degraded with connected intent, node, network,
+credential, trust, valid cached map and one peer; no local/cache/intent error is
+reported. The failed condition precedes the actual TCP probe, so this does not
+yet prove packet loss. A failure-only public IPC diagnostic now distinguishes
+identity equality, WireGuard OK, usable listen port, actual WireGuard peer count
+and endpoint equality. Its cause remains unresolved and new CI is required.
+
 Unclassified application probe failures now report whether a process exit was
 observed, its exit code, whether the parent three-second context expired,
 elapsed time and output byte count. Raw process errors/output are not printed;

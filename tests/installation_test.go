@@ -156,6 +156,11 @@ func TestInstalledClient(t *testing.T) {
 				copyPublicFile(t, source, binary)
 			}
 			reinstall(t)
+			// The fixture explicitly stopped the service before removing the
+			// binary. Debian preserves stopped intent across package reinstalls.
+			if runtime.GOOS == "linux" {
+				start(t)
+			}
 		}
 		exerciseInstalledReinstall(t, s, binary, configPath, start, stop, reinstall, repair)
 	}) {

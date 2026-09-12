@@ -73,6 +73,28 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	}
 	connected := func(phase string) {
 		t.Helper()
+		defer func() {
+			if !t.Failed() {
+				return
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+			defer cancel()
+			output, err := exec.CommandContext(ctx, binary, "service", "status", "--timeout", "2s").Output()
+			var current ipc.StatusResponse
+			if err != nil || json.Unmarshal(output, &current) != nil {
+				t.Log("installed connection diagnostic: public_status_available=false")
+				return
+			}
+			wgOK, validPort, endpointMatches := false, false, false
+			peers := 0
+			if current.WireGuard != nil {
+				wgOK = current.WireGuard.OK
+				validPort = current.WireGuard.ListenPort > 0 && current.WireGuard.ListenPort <= 65535
+				peers = len(current.WireGuard.Peers)
+				endpointMatches = peers == 1 && current.WireGuard.Peers[0].Endpoint == reference.Endpoint
+			}
+			t.Logf("installed connection diagnostic: public_status_available=true same_identity=%t wireguard_ok=%t valid_listen_port=%t wireguard_peers=%d endpoint_matches=%t", sameIdentity(current), wgOK, validPort, peers, endpointMatches)
+		}()
 		v := waitInstalledCondition(t, binary, phase, func(v ipc.StatusResponse) bool {
 			return sameIdentity(v) && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.PeerCount == 1 && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535 && len(v.WireGuard.Peers) == 1 && v.WireGuard.Peers[0].Endpoint == reference.Endpoint
 		})
