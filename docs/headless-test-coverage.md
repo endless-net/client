@@ -2710,6 +2710,31 @@ failed; the source is not qualified for publication. Optional external STUN was
 skipped and supplies no evidence. Windows restricted-token tests and bounded
 probe-mismatch counters were introduced after this source.
 
+## Windows restricted-token installation evidence — 2026-09-12
+
+Source `08d5186596527f6ce8a0f0064b75431a07126f69` in
+[run 34666246762](https://github.com/endless-net/client/actions/runs/34666246762)
+passed both Windows installation jobs:
+
+| Platform | Job | Installed root | Administrator denials |
+| --- | --- | --- | --- |
+| Windows 2022 x64 | [103478854514](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854514) | PASS, 47.39s | Explicit IPC authorization, connected and disconnected |
+| Windows 2025 x64 | [103478854524](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854524) | PASS, 53.00s | Explicit IPC authorization, connected and disconnected |
+
+Each job passed fresh installation, disconnected service restart, enrolled
+reinstallation and uninstall. The restricted CLI executed `version` successfully
+and administrator-only `local-forget` was rejected by IPC authorization in both
+connection states. These were application authorization denials, not named-pipe
+transport denials. Subsequent assertions retained the original identity and
+connection intent and verified the corresponding real TCP behavior.
+
+This proves the tested restricted-token administrative boundary on these two
+hosted Windows images. It does not cover another account SID, observer/owner
+roles, reboot, or upgrade between different artifacts. At this snapshot the
+contract matrix is incomplete; these installation results do not qualify the
+whole source or resolve the previous Windows UDP mismatch and disconnect timeout.
+The later post-failure public status observation is not part of this source.
+
 ## Next work
 
 Failed harness Service commands now trigger one public status query with a
@@ -2736,29 +2761,33 @@ payload. Logs distinguish pipe access denial from explicit IPC administrator
 authorization; the former does not prove application-role handling. The parent
 then requires the original identity/intent and corresponding TCP behavior.
 This preserves the account SID and leaves another-owner/observer scenarios open.
-Windows hosted evidence is pending; only compilation/short checks ran locally.
+Both Windows hosted installation jobs passed for source `08d5186`, as recorded
+above; only compilation/short checks ran locally.
 
 HC-004/053 Unix installation acceptance now checks the pre-existing nobody
 account: a non-root UID and executable installed CLI, then explicit IPC permission
 denial for status/connect/disconnect/confirmed local-forget while the enrolled
 service runs. Both connection states must retain identity and real TCP behavior.
-This applies to the six Linux/macOS runners and awaits native evidence. Windows
-and observer/owner/admin authorization after transport access remain open; these
-checks do not claim all-platform application-role coverage.
+This passed on the six Linux/macOS runners for source `c36c0db`, as recorded
+above. Observer/owner/admin authorization after Unix transport access remains
+open; these checks do not claim all-platform application-role coverage.
 
 The DNS wire root now independently varies the Client listener address family
 and upstream address family, with complete/truncated UDP replies: eight variants
 per runner. Every listener must report exactly the requested loopback address,
 then accept both UDP and TCP queries. The full private/global/split lifecycle
 runs through each combination. This adds native IPv6 proxy-listener acceptance
-without assuming it from IPv6 records or upstreams; hosted evidence is pending.
+without assuming it from IPv6 records or upstreams. All 192 DNS leaf outcomes
+passed for source `c36c0db`; that source's aggregate gate failed on two other roots.
 
 HC-025/026 also runs both upstream address families with truncated UDP answers.
 The fixture binds TCP on the same endpoint, supplies no UDP answer records and
 requires the Client to repeat the DNS question over length-framed TCP. Domain
 observations and doubled query counts cover successful resolution and split
 SERVFAIL/recovery without leaking to the global resolver. This is normal DNS
-transport retry, not a legacy protocol fallback. Native qualification is pending.
+transport retry, not a legacy protocol fallback. The DNS variants passed across
+all 24 jobs for `c36c0db`; whole-source qualification remains blocked by its two
+Windows failures.
 
 The native HC-025/026 DNS scenario now runs separately with UDP upstreams bound
 to IPv4 and IPv6 loopback. Each variant repeats A/AAAA local-map projection,
