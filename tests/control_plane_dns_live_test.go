@@ -129,6 +129,32 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 		status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
 			return nativeDNSMapApplied(v, id, previous)
 		})
+		var diagnostic ipc.DiagnosticsResponse
+		n.Service("diagnostics", &diagnostic)
+		d := diagnostic.Diagnostics
+		if d.Status.NodeID != id || d.Status.MapRevision != status.MapRevision || !d.Status.CachedMapValid ||
+			d.DNSSummary == nil || !d.DNSSummary.ConfigPresent || !d.DNSSummary.MagicDNSEnabled ||
+			d.DNSSummary.SearchDomain != "scenario.endlessnet" || d.DNSSummary.RecordCount != len(d.DNSSummary.Records) {
+			t.Fatal("public DNS diagnostics did not describe the applied signed map")
+		}
+		peerRecords := 0
+		for _, record := range d.DNSSummary.Records {
+			if record.NodeID != "live-dns-peer" {
+				continue
+			}
+			peerRecords++
+			if record.Hostname != phase.hostname || record.IPv4 != phase.ipv4 || record.IPv6 != phase.ipv6 ||
+				strings.TrimSuffix(record.FQDN, ".") != phase.hostname+".scenario.endlessnet" {
+				t.Fatal("public DNS diagnostics retained an obsolete peer name or address")
+			}
+		}
+		wantPeerRecords := 0
+		if phase.hostname != "" {
+			wantPeerRecords = 1
+		}
+		if peerRecords != wantPeerRecords {
+			t.Fatal("public DNS diagnostics omitted, duplicated or retained a withdrawn peer")
+		}
 		listener := clientDNSListenerAddress(status)
 		for _, transport := range []string{"udp", "tcp"} {
 			for _, hostname := range []string{"live-peer", "renamed-peer"} {

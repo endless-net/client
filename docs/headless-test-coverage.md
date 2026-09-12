@@ -5388,3 +5388,15 @@ All eight installation jobs and the expanded container lifecycle pass. The
 packet-filter expiry fix `d97b4ab`, join-token/session transport expansions and
 later flow diagnostics are absent from this source and need their own native
 matrix. Existing evidence snapshots retain their original outcomes and limits.
+
+### 2026-09-12: DNS diagnostics track the live signed projection
+
+`TestControlPlaneNativeDNSMapUpdates` now reads public IPC diagnostics after
+each applied address change, peer rename, withdrawal and restoration. It
+requires the current map revision, consistent record counts and exactly the
+expected peer name, FQDN and IPv4/IPv6 addresses, alongside the existing real
+UDP/TCP A/AAAA answers. Withdrawn or obsolete peer records must not remain in
+the diagnostic summary. No private Client state is read. Short tests, vet and
+lint pass; this extension is pending native execution and is absent from
+`90f8a28`. The summary contract describes configuration, not upstream health;
+these checks do not establish DNS/peer-path/application failure classification.
