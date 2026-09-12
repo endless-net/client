@@ -162,6 +162,23 @@ requiring fresh received and echoed counts for each successful TCP/UDP probe.
 The lifecycle assertions and native traffic requirements remain in place.
 This test correction still requires native qualification on its own source.
 
+### Windows startup recurrence in the same run
+
+All three Windows 2022 reports from source `90f8a28` pass both native
+cached-map expiry families. Repetitions 2 and 3 fail only the two counter
+assertions described above. Repetition 1 also fails
+`TestControlPlaneNativeApplicationRoute/ipv4` in the initial map-application
+wait ([job 103593386182](https://github.com/endless-net/client/actions/runs/34708283604/job/103593386182)).
+The agent remains alive and IPC answers 599 times without transport errors
+during the 15-second wait. Every WireGuard inspection is classified as
+`operation-in-progress`; the last public state has revision 1, zero peers,
+valid cache and credentials, and no agent snapshot. The IPv6 subtest passes.
+
+This repeats the earlier Windows startup symptom, now with evidence that
+inspection was unavailable because an operation held the WireGuard lock.
+It does not identify which native startup operation was delayed or why.
+The timeout has not been relaxed; Client startup diagnosis remains open.
+
 ## Diagnostic export storage failure increment — 2026-09-12
 
 `TestControlPlaneDiagnosticsExport` now compares the public exported bytes before
