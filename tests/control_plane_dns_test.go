@@ -26,13 +26,17 @@ import (
 func TestControlPlaneDNSWireRecovery(t *testing.T) {
 	for _, network := range []string{"udp4", "udp6"} {
 		t.Run(network, func(t *testing.T) {
-			t.Run("complete-udp", func(t *testing.T) { exerciseDNSWireRecovery(t, network, false) })
-			t.Run("truncated-udp", func(t *testing.T) { exerciseDNSWireRecovery(t, network, true) })
+			for _, host := range []string{"127.0.0.1", "::1"} {
+				t.Run(host, func(t *testing.T) {
+					t.Run("complete-udp", func(t *testing.T) { exerciseDNSWireRecovery(t, network, host, false) })
+					t.Run("truncated-udp", func(t *testing.T) { exerciseDNSWireRecovery(t, network, host, true) })
+				})
+			}
 		})
 	}
 }
 
-func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork string, truncated bool) {
+func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork, listenHost string, truncated bool) {
 	t.Helper()
 	s, n, id := controlScenario(t)
 	var disconnected ipc.DisconnectResponse
@@ -58,7 +62,7 @@ func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork string, truncated boo
 			t.Fatal(err)
 		}
 		n.MustRun("sync", "--config", n.Config, "--timeout", "1s")
-		address, stop := startClientDNS(t, n, "--upstream", globalAddress, "--split", "corp.test="+splitAddress, "--split", "blocked.corp.test=")
+		address, stop := startClientDNS(t, n, listenHost, "--upstream", globalAddress, "--split", "corp.test="+splitAddress, "--split", "blocked.corp.test=")
 		for _, transport := range []string{"udp", "tcp"} {
 			peerCode, peerAddress := dnsmessage.RCodeNameError, ""
 			if present {
@@ -110,9 +114,9 @@ func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork string, truncated boo
 	}
 }
 
-func startClientDNS(t *testing.T, n *testclient.Node, options ...string) (string, func()) {
+func startClientDNS(t *testing.T, n *testclient.Node, listenHost string, options ...string) (string, func()) {
 	t.Helper()
-	args := []string{"dns", "serve", "--config", n.Config, "--listen", "127.0.0.1:0", "--domain", "scenario.endlessnet", "--timeout", "1s"}
+	args := []string{"dns", "serve", "--config", n.Config, "--listen", net.JoinHostPort(listenHost, "0"), "--domain", "scenario.endlessnet", "--timeout", "1s"}
 	cmd := exec.Command(n.Binary, append(args, options...)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -136,7 +140,7 @@ func startClientDNS(t *testing.T, n *testclient.Node, options ...string) (string
 	select {
 	case address := <-ready:
 		parsed, err := netip.ParseAddrPort(address)
-		if err != nil || !parsed.Addr().IsLoopback() || parsed.Port() == 0 {
+		if err != nil || parsed.Addr() != netip.MustParseAddr(listenHost) || parsed.Port() == 0 {
 			t.Fatal("DNS CLI did not report a loopback listener")
 		}
 		return address, stop
@@ -162,7 +166,7 @@ func assertDNSWireType(t *testing.T, transport, address, name string, family dns
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn, err := net.DialTimeout(transport+"4", address, time.Second)
+	conn, err := net.DialTimeout(transport, address, time.Second)
 	if err != nil {
 		t.Fatal("DNS listener connection failed")
 	}

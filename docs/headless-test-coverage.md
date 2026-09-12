@@ -2602,6 +2602,13 @@ are absent from this source.
 
 ## Next work
 
+The DNS wire root now independently varies the Client listener address family
+and upstream address family, with complete/truncated UDP replies: eight variants
+per runner. Every listener must report exactly the requested loopback address,
+then accept both UDP and TCP queries. The full private/global/split lifecycle
+runs through each combination. This adds native IPv6 proxy-listener acceptance
+without assuming it from IPv6 records or upstreams; hosted evidence is pending.
+
 HC-025/026 also runs both upstream address families with truncated UDP answers.
 The fixture binds TCP on the same endpoint, supplies no UDP answer records and
 requires the Client to repeat the DNS question over length-framed TCP. Domain
@@ -2614,8 +2621,8 @@ to IPv4 and IPv6 loopback. Each variant repeats A/AAAA local-map projection,
 withdrawal/restoration, global/split selection, blocked-domain denial and split
 SERVFAIL/recovery with exact wire-query isolation checks. Failure to bind the
 required upstream family fails the scenario rather than skipping it. Requests
-to the Client proxy still use IPv4 loopback over UDP/TCP; this does not establish
-an IPv6 proxy listener. TCP retry is covered by the separate truncated-answer
+to the Client proxy use independent IPv4/IPv6 loopback listeners over UDP/TCP,
+as described above. TCP retry is covered by the separate truncated-answer
 variants above. Hosted qualification is pending.
 
 HC-025/026 DNS wire recovery now injects SERVFAIL from the selected split
