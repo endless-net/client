@@ -105,12 +105,24 @@ enum LanAccess {
   LAN_ACCESS_ALLOW = 2;
 }
 
+// NONE is a status-only cleared selection, never a SelectExitNode mode.
+enum ExitFamilyMode {
+  EXIT_FAMILY_MODE_UNSPECIFIED = 0;
+  EXIT_FAMILY_MODE_NONE = 1;
+  EXIT_FAMILY_MODE_IPV4_ONLY = 2;
+  EXIT_FAMILY_MODE_IPV6_ONLY = 3;
+  EXIT_FAMILY_MODE_DUAL_STACK = 4;
+}
+
 message ExitNode {
   string id = 1;
   string display_name = 2;
   string peer_id = 3;
   Restriction selection = 4;
   repeated LanAccess allowed_lan_access = 5;
+  // Exact selectable modes after platform, provider and policy restrictions.
+  // Empty means not selectable; never infer dual-stack from separate modes.
+  repeated ExitFamilyMode allowed_family_modes = 6;
 }
 
 enum ApplyState {
@@ -118,6 +130,16 @@ enum ApplyState {
   APPLY_STATE_PENDING = 1;
   APPLY_STATE_APPLIED = 2;
   APPLY_STATE_FAILED = 3;
+}
+
+// One address family's authoritative requested/effective enforcement state.
+message ExitFamilyStatus {
+  optional string requested_exit_node_id = 1;
+  optional string effective_exit_node_id = 2;
+  ApplyState apply_state = 3;
+  Failure failure = 4;
+  // Actual blocking protection, not merely desired policy.
+  bool fail_closed = 5;
 }
 
 message ExitNodeStatus {
@@ -132,6 +154,11 @@ message ExitNodeStatus {
   Failure failure = 9;
   // On path loss, traffic cannot silently escape via a direct default route.
   bool fail_closed = 10;
+  ExitFamilyMode requested_family_mode = 11;
+  // Both required, including a disabled/cleared family. Partial application
+  // remains visible here and cannot be reported as aggregate APPLIED.
+  ExitFamilyStatus ipv4 = 12;
+  ExitFamilyStatus ipv6 = 13;
 }
 
 enum ResourceKind {

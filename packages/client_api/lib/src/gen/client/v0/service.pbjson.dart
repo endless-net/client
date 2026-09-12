@@ -1384,6 +1384,14 @@ const SelectExitNodeRequest$json = {
       '6': '.client.v0.LanAccess',
       '10': 'lanAccess'
     },
+    {
+      '1': 'family_mode',
+      '3': 5,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.ExitFamilyMode',
+      '10': 'familyMode'
+    },
   ],
 };
 
@@ -1392,7 +1400,8 @@ final $typed_data.Uint8List selectExitNodeRequestDescriptor = $convert.base64Dec
     'ChVTZWxlY3RFeGl0Tm9kZVJlcXVlc3QSNgoIbXV0YXRpb24YASABKAsyGi5jbGllbnQudjAuTX'
     'V0YXRpb25Db250ZXh0UghtdXRhdGlvbhIvCgdwcm9maWxlGAIgASgLMhUuY2xpZW50LnYwLlBy'
     'b2ZpbGVSZWZSB3Byb2ZpbGUSIAoMZXhpdF9ub2RlX2lkGAMgASgJUgpleGl0Tm9kZUlkEjMKCm'
-    'xhbl9hY2Nlc3MYBCABKA4yFC5jbGllbnQudjAuTGFuQWNjZXNzUglsYW5BY2Nlc3M=');
+    'xhbl9hY2Nlc3MYBCABKA4yFC5jbGllbnQudjAuTGFuQWNjZXNzUglsYW5BY2Nlc3MSOgoLZmFt'
+    'aWx5X21vZGUYBSABKA4yGS5jbGllbnQudjAuRXhpdEZhbWlseU1vZGVSCmZhbWlseU1vZGU=');
 
 @$core.Deprecated('Use selectExitNodeResponseDescriptor instead')
 const SelectExitNodeResponse$json = {

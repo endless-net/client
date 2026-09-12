@@ -1313,6 +1313,7 @@ class Operation extends $pb.GeneratedMessage {
     SnapshotMetadata? metadata,
     UserAction? userAction,
     ConnectionContinuity? continuity,
+    OperationKind? kind,
     Failure? failure,
     ChangeResult? change,
     EnrollmentResult? enrollment,
@@ -1329,6 +1330,7 @@ class Operation extends $pb.GeneratedMessage {
     if (metadata != null) result.metadata = metadata;
     if (userAction != null) result.userAction = userAction;
     if (continuity != null) result.continuity = continuity;
+    if (kind != null) result.kind = kind;
     if (failure != null) result.failure = failure;
     if (change != null) result.change = change;
     if (enrollment != null) result.enrollment = enrollment;
@@ -1375,6 +1377,8 @@ class Operation extends $pb.GeneratedMessage {
         subBuilder: UserAction.create)
     ..aE<ConnectionContinuity>(7, _omitFieldNames ? '' : 'continuity',
         enumValues: ConnectionContinuity.values)
+    ..aE<OperationKind>(8, _omitFieldNames ? '' : 'kind',
+        enumValues: OperationKind.values)
     ..aOM<Failure>(10, _omitFieldNames ? '' : 'failure',
         subBuilder: Failure.create)
     ..aOM<ChangeResult>(11, _omitFieldNames ? '' : 'change',
@@ -1493,82 +1497,92 @@ class Operation extends $pb.GeneratedMessage {
   @$pb.TagNumber(7)
   void clearContinuity() => $_clearField(7);
 
+  /// Immutable, including pending operations, snapshots and restart recovery.
+  @$pb.TagNumber(8)
+  OperationKind get kind => $_getN(7);
+  @$pb.TagNumber(8)
+  set kind(OperationKind value) => $_setField(8, value);
+  @$pb.TagNumber(8)
+  $core.bool hasKind() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearKind() => $_clearField(8);
+
   @$pb.TagNumber(10)
-  Failure get failure => $_getN(7);
+  Failure get failure => $_getN(8);
   @$pb.TagNumber(10)
   set failure(Failure value) => $_setField(10, value);
   @$pb.TagNumber(10)
-  $core.bool hasFailure() => $_has(7);
+  $core.bool hasFailure() => $_has(8);
   @$pb.TagNumber(10)
   void clearFailure() => $_clearField(10);
   @$pb.TagNumber(10)
-  Failure ensureFailure() => $_ensure(7);
+  Failure ensureFailure() => $_ensure(8);
 
   @$pb.TagNumber(11)
-  ChangeResult get change => $_getN(8);
+  ChangeResult get change => $_getN(9);
   @$pb.TagNumber(11)
   set change(ChangeResult value) => $_setField(11, value);
   @$pb.TagNumber(11)
-  $core.bool hasChange() => $_has(8);
+  $core.bool hasChange() => $_has(9);
   @$pb.TagNumber(11)
   void clearChange() => $_clearField(11);
   @$pb.TagNumber(11)
-  ChangeResult ensureChange() => $_ensure(8);
+  ChangeResult ensureChange() => $_ensure(9);
 
   @$pb.TagNumber(12)
-  EnrollmentResult get enrollment => $_getN(9);
+  EnrollmentResult get enrollment => $_getN(10);
   @$pb.TagNumber(12)
   set enrollment(EnrollmentResult value) => $_setField(12, value);
   @$pb.TagNumber(12)
-  $core.bool hasEnrollment() => $_has(9);
+  $core.bool hasEnrollment() => $_has(10);
   @$pb.TagNumber(12)
   void clearEnrollment() => $_clearField(12);
   @$pb.TagNumber(12)
-  EnrollmentResult ensureEnrollment() => $_ensure(9);
+  EnrollmentResult ensureEnrollment() => $_ensure(10);
 
   @$pb.TagNumber(13)
-  SelectionResult get selection => $_getN(10);
+  SelectionResult get selection => $_getN(11);
   @$pb.TagNumber(13)
   set selection(SelectionResult value) => $_setField(13, value);
   @$pb.TagNumber(13)
-  $core.bool hasSelection() => $_has(10);
+  $core.bool hasSelection() => $_has(11);
   @$pb.TagNumber(13)
   void clearSelection() => $_clearField(13);
   @$pb.TagNumber(13)
-  SelectionResult ensureSelection() => $_ensure(10);
+  SelectionResult ensureSelection() => $_ensure(11);
 
   @$pb.TagNumber(14)
-  CleanupResult get cleanup => $_getN(11);
+  CleanupResult get cleanup => $_getN(12);
   @$pb.TagNumber(14)
   set cleanup(CleanupResult value) => $_setField(14, value);
   @$pb.TagNumber(14)
-  $core.bool hasCleanup() => $_has(11);
+  $core.bool hasCleanup() => $_has(12);
   @$pb.TagNumber(14)
   void clearCleanup() => $_clearField(14);
   @$pb.TagNumber(14)
-  CleanupResult ensureCleanup() => $_ensure(11);
+  CleanupResult ensureCleanup() => $_ensure(12);
 
   @$pb.TagNumber(15)
-  RenewalResult get renewal => $_getN(12);
+  RenewalResult get renewal => $_getN(13);
   @$pb.TagNumber(15)
   set renewal(RenewalResult value) => $_setField(15, value);
   @$pb.TagNumber(15)
-  $core.bool hasRenewal() => $_has(12);
+  $core.bool hasRenewal() => $_has(13);
   @$pb.TagNumber(15)
   void clearRenewal() => $_clearField(15);
   @$pb.TagNumber(15)
-  RenewalResult ensureRenewal() => $_ensure(12);
+  RenewalResult ensureRenewal() => $_ensure(13);
 
   @$pb.TagNumber(16)
-  BundleResult get bundle => $_getN(13);
+  BundleResult get bundle => $_getN(14);
   @$pb.TagNumber(16)
   set bundle(BundleResult value) => $_setField(16, value);
   @$pb.TagNumber(16)
-  $core.bool hasBundle() => $_has(13);
+  $core.bool hasBundle() => $_has(14);
   @$pb.TagNumber(16)
   void clearBundle() => $_clearField(16);
   @$pb.TagNumber(16)
-  BundleResult ensureBundle() => $_ensure(13);
+  BundleResult ensureBundle() => $_ensure(14);
 }
 
 class PageRequest extends $pb.GeneratedMessage {
@@ -1715,8 +1729,23 @@ class Common {
       defaultOrMaker: Access.ACCESS_UNSPECIFIED,
       valueOf: Access.valueOf,
       enumValues: Access.values);
+  static final allowsInitialOwnershipClaim = $pb.Extension<$core.bool>(
+      _omitMessageNames ? '' : 'google.protobuf.MethodOptions',
+      _omitFieldNames ? '' : 'allowsInitialOwnershipClaim',
+      51001,
+      $pb.PbFieldType.OB);
+  static final operationKind = $pb.Extension<OperationKind>(
+      _omitMessageNames ? '' : 'google.protobuf.MethodOptions',
+      _omitFieldNames ? '' : 'operationKind',
+      51002,
+      $pb.PbFieldType.OE,
+      defaultOrMaker: OperationKind.OPERATION_KIND_UNSPECIFIED,
+      valueOf: OperationKind.valueOf,
+      enumValues: OperationKind.values);
   static void registerAllExtensions($pb.ExtensionRegistry registry) {
     registry.add(access);
+    registry.add(allowsInitialOwnershipClaim);
+    registry.add(operationKind);
   }
 }
 

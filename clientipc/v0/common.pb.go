@@ -638,6 +638,107 @@ func (CleanupOutcome) EnumDescriptor() ([]byte, []int) {
 	return file_client_v0_common_proto_rawDescGZIP(), []int{8}
 }
 
+// Closed mutation vocabulary; UNSPECIFIED is invalid in returned operations.
+type OperationKind int32
+
+const (
+	OperationKind_OPERATION_KIND_UNSPECIFIED               OperationKind = 0
+	OperationKind_OPERATION_KIND_ENROLL                    OperationKind = 1
+	OperationKind_OPERATION_KIND_CONNECT                   OperationKind = 2
+	OperationKind_OPERATION_KIND_DISCONNECT                OperationKind = 3
+	OperationKind_OPERATION_KIND_TRUST_SERVER_IDENTITY     OperationKind = 4
+	OperationKind_OPERATION_KIND_LOGOUT                    OperationKind = 5
+	OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT   OperationKind = 6
+	OperationKind_OPERATION_KIND_SELECT_NETWORK            OperationKind = 7
+	OperationKind_OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE OperationKind = 8
+	OperationKind_OPERATION_KIND_CREATE_PROFILE            OperationKind = 9
+	OperationKind_OPERATION_KIND_SELECT_PROFILE            OperationKind = 10
+	OperationKind_OPERATION_KIND_RENAME_PROFILE            OperationKind = 11
+	OperationKind_OPERATION_KIND_REMOVE_PROFILE            OperationKind = 12
+	OperationKind_OPERATION_KIND_RENEW_SESSION             OperationKind = 13
+	OperationKind_OPERATION_KIND_SELECT_EXIT_NODE          OperationKind = 14
+	OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE           OperationKind = 15
+	OperationKind_OPERATION_KIND_SET_PREFERENCES           OperationKind = 16
+	OperationKind_OPERATION_KIND_RESET_PREFERENCES         OperationKind = 17
+	OperationKind_OPERATION_KIND_SET_RESOURCE_ENABLED      OperationKind = 18
+	OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE          OperationKind = 19
+)
+
+// Enum value maps for OperationKind.
+var (
+	OperationKind_name = map[int32]string{
+		0:  "OPERATION_KIND_UNSPECIFIED",
+		1:  "OPERATION_KIND_ENROLL",
+		2:  "OPERATION_KIND_CONNECT",
+		3:  "OPERATION_KIND_DISCONNECT",
+		4:  "OPERATION_KIND_TRUST_SERVER_IDENTITY",
+		5:  "OPERATION_KIND_LOGOUT",
+		6:  "OPERATION_KIND_FORGET_LOCAL_ENROLLMENT",
+		7:  "OPERATION_KIND_SELECT_NETWORK",
+		8:  "OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE",
+		9:  "OPERATION_KIND_CREATE_PROFILE",
+		10: "OPERATION_KIND_SELECT_PROFILE",
+		11: "OPERATION_KIND_RENAME_PROFILE",
+		12: "OPERATION_KIND_REMOVE_PROFILE",
+		13: "OPERATION_KIND_RENEW_SESSION",
+		14: "OPERATION_KIND_SELECT_EXIT_NODE",
+		15: "OPERATION_KIND_CLEAR_EXIT_NODE",
+		16: "OPERATION_KIND_SET_PREFERENCES",
+		17: "OPERATION_KIND_RESET_PREFERENCES",
+		18: "OPERATION_KIND_SET_RESOURCE_ENABLED",
+		19: "OPERATION_KIND_NOTIFY_LIFECYCLE",
+	}
+	OperationKind_value = map[string]int32{
+		"OPERATION_KIND_UNSPECIFIED":               0,
+		"OPERATION_KIND_ENROLL":                    1,
+		"OPERATION_KIND_CONNECT":                   2,
+		"OPERATION_KIND_DISCONNECT":                3,
+		"OPERATION_KIND_TRUST_SERVER_IDENTITY":     4,
+		"OPERATION_KIND_LOGOUT":                    5,
+		"OPERATION_KIND_FORGET_LOCAL_ENROLLMENT":   6,
+		"OPERATION_KIND_SELECT_NETWORK":            7,
+		"OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE": 8,
+		"OPERATION_KIND_CREATE_PROFILE":            9,
+		"OPERATION_KIND_SELECT_PROFILE":            10,
+		"OPERATION_KIND_RENAME_PROFILE":            11,
+		"OPERATION_KIND_REMOVE_PROFILE":            12,
+		"OPERATION_KIND_RENEW_SESSION":             13,
+		"OPERATION_KIND_SELECT_EXIT_NODE":          14,
+		"OPERATION_KIND_CLEAR_EXIT_NODE":           15,
+		"OPERATION_KIND_SET_PREFERENCES":           16,
+		"OPERATION_KIND_RESET_PREFERENCES":         17,
+		"OPERATION_KIND_SET_RESOURCE_ENABLED":      18,
+		"OPERATION_KIND_NOTIFY_LIFECYCLE":          19,
+	}
+)
+
+func (x OperationKind) Enum() *OperationKind {
+	p := new(OperationKind)
+	*p = x
+	return p
+}
+
+func (x OperationKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OperationKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_client_v0_common_proto_enumTypes[9].Descriptor()
+}
+
+func (OperationKind) Type() protoreflect.EnumType {
+	return &file_client_v0_common_proto_enumTypes[9]
+}
+
+func (x OperationKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OperationKind.Descriptor instead.
+func (OperationKind) EnumDescriptor() ([]byte, []int) {
+	return file_client_v0_common_proto_rawDescGZIP(), []int{9}
+}
+
 type UserAction_Kind int32
 
 const (
@@ -680,11 +781,11 @@ func (x UserAction_Kind) String() string {
 }
 
 func (UserAction_Kind) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v0_common_proto_enumTypes[9].Descriptor()
+	return file_client_v0_common_proto_enumTypes[10].Descriptor()
 }
 
 func (UserAction_Kind) Type() protoreflect.EnumType {
-	return &file_client_v0_common_proto_enumTypes[9]
+	return &file_client_v0_common_proto_enumTypes[10]
 }
 
 func (x UserAction_Kind) Number() protoreflect.EnumNumber {
@@ -1655,6 +1756,8 @@ type Operation struct {
 	Metadata   *SnapshotMetadata      `protobuf:"bytes,5,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	UserAction *UserAction            `protobuf:"bytes,6,opt,name=user_action,json=userAction,proto3" json:"user_action,omitempty"`
 	Continuity ConnectionContinuity   `protobuf:"varint,7,opt,name=continuity,proto3,enum=client.v0.ConnectionContinuity" json:"continuity,omitempty"`
+	// Immutable, including pending operations, snapshots and restart recovery.
+	Kind OperationKind `protobuf:"varint,8,opt,name=kind,proto3,enum=client.v0.OperationKind" json:"kind,omitempty"`
 	// Types that are valid to be assigned to Outcome:
 	//
 	//	*Operation_Failure
@@ -1746,6 +1849,13 @@ func (x *Operation) GetContinuity() ConnectionContinuity {
 		return x.Continuity
 	}
 	return ConnectionContinuity_CONNECTION_CONTINUITY_UNSPECIFIED
+}
+
+func (x *Operation) GetKind() OperationKind {
+	if x != nil {
+		return x.Kind
+	}
+	return OperationKind_OPERATION_KIND_UNSPECIFIED
 }
 
 func (x *Operation) GetOutcome() isOperation_Outcome {
@@ -1977,6 +2087,22 @@ var file_client_v0_common_proto_extTypes = []protoimpl.ExtensionInfo{
 		Tag:           "varint,51000,opt,name=access,enum=client.v0.Access",
 		Filename:      "client/v0/common.proto",
 	},
+	{
+		ExtendedType:  (*descriptorpb.MethodOptions)(nil),
+		ExtensionType: (*bool)(nil),
+		Field:         51001,
+		Name:          "client.v0.allows_initial_ownership_claim",
+		Tag:           "varint,51001,opt,name=allows_initial_ownership_claim",
+		Filename:      "client/v0/common.proto",
+	},
+	{
+		ExtendedType:  (*descriptorpb.MethodOptions)(nil),
+		ExtensionType: (*OperationKind)(nil),
+		Field:         51002,
+		Name:          "client.v0.operation_kind",
+		Tag:           "varint,51002,opt,name=operation_kind,enum=client.v0.OperationKind",
+		Filename:      "client/v0/common.proto",
+	},
 }
 
 // Extension fields to descriptorpb.MethodOptions.
@@ -1985,6 +2111,14 @@ var (
 	//
 	// optional client.v0.Access access = 51000;
 	E_Access = &file_client_v0_common_proto_extTypes[0]
+	// Only a fresh installation with no owner or enrollment may claim atomically.
+	//
+	// optional bool allows_initial_ownership_claim = 51001;
+	E_AllowsInitialOwnershipClaim = &file_client_v0_common_proto_extTypes[1]
+	// Required for every mutation; persisted into Operation.kind at acceptance.
+	//
+	// optional client.v0.OperationKind operation_kind = 51002;
+	E_OperationKind = &file_client_v0_common_proto_extTypes[2]
 )
 
 var File_client_v0_common_proto protoreflect.FileDescriptor
@@ -2086,7 +2220,7 @@ const file_client_v0_common_proto_rawDesc = "" +
 	"\n" +
 	"size_bytes\x18\x04 \x01(\x04R\tsizeBytes\x12\x16\n" +
 	"\x06sha256\x18\x05 \x01(\tR\x06sha256\x12\x16\n" +
-	"\x06reused\x18\x06 \x01(\bR\x06reused\"\xc4\x05\n" +
+	"\x06reused\x18\x06 \x01(\bR\x06reused\"\xf2\x05\n" +
 	"\tOperation\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -2099,7 +2233,8 @@ const file_client_v0_common_proto_rawDesc = "" +
 	"userAction\x12?\n" +
 	"\n" +
 	"continuity\x18\a \x01(\x0e2\x1f.client.v0.ConnectionContinuityR\n" +
-	"continuity\x12.\n" +
+	"continuity\x12,\n" +
+	"\x04kind\x18\b \x01(\x0e2\x18.client.v0.OperationKindR\x04kind\x12.\n" +
 	"\afailure\x18\n" +
 	" \x01(\v2\x12.client.v0.FailureH\x00R\afailure\x121\n" +
 	"\x06change\x18\v \x01(\v2\x17.client.v0.ChangeResultH\x00R\x06change\x12=\n" +
@@ -2212,8 +2347,32 @@ const file_client_v0_common_proto_rawDesc = "" +
 	"\x1bCLEANUP_OUTCOME_UNSPECIFIED\x10\x00\x12$\n" +
 	" CLEANUP_OUTCOME_REMOTE_CONFIRMED\x10\x01\x12&\n" +
 	"\"CLEANUP_OUTCOME_REMOTE_UNCONFIRMED\x10\x02\x12\"\n" +
-	"\x1eCLEANUP_OUTCOME_NOT_REGISTERED\x10\x03:K\n" +
-	"\x06access\x12\x1e.google.protobuf.MethodOptions\x18\xb8\x8e\x03 \x01(\x0e2\x11.client.v0.AccessR\x06accessB6Z4github.com/endless-net/client/clientipc/v0;clientipcb\x06proto3"
+	"\x1eCLEANUP_OUTCOME_NOT_REGISTERED\x10\x03*\xd6\x05\n" +
+	"\rOperationKind\x12\x1e\n" +
+	"\x1aOPERATION_KIND_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15OPERATION_KIND_ENROLL\x10\x01\x12\x1a\n" +
+	"\x16OPERATION_KIND_CONNECT\x10\x02\x12\x1d\n" +
+	"\x19OPERATION_KIND_DISCONNECT\x10\x03\x12(\n" +
+	"$OPERATION_KIND_TRUST_SERVER_IDENTITY\x10\x04\x12\x19\n" +
+	"\x15OPERATION_KIND_LOGOUT\x10\x05\x12*\n" +
+	"&OPERATION_KIND_FORGET_LOCAL_ENROLLMENT\x10\x06\x12!\n" +
+	"\x1dOPERATION_KIND_SELECT_NETWORK\x10\a\x12,\n" +
+	"(OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE\x10\b\x12!\n" +
+	"\x1dOPERATION_KIND_CREATE_PROFILE\x10\t\x12!\n" +
+	"\x1dOPERATION_KIND_SELECT_PROFILE\x10\n" +
+	"\x12!\n" +
+	"\x1dOPERATION_KIND_RENAME_PROFILE\x10\v\x12!\n" +
+	"\x1dOPERATION_KIND_REMOVE_PROFILE\x10\f\x12 \n" +
+	"\x1cOPERATION_KIND_RENEW_SESSION\x10\r\x12#\n" +
+	"\x1fOPERATION_KIND_SELECT_EXIT_NODE\x10\x0e\x12\"\n" +
+	"\x1eOPERATION_KIND_CLEAR_EXIT_NODE\x10\x0f\x12\"\n" +
+	"\x1eOPERATION_KIND_SET_PREFERENCES\x10\x10\x12$\n" +
+	" OPERATION_KIND_RESET_PREFERENCES\x10\x11\x12'\n" +
+	"#OPERATION_KIND_SET_RESOURCE_ENABLED\x10\x12\x12#\n" +
+	"\x1fOPERATION_KIND_NOTIFY_LIFECYCLE\x10\x13:K\n" +
+	"\x06access\x12\x1e.google.protobuf.MethodOptions\x18\xb8\x8e\x03 \x01(\x0e2\x11.client.v0.AccessR\x06access:e\n" +
+	"\x1eallows_initial_ownership_claim\x12\x1e.google.protobuf.MethodOptions\x18\xb9\x8e\x03 \x01(\bR\x1ballowsInitialOwnershipClaim:a\n" +
+	"\x0eoperation_kind\x12\x1e.google.protobuf.MethodOptions\x18\xba\x8e\x03 \x01(\x0e2\x18.client.v0.OperationKindR\roperationKindB6Z4github.com/endless-net/client/clientipc/v0;clientipcb\x06proto3"
 
 var (
 	file_client_v0_common_proto_rawDescOnce sync.Once
@@ -2227,7 +2386,7 @@ func file_client_v0_common_proto_rawDescGZIP() []byte {
 	return file_client_v0_common_proto_rawDescData
 }
 
-var file_client_v0_common_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
+var file_client_v0_common_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
 var file_client_v0_common_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_client_v0_common_proto_goTypes = []any{
 	(Access)(0),                        // 0: client.v0.Access
@@ -2239,68 +2398,73 @@ var file_client_v0_common_proto_goTypes = []any{
 	(OperationState)(0),                // 6: client.v0.OperationState
 	(ConnectionContinuity)(0),          // 7: client.v0.ConnectionContinuity
 	(CleanupOutcome)(0),                // 8: client.v0.CleanupOutcome
-	(UserAction_Kind)(0),               // 9: client.v0.UserAction.Kind
-	(*Restriction)(nil),                // 10: client.v0.Restriction
-	(*CapabilityStatus)(nil),           // 11: client.v0.CapabilityStatus
-	(*BuildIdentity)(nil),              // 12: client.v0.BuildIdentity
-	(*RuntimeInfo)(nil),                // 13: client.v0.RuntimeInfo
-	(*SnapshotMetadata)(nil),           // 14: client.v0.SnapshotMetadata
-	(*ProfileRef)(nil),                 // 15: client.v0.ProfileRef
-	(*MutationContext)(nil),            // 16: client.v0.MutationContext
-	(*Failure)(nil),                    // 17: client.v0.Failure
-	(*UserAction)(nil),                 // 18: client.v0.UserAction
-	(*ChangeResult)(nil),               // 19: client.v0.ChangeResult
-	(*EnrollmentResult)(nil),           // 20: client.v0.EnrollmentResult
-	(*SelectionResult)(nil),            // 21: client.v0.SelectionResult
-	(*CleanupResult)(nil),              // 22: client.v0.CleanupResult
-	(*RenewalResult)(nil),              // 23: client.v0.RenewalResult
-	(*BundleResult)(nil),               // 24: client.v0.BundleResult
-	(*Operation)(nil),                  // 25: client.v0.Operation
-	(*PageRequest)(nil),                // 26: client.v0.PageRequest
-	(*PageResponse)(nil),               // 27: client.v0.PageResponse
-	(*timestamppb.Timestamp)(nil),      // 28: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),        // 29: google.protobuf.Duration
-	(*descriptorpb.MethodOptions)(nil), // 30: google.protobuf.MethodOptions
+	(OperationKind)(0),                 // 9: client.v0.OperationKind
+	(UserAction_Kind)(0),               // 10: client.v0.UserAction.Kind
+	(*Restriction)(nil),                // 11: client.v0.Restriction
+	(*CapabilityStatus)(nil),           // 12: client.v0.CapabilityStatus
+	(*BuildIdentity)(nil),              // 13: client.v0.BuildIdentity
+	(*RuntimeInfo)(nil),                // 14: client.v0.RuntimeInfo
+	(*SnapshotMetadata)(nil),           // 15: client.v0.SnapshotMetadata
+	(*ProfileRef)(nil),                 // 16: client.v0.ProfileRef
+	(*MutationContext)(nil),            // 17: client.v0.MutationContext
+	(*Failure)(nil),                    // 18: client.v0.Failure
+	(*UserAction)(nil),                 // 19: client.v0.UserAction
+	(*ChangeResult)(nil),               // 20: client.v0.ChangeResult
+	(*EnrollmentResult)(nil),           // 21: client.v0.EnrollmentResult
+	(*SelectionResult)(nil),            // 22: client.v0.SelectionResult
+	(*CleanupResult)(nil),              // 23: client.v0.CleanupResult
+	(*RenewalResult)(nil),              // 24: client.v0.RenewalResult
+	(*BundleResult)(nil),               // 25: client.v0.BundleResult
+	(*Operation)(nil),                  // 26: client.v0.Operation
+	(*PageRequest)(nil),                // 27: client.v0.PageRequest
+	(*PageResponse)(nil),               // 28: client.v0.PageResponse
+	(*timestamppb.Timestamp)(nil),      // 29: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),        // 30: google.protobuf.Duration
+	(*descriptorpb.MethodOptions)(nil), // 31: google.protobuf.MethodOptions
 }
 var file_client_v0_common_proto_depIdxs = []int32{
 	3,  // 0: client.v0.Restriction.availability:type_name -> client.v0.Availability
 	4,  // 1: client.v0.Restriction.action_owner:type_name -> client.v0.ActionOwner
 	2,  // 2: client.v0.CapabilityStatus.capability:type_name -> client.v0.Capability
-	10, // 3: client.v0.CapabilityStatus.restriction:type_name -> client.v0.Restriction
+	11, // 3: client.v0.CapabilityStatus.restriction:type_name -> client.v0.Restriction
 	1,  // 4: client.v0.CapabilityStatus.platform:type_name -> client.v0.Platform
 	1,  // 5: client.v0.BuildIdentity.platform:type_name -> client.v0.Platform
-	12, // 6: client.v0.RuntimeInfo.build:type_name -> client.v0.BuildIdentity
-	11, // 7: client.v0.RuntimeInfo.capabilities:type_name -> client.v0.CapabilityStatus
+	13, // 6: client.v0.RuntimeInfo.build:type_name -> client.v0.BuildIdentity
+	12, // 7: client.v0.RuntimeInfo.capabilities:type_name -> client.v0.CapabilityStatus
 	0,  // 8: client.v0.RuntimeInfo.caller_access:type_name -> client.v0.Access
-	28, // 9: client.v0.SnapshotMetadata.generated_at:type_name -> google.protobuf.Timestamp
+	29, // 9: client.v0.SnapshotMetadata.generated_at:type_name -> google.protobuf.Timestamp
 	5,  // 10: client.v0.Failure.code:type_name -> client.v0.ErrorCode
-	29, // 11: client.v0.Failure.retry_after:type_name -> google.protobuf.Duration
+	30, // 11: client.v0.Failure.retry_after:type_name -> google.protobuf.Duration
 	4,  // 12: client.v0.Failure.action_owner:type_name -> client.v0.ActionOwner
-	9,  // 13: client.v0.UserAction.kind:type_name -> client.v0.UserAction.Kind
-	28, // 14: client.v0.UserAction.expires_at:type_name -> google.protobuf.Timestamp
+	10, // 13: client.v0.UserAction.kind:type_name -> client.v0.UserAction.Kind
+	29, // 14: client.v0.UserAction.expires_at:type_name -> google.protobuf.Timestamp
 	8,  // 15: client.v0.CleanupResult.outcome:type_name -> client.v0.CleanupOutcome
-	28, // 16: client.v0.RenewalResult.expires_at:type_name -> google.protobuf.Timestamp
-	28, // 17: client.v0.BundleResult.created_at:type_name -> google.protobuf.Timestamp
-	28, // 18: client.v0.BundleResult.expires_at:type_name -> google.protobuf.Timestamp
+	29, // 16: client.v0.RenewalResult.expires_at:type_name -> google.protobuf.Timestamp
+	29, // 17: client.v0.BundleResult.created_at:type_name -> google.protobuf.Timestamp
+	29, // 18: client.v0.BundleResult.expires_at:type_name -> google.protobuf.Timestamp
 	6,  // 19: client.v0.Operation.state:type_name -> client.v0.OperationState
-	14, // 20: client.v0.Operation.metadata:type_name -> client.v0.SnapshotMetadata
-	18, // 21: client.v0.Operation.user_action:type_name -> client.v0.UserAction
+	15, // 20: client.v0.Operation.metadata:type_name -> client.v0.SnapshotMetadata
+	19, // 21: client.v0.Operation.user_action:type_name -> client.v0.UserAction
 	7,  // 22: client.v0.Operation.continuity:type_name -> client.v0.ConnectionContinuity
-	17, // 23: client.v0.Operation.failure:type_name -> client.v0.Failure
-	19, // 24: client.v0.Operation.change:type_name -> client.v0.ChangeResult
-	20, // 25: client.v0.Operation.enrollment:type_name -> client.v0.EnrollmentResult
-	21, // 26: client.v0.Operation.selection:type_name -> client.v0.SelectionResult
-	22, // 27: client.v0.Operation.cleanup:type_name -> client.v0.CleanupResult
-	23, // 28: client.v0.Operation.renewal:type_name -> client.v0.RenewalResult
-	24, // 29: client.v0.Operation.bundle:type_name -> client.v0.BundleResult
-	14, // 30: client.v0.PageResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	30, // 31: client.v0.access:extendee -> google.protobuf.MethodOptions
-	0,  // 32: client.v0.access:type_name -> client.v0.Access
-	33, // [33:33] is the sub-list for method output_type
-	33, // [33:33] is the sub-list for method input_type
-	32, // [32:33] is the sub-list for extension type_name
-	31, // [31:32] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	9,  // 23: client.v0.Operation.kind:type_name -> client.v0.OperationKind
+	18, // 24: client.v0.Operation.failure:type_name -> client.v0.Failure
+	20, // 25: client.v0.Operation.change:type_name -> client.v0.ChangeResult
+	21, // 26: client.v0.Operation.enrollment:type_name -> client.v0.EnrollmentResult
+	22, // 27: client.v0.Operation.selection:type_name -> client.v0.SelectionResult
+	23, // 28: client.v0.Operation.cleanup:type_name -> client.v0.CleanupResult
+	24, // 29: client.v0.Operation.renewal:type_name -> client.v0.RenewalResult
+	25, // 30: client.v0.Operation.bundle:type_name -> client.v0.BundleResult
+	15, // 31: client.v0.PageResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	31, // 32: client.v0.access:extendee -> google.protobuf.MethodOptions
+	31, // 33: client.v0.allows_initial_ownership_claim:extendee -> google.protobuf.MethodOptions
+	31, // 34: client.v0.operation_kind:extendee -> google.protobuf.MethodOptions
+	0,  // 35: client.v0.access:type_name -> client.v0.Access
+	9,  // 36: client.v0.operation_kind:type_name -> client.v0.OperationKind
+	37, // [37:37] is the sub-list for method output_type
+	37, // [37:37] is the sub-list for method input_type
+	35, // [35:37] is the sub-list for extension type_name
+	32, // [32:35] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_client_v0_common_proto_init() }
@@ -2322,9 +2486,9 @@ func file_client_v0_common_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v0_common_proto_rawDesc), len(file_client_v0_common_proto_rawDesc)),
-			NumEnums:      10,
+			NumEnums:      11,
 			NumMessages:   18,
-			NumExtensions: 1,
+			NumExtensions: 3,
 			NumServices:   0,
 		},
 		GoTypes:           file_client_v0_common_proto_goTypes,

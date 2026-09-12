@@ -254,6 +254,62 @@ func (LanAccess) EnumDescriptor() ([]byte, []int) {
 	return file_client_v0_features_proto_rawDescGZIP(), []int{3}
 }
 
+// NONE is a status-only cleared selection, never a SelectExitNode mode.
+type ExitFamilyMode int32
+
+const (
+	ExitFamilyMode_EXIT_FAMILY_MODE_UNSPECIFIED ExitFamilyMode = 0
+	ExitFamilyMode_EXIT_FAMILY_MODE_NONE        ExitFamilyMode = 1
+	ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY   ExitFamilyMode = 2
+	ExitFamilyMode_EXIT_FAMILY_MODE_IPV6_ONLY   ExitFamilyMode = 3
+	ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK  ExitFamilyMode = 4
+)
+
+// Enum value maps for ExitFamilyMode.
+var (
+	ExitFamilyMode_name = map[int32]string{
+		0: "EXIT_FAMILY_MODE_UNSPECIFIED",
+		1: "EXIT_FAMILY_MODE_NONE",
+		2: "EXIT_FAMILY_MODE_IPV4_ONLY",
+		3: "EXIT_FAMILY_MODE_IPV6_ONLY",
+		4: "EXIT_FAMILY_MODE_DUAL_STACK",
+	}
+	ExitFamilyMode_value = map[string]int32{
+		"EXIT_FAMILY_MODE_UNSPECIFIED": 0,
+		"EXIT_FAMILY_MODE_NONE":        1,
+		"EXIT_FAMILY_MODE_IPV4_ONLY":   2,
+		"EXIT_FAMILY_MODE_IPV6_ONLY":   3,
+		"EXIT_FAMILY_MODE_DUAL_STACK":  4,
+	}
+)
+
+func (x ExitFamilyMode) Enum() *ExitFamilyMode {
+	p := new(ExitFamilyMode)
+	*p = x
+	return p
+}
+
+func (x ExitFamilyMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExitFamilyMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_client_v0_features_proto_enumTypes[4].Descriptor()
+}
+
+func (ExitFamilyMode) Type() protoreflect.EnumType {
+	return &file_client_v0_features_proto_enumTypes[4]
+}
+
+func (x ExitFamilyMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExitFamilyMode.Descriptor instead.
+func (ExitFamilyMode) EnumDescriptor() ([]byte, []int) {
+	return file_client_v0_features_proto_rawDescGZIP(), []int{4}
+}
+
 type ApplyState int32
 
 const (
@@ -290,11 +346,11 @@ func (x ApplyState) String() string {
 }
 
 func (ApplyState) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v0_features_proto_enumTypes[4].Descriptor()
+	return file_client_v0_features_proto_enumTypes[5].Descriptor()
 }
 
 func (ApplyState) Type() protoreflect.EnumType {
-	return &file_client_v0_features_proto_enumTypes[4]
+	return &file_client_v0_features_proto_enumTypes[5]
 }
 
 func (x ApplyState) Number() protoreflect.EnumNumber {
@@ -303,7 +359,7 @@ func (x ApplyState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ApplyState.Descriptor instead.
 func (ApplyState) EnumDescriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{4}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{5}
 }
 
 type ResourceKind int32
@@ -345,11 +401,11 @@ func (x ResourceKind) String() string {
 }
 
 func (ResourceKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v0_features_proto_enumTypes[5].Descriptor()
+	return file_client_v0_features_proto_enumTypes[6].Descriptor()
 }
 
 func (ResourceKind) Type() protoreflect.EnumType {
-	return &file_client_v0_features_proto_enumTypes[5]
+	return &file_client_v0_features_proto_enumTypes[6]
 }
 
 func (x ResourceKind) Number() protoreflect.EnumNumber {
@@ -358,7 +414,7 @@ func (x ResourceKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ResourceKind.Descriptor instead.
 func (ResourceKind) EnumDescriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{5}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{6}
 }
 
 type UpdateClassification int32
@@ -397,11 +453,11 @@ func (x UpdateClassification) String() string {
 }
 
 func (UpdateClassification) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v0_features_proto_enumTypes[6].Descriptor()
+	return file_client_v0_features_proto_enumTypes[7].Descriptor()
 }
 
 func (UpdateClassification) Type() protoreflect.EnumType {
-	return &file_client_v0_features_proto_enumTypes[6]
+	return &file_client_v0_features_proto_enumTypes[7]
 }
 
 func (x UpdateClassification) Number() protoreflect.EnumNumber {
@@ -410,7 +466,7 @@ func (x UpdateClassification) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UpdateClassification.Descriptor instead.
 func (UpdateClassification) EnumDescriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{6}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{7}
 }
 
 type DistributionChannel int32
@@ -452,11 +508,11 @@ func (x DistributionChannel) String() string {
 }
 
 func (DistributionChannel) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v0_features_proto_enumTypes[7].Descriptor()
+	return file_client_v0_features_proto_enumTypes[8].Descriptor()
 }
 
 func (DistributionChannel) Type() protoreflect.EnumType {
-	return &file_client_v0_features_proto_enumTypes[7]
+	return &file_client_v0_features_proto_enumTypes[8]
 }
 
 func (x DistributionChannel) Number() protoreflect.EnumNumber {
@@ -465,7 +521,7 @@ func (x DistributionChannel) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DistributionChannel.Descriptor instead.
 func (DistributionChannel) EnumDescriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{7}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{8}
 }
 
 type CompatibilityState int32
@@ -504,11 +560,11 @@ func (x CompatibilityState) String() string {
 }
 
 func (CompatibilityState) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v0_features_proto_enumTypes[8].Descriptor()
+	return file_client_v0_features_proto_enumTypes[9].Descriptor()
 }
 
 func (CompatibilityState) Type() protoreflect.EnumType {
-	return &file_client_v0_features_proto_enumTypes[8]
+	return &file_client_v0_features_proto_enumTypes[9]
 }
 
 func (x CompatibilityState) Number() protoreflect.EnumNumber {
@@ -517,7 +573,7 @@ func (x CompatibilityState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CompatibilityState.Descriptor instead.
 func (CompatibilityState) EnumDescriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{8}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{9}
 }
 
 type UpdateState int32
@@ -565,11 +621,11 @@ func (x UpdateState) String() string {
 }
 
 func (UpdateState) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v0_features_proto_enumTypes[9].Descriptor()
+	return file_client_v0_features_proto_enumTypes[10].Descriptor()
 }
 
 func (UpdateState) Type() protoreflect.EnumType {
-	return &file_client_v0_features_proto_enumTypes[9]
+	return &file_client_v0_features_proto_enumTypes[10]
 }
 
 func (x UpdateState) Number() protoreflect.EnumNumber {
@@ -578,7 +634,7 @@ func (x UpdateState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UpdateState.Descriptor instead.
 func (UpdateState) EnumDescriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{9}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{10}
 }
 
 type LifecycleEvent int32
@@ -611,11 +667,11 @@ func (x LifecycleEvent) String() string {
 }
 
 func (LifecycleEvent) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v0_features_proto_enumTypes[10].Descriptor()
+	return file_client_v0_features_proto_enumTypes[11].Descriptor()
 }
 
 func (LifecycleEvent) Type() protoreflect.EnumType {
-	return &file_client_v0_features_proto_enumTypes[10]
+	return &file_client_v0_features_proto_enumTypes[11]
 }
 
 func (x LifecycleEvent) Number() protoreflect.EnumNumber {
@@ -624,7 +680,7 @@ func (x LifecycleEvent) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use LifecycleEvent.Descriptor instead.
 func (LifecycleEvent) EnumDescriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{10}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{11}
 }
 
 type SettingControl struct {
@@ -1193,8 +1249,11 @@ type ExitNode struct {
 	PeerId           string                 `protobuf:"bytes,3,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
 	Selection        *Restriction           `protobuf:"bytes,4,opt,name=selection,proto3" json:"selection,omitempty"`
 	AllowedLanAccess []LanAccess            `protobuf:"varint,5,rep,packed,name=allowed_lan_access,json=allowedLanAccess,proto3,enum=client.v0.LanAccess" json:"allowed_lan_access,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Exact selectable modes after platform, provider and policy restrictions.
+	// Empty means not selectable; never infer dual-stack from separate modes.
+	AllowedFamilyModes []ExitFamilyMode `protobuf:"varint,6,rep,packed,name=allowed_family_modes,json=allowedFamilyModes,proto3,enum=client.v0.ExitFamilyMode" json:"allowed_family_modes,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ExitNode) Reset() {
@@ -1262,6 +1321,91 @@ func (x *ExitNode) GetAllowedLanAccess() []LanAccess {
 	return nil
 }
 
+func (x *ExitNode) GetAllowedFamilyModes() []ExitFamilyMode {
+	if x != nil {
+		return x.AllowedFamilyModes
+	}
+	return nil
+}
+
+// One address family's authoritative requested/effective enforcement state.
+type ExitFamilyStatus struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	RequestedExitNodeId *string                `protobuf:"bytes,1,opt,name=requested_exit_node_id,json=requestedExitNodeId,proto3,oneof" json:"requested_exit_node_id,omitempty"`
+	EffectiveExitNodeId *string                `protobuf:"bytes,2,opt,name=effective_exit_node_id,json=effectiveExitNodeId,proto3,oneof" json:"effective_exit_node_id,omitempty"`
+	ApplyState          ApplyState             `protobuf:"varint,3,opt,name=apply_state,json=applyState,proto3,enum=client.v0.ApplyState" json:"apply_state,omitempty"`
+	Failure             *Failure               `protobuf:"bytes,4,opt,name=failure,proto3" json:"failure,omitempty"`
+	// Actual blocking protection, not merely desired policy.
+	FailClosed    bool `protobuf:"varint,5,opt,name=fail_closed,json=failClosed,proto3" json:"fail_closed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExitFamilyStatus) Reset() {
+	*x = ExitFamilyStatus{}
+	mi := &file_client_v0_features_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExitFamilyStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExitFamilyStatus) ProtoMessage() {}
+
+func (x *ExitFamilyStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_features_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExitFamilyStatus.ProtoReflect.Descriptor instead.
+func (*ExitFamilyStatus) Descriptor() ([]byte, []int) {
+	return file_client_v0_features_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ExitFamilyStatus) GetRequestedExitNodeId() string {
+	if x != nil && x.RequestedExitNodeId != nil {
+		return *x.RequestedExitNodeId
+	}
+	return ""
+}
+
+func (x *ExitFamilyStatus) GetEffectiveExitNodeId() string {
+	if x != nil && x.EffectiveExitNodeId != nil {
+		return *x.EffectiveExitNodeId
+	}
+	return ""
+}
+
+func (x *ExitFamilyStatus) GetApplyState() ApplyState {
+	if x != nil {
+		return x.ApplyState
+	}
+	return ApplyState_APPLY_STATE_UNSPECIFIED
+}
+
+func (x *ExitFamilyStatus) GetFailure() *Failure {
+	if x != nil {
+		return x.Failure
+	}
+	return nil
+}
+
+func (x *ExitFamilyStatus) GetFailClosed() bool {
+	if x != nil {
+		return x.FailClosed
+	}
+	return false
+}
+
 type ExitNodeStatus struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Metadata            *SnapshotMetadata      `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
@@ -1274,14 +1418,19 @@ type ExitNodeStatus struct {
 	Control             *SettingControl        `protobuf:"bytes,8,opt,name=control,proto3" json:"control,omitempty"`
 	Failure             *Failure               `protobuf:"bytes,9,opt,name=failure,proto3" json:"failure,omitempty"`
 	// On path loss, traffic cannot silently escape via a direct default route.
-	FailClosed    bool `protobuf:"varint,10,opt,name=fail_closed,json=failClosed,proto3" json:"fail_closed,omitempty"`
+	FailClosed          bool           `protobuf:"varint,10,opt,name=fail_closed,json=failClosed,proto3" json:"fail_closed,omitempty"`
+	RequestedFamilyMode ExitFamilyMode `protobuf:"varint,11,opt,name=requested_family_mode,json=requestedFamilyMode,proto3,enum=client.v0.ExitFamilyMode" json:"requested_family_mode,omitempty"`
+	// Both required, including a disabled/cleared family. Partial application
+	// remains visible here and cannot be reported as aggregate APPLIED.
+	Ipv4          *ExitFamilyStatus `protobuf:"bytes,12,opt,name=ipv4,proto3" json:"ipv4,omitempty"`
+	Ipv6          *ExitFamilyStatus `protobuf:"bytes,13,opt,name=ipv6,proto3" json:"ipv6,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ExitNodeStatus) Reset() {
 	*x = ExitNodeStatus{}
-	mi := &file_client_v0_features_proto_msgTypes[8]
+	mi := &file_client_v0_features_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1293,7 +1442,7 @@ func (x *ExitNodeStatus) String() string {
 func (*ExitNodeStatus) ProtoMessage() {}
 
 func (x *ExitNodeStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_features_proto_msgTypes[8]
+	mi := &file_client_v0_features_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1306,7 +1455,7 @@ func (x *ExitNodeStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExitNodeStatus.ProtoReflect.Descriptor instead.
 func (*ExitNodeStatus) Descriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{8}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ExitNodeStatus) GetMetadata() *SnapshotMetadata {
@@ -1379,6 +1528,27 @@ func (x *ExitNodeStatus) GetFailClosed() bool {
 	return false
 }
 
+func (x *ExitNodeStatus) GetRequestedFamilyMode() ExitFamilyMode {
+	if x != nil {
+		return x.RequestedFamilyMode
+	}
+	return ExitFamilyMode_EXIT_FAMILY_MODE_UNSPECIFIED
+}
+
+func (x *ExitNodeStatus) GetIpv4() *ExitFamilyStatus {
+	if x != nil {
+		return x.Ipv4
+	}
+	return nil
+}
+
+func (x *ExitNodeStatus) GetIpv6() *ExitFamilyStatus {
+	if x != nil {
+		return x.Ipv6
+	}
+	return nil
+}
+
 type HostTarget struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Addresses     []string               `protobuf:"bytes,1,rep,name=addresses,proto3" json:"addresses,omitempty"`
@@ -1389,7 +1559,7 @@ type HostTarget struct {
 
 func (x *HostTarget) Reset() {
 	*x = HostTarget{}
-	mi := &file_client_v0_features_proto_msgTypes[9]
+	mi := &file_client_v0_features_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1401,7 +1571,7 @@ func (x *HostTarget) String() string {
 func (*HostTarget) ProtoMessage() {}
 
 func (x *HostTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_features_proto_msgTypes[9]
+	mi := &file_client_v0_features_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1414,7 +1584,7 @@ func (x *HostTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostTarget.ProtoReflect.Descriptor instead.
 func (*HostTarget) Descriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{9}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *HostTarget) GetAddresses() []string {
@@ -1440,7 +1610,7 @@ type SubnetTarget struct {
 
 func (x *SubnetTarget) Reset() {
 	*x = SubnetTarget{}
-	mi := &file_client_v0_features_proto_msgTypes[10]
+	mi := &file_client_v0_features_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1452,7 +1622,7 @@ func (x *SubnetTarget) String() string {
 func (*SubnetTarget) ProtoMessage() {}
 
 func (x *SubnetTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_features_proto_msgTypes[10]
+	mi := &file_client_v0_features_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1465,7 +1635,7 @@ func (x *SubnetTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubnetTarget.ProtoReflect.Descriptor instead.
 func (*SubnetTarget) Descriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{10}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SubnetTarget) GetCidr() string {
@@ -1486,7 +1656,7 @@ type ServiceTarget struct {
 
 func (x *ServiceTarget) Reset() {
 	*x = ServiceTarget{}
-	mi := &file_client_v0_features_proto_msgTypes[11]
+	mi := &file_client_v0_features_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1498,7 +1668,7 @@ func (x *ServiceTarget) String() string {
 func (*ServiceTarget) ProtoMessage() {}
 
 func (x *ServiceTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_features_proto_msgTypes[11]
+	mi := &file_client_v0_features_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1511,7 +1681,7 @@ func (x *ServiceTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceTarget.ProtoReflect.Descriptor instead.
 func (*ServiceTarget) Descriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{11}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ServiceTarget) GetHostname() string {
@@ -1546,7 +1716,7 @@ type ApplicationTarget struct {
 
 func (x *ApplicationTarget) Reset() {
 	*x = ApplicationTarget{}
-	mi := &file_client_v0_features_proto_msgTypes[12]
+	mi := &file_client_v0_features_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1558,7 +1728,7 @@ func (x *ApplicationTarget) String() string {
 func (*ApplicationTarget) ProtoMessage() {}
 
 func (x *ApplicationTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_features_proto_msgTypes[12]
+	mi := &file_client_v0_features_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1571,7 +1741,7 @@ func (x *ApplicationTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplicationTarget.ProtoReflect.Descriptor instead.
 func (*ApplicationTarget) Descriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{12}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ApplicationTarget) GetDisplayAddress() string {
@@ -1612,7 +1782,7 @@ type Resource struct {
 
 func (x *Resource) Reset() {
 	*x = Resource{}
-	mi := &file_client_v0_features_proto_msgTypes[13]
+	mi := &file_client_v0_features_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1624,7 +1794,7 @@ func (x *Resource) String() string {
 func (*Resource) ProtoMessage() {}
 
 func (x *Resource) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_features_proto_msgTypes[13]
+	mi := &file_client_v0_features_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1637,7 +1807,7 @@ func (x *Resource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Resource.ProtoReflect.Descriptor instead.
 func (*Resource) Descriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{13}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *Resource) GetId() string {
@@ -1780,7 +1950,7 @@ type Compatibility struct {
 
 func (x *Compatibility) Reset() {
 	*x = Compatibility{}
-	mi := &file_client_v0_features_proto_msgTypes[14]
+	mi := &file_client_v0_features_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1792,7 +1962,7 @@ func (x *Compatibility) String() string {
 func (*Compatibility) ProtoMessage() {}
 
 func (x *Compatibility) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_features_proto_msgTypes[14]
+	mi := &file_client_v0_features_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1805,7 +1975,7 @@ func (x *Compatibility) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Compatibility.ProtoReflect.Descriptor instead.
 func (*Compatibility) Descriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{14}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Compatibility) GetState() CompatibilityState {
@@ -1866,7 +2036,7 @@ type VerifiedUpdate struct {
 
 func (x *VerifiedUpdate) Reset() {
 	*x = VerifiedUpdate{}
-	mi := &file_client_v0_features_proto_msgTypes[15]
+	mi := &file_client_v0_features_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1878,7 +2048,7 @@ func (x *VerifiedUpdate) String() string {
 func (*VerifiedUpdate) ProtoMessage() {}
 
 func (x *VerifiedUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_features_proto_msgTypes[15]
+	mi := &file_client_v0_features_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1891,7 +2061,7 @@ func (x *VerifiedUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifiedUpdate.ProtoReflect.Descriptor instead.
 func (*VerifiedUpdate) Descriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{15}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *VerifiedUpdate) GetReleaseId() string {
@@ -2001,7 +2171,7 @@ type UpdateInfo struct {
 
 func (x *UpdateInfo) Reset() {
 	*x = UpdateInfo{}
-	mi := &file_client_v0_features_proto_msgTypes[16]
+	mi := &file_client_v0_features_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2013,7 +2183,7 @@ func (x *UpdateInfo) String() string {
 func (*UpdateInfo) ProtoMessage() {}
 
 func (x *UpdateInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_features_proto_msgTypes[16]
+	mi := &file_client_v0_features_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2026,7 +2196,7 @@ func (x *UpdateInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateInfo.ProtoReflect.Descriptor instead.
 func (*UpdateInfo) Descriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{16}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *UpdateInfo) GetMetadata() *SnapshotMetadata {
@@ -2094,7 +2264,7 @@ type SupportInfo struct {
 
 func (x *SupportInfo) Reset() {
 	*x = SupportInfo{}
-	mi := &file_client_v0_features_proto_msgTypes[17]
+	mi := &file_client_v0_features_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2106,7 +2276,7 @@ func (x *SupportInfo) String() string {
 func (*SupportInfo) ProtoMessage() {}
 
 func (x *SupportInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_features_proto_msgTypes[17]
+	mi := &file_client_v0_features_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2119,7 +2289,7 @@ func (x *SupportInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SupportInfo.ProtoReflect.Descriptor instead.
 func (*SupportInfo) Descriptor() ([]byte, []int) {
-	return file_client_v0_features_proto_rawDescGZIP(), []int{17}
+	return file_client_v0_features_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SupportInfo) GetRuntime() *BuildIdentity {
@@ -2236,13 +2406,24 @@ const file_client_v0_features_proto_rawDesc = "" +
 	"\acontrol\x18\x02 \x01(\v2\x19.client.v0.SettingControlR\acontrol\x12%\n" +
 	"\rboolean_value\x18\x03 \x01(\bH\x00R\fbooleanValue\x12G\n" +
 	"\x0flifecycle_value\x18\x04 \x01(\x0e2\x1c.client.v0.LifecycleBehaviorH\x00R\x0elifecycleValueB\x11\n" +
-	"\x0feffective_value\"\xd0\x01\n" +
+	"\x0feffective_value\"\x9d\x02\n" +
 	"\bExitNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x17\n" +
 	"\apeer_id\x18\x03 \x01(\tR\x06peerId\x124\n" +
 	"\tselection\x18\x04 \x01(\v2\x16.client.v0.RestrictionR\tselection\x12B\n" +
-	"\x12allowed_lan_access\x18\x05 \x03(\x0e2\x14.client.v0.LanAccessR\x10allowedLanAccess\"\xde\x04\n" +
+	"\x12allowed_lan_access\x18\x05 \x03(\x0e2\x14.client.v0.LanAccessR\x10allowedLanAccess\x12K\n" +
+	"\x14allowed_family_modes\x18\x06 \x03(\x0e2\x19.client.v0.ExitFamilyModeR\x12allowedFamilyModes\"\xc3\x02\n" +
+	"\x10ExitFamilyStatus\x128\n" +
+	"\x16requested_exit_node_id\x18\x01 \x01(\tH\x00R\x13requestedExitNodeId\x88\x01\x01\x128\n" +
+	"\x16effective_exit_node_id\x18\x02 \x01(\tH\x01R\x13effectiveExitNodeId\x88\x01\x01\x126\n" +
+	"\vapply_state\x18\x03 \x01(\x0e2\x15.client.v0.ApplyStateR\n" +
+	"applyState\x12,\n" +
+	"\afailure\x18\x04 \x01(\v2\x12.client.v0.FailureR\afailure\x12\x1f\n" +
+	"\vfail_closed\x18\x05 \x01(\bR\n" +
+	"failClosedB\x19\n" +
+	"\x17_requested_exit_node_idB\x19\n" +
+	"\x17_effective_exit_node_id\"\x8f\x06\n" +
 	"\x0eExitNodeStatus\x127\n" +
 	"\bmetadata\x18\x01 \x01(\v2\x1b.client.v0.SnapshotMetadataR\bmetadata\x12\x1d\n" +
 	"\n" +
@@ -2257,7 +2438,10 @@ const file_client_v0_features_proto_rawDesc = "" +
 	"\afailure\x18\t \x01(\v2\x12.client.v0.FailureR\afailure\x12\x1f\n" +
 	"\vfail_closed\x18\n" +
 	" \x01(\bR\n" +
-	"failClosedB\x19\n" +
+	"failClosed\x12M\n" +
+	"\x15requested_family_mode\x18\v \x01(\x0e2\x19.client.v0.ExitFamilyModeR\x13requestedFamilyMode\x12/\n" +
+	"\x04ipv4\x18\f \x01(\v2\x1b.client.v0.ExitFamilyStatusR\x04ipv4\x12/\n" +
+	"\x04ipv6\x18\r \x01(\v2\x1b.client.v0.ExitFamilyStatusR\x04ipv6B\x19\n" +
 	"\x17_requested_exit_node_idB\x19\n" +
 	"\x17_effective_exit_node_id\"F\n" +
 	"\n" +
@@ -2363,7 +2547,13 @@ const file_client_v0_features_proto_rawDesc = "" +
 	"\tLanAccess\x12\x1a\n" +
 	"\x16LAN_ACCESS_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10LAN_ACCESS_BLOCK\x10\x01\x12\x14\n" +
-	"\x10LAN_ACCESS_ALLOW\x10\x02*s\n" +
+	"\x10LAN_ACCESS_ALLOW\x10\x02*\xae\x01\n" +
+	"\x0eExitFamilyMode\x12 \n" +
+	"\x1cEXIT_FAMILY_MODE_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15EXIT_FAMILY_MODE_NONE\x10\x01\x12\x1e\n" +
+	"\x1aEXIT_FAMILY_MODE_IPV4_ONLY\x10\x02\x12\x1e\n" +
+	"\x1aEXIT_FAMILY_MODE_IPV6_ONLY\x10\x03\x12\x1f\n" +
+	"\x1bEXIT_FAMILY_MODE_DUAL_STACK\x10\x04*s\n" +
 	"\n" +
 	"ApplyState\x12\x1b\n" +
 	"\x17APPLY_STATE_UNSPECIFIED\x10\x00\x12\x17\n" +
@@ -2416,106 +2606,114 @@ func file_client_v0_features_proto_rawDescGZIP() []byte {
 	return file_client_v0_features_proto_rawDescData
 }
 
-var file_client_v0_features_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_client_v0_features_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_client_v0_features_proto_enumTypes = make([]protoimpl.EnumInfo, 12)
+var file_client_v0_features_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_client_v0_features_proto_goTypes = []any{
 	(SettingSource)(0),            // 0: client.v0.SettingSource
 	(LifecycleBehavior)(0),        // 1: client.v0.LifecycleBehavior
 	(PreferenceKey)(0),            // 2: client.v0.PreferenceKey
 	(LanAccess)(0),                // 3: client.v0.LanAccess
-	(ApplyState)(0),               // 4: client.v0.ApplyState
-	(ResourceKind)(0),             // 5: client.v0.ResourceKind
-	(UpdateClassification)(0),     // 6: client.v0.UpdateClassification
-	(DistributionChannel)(0),      // 7: client.v0.DistributionChannel
-	(CompatibilityState)(0),       // 8: client.v0.CompatibilityState
-	(UpdateState)(0),              // 9: client.v0.UpdateState
-	(LifecycleEvent)(0),           // 10: client.v0.LifecycleEvent
-	(*SettingControl)(nil),        // 11: client.v0.SettingControl
-	(*BooleanSetting)(nil),        // 12: client.v0.BooleanSetting
-	(*LifecycleSetting)(nil),      // 13: client.v0.LifecycleSetting
-	(*RuntimeLifecycle)(nil),      // 14: client.v0.RuntimeLifecycle
-	(*Preferences)(nil),           // 15: client.v0.Preferences
-	(*PreferencesPatch)(nil),      // 16: client.v0.PreferencesPatch
-	(*ManagedSetting)(nil),        // 17: client.v0.ManagedSetting
-	(*ExitNode)(nil),              // 18: client.v0.ExitNode
-	(*ExitNodeStatus)(nil),        // 19: client.v0.ExitNodeStatus
-	(*HostTarget)(nil),            // 20: client.v0.HostTarget
-	(*SubnetTarget)(nil),          // 21: client.v0.SubnetTarget
-	(*ServiceTarget)(nil),         // 22: client.v0.ServiceTarget
-	(*ApplicationTarget)(nil),     // 23: client.v0.ApplicationTarget
-	(*Resource)(nil),              // 24: client.v0.Resource
-	(*Compatibility)(nil),         // 25: client.v0.Compatibility
-	(*VerifiedUpdate)(nil),        // 26: client.v0.VerifiedUpdate
-	(*UpdateInfo)(nil),            // 27: client.v0.UpdateInfo
-	(*SupportInfo)(nil),           // 28: client.v0.SupportInfo
-	(*Restriction)(nil),           // 29: client.v0.Restriction
-	(*SnapshotMetadata)(nil),      // 30: client.v0.SnapshotMetadata
-	(*Failure)(nil),               // 31: client.v0.Failure
-	(*timestamppb.Timestamp)(nil), // 32: google.protobuf.Timestamp
-	(*BuildIdentity)(nil),         // 33: client.v0.BuildIdentity
+	(ExitFamilyMode)(0),           // 4: client.v0.ExitFamilyMode
+	(ApplyState)(0),               // 5: client.v0.ApplyState
+	(ResourceKind)(0),             // 6: client.v0.ResourceKind
+	(UpdateClassification)(0),     // 7: client.v0.UpdateClassification
+	(DistributionChannel)(0),      // 8: client.v0.DistributionChannel
+	(CompatibilityState)(0),       // 9: client.v0.CompatibilityState
+	(UpdateState)(0),              // 10: client.v0.UpdateState
+	(LifecycleEvent)(0),           // 11: client.v0.LifecycleEvent
+	(*SettingControl)(nil),        // 12: client.v0.SettingControl
+	(*BooleanSetting)(nil),        // 13: client.v0.BooleanSetting
+	(*LifecycleSetting)(nil),      // 14: client.v0.LifecycleSetting
+	(*RuntimeLifecycle)(nil),      // 15: client.v0.RuntimeLifecycle
+	(*Preferences)(nil),           // 16: client.v0.Preferences
+	(*PreferencesPatch)(nil),      // 17: client.v0.PreferencesPatch
+	(*ManagedSetting)(nil),        // 18: client.v0.ManagedSetting
+	(*ExitNode)(nil),              // 19: client.v0.ExitNode
+	(*ExitFamilyStatus)(nil),      // 20: client.v0.ExitFamilyStatus
+	(*ExitNodeStatus)(nil),        // 21: client.v0.ExitNodeStatus
+	(*HostTarget)(nil),            // 22: client.v0.HostTarget
+	(*SubnetTarget)(nil),          // 23: client.v0.SubnetTarget
+	(*ServiceTarget)(nil),         // 24: client.v0.ServiceTarget
+	(*ApplicationTarget)(nil),     // 25: client.v0.ApplicationTarget
+	(*Resource)(nil),              // 26: client.v0.Resource
+	(*Compatibility)(nil),         // 27: client.v0.Compatibility
+	(*VerifiedUpdate)(nil),        // 28: client.v0.VerifiedUpdate
+	(*UpdateInfo)(nil),            // 29: client.v0.UpdateInfo
+	(*SupportInfo)(nil),           // 30: client.v0.SupportInfo
+	(*Restriction)(nil),           // 31: client.v0.Restriction
+	(*SnapshotMetadata)(nil),      // 32: client.v0.SnapshotMetadata
+	(*Failure)(nil),               // 33: client.v0.Failure
+	(*timestamppb.Timestamp)(nil), // 34: google.protobuf.Timestamp
+	(*BuildIdentity)(nil),         // 35: client.v0.BuildIdentity
 }
 var file_client_v0_features_proto_depIdxs = []int32{
 	0,  // 0: client.v0.SettingControl.source:type_name -> client.v0.SettingSource
-	29, // 1: client.v0.SettingControl.mutation:type_name -> client.v0.Restriction
-	11, // 2: client.v0.BooleanSetting.control:type_name -> client.v0.SettingControl
+	31, // 1: client.v0.SettingControl.mutation:type_name -> client.v0.Restriction
+	12, // 2: client.v0.BooleanSetting.control:type_name -> client.v0.SettingControl
 	1,  // 3: client.v0.LifecycleSetting.effective:type_name -> client.v0.LifecycleBehavior
 	1,  // 4: client.v0.LifecycleSetting.requested:type_name -> client.v0.LifecycleBehavior
-	11, // 5: client.v0.LifecycleSetting.control:type_name -> client.v0.SettingControl
+	12, // 5: client.v0.LifecycleSetting.control:type_name -> client.v0.SettingControl
 	1,  // 6: client.v0.LifecycleSetting.allowed_values:type_name -> client.v0.LifecycleBehavior
-	13, // 7: client.v0.RuntimeLifecycle.runtime_start:type_name -> client.v0.LifecycleSetting
-	13, // 8: client.v0.RuntimeLifecycle.ui_quit:type_name -> client.v0.LifecycleSetting
-	13, // 9: client.v0.RuntimeLifecycle.user_logoff:type_name -> client.v0.LifecycleSetting
-	13, // 10: client.v0.RuntimeLifecycle.suspend:type_name -> client.v0.LifecycleSetting
-	13, // 11: client.v0.RuntimeLifecycle.resume:type_name -> client.v0.LifecycleSetting
-	30, // 12: client.v0.Preferences.metadata:type_name -> client.v0.SnapshotMetadata
-	12, // 13: client.v0.Preferences.allow_inbound:type_name -> client.v0.BooleanSetting
-	12, // 14: client.v0.Preferences.accept_dns:type_name -> client.v0.BooleanSetting
-	12, // 15: client.v0.Preferences.accept_routes:type_name -> client.v0.BooleanSetting
-	14, // 16: client.v0.Preferences.lifecycle:type_name -> client.v0.RuntimeLifecycle
+	14, // 7: client.v0.RuntimeLifecycle.runtime_start:type_name -> client.v0.LifecycleSetting
+	14, // 8: client.v0.RuntimeLifecycle.ui_quit:type_name -> client.v0.LifecycleSetting
+	14, // 9: client.v0.RuntimeLifecycle.user_logoff:type_name -> client.v0.LifecycleSetting
+	14, // 10: client.v0.RuntimeLifecycle.suspend:type_name -> client.v0.LifecycleSetting
+	14, // 11: client.v0.RuntimeLifecycle.resume:type_name -> client.v0.LifecycleSetting
+	32, // 12: client.v0.Preferences.metadata:type_name -> client.v0.SnapshotMetadata
+	13, // 13: client.v0.Preferences.allow_inbound:type_name -> client.v0.BooleanSetting
+	13, // 14: client.v0.Preferences.accept_dns:type_name -> client.v0.BooleanSetting
+	13, // 15: client.v0.Preferences.accept_routes:type_name -> client.v0.BooleanSetting
+	15, // 16: client.v0.Preferences.lifecycle:type_name -> client.v0.RuntimeLifecycle
 	1,  // 17: client.v0.PreferencesPatch.runtime_start:type_name -> client.v0.LifecycleBehavior
 	1,  // 18: client.v0.PreferencesPatch.ui_quit:type_name -> client.v0.LifecycleBehavior
 	1,  // 19: client.v0.PreferencesPatch.user_logoff:type_name -> client.v0.LifecycleBehavior
 	1,  // 20: client.v0.PreferencesPatch.suspend:type_name -> client.v0.LifecycleBehavior
 	1,  // 21: client.v0.PreferencesPatch.resume:type_name -> client.v0.LifecycleBehavior
 	2,  // 22: client.v0.ManagedSetting.key:type_name -> client.v0.PreferenceKey
-	11, // 23: client.v0.ManagedSetting.control:type_name -> client.v0.SettingControl
+	12, // 23: client.v0.ManagedSetting.control:type_name -> client.v0.SettingControl
 	1,  // 24: client.v0.ManagedSetting.lifecycle_value:type_name -> client.v0.LifecycleBehavior
-	29, // 25: client.v0.ExitNode.selection:type_name -> client.v0.Restriction
+	31, // 25: client.v0.ExitNode.selection:type_name -> client.v0.Restriction
 	3,  // 26: client.v0.ExitNode.allowed_lan_access:type_name -> client.v0.LanAccess
-	30, // 27: client.v0.ExitNodeStatus.metadata:type_name -> client.v0.SnapshotMetadata
-	3,  // 28: client.v0.ExitNodeStatus.requested_lan_access:type_name -> client.v0.LanAccess
-	3,  // 29: client.v0.ExitNodeStatus.effective_lan_access:type_name -> client.v0.LanAccess
-	4,  // 30: client.v0.ExitNodeStatus.apply_state:type_name -> client.v0.ApplyState
-	11, // 31: client.v0.ExitNodeStatus.control:type_name -> client.v0.SettingControl
-	31, // 32: client.v0.ExitNodeStatus.failure:type_name -> client.v0.Failure
-	5,  // 33: client.v0.Resource.kind:type_name -> client.v0.ResourceKind
-	29, // 34: client.v0.Resource.availability:type_name -> client.v0.Restriction
-	12, // 35: client.v0.Resource.enabled:type_name -> client.v0.BooleanSetting
-	20, // 36: client.v0.Resource.host:type_name -> client.v0.HostTarget
-	21, // 37: client.v0.Resource.subnet:type_name -> client.v0.SubnetTarget
-	22, // 38: client.v0.Resource.service:type_name -> client.v0.ServiceTarget
-	23, // 39: client.v0.Resource.application:type_name -> client.v0.ApplicationTarget
-	8,  // 40: client.v0.Compatibility.state:type_name -> client.v0.CompatibilityState
-	32, // 41: client.v0.VerifiedUpdate.verified_at:type_name -> google.protobuf.Timestamp
-	32, // 42: client.v0.VerifiedUpdate.expires_at:type_name -> google.protobuf.Timestamp
-	33, // 43: client.v0.VerifiedUpdate.runtime:type_name -> client.v0.BuildIdentity
-	25, // 44: client.v0.VerifiedUpdate.compatibility:type_name -> client.v0.Compatibility
-	6,  // 45: client.v0.VerifiedUpdate.classification:type_name -> client.v0.UpdateClassification
-	7,  // 46: client.v0.VerifiedUpdate.channel:type_name -> client.v0.DistributionChannel
-	32, // 47: client.v0.VerifiedUpdate.mandatory_after:type_name -> google.protobuf.Timestamp
-	30, // 48: client.v0.UpdateInfo.metadata:type_name -> client.v0.SnapshotMetadata
-	33, // 49: client.v0.UpdateInfo.installed_runtime:type_name -> client.v0.BuildIdentity
-	33, // 50: client.v0.UpdateInfo.reported_ui:type_name -> client.v0.BuildIdentity
-	25, // 51: client.v0.UpdateInfo.installed_pair:type_name -> client.v0.Compatibility
-	9,  // 52: client.v0.UpdateInfo.state:type_name -> client.v0.UpdateState
-	26, // 53: client.v0.UpdateInfo.available:type_name -> client.v0.VerifiedUpdate
-	29, // 54: client.v0.UpdateInfo.discovery:type_name -> client.v0.Restriction
-	33, // 55: client.v0.SupportInfo.runtime:type_name -> client.v0.BuildIdentity
-	56, // [56:56] is the sub-list for method output_type
-	56, // [56:56] is the sub-list for method input_type
-	56, // [56:56] is the sub-list for extension type_name
-	56, // [56:56] is the sub-list for extension extendee
-	0,  // [0:56] is the sub-list for field type_name
+	4,  // 27: client.v0.ExitNode.allowed_family_modes:type_name -> client.v0.ExitFamilyMode
+	5,  // 28: client.v0.ExitFamilyStatus.apply_state:type_name -> client.v0.ApplyState
+	33, // 29: client.v0.ExitFamilyStatus.failure:type_name -> client.v0.Failure
+	32, // 30: client.v0.ExitNodeStatus.metadata:type_name -> client.v0.SnapshotMetadata
+	3,  // 31: client.v0.ExitNodeStatus.requested_lan_access:type_name -> client.v0.LanAccess
+	3,  // 32: client.v0.ExitNodeStatus.effective_lan_access:type_name -> client.v0.LanAccess
+	5,  // 33: client.v0.ExitNodeStatus.apply_state:type_name -> client.v0.ApplyState
+	12, // 34: client.v0.ExitNodeStatus.control:type_name -> client.v0.SettingControl
+	33, // 35: client.v0.ExitNodeStatus.failure:type_name -> client.v0.Failure
+	4,  // 36: client.v0.ExitNodeStatus.requested_family_mode:type_name -> client.v0.ExitFamilyMode
+	20, // 37: client.v0.ExitNodeStatus.ipv4:type_name -> client.v0.ExitFamilyStatus
+	20, // 38: client.v0.ExitNodeStatus.ipv6:type_name -> client.v0.ExitFamilyStatus
+	6,  // 39: client.v0.Resource.kind:type_name -> client.v0.ResourceKind
+	31, // 40: client.v0.Resource.availability:type_name -> client.v0.Restriction
+	13, // 41: client.v0.Resource.enabled:type_name -> client.v0.BooleanSetting
+	22, // 42: client.v0.Resource.host:type_name -> client.v0.HostTarget
+	23, // 43: client.v0.Resource.subnet:type_name -> client.v0.SubnetTarget
+	24, // 44: client.v0.Resource.service:type_name -> client.v0.ServiceTarget
+	25, // 45: client.v0.Resource.application:type_name -> client.v0.ApplicationTarget
+	9,  // 46: client.v0.Compatibility.state:type_name -> client.v0.CompatibilityState
+	34, // 47: client.v0.VerifiedUpdate.verified_at:type_name -> google.protobuf.Timestamp
+	34, // 48: client.v0.VerifiedUpdate.expires_at:type_name -> google.protobuf.Timestamp
+	35, // 49: client.v0.VerifiedUpdate.runtime:type_name -> client.v0.BuildIdentity
+	27, // 50: client.v0.VerifiedUpdate.compatibility:type_name -> client.v0.Compatibility
+	7,  // 51: client.v0.VerifiedUpdate.classification:type_name -> client.v0.UpdateClassification
+	8,  // 52: client.v0.VerifiedUpdate.channel:type_name -> client.v0.DistributionChannel
+	34, // 53: client.v0.VerifiedUpdate.mandatory_after:type_name -> google.protobuf.Timestamp
+	32, // 54: client.v0.UpdateInfo.metadata:type_name -> client.v0.SnapshotMetadata
+	35, // 55: client.v0.UpdateInfo.installed_runtime:type_name -> client.v0.BuildIdentity
+	35, // 56: client.v0.UpdateInfo.reported_ui:type_name -> client.v0.BuildIdentity
+	27, // 57: client.v0.UpdateInfo.installed_pair:type_name -> client.v0.Compatibility
+	10, // 58: client.v0.UpdateInfo.state:type_name -> client.v0.UpdateState
+	28, // 59: client.v0.UpdateInfo.available:type_name -> client.v0.VerifiedUpdate
+	31, // 60: client.v0.UpdateInfo.discovery:type_name -> client.v0.Restriction
+	35, // 61: client.v0.SupportInfo.runtime:type_name -> client.v0.BuildIdentity
+	62, // [62:62] is the sub-list for method output_type
+	62, // [62:62] is the sub-list for method input_type
+	62, // [62:62] is the sub-list for extension type_name
+	62, // [62:62] is the sub-list for extension extendee
+	0,  // [0:62] is the sub-list for field type_name
 }
 
 func init() { file_client_v0_features_proto_init() }
@@ -2532,7 +2730,8 @@ func file_client_v0_features_proto_init() {
 		(*ManagedSetting_LifecycleValue)(nil),
 	}
 	file_client_v0_features_proto_msgTypes[8].OneofWrappers = []any{}
-	file_client_v0_features_proto_msgTypes[13].OneofWrappers = []any{
+	file_client_v0_features_proto_msgTypes[9].OneofWrappers = []any{}
+	file_client_v0_features_proto_msgTypes[14].OneofWrappers = []any{
 		(*Resource_Host)(nil),
 		(*Resource_Subnet)(nil),
 		(*Resource_Service)(nil),
@@ -2543,8 +2742,8 @@ func file_client_v0_features_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v0_features_proto_rawDesc), len(file_client_v0_features_proto_rawDesc)),
-			NumEnums:      11,
-			NumMessages:   18,
+			NumEnums:      12,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

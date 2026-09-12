@@ -2839,11 +2839,14 @@ func (x *GetExitNodeResponse) GetStatus() *ExitNodeStatus {
 }
 
 type SelectExitNodeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Mutation      *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
-	Profile       *ProfileRef            `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
-	ExitNodeId    string                 `protobuf:"bytes,3,opt,name=exit_node_id,json=exitNodeId,proto3" json:"exit_node_id,omitempty"`
-	LanAccess     LanAccess              `protobuf:"varint,4,opt,name=lan_access,json=lanAccess,proto3,enum=client.v0.LanAccess" json:"lan_access,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Mutation   *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	Profile    *ProfileRef            `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
+	ExitNodeId string                 `protobuf:"bytes,3,opt,name=exit_node_id,json=exitNodeId,proto3" json:"exit_node_id,omitempty"`
+	LanAccess  LanAccess              `protobuf:"varint,4,opt,name=lan_access,json=lanAccess,proto3,enum=client.v0.LanAccess" json:"lan_access,omitempty"`
+	// Must be explicitly listed in ExitNode.allowed_family_modes.
+	// UNSPECIFIED/NONE and unknown values fail INVALID_ARGUMENT; no downgrade.
+	FamilyMode    ExitFamilyMode `protobuf:"varint,5,opt,name=family_mode,json=familyMode,proto3,enum=client.v0.ExitFamilyMode" json:"family_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2904,6 +2907,13 @@ func (x *SelectExitNodeRequest) GetLanAccess() LanAccess {
 		return x.LanAccess
 	}
 	return LanAccess_LAN_ACCESS_UNSPECIFIED
+}
+
+func (x *SelectExitNodeRequest) GetFamilyMode() ExitFamilyMode {
+	if x != nil {
+		return x.FamilyMode
+	}
+	return ExitFamilyMode_EXIT_FAMILY_MODE_UNSPECIFIED
 }
 
 type SelectExitNodeResponse struct {
@@ -4369,14 +4379,16 @@ const file_client_v0_service_proto_rawDesc = "" +
 	"\x12GetExitNodeRequest\x12/\n" +
 	"\aprofile\x18\x01 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\"H\n" +
 	"\x13GetExitNodeResponse\x121\n" +
-	"\x06status\x18\x01 \x01(\v2\x19.client.v0.ExitNodeStatusR\x06status\"\xd7\x01\n" +
+	"\x06status\x18\x01 \x01(\v2\x19.client.v0.ExitNodeStatusR\x06status\"\x93\x02\n" +
 	"\x15SelectExitNodeRequest\x126\n" +
 	"\bmutation\x18\x01 \x01(\v2\x1a.client.v0.MutationContextR\bmutation\x12/\n" +
 	"\aprofile\x18\x02 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\x12 \n" +
 	"\fexit_node_id\x18\x03 \x01(\tR\n" +
 	"exitNodeId\x123\n" +
 	"\n" +
-	"lan_access\x18\x04 \x01(\x0e2\x14.client.v0.LanAccessR\tlanAccess\"L\n" +
+	"lan_access\x18\x04 \x01(\x0e2\x14.client.v0.LanAccessR\tlanAccess\x12:\n" +
+	"\vfamily_mode\x18\x05 \x01(\x0e2\x19.client.v0.ExitFamilyModeR\n" +
+	"familyMode\"L\n" +
 	"\x16SelectExitNodeResponse\x122\n" +
 	"\toperation\x18\x01 \x01(\v2\x14.client.v0.OperationR\toperation\"\x7f\n" +
 	"\x14ClearExitNodeRequest\x126\n" +
@@ -4465,46 +4477,47 @@ const file_client_v0_service_proto_rawDesc = "" +
 	"\x0eDOMAIN_SUPPORT\x10\t\x12\x1a\n" +
 	"\x16DOMAIN_SERVER_IDENTITY\x10\n" +
 	"\x12\x12\n" +
-	"\x0eDOMAIN_SESSION\x10\v2\xa0\x1b\n" +
+	"\x0eDOMAIN_SESSION\x10\v2\xf4\x1b\n" +
 	"\rClientService\x12[\n" +
 	"\x0eGetRuntimeInfo\x12 .client.v0.GetRuntimeInfoRequest\x1a!.client.v0.GetRuntimeInfoResponse\"\x04\xc0\xf3\x18\x01\x12L\n" +
 	"\tGetStatus\x12\x1b.client.v0.GetStatusRequest\x1a\x1c.client.v0.GetStatusResponse\"\x04\xc0\xf3\x18\x01\x12T\n" +
 	"\vWatchEvents\x12\x1d.client.v0.WatchEventsRequest\x1a\x1e.client.v0.WatchEventsResponse\"\x04\xc0\xf3\x18\x010\x01\x12U\n" +
-	"\fGetOperation\x12\x1e.client.v0.GetOperationRequest\x1a\x1f.client.v0.GetOperationResponse\"\x04\xc0\xf3\x18\x02\x12C\n" +
-	"\x06Enroll\x12\x18.client.v0.EnrollRequest\x1a\x19.client.v0.EnrollResponse\"\x04\xc0\xf3\x18\x02\x12F\n" +
-	"\aConnect\x12\x19.client.v0.ConnectRequest\x1a\x1a.client.v0.ConnectResponse\"\x04\xc0\xf3\x18\x02\x12O\n" +
+	"\fGetOperation\x12\x1e.client.v0.GetOperationRequest\x1a\x1f.client.v0.GetOperationResponse\"\x04\xc0\xf3\x18\x02\x12K\n" +
+	"\x06Enroll\x12\x18.client.v0.EnrollRequest\x1a\x19.client.v0.EnrollResponse\"\f\xc0\xf3\x18\x02\xc8\xf3\x18\x01\xd0\xf3\x18\x01\x12J\n" +
+	"\aConnect\x12\x19.client.v0.ConnectRequest\x1a\x1a.client.v0.ConnectResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\x02\x12S\n" +
 	"\n" +
-	"Disconnect\x12\x1c.client.v0.DisconnectRequest\x1a\x1d.client.v0.DisconnectResponse\"\x04\xc0\xf3\x18\x02\x12d\n" +
-	"\x11GetServerIdentity\x12#.client.v0.GetServerIdentityRequest\x1a$.client.v0.GetServerIdentityResponse\"\x04\xc0\xf3\x18\x02\x12j\n" +
-	"\x13TrustServerIdentity\x12%.client.v0.TrustServerIdentityRequest\x1a&.client.v0.TrustServerIdentityResponse\"\x04\xc0\xf3\x18\x03\x12C\n" +
-	"\x06Logout\x12\x18.client.v0.LogoutRequest\x1a\x19.client.v0.LogoutResponse\"\x04\xc0\xf3\x18\x02\x12p\n" +
-	"\x15ForgetLocalEnrollment\x12'.client.v0.ForgetLocalEnrollmentRequest\x1a(.client.v0.ForgetLocalEnrollmentResponse\"\x04\xc0\xf3\x18\x03\x12U\n" +
-	"\fListNetworks\x12\x1e.client.v0.ListNetworksRequest\x1a\x1f.client.v0.ListNetworksResponse\"\x04\xc0\xf3\x18\x02\x12X\n" +
-	"\rSelectNetwork\x12\x1f.client.v0.SelectNetworkRequest\x1a .client.v0.SelectNetworkResponse\"\x04\xc0\xf3\x18\x02\x12L\n" +
+	"Disconnect\x12\x1c.client.v0.DisconnectRequest\x1a\x1d.client.v0.DisconnectResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\x03\x12d\n" +
+	"\x11GetServerIdentity\x12#.client.v0.GetServerIdentityRequest\x1a$.client.v0.GetServerIdentityResponse\"\x04\xc0\xf3\x18\x02\x12n\n" +
+	"\x13TrustServerIdentity\x12%.client.v0.TrustServerIdentityRequest\x1a&.client.v0.TrustServerIdentityResponse\"\b\xc0\xf3\x18\x03\xd0\xf3\x18\x04\x12G\n" +
+	"\x06Logout\x12\x18.client.v0.LogoutRequest\x1a\x19.client.v0.LogoutResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\x05\x12t\n" +
+	"\x15ForgetLocalEnrollment\x12'.client.v0.ForgetLocalEnrollmentRequest\x1a(.client.v0.ForgetLocalEnrollmentResponse\"\b\xc0\xf3\x18\x03\xd0\xf3\x18\x06\x12U\n" +
+	"\fListNetworks\x12\x1e.client.v0.ListNetworksRequest\x1a\x1f.client.v0.ListNetworksResponse\"\x04\xc0\xf3\x18\x02\x12\\\n" +
+	"\rSelectNetwork\x12\x1f.client.v0.SelectNetworkRequest\x1a .client.v0.SelectNetworkResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\a\x12L\n" +
 	"\tListPeers\x12\x1b.client.v0.ListPeersRequest\x1a\x1c.client.v0.ListPeersResponse\"\x04\xc0\xf3\x18\x02\x12[\n" +
-	"\x0eGetDiagnostics\x12 .client.v0.GetDiagnosticsRequest\x1a!.client.v0.GetDiagnosticsResponse\"\x04\xc0\xf3\x18\x02\x12v\n" +
-	"\x17CreateDiagnosticsBundle\x12).client.v0.CreateDiagnosticsBundleRequest\x1a*.client.v0.CreateDiagnosticsBundleResponse\"\x04\xc0\xf3\x18\x02\x12p\n" +
+	"\x0eGetDiagnostics\x12 .client.v0.GetDiagnosticsRequest\x1a!.client.v0.GetDiagnosticsResponse\"\x04\xc0\xf3\x18\x02\x12z\n" +
+	"\x17CreateDiagnosticsBundle\x12).client.v0.CreateDiagnosticsBundleRequest\x1a*.client.v0.CreateDiagnosticsBundleResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\b\x12p\n" +
 	"\x15ReadDiagnosticsBundle\x12'.client.v0.ReadDiagnosticsBundleRequest\x1a(.client.v0.ReadDiagnosticsBundleResponse\"\x04\xc0\xf3\x18\x02\x12[\n" +
 	"\x0eListRecentLogs\x12 .client.v0.ListRecentLogsRequest\x1a!.client.v0.ListRecentLogsResponse\"\x04\xc0\xf3\x18\x02\x12U\n" +
-	"\fListProfiles\x12\x1e.client.v0.ListProfilesRequest\x1a\x1f.client.v0.ListProfilesResponse\"\x04\xc0\xf3\x18\x02\x12X\n" +
-	"\rCreateProfile\x12\x1f.client.v0.CreateProfileRequest\x1a .client.v0.CreateProfileResponse\"\x04\xc0\xf3\x18\x02\x12X\n" +
-	"\rSelectProfile\x12\x1f.client.v0.SelectProfileRequest\x1a .client.v0.SelectProfileResponse\"\x04\xc0\xf3\x18\x02\x12X\n" +
-	"\rRenameProfile\x12\x1f.client.v0.RenameProfileRequest\x1a .client.v0.RenameProfileResponse\"\x04\xc0\xf3\x18\x02\x12X\n" +
-	"\rRemoveProfile\x12\x1f.client.v0.RemoveProfileRequest\x1a .client.v0.RemoveProfileResponse\"\x04\xc0\xf3\x18\x02\x12O\n" +
+	"\fListProfiles\x12\x1e.client.v0.ListProfilesRequest\x1a\x1f.client.v0.ListProfilesResponse\"\x04\xc0\xf3\x18\x02\x12`\n" +
+	"\rCreateProfile\x12\x1f.client.v0.CreateProfileRequest\x1a .client.v0.CreateProfileResponse\"\f\xc0\xf3\x18\x02\xc8\xf3\x18\x01\xd0\xf3\x18\t\x12\\\n" +
+	"\rSelectProfile\x12\x1f.client.v0.SelectProfileRequest\x1a .client.v0.SelectProfileResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\n" +
+	"\x12\\\n" +
+	"\rRenameProfile\x12\x1f.client.v0.RenameProfileRequest\x1a .client.v0.RenameProfileResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\v\x12\\\n" +
+	"\rRemoveProfile\x12\x1f.client.v0.RemoveProfileRequest\x1a .client.v0.RemoveProfileResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\f\x12O\n" +
 	"\n" +
-	"GetSession\x12\x1c.client.v0.GetSessionRequest\x1a\x1d.client.v0.GetSessionResponse\"\x04\xc0\xf3\x18\x02\x12U\n" +
-	"\fRenewSession\x12\x1e.client.v0.RenewSessionRequest\x1a\x1f.client.v0.RenewSessionResponse\"\x04\xc0\xf3\x18\x02\x12X\n" +
+	"GetSession\x12\x1c.client.v0.GetSessionRequest\x1a\x1d.client.v0.GetSessionResponse\"\x04\xc0\xf3\x18\x02\x12Y\n" +
+	"\fRenewSession\x12\x1e.client.v0.RenewSessionRequest\x1a\x1f.client.v0.RenewSessionResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\r\x12X\n" +
 	"\rListExitNodes\x12\x1f.client.v0.ListExitNodesRequest\x1a .client.v0.ListExitNodesResponse\"\x04\xc0\xf3\x18\x02\x12R\n" +
-	"\vGetExitNode\x12\x1d.client.v0.GetExitNodeRequest\x1a\x1e.client.v0.GetExitNodeResponse\"\x04\xc0\xf3\x18\x02\x12[\n" +
-	"\x0eSelectExitNode\x12 .client.v0.SelectExitNodeRequest\x1a!.client.v0.SelectExitNodeResponse\"\x04\xc0\xf3\x18\x02\x12X\n" +
-	"\rClearExitNode\x12\x1f.client.v0.ClearExitNodeRequest\x1a .client.v0.ClearExitNodeResponse\"\x04\xc0\xf3\x18\x02\x12[\n" +
-	"\x0eGetPreferences\x12 .client.v0.GetPreferencesRequest\x1a!.client.v0.GetPreferencesResponse\"\x04\xc0\xf3\x18\x02\x12[\n" +
-	"\x0eSetPreferences\x12 .client.v0.SetPreferencesRequest\x1a!.client.v0.SetPreferencesResponse\"\x04\xc0\xf3\x18\x02\x12a\n" +
-	"\x10ResetPreferences\x12\".client.v0.ResetPreferencesRequest\x1a#.client.v0.ResetPreferencesResponse\"\x04\xc0\xf3\x18\x02\x12j\n" +
+	"\vGetExitNode\x12\x1d.client.v0.GetExitNodeRequest\x1a\x1e.client.v0.GetExitNodeResponse\"\x04\xc0\xf3\x18\x02\x12_\n" +
+	"\x0eSelectExitNode\x12 .client.v0.SelectExitNodeRequest\x1a!.client.v0.SelectExitNodeResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\x0e\x12\\\n" +
+	"\rClearExitNode\x12\x1f.client.v0.ClearExitNodeRequest\x1a .client.v0.ClearExitNodeResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\x0f\x12[\n" +
+	"\x0eGetPreferences\x12 .client.v0.GetPreferencesRequest\x1a!.client.v0.GetPreferencesResponse\"\x04\xc0\xf3\x18\x02\x12_\n" +
+	"\x0eSetPreferences\x12 .client.v0.SetPreferencesRequest\x1a!.client.v0.SetPreferencesResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\x10\x12e\n" +
+	"\x10ResetPreferences\x12\".client.v0.ResetPreferencesRequest\x1a#.client.v0.ResetPreferencesResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\x11\x12j\n" +
 	"\x13ListManagedSettings\x12%.client.v0.ListManagedSettingsRequest\x1a&.client.v0.ListManagedSettingsResponse\"\x04\xc0\xf3\x18\x02\x12X\n" +
-	"\rListResources\x12\x1f.client.v0.ListResourcesRequest\x1a .client.v0.ListResourcesResponse\"\x04\xc0\xf3\x18\x02\x12g\n" +
-	"\x12SetResourceEnabled\x12$.client.v0.SetResourceEnabledRequest\x1a%.client.v0.SetResourceEnabledResponse\"\x04\xc0\xf3\x18\x02\x12^\n" +
-	"\x0fNotifyLifecycle\x12!.client.v0.NotifyLifecycleRequest\x1a\".client.v0.NotifyLifecycleResponse\"\x04\xc0\xf3\x18\x02\x12X\n" +
+	"\rListResources\x12\x1f.client.v0.ListResourcesRequest\x1a .client.v0.ListResourcesResponse\"\x04\xc0\xf3\x18\x02\x12k\n" +
+	"\x12SetResourceEnabled\x12$.client.v0.SetResourceEnabledRequest\x1a%.client.v0.SetResourceEnabledResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\x12\x12b\n" +
+	"\x0fNotifyLifecycle\x12!.client.v0.NotifyLifecycleRequest\x1a\".client.v0.NotifyLifecycleResponse\"\b\xc0\xf3\x18\x02\xd0\xf3\x18\x13\x12X\n" +
 	"\rGetUpdateInfo\x12\x1f.client.v0.GetUpdateInfoRequest\x1a .client.v0.GetUpdateInfoResponse\"\x04\xc0\xf3\x18\x02\x12[\n" +
 	"\x0eGetSupportInfo\x12 .client.v0.GetSupportInfoRequest\x1a!.client.v0.GetSupportInfoResponse\"\x04\xc0\xf3\x18\x01B6Z4github.com/endless-net/client/clientipc/v0;clientipcb\x06proto3"
 
@@ -4622,17 +4635,18 @@ var file_client_v0_service_proto_goTypes = []any{
 	(*ExitNode)(nil),                        // 96: client.v0.ExitNode
 	(*ExitNodeStatus)(nil),                  // 97: client.v0.ExitNodeStatus
 	(LanAccess)(0),                          // 98: client.v0.LanAccess
-	(*Preferences)(nil),                     // 99: client.v0.Preferences
-	(*PreferencesPatch)(nil),                // 100: client.v0.PreferencesPatch
-	(PreferenceKey)(0),                      // 101: client.v0.PreferenceKey
-	(*ManagedSetting)(nil),                  // 102: client.v0.ManagedSetting
-	(ResourceKind)(0),                       // 103: client.v0.ResourceKind
-	(*Resource)(nil),                        // 104: client.v0.Resource
-	(LifecycleEvent)(0),                     // 105: client.v0.LifecycleEvent
-	(*BuildIdentity)(nil),                   // 106: client.v0.BuildIdentity
-	(*UpdateInfo)(nil),                      // 107: client.v0.UpdateInfo
-	(*SupportInfo)(nil),                     // 108: client.v0.SupportInfo
-	(*Failure)(nil),                         // 109: client.v0.Failure
+	(ExitFamilyMode)(0),                     // 99: client.v0.ExitFamilyMode
+	(*Preferences)(nil),                     // 100: client.v0.Preferences
+	(*PreferencesPatch)(nil),                // 101: client.v0.PreferencesPatch
+	(PreferenceKey)(0),                      // 102: client.v0.PreferenceKey
+	(*ManagedSetting)(nil),                  // 103: client.v0.ManagedSetting
+	(ResourceKind)(0),                       // 104: client.v0.ResourceKind
+	(*Resource)(nil),                        // 105: client.v0.Resource
+	(LifecycleEvent)(0),                     // 106: client.v0.LifecycleEvent
+	(*BuildIdentity)(nil),                   // 107: client.v0.BuildIdentity
+	(*UpdateInfo)(nil),                      // 108: client.v0.UpdateInfo
+	(*SupportInfo)(nil),                     // 109: client.v0.SupportInfo
+	(*Failure)(nil),                         // 110: client.v0.Failure
 }
 var file_client_v0_service_proto_depIdxs = []int32{
 	79,  // 0: client.v0.GetRuntimeInfoResponse.runtime:type_name -> client.v0.RuntimeInfo
@@ -4710,129 +4724,130 @@ var file_client_v0_service_proto_depIdxs = []int32{
 	82,  // 72: client.v0.SelectExitNodeRequest.mutation:type_name -> client.v0.MutationContext
 	83,  // 73: client.v0.SelectExitNodeRequest.profile:type_name -> client.v0.ProfileRef
 	98,  // 74: client.v0.SelectExitNodeRequest.lan_access:type_name -> client.v0.LanAccess
-	81,  // 75: client.v0.SelectExitNodeResponse.operation:type_name -> client.v0.Operation
-	82,  // 76: client.v0.ClearExitNodeRequest.mutation:type_name -> client.v0.MutationContext
-	83,  // 77: client.v0.ClearExitNodeRequest.profile:type_name -> client.v0.ProfileRef
-	81,  // 78: client.v0.ClearExitNodeResponse.operation:type_name -> client.v0.Operation
-	83,  // 79: client.v0.GetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
-	99,  // 80: client.v0.GetPreferencesResponse.preferences:type_name -> client.v0.Preferences
-	82,  // 81: client.v0.SetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
-	83,  // 82: client.v0.SetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
-	100, // 83: client.v0.SetPreferencesRequest.patch:type_name -> client.v0.PreferencesPatch
-	81,  // 84: client.v0.SetPreferencesResponse.operation:type_name -> client.v0.Operation
-	82,  // 85: client.v0.ResetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
-	83,  // 86: client.v0.ResetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
-	101, // 87: client.v0.ResetPreferencesRequest.keys:type_name -> client.v0.PreferenceKey
-	81,  // 88: client.v0.ResetPreferencesResponse.operation:type_name -> client.v0.Operation
-	83,  // 89: client.v0.ListManagedSettingsRequest.profile:type_name -> client.v0.ProfileRef
-	102, // 90: client.v0.ListManagedSettingsResponse.settings:type_name -> client.v0.ManagedSetting
-	86,  // 91: client.v0.ListManagedSettingsResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	83,  // 92: client.v0.ListResourcesRequest.profile:type_name -> client.v0.ProfileRef
-	87,  // 93: client.v0.ListResourcesRequest.page:type_name -> client.v0.PageRequest
-	103, // 94: client.v0.ListResourcesRequest.kinds:type_name -> client.v0.ResourceKind
-	104, // 95: client.v0.ListResourcesResponse.resources:type_name -> client.v0.Resource
-	89,  // 96: client.v0.ListResourcesResponse.page:type_name -> client.v0.PageResponse
-	82,  // 97: client.v0.SetResourceEnabledRequest.mutation:type_name -> client.v0.MutationContext
-	83,  // 98: client.v0.SetResourceEnabledRequest.profile:type_name -> client.v0.ProfileRef
-	81,  // 99: client.v0.SetResourceEnabledResponse.operation:type_name -> client.v0.Operation
-	82,  // 100: client.v0.NotifyLifecycleRequest.mutation:type_name -> client.v0.MutationContext
-	83,  // 101: client.v0.NotifyLifecycleRequest.profile:type_name -> client.v0.ProfileRef
-	105, // 102: client.v0.NotifyLifecycleRequest.event:type_name -> client.v0.LifecycleEvent
-	81,  // 103: client.v0.NotifyLifecycleResponse.operation:type_name -> client.v0.Operation
-	106, // 104: client.v0.GetUpdateInfoRequest.reported_ui:type_name -> client.v0.BuildIdentity
-	107, // 105: client.v0.GetUpdateInfoResponse.info:type_name -> client.v0.UpdateInfo
-	108, // 106: client.v0.GetSupportInfoResponse.info:type_name -> client.v0.SupportInfo
-	86,  // 107: client.v0.WatchEventsResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	77,  // 108: client.v0.WatchEventsResponse.snapshot:type_name -> client.v0.SnapshotEvent
-	80,  // 109: client.v0.WatchEventsResponse.status_changed:type_name -> client.v0.Status
-	78,  // 110: client.v0.WatchEventsResponse.invalidated:type_name -> client.v0.DomainInvalidated
-	81,  // 111: client.v0.WatchEventsResponse.operation_changed:type_name -> client.v0.Operation
-	109, // 112: client.v0.WatchEventsResponse.failure:type_name -> client.v0.Failure
-	95,  // 113: client.v0.WatchEventsResponse.session_changed:type_name -> client.v0.Session
-	79,  // 114: client.v0.SnapshotEvent.runtime:type_name -> client.v0.RuntimeInfo
-	80,  // 115: client.v0.SnapshotEvent.status:type_name -> client.v0.Status
-	0,   // 116: client.v0.DomainInvalidated.domain:type_name -> client.v0.Domain
-	1,   // 117: client.v0.ClientService.GetRuntimeInfo:input_type -> client.v0.GetRuntimeInfoRequest
-	3,   // 118: client.v0.ClientService.GetStatus:input_type -> client.v0.GetStatusRequest
-	5,   // 119: client.v0.ClientService.WatchEvents:input_type -> client.v0.WatchEventsRequest
-	6,   // 120: client.v0.ClientService.GetOperation:input_type -> client.v0.GetOperationRequest
-	8,   // 121: client.v0.ClientService.Enroll:input_type -> client.v0.EnrollRequest
-	10,  // 122: client.v0.ClientService.Connect:input_type -> client.v0.ConnectRequest
-	12,  // 123: client.v0.ClientService.Disconnect:input_type -> client.v0.DisconnectRequest
-	14,  // 124: client.v0.ClientService.GetServerIdentity:input_type -> client.v0.GetServerIdentityRequest
-	16,  // 125: client.v0.ClientService.TrustServerIdentity:input_type -> client.v0.TrustServerIdentityRequest
-	18,  // 126: client.v0.ClientService.Logout:input_type -> client.v0.LogoutRequest
-	20,  // 127: client.v0.ClientService.ForgetLocalEnrollment:input_type -> client.v0.ForgetLocalEnrollmentRequest
-	22,  // 128: client.v0.ClientService.ListNetworks:input_type -> client.v0.ListNetworksRequest
-	24,  // 129: client.v0.ClientService.SelectNetwork:input_type -> client.v0.SelectNetworkRequest
-	26,  // 130: client.v0.ClientService.ListPeers:input_type -> client.v0.ListPeersRequest
-	28,  // 131: client.v0.ClientService.GetDiagnostics:input_type -> client.v0.GetDiagnosticsRequest
-	30,  // 132: client.v0.ClientService.CreateDiagnosticsBundle:input_type -> client.v0.CreateDiagnosticsBundleRequest
-	32,  // 133: client.v0.ClientService.ReadDiagnosticsBundle:input_type -> client.v0.ReadDiagnosticsBundleRequest
-	34,  // 134: client.v0.ClientService.ListRecentLogs:input_type -> client.v0.ListRecentLogsRequest
-	36,  // 135: client.v0.ClientService.ListProfiles:input_type -> client.v0.ListProfilesRequest
-	38,  // 136: client.v0.ClientService.CreateProfile:input_type -> client.v0.CreateProfileRequest
-	40,  // 137: client.v0.ClientService.SelectProfile:input_type -> client.v0.SelectProfileRequest
-	42,  // 138: client.v0.ClientService.RenameProfile:input_type -> client.v0.RenameProfileRequest
-	44,  // 139: client.v0.ClientService.RemoveProfile:input_type -> client.v0.RemoveProfileRequest
-	46,  // 140: client.v0.ClientService.GetSession:input_type -> client.v0.GetSessionRequest
-	48,  // 141: client.v0.ClientService.RenewSession:input_type -> client.v0.RenewSessionRequest
-	50,  // 142: client.v0.ClientService.ListExitNodes:input_type -> client.v0.ListExitNodesRequest
-	52,  // 143: client.v0.ClientService.GetExitNode:input_type -> client.v0.GetExitNodeRequest
-	54,  // 144: client.v0.ClientService.SelectExitNode:input_type -> client.v0.SelectExitNodeRequest
-	56,  // 145: client.v0.ClientService.ClearExitNode:input_type -> client.v0.ClearExitNodeRequest
-	58,  // 146: client.v0.ClientService.GetPreferences:input_type -> client.v0.GetPreferencesRequest
-	60,  // 147: client.v0.ClientService.SetPreferences:input_type -> client.v0.SetPreferencesRequest
-	62,  // 148: client.v0.ClientService.ResetPreferences:input_type -> client.v0.ResetPreferencesRequest
-	64,  // 149: client.v0.ClientService.ListManagedSettings:input_type -> client.v0.ListManagedSettingsRequest
-	66,  // 150: client.v0.ClientService.ListResources:input_type -> client.v0.ListResourcesRequest
-	68,  // 151: client.v0.ClientService.SetResourceEnabled:input_type -> client.v0.SetResourceEnabledRequest
-	70,  // 152: client.v0.ClientService.NotifyLifecycle:input_type -> client.v0.NotifyLifecycleRequest
-	72,  // 153: client.v0.ClientService.GetUpdateInfo:input_type -> client.v0.GetUpdateInfoRequest
-	74,  // 154: client.v0.ClientService.GetSupportInfo:input_type -> client.v0.GetSupportInfoRequest
-	2,   // 155: client.v0.ClientService.GetRuntimeInfo:output_type -> client.v0.GetRuntimeInfoResponse
-	4,   // 156: client.v0.ClientService.GetStatus:output_type -> client.v0.GetStatusResponse
-	76,  // 157: client.v0.ClientService.WatchEvents:output_type -> client.v0.WatchEventsResponse
-	7,   // 158: client.v0.ClientService.GetOperation:output_type -> client.v0.GetOperationResponse
-	9,   // 159: client.v0.ClientService.Enroll:output_type -> client.v0.EnrollResponse
-	11,  // 160: client.v0.ClientService.Connect:output_type -> client.v0.ConnectResponse
-	13,  // 161: client.v0.ClientService.Disconnect:output_type -> client.v0.DisconnectResponse
-	15,  // 162: client.v0.ClientService.GetServerIdentity:output_type -> client.v0.GetServerIdentityResponse
-	17,  // 163: client.v0.ClientService.TrustServerIdentity:output_type -> client.v0.TrustServerIdentityResponse
-	19,  // 164: client.v0.ClientService.Logout:output_type -> client.v0.LogoutResponse
-	21,  // 165: client.v0.ClientService.ForgetLocalEnrollment:output_type -> client.v0.ForgetLocalEnrollmentResponse
-	23,  // 166: client.v0.ClientService.ListNetworks:output_type -> client.v0.ListNetworksResponse
-	25,  // 167: client.v0.ClientService.SelectNetwork:output_type -> client.v0.SelectNetworkResponse
-	27,  // 168: client.v0.ClientService.ListPeers:output_type -> client.v0.ListPeersResponse
-	29,  // 169: client.v0.ClientService.GetDiagnostics:output_type -> client.v0.GetDiagnosticsResponse
-	31,  // 170: client.v0.ClientService.CreateDiagnosticsBundle:output_type -> client.v0.CreateDiagnosticsBundleResponse
-	33,  // 171: client.v0.ClientService.ReadDiagnosticsBundle:output_type -> client.v0.ReadDiagnosticsBundleResponse
-	35,  // 172: client.v0.ClientService.ListRecentLogs:output_type -> client.v0.ListRecentLogsResponse
-	37,  // 173: client.v0.ClientService.ListProfiles:output_type -> client.v0.ListProfilesResponse
-	39,  // 174: client.v0.ClientService.CreateProfile:output_type -> client.v0.CreateProfileResponse
-	41,  // 175: client.v0.ClientService.SelectProfile:output_type -> client.v0.SelectProfileResponse
-	43,  // 176: client.v0.ClientService.RenameProfile:output_type -> client.v0.RenameProfileResponse
-	45,  // 177: client.v0.ClientService.RemoveProfile:output_type -> client.v0.RemoveProfileResponse
-	47,  // 178: client.v0.ClientService.GetSession:output_type -> client.v0.GetSessionResponse
-	49,  // 179: client.v0.ClientService.RenewSession:output_type -> client.v0.RenewSessionResponse
-	51,  // 180: client.v0.ClientService.ListExitNodes:output_type -> client.v0.ListExitNodesResponse
-	53,  // 181: client.v0.ClientService.GetExitNode:output_type -> client.v0.GetExitNodeResponse
-	55,  // 182: client.v0.ClientService.SelectExitNode:output_type -> client.v0.SelectExitNodeResponse
-	57,  // 183: client.v0.ClientService.ClearExitNode:output_type -> client.v0.ClearExitNodeResponse
-	59,  // 184: client.v0.ClientService.GetPreferences:output_type -> client.v0.GetPreferencesResponse
-	61,  // 185: client.v0.ClientService.SetPreferences:output_type -> client.v0.SetPreferencesResponse
-	63,  // 186: client.v0.ClientService.ResetPreferences:output_type -> client.v0.ResetPreferencesResponse
-	65,  // 187: client.v0.ClientService.ListManagedSettings:output_type -> client.v0.ListManagedSettingsResponse
-	67,  // 188: client.v0.ClientService.ListResources:output_type -> client.v0.ListResourcesResponse
-	69,  // 189: client.v0.ClientService.SetResourceEnabled:output_type -> client.v0.SetResourceEnabledResponse
-	71,  // 190: client.v0.ClientService.NotifyLifecycle:output_type -> client.v0.NotifyLifecycleResponse
-	73,  // 191: client.v0.ClientService.GetUpdateInfo:output_type -> client.v0.GetUpdateInfoResponse
-	75,  // 192: client.v0.ClientService.GetSupportInfo:output_type -> client.v0.GetSupportInfoResponse
-	155, // [155:193] is the sub-list for method output_type
-	117, // [117:155] is the sub-list for method input_type
-	117, // [117:117] is the sub-list for extension type_name
-	117, // [117:117] is the sub-list for extension extendee
-	0,   // [0:117] is the sub-list for field type_name
+	99,  // 75: client.v0.SelectExitNodeRequest.family_mode:type_name -> client.v0.ExitFamilyMode
+	81,  // 76: client.v0.SelectExitNodeResponse.operation:type_name -> client.v0.Operation
+	82,  // 77: client.v0.ClearExitNodeRequest.mutation:type_name -> client.v0.MutationContext
+	83,  // 78: client.v0.ClearExitNodeRequest.profile:type_name -> client.v0.ProfileRef
+	81,  // 79: client.v0.ClearExitNodeResponse.operation:type_name -> client.v0.Operation
+	83,  // 80: client.v0.GetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
+	100, // 81: client.v0.GetPreferencesResponse.preferences:type_name -> client.v0.Preferences
+	82,  // 82: client.v0.SetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
+	83,  // 83: client.v0.SetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
+	101, // 84: client.v0.SetPreferencesRequest.patch:type_name -> client.v0.PreferencesPatch
+	81,  // 85: client.v0.SetPreferencesResponse.operation:type_name -> client.v0.Operation
+	82,  // 86: client.v0.ResetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
+	83,  // 87: client.v0.ResetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
+	102, // 88: client.v0.ResetPreferencesRequest.keys:type_name -> client.v0.PreferenceKey
+	81,  // 89: client.v0.ResetPreferencesResponse.operation:type_name -> client.v0.Operation
+	83,  // 90: client.v0.ListManagedSettingsRequest.profile:type_name -> client.v0.ProfileRef
+	103, // 91: client.v0.ListManagedSettingsResponse.settings:type_name -> client.v0.ManagedSetting
+	86,  // 92: client.v0.ListManagedSettingsResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	83,  // 93: client.v0.ListResourcesRequest.profile:type_name -> client.v0.ProfileRef
+	87,  // 94: client.v0.ListResourcesRequest.page:type_name -> client.v0.PageRequest
+	104, // 95: client.v0.ListResourcesRequest.kinds:type_name -> client.v0.ResourceKind
+	105, // 96: client.v0.ListResourcesResponse.resources:type_name -> client.v0.Resource
+	89,  // 97: client.v0.ListResourcesResponse.page:type_name -> client.v0.PageResponse
+	82,  // 98: client.v0.SetResourceEnabledRequest.mutation:type_name -> client.v0.MutationContext
+	83,  // 99: client.v0.SetResourceEnabledRequest.profile:type_name -> client.v0.ProfileRef
+	81,  // 100: client.v0.SetResourceEnabledResponse.operation:type_name -> client.v0.Operation
+	82,  // 101: client.v0.NotifyLifecycleRequest.mutation:type_name -> client.v0.MutationContext
+	83,  // 102: client.v0.NotifyLifecycleRequest.profile:type_name -> client.v0.ProfileRef
+	106, // 103: client.v0.NotifyLifecycleRequest.event:type_name -> client.v0.LifecycleEvent
+	81,  // 104: client.v0.NotifyLifecycleResponse.operation:type_name -> client.v0.Operation
+	107, // 105: client.v0.GetUpdateInfoRequest.reported_ui:type_name -> client.v0.BuildIdentity
+	108, // 106: client.v0.GetUpdateInfoResponse.info:type_name -> client.v0.UpdateInfo
+	109, // 107: client.v0.GetSupportInfoResponse.info:type_name -> client.v0.SupportInfo
+	86,  // 108: client.v0.WatchEventsResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	77,  // 109: client.v0.WatchEventsResponse.snapshot:type_name -> client.v0.SnapshotEvent
+	80,  // 110: client.v0.WatchEventsResponse.status_changed:type_name -> client.v0.Status
+	78,  // 111: client.v0.WatchEventsResponse.invalidated:type_name -> client.v0.DomainInvalidated
+	81,  // 112: client.v0.WatchEventsResponse.operation_changed:type_name -> client.v0.Operation
+	110, // 113: client.v0.WatchEventsResponse.failure:type_name -> client.v0.Failure
+	95,  // 114: client.v0.WatchEventsResponse.session_changed:type_name -> client.v0.Session
+	79,  // 115: client.v0.SnapshotEvent.runtime:type_name -> client.v0.RuntimeInfo
+	80,  // 116: client.v0.SnapshotEvent.status:type_name -> client.v0.Status
+	0,   // 117: client.v0.DomainInvalidated.domain:type_name -> client.v0.Domain
+	1,   // 118: client.v0.ClientService.GetRuntimeInfo:input_type -> client.v0.GetRuntimeInfoRequest
+	3,   // 119: client.v0.ClientService.GetStatus:input_type -> client.v0.GetStatusRequest
+	5,   // 120: client.v0.ClientService.WatchEvents:input_type -> client.v0.WatchEventsRequest
+	6,   // 121: client.v0.ClientService.GetOperation:input_type -> client.v0.GetOperationRequest
+	8,   // 122: client.v0.ClientService.Enroll:input_type -> client.v0.EnrollRequest
+	10,  // 123: client.v0.ClientService.Connect:input_type -> client.v0.ConnectRequest
+	12,  // 124: client.v0.ClientService.Disconnect:input_type -> client.v0.DisconnectRequest
+	14,  // 125: client.v0.ClientService.GetServerIdentity:input_type -> client.v0.GetServerIdentityRequest
+	16,  // 126: client.v0.ClientService.TrustServerIdentity:input_type -> client.v0.TrustServerIdentityRequest
+	18,  // 127: client.v0.ClientService.Logout:input_type -> client.v0.LogoutRequest
+	20,  // 128: client.v0.ClientService.ForgetLocalEnrollment:input_type -> client.v0.ForgetLocalEnrollmentRequest
+	22,  // 129: client.v0.ClientService.ListNetworks:input_type -> client.v0.ListNetworksRequest
+	24,  // 130: client.v0.ClientService.SelectNetwork:input_type -> client.v0.SelectNetworkRequest
+	26,  // 131: client.v0.ClientService.ListPeers:input_type -> client.v0.ListPeersRequest
+	28,  // 132: client.v0.ClientService.GetDiagnostics:input_type -> client.v0.GetDiagnosticsRequest
+	30,  // 133: client.v0.ClientService.CreateDiagnosticsBundle:input_type -> client.v0.CreateDiagnosticsBundleRequest
+	32,  // 134: client.v0.ClientService.ReadDiagnosticsBundle:input_type -> client.v0.ReadDiagnosticsBundleRequest
+	34,  // 135: client.v0.ClientService.ListRecentLogs:input_type -> client.v0.ListRecentLogsRequest
+	36,  // 136: client.v0.ClientService.ListProfiles:input_type -> client.v0.ListProfilesRequest
+	38,  // 137: client.v0.ClientService.CreateProfile:input_type -> client.v0.CreateProfileRequest
+	40,  // 138: client.v0.ClientService.SelectProfile:input_type -> client.v0.SelectProfileRequest
+	42,  // 139: client.v0.ClientService.RenameProfile:input_type -> client.v0.RenameProfileRequest
+	44,  // 140: client.v0.ClientService.RemoveProfile:input_type -> client.v0.RemoveProfileRequest
+	46,  // 141: client.v0.ClientService.GetSession:input_type -> client.v0.GetSessionRequest
+	48,  // 142: client.v0.ClientService.RenewSession:input_type -> client.v0.RenewSessionRequest
+	50,  // 143: client.v0.ClientService.ListExitNodes:input_type -> client.v0.ListExitNodesRequest
+	52,  // 144: client.v0.ClientService.GetExitNode:input_type -> client.v0.GetExitNodeRequest
+	54,  // 145: client.v0.ClientService.SelectExitNode:input_type -> client.v0.SelectExitNodeRequest
+	56,  // 146: client.v0.ClientService.ClearExitNode:input_type -> client.v0.ClearExitNodeRequest
+	58,  // 147: client.v0.ClientService.GetPreferences:input_type -> client.v0.GetPreferencesRequest
+	60,  // 148: client.v0.ClientService.SetPreferences:input_type -> client.v0.SetPreferencesRequest
+	62,  // 149: client.v0.ClientService.ResetPreferences:input_type -> client.v0.ResetPreferencesRequest
+	64,  // 150: client.v0.ClientService.ListManagedSettings:input_type -> client.v0.ListManagedSettingsRequest
+	66,  // 151: client.v0.ClientService.ListResources:input_type -> client.v0.ListResourcesRequest
+	68,  // 152: client.v0.ClientService.SetResourceEnabled:input_type -> client.v0.SetResourceEnabledRequest
+	70,  // 153: client.v0.ClientService.NotifyLifecycle:input_type -> client.v0.NotifyLifecycleRequest
+	72,  // 154: client.v0.ClientService.GetUpdateInfo:input_type -> client.v0.GetUpdateInfoRequest
+	74,  // 155: client.v0.ClientService.GetSupportInfo:input_type -> client.v0.GetSupportInfoRequest
+	2,   // 156: client.v0.ClientService.GetRuntimeInfo:output_type -> client.v0.GetRuntimeInfoResponse
+	4,   // 157: client.v0.ClientService.GetStatus:output_type -> client.v0.GetStatusResponse
+	76,  // 158: client.v0.ClientService.WatchEvents:output_type -> client.v0.WatchEventsResponse
+	7,   // 159: client.v0.ClientService.GetOperation:output_type -> client.v0.GetOperationResponse
+	9,   // 160: client.v0.ClientService.Enroll:output_type -> client.v0.EnrollResponse
+	11,  // 161: client.v0.ClientService.Connect:output_type -> client.v0.ConnectResponse
+	13,  // 162: client.v0.ClientService.Disconnect:output_type -> client.v0.DisconnectResponse
+	15,  // 163: client.v0.ClientService.GetServerIdentity:output_type -> client.v0.GetServerIdentityResponse
+	17,  // 164: client.v0.ClientService.TrustServerIdentity:output_type -> client.v0.TrustServerIdentityResponse
+	19,  // 165: client.v0.ClientService.Logout:output_type -> client.v0.LogoutResponse
+	21,  // 166: client.v0.ClientService.ForgetLocalEnrollment:output_type -> client.v0.ForgetLocalEnrollmentResponse
+	23,  // 167: client.v0.ClientService.ListNetworks:output_type -> client.v0.ListNetworksResponse
+	25,  // 168: client.v0.ClientService.SelectNetwork:output_type -> client.v0.SelectNetworkResponse
+	27,  // 169: client.v0.ClientService.ListPeers:output_type -> client.v0.ListPeersResponse
+	29,  // 170: client.v0.ClientService.GetDiagnostics:output_type -> client.v0.GetDiagnosticsResponse
+	31,  // 171: client.v0.ClientService.CreateDiagnosticsBundle:output_type -> client.v0.CreateDiagnosticsBundleResponse
+	33,  // 172: client.v0.ClientService.ReadDiagnosticsBundle:output_type -> client.v0.ReadDiagnosticsBundleResponse
+	35,  // 173: client.v0.ClientService.ListRecentLogs:output_type -> client.v0.ListRecentLogsResponse
+	37,  // 174: client.v0.ClientService.ListProfiles:output_type -> client.v0.ListProfilesResponse
+	39,  // 175: client.v0.ClientService.CreateProfile:output_type -> client.v0.CreateProfileResponse
+	41,  // 176: client.v0.ClientService.SelectProfile:output_type -> client.v0.SelectProfileResponse
+	43,  // 177: client.v0.ClientService.RenameProfile:output_type -> client.v0.RenameProfileResponse
+	45,  // 178: client.v0.ClientService.RemoveProfile:output_type -> client.v0.RemoveProfileResponse
+	47,  // 179: client.v0.ClientService.GetSession:output_type -> client.v0.GetSessionResponse
+	49,  // 180: client.v0.ClientService.RenewSession:output_type -> client.v0.RenewSessionResponse
+	51,  // 181: client.v0.ClientService.ListExitNodes:output_type -> client.v0.ListExitNodesResponse
+	53,  // 182: client.v0.ClientService.GetExitNode:output_type -> client.v0.GetExitNodeResponse
+	55,  // 183: client.v0.ClientService.SelectExitNode:output_type -> client.v0.SelectExitNodeResponse
+	57,  // 184: client.v0.ClientService.ClearExitNode:output_type -> client.v0.ClearExitNodeResponse
+	59,  // 185: client.v0.ClientService.GetPreferences:output_type -> client.v0.GetPreferencesResponse
+	61,  // 186: client.v0.ClientService.SetPreferences:output_type -> client.v0.SetPreferencesResponse
+	63,  // 187: client.v0.ClientService.ResetPreferences:output_type -> client.v0.ResetPreferencesResponse
+	65,  // 188: client.v0.ClientService.ListManagedSettings:output_type -> client.v0.ListManagedSettingsResponse
+	67,  // 189: client.v0.ClientService.ListResources:output_type -> client.v0.ListResourcesResponse
+	69,  // 190: client.v0.ClientService.SetResourceEnabled:output_type -> client.v0.SetResourceEnabledResponse
+	71,  // 191: client.v0.ClientService.NotifyLifecycle:output_type -> client.v0.NotifyLifecycleResponse
+	73,  // 192: client.v0.ClientService.GetUpdateInfo:output_type -> client.v0.GetUpdateInfoResponse
+	75,  // 193: client.v0.ClientService.GetSupportInfo:output_type -> client.v0.GetSupportInfoResponse
+	156, // [156:194] is the sub-list for method output_type
+	118, // [118:156] is the sub-list for method input_type
+	118, // [118:118] is the sub-list for extension type_name
+	118, // [118:118] is the sub-list for extension extendee
+	0,   // [0:118] is the sub-list for field type_name
 }
 
 func init() { file_client_v0_service_proto_init() }

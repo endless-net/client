@@ -20,6 +20,10 @@ enum Access {
 extend google.protobuf.MethodOptions {
   // Minimum role, derived from authenticated local peer identity, never payload.
   Access access = 51000;
+  // Only a fresh installation with no owner or enrollment may claim atomically.
+  bool allows_initial_ownership_claim = 51001;
+  // Required for every mutation; persisted into Operation.kind at acceptance.
+  OperationKind operation_kind = 51002;
 }
 
 enum Platform {
@@ -239,6 +243,30 @@ message BundleResult {
   bool reused = 6;
 }
 
+// Closed mutation vocabulary; UNSPECIFIED is invalid in returned operations.
+enum OperationKind {
+  OPERATION_KIND_UNSPECIFIED = 0;
+  OPERATION_KIND_ENROLL = 1;
+  OPERATION_KIND_CONNECT = 2;
+  OPERATION_KIND_DISCONNECT = 3;
+  OPERATION_KIND_TRUST_SERVER_IDENTITY = 4;
+  OPERATION_KIND_LOGOUT = 5;
+  OPERATION_KIND_FORGET_LOCAL_ENROLLMENT = 6;
+  OPERATION_KIND_SELECT_NETWORK = 7;
+  OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE = 8;
+  OPERATION_KIND_CREATE_PROFILE = 9;
+  OPERATION_KIND_SELECT_PROFILE = 10;
+  OPERATION_KIND_RENAME_PROFILE = 11;
+  OPERATION_KIND_REMOVE_PROFILE = 12;
+  OPERATION_KIND_RENEW_SESSION = 13;
+  OPERATION_KIND_SELECT_EXIT_NODE = 14;
+  OPERATION_KIND_CLEAR_EXIT_NODE = 15;
+  OPERATION_KIND_SET_PREFERENCES = 16;
+  OPERATION_KIND_RESET_PREFERENCES = 17;
+  OPERATION_KIND_SET_RESOURCE_ENABLED = 18;
+  OPERATION_KIND_NOTIFY_LIFECYCLE = 19;
+}
+
 message Operation {
   string id = 1;
   string request_id = 2;
@@ -247,6 +275,8 @@ message Operation {
   SnapshotMetadata metadata = 5;
   UserAction user_action = 6;
   ConnectionContinuity continuity = 7;
+  // Immutable, including pending operations, snapshots and restart recovery.
+  OperationKind kind = 8;
   oneof outcome {
     Failure failure = 10;
     ChangeResult change = 11;

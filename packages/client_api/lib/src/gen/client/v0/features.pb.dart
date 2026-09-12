@@ -804,6 +804,7 @@ class ExitNode extends $pb.GeneratedMessage {
     $core.String? peerId,
     $0.Restriction? selection,
     $core.Iterable<LanAccess>? allowedLanAccess,
+    $core.Iterable<ExitFamilyMode>? allowedFamilyModes,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -812,6 +813,8 @@ class ExitNode extends $pb.GeneratedMessage {
     if (selection != null) result.selection = selection;
     if (allowedLanAccess != null)
       result.allowedLanAccess.addAll(allowedLanAccess);
+    if (allowedFamilyModes != null)
+      result.allowedFamilyModes.addAll(allowedFamilyModes);
     return result;
   }
 
@@ -838,6 +841,11 @@ class ExitNode extends $pb.GeneratedMessage {
         valueOf: LanAccess.valueOf,
         enumValues: LanAccess.values,
         defaultEnumValue: LanAccess.LAN_ACCESS_UNSPECIFIED)
+    ..pc<ExitFamilyMode>(
+        6, _omitFieldNames ? '' : 'allowedFamilyModes', $pb.PbFieldType.KE,
+        valueOf: ExitFamilyMode.valueOf,
+        enumValues: ExitFamilyMode.values,
+        defaultEnumValue: ExitFamilyMode.EXIT_FAMILY_MODE_UNSPECIFIED)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -898,6 +906,121 @@ class ExitNode extends $pb.GeneratedMessage {
 
   @$pb.TagNumber(5)
   $pb.PbList<LanAccess> get allowedLanAccess => $_getList(4);
+
+  /// Exact selectable modes after platform, provider and policy restrictions.
+  /// Empty means not selectable; never infer dual-stack from separate modes.
+  @$pb.TagNumber(6)
+  $pb.PbList<ExitFamilyMode> get allowedFamilyModes => $_getList(5);
+}
+
+/// One address family's authoritative requested/effective enforcement state.
+class ExitFamilyStatus extends $pb.GeneratedMessage {
+  factory ExitFamilyStatus({
+    $core.String? requestedExitNodeId,
+    $core.String? effectiveExitNodeId,
+    ApplyState? applyState,
+    $0.Failure? failure,
+    $core.bool? failClosed,
+  }) {
+    final result = create();
+    if (requestedExitNodeId != null)
+      result.requestedExitNodeId = requestedExitNodeId;
+    if (effectiveExitNodeId != null)
+      result.effectiveExitNodeId = effectiveExitNodeId;
+    if (applyState != null) result.applyState = applyState;
+    if (failure != null) result.failure = failure;
+    if (failClosed != null) result.failClosed = failClosed;
+    return result;
+  }
+
+  ExitFamilyStatus._();
+
+  factory ExitFamilyStatus.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ExitFamilyStatus.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ExitFamilyStatus',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'requestedExitNodeId')
+    ..aOS(2, _omitFieldNames ? '' : 'effectiveExitNodeId')
+    ..aE<ApplyState>(3, _omitFieldNames ? '' : 'applyState',
+        enumValues: ApplyState.values)
+    ..aOM<$0.Failure>(4, _omitFieldNames ? '' : 'failure',
+        subBuilder: $0.Failure.create)
+    ..aOB(5, _omitFieldNames ? '' : 'failClosed')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ExitFamilyStatus clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ExitFamilyStatus copyWith(void Function(ExitFamilyStatus) updates) =>
+      super.copyWith((message) => updates(message as ExitFamilyStatus))
+          as ExitFamilyStatus;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ExitFamilyStatus create() => ExitFamilyStatus._();
+  @$core.override
+  ExitFamilyStatus createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ExitFamilyStatus getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ExitFamilyStatus>(create);
+  static ExitFamilyStatus? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get requestedExitNodeId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set requestedExitNodeId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasRequestedExitNodeId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearRequestedExitNodeId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get effectiveExitNodeId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set effectiveExitNodeId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasEffectiveExitNodeId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearEffectiveExitNodeId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  ApplyState get applyState => $_getN(2);
+  @$pb.TagNumber(3)
+  set applyState(ApplyState value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasApplyState() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearApplyState() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $0.Failure get failure => $_getN(3);
+  @$pb.TagNumber(4)
+  set failure($0.Failure value) => $_setField(4, value);
+  @$pb.TagNumber(4)
+  $core.bool hasFailure() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearFailure() => $_clearField(4);
+  @$pb.TagNumber(4)
+  $0.Failure ensureFailure() => $_ensure(3);
+
+  /// Actual blocking protection, not merely desired policy.
+  @$pb.TagNumber(5)
+  $core.bool get failClosed => $_getBF(4);
+  @$pb.TagNumber(5)
+  set failClosed($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasFailClosed() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearFailClosed() => $_clearField(5);
 }
 
 class ExitNodeStatus extends $pb.GeneratedMessage {
@@ -912,6 +1035,9 @@ class ExitNodeStatus extends $pb.GeneratedMessage {
     SettingControl? control,
     $0.Failure? failure,
     $core.bool? failClosed,
+    ExitFamilyMode? requestedFamilyMode,
+    ExitFamilyStatus? ipv4,
+    ExitFamilyStatus? ipv6,
   }) {
     final result = create();
     if (metadata != null) result.metadata = metadata;
@@ -928,6 +1054,10 @@ class ExitNodeStatus extends $pb.GeneratedMessage {
     if (control != null) result.control = control;
     if (failure != null) result.failure = failure;
     if (failClosed != null) result.failClosed = failClosed;
+    if (requestedFamilyMode != null)
+      result.requestedFamilyMode = requestedFamilyMode;
+    if (ipv4 != null) result.ipv4 = ipv4;
+    if (ipv6 != null) result.ipv6 = ipv6;
     return result;
   }
 
@@ -960,6 +1090,12 @@ class ExitNodeStatus extends $pb.GeneratedMessage {
     ..aOM<$0.Failure>(9, _omitFieldNames ? '' : 'failure',
         subBuilder: $0.Failure.create)
     ..aOB(10, _omitFieldNames ? '' : 'failClosed')
+    ..aE<ExitFamilyMode>(11, _omitFieldNames ? '' : 'requestedFamilyMode',
+        enumValues: ExitFamilyMode.values)
+    ..aOM<ExitFamilyStatus>(12, _omitFieldNames ? '' : 'ipv4',
+        subBuilder: ExitFamilyStatus.create)
+    ..aOM<ExitFamilyStatus>(13, _omitFieldNames ? '' : 'ipv6',
+        subBuilder: ExitFamilyStatus.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1077,6 +1213,39 @@ class ExitNodeStatus extends $pb.GeneratedMessage {
   $core.bool hasFailClosed() => $_has(9);
   @$pb.TagNumber(10)
   void clearFailClosed() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  ExitFamilyMode get requestedFamilyMode => $_getN(10);
+  @$pb.TagNumber(11)
+  set requestedFamilyMode(ExitFamilyMode value) => $_setField(11, value);
+  @$pb.TagNumber(11)
+  $core.bool hasRequestedFamilyMode() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearRequestedFamilyMode() => $_clearField(11);
+
+  /// Both required, including a disabled/cleared family. Partial application
+  /// remains visible here and cannot be reported as aggregate APPLIED.
+  @$pb.TagNumber(12)
+  ExitFamilyStatus get ipv4 => $_getN(11);
+  @$pb.TagNumber(12)
+  set ipv4(ExitFamilyStatus value) => $_setField(12, value);
+  @$pb.TagNumber(12)
+  $core.bool hasIpv4() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearIpv4() => $_clearField(12);
+  @$pb.TagNumber(12)
+  ExitFamilyStatus ensureIpv4() => $_ensure(11);
+
+  @$pb.TagNumber(13)
+  ExitFamilyStatus get ipv6 => $_getN(12);
+  @$pb.TagNumber(13)
+  set ipv6(ExitFamilyStatus value) => $_setField(13, value);
+  @$pb.TagNumber(13)
+  $core.bool hasIpv6() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearIpv6() => $_clearField(13);
+  @$pb.TagNumber(13)
+  ExitFamilyStatus ensureIpv6() => $_ensure(12);
 }
 
 class HostTarget extends $pb.GeneratedMessage {

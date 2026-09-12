@@ -3650,12 +3650,14 @@ class SelectExitNodeRequest extends $pb.GeneratedMessage {
     $1.ProfileRef? profile,
     $core.String? exitNodeId,
     $3.LanAccess? lanAccess,
+    $3.ExitFamilyMode? familyMode,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
     if (profile != null) result.profile = profile;
     if (exitNodeId != null) result.exitNodeId = exitNodeId;
     if (lanAccess != null) result.lanAccess = lanAccess;
+    if (familyMode != null) result.familyMode = familyMode;
     return result;
   }
 
@@ -3679,6 +3681,8 @@ class SelectExitNodeRequest extends $pb.GeneratedMessage {
     ..aOS(3, _omitFieldNames ? '' : 'exitNodeId')
     ..aE<$3.LanAccess>(4, _omitFieldNames ? '' : 'lanAccess',
         enumValues: $3.LanAccess.values)
+    ..aE<$3.ExitFamilyMode>(5, _omitFieldNames ? '' : 'familyMode',
+        enumValues: $3.ExitFamilyMode.values)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3740,6 +3744,17 @@ class SelectExitNodeRequest extends $pb.GeneratedMessage {
   $core.bool hasLanAccess() => $_has(3);
   @$pb.TagNumber(4)
   void clearLanAccess() => $_clearField(4);
+
+  /// Must be explicitly listed in ExitNode.allowed_family_modes.
+  /// UNSPECIFIED/NONE and unknown values fail INVALID_ARGUMENT; no downgrade.
+  @$pb.TagNumber(5)
+  $3.ExitFamilyMode get familyMode => $_getN(4);
+  @$pb.TagNumber(5)
+  set familyMode($3.ExitFamilyMode value) => $_setField(5, value);
+  @$pb.TagNumber(5)
+  $core.bool hasFamilyMode() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearFamilyMode() => $_clearField(5);
 }
 
 class SelectExitNodeResponse extends $pb.GeneratedMessage {

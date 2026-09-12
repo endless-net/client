@@ -5,6 +5,8 @@
 - Contract version: **v0**, explicitly selected by the user.
 - Additive BA/SA alignment: 2026-09-13 (credential deadlines and initial
   connection/operation snapshot). Version and accepted baseline are unchanged.
+- Contract corrections: 2026-09-13 (operation kinds, initial-claim annotations,
+  explicit IPv4/IPv6 exit selection and per-family application state).
 - Canonical source: [service.proto](../proto/client/v0/service.proto),
   [common.proto](../proto/client/v0/common.proto),
   [runtime.proto](../proto/client/v0/runtime.proto),
@@ -116,6 +118,15 @@ or `Enroll` may atomically claim ownership from the authenticated peer. An
 existing ownerless enrollment requires an administrator. Concurrent claims must
 have one winner. Ownership is retained after logout and local forget.
 
+Only methods annotated `allows_initial_ownership_claim = true` may use that
+exception; both still require an authenticated local peer. The annotation is
+permission to evaluate the exception, not an authorization grant. The runtime
+must atomically recheck that owner and enrollment are absent together with
+persisting the winning owner and accepted mutation. A losing different identity
+receives OWNER_REQUIRED; it cannot observe the winner's operation. A retry from
+the winning identity follows normal durable deduplication. Unannotated methods
+never claim ownership. Existing ownerless enrollment cannot use this exception.
+
 Responses are caller-filtered before serialization, including nested status,
 diagnostics, operations and streams. Unauthorized lookup returns NOT_FOUND.
 Observer event streams receive neither session payloads nor operation updates.
@@ -153,6 +164,13 @@ Terminal outcome and actual continuity are immutable. Success means the requeste
 effect is achieved, not merely that a command was queued. Profile/network/exit
 switches and renewal report PRESERVED, INTERRUPTED, UNKNOWN or NOT_APPLICABLE;
 they must never infer uninterrupted access from RPC success.
+
+Every mutation RPC has an `operation_kind` annotation matching one distinct
+`OperationKind`. The runtime sets `Operation.kind` before durable acceptance;
+it remains immutable in responses, GetOperation, current_operations and events,
+including inactive profiles and restart recovery. UNSPECIFIED and unknown kinds
+are not valid producer outputs. UI must not infer the kind from operation ID,
+outcome, active profile or the last command it remembers sending.
 
 Mutations affecting the active context serialize. While enrollment, renewal,
 trust or a switch is pending, conflicting mutations fail BUSY. Explicit
@@ -229,6 +247,34 @@ node. Exit selection separates requested and effective IDs and LAN behavior.
 A selected but unreachable exit remains fail-closed; never silently route
 protected traffic through the local default route. Clear is an explicit,
 policy-checked operation. Report ApplyState and typed failure on apply errors.
+
+SelectExitNode requires an explicit `family_mode` from the selected node's
+`allowed_family_modes`. The catalog is already filtered by platform/provider and
+policy; an empty list means no selectable mode. UNSPECIFIED, NONE and unknown
+request enum values fail INVALID_ARGUMENT. A known mode absent from the catalog
+is rejected using its actual capability/policy restriction, never downgraded.
+IPV4_ONLY protects IPv4, IPV6_ONLY protects IPv6, DUAL_STACK protects both.
+The unselected family follows ordinary effective routing/policy; the UI must
+explicitly disclose that it is not protected by the selected exit node.
+
+GetExitNode always includes `ipv4` and `ipv6` states. Each carries optional
+requested/effective exit IDs, apply state, failure and actual fail-closed
+enforcement. Absence of an ID means no exit selection for that family, not
+unknown status. For a disabled/cleared family both IDs are absent and APPLIED
+means its ordinary policy has actually been restored. NONE is the cleared
+requested mode; UNSPECIFIED is not a valid producer status.
+
+Aggregate requested ID/mode express intent. Aggregate effective ID is present
+only when every requested family has converged to that node and every excluded
+family has cleared its prior exit. Aggregate APPLIED additionally requires LAN
+policy convergence; otherwise FAILED takes precedence over PENDING. Per-family
+state remains authoritative for partial application. SUCCEEDED requires full
+convergence, never IPv4-only success for a dual-stack request. On path loss each
+selected family must block fallback before reporting fail_closed; inability to
+enforce blocking is a failure, not a protection claim. The aggregate fail_closed
+is true only with nonempty selection and protection for every requested family.
+Clear removes both families; partial clear must remain visible as pending/failed.
+
 Overlaps expose only caller-visible resource IDs; conflicting enablement fails
 RESOURCE_CONFLICT instead of silently choosing a route.
 

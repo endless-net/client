@@ -29,14 +29,18 @@ service ClientService {
   // UF-03: initial unowned installation uses the ownership-claim exception.
   rpc Enroll(EnrollRequest) returns (EnrollResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_ENROLL;
+    option (allows_initial_ownership_claim) = true;
   }
   // UF-05: persist connected intent, then reconcile runtime.
   rpc Connect(ConnectRequest) returns (ConnectResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_CONNECT;
   }
   // UF-05: persist disconnected intent; retain registration.
   rpc Disconnect(DisconnectRequest) returns (DisconnectResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_DISCONNECT;
   }
   // UF-10: review announced and trusted identity for a profile.
   rpc GetServerIdentity(GetServerIdentityRequest) returns (GetServerIdentityResponse) {
@@ -45,14 +49,17 @@ service ClientService {
   // UF-10: fixed-purpose privileged operation, matching the current announcement.
   rpc TrustServerIdentity(TrustServerIdentityRequest) returns (TrustServerIdentityResponse) {
     option (access) = ACCESS_ADMINISTRATOR;
+    option (operation_kind) = OPERATION_KIND_TRUST_SERVER_IDENTITY;
   }
   // UF-12: remote confirmation is required before deleting local registration.
   rpc Logout(LogoutRequest) returns (LogoutResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_LOGOUT;
   }
   // UF-12: explicit local-only cleanup; never claims remote revocation.
   rpc ForgetLocalEnrollment(ForgetLocalEnrollmentRequest) returns (ForgetLocalEnrollmentResponse) {
     option (access) = ACCESS_ADMINISTRATOR;
+    option (operation_kind) = OPERATION_KIND_FORGET_LOCAL_ENROLLMENT;
   }
   // UF-07: only already granted networks for this profile.
   rpc ListNetworks(ListNetworksRequest) returns (ListNetworksResponse) {
@@ -61,6 +68,7 @@ service ClientService {
   // UF-07: select an enrolled network by stable ID.
   rpc SelectNetwork(SelectNetworkRequest) returns (SelectNetworkResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_SELECT_NETWORK;
   }
   // UF-06, UF-19: filtered peer search and path inspection.
   rpc ListPeers(ListPeersRequest) returns (ListPeersResponse) {
@@ -73,6 +81,7 @@ service ClientService {
   // UF-11: local-only redacted archive, no upload or packet capture.
   rpc CreateDiagnosticsBundle(CreateDiagnosticsBundleRequest) returns (CreateDiagnosticsBundleResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE;
   }
   // UF-11: caller-bound handle; bounded chunks, no filesystem path input.
   rpc ReadDiagnosticsBundle(ReadDiagnosticsBundleRequest) returns (ReadDiagnosticsBundleResponse) {
@@ -89,18 +98,23 @@ service ClientService {
   // UF-16: create empty context; enrollment is a separate explicit action.
   rpc CreateProfile(CreateProfileRequest) returns (CreateProfileResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_CREATE_PROFILE;
+    option (allows_initial_ownership_claim) = true;
   }
   // UF-16: atomic context switch, report actual connection interruption.
   rpc SelectProfile(SelectProfileRequest) returns (SelectProfileResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_SELECT_PROFILE;
   }
   // UF-16: change display name only; identity and origin are immutable.
   rpc RenameProfile(RenameProfileRequest) returns (RenameProfileResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_RENAME_PROFILE;
   }
   // UF-16: only inactive profiles with no remaining registration/session.
   rpc RemoveProfile(RemoveProfileRequest) returns (RemoveProfileResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_REMOVE_PROFILE;
   }
   // UF-17: expiry, warning deadline and renewal availability.
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse) {
@@ -109,6 +123,7 @@ service ClientService {
   // UF-17: no caller-supplied callback URL or browser credential.
   rpc RenewSession(RenewSessionRequest) returns (RenewSessionResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_RENEW_SESSION;
   }
   // UF-08: list authorized consumer-side egress choices.
   rpc ListExitNodes(ListExitNodesRequest) returns (ListExitNodesResponse) {
@@ -121,10 +136,12 @@ service ClientService {
   // UF-08: only an authorized catalog ID; never arbitrary routes.
   rpc SelectExitNode(SelectExitNodeRequest) returns (SelectExitNodeResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_SELECT_EXIT_NODE;
   }
   // UF-08: explicit removal of consumer-side egress selection.
   rpc ClearExitNode(ClearExitNodeRequest) returns (ClearExitNodeResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_CLEAR_EXIT_NODE;
   }
   // UF-18, UF-21: effective values, user overrides and locks.
   rpc GetPreferences(GetPreferencesRequest) returns (GetPreferencesResponse) {
@@ -133,10 +150,12 @@ service ClientService {
   // UF-18, UF-21: nonempty typed patch, all-or-nothing validation.
   rpc SetPreferences(SetPreferencesRequest) returns (SetPreferencesResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_SET_PREFERENCES;
   }
   // UF-18, UF-21: remove named user overrides; managed values remain.
   rpc ResetPreferences(ResetPreferencesRequest) returns (ResetPreferencesResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_RESET_PREFERENCES;
   }
   // UF-20: read-only effective runtime policy and next-action owner.
   rpc ListManagedSettings(ListManagedSettingsRequest) returns (ListManagedSettingsResponse) {
@@ -149,10 +168,12 @@ service ClientService {
   // UF-19: local subset selection cannot expand backend authorization.
   rpc SetResourceEnabled(SetResourceEnabledRequest) returns (SetResourceEnabledResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_SET_RESOURCE_ENABLED;
   }
   // UF-21: explicit graceful UI quit only; OS lifecycle comes from runtime adapters.
   rpc NotifyLifecycle(NotifyLifecycleRequest) returns (NotifyLifecycleResponse) {
     option (access) = ACCESS_OWNER;
+    option (operation_kind) = OPERATION_KIND_NOTIFY_LIFECYCLE;
   }
   // UF-22: verified distribution projection and installed-pair compatibility.
   rpc GetUpdateInfo(GetUpdateInfoRequest) returns (GetUpdateInfoResponse) {
@@ -426,6 +447,9 @@ message SelectExitNodeRequest {
   ProfileRef profile = 2;
   string exit_node_id = 3;
   LanAccess lan_access = 4;
+  // Must be explicitly listed in ExitNode.allowed_family_modes.
+  // UNSPECIFIED/NONE and unknown values fail INVALID_ARGUMENT; no downgrade.
+  ExitFamilyMode family_mode = 5;
 }
 
 message SelectExitNodeResponse {

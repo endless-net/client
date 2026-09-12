@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -46,6 +47,19 @@ func TestLocalGRPC(t *testing.T) {
 			endpoint := filepath.Join(t.TempDir(), "rpc.sock")
 			if runtime.GOOS == "windows" {
 				endpoint = fmt.Sprintf(`\\.\pipe\endlessnet-rpc-test-%d`, time.Now().UnixNano())
+			} else {
+				// Darwin sockaddr_un has a short path limit; t.TempDir includes
+				// the full test name and can exceed it before the socket suffix.
+				dir, err := os.MkdirTemp("/tmp", "en-ipc-")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if err := os.Remove(dir); err != nil {
+						t.Error(err)
+					}
+				})
+				endpoint = filepath.Join(dir, "rpc.sock")
 			}
 			listener, err := Listen(endpoint)
 			if err != nil {

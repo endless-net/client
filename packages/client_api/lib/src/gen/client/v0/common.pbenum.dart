@@ -394,6 +394,84 @@ class CleanupOutcome extends $pb.ProtobufEnum {
   const CleanupOutcome._(super.value, super.name);
 }
 
+/// Closed mutation vocabulary; UNSPECIFIED is invalid in returned operations.
+class OperationKind extends $pb.ProtobufEnum {
+  static const OperationKind OPERATION_KIND_UNSPECIFIED =
+      OperationKind._(0, _omitEnumNames ? '' : 'OPERATION_KIND_UNSPECIFIED');
+  static const OperationKind OPERATION_KIND_ENROLL =
+      OperationKind._(1, _omitEnumNames ? '' : 'OPERATION_KIND_ENROLL');
+  static const OperationKind OPERATION_KIND_CONNECT =
+      OperationKind._(2, _omitEnumNames ? '' : 'OPERATION_KIND_CONNECT');
+  static const OperationKind OPERATION_KIND_DISCONNECT =
+      OperationKind._(3, _omitEnumNames ? '' : 'OPERATION_KIND_DISCONNECT');
+  static const OperationKind OPERATION_KIND_TRUST_SERVER_IDENTITY =
+      OperationKind._(
+          4, _omitEnumNames ? '' : 'OPERATION_KIND_TRUST_SERVER_IDENTITY');
+  static const OperationKind OPERATION_KIND_LOGOUT =
+      OperationKind._(5, _omitEnumNames ? '' : 'OPERATION_KIND_LOGOUT');
+  static const OperationKind OPERATION_KIND_FORGET_LOCAL_ENROLLMENT =
+      OperationKind._(
+          6, _omitEnumNames ? '' : 'OPERATION_KIND_FORGET_LOCAL_ENROLLMENT');
+  static const OperationKind OPERATION_KIND_SELECT_NETWORK =
+      OperationKind._(7, _omitEnumNames ? '' : 'OPERATION_KIND_SELECT_NETWORK');
+  static const OperationKind OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE =
+      OperationKind._(
+          8, _omitEnumNames ? '' : 'OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE');
+  static const OperationKind OPERATION_KIND_CREATE_PROFILE =
+      OperationKind._(9, _omitEnumNames ? '' : 'OPERATION_KIND_CREATE_PROFILE');
+  static const OperationKind OPERATION_KIND_SELECT_PROFILE = OperationKind._(
+      10, _omitEnumNames ? '' : 'OPERATION_KIND_SELECT_PROFILE');
+  static const OperationKind OPERATION_KIND_RENAME_PROFILE = OperationKind._(
+      11, _omitEnumNames ? '' : 'OPERATION_KIND_RENAME_PROFILE');
+  static const OperationKind OPERATION_KIND_REMOVE_PROFILE = OperationKind._(
+      12, _omitEnumNames ? '' : 'OPERATION_KIND_REMOVE_PROFILE');
+  static const OperationKind OPERATION_KIND_RENEW_SESSION =
+      OperationKind._(13, _omitEnumNames ? '' : 'OPERATION_KIND_RENEW_SESSION');
+  static const OperationKind OPERATION_KIND_SELECT_EXIT_NODE = OperationKind._(
+      14, _omitEnumNames ? '' : 'OPERATION_KIND_SELECT_EXIT_NODE');
+  static const OperationKind OPERATION_KIND_CLEAR_EXIT_NODE = OperationKind._(
+      15, _omitEnumNames ? '' : 'OPERATION_KIND_CLEAR_EXIT_NODE');
+  static const OperationKind OPERATION_KIND_SET_PREFERENCES = OperationKind._(
+      16, _omitEnumNames ? '' : 'OPERATION_KIND_SET_PREFERENCES');
+  static const OperationKind OPERATION_KIND_RESET_PREFERENCES = OperationKind._(
+      17, _omitEnumNames ? '' : 'OPERATION_KIND_RESET_PREFERENCES');
+  static const OperationKind OPERATION_KIND_SET_RESOURCE_ENABLED =
+      OperationKind._(
+          18, _omitEnumNames ? '' : 'OPERATION_KIND_SET_RESOURCE_ENABLED');
+  static const OperationKind OPERATION_KIND_NOTIFY_LIFECYCLE = OperationKind._(
+      19, _omitEnumNames ? '' : 'OPERATION_KIND_NOTIFY_LIFECYCLE');
+
+  static const $core.List<OperationKind> values = <OperationKind>[
+    OPERATION_KIND_UNSPECIFIED,
+    OPERATION_KIND_ENROLL,
+    OPERATION_KIND_CONNECT,
+    OPERATION_KIND_DISCONNECT,
+    OPERATION_KIND_TRUST_SERVER_IDENTITY,
+    OPERATION_KIND_LOGOUT,
+    OPERATION_KIND_FORGET_LOCAL_ENROLLMENT,
+    OPERATION_KIND_SELECT_NETWORK,
+    OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE,
+    OPERATION_KIND_CREATE_PROFILE,
+    OPERATION_KIND_SELECT_PROFILE,
+    OPERATION_KIND_RENAME_PROFILE,
+    OPERATION_KIND_REMOVE_PROFILE,
+    OPERATION_KIND_RENEW_SESSION,
+    OPERATION_KIND_SELECT_EXIT_NODE,
+    OPERATION_KIND_CLEAR_EXIT_NODE,
+    OPERATION_KIND_SET_PREFERENCES,
+    OPERATION_KIND_RESET_PREFERENCES,
+    OPERATION_KIND_SET_RESOURCE_ENABLED,
+    OPERATION_KIND_NOTIFY_LIFECYCLE,
+  ];
+
+  static final $core.List<OperationKind?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 19);
+  static OperationKind? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const OperationKind._(super.value, super.name);
+}
+
 class UserAction_Kind extends $pb.ProtobufEnum {
   static const UserAction_Kind KIND_UNSPECIFIED =
       UserAction_Kind._(0, _omitEnumNames ? '' : 'KIND_UNSPECIFIED');

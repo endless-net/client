@@ -94,6 +94,25 @@ final $typed_data.Uint8List lanAccessDescriptor = $convert.base64Decode(
     'CglMYW5BY2Nlc3MSGgoWTEFOX0FDQ0VTU19VTlNQRUNJRklFRBAAEhQKEExBTl9BQ0NFU1NfQk'
     'xPQ0sQARIUChBMQU5fQUNDRVNTX0FMTE9XEAI=');
 
+@$core.Deprecated('Use exitFamilyModeDescriptor instead')
+const ExitFamilyMode$json = {
+  '1': 'ExitFamilyMode',
+  '2': [
+    {'1': 'EXIT_FAMILY_MODE_UNSPECIFIED', '2': 0},
+    {'1': 'EXIT_FAMILY_MODE_NONE', '2': 1},
+    {'1': 'EXIT_FAMILY_MODE_IPV4_ONLY', '2': 2},
+    {'1': 'EXIT_FAMILY_MODE_IPV6_ONLY', '2': 3},
+    {'1': 'EXIT_FAMILY_MODE_DUAL_STACK', '2': 4},
+  ],
+};
+
+/// Descriptor for `ExitFamilyMode`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List exitFamilyModeDescriptor = $convert.base64Decode(
+    'Cg5FeGl0RmFtaWx5TW9kZRIgChxFWElUX0ZBTUlMWV9NT0RFX1VOU1BFQ0lGSUVEEAASGQoVRV'
+    'hJVF9GQU1JTFlfTU9ERV9OT05FEAESHgoaRVhJVF9GQU1JTFlfTU9ERV9JUFY0X09OTFkQAhIe'
+    'ChpFWElUX0ZBTUlMWV9NT0RFX0lQVjZfT05MWRADEh8KG0VYSVRfRkFNSUxZX01PREVfRFVBTF'
+    '9TVEFDSxAE');
+
 @$core.Deprecated('Use applyStateDescriptor instead')
 const ApplyState$json = {
   '1': 'ApplyState',
@@ -634,6 +653,14 @@ const ExitNode$json = {
       '6': '.client.v0.LanAccess',
       '10': 'allowedLanAccess'
     },
+    {
+      '1': 'allowed_family_modes',
+      '3': 6,
+      '4': 3,
+      '5': 14,
+      '6': '.client.v0.ExitFamilyMode',
+      '10': 'allowedFamilyModes'
+    },
   ],
 };
 
@@ -642,7 +669,64 @@ final $typed_data.Uint8List exitNodeDescriptor = $convert.base64Decode(
     'CghFeGl0Tm9kZRIOCgJpZBgBIAEoCVICaWQSIQoMZGlzcGxheV9uYW1lGAIgASgJUgtkaXNwbG'
     'F5TmFtZRIXCgdwZWVyX2lkGAMgASgJUgZwZWVySWQSNAoJc2VsZWN0aW9uGAQgASgLMhYuY2xp'
     'ZW50LnYwLlJlc3RyaWN0aW9uUglzZWxlY3Rpb24SQgoSYWxsb3dlZF9sYW5fYWNjZXNzGAUgAy'
-    'gOMhQuY2xpZW50LnYwLkxhbkFjY2Vzc1IQYWxsb3dlZExhbkFjY2Vzcw==');
+    'gOMhQuY2xpZW50LnYwLkxhbkFjY2Vzc1IQYWxsb3dlZExhbkFjY2VzcxJLChRhbGxvd2VkX2Zh'
+    'bWlseV9tb2RlcxgGIAMoDjIZLmNsaWVudC52MC5FeGl0RmFtaWx5TW9kZVISYWxsb3dlZEZhbW'
+    'lseU1vZGVz');
+
+@$core.Deprecated('Use exitFamilyStatusDescriptor instead')
+const ExitFamilyStatus$json = {
+  '1': 'ExitFamilyStatus',
+  '2': [
+    {
+      '1': 'requested_exit_node_id',
+      '3': 1,
+      '4': 1,
+      '5': 9,
+      '9': 0,
+      '10': 'requestedExitNodeId',
+      '17': true
+    },
+    {
+      '1': 'effective_exit_node_id',
+      '3': 2,
+      '4': 1,
+      '5': 9,
+      '9': 1,
+      '10': 'effectiveExitNodeId',
+      '17': true
+    },
+    {
+      '1': 'apply_state',
+      '3': 3,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.ApplyState',
+      '10': 'applyState'
+    },
+    {
+      '1': 'failure',
+      '3': 4,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.Failure',
+      '10': 'failure'
+    },
+    {'1': 'fail_closed', '3': 5, '4': 1, '5': 8, '10': 'failClosed'},
+  ],
+  '8': [
+    {'1': '_requested_exit_node_id'},
+    {'1': '_effective_exit_node_id'},
+  ],
+};
+
+/// Descriptor for `ExitFamilyStatus`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List exitFamilyStatusDescriptor = $convert.base64Decode(
+    'ChBFeGl0RmFtaWx5U3RhdHVzEjgKFnJlcXVlc3RlZF9leGl0X25vZGVfaWQYASABKAlIAFITcm'
+    'VxdWVzdGVkRXhpdE5vZGVJZIgBARI4ChZlZmZlY3RpdmVfZXhpdF9ub2RlX2lkGAIgASgJSAFS'
+    'E2VmZmVjdGl2ZUV4aXROb2RlSWSIAQESNgoLYXBwbHlfc3RhdGUYAyABKA4yFS5jbGllbnQudj'
+    'AuQXBwbHlTdGF0ZVIKYXBwbHlTdGF0ZRIsCgdmYWlsdXJlGAQgASgLMhIuY2xpZW50LnYwLkZh'
+    'aWx1cmVSB2ZhaWx1cmUSHwoLZmFpbF9jbG9zZWQYBSABKAhSCmZhaWxDbG9zZWRCGQoXX3JlcX'
+    'Vlc3RlZF9leGl0X25vZGVfaWRCGQoXX2VmZmVjdGl2ZV9leGl0X25vZGVfaWQ=');
 
 @$core.Deprecated('Use exitNodeStatusDescriptor instead')
 const ExitNodeStatus$json = {
@@ -716,6 +800,30 @@ const ExitNodeStatus$json = {
       '10': 'failure'
     },
     {'1': 'fail_closed', '3': 10, '4': 1, '5': 8, '10': 'failClosed'},
+    {
+      '1': 'requested_family_mode',
+      '3': 11,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.ExitFamilyMode',
+      '10': 'requestedFamilyMode'
+    },
+    {
+      '1': 'ipv4',
+      '3': 12,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.ExitFamilyStatus',
+      '10': 'ipv4'
+    },
+    {
+      '1': 'ipv6',
+      '3': 13,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.ExitFamilyStatus',
+      '10': 'ipv6'
+    },
   ],
   '8': [
     {'1': '_requested_exit_node_id'},
@@ -734,8 +842,12 @@ final $typed_data.Uint8List exitNodeStatusDescriptor = $convert.base64Decode(
     'MC5MYW5BY2Nlc3NSEmVmZmVjdGl2ZUxhbkFjY2VzcxI2CgthcHBseV9zdGF0ZRgHIAEoDjIVLm'
     'NsaWVudC52MC5BcHBseVN0YXRlUgphcHBseVN0YXRlEjMKB2NvbnRyb2wYCCABKAsyGS5jbGll'
     'bnQudjAuU2V0dGluZ0NvbnRyb2xSB2NvbnRyb2wSLAoHZmFpbHVyZRgJIAEoCzISLmNsaWVudC'
-    '52MC5GYWlsdXJlUgdmYWlsdXJlEh8KC2ZhaWxfY2xvc2VkGAogASgIUgpmYWlsQ2xvc2VkQhkK'
-    'F19yZXF1ZXN0ZWRfZXhpdF9ub2RlX2lkQhkKF19lZmZlY3RpdmVfZXhpdF9ub2RlX2lk');
+    '52MC5GYWlsdXJlUgdmYWlsdXJlEh8KC2ZhaWxfY2xvc2VkGAogASgIUgpmYWlsQ2xvc2VkEk0K'
+    'FXJlcXVlc3RlZF9mYW1pbHlfbW9kZRgLIAEoDjIZLmNsaWVudC52MC5FeGl0RmFtaWx5TW9kZV'
+    'ITcmVxdWVzdGVkRmFtaWx5TW9kZRIvCgRpcHY0GAwgASgLMhsuY2xpZW50LnYwLkV4aXRGYW1p'
+    'bHlTdGF0dXNSBGlwdjQSLwoEaXB2NhgNIAEoCzIbLmNsaWVudC52MC5FeGl0RmFtaWx5U3RhdH'
+    'VzUgRpcHY2QhkKF19yZXF1ZXN0ZWRfZXhpdF9ub2RlX2lkQhkKF19lZmZlY3RpdmVfZXhpdF9u'
+    'b2RlX2lk');
 
 @$core.Deprecated('Use hostTargetDescriptor instead')
 const HostTarget$json = {

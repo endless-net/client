@@ -140,6 +140,35 @@ class LanAccess extends $pb.ProtobufEnum {
   const LanAccess._(super.value, super.name);
 }
 
+/// NONE is a status-only cleared selection, never a SelectExitNode mode.
+class ExitFamilyMode extends $pb.ProtobufEnum {
+  static const ExitFamilyMode EXIT_FAMILY_MODE_UNSPECIFIED =
+      ExitFamilyMode._(0, _omitEnumNames ? '' : 'EXIT_FAMILY_MODE_UNSPECIFIED');
+  static const ExitFamilyMode EXIT_FAMILY_MODE_NONE =
+      ExitFamilyMode._(1, _omitEnumNames ? '' : 'EXIT_FAMILY_MODE_NONE');
+  static const ExitFamilyMode EXIT_FAMILY_MODE_IPV4_ONLY =
+      ExitFamilyMode._(2, _omitEnumNames ? '' : 'EXIT_FAMILY_MODE_IPV4_ONLY');
+  static const ExitFamilyMode EXIT_FAMILY_MODE_IPV6_ONLY =
+      ExitFamilyMode._(3, _omitEnumNames ? '' : 'EXIT_FAMILY_MODE_IPV6_ONLY');
+  static const ExitFamilyMode EXIT_FAMILY_MODE_DUAL_STACK =
+      ExitFamilyMode._(4, _omitEnumNames ? '' : 'EXIT_FAMILY_MODE_DUAL_STACK');
+
+  static const $core.List<ExitFamilyMode> values = <ExitFamilyMode>[
+    EXIT_FAMILY_MODE_UNSPECIFIED,
+    EXIT_FAMILY_MODE_NONE,
+    EXIT_FAMILY_MODE_IPV4_ONLY,
+    EXIT_FAMILY_MODE_IPV6_ONLY,
+    EXIT_FAMILY_MODE_DUAL_STACK,
+  ];
+
+  static final $core.List<ExitFamilyMode?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 4);
+  static ExitFamilyMode? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const ExitFamilyMode._(super.value, super.name);
+}
+
 class ApplyState extends $pb.ProtobufEnum {
   static const ApplyState APPLY_STATE_UNSPECIFIED =
       ApplyState._(0, _omitEnumNames ? '' : 'APPLY_STATE_UNSPECIFIED');
