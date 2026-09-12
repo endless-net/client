@@ -3151,6 +3151,19 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+[Windows 2025 repeat 2](https://github.com/endless-net/client/actions/runs/34675588798/job/103505041486)
+at source `1f8df62444b6c30e070c87d5f265c27e2e698a93` fails only
+`NativeFlowConsent/ipv6/tcp` at 2026-09-12 05:37:17 UTC during the expiry loop.
+The failed exchange is classified denial with reference application received/
+echoed deltas both zero. Public status is available, cache valid and connected;
+diagnostic `wireguard_ok=false`, handshake=false and RX/TX zero do not prove
+tunnel removal: the previous logger also emits these defaults when the entire
+WireGuard inspection is absent. Reference TCP counters do not count SYN packets.
+No raw inspection error or peer-presence evidence was recorded in this source.
+Flow failure diagnostics now separately record inspection presence, error presence,
+peer count and agent presence, using only public IPC. Assertions are unchanged;
+short tests, vet and lint pass, and native diagnosis remains pending.
+
 Run 34675588798 at source `1f8df62444b6c30e070c87d5f265c27e2e698a93`
 has an independent pair of failures in
 [macOS Intel repeat 3](https://github.com/endless-net/client/actions/runs/34675588798/job/103505041497):
