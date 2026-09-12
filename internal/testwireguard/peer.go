@@ -103,8 +103,59 @@ type UDPObservation struct {
 }
 
 type udpHistory struct {
-	mu      sync.Mutex
-	records []UDPObservation
+	mu       sync.Mutex
+	records  []UDPObservation
+	rejected []UDPRejection
+}
+
+// UDPRejection records header shape only; it never retains addresses or payload.
+type UDPRejection struct {
+	ReceivedIndex                          uint64
+	Bytes                                  int
+	IPVersion, Protocol                    uint8
+	SourceMatches, DestinationMatches      bool
+	UDPHeaderPresent                       bool
+	SourcePort, DestinationPort, UDPLength uint16
+	ChecksumZero                           bool
+}
+
+func (p Peer) UDPRejections() []UDPRejection {
+	if p.udpHistory == nil {
+		return nil
+	}
+	p.udpHistory.mu.Lock()
+	defer p.udpHistory.mu.Unlock()
+	return append([]UDPRejection(nil), p.udpHistory.rejected...)
+}
+
+func udpRejection(packet []byte, clientIP, peerIP netip.Addr, index uint64) UDPRejection {
+	r := UDPRejection{ReceivedIndex: index, Bytes: len(packet)}
+	if len(packet) == 0 {
+		return r
+	}
+	r.IPVersion = packet[0] >> 4
+	offset := 0
+	if r.IPVersion == 4 && len(packet) >= 20 {
+		r.Protocol = packet[9]
+		r.SourceMatches = bytes.Equal(packet[12:16], clientIP.AsSlice())
+		r.DestinationMatches = bytes.Equal(packet[16:20], peerIP.AsSlice())
+		if packet[0] == 0x45 {
+			offset = 20
+		}
+	} else if r.IPVersion == 6 && len(packet) >= 40 {
+		r.Protocol = packet[6]
+		r.SourceMatches = bytes.Equal(packet[8:24], clientIP.AsSlice())
+		r.DestinationMatches = bytes.Equal(packet[24:40], peerIP.AsSlice())
+		offset = 40
+	}
+	if offset != 0 && r.Protocol == 17 && len(packet) >= offset+8 {
+		r.UDPHeaderPresent = true
+		r.SourcePort = binary.BigEndian.Uint16(packet[offset : offset+2])
+		r.DestinationPort = binary.BigEndian.Uint16(packet[offset+2 : offset+4])
+		r.UDPLength = binary.BigEndian.Uint16(packet[offset+4 : offset+6])
+		r.ChecksumZero = binary.BigEndian.Uint16(packet[offset+6:offset+8]) == 0
+	}
+	return r
 }
 
 func (p Peer) UDPObservations() []UDPObservation {
@@ -162,7 +213,7 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 				if !ok {
 					return
 				}
-				traffic.received.Add(1)
+				index := traffic.received.Add(1)
 				var reply []byte
 				if clientIP.Is4() {
 					reply = echoUDP(packet, clientIP.As4(), peerIP.As4())
@@ -170,6 +221,12 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 					reply = echoUDPv6(packet, clientIP.As16(), peerIP.As16())
 				}
 				if reply == nil {
+					history.mu.Lock()
+					if len(history.rejected) == 32 {
+						history.rejected = history.rejected[1:]
+					}
+					history.rejected = append(history.rejected, udpRejection(packet, clientIP, peerIP, index))
+					history.mu.Unlock()
 					continue
 				}
 				// Validated echo helpers accept exactly one 32-byte UDP payload.

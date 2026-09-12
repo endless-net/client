@@ -125,6 +125,9 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		reference = testwireguard.NewUDP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
 		defer func() {
 			if t.Failed() {
+				for _, rejection := range reference.UDPRejections() {
+					t.Logf("reference UDP rejected: received_index=%d bytes=%d ip_version=%d protocol=%d source_matches=%t destination_matches=%t udp_header_present=%t source_port=%d destination_port=%d udp_length=%d checksum_zero=%t", rejection.ReceivedIndex, rejection.Bytes, rejection.IPVersion, rejection.Protocol, rejection.SourceMatches, rejection.DestinationMatches, rejection.UDPHeaderPresent, rejection.SourcePort, rejection.DestinationPort, rejection.UDPLength, rejection.ChecksumZero)
+				}
 				for i, observation := range reference.UDPObservations() {
 					t.Logf("reference UDP accepted: index=%d source_port=%d destination_port=%d payload_sha256=%x", i, observation.SourcePort, observation.DestinationPort, observation.PayloadSHA256)
 				}

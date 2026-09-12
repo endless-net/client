@@ -3171,8 +3171,15 @@ timeout has no unexpected-reply digest to correlate. No evidence yet separates
 an unrelated packet, a rejected request, scheduling delay or loss elsewhere.
 Do not infer a flow-consent or Client runtime cause from temporal proximity.
 
-Client-owned follow-up is to observe rejected reference packet shapes/reasons
-without exposing payloads or reading Client state, then revalidate on native CI.
+The UDP participant now retains the last 32 rejected packet header observations:
+receive sequence, length, IP version/protocol, expected endpoint-match flags,
+and UDP header presence, ports, length and zero-checksum flag. Failure-only logs
+withhold addresses and payloads. Sequence numbers can be compared with received
+counts, but do not by themselves identify the failed application request.
+Truncated IPv4/IPv6 headers have a bounded parsing component test. Native
+validation of these observations remains pending; echo acceptance is unchanged.
+Client-owned follow-up is to correlate rejected packet shapes with failed
+exchanges without exposing payloads or reading Client state, then revalidate.
 The report does not qualify the full source; other repetitions are still running.
 Assertions remain strict and no retry or runtime change is justified yet.
 
