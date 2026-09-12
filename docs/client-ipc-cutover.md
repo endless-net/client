@@ -86,8 +86,9 @@ at 128 and display names at 128 UTF-8 bytes without control characters.
 records and idempotent replay. `service_rpc_pages_test.go` covers caller/query/
 instance/revision/size-bound signed pagination, five-minute expiry, stable
 ordering, stale snapshot rejection and no private config disclosure.
-SelectProfile, per-profile tunnel handover and other
-runtime providers remain required work; this is not UF-16 acceptance yet.
+SelectProfile handler/lifecycle wiring and other runtime providers remain
+required work; this is not UF-16 acceptance yet. The handover foundation and
+its remaining gates are recorded below.
 
 ## Native status/event publication (2026-09-13)
 
@@ -130,3 +131,28 @@ New CLI/provider tests cover unknown connectivity/deadlines, invalid cache,
 foreign/future agent snapshots, safe readiness probes and native publication.
 The agent loop still needs wiring to this provider with actual phase transitions;
 that and the production listener cutover are not established by these tests.
+
+## Durable profile handover foundation (2026-09-13)
+
+`service_rpc_switch.go` persists the selection operation before side effects,
+serializes handover using the same lock as automatic agent reconciliation, and
+stops the old tunnel before committing the target context. Installation keys
+and ownership remain installation-scoped. Old observations are discarded on
+activation; profile-list invalidations accompany switch progress. A failed
+target apply is stopped again and disables automatic reconnect. If cleanup
+fails, continuity remains unknown; this does not claim routes were removed.
+
+Short tests cover stop/apply ordering, pending replay, BUSY, selecting the same
+profile without disruption, failure outcomes, and process-loss recovery before
+and after durable activation. Recovery preserves recorded interruption and does
+not infer uninterrupted service from a tunnel absent after restart. Agent-driver
+tests verify the shared lock, missing provider/enrollment rejection and typed
+failure sanitization. These are deterministic local tests, not OS route or
+release acceptance evidence.
+
+The native SelectProfile RPC/lifecycle worker, initial-profile adoption for
+existing installations, complete policy restrictions, Disconnect race handling,
+other profile-scoped invalidations and multi-platform real tunnel verification
+still need implementation/validation in this repository before UF-16 acceptance.
+The production HTTP v2 listener remains until the full hard cutover is ready;
+the new implementation does not delegate to it or provide a fallback.

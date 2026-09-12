@@ -35,6 +35,7 @@ type ClientRPCState struct {
 	Operations      map[string]clientRPCOperationRecord `json:"operations"`
 	Profiles        map[string]clientRPCProfile         `json:"profiles,omitempty"`
 	ActiveProfileID string                              `json:"active_profile_id,omitempty"`
+	ProfileSwitch   *clientRPCProfileSwitch             `json:"profile_switch,omitempty"`
 }
 
 type clientRPCOperationRecord struct {
@@ -49,6 +50,7 @@ type clientRPCOperationRecord struct {
 // may run until acceptance commits. Runtime reconciliation executes those effects.
 type ClientRPCMutations struct {
 	mu             sync.Mutex
+	profileWorker  sync.Mutex
 	store          *ConfigStore
 	instanceID     string
 	now            func() time.Time
@@ -319,7 +321,7 @@ func validRPCOperationTransition(previous, next *ipc.Operation) bool {
 	case ipc.OperationState_OPERATION_STATE_PENDING:
 		allowed = next.State == ipc.OperationState_OPERATION_STATE_RUNNING || next.State == ipc.OperationState_OPERATION_STATE_FAILED || next.State == ipc.OperationState_OPERATION_STATE_CANCELLED
 	case ipc.OperationState_OPERATION_STATE_RUNNING:
-		allowed = next.State == ipc.OperationState_OPERATION_STATE_WAITING_FOR_USER || rpcOperationTerminal(next.State)
+		allowed = next.State == ipc.OperationState_OPERATION_STATE_RUNNING || next.State == ipc.OperationState_OPERATION_STATE_WAITING_FOR_USER || rpcOperationTerminal(next.State)
 	case ipc.OperationState_OPERATION_STATE_WAITING_FOR_USER:
 		allowed = next.State == ipc.OperationState_OPERATION_STATE_RUNNING || next.State == ipc.OperationState_OPERATION_STATE_FAILED || next.State == ipc.OperationState_OPERATION_STATE_CANCELLED
 	}
@@ -363,6 +365,10 @@ func validRPCOperationTransition(previous, next *ipc.Operation) bool {
 func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *ipc.Operation) error) (*ipc.Operation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	previousActive := ""
+	if state := m.store.Read().RPCState; state != nil {
+		previousActive = state.ActiveProfileID
+	}
 	if id == "" || apply == nil {
 		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
@@ -404,6 +410,9 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 	})
 	if err != nil {
 		return nil, err
+	}
+	if state := m.store.Read().RPCState; state != nil && state.ActiveProfileID != previousActive {
+		m.observedStatus = nil
 	}
 	m.publishMutationLocked(updated)
 	return updated, nil
