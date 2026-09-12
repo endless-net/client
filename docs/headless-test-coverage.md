@@ -3151,6 +3151,47 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+### Completed matrix at 0cf6d73: Relay recovery passes, UDP mismatch remains
+
+Run [34673867164](https://github.com/endless-net/client/actions/runs/34673867164)
+has completed all 24 native reports at exact source
+`0cf6d735193f1ffc0980b68cf19bb3b602a54423`. Each report contains the same 39 root
+names: **911 PASS, 25 FAIL, 0 SKIP** across 936 root executions.
+
+| Runner | Three repetitions: PASS / FAIL / SKIP |
+| --- | --- |
+| ubuntu-22.04 | 114 / 3 / 0 |
+| ubuntu-24.04 | 114 / 3 / 0 |
+| ubuntu-22.04-arm | 113 / 4 / 0 |
+| ubuntu-24.04-arm | 114 / 3 / 0 |
+| windows-2022 | 114 / 3 / 0 |
+| windows-2025 | 114 / 3 / 0 |
+| macos-15-intel | 114 / 3 / 0 |
+| macos-15 | 114 / 3 / 0 |
+
+Every report fails only the browser corrected-endpoint leaf of
+`RouteAdvertisement`, except Ubuntu 22.04 ARM repeat 3, which additionally fails
+`NativeIPv6UDPTraffic` with the unknown response documented below. The last
+[macOS ARM report](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753948)
+and [Windows 2022 report](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753980)
+both contain 38 PASS roots and that one endpoint failure.
+
+All 96 Relay family leaves (two roots, two families, 24 reports) pass, including
+bounded same-socket TCP recovery after complete Relay outage. All 96 flow consent
+family/protocol leaves also pass. These qualify those bounded executions at this
+source, not all HC-028/HC-057 variants or freedom from intermittent failures.
+The startup-race additions, endpoint fixture correction and UDP digest correlation
+were added later and are not validated by this run.
+
+All eight installation jobs, three platform Verify jobs and the separate Client
+control-plane job pass. The installation scope and its 40 parent/child records
+are documented above. Optional external STUN is skipped. The aggregate
+[verify gate 103505030526](https://github.com/endless-net/client/actions/runs/34673867164/job/103505030526)
+fails, so this source is not qualified for publication. Client-owned follow-up
+is to verify the corrected fixture and startup race on later source, correlate
+any repeated UDP mismatch, and continue remaining HC variants. No backend or
+infrastructure changes follow from these bounded results.
+
 UDP mismatch diagnostics now include SHA-256 digests of the synthetic request
 and unexpected reply. The parent accepts only canonical, exactly 32-byte hex
 digests and bounded counters; malformed or extra output remains withheld.
