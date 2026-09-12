@@ -2861,6 +2861,60 @@ assertions, stricter child-outcome verifier, or UDP completed-reply history.
 Those changes require evidence from their own source revision. Full HC-001–HC-065
 coverage remains incomplete; this matrix does not close missing scenarios.
 
+## Complete native evidence: 37-root revision
+
+[Run 34668955037](https://github.com/endless-net/client/actions/runs/34668955037)
+completed on 2026-09-12 for source `4a8011f90d839e6771d05999933a7738bc9a315f`.
+All 24 logs contain the same 37-root inventory: **886 PASS, 2 FAIL, 0 SKIP**.
+The four flow-consent variants total **94 PASS, 2 FAIL**. Both failures are
+IPv6 UDP application unavailability after consent on Ubuntu 24.04 repetition 3
+and Ubuntu 22.04 ARM repetition 3; their stage, timestamps and root-cause limits
+are recorded below. No other root or child outcome failed or skipped.
+
+The [aggregate gate](https://github.com/endless-net/client/actions/runs/34668955037/job/103491756047)
+failed. All eight installation jobs, three OS verification jobs and the separate
+Client control-plane job passed. Optional external STUN was skipped and is not
+compatibility evidence. The table is the final result; earlier partial snapshots
+below retain their historical observation limits.
+
+| Runner and repetition | Job | Root outcomes |
+| --- | --- | --- |
+| macos-15-intel, repeat 1 | [103487109024](https://github.com/endless-net/client/actions/runs/34668955037/job/103487109024) | 37 PASS |
+| macos-15-intel, repeat 2 | [103487109003](https://github.com/endless-net/client/actions/runs/34668955037/job/103487109003) | 37 PASS |
+| macos-15-intel, repeat 3 | [103487109054](https://github.com/endless-net/client/actions/runs/34668955037/job/103487109054) | 37 PASS |
+| macos-15, repeat 1 | [103487108968](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108968) | 37 PASS |
+| macos-15, repeat 2 | [103487108921](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108921) | 37 PASS |
+| macos-15, repeat 3 | [103487108993](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108993) | 37 PASS |
+| ubuntu-22.04-arm, repeat 1 | [103487108913](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108913) | 37 PASS |
+| ubuntu-22.04-arm, repeat 2 | [103487108981](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108981) | 37 PASS |
+| ubuntu-22.04-arm, repeat 3 | [103487108946](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108946) | 36 PASS, 1 FAIL |
+| ubuntu-22.04, repeat 1 | [103487108920](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108920) | 37 PASS |
+| ubuntu-22.04, repeat 2 | [103487108911](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108911) | 37 PASS |
+| ubuntu-22.04, repeat 3 | [103487108973](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108973) | 37 PASS |
+| ubuntu-24.04-arm, repeat 1 | [103487108942](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108942) | 37 PASS |
+| ubuntu-24.04-arm, repeat 2 | [103487108935](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108935) | 37 PASS |
+| ubuntu-24.04-arm, repeat 3 | [103487108937](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108937) | 37 PASS |
+| ubuntu-24.04, repeat 1 | [103487108959](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108959) | 37 PASS |
+| ubuntu-24.04, repeat 2 | [103487108983](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108983) | 37 PASS |
+| ubuntu-24.04, repeat 3 | [103487108890](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108890) | 36 PASS, 1 FAIL |
+| windows-2022, repeat 1 | [103487108994](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108994) | 37 PASS |
+| windows-2022, repeat 2 | [103487109098](https://github.com/endless-net/client/actions/runs/34668955037/job/103487109098) | 37 PASS |
+| windows-2022, repeat 3 | [103487109002](https://github.com/endless-net/client/actions/runs/34668955037/job/103487109002) | 37 PASS |
+| windows-2025, repeat 1 | [103487108918](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108918) | 37 PASS |
+| windows-2025, repeat 2 | [103487108991](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108991) | 37 PASS |
+| windows-2025, repeat 3 | [103487109015](https://github.com/endless-net/client/actions/runs/34668955037/job/103487109015) | 37 PASS |
+
+Interrupted disconnect followed by restart, direct IPC cleanup-confirmation
+validation, and CLI/IPC assertions of the exact build commit passed in all
+24 repetitions across all eight runners. The four-way flow-consent expansion
+remains unqualified because of the two failures. No claim of complete
+HC-001–HC-065 coverage follows from the other successful roots.
+
+This source predates the completed-UDP-reply history, forced-termination ownership
+variants, retained Relay sessions, native control-outage traffic, strict denial
+oracle, DNS response binding, route advertisement and early registration-input
+validation. Those changes require a separate source-specific matrix.
+
 ## Partial native evidence: 37-root revision
 
 Snapshot collected on 2026-09-12 for run `34668955037`, source
