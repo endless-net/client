@@ -53,10 +53,21 @@ func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork, listenHost string, t
 	peer := api.Peer{ID: "dns-wire-peer", Hostname: "wire-peer", PublicKey: public, AllowedIPs: []string{"100.90.0.20/32", "fd7a:115c:a1e0::20/128"}}
 	globalAddress, globalQueries, _ := dnsContractUpstream(t, upstreamNetwork, truncated, [4]byte{203, 0, 113, 4})
 	splitAddress, splitQueries, setSplitCode := dnsContractUpstream(t, upstreamNetwork, truncated, [4]byte{198, 51, 100, 7})
-	for _, present := range []bool{true, false, true} {
+	phases := []struct{ hostname, ipv4, ipv6 string }{
+		{"wire-peer", "100.90.0.20", "fd7a:115c:a1e0::20"},
+		{},
+		{"wire-peer", "100.90.0.20", "fd7a:115c:a1e0::20"},
+		{"renamed-peer", "100.90.0.20", "fd7a:115c:a1e0::20"},
+		{"renamed-peer", "100.90.0.21", "fd7a:115c:a1e0::21"},
+		{"wire-peer", "100.90.0.20", "fd7a:115c:a1e0::20"},
+	}
+	for _, phase := range phases {
 		var peers []api.Peer
-		if present {
-			peers = []api.Peer{peer}
+		if phase.hostname != "" {
+			updated := peer
+			updated.Hostname = phase.hostname
+			updated.AllowedIPs = []string{phase.ipv4 + "/32", phase.ipv6 + "/128"}
+			peers = []api.Peer{updated}
 		}
 		if err := s.UpdatePeers(id, peers); err != nil {
 			t.Fatal(err)
@@ -65,15 +76,22 @@ func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork, listenHost string, t
 		address, stop := startClientDNS(t, n, listenHost, "--upstream", globalAddress, "--split", "corp.test="+splitAddress, "--split", "blocked.corp.test=")
 		for _, transport := range []string{"udp", "tcp"} {
 			peerCode, peerAddress := dnsmessage.RCodeNameError, ""
-			if present {
-				peerCode, peerAddress = dnsmessage.RCodeSuccess, "100.90.0.20"
+			peerName := "wire-peer.scenario.endlessnet."
+			if phase.hostname != "" {
+				peerCode, peerAddress = dnsmessage.RCodeSuccess, phase.ipv4
+				peerName = phase.hostname + ".scenario.endlessnet."
 			}
-			assertDNSWire(t, transport, address, "wire-peer.scenario.endlessnet.", peerCode, peerAddress)
-			peerIPv6 := ""
-			if present {
-				peerIPv6 = "fd7a:115c:a1e0::20"
+			assertDNSWire(t, transport, address, peerName, peerCode, peerAddress)
+			assertDNSWireType(t, transport, address, peerName, dnsmessage.TypeAAAA, peerCode, phase.ipv6)
+			// The same peer ID/key changes its name and addresses. Neither the
+			// withdrawn name nor stale A/AAAA records may survive a fresh map.
+			for _, hostname := range []string{"wire-peer", "renamed-peer"} {
+				if hostname != phase.hostname {
+					name := hostname + ".scenario.endlessnet."
+					assertDNSWire(t, transport, address, name, dnsmessage.RCodeNameError, "")
+					assertDNSWireType(t, transport, address, name, dnsmessage.TypeAAAA, dnsmessage.RCodeNameError, "")
+				}
 			}
-			assertDNSWireType(t, transport, address, "wire-peer.scenario.endlessnet.", dnsmessage.TypeAAAA, peerCode, peerIPv6)
 			assertDNSWireType(t, transport, address, "absent.scenario.endlessnet.", dnsmessage.TypeAAAA, dnsmessage.RCodeNameError, "")
 			assertDNSWire(t, transport, address, "absent.scenario.endlessnet.", dnsmessage.RCodeNameError, "")
 			assertDNSWire(t, transport, address, "public.example.", dnsmessage.RCodeSuccess, "203.0.113.4")
@@ -84,7 +102,7 @@ func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork, listenHost string, t
 			setSplitCode(dnsmessage.RCodeServerFailure)
 			assertDNSWire(t, transport, address, "db.corp.test.", dnsmessage.RCodeServerFailure, "")
 			assertDNSWire(t, transport, address, "public.example.", dnsmessage.RCodeSuccess, "203.0.113.4")
-			assertDNSWire(t, transport, address, "wire-peer.scenario.endlessnet.", peerCode, peerAddress)
+			assertDNSWire(t, transport, address, peerName, peerCode, peerAddress)
 			setSplitCode(dnsmessage.RCodeSuccess)
 			assertDNSWire(t, transport, address, "db.corp.test.", dnsmessage.RCodeSuccess, "198.51.100.7")
 		}
@@ -97,7 +115,7 @@ func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork, listenHost string, t
 		want    string
 		count   int
 	}{
-		{globalQueries(), "public.example.", 12}, {splitQueries(), "db.corp.test.", 18},
+		{globalQueries(), "public.example.", 4 * len(phases)}, {splitQueries(), "db.corp.test.", 6 * len(phases)},
 	} {
 		count := observation.count
 		if truncated {

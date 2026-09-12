@@ -3151,6 +3151,23 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+### DNS peer rename and address replacement: native validation pending
+
+`TestControlPlaneDNSWireRecovery` now keeps one peer ID/public key through six
+signed-map phases: present, withdrawn, restored, renamed, IPv4/IPv6 addresses
+replaced, and original name/addresses restored. Real CLI synchronization and a
+fresh DNS proxy are used for every phase. UDP and TCP queries require exactly
+the current A/AAAA address and NXDOMAIN with no answers for the inactive name.
+The existing complete-UDP and truncated-UDP/TCP upstream variants run with
+IPv4/IPv6 upstreams and listeners. Upstream transcripts must still contain only
+their assigned external domains; renamed or withdrawn peer queries must not leak.
+
+This is additional HC-025/HC-026 consumer coverage, not live DNS reload, OS
+resolver integration or proof of application IP connectivity. Short tests, vet
+and lint pass; native evidence for the new phases remains pending in the existing
+eight-runner, three-repetition Client contract matrix. The test reads no Client
+state files. Remaining implementation and validation belong to `endless-net/client`.
+
 ### Enrolled client TLS lifetime recovery: native validation pending
 
 `TestControlPlaneTLSTrustBoundary` now adds `enrolled-expired` and
