@@ -5338,3 +5338,22 @@ exactly-one-registration assertion remain. Both family leaves are required in
 CI reports. Short tests, vet and lint pass; these expanded native variants are
 pending and are absent from the running `169b09c` matrix. Browser/OIDC refresh
 and provider session-expiration scheduling remain outside this evidence.
+
+### 2026-09-12: Windows exit-route fix qualified in all six repeats
+
+All three Windows 2022 and all three Windows 2025 reports in
+[run 34706279754](https://github.com/endless-net/client/actions/runs/34706279754)
+at `169b09c91a010cf2c850a6bcd58c366de2b26d9c` pass
+`TestControlPlaneNativeExitRoute/ipv4` and `/ipv6`. This qualifies the `/1`
+route-precedence fix against the same-host reference egress, withdrawal and
+recovery scenario that failed all three Windows 2022 repeats at `cce41e6`.
+Remote tunnel/control endpoint bypass and public egress observation remain
+unqualified; this evidence does not establish all HC-036 variants.
+
+Application-route readiness also passes all six Windows repeats; its earlier
+intermittent startup failure is not thereby explained. MTU preference tests
+pass both families in all six reports. All Windows reports still fail cached
+map expiry, and Windows 2025 repeat 1 additionally fails an IPv6 TCP exchange
+3.752 seconds before consent expiry. The expiry packet-filter fix and later
+flow diagnostics are absent from this source. The overall run remains
+unqualified while the other native reports are pending.
