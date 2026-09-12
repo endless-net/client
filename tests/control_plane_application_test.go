@@ -111,6 +111,7 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 				t.Helper()
 				ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 				defer cancel()
+				beforeTo, beforeFrom := reference.ForwardedPacketCounts()
 				if err := testclient.Await(ctx, func() bool { return probe("tcp", address) }); err != nil {
 					t.Fatal("application TCP target did not become reachable")
 				}
@@ -118,8 +119,8 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 					t.Fatal("application grant permitted a protocol or port outside its target")
 				}
 				toResource, fromResource := reference.ForwardedPacketCounts()
-				if toResource == 0 || fromResource == 0 {
-					t.Fatal("application traffic bypassed the connector forwarding hop")
+				if toResource <= beforeTo || fromResource <= beforeFrom {
+					t.Fatalf("application traffic did not produce fresh connector forwarding: before=%d/%d after=%d/%d", beforeTo, beforeFrom, toResource, fromResource)
 				}
 			}
 			assertDNS := func(code dnsmessage.RCode, expected string) {

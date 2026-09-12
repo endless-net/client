@@ -4994,3 +4994,20 @@ and deny the replacement rights before final withdrawal. The positive probes
 establish that previously denied services actually respond when authorized.
 This extension passes local short-test compilation, vet and lint; native
 execution is pending and is not included in the `92983ae` evidence above.
+
+The next inspected artifact, `client-contracts-macos-15-3` from the same run
+and exact source, has 50 PASS roots, zero FAIL/SKIP roots and successful package
+completion. Both exit-route families and both sharing families pass. This is
+the first inspected macOS ARM result for the Darwin route corrections, not
+qualification of the other macOS repetitions, Intel runners or off-host exit
+underlay behavior. Together with the eight reports above, the inspected subtotal
+is 449 PASS roots and one FAIL across nine reports.
+
+The Ubuntu 24.04 ARM application failure occurs at the final positive DNS check
+after expiry and a fresh grant, after TCP access has recovered. The DNS helper
+now retains its final transport error and attempt count instead of reporting
+only `DNS response unavailable`; timeouts and exact DNS assertions are unchanged.
+HC-040 positive phases now require fresh bidirectional connector packet counts,
+so recovery cannot reuse the initial forwarding observation. Short tests, vet
+and lint pass locally. Neither addition establishes the DNS failure's cause;
+the strengthened native scenario remains pending in CI.

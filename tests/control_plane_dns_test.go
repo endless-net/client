@@ -199,7 +199,7 @@ func assertDNSWireType(t *testing.T, transport, address, name string, family dns
 		}
 	}
 	if err != nil {
-		t.Fatal("DNS response unavailable")
+		t.Fatalf("%s DNS response unavailable after %d attempts: %v", transport, attempts, err)
 	}
 	var response dnsmessage.Message
 	if err := response.Unpack(reply); err != nil {
