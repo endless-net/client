@@ -121,6 +121,7 @@ func requiredPlatformSubtests(platform string, names []string) []string {
 		"TestControlPlaneNativeMachineSharing", "TestControlPlaneRoutedResource",
 		"TestControlPlaneNativeServiceCatalog", "TestControlPlaneNativeMTUPreference",
 		"TestControlPlaneNativeCachedMapExpiry",
+		"TestControlPlaneJoinTokenRotation",
 	} {
 		if slices.Contains(names, root) {
 			required = append(required, root+"/ipv4", root+"/ipv6")

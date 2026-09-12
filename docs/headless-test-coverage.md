@@ -5268,3 +5268,15 @@ run. The later MTU and cached-map-expiry roots, expanded container transports,
 Windows `/1` fix and inspection-state diagnostics are absent from this source
 and remain pending on a subsequent run. These root counts do not represent a
 percentage of complete HC-001–HC-065 coverage or release acceptance.
+
+### 2026-09-12: join-token rotation across address families and transports
+
+`TestControlPlaneJoinTokenRotation` now runs IPv4 and IPv6 variants. Both require
+fresh TCP and UDP application exchanges and bidirectional reference forwarding
+before rotation, after old-token enrollment rejection, after the existing Client
+restarts during control unavailability, and after control recovery. Existing
+node identity and authority must survive; the replacement token still enrolls
+exactly one distinct Client. Both family leaves are mandatory in CI reports.
+Short tests, vet and lint pass. This extends the qualified IPv4 TCP scenario;
+native execution of the new variants is pending. Join-token expiry and provider
+token-lifecycle implementation are not established by this rotation scenario.
