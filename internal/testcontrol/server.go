@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -96,6 +97,7 @@ type Server struct {
 	flows                    map[string]*flowState
 	flowReports              []*rpc.ReportFlowLogRequest
 	loseFlowAcknowledgement  bool
+	setTLSValidity           func(time.Time, time.Time) error
 }
 
 func New(t testing.TB) *Server {
@@ -168,6 +170,25 @@ func NewWithListener(t testing.TB, listener net.Listener) *Server {
 			t.Fatal(err)
 		}
 		s.HTTP.TLS = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: tlsKey}}}
+		var presented atomic.Pointer[tls.Certificate]
+		presented.Store(&s.HTTP.TLS.Certificates[0])
+		s.HTTP.TLS.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+			return &tls.Config{Certificates: []tls.Certificate{*presented.Load()}}, nil
+		}
+		s.setTLSValidity = func(from, until time.Time) error {
+			leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			if err != nil {
+				return err
+			}
+			leaf := &x509.Certificate{SerialNumber: big.NewInt(2), NotBefore: from, NotAfter: until, IPAddresses: []net.IP{address.IP}, KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+			leafDER, err := x509.CreateCertificate(rand.Reader, leaf, certificate, &leafKey.PublicKey, tlsKey)
+			if err != nil {
+				return err
+			}
+			presented.Store(&tls.Certificate{Certificate: [][]byte{leafDER, der}, PrivateKey: leafKey})
+			s.HTTP.CloseClientConnections()
+			return nil
+		}
 		s.HTTP.StartTLS()
 	} else {
 		s.HTTP.Start()
@@ -178,6 +199,15 @@ func NewWithListener(t testing.TB, listener net.Listener) *Server {
 
 func (s *Server) Close()      { s.closeOnce.Do(func() { close(s.closed); s.HTTP.Close() }) }
 func (s *Server) URL() string { return s.HTTP.URL }
+
+// SetTLSCertificateValidity changes the served leaf while retaining the trusted
+// CA and origin. New handshakes observe the supplied lifetime; keys stay in memory.
+func (s *Server) SetTLSCertificateValidity(from, until time.Time) error {
+	if s.setTLSValidity == nil {
+		return errors.New("TLS listener required")
+	}
+	return s.setTLSValidity(from, until)
+}
 
 // TLSCertificatePEM returns public trust material, never the TLS private key.
 func (s *Server) TLSCertificatePEM() []byte {

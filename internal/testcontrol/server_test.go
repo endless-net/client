@@ -204,6 +204,24 @@ func TestTLSControlPeerRequiresItsExplicitTrust(t *testing.T) {
 	a.HTTPClient = &http.Client{Transport: trusted, Timeout: time.Second}
 	_, err = a.ServerKey()
 	check(t, err)
+	for _, lifetime := range []struct{ from, until time.Duration }{
+		{-2 * time.Hour, -time.Hour},
+		{time.Hour, 2 * time.Hour},
+	} {
+		check(t, s.SetTLSCertificateValidity(time.Now().Add(lifetime.from), time.Now().Add(lifetime.until)))
+		trusted.CloseIdleConnections()
+		before := len(s.Events())
+		if _, err := a.ServerKey(); err == nil {
+			t.Fatal("trusted CA bypassed invalid leaf lifetime")
+		}
+		if len(s.Events()) != before {
+			t.Fatal("invalid leaf lifetime reached HTTP")
+		}
+	}
+	check(t, s.SetTLSCertificateValidity(time.Now().Add(-time.Minute), time.Now().Add(time.Hour)))
+	trusted.CloseIdleConnections()
+	_, err = a.ServerKey()
+	check(t, err)
 }
 
 func TestPeerDeltaAndResync(t *testing.T) {

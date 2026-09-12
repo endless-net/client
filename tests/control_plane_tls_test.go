@@ -63,6 +63,31 @@ func TestControlPlaneTLSTrustBoundary(t *testing.T) {
 	if len(s.Events()) != beforeMismatch {
 		t.Fatal("hostname-mismatched TLS connection reached the control HTTP handler")
 	}
+	for _, tc := range []struct {
+		name        string
+		from, until time.Duration
+	}{
+		{"expired", -2 * time.Hour, -time.Hour},
+		{"not-yet-valid", time.Hour, 2 * time.Hour},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now()
+			if err := s.SetTLSCertificateValidity(now.Add(tc.from), now.Add(tc.until)); err != nil {
+				t.Fatal(err)
+			}
+			before := len(s.Events())
+			output, err := n.Run("up", "--config", n.Config, "--server", s.URL(), "--coordinator", s.URL(), "--network", network.Name, "--join-token", join, "--hostname", "tls-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off")
+			if err == nil || !strings.Contains(strings.ToLower(string(output)), "certificate") {
+				t.Fatal("invalid TLS lifetime did not produce a certificate error (output withheld)")
+			}
+			if len(s.Events()) != before {
+				t.Fatal("invalid TLS lifetime reached the control HTTP handler")
+			}
+		})
+	}
+	if err := s.SetTLSCertificateValidity(time.Now().Add(-time.Minute), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 	n.Enroll(s, network.Name, join)
 	n.Start()
 	defer n.Stop()

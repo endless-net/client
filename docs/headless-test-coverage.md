@@ -2737,6 +2737,17 @@ The later post-failure public status observation is not part of this source.
 
 ## Next work
 
+HC-021 TLS lifetime acceptance now extends the common TLS root with expired and
+not-yet-valid leaf certificates signed by the already trusted test CA, at the
+same origin. Each real CLI enrollment must fail with a certificate error before
+any HTTP handler observation. Restoring a valid leaf must allow the same Client
+profile to enroll and preserve its identity across agent restart. The fixture
+closes previous connections to require a fresh handshake and retains private
+TLS material only in memory. A short contract-fixture test verifies both lifetime
+denials and recovery independently. Short checks passed locally; native evidence
+for these new variants is pending. This does not prove expiry handling for an
+already established agent session or data-plane retirement at expiry.
+
 Failed harness Service commands now trigger one public status query with a
 separate two-second outer deadline. Logs contain only boolean intent/credential/
 cache/WireGuard presence and health, or a fixed status-error category. The
