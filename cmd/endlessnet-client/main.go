@@ -747,6 +747,9 @@ func cmdUp(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if *advertiseSNAT && runtime.GOOS != "linux" {
+		return fmt.Errorf("advertise-snat is unsupported on %s", runtime.GOOS)
+	}
 	approvalTimeout, err := parseOptionalDuration("approval-timeout", *approvalTimeoutValue)
 	if err != nil {
 		return err

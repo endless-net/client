@@ -110,7 +110,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | C RoutedResource passed three times on all eight native platforms: IPv4/IPv6 TCP/UDP through an IP forwarding peer, route withdrawal and recovery | Full Client router roles, SNAT, HA and remaining resource variants |
 | HC-033 | C durable route installation disable/restore passed three times on all eight native platforms; U configuration tests | Per-resource selection and remaining route-selection semantics |
-| HC-034 | U SNAT/forwarding tests | Advertisement versus approval versus effective traffic |
+| HC-034 | C native route advertisement and explicit platform boundary; Linux two-Client subnet forwarding/SNAT, approval, withdrawal, router outage and recovery are executable; U hook rendering | Qualify the common root on every runner; non-Linux router dataplane is explicitly unsupported; IPv6, no-SNAT, independent policy and other router variants |
 | HC-035 | No C/R evidence audited | Site-to-site scope and reverse-path tests |
 | HC-036 | U exit-route configuration | Egress IP and independent IPv4/IPv6 probes |
 | HC-037 | U exit-LAN rules | LAN allowed/denied with real exit traffic |
@@ -4624,6 +4624,20 @@ registration result and complete exactly one node registration after approval.
 This verifies Client input and projection behavior; it does not infer effective
 policy authorization from the requested attribute. The common root count stays
 45 while the expanded root awaits native qualification.
+
+`TestControlPlaneSubnetRouter` adds HC-034 at the real Client dataplane boundary.
+On Linux, two independently registered Clients run in separate network
+namespaces and the router has a third LAN namespace behind it. The router
+advertises the LAN prefix with forwarding/SNAT enabled. The source must fail to
+reach a live TCP/UDP application before route approval, reach it only after the
+signed peer projection includes the prefix, lose both paths after withdrawal
+and router shutdown, then recover after approval and same-identity restart.
+The isolated topology has no alternate source-to-LAN route. On Windows and
+macOS the same common root requires an explicit unsupported outcome before any
+registration because the current forwarding hooks are Linux-only; the CLI no
+longer silently accepts a nonfunctional setting. IPv6, no-SNAT, independent
+route policy and HA remain separate variants. This raises the pending common
+inventory to 46 roots / 1,104 native outcomes.
 
 Run [34690909647](https://github.com/endless-net/client/actions/runs/34690909647)
 completed at source `73ebdf2699fd89bb66ce52183178e5a9421fe2a6`.
