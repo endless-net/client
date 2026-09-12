@@ -2,6 +2,7 @@ package tests
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -18,6 +19,10 @@ import (
 func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 	s, n, id := controlScenario(t)
 	initial := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid })
+	alias := filepath.Join(t.TempDir(), "config-alias.json")
+	if err := os.Symlink(n.Config, alias); err != nil {
+		t.Fatal("hosted runner could not create the configuration path alias")
+	}
 	for _, disconnected := range []bool{false, true} {
 		if disconnected {
 			var response ipc.DisconnectResponse
@@ -30,7 +35,7 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 		// All paths name the existing configuration; no identity file is read.
 		separator := string(filepath.Separator)
 		dir := filepath.Dir(n.Config)
-		paths := []string{n.Config, dir + separator + "." + separator + filepath.Base(n.Config), dir + separator + ".." + separator + filepath.Base(dir) + separator + filepath.Base(n.Config)}
+		paths := []string{n.Config, dir + separator + "." + separator + filepath.Base(n.Config), dir + separator + ".." + separator + filepath.Base(dir) + separator + filepath.Base(n.Config), alias}
 		start, results := make(chan struct{}), make(chan bool, len(paths))
 		for i, path := range paths {
 			args := []string{"agent", "--config", path, "--wg-interface", n.Interface}

@@ -2502,6 +2502,16 @@ HC-001–HC-065 completion remains unproven.
 
 ## Next work
 
+The native single-agent ownership root adds a file symlink naming its existing
+configuration as a fourth simultaneous contender, with a distinct IPC endpoint.
+It must receive the same ownership error as the direct and lexical paths while
+the original process retains identity, intent and map updates. Creating the alias
+uses filesystem metadata only, with no private Client state read; inability to
+create it fails the hosted test rather than skipping a platform. Current path
+resolution does not explicitly resolve symlinks, so this is an unqualified probe
+for a possible lock bypass, not a confirmed fix. Hard links and simultaneous
+startup without an existing owner remain separate gaps.
+
 The four native direct-traffic roots now rotate the map signer while connected,
 reject confirmation of the old key, explicitly confirm the new key and require
 real application traffic plus ICMP echo to recover. They restart the agent and
