@@ -78,6 +78,9 @@ func (m *ClientRPCMutations) ReconcileProfileSwitch(ctx context.Context, driver 
 	defer m.profileWorker.Unlock()
 	driver.Lock.Lock()
 	defer driver.Lock.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	cfg := m.store.Read()
 	if cfg.RPCState == nil || cfg.RPCState.ProfileSwitch == nil {
 		return nil
@@ -122,6 +125,9 @@ func (m *ClientRPCMutations) ReconcileProfileSwitch(ctx context.Context, driver 
 		return err
 	}
 	continuity, err := driver.Stop(ctx)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if err != nil {
 		return m.failProfileSwitch(current.Id, err, ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, false)
 	}
@@ -168,10 +174,19 @@ func (m *ClientRPCMutations) ReconcileProfileSwitch(ctx context.Context, driver 
 		}
 	}
 	cfg = m.store.Read()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == ConnectionIntentDesiredConnected {
 		if err := driver.Start(ctx, cfg); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			// A partial apply must be torn down before reporting a safe state.
 			_, stopErr := driver.Stop(ctx)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			if stopErr != nil {
 				return m.failProfileSwitch(current.Id, stopErr, ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, false)
 			}

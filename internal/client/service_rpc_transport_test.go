@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -109,4 +110,54 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if len(m.store.Read().RPCState.Profiles) != 1 {
 		t.Fatal("conflicting request performed side effects")
 	}
+	selection := &ipc.SelectProfileRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: &ipc.ProfileRef{ProfileId: accepted.Msg.Operation.ProfileId}}
+	_, err = client.SelectProfile(ctx, connect.NewRequest(selection))
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	workerCtx, stopWorker := context.WithCancel(ctx)
+	allowSwitch := make(chan struct{})
+	workerDone, err := service.StartProfileWorker(workerCtx, ClientRPCProfileDriver{Lock: &sync.Mutex{},
+		Stop: func(ctx context.Context) (ipc.ConnectionContinuity, error) {
+			select {
+			case <-allowSwitch:
+				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE, nil
+			case <-ctx.Done():
+				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, ctx.Err()
+			}
+		},
+		Start: func(context.Context, Config) error { t.Error("empty profile attempted connection"); return nil },
+	})
+	if err != nil {
+		stopWorker()
+		t.Fatal(err)
+	}
+	defer func() { stopWorker(); <-workerDone }()
+	profiles, err := client.ListProfiles(ctx, connect.NewRequest(&ipc.ListProfilesRequest{}))
+	if err != nil || len(profiles.Msg.Profiles) != 1 || profiles.Msg.Profiles[0].Selection.Availability != ipc.Availability_AVAILABILITY_AVAILABLE {
+		t.Fatal("running worker not projected in profile selection", err)
+	}
+	switchEvents, err := client.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = switchEvents.Close() }()
+	if !switchEvents.Receive() {
+		t.Fatal(switchEvents.Err())
+	}
+	requestCtx, cancelRequest := context.WithCancel(ctx)
+	selected, err := client.SelectProfile(requestCtx, connect.NewRequest(selection))
+	cancelRequest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	close(allowSwitch)
+	for switchEvents.Receive() {
+		op := switchEvents.Msg().GetOperationChanged()
+		if op.GetId() == selected.Msg.Operation.Id && rpcOperationTerminal(op.State) {
+			if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.GetSelection().SelectedId != selection.Profile.ProfileId {
+				t.Fatal("native worker selection failed")
+			}
+			return
+		}
+	}
+	t.Fatal("native worker did not publish terminal selection", switchEvents.Err())
 }

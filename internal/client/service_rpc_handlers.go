@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -20,8 +21,10 @@ import (
 // consumers are migrated. It never forwards requests to the HTTP v2 handler.
 type ClientRPCService struct {
 	clientipcconnect.UnimplementedClientServiceHandler
-	mutations *ClientRPCMutations
-	build     *ipc.BuildIdentity
+	mutations     *ClientRPCMutations
+	build         *ipc.BuildIdentity
+	profileMu     sync.Mutex
+	profileWorker *clientRPCProfileWorker
 }
 
 func NewClientRPCService(mutations *ClientRPCMutations, build *ipc.BuildIdentity) *ClientRPCService {
@@ -157,7 +160,10 @@ func (s *ClientRPCService) CreateProfile(ctx context.Context, request *connect.R
 
 func (s *ClientRPCService) ListProfiles(ctx context.Context, request *connect.Request[ipc.ListProfilesRequest]) (*connect.Response[ipc.ListProfilesResponse], error) {
 	peer, _ := local.PeerFromContext(ctx)
-	result, err := s.mutations.listProfilesAs(peer, request.Msg)
+	s.profileMu.Lock()
+	defer s.profileMu.Unlock()
+	ready := s.profileWorker != nil && s.profileWorker.ctx.Err() == nil
+	result, err := s.mutations.listProfilesWithSelectionAs(peer, request.Msg, ready)
 	if err != nil {
 		return nil, err
 	}

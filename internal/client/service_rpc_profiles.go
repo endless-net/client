@@ -19,6 +19,10 @@ import (
 const maxRPCProfiles = 128
 
 func (m *ClientRPCMutations) listProfilesAs(peer local.Peer, request *ipc.ListProfilesRequest) (*ipc.ListProfilesResponse, error) {
+	return m.listProfilesWithSelectionAs(peer, request, false)
+}
+
+func (m *ClientRPCMutations) listProfilesWithSelectionAs(peer local.Peer, request *ipc.ListProfilesRequest, selectionReady bool) (*ipc.ListProfilesResponse, error) {
 	cfg := m.store.Read()
 	const procedure = "/client.v0.ClientService/ListProfiles"
 	if err := authorizeRPCPeer(peer, rpcMethod(procedure), cfg); err != nil {
@@ -39,6 +43,22 @@ func (m *ClientRPCMutations) listProfilesAs(peer local.Peer, request *ipc.ListPr
 		return nil, err
 	}
 	result := &ipc.ListProfilesResponse{ActiveProfileId: activeID, Page: &ipc.PageResponse{NextPageToken: next, Metadata: &ipc.SnapshotMetadata{InstanceId: m.instanceID, Revision: revision, GeneratedAt: timestamppb.New(m.now())}}}
+	selection := &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "profile_selection_provider_not_running"}
+	if selectionReady {
+		selection = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE}
+		if cfg.RPCState != nil {
+			busy := cfg.RPCState.ProfileSwitch != nil || (activeID == "" && rpcConfigHasEnrollment(cfg))
+			for _, record := range cfg.RPCState.Operations {
+				op := new(ipc.Operation)
+				if proto.Unmarshal(record.Operation, op) != nil || !rpcOperationTerminal(op.State) {
+					busy = true
+				}
+			}
+			if busy {
+				selection = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "profile_selection_busy"}
+			}
+		}
+	}
 	for _, profile := range profiles[start:end] {
 		configuration := profile.Configuration
 		if profile.ID == activeID {
@@ -53,7 +73,7 @@ func (m *ClientRPCMutations) listProfilesAs(peer local.Peer, request *ipc.ListPr
 		}
 		result.Profiles = append(result.Profiles, &ipc.Profile{Id: profile.ID, DisplayName: profile.DisplayName, ControlOrigin: profile.ControlOrigin,
 			AccountId: configuration.ActiveAccountID, SelectedNetworkId: configuration.NetworkID, State: state, Active: profile.ID == activeID,
-			Selection: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_UNSUPPORTED, ReasonKey: "profile_selection_not_implemented"}})
+			Selection: proto.Clone(selection).(*ipc.Restriction)})
 	}
 	return result, nil
 }

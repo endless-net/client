@@ -86,7 +86,7 @@ at 128 and display names at 128 UTF-8 bytes without control characters.
 records and idempotent replay. `service_rpc_pages_test.go` covers caller/query/
 instance/revision/size-bound signed pagination, five-minute expiry, stable
 ordering, stale snapshot rejection and no private config disclosure.
-SelectProfile handler/lifecycle wiring and other runtime providers remain
+Production SelectProfile lifecycle wiring and other runtime providers remain
 required work; this is not UF-16 acceptance yet. The handover foundation and
 its remaining gates are recorded below.
 
@@ -150,9 +150,23 @@ tests verify the shared lock, missing provider/enrollment rejection and typed
 failure sanitization. These are deterministic local tests, not OS route or
 release acceptance evidence.
 
-The native SelectProfile RPC/lifecycle worker, initial-profile adoption for
+Production wiring of the native SelectProfile worker, initial-profile adoption for
 existing installations, complete policy restrictions, Disconnect race handling,
 other profile-scoped invalidations and multi-platform real tunnel verification
 still need implementation/validation in this repository before UF-16 acceptance.
 The production HTTP v2 listener remains until the full hard cutover is ready;
 the new implementation does not delegate to it or provide a fallback.
+
+`service_rpc_worker.go` now binds SelectProfile to a service-owned executor.
+Startup scans the durable plan without requiring request replay; shutdown leaves
+unfinished work resumable instead of turning lifecycle cancellation into a
+business failure. The host must start the worker before serving, stop serving on
+unexpected worker error, cancel its lifecycle context and await completion.
+Without a live worker SelectProfile returns UNAVAILABLE. ListProfiles projects
+worker availability and current BUSY restrictions from the native state.
+
+The real local-transport short test exercises SelectProfile through the generated
+client and observes its terminal event. Worker tests cover startup recovery,
+duplicate-worker rejection and cancellation/resumption. These checks do not yet
+prove production agent lifecycle integration, Disconnect preemption or actual
+multi-platform route cleanup.
