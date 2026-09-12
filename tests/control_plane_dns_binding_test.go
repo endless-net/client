@@ -10,19 +10,22 @@ import (
 // HC-025/HC-026: real CLI, DNS wire faults and recovery in one proxy process.
 func TestControlPlaneDNSUpstreamResponseBinding(t *testing.T) {
 	for _, network := range []string{"udp4", "udp6"} {
-		for _, fallback := range []bool{false, true} {
-			mode := "udp-answer"
-			if fallback {
-				mode = "tcp-answer"
-			}
+		for _, mode := range []string{"udp-answer", "tcp-answer", "invalid-truncated-udp"} {
+			fallback := mode != "udp-answer"
 			t.Run(network+"/"+mode, func(t *testing.T) {
 				_, n, _ := controlScenario(t)
 				n.Stop()
 				var fault atomic.Int32
+				var udpQueries, tcpQueries atomic.Int32
 				upstream, _, _ := dnsContractUpstream(t, network, fallback, [4]byte{203, 0, 113, 4}, func(reply *dnsmessage.Message, tcp bool) {
-					if fallback && !tcp {
+					if tcp {
+						tcpQueries.Add(1)
+					} else {
+						udpQueries.Add(1)
+					}
+					if mode == "tcp-answer" && !tcp || mode == "invalid-truncated-udp" && tcp {
 						return
-					} // Valid TC response must reach the faulty TCP answer.
+					}
 					switch fault.Load() {
 					case 1:
 						reply.ID++
@@ -50,9 +53,24 @@ func TestControlPlaneDNSUpstreamResponseBinding(t *testing.T) {
 					assertDNSWire(t, transport, address, "public.example.", dnsmessage.RCodeSuccess, "203.0.113.4")
 					for i := int32(1); i <= 7; i++ {
 						fault.Store(i)
+						beforeUDP, beforeTCP := udpQueries.Load(), tcpQueries.Load()
 						assertDNSWire(t, transport, address, "public.example.", dnsmessage.RCodeServerFailure, "")
+						wantTCP := int32(0)
+						if mode == "tcp-answer" {
+							wantTCP = 1
+						}
+						if udpQueries.Load()-beforeUDP != 1 || tcpQueries.Load()-beforeTCP != wantTCP {
+							t.Fatal("invalid upstream answer used an unexpected transport path")
+						}
 						fault.Store(0)
+						beforeUDP, beforeTCP = udpQueries.Load(), tcpQueries.Load()
 						assertDNSWire(t, transport, address, "public.example.", dnsmessage.RCodeSuccess, "203.0.113.4")
+						if fallback {
+							wantTCP = 1
+						}
+						if udpQueries.Load()-beforeUDP != 1 || tcpQueries.Load()-beforeTCP != wantTCP {
+							t.Fatal("repaired upstream answer did not use the required transport path")
+						}
 					}
 				}
 			})

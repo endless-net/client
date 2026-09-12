@@ -2863,6 +2863,16 @@ coverage remains incomplete; this matrix does not close missing scenarios.
 
 ## Next work
 
+The DNS response-binding root now includes `invalid-truncated-udp` alongside
+`udp-answer` and `tcp-answer`, for both IP families. All seven invalid response
+variants must produce SERVFAIL without any upstream TCP question when the
+untrusted UDP answer sets TC. Wire-observed counters require exactly one UDP
+question and no TCP question for that rejection; repairing the same fixture
+must require one UDP and one TCP question and restore resolution. The existing
+direct-UDP and invalid-TCP cases now assert their transport counts too. This
+distinguishes rejection before fallback from a failure after an unwanted TCP
+attempt. Six native leaves are pending source-specific matrix validation.
+
 Run `34668955037`, source `4a8011f90d839e6771d05999933a7738bc9a315f`, has
 confirmed `NativeFlowConsent/ipv6/udp` failures on
 [Ubuntu 24.04 repetition 3](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108890)
