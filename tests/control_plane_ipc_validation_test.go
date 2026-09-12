@@ -16,7 +16,7 @@ import (
 
 // HC-053: invalid local requests must fail before executing a state mutation.
 func TestControlPlaneIPCRequestValidation(t *testing.T) {
-	_, n, id := controlScenario(t)
+	s, n, id := controlScenario(t)
 	endpoint := n.Socket
 	if runtime.GOOS == "windows" {
 		endpoint = n.Pipe
@@ -32,6 +32,9 @@ func TestControlPlaneIPCRequestValidation(t *testing.T) {
 	}{
 		{"wrong-method", http.MethodGet, ipc.PathDisconnect, "", ipc.ErrorMethodNotAllowed, http.StatusMethodNotAllowed},
 		{"unknown-route", http.MethodPost, "/unsupported-operation", "{}", ipc.ErrorNotFound, http.StatusNotFound},
+		{"local-forget-confirmation-omitted", http.MethodPost, ipc.PathLocalForget, "{}", ipc.ErrorLocalForgetConfirmationRequired, http.StatusBadRequest},
+		{"local-forget-confirmation-false", http.MethodPost, ipc.PathLocalForget, `{"confirmed":false}`, ipc.ErrorLocalForgetConfirmationRequired, http.StatusBadRequest},
+		{"local-forget-confirmation-wrong-type", http.MethodPost, ipc.PathLocalForget, `{"confirmed":"true"}`, ipc.ErrorInvalidJSON, http.StatusBadRequest},
 		{"invalid-json", http.MethodPost, ipc.PathDisconnect, "{", ipc.ErrorInvalidJSON, http.StatusBadRequest},
 		{"unknown-field", http.MethodPost, ipc.PathDisconnect, `{"unexpected":true}`, ipc.ErrorInvalidJSON, http.StatusBadRequest},
 		{"trailing-json", http.MethodPost, ipc.PathDisconnect, "{} {}", ipc.ErrorInvalidJSON, http.StatusBadRequest},
@@ -69,8 +72,13 @@ func TestControlPlaneIPCRequestValidation(t *testing.T) {
 				t.Fatal("invalid IPC response omitted server protocol metadata")
 			}
 			status, err := n.Status()
-			if err != nil || status.NodeID != id || !status.CachedMapValid || status.UserDisconnected || status.DesiredState != ipc.DesiredConnected {
+			if err != nil || status.NodeID != id || !status.NodeCredentialPresent || !status.CachedMapValid || status.UserDisconnected || status.DesiredState != ipc.DesiredConnected {
 				t.Fatal("invalid IPC request changed identity or connection intent")
+			}
+			for _, event := range s.Events() {
+				if event.Kind == "deleted" || event.Kind == "logout" {
+					t.Fatal("invalid IPC request performed remote cleanup")
+				}
 			}
 		})
 	}

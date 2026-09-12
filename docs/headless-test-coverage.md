@@ -2816,6 +2816,14 @@ has 36 roots and still requires its own 864-outcome matrix. This successful
 
 ## Next work
 
+HC-022/053 request validation now calls the public native local-forget endpoint
+directly, bypassing CLI validation. Omitted/false confirmation must return the
+typed confirmation-required error; a string in place of the boolean must return
+invalid-JSON. Every rejected request must preserve the original credential,
+cached map and connected intent and produce no remote deletion/logout observation.
+These are mandatory variants of the common request-validation root; native
+evidence remains pending. They complement the CLI and actual-traffic checks.
+
 The aggregate report verifier now requires one matching run/PASS pair for every
 observed subtest as well as each compiled root. Two short regressions replaced
 either the child's run or PASS with an output event while leaving the parent and
