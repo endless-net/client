@@ -116,7 +116,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-037 | U exit-LAN rules | LAN allowed/denied with real exit traffic |
 | HC-038 | U router configuration | Real client acting as egress for another client |
 | HC-039 | No C/R evidence audited | Role-specific HA semantics and failure recovery |
-| HC-040 | U application discovery/runtime | Node RPC → signed effective map → real connector traffic |
+| HC-040 | C native signed application route, DNS, connector traffic, target isolation, withdrawal, expiry and recovery are executable; U application discovery/runtime | Qualify the native root on every runner; connector discovery report, DNS-address change, CNAME, multiple-IP and connector-outage variants |
 | HC-041 | No C/R evidence audited | Overlap product decision and unambiguous target tests |
 | HC-042 | No C/R evidence audited | SSH feature scope, authority and commands contract |
 | HC-043 | No C/R evidence audited | Forwarding scope and allowed/denied listener tests |
@@ -4556,3 +4556,14 @@ only bounded outcome booleans and will distinguish Client OS configuration
 failure from an application resolver path that bypasses the platform manager.
 These corrections postdate run 34689252202 and require their own complete
 24-job exact-source matrix before either failing root is qualified.
+
+`TestControlPlaneNativeApplicationRoute` adds Client-owned HC-040 coverage for
+both address families. A real Client first receives the application without a
+route and must return NXDOMAIN and block resource traffic. A signed route then
+projects the domain to a distinct resource stack behind a WireGuard connector;
+the declared TCP port must work while UDP and a second TCP port remain blocked.
+Route withdrawal and natural expiry must each retire DNS and fresh traffic, and
+a fresh signed grant must recover both. The test observes DNS wire answers,
+application exchanges and forwarding-hop packet counters. It does not import
+Client runtime internals or treat this Application scenario as HC-051 service
+abstraction evidence. Its 42-root / 1,008-outcome native matrix is pending.
