@@ -77,10 +77,8 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 	n.AwaitStatus(func(v ipc.StatusResponse) bool {
 		return v.NodeID == id && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
 	})
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:53", time.Second)
-	if err == nil {
-		_ = conn.Close()
-		t.Fatal("agent DNS TCP listener remained available after disconnect")
+	for _, transport := range []string{"udp", "tcp"} {
+		assertDNSListenerUnavailable(t, transport, "127.0.0.1:53")
 	}
 	var connected ipc.ConnectResponse
 	n.Service("connect", &connected)
@@ -93,6 +91,40 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 		assertDNSWire(t, transport, "127.0.0.1:53", "live-peer.scenario.endlessnet.", dnsmessage.RCodeSuccess, "198.18.96.20")
 		assertDNSWireType(t, transport, "127.0.0.1:53", "live-peer.scenario.endlessnet.", dnsmessage.TypeAAAA, dnsmessage.RCodeSuccess, "fd96::20")
 		assertDNSWire(t, transport, "127.0.0.1:53", "renamed-peer.scenario.endlessnet.", dnsmessage.RCodeNameError, "")
+	}
+}
+
+func assertDNSListenerUnavailable(t *testing.T, transport, address string) {
+	t.Helper()
+	conn, err := net.DialTimeout(transport, address, time.Second)
+	if err != nil {
+		return
+	}
+	defer func() { _ = conn.Close() }()
+	if transport == "tcp" {
+		t.Fatal("agent DNS TCP listener remained available after disconnect")
+	}
+	qname, err := dnsmessage.NewName("live-peer.scenario.endlessnet.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := dnsmessage.Message{
+		Header:    dnsmessage.Header{ID: 0x6143, RecursionDesired: true},
+		Questions: []dnsmessage.Question{{Name: qname, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}},
+	}
+	wire, err := query.Pack()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.SetDeadline(time.Now().Add(500 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Write(wire); err != nil {
+		return
+	}
+	var reply [512]byte
+	if _, err := conn.Read(reply[:]); err == nil {
+		t.Fatal("agent DNS UDP listener remained available after disconnect")
 	}
 }
 
