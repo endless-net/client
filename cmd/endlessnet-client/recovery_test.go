@@ -355,6 +355,49 @@ func TestTrustServerPersistsTrustAndIntentBeforeRenewalAndIsIdempotent(t *testin
 	}
 }
 
+func TestTrustAlreadyAppliedPreservesDisconnectedIntent(t *testing.T) {
+	var trust clientapi.SigningTrustBundle
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/server-key" {
+			_ = json.NewEncoder(w).Encode(testServerKeyResponseFromBundle(trust))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+	fixture := newRecoveryTestFixture(t, server.URL)
+	var err error
+	trust, err = clientapi.NewSigningTrustBundle(base64.RawURLEncoding.EncodeToString(fixture.OldSigningKey.Public().(ed25519.PublicKey)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := client.OpenConfigStore(fixture.ConfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Update(func(cfg *client.Config) error {
+		cfg.MapSigningTrust = &trust
+		cfg.EnrollmentRecovery = nil
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A disconnected client needs no engine to reaffirm an unchanged trust key.
+	opts := agentIPCOptions{ConfigPath: fixture.ConfigPath}
+	if err := agentConnectionIntentStore(opts).SetDisconnected("user_disconnect"); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		result, err := agentIPCHandlers(opts).TrustServer(context.Background(), ipc.TrustServerRequest{ConfirmedControlOrigin: server.URL, ConfirmedKeyID: trust.ActiveKeyID})
+		if err != nil {
+			t.Fatal("unchanged trust confirmation attempted tunnel recovery")
+		}
+		if result.Outcome != ipc.RecoveryOutcomeAlreadyApplied || result.State != ipc.StateDisconnected || result.TrustedKeyID != trust.ActiveKeyID {
+			t.Fatal("unchanged trust confirmation lost disconnected state")
+		}
+	}
+}
+
 func recoverySuccessResponse(t *testing.T, signingKey ed25519.PrivateKey, req clientapi.RegisterNodeRequest) clientapi.RegisterNodeResponse {
 	t.Helper()
 	credential, err := clientapi.SignNodeCredential(signingKey, req.NetworkID, "node-1", []string{"node:register", "node:map"}, time.Now().UTC().Add(time.Hour))

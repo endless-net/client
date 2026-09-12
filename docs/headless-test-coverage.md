@@ -2414,6 +2414,17 @@ HC-001–HC-065 coverage and the remaining platform variants are still open.
 
 ## Next work
 
+A component regression reproduced unchanged trust confirmation attempting tunnel
+configuration despite explicit disconnected intent (even `already_applied` took
+the connect path). Trust recovery now reads the durable connection intent before
+reconnecting; disconnected intent is retained and an unreadable intent fails
+closed. Reaffirming the current key twice succeeds without an engine in the
+regression. The native trust root repeats the same confirmation through public
+CLI, checks the response and unchanged identity/cached-map/intent, restarts the
+agent and requires disconnected intent to survive, then explicitly reconnects.
+The regression establishes the unconditional-connect defect; native evidence
+and successful changed-key rotation remain pending. No protocol version changes.
+
 The DNS wire root now also queries AAAA records over both UDP and TCP for a
 dual-stack peer, withdraws that peer and requires NXDOMAIN, then restores its
 IPv6 answer. Absent private AAAA names must also return NXDOMAIN. Existing

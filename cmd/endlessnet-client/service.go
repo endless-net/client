@@ -1206,7 +1206,11 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 				}
 			}
 			if progress.Completed && !progress.Terminal {
-				if cfg := configStore.Read(); strings.TrimSpace(cfg.NodeCredential) != "" {
+				_, disconnected, intentErr := agentConnectionIntentStore(opts).Disconnected()
+				if intentErr != nil {
+					return ipc.TrustServerResponse{}, ipc.NewError(http.StatusInternalServerError, "connection_intent_read_failed", intentErr)
+				}
+				if cfg := configStore.Read(); !disconnected && strings.TrimSpace(cfg.NodeCredential) != "" {
 					if _, connectErr := connectAgentTunnel(ctx, opts); connectErr != nil {
 						return ipc.TrustServerResponse{}, connectErr
 					}

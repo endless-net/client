@@ -58,12 +58,30 @@ func TestControlPlaneTrustConfirmation(t *testing.T) {
 			})
 		})
 	}
+	var disconnected ipc.DisconnectResponse
+	n.Service("disconnect", &disconnected)
+	for range 2 {
+		output, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", initial.ControlOrigin, "--confirmed-key-id", initial.AnnouncedKeyID)
+		var response ipc.TrustServerResponse
+		if err != nil || json.Unmarshal(output, &response) != nil || response.Outcome != ipc.RecoveryOutcomeAlreadyApplied || response.TrustedKeyID != initial.TrustedKeyID || response.State != ipc.StateDisconnected {
+			t.Fatal("repeated unchanged trust confirmation did not preserve disconnected state")
+		}
+		status, err := n.Status()
+		if err != nil || status.NodeID != id || !status.CachedMapValid || !status.UserDisconnected || status.DesiredState != ipc.DesiredDisconnected {
+			t.Fatal("unchanged trust confirmation altered identity or disconnected intent")
+		}
+	}
 	n.Stop()
 	n.Start()
-	n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.NodeCredentialPresent && v.CachedMapValid })
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.NodeID == id && v.NodeCredentialPresent && v.CachedMapValid && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+	})
 	if identity(t).TrustedKeyID != initial.TrustedKeyID {
 		t.Fatal("rejected confirmation changed durable server trust")
 	}
+	var connected ipc.ConnectResponse
+	n.Service("connect", &connected)
+	n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid && !v.UserDisconnected })
 	registrations := 0
 	for _, event := range s.Events() {
 		if event.Kind == "registered" {
