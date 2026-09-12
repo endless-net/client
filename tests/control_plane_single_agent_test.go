@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
@@ -74,7 +75,11 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 		}
 		// After release, a new real process must acquire ownership and retain
 		// enrollment and the user's current connection intent.
-		n.Stop()
+		if runtime.GOOS == "windows" {
+			n.Stop()
+		} else {
+			n.StopWithSignal(syscall.SIGTERM)
+		}
 		originalPath := n.Config
 		n.Config = alias
 		n.Start()

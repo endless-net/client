@@ -2502,6 +2502,16 @@ HC-001–HC-065 completion remains unproven.
 
 ## Next work
 
+HC-005 foreground shutdown now has an explicit Unix SIGTERM path: the agent's
+signal context handles SIGTERM as well as Interrupt. The native ownership root
+requires a zero exit code within the helper's existing five-second shutdown
+budget before starting the successor with retained identity/intent. A fallback
+kill is cleanup only and fails this assertion. Windows continues to exercise
+abrupt process termination here; SCM shutdown belongs to installed-service tests.
+This closes a missing test boundary rather than treating the old permissive
+`Stop` helper as proof of graceful signal handling. Hosted qualification of the
+new signal behavior remains pending.
+
 The first interrupted-rotation run exposed an invalid fixture response: its body
 used `request_id=rotation-renewal-unavailable`, while `SetResponseFault` emitted
 `X-Request-ID: test-request`. The Client correctly classified this mismatch as a

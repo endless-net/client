@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/endless-net/client/internal/client"
@@ -657,7 +658,7 @@ func cmdAgent(args []string) error {
 		log.Printf("windows service logging initialized with source %q", strings.TrimSpace(*eventLogSource))
 		return client.RunWindowsService("endlessnet-client", run)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return run(ctx)
 }

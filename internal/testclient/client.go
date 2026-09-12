@@ -156,6 +156,32 @@ func (n *Node) Stop() {
 	}
 }
 
+// StopWithSignal verifies clean foreground shutdown rather than accepting a
+// fallback process kill. Callers choose only signals supported by the platform.
+func (n *Node) StopWithSignal(signal os.Signal) {
+	n.t.Helper()
+	if n.cmd == nil {
+		n.t.Fatal("no agent process to signal")
+	}
+	cmd := n.cmd
+	n.cmd = nil
+	if err := cmd.Process.Signal(signal); err != nil {
+		_ = cmd.Process.Kill()
+		<-n.done
+		n.t.Fatal("could not deliver the foreground termination signal")
+	}
+	select {
+	case err := <-n.done:
+		if err != nil {
+			n.t.Fatal("foreground signal shutdown did not exit successfully")
+		}
+	case <-time.After(5 * time.Second):
+		_ = cmd.Process.Kill()
+		<-n.done
+		n.t.Fatal("foreground signal shutdown required a forced kill")
+	}
+}
+
 // ServiceCommand uses the same bounded native-operation timeout for success
 // and expected error cases. Callers must not print arbitrary returned output.
 func (n *Node) ServiceCommand(operation string, options ...string) ([]byte, error) {
