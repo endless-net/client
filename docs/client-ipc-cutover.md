@@ -260,3 +260,13 @@ its terminal event with a substituted driver. Its unsigned fixture is not real
 map-verification or tunnel evidence. Full policy/phase provider integration,
 bounded preemption, production lifecycle and multi-platform system acceptance
 remain required before claiming UF-05 release acceptance.
+
+Connect/profile application now registers a cancellable provider context under
+the same lock as durable mutation acceptance. Accepted Disconnect cancels that
+context only after its intent/journal commit; rejected and replayed commands do
+not interrupt current work. This closes the check-intent/start race without
+claiming that context cancellation itself removed routes. Cleanup still runs
+through Down and its own result handling. `TestRPCDisconnectPreemptsApplyOnlyAfterAcceptance`
+checks rejected CAS, cancellation of an active apply, cancelled Connect outcome
+and subsequent Disconnect completion. Providers must honor cancellation; real
+driver latency and OS cleanup still require system evidence.

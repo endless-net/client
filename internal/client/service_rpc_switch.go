@@ -178,7 +178,7 @@ func (m *ClientRPCMutations) ReconcileProfileSwitch(ctx context.Context, driver 
 		return err
 	}
 	if cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == ConnectionIntentDesiredConnected {
-		if err := driver.Start(ctx, cfg); err != nil {
+		if err := m.applyProfileConnection(ctx, driver, cfg); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
@@ -209,11 +209,14 @@ func (m *ClientRPCMutations) failProfileSwitch(id string, cause error, continuit
 		failure = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, ReasonKey: "profile_switch_failed"}
 	}
 	_, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
-		if stopped || (cfg.RPCState.ProfileSwitch != nil && cfg.RPCState.ProfileSwitch.Activated) {
+		if (stopped || (cfg.RPCState.ProfileSwitch != nil && cfg.RPCState.ProfileSwitch.Activated)) && (cfg.ConnectionIntent == nil || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected) {
 			cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "profile_switch_failed", UpdatedAt: m.now().UTC().Format("2006-01-02T15:04:05.999999999Z07:00")}
 		}
 		cfg.RPCState.ProfileSwitch = nil
 		op.State = ipc.OperationState_OPERATION_STATE_FAILED
+		if failure.Code == ipc.ErrorCode_ERROR_CODE_CANCELLED {
+			op.State = ipc.OperationState_OPERATION_STATE_CANCELLED
+		}
 		op.Continuity = continuity
 		op.Outcome = &ipc.Operation_Failure{Failure: failure}
 		return nil

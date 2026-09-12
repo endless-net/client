@@ -59,6 +59,7 @@ type ClientRPCMutations struct {
 	instanceID       string
 	now              func() time.Time
 	observedStatus   *ipc.Status
+	cancelApply      context.CancelFunc
 	subscribers      map[*rpcSubscriber]struct{}
 }
 
@@ -297,6 +298,9 @@ func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, r
 		return nil, false, err
 	}
 	if !reused {
+		if accepted.Kind == ipc.OperationKind_OPERATION_KIND_DISCONNECT && m.cancelApply != nil {
+			m.cancelApply() // Only after durable acceptance, never on rejected input.
+		}
 		m.publishMutationLocked(accepted)
 	}
 	return accepted, reused, nil

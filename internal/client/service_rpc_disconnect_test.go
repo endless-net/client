@@ -79,22 +79,19 @@ func TestRPCDisconnectDuringProfileApply(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.selectProfileAs(peer, &ipc.SelectProfileRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: &ipc.ProfileRef{ProfileId: profile.ProfileId}}); err != nil {
+	switchOp, err := m.selectProfileAs(peer, &ipc.SelectProfileRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: &ipc.ProfileRef{ProfileId: profile.ProfileId}})
+	if err != nil {
 		t.Fatal(err)
 	}
-	entered, release := make(chan struct{}), make(chan struct{})
-	ctx, cancel := context.WithCancel(t.Context())
+	entered := make(chan struct{})
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
 		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED, nil
 	}, Start: func(ctx context.Context, _ Config) error {
 		close(entered)
-		select {
-		case <-release:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		<-ctx.Done()
+		return ctx.Err()
 	}}
 	done := make(chan error, 1)
 	go func() { done <- m.ReconcileProfileSwitch(ctx, driver) }()
@@ -107,7 +104,6 @@ func TestRPCDisconnectDuringProfileApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	close(release)
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
@@ -117,6 +113,10 @@ func TestRPCDisconnectDuringProfileApply(t *testing.T) {
 	final, err := m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
 	if err != nil || final.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || m.store.Read().ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
 		t.Fatal("switch restored connected intent after explicit disconnect", err)
+	}
+	cancelledSwitch, err := m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: switchOp.Id}})
+	if err != nil || cancelledSwitch.State != ipc.OperationState_OPERATION_STATE_CANCELLED || cancelledSwitch.GetFailure().Code != ipc.ErrorCode_ERROR_CODE_CANCELLED || m.store.Read().ConnectionIntent.Reason != "user_disconnect" {
+		t.Fatal("user preemption became apply failure or replaced user intent", err)
 	}
 }
 

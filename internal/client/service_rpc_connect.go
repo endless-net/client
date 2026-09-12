@@ -83,7 +83,7 @@ func (m *ClientRPCMutations) ReconcileConnect(ctx context.Context, driver Client
 	cfg = m.store.Read()
 	var applyErr error
 	if cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == ConnectionIntentDesiredConnected {
-		applyErr = driver.Start(ctx, cfg)
+		applyErr = m.applyProfileConnection(ctx, driver, cfg)
 		if err := ctx.Err(); err != nil {
 			return err
 		}

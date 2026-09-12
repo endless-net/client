@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/clientipc/local"
@@ -149,5 +150,64 @@ func TestRPCConnectResumesAfterLifecycleCancellation(t *testing.T) {
 	final, err := restarted.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
 	if err != nil || final.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
 		t.Fatal("connect restart failed", err)
+	}
+}
+
+func TestRPCDisconnectPreemptsApplyOnlyAfterAcceptance(t *testing.T) {
+	m, peer, profile := rpcConnectFixture(t)
+	op, err := m.connectAs(peer, &ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	applying := make(chan context.Context, 1)
+	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Start: func(ctx context.Context, _ Config) error {
+		applying <- ctx
+		<-ctx.Done()
+		return ctx.Err()
+	}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
+	}}
+	done := make(chan error, 1)
+	go func() { done <- m.ReconcileConnect(ctx, driver) }()
+	var applyCtx context.Context
+	select {
+	case applyCtx = <-applying:
+	case <-ctx.Done():
+		t.Fatal("apply not started")
+	}
+	stale := &ipc.DisconnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}
+	stale.Mutation.ExpectedRevision++
+	_, err = m.disconnectAs(peer, stale)
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	if applyCtx.Err() != nil {
+		t.Fatal("rejected Disconnect interrupted apply")
+	}
+	if _, err := m.disconnectAs(peer, &ipc.DisconnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-applyCtx.Done():
+	case <-ctx.Done():
+		t.Fatal("accepted Disconnect did not cancel apply")
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal("apply did not yield to Disconnect")
+	}
+	final, err := m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
+	if err != nil || final.State != ipc.OperationState_OPERATION_STATE_CANCELLED {
+		t.Fatal("preempted Connect was not cancelled", err)
+	}
+	if err := m.ReconcileDisconnect(ctx, driver); err != nil {
+		t.Fatal(err)
+	}
+	if m.store.Read().RPCState.DisconnectOperationID != "" {
+		t.Fatal("Disconnect did not complete after preemption")
 	}
 }
