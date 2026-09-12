@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/netip"
 	"os"
@@ -259,6 +260,28 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		t.Fatal("disconnected client still delivered overlay traffic")
 	}
 	assertICMP("disconnected", false)
+	// Reaffirming the current trust key is not permission to reconnect.
+	// Exercise the public administrative operation before observing real traffic.
+	for range 2 {
+		output, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", s.Trust().ActiveKeyID)
+		var response ipc.TrustServerResponse
+		if err != nil || json.Unmarshal(output, &response) != nil || response.Outcome != ipc.RecoveryOutcomeAlreadyApplied {
+			t.Fatal("native disconnected trust confirmation failed")
+		}
+	}
+	status, err := n.Status()
+	if err != nil || status.NodeID != initial.NodeID || !status.UserDisconnected || status.DesiredState != ipc.DesiredDisconnected {
+		t.Fatal("native trust confirmation lost disconnected identity or intent")
+	}
+	// Keep the return path usable if a defective Client reopened its device;
+	// a stale fixture endpoint must not turn accidental connectivity into denial.
+	if status.WireGuard != nil && status.WireGuard.ListenPort > 0 && status.WireGuard.ListenPort <= 65535 {
+		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+	}
+	if fresh("24001") || fresh("24002") {
+		t.Fatal("trust confirmation restored traffic without explicit connect")
+	}
+	assertICMP("disconnected-after-trust-confirmation", false)
 	// HC-017/HC-018: a new agent process must preserve disconnected intent and
 	// enrollment. Restoring connected intent must recover actual traffic using
 	// the same public node/key binding held by the unchanged reference peer.

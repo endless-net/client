@@ -2414,6 +2414,14 @@ HC-001–HC-065 coverage and the remaining platform variants are still open.
 
 ## Next work
 
+The four native direct-traffic roots now reaffirm the current signing key twice
+after disconnect, then require IPv4/IPv6 TCP/UDP and ICMP echo denial to remain
+effective. The reference peer stays available; if public IPC exposes a newly
+opened Client port, its return endpoint is refreshed so stale fixture routing
+cannot manufacture denial. Existing disconnected restart and explicit reconnect
+checks follow with the same identity. This adds dataplane evidence for the trust
+intent fix beyond status-only assertions; hosted qualification remains pending.
+
 A component regression reproduced unchanged trust confirmation attempting tunnel
 configuration despite explicit disconnected intent (even `already_applied` took
 the connect path). Trust recovery now reads the durable connection intent before
