@@ -351,7 +351,7 @@ jobs:
       options: --cap-add=NET_ADMIN --device=/dev/net/tun
     steps:
       - name: Install container test dependencies
-        run: apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git iproute2 iptables
+        run: apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git iproute2 iptables iputils-ping
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:

@@ -4930,3 +4930,9 @@ in the shell's own HOME and checks repository access before building. VCS
 stamping remains enabled. This addresses the suspected checkout/shell HOME
 mismatch; a successful subsequent container build and workload run are still
 required before HC-054 has native evidence.
+
+The container dependency list also includes `iputils-ping`: the reused TCP
+lifecycle helper invokes the native ICMP probe before and during its traffic
+checks. Missing `ping` is an execution failure, not a valid denied-packet result.
+This dependency was found by source inspection before a successful container
+workload run. No additional container capabilities are added by this change.
