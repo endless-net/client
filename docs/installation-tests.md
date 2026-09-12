@@ -7,7 +7,7 @@ manual workflow dispatches.
 
 | Platform | Installation under test |
 | --- | --- |
-| Ubuntu 22.04 and 24.04, amd64 | Actual `.deb` from `scripts/build-deb.sh`, installed with `dpkg`, started by systemd |
+| Ubuntu 22.04 and 24.04, amd64 and arm64 | Actual `.deb` from `scripts/build-deb.sh`, installed with `dpkg`, started by systemd |
 | Windows Server 2022 and 2025, amd64 | Core binary with checksum-pinned, signed Wintun; generated Windows service installer and SCM |
 | macOS 15, Apple Silicon and Intel | Core binary with generated launchd installer and LaunchDaemon |
 
@@ -24,7 +24,12 @@ The suite checks:
 4. Diagnostics reporting the actual runtime OS and CPU architecture.
 5. Disconnect acknowledgement and persistence of disconnected intent across a
    service restart.
-6. Removal of the service; Debian package files must also disappear. Windows
+6. Public CLI enrollment against the contract testserver, followed by actual
+   IPv4 TCP traffic through the installed agent and a WireGuard reference peer.
+7. Reinstallation of the same artifact while connected and while explicitly
+   disconnected, preserving identity, trust and connection intent; explicit
+   reconnect must restore real TCP traffic.
+8. Removal of the service; Debian package files must also disappear. Windows
    and macOS service uninstallers deliberately retain the separately copied
    binary and state, and IPC must no longer respond.
 
@@ -39,12 +44,21 @@ run privileged installation tests on a development workstation.
 - [client-ui, main](https://github.com/endless-net/client-ui/tree/main) owns the
   signed Windows MSI, UI launch and consumer installation on Windows 10/11.
 - This repository owns future signed/notarized macOS packaging and additional
-  Linux distribution and arm64 installation coverage.
+  Linux distributions beyond the Ubuntu amd64/arm64 matrix above.
+- Client-owned gaps include installation under an unauthorized local user,
+  interrupted installation, replacement with a different artifact version,
+  full state removal and an actual machine reboot with late network availability.
+  Service restart and same-artifact reinstall do not establish those outcomes.
 - [system-tests, main](https://github.com/endless-net/system-tests/tree/main) owns
   backend enrollment, two-client tunnel traffic, DNS and route acceptance
-  against immutable artifact manifests. An unenrolled IPC check does not prove
-  connectivity to another EndlessNet node.
+  against immutable artifact manifests. The Client-owned installed-service TCP
+  test above uses a contract testserver and a reference peer; it does not prove
+  compatibility with a released backend manifest or two production participants.
 - Android and iOS are not installation targets for this desktop core suite.
   Mobile acceptance needs platform applications and their installation artifacts.
 
 These tests do not deploy production services or change runner infrastructure.
+Execution evidence and its exact source/runner limits are recorded in
+[the headless coverage ledger](headless-test-coverage.md). This description of
+the current suite does not qualify an unexecuted source or close all HC-001–HC-065
+requirements.
