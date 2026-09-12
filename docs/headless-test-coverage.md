@@ -101,11 +101,11 @@ product scope are different conditions; neither is a successful skip.
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
-| HC-025 | C DNS CLI/proxy, wire lookup and application access by FQDN; eight-platform UDP/TCP A/AAAA projection, withdrawal/restoration, split isolation and SERVFAIL recovery at qualified `38050bc` | OS resolver integration, live reload, pending IPv6 listener/upstream and TCP-retry variants |
+| HC-025 | C DNS CLI/proxy, wire lookup and application access by FQDN; eight-platform UDP/TCP A/AAAA projection, withdrawal/restoration, split isolation and SERVFAIL recovery at qualified `38050bc`; native system-resolver selection, negative outcome and reconnect/map-change recovery are executable | Qualify the system-resolver root on every runner; pending IPv6 listener/upstream and TCP-retry variants |
 | HC-026 | C explicit default/split upstream selection and denied-domain isolation; U DNS/router configuration | System DNS control and IP-access preservation |
 | HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
 | HC-028 | C native single-Relay and two-Relay failover IPv4/IPv6 TCP/UDP, outage denial, recovery and agent restart passed all 24 native repetitions | NAT, direct/Relay transitions, existing-session failover, healthy-backup failback and remaining Relay variants |
-| HC-029 | U endpoint/reconnect tests | External network change and stale response ordering |
+| HC-029 | C native signed endpoint rotation now requires stale-endpoint denial followed by IPv4/IPv6 TCP/UDP recovery; U endpoint/reconnect tests | Qualify the native rotation root on every runner; external network change and additional stale response ordering variants |
 | HC-030 | C typed/malformed errors; L connected cached-map TCP startup without control, later map advancement and disconnected no-auto-connect passed all eight installation runners at `0cf6d73`; historical R short dependency/process outages | Map/lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | C RoutedResource passed three times on all eight native platforms: IPv4/IPv6 TCP/UDP through an IP forwarding peer, route withdrawal and recovery | Full Client router roles, SNAT, HA and remaining resource variants |
@@ -4534,3 +4534,25 @@ Explicit ICMP grants and errors/PMTU, IPv6 underlay, Relay/NAT, policy direction
 resolver behavior still require explicit client tests and runner evidence.
 Do not infer those outcomes from component ACL tests or successful peer UDP
 echoes. The real Client must continue to use its native OS interface and CLI/IPC.
+
+Run [34689252202](https://github.com/endless-net/client/actions/runs/34689252202)
+completed at source `9df3146134c26bc184ef444a100a33d0f55d1959`. All 24
+native reports were inspected and contained the same 41-root inventory: 971
+PASS, 13 FAIL and 0 SKIP out of 984 expected root outcomes. All six macOS jobs
+and all Ubuntu 24.04 ARM jobs passed. Twelve deterministic failures were the
+new native system-resolver root on all Ubuntu 22.04 amd64/arm64 and Windows
+2022/2025 repetitions. The remaining Ubuntu 24.04 amd64 failure was the IPv4
+UDP flow-consent variant: a delayed, valid reply from an earlier exchange
+arrived after the OS reused its source port and was rejected as the current
+nonce. The reference fixture recorded the current request afterward. This is
+not a Client dataplane denial.
+
+The packet probe at `902a2b9` now retains an unknown UDP reply while continuing
+to wait for the current nonce. It succeeds only when the current reply arrives,
+and still returns a fatal mismatch if no current reply arrives before the
+deadline. A component regression covers both outcomes. Linux and Windows
+system-resolver diagnostics were added at `6777ede` and `73ebdf2`; they report
+only bounded outcome booleans and will distinguish Client OS configuration
+failure from an application resolver path that bypasses the platform manager.
+These corrections postdate run 34689252202 and require their own complete
+24-job exact-source matrix before either failing root is qualified.
