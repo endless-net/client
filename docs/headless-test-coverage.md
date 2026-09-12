@@ -127,7 +127,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-048 | No C/R evidence audited | Audience restrictions, lifetime, shutdown and crash expiry |
 | HC-049 | No C/R evidence audited | Certificate/publication scope and frontend/backend TLS |
 | HC-050 | U sharing/encrypted engine tests | C grant/consent/revoke/expiry/new identity against published contracts without internal access |
-| HC-051 | U service discovery/runtime | Logical service host approval, loss and actual traffic |
+| HC-051 | C native signed two-host service DNS, actual host traffic, target isolation, host-set removal, approval loss and recovery are executable; U service discovery/runtime | Qualify the native root on every runner; health, load distribution and connection-draining semantics require product decisions |
 | HC-052 | L/C bounded IPC waits; independent event subscriptions/cancellation/restart and real CLI listening-timeout exit passed all 24 repetitions at qualified `38050bc`; installed absent-service failure passed all eight runners | Remaining public readiness conditions, slow consumers and stalled native IPC |
 | HC-053 | L/C structured IPC; request validation, non-object rejection, body-size boundaries, subscribers and real CLI NDJSON events passed all 24 repetitions at qualified `38050bc`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
 | HC-054 | No C/R evidence audited | Container persistent versus ephemeral lifecycle |
@@ -4567,3 +4567,15 @@ a fresh signed grant must recover both. The test observes DNS wire answers,
 application exchanges and forwarding-hop packet counters. It does not import
 Client runtime internals or treat this Application scenario as HC-051 service
 abstraction evidence. Its 42-root / 1,008-outcome native matrix is pending.
+
+`TestControlPlaneNativeServiceCatalog` adds separate HC-051 coverage for IPv4
+and IPv6. The signed service starts without approval and must return NXDOMAIN.
+After approval, its logical DNS name must contain exactly two signed host
+identities, and traffic to every returned address must cross the real native
+WireGuard path on the declared TCP port while UDP and another TCP port remain
+blocked by the signed peer policy. Removing one host must remove only that DNS
+answer; losing approval must fail DNS closed; restoring approval must return
+both usable hosts. Direct peer authorization is asserted separately from
+logical-service membership. Health interpretation, balancing and connection
+draining are still product gaps. This raises the pending common inventory to
+43 roots / 1,032 native outcomes.
