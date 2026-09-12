@@ -5,6 +5,9 @@ on:
     paths:
       - "proto/**"
       - "buf.yaml"
+      - "buf.gen.yaml"
+      - "clientipc/**"
+      - "packages/client_api/**"
       - "contracts/proto-baseline/**"
       - ".github/workflows/protobuf-contract.yml"
   push:
@@ -12,6 +15,9 @@ on:
     paths:
       - "proto/**"
       - "buf.yaml"
+      - "buf.gen.yaml"
+      - "clientipc/**"
+      - "packages/client_api/**"
       - "contracts/proto-baseline/**"
       - ".github/workflows/protobuf-contract.yml"
   workflow_dispatch:
@@ -30,6 +36,20 @@ jobs:
         with:
           version: 1.72.0
           setup_only: true
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: clientipc/go.mod
+          cache: false
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.13.0
+      - name: Install pinned generators
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.10
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.19.1
+          go install golang.org/x/tools/cmd/goimports@v0.39.0
+          dart pub global activate protoc_plugin 25.0.0
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
       - name: Check canonical formatting
         run: buf format --diff --exit-code
       - name: Lint contract
@@ -57,6 +77,24 @@ jobs:
           fi
           cat "$fixture/breaking.json"
           grep -q 'RPC_NO_DELETE' "$fixture/breaking.json"
+      - name: Regenerate Go and Dart bindings
+        run: |
+          buf generate
+          goimports -w clientipc
+      - name: Test generated Go protocols
+        working-directory: clientipc
+        run: go test -short ./...
+      - name: Resolve locked Dart dependencies
+        working-directory: packages/client_api
+        run: dart pub get --enforce-lockfile
+      - name: Analyze Dart bindings
+        working-directory: packages/client_api
+        run: dart analyze --fatal-infos
+      - name: Check generated artifacts are committed
+        shell: bash
+        run: |
+          git diff --exit-code -- clientipc packages/client_api
+          test -z "$(git ls-files --others --exclude-standard -- clientipc packages/client_api)"
       - uses: actions/upload-artifact@v7
         with:
           name: client-ipc-v0-descriptor

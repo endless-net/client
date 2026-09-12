@@ -5,3 +5,4 @@
 /.private-modules/
 *.exe
 *.test
+**/.dart_tool/

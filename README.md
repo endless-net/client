@@ -39,6 +39,8 @@ The accepted Protobuf contract is version **v0**:
 Its [contract guide and UF-01–UF-23 coverage](docs/client-ipc-protobuf.md)
 define commands, events, ownership, platform applicability and adoption gates.
 The contract is not yet served by the runtime or published as a released IPC artifact.
+Generated bindings are committed in the [Go module](clientipc/README.md) and
+[Dart/Flutter package](packages/client_api/README.md); `buf generate` rebuilds both.
 
 The repository owns the client binary, Linux service assets, APT package,
 immutable Windows core manifest and the producer side of the versioned local IPC

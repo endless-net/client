@@ -1,0 +1,10 @@
+name: endlessnet_client_api
+description: Generated Dart and Flutter contract for EndlessNet Client IPC v0.
+version: 0.0.0
+publish_to: none
+environment:
+  sdk: ^3.8.0
+dependencies:
+  fixnum: ^1.1.1
+  grpc: ^5.1.0
+  protobuf: ^6.0.0

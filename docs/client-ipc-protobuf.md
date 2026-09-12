@@ -30,9 +30,17 @@ The runtime, CLI, privileged helper and UI have not been migrated.
 | `contracts/proto-baseline/client.binpb` | Accepted v0 descriptor used for breaking-change detection |
 | `.github/workflows/protobuf-contract.yml` | CI formatting, lint, descriptor compilation and mandatory breaking check |
 
-The Go package option reserves `github.com/endless-net/client/clientipc/v0` for
-future generated bindings. No generated module or SDK is claimed to exist.
-Dart bindings must consume this same schema from a pinned immutable source.
+Generated Go bindings are committed in the separate [clientipc module](../clientipc/README.md):
+`github.com/endless-net/client/clientipc/v0` contains messages and
+`clientipc/v0/clientipcconnect` contains Connect client/handler bindings.
+The [Dart package](../packages/client_api/README.md) contains Protobuf messages
+and gRPC bindings and exports `package:endlessnet_client_api/client_api.dart`.
+Both use [buf.gen.yaml](../buf.gen.yaml) and must be consumed from pinned
+immutable source. Generator pins match the Management pipeline:
+protoc-gen-go 1.36.10, protoc-gen-connect-go 1.19.1, protoc_plugin 25.0.0.
+Run `buf generate` and `goimports -w clientipc` from the repository root.
+CI regenerates both SDKs, checks tracked and untracked changes, tests Go unary
+and streaming calls over Connect/gRPC, and analyzes Dart with locked dependencies.
 Control-plane DTOs remain owned by their existing producer modules; these
 messages are local UI projections and do not duplicate signed wire formats.
 
@@ -324,7 +332,7 @@ accepted for release.
 
 ## Adoption and follow-up owners
 
-- **client**: select transport; implement generated Go bindings, interception,
+- **client**: select transport; integrate generated Go bindings, interception,
   persistence/deduplication, RPC adapters and capability providers; migrate CLI
   and helper; test authorization, stream reconnect, interruption, crash recovery,
   cleanup and requested/effective divergence. Current code does not implement

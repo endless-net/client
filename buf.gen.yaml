@@ -1,0 +1,14 @@
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: clientipc
+    opt:
+      - module=github.com/endless-net/client/clientipc
+  - local: protoc-gen-connect-go
+    out: clientipc
+    opt:
+      - module=github.com/endless-net/client/clientipc
+  - local: protoc-gen-dart
+    out: packages/client_api/lib/src/gen
+    opt:
+      - grpc
