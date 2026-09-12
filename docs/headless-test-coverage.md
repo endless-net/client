@@ -106,7 +106,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
 | HC-028 | C native single-Relay and two-Relay failover IPv4/IPv6 TCP/UDP, outage denial, recovery and agent restart passed all 24 native repetitions | NAT, direct/Relay transitions, existing-session failover, healthy-backup failback and remaining Relay variants |
 | HC-029 | C native signed endpoint rotation now requires stale-endpoint denial followed by IPv4/IPv6 TCP/UDP recovery; U endpoint/reconnect tests | Qualify the native rotation root on every runner; external network change and additional stale response ordering variants |
-| HC-030 | C typed/malformed errors and executable native cached-map signature expiry/outage/restart recovery; L connected cached-map TCP startup without control, later map advancement and disconnected no-auto-connect passed all eight installation runners at `0cf6d73`; historical R short dependency/process outages | Qualify the new cached-map expiry root; other lease expiry, edge/transport/storage outage and remaining variants |
+| HC-030 | C typed/malformed errors; native cached-map signature expiry/outage/restart recovery for IPv4/IPv6 passed all 24 repeats at `90f8a28`; L connected cached-map TCP startup without control, later map advancement and disconnected no-auto-connect passed all eight installation runners at `0cf6d73`; historical R short dependency/process outages | Other lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | C RoutedResource passed three times on all eight native platforms: IPv4/IPv6 TCP/UDP through an IP forwarding peer, route withdrawal and recovery | Full Client router roles, SNAT, HA and remaining resource variants |
 | HC-033 | C durable route installation disable/restore passed three times on all eight native platforms; U configuration tests | Per-resource selection and remaining route-selection semantics |
@@ -142,6 +142,36 @@ product scope are different conditions; neither is a successful skip.
 | HC-063 | L/C explicit native state removal, fresh `NeedsEnrollment`, and reenrollment with a different node identity passed all eight installation runners at `92983ae`; local forget deliberately retains identity | Standalone reset without uninstall and provider-side removal remain separate |
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
+
+## Complete corrected map-expiry matrix — 2026-09-12
+
+[Run 34708283604](https://github.com/endless-net/client/actions/runs/34708283604)
+completed with a failed aggregate gate at source
+`90f8a2860b55b08466842a51bbe3fdcf207ab521`. All 24 native reports are present
+for the eight platform variants with three repeats. Each identifies this source,
+contains all 52 expected root results and a terminal package result. The native
+total is **1199 PASS, 49 FAIL, 0 SKIP**; these are repeated test-root outcomes,
+not a completion percentage for the 65 HC scenarios.
+
+`NativeCachedMapExpiry` passes all 24 times, with 48 passing IPv4/IPv6 leaves.
+This qualifies the signed-map expiry packet-filter fix for the tested outage,
+restart, traffic-denial and fresh-map recovery sequence on all eight native
+variants. Other credential lifetimes and route-retirement requirements remain
+separate. Native flow consent and exit-route roots also pass all 24 repeats;
+the earlier intermittent flow failures have not been explained by this result.
+
+There are 24 failures each in `JoinTokenRotation` and `SessionExpiryRecovery`
+from the wrong reference counter, corrected later in `6cff19b`. Their expanded
+lifecycle coverage still needs its own successful native run. The remaining
+failure is `NativeApplicationRoute/ipv4` on Windows 2022 repeat 1, detailed
+below. Forty-nine of the 52 roots pass every repeat; the application root passes
+23. Neither the counter correction nor the later startup-stage diagnostics is
+qualified by this source.
+
+All eight installation jobs, the container lifecycle job, control-plane job and
+Linux/macOS/Windows verification jobs succeeded. External STUN compatibility
+was skipped and is not claimed as verified. The aggregate `verify` job failed
+([job 103600518503](https://github.com/endless-net/client/actions/runs/34708283604/job/103600518503)).
 
 ## First corrected map-expiry native evidence — 2026-09-12
 
