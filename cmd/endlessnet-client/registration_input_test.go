@@ -25,6 +25,13 @@ func TestDeniedJoinTokenCanBeReplacedWithoutForgettingEnrollment(t *testing.T) {
 	if err := cmdUp(append(args, token)); err == nil {
 		t.Fatal("retired token authorized registration")
 	}
+	denied := false
+	for _, event := range s.Events() {
+		denied = denied || event.Kind == "join-token-unknown"
+	}
+	if !denied {
+		t.Fatal("initial CLI error did not result from token authorization")
+	}
 	if _, err := captureStdout(t, func() error { return cmdUp(append(args, replacement)) }); err != nil {
 		t.Fatal("replacement token could not recover the same client configuration")
 	}

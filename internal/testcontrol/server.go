@@ -747,6 +747,7 @@ func (s *Server) registerLocked(req api.RegisterNodeRequest, authorization strin
 		var ok bool
 		networkID, ok = s.joins[req.JoinToken]
 		if !ok {
+			s.recordLocked(Event{Kind: "join-token-unknown"})
 			return api.RegisterNodeResponse{}, api.ErrorCodeAuthorizationDenied, nil
 		}
 		if expires := s.joinExpiries[req.JoinToken]; !expires.IsZero() && !time.Now().Before(expires) {

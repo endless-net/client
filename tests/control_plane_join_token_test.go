@@ -130,19 +130,22 @@ func exerciseJoinTokenRetirement(t *testing.T, family string, expire bool) {
 		}
 	}
 	candidate := testclient.New(t, s)
+	beforeDeniedAttempt := len(s.Events())
 	_, err = candidate.Run("up", "--config", candidate.Config, "--server", s.URL(), "--network", network.Name, "--join-token", token, "--hostname", "replacement-node", "--map-signing-trust-file", candidate.TrustFile, "--route-table", "off")
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
 		t.Fatal("retired join token still enrolled a new client")
 	}
+	wantDenial := "join-token-unknown"
 	if expire {
-		expiryObserved := false
-		for _, event := range s.Events() {
-			expiryObserved = expiryObserved || event.Kind == "join-token-expired"
-		}
-		if !expiryObserved {
-			t.Fatal("registration did not exercise the token deadline")
-		}
+		wantDenial = "join-token-expired"
+	}
+	denialObserved := false
+	for _, event := range s.Events()[beforeDeniedAttempt:] {
+		denialObserved = denialObserved || event.Kind == wantDenial
+	}
+	if !denialObserved {
+		t.Fatal("failed CLI attempt did not reach the intended token authorization denial")
 	}
 	apply()
 	reachable()

@@ -163,6 +163,12 @@ Identity is preserved. Transport uncertainty, malformed responses and temporary
 errors retain replay state; the existing response-loss immutability regression
 still passes. Native qualification remains pending.
 
+The native retirement checks additionally require an authorization event from
+the failed attempt's own observation interval: unknown/retired token for
+rotation, expired token for the deadline variant. A generic CLI exit caused by
+startup or local storage failure cannot satisfy this negative assertion. Events
+contain only a fixed reason label; token values are never logged.
+
 ## Linux exit LAN policy increment — 2026-09-12
 
 The Linux branch of `TestControlPlaneExitProvider` now adds HC-037 observations
