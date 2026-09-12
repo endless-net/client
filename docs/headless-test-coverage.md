@@ -135,7 +135,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
 | HC-057 | C export/reuse, retention and IPv4 UDP flow consent/retry/expiry passed all 24 native repetitions at `a9a1a21`; D FlowConsentAndIdempotency; U flow tests | Crash recovery, comprehensive redaction and remaining retention/flow variants |
 | HC-058 | L version and runtime platform; native IPC negotiation/restart passed all 24 repetitions at `a9a1a21` | Artifact mismatch and exact release identity |
-| HC-059 | U trust/recovery matrix; C TrustConfirmation rejection passed three times on all eight native platforms | Successful rotation, interrupted recovery and independent signing scopes |
+| HC-059 | No qualified independent client-endorsed node-admission evidence; server trust/recovery tests belong to HC-021 | BR-05 / Q-05 product decision: independently signed node admission, unsigned-node denial, signing-device loss and recovery |
 | HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
 | HC-062 | C process restart during outage | Repair of damaged installation separately from identity reset |
@@ -2413,6 +2413,20 @@ correction, not evidence of bypassed Client certificate validation. Complete
 HC-001–HC-065 coverage and the remaining platform variants are still open.
 
 ## Next work
+
+Requirement mapping correction: the architecture catalog defines HC-059 as node
+admission endorsed independently of the control plane (the B20 / Tailnet Lock
+comparison), whereas HC-021 explicitly includes control endpoint, TLS and server
+identity errors. The server trust-confirmation and map-signing rotation tests
+therefore cover HC-021 variants; they do **not** qualify HC-059. Earlier mentions
+of HC-059 alongside those tests in this ledger are superseded by this correction,
+without changing their execution evidence. The [business analysis on main](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-business-analysis.md)
+keeps independent endorsement under BR-05 / Q-05 as a separate product decision.
+The [HC catalog on main](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-use-cases.md)
+requires unsigned-node denial and recovery after loss of a signing device for
+that capability. Neither ordinary login nor server-key rotation proves those
+requirements. Client work remains scoped to its published contracts; no Signing
+or Coordinator implementation work is authorized by this test increment.
 
 `TestControlPlaneMapSigningRotation` changes the testserver's map-signing key
 while retaining node-credential and relay trust. A public-wire fixture check

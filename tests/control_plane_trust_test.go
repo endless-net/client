@@ -11,7 +11,7 @@ import (
 	ipc "github.com/endless-net/client/ipc/v2"
 )
 
-// HC-021/HC-059: rejected operator confirmations must not mutate pinned trust
+// HC-021: rejected operator confirmations must not mutate pinned trust
 // or enrollment. This does not qualify successful signing-key rotation.
 func TestControlPlaneTrustConfirmation(t *testing.T) {
 	s, n, id := controlScenario(t)

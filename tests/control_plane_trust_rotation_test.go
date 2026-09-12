@@ -8,7 +8,7 @@ import (
 	ipc "github.com/endless-net/client/ipc/v2"
 )
 
-// HC-059: explicit map-signing trust recovery preserves enrollment and intent;
+// HC-021: explicit map-signing trust recovery preserves enrollment and intent;
 // node credential trust remains an independent published server-key field.
 func TestControlPlaneMapSigningRotation(t *testing.T) {
 	s, n, id := controlScenario(t)
