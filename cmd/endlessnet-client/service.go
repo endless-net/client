@@ -424,6 +424,9 @@ func cmdServiceIPCEvents(command string, args []string) error {
 	encoder := json.NewEncoder(os.Stdout)
 	receivedHello := false
 	err = newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket).Stream(ctx, http.MethodGet, ipc.PathEvents, nil, func(event ipc.Event) error {
+		if !receivedHello && event.EventType != ipc.EventTypeHello {
+			return errors.New("service IPC event stream did not begin with hello")
+		}
 		if err := encoder.Encode(event); err != nil {
 			return err
 		}

@@ -2773,6 +2773,15 @@ public status observation. Those increments require their own exact-source CI.
 
 ## Next work
 
+The CLI event consumer now rejects a first event other than hello before writing
+it to stdout, matching the ordering requirement in the public IPC OpenAPI events
+description. A short regression supplied status_changed followed by hello:
+before the fix, the CLI reported success for this invalid order. The regression
+now requires failure and empty stdout. The native CLI fault root includes the
+same invalid sequence, followed by repaired-endpoint recovery, for all eight
+platforms. Native qualification remains pending; this does not claim validation
+of every later event sequence or payload.
+
 HC-052/053 now has a 34th common root, `TestControlPlaneCLIIPCFailureBoundary`.
 It drives the shipping CLI over an actual Unix socket or Windows named pipe
 against an HTTP/NDJSON contract fault fixture, without starting an agent. A

@@ -2864,17 +2864,25 @@ func TestCmdServiceEventsStreamsNDJSON(t *testing.T) {
 
 func TestCmdServiceEventsRequiresHelloBeforeSuccessfulCompletion(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		hello bool
-		wait  bool
+		name        string
+		hello       bool
+		wait        bool
+		statusFirst bool
 	}{
 		{name: "timeout-before-hello", wait: true},
 		{name: "eof-before-hello"},
+		{name: "status-before-hello", statusFirst: true},
 		{name: "timeout-after-hello", hello: true, wait: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(client.NewServiceIPCHandler(client.ServiceIPCHandlers{
 				Events: func(ctx context.Context, _ ipc.EventsRequest, writer client.ServiceIPCEventWriter) error {
+					if tc.statusFirst {
+						if err := writer.Send(ipc.Event{EventType: ipc.EventTypeStatusChanged, Sequence: 1}); err != nil {
+							return err
+						}
+						return writer.Send(ipc.Event{EventType: ipc.EventTypeHello, Sequence: 2})
+					}
 					if tc.hello {
 						if err := writer.Send(ipc.Event{EventType: ipc.EventTypeHello, Sequence: 1}); err != nil {
 							return err

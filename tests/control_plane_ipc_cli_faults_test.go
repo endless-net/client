@@ -21,7 +21,7 @@ import (
 // stream from a successfully established subscription on each native transport.
 func TestControlPlaneCLIIPCFailureBoundary(t *testing.T) {
 	requireControlScenario(t)
-	for _, mode := range []string{"timeout-before-hello", "eof-before-hello", "malformed-event"} {
+	for _, mode := range []string{"timeout-before-hello", "eof-before-hello", "malformed-event", "status-before-hello"} {
 		t.Run(mode, func(t *testing.T) {
 			n := testclient.New(t, testcontrol.New(t))
 			listener, err := listenCLIFaultIPC(n.Socket, n.Pipe)
@@ -49,6 +49,10 @@ func TestControlPlaneCLIIPCFailureBoundary(t *testing.T) {
 					<-r.Context().Done()
 				case "malformed-event":
 					_, _ = w.Write([]byte("{\n"))
+				case "status-before-hello":
+					encoder := json.NewEncoder(w)
+					_ = encoder.Encode(ipc.Event{Metadata: ipc.NewMetadata(ipc.Version), EventType: ipc.EventTypeStatusChanged, Sequence: 1, GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+					_ = encoder.Encode(ipc.Event{Metadata: ipc.NewMetadata(ipc.Version), EventType: ipc.EventTypeHello, Sequence: 2, GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 				}
 			})}
 			go func() { _ = server.Serve(listener) }()
