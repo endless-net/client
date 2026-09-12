@@ -123,6 +123,13 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		reference = testwireguard.NewTCP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
 	} else {
 		reference = testwireguard.NewUDP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
+		defer func() {
+			if t.Failed() {
+				for i, observation := range reference.UDPObservations() {
+					t.Logf("reference UDP accepted: index=%d source_port=%d destination_port=%d payload_sha256=%x", i, observation.SourcePort, observation.DestinationPort, observation.PayloadSHA256)
+				}
+			}
+		}()
 	}
 	peer := api.Peer{ID: "protocol-peer", Hostname: "udp-peer", PublicKey: reference.PublicKey, Endpoint: reference.Endpoint, EndpointCandidates: []string{reference.Endpoint}, AllowedIPs: []string{netip.PrefixFrom(peerIP, peerIP.BitLen()).String()}}
 	apply := func(desired api.Peer) {

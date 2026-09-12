@@ -4,6 +4,7 @@ package testwireguard
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -11,6 +12,7 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -64,6 +66,7 @@ type Peer struct {
 	traffic             *trafficCounters
 	forwarded           *trafficCounters
 	bind                *observedBind
+	udpHistory          *udpHistory
 	setEndpoint         func(netip.AddrPort) error
 }
 
@@ -91,6 +94,27 @@ func (p Peer) HandshakeCounts() (uint64, uint64, uint64) {
 }
 
 type trafficCounters struct{ received, echoed atomic.Uint64 }
+
+// UDPObservation describes a synthetic echo accepted at the public packet boundary.
+// It contains no Client state or raw application payload.
+type UDPObservation struct {
+	SourcePort, DestinationPort uint16
+	PayloadSHA256               [32]byte
+}
+
+type udpHistory struct {
+	mu      sync.Mutex
+	records []UDPObservation
+}
+
+func (p Peer) UDPObservations() []UDPObservation {
+	if p.udpHistory == nil {
+		return nil
+	}
+	p.udpHistory.mu.Lock()
+	defer p.udpHistory.mu.Unlock()
+	return append([]UDPObservation(nil), p.udpHistory.records...)
+}
 
 func (p Peer) PacketCounts() (uint64, uint64) {
 	return p.traffic.received.Load(), p.traffic.echoed.Load()
@@ -126,6 +150,7 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 	engine := device.NewDevice(tunnel.TUN(), bind, &device.Logger{Verbosef: device.DiscardLogf, Errorf: device.DiscardLogf})
 	done, exited := make(chan struct{}), make(chan struct{})
 	traffic := &trafficCounters{}
+	history := &udpHistory{}
 	t.Cleanup(func() { close(done); engine.Close(); <-exited })
 	go func() {
 		defer close(exited)
@@ -147,6 +172,15 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 				if reply == nil {
 					continue
 				}
+				// Validated echo helpers accept exactly one 32-byte UDP payload.
+				header := len(packet) - 40
+				observation := UDPObservation{SourcePort: binary.BigEndian.Uint16(packet[header : header+2]), DestinationPort: binary.BigEndian.Uint16(packet[header+2 : header+4]), PayloadSHA256: sha256.Sum256(packet[len(packet)-32:])}
+				history.mu.Lock()
+				if len(history.records) == 128 {
+					history.records = history.records[1:]
+				}
+				history.records = append(history.records, observation)
+				history.mu.Unlock()
 				select {
 				case tunnel.Outbound <- reply:
 					traffic.echoed.Add(1)
@@ -168,7 +202,7 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 		t.Fatal("reference peer has no UDP listener")
 	}
 	return Peer{
-		PublicKey: public, Endpoint: net.JoinHostPort(underlayIP.String(), strconv.Itoa(int(port))), traffic: traffic, bind: bind,
+		PublicKey: public, Endpoint: net.JoinHostPort(underlayIP.String(), strconv.Itoa(int(port))), traffic: traffic, bind: bind, udpHistory: history,
 		setEndpoint: func(endpoint netip.AddrPort) error {
 			return engine.IpcSet(fmt.Sprintf("public_key=%s\nupdate_only=true\nendpoint=%s\n\n", toHex(clientPublic), endpoint))
 		},

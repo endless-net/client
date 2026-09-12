@@ -3151,6 +3151,18 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+UDP mismatch diagnostics now include SHA-256 digests of the synthetic request
+and unexpected reply. The parent accepts only canonical, exactly 32-byte hex
+digests and bounded counters; malformed or extra output remains withheld.
+The UDP contract participant retains its last 128 accepted echo request digests
+and source/destination ports, and the native test logs them only on failure.
+These are observations at the participant's packet boundary, not private Client
+state. A record proves packet acceptance for echo, not delivery of its reply.
+The bounded history can help correlate a later unknown reply with earlier
+traffic, but absence from this history does not prove corruption. Strict nonce
+matching, denial classification and deadlines are unchanged. Short tests, vet
+and lint pass; actual failure correlation awaits native runner evidence.
+
 An additional failure in run 34673867164 is independent of the endpoint fixture:
 [Ubuntu 22.04 ARM repeat 3](https://github.com/endless-net/client/actions/runs/34673867164/job/103500753933)
 fails `TestControlPlaneNativeIPv6UDPTraffic` at 2026-09-12 05:19:45 UTC, following

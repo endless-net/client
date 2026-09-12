@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"flag"
 	"fmt"
@@ -202,7 +203,7 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 					zero++
 				}
 			}
-			return fmt.Errorf("application response mismatch: different_bytes=%d zero_bytes=%d", different, zero)
+			return fmt.Errorf("application response mismatch: different_bytes=%d zero_bytes=%d request_sha256=%x reply_sha256=%x", different, zero, sha256.Sum256(request[:]), sha256.Sum256(reply[:]))
 		}
 		delete(x.pending, reply)
 		if x.datagram {

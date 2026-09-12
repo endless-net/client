@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -364,17 +365,24 @@ func packetProbeReportsDenial(exitCode int, output []byte) bool {
 }
 
 func packetProbeFailureReason(output []byte) string {
-	// Reconstruct only fixed errors and bounded counters, never raw output.
+	// Reconstruct fixed errors, bounded counters and exact SHA-256 digests of
+	// synthetic probe payloads, never arbitrary child output.
 	value := strings.TrimSpace(string(output))
 	for _, known := range []string{"application deadline setup failed", "partial application request write", "application response length mismatch", "too many outstanding application requests", "network must be tcp or udp"} {
 		if value == known {
 			return known
 		}
 	}
-	const format = "application response mismatch: different_bytes=%d zero_bytes=%d"
+	const format = "application response mismatch: different_bytes=%d zero_bytes=%d request_sha256=%s reply_sha256=%s"
 	var different, zero int
-	if n, err := fmt.Sscanf(value, format, &different, &zero); err == nil && n == 2 && different >= 1 && different <= 32 && zero >= 0 && zero <= 32 {
-		canonical := fmt.Sprintf(format, different, zero)
+	var requestHash, replyHash string
+	if n, err := fmt.Sscanf(value, format, &different, &zero, &requestHash, &replyHash); err == nil && n == 4 && different >= 1 && different <= 32 && zero >= 0 && zero <= 32 {
+		requestDigest, requestErr := hex.DecodeString(requestHash)
+		replyDigest, replyErr := hex.DecodeString(replyHash)
+		if requestErr != nil || replyErr != nil || len(requestDigest) != 32 || len(replyDigest) != 32 {
+			return "unclassified probe failure"
+		}
+		canonical := fmt.Sprintf(format, different, zero, hex.EncodeToString(requestDigest), hex.EncodeToString(replyDigest))
 		if value == canonical {
 			return canonical
 		}
