@@ -1,7 +1,11 @@
 package tests
 
 import (
+	"context"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +16,67 @@ import (
 	ipc "github.com/endless-net/client/ipc/v2"
 	"golang.org/x/net/dns/dnsmessage"
 )
+
+// HC-017/HC-025: the operating-system resolver selects the running Client's
+// DNS configuration, including a map received while connection intent is off.
+func TestControlPlaneNativeSystemDNS(t *testing.T) {
+	requireControlScenario(t)
+	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
+	if !filepath.IsAbs(binary) {
+		t.Fatal("system DNS requires the packetprobe binary")
+	}
+	s := testcontrol.New(t)
+	network, join, err := s.AddNetwork("native-system-dns", "198.18.97.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := testclient.New(t, s)
+	n.Enroll(s, network.Name, join, "--route-table", "auto")
+	n.Start()
+	defer n.Stop()
+	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return nativeDNSMapApplied(v, "", 0) })
+	id := status.NodeID
+	key, err := wg.GeneratePrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, err := wg.PublicKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setPeer := func(hostname, address string) {
+		t.Helper()
+		previous := status.MapRevision
+		if err := s.UpdateMap(id, func(m *api.NetworkMapSnapshot) {
+			m.Network.DNSConfig = &api.DNSConfig{MagicDNSEnabled: true, Suffix: "scenario.endlessnet", OverrideLocalDNS: false}
+			m.Peers = []api.Peer{{ID: "system-dns-peer", Hostname: hostname, PublicKey: public, AllowedIPs: []string{address + "/32"}}}
+		}); err != nil {
+			t.Fatal(err)
+		}
+		status = n.AwaitStatus(func(v ipc.StatusResponse) bool { return nativeDNSMapApplied(v, id, previous) })
+	}
+	setPeer("system-peer-one", "198.18.97.20")
+	assertSystemDNSAddress(t, binary, "system-peer-one.scenario.endlessnet", "198.18.97.20")
+
+	var disconnected ipc.DisconnectResponse
+	n.Service("disconnect", &disconnected)
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.NodeID == id && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+	})
+	previous := status.MapRevision
+	if err := s.UpdateMap(id, func(m *api.NetworkMapSnapshot) {
+		m.Network.DNSConfig = &api.DNSConfig{MagicDNSEnabled: true, Suffix: "scenario.endlessnet", OverrideLocalDNS: false}
+		m.Peers = []api.Peer{{ID: "system-dns-peer", Hostname: "system-peer-two", PublicKey: public, AllowedIPs: []string{"198.18.97.21/32"}}}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var connected ipc.ConnectResponse
+	n.Service("connect", &connected)
+	status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return nativeDNSMapApplied(v, id, previous) && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
+	})
+	assertSystemDNSAddress(t, binary, "system-peer-two.scenario.endlessnet", "198.18.97.21")
+}
 
 // HC-025: the running native agent applies DNS changes from signed maps.
 // Queries target its DNS listener; this does not prove OS resolver selection.
@@ -125,6 +190,19 @@ func assertDNSListenerUnavailable(t *testing.T, transport, address string) {
 	var reply [512]byte
 	if _, err := conn.Read(reply[:]); err == nil {
 		t.Fatal("agent DNS UDP listener remained available after disconnect")
+	}
+}
+
+func assertSystemDNSAddress(t *testing.T, binary, name, expected string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	output, err := packetProbeCommand(ctx, "", binary, "--mode", "resolve", "--address", name).CombinedOutput()
+	if err != nil {
+		t.Fatal("system resolver did not resolve the published Client DNS name")
+	}
+	if strings.TrimSpace(string(output)) != expected {
+		t.Fatal("system resolver returned an address outside the published Client map")
 	}
 }
 
