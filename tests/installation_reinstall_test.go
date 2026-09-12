@@ -117,6 +117,23 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	t.Log("repair: missing executable with connected intent")
 	repairMissingBinary()
 	connected("connected repair after executable loss")
+	// HC-006/HC-030: the OS service manager must start an enrolled agent even
+	// when control is unavailable. A valid cached map must still carry traffic.
+	stop(t)
+	s.SetUnavailable(true)
+	start(t)
+	offline := waitInstalledCondition(t, binary, "service startup without control", func(v ipc.StatusResponse) bool {
+		return sameIdentity(v) && v.State == ipc.StateDegraded && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
+	})
+	connected("cached traffic after service startup without control")
+	s.SetUnavailable(false)
+	if err := s.UpdatePeers(initial.NodeID, []api.Peer{peer}); err != nil {
+		t.Fatal(err)
+	}
+	waitInstalledCondition(t, binary, "control recovery after service startup", func(v ipc.StatusResponse) bool {
+		return sameIdentity(v) && v.MapRevision > offline.MapRevision && v.State != ipc.StateDegraded
+	})
+	connected("traffic after late control recovery")
 
 	var disconnected ipc.DisconnectResponse
 	request(t, binary, "disconnect", &disconnected)

@@ -2950,6 +2950,16 @@ control-outage traffic, strict probe-denial oracle and DNS response-binding work
 
 ## Next work
 
+HC-006/HC-030 installed-service coverage now stops an enrolled service, makes
+the contract control endpoint unavailable and starts it through the real OS
+service manager. Public IPC must show degraded control with the original
+identity, credential, valid cached map and connected intent; real TCP traffic
+must work with that cached authorization. Restoring control must deliver a newer
+signed map, clear degraded status and retain traffic. This is part of all eight
+installation jobs, with native evidence pending. It tests late control
+availability for an already-enrolled service within map validity; it does not
+prove first enrollment offline, machine reboot or expired-map behavior.
+
 HC-062 now has executable installed-client repair coverage inside
 `TestInstalledClient/enrolled-reinstall`. On disposable hosted runners only,
 the fixture stops the installed service, verifies its executable is the known
