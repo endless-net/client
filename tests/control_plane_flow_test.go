@@ -14,7 +14,7 @@ import (
 )
 
 func TestControlPlaneNativeFlowConsent(t *testing.T) {
-	exerciseNativeTrafficScenario(t, false, "udp", true, false)
+	exerciseNativeTrafficScenario(t, false, "udp", true, "")
 }
 
 func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id string, clientIP, peerIP netip.Addr, fresh func(string) bool) {

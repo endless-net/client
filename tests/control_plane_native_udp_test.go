@@ -37,20 +37,22 @@ func TestControlPlaneNativeIPv6TCPTraffic(t *testing.T) {
 }
 
 func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
-	exerciseNativeTrafficScenario(t, ipv6, protocol, false, false)
+	exerciseNativeTrafficScenario(t, ipv6, protocol, false, "")
 }
 
 func TestControlPlaneNativeLogoutTraffic(t *testing.T) {
-	for _, family := range []string{"ipv4", "ipv6"} {
-		for _, protocol := range []string{"tcp", "udp"} {
-			t.Run(family+"/"+protocol, func(t *testing.T) {
-				exerciseNativeTrafficScenario(t, family == "ipv6", protocol, false, true)
-			})
+	for _, cleanup := range []string{"logout", "local-forget"} {
+		for _, family := range []string{"ipv4", "ipv6"} {
+			for _, protocol := range []string{"tcp", "udp"} {
+				t.Run(cleanup+"/"+family+"/"+protocol, func(t *testing.T) {
+					exerciseNativeTrafficScenario(t, family == "ipv6", protocol, false, cleanup)
+				})
+			}
 		}
 	}
 }
 
-func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flowLogs, logout bool) {
+func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flowLogs bool, cleanup string) {
 	t.Helper()
 	requireControlScenario(t)
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
@@ -193,11 +195,22 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 	}
 	assertICMP("initial", true)
-	if logout {
-		var response ipc.LogoutResponse
-		n.Service("logout", &response)
-		if response.Outcome != ipc.LogoutOutcomeRemoteCleanupConfirmed {
-			t.Fatal("native logout did not confirm remote cleanup")
+	if cleanup != "" {
+		wantDeleted := 1
+		if cleanup == "local-forget" {
+			s.SetUnavailable(true)
+			output, err := n.ServiceCommand("local-forget", "--confirm-local-forget")
+			var response ipc.LocalForgetResponse
+			if err != nil || json.Unmarshal(output, &response) != nil || response.Outcome != ipc.LogoutOutcomeRemoteCleanupUnconfirmed {
+				t.Fatal("native local cleanup failed or claimed confirmed remote cleanup (output withheld)")
+			}
+			wantDeleted = 0
+		} else {
+			var response ipc.LogoutResponse
+			n.Service("logout", &response)
+			if response.Outcome != ipc.LogoutOutcomeRemoteCleanupConfirmed {
+				t.Fatal("native logout did not confirm remote cleanup")
+			}
 		}
 		clean := func(v ipc.StatusResponse) bool {
 			return v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent && v.PeerCount == 0 && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
@@ -207,11 +220,12 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			first("blocked")
 			second("blocked")
 			if fresh("24001") || fresh("24002") {
-				t.Fatal("confirmed logout retained fresh application access")
+				t.Fatal("cleanup retained fresh application access")
 			}
 		}
 		assertICMP("logout", false)
 		n.Stop()
+		s.SetUnavailable(false)
 		n.Start()
 		n.AwaitStatus(clean)
 		if fresh("24001") || fresh("24002") {
@@ -220,6 +234,9 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		assertICMP("logout-restart", false)
 		deleted, registered := 0, 0
 		for _, event := range s.Events() {
+			if cleanup == "local-forget" && (event.Kind == "deleted" || event.Kind == "logout") {
+				t.Fatal("local cleanup unexpectedly performed remote revocation")
+			}
 			if event.Kind == "deleted" && event.NodeID == initial.NodeID {
 				deleted++
 			}
@@ -227,8 +244,8 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 				registered++
 			}
 		}
-		if deleted != 1 || registered != 1 {
-			t.Fatal("native logout did not retain one creation and one confirmed deletion")
+		if deleted != wantDeleted || registered != 1 {
+			t.Fatal("native cleanup did not preserve the expected creation/deletion transcript")
 		}
 		return
 	}

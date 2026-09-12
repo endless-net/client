@@ -2773,13 +2773,17 @@ public status observation. Those increments require their own exact-source CI.
 
 ## Next work
 
-HC-022 additionally has `TestControlPlaneNativeLogoutTraffic`: four IPv4/IPv6
-TCP/UDP variants establish real native traffic and two sessions, then require
-confirmed logout to block those sessions and fresh traffic on both ports.
+HC-022 additionally has `TestControlPlaneNativeLogoutTraffic`: eight variants,
+with confirmed logout and forced local-forget independently covering IPv4/IPv6
+TCP/UDP. Each variant establishes real native traffic and two sessions, then requires
+cleanup to block those sessions and fresh traffic on both ports.
 Public status must clear enrollment/map state; restart must retain that state
 and traffic denial. The TCP reference peer also checks ICMP echo denial before
 and after restart. The testserver transcript requires one original creation and
-one confirmed deletion. This uses the existing protocol peer, not another real
+one confirmed deletion for logout. Local-forget runs while control is unavailable,
+must report unconfirmed remote cleanup and must record no remote deletion/logout.
+Control is restored before restart, which must still retain traffic denial.
+This uses the existing protocol peer, not another real
 Client or a backend runtime. Native evidence is pending. With this 36th root,
 the automatic matrix inventory requires 36 x 3 x 8 = 864 root outcomes.
 
