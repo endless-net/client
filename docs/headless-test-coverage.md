@@ -3170,6 +3170,12 @@ state files. Remaining implementation and validation belong to `endless-net/clie
 
 ### Enrolled client TLS lifetime recovery: native validation pending
 
+The untrusted-CA precondition now requires a real CLI process exit with code 1
+and a certificate error, rather than accepting any command failure. Its HTTP
+transcript must remain entirely unchanged, rather than checking only enrollment
+events. This prevents a launch failure or unrelated refusal from proving TLS
+rejection. Raw CLI output remains withheld; native validation is pending.
+
 `TestControlPlaneTLSTrustBoundary` now adds `enrolled-expired` and
 `enrolled-not-yet-valid`. Each stops the real enrolled agent, presents a leaf
 with an invalid lifetime under the already trusted CA, and starts the agent

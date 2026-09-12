@@ -2,7 +2,9 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"net"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -29,14 +31,14 @@ func TestControlPlaneTLSTrustBoundary(t *testing.T) {
 	n := testclient.New(t, s)
 	trustedEnvironment := n.Environment
 	n.Environment = nil
-	_, err = n.Run("up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--join-token", join, "--hostname", "tls-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off")
-	if err == nil {
-		t.Fatal("untrusted HTTPS server enrolled the client")
+	beforeUntrusted := len(s.Events())
+	untrustedOutput, err := n.Run("up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--join-token", join, "--hostname", "tls-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off")
+	var processExit *exec.ExitError
+	if !errors.As(err, &processExit) || processExit.ExitCode() != 1 || !strings.Contains(strings.ToLower(string(untrustedOutput)), "certificate") {
+		t.Fatal("untrusted HTTPS did not produce a CLI certificate rejection (output withheld)")
 	}
-	for _, event := range s.Events() {
-		if event.Kind == "registered" || event.Kind == "registration-refreshed" || event.Kind == "enrollment" {
-			t.Fatal("untrusted HTTPS server received enrollment")
-		}
+	if len(s.Events()) != beforeUntrusted {
+		t.Fatal("untrusted HTTPS connection reached the control HTTP handler")
 	}
 	n.Environment = trustedEnvironment
 	n.TrustControlTLS(s)
