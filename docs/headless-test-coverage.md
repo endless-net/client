@@ -2737,6 +2737,16 @@ The later post-failure public status observation is not part of this source.
 
 ## Next work
 
+Source `08d5186` also failed Windows 2025 repetition 1
+([job 103478854598](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854598)):
+two truncated-UDP DNS variants could not bind their TCP fixture to the previously
+allocated UDP port. No Client DNS conclusion follows from this setup failure.
+The fixture now allocates TCP first, then binds UDP to that same endpoint, so TCP
+port selection respects existing TCP sockets and TIME_WAIT. The original OS error
+was withheld, so TIME_WAIT is not established as the specific cause. UDP bind
+failure remains fatal; there are no retries, skipped families or relaxed wire
+assertions. Native confirmation of the changed allocation order is pending.
+
 Run `34666246762`, source `08d5186`, failed the IPC-events root in Windows 2022
 repetition 1 ([job 103478854527](https://github.com/endless-net/client/actions/runs/34666246762/job/103478854527)):
 the first SDK subscription ended before the initial hello, after the CLI event

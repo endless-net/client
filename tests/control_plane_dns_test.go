@@ -233,9 +233,22 @@ func dnsContractUpstream(t *testing.T, network string, truncated bool, address [
 	if network == "udp6" {
 		host = "::1"
 	}
-	conn, err := net.ListenPacket(network, net.JoinHostPort(host, "0"))
+	endpoint := net.JoinHostPort(host, "0")
+	var listener net.Listener
+	if truncated {
+		// Let TCP allocate its own port, respecting existing TCP connections and
+		// TIME_WAIT. A UDP-allocated port need not be available to TCP on Windows.
+		var err error
+		listener, err = net.Listen(strings.Replace(network, "udp", "tcp", 1), endpoint)
+		if err != nil {
+			t.Fatal("could not allocate DNS TCP fallback fixture")
+		}
+		t.Cleanup(func() { _ = listener.Close() })
+		endpoint = listener.Addr().String()
+	}
+	conn, err := net.ListenPacket(network, endpoint)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("could not bind DNS UDP fixture at the selected endpoint")
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	var mu sync.Mutex
@@ -266,11 +279,6 @@ func dnsContractUpstream(t *testing.T, network string, truncated bool, address [
 		return wire
 	}
 	if truncated {
-		listener, err := net.Listen(strings.Replace(network, "udp", "tcp", 1), conn.LocalAddr().String())
-		if err != nil {
-			t.Fatal("could not bind DNS TCP fallback fixture on the UDP port")
-		}
-		t.Cleanup(func() { _ = listener.Close() })
 		go func() {
 			for {
 				stream, err := listener.Accept()
