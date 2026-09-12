@@ -91,8 +91,20 @@ func TestControlPlaneJoinTokenRotation(t *testing.T) {
 	if current, statusErr := existing.Status(); statusErr != nil || current.NodeID != nodeID || !current.NodeCredentialPresent {
 		t.Fatal("join-token rotation changed the existing node credential")
 	}
+	// The revoked join token must not become a startup dependency when the
+	// existing node restarts from its still-valid map during a control outage.
+	s.SetUnavailable(true)
+	defer s.SetUnavailable(false)
 	existing.Stop()
 	existing.Start()
+	status = existing.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.NodeID == nodeID && v.NodeCredentialPresent && v.CachedMapValid &&
+			!v.UserDisconnected && v.Agent != nil && v.Agent.LastError != "" &&
+			v.WireGuard != nil && v.WireGuard.OK
+	})
+	reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+	reachable()
+	s.SetUnavailable(false)
 	apply()
 	reachable()
 	replacementClient := testclient.New(t, s)

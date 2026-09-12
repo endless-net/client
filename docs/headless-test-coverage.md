@@ -91,7 +91,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-012 | C real Client rejects invalid and preserves corrected hostname, endpoint, advertised-prefix and requested-tag registration inputs through browser approval; D request/proof tests | Qualify the expanded native root; effective tag/route authorization and additional platform attributes against published responses |
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
 | HC-014 | C user-session rotation, user-RPC denial, node-credential independence, reauthentication and same-node traffic/restart recovery are executable; U recovery matrix | Qualify the native root on every runner; browser/OIDC refresh and other session-expiry timing variants |
-| HC-015 | C join-token rotation denies a new real Client, preserves the existing node credential, signed-map advancement, native traffic and restart, then replacement-token enrollment is executable; historical R revoked join key | Qualify the native root on every runner; token expiry and offline variants; node revocation remains separate |
+| HC-015 | C join-token rotation denies a new real Client, preserves the existing node credential, signed-map advancement, native traffic and cached restart during a control outage, then control recovery and replacement-token enrollment are executable; historical R revoked join key | Qualify the native root on every runner; token expiry and expired-cache variants; node revocation remains separate |
 | HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners | Other paths/protocols and denied-access variants |
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
@@ -4830,3 +4830,13 @@ cannot be considered a resolution of the Windows failure. The reference-hop
 test now reports TCP and UDP outcomes separately and requires fresh forwarded
 packet counts on each reachability phase, including recovery. This avoids
 using packets from the initial connection as evidence of the recovered path.
+
+HC-015 now restarts the already enrolled Client during a control-plane outage
+after its original join token has been revoked. Public IPC must retain the same
+node identity, node credential presence, connected intent and valid cached map,
+and the real Client must carry fresh TCP traffic to the reference peer before
+control is restored. The subsequent signed map update and replacement-token
+enrollment retain their existing checks, including exactly two distinct
+successful registrations for the whole scenario. This tests cached startup
+independence from the revoked registration token; it does not cover expired
+maps or expiry of the node credential. Hosted qualification remains pending.
