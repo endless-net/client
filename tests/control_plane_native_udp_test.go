@@ -200,7 +200,11 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 	}
 	if endpointChange {
-		peer.Endpoint = reference.RotateEndpoint(t)
+		nextEndpoint := reference.RotateEndpoint(t)
+		if fresh("24001") {
+			t.Fatal("native traffic reached a peer after its old endpoint retired but before a signed endpoint update")
+		}
+		peer.Endpoint = nextEndpoint
 		peer.EndpointCandidates = []string{peer.Endpoint}
 		apply(peer)
 		for _, port := range []string{"24001", "24002"} {
