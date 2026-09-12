@@ -2414,6 +2414,15 @@ HC-001–HC-065 coverage and the remaining platform variants are still open.
 
 ## Next work
 
+The native IPC event root now opens two simultaneous subscriptions. Each must
+receive its own hello, current snapshot and the subsequent disconnect event,
+with independently increasing sequence numbers. After explicit cancellation
+of the second subscription, the first must still report reconnect and another
+disconnect before the existing agent-restart recovery phase. The test uses only
+the published native IPC transport and observable events. This adds subscription
+isolation to the pending event-stream evidence; it does not test slow consumers
+or claim resumable event history. The inventory stays at 32 roots / 768 outcomes.
+
 The IPC schema now documents the existing 65536-byte JSON mutation body limit,
 including whitespace, and HTTP 413 / `request_too_large` before action dispatch.
 The native request-validation root sends a valid object one byte above that

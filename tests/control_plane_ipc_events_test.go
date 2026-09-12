@@ -19,11 +19,12 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 		endpoint = n.Pipe
 	}
 	type subscription struct {
-		events <-chan ipc.Event
-		done   <-chan struct{}
-		cancel context.CancelFunc
+		events       <-chan ipc.Event
+		done         <-chan struct{}
+		cancel       context.CancelFunc
+		lastSequence int
 	}
-	subscribe := func() subscription {
+	subscribe := func() *subscription {
 		t.Helper()
 		local, err := ipc.NewLocalClient(endpoint)
 		if err != nil {
@@ -54,26 +55,25 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 			}
 			local.HTTPClient.CloseIdleConnections()
 		})
-		return subscription{events: events, done: done, cancel: cancel}
+		return &subscription{events: events, done: done, cancel: cancel}
 	}
-	lastSequence := 0
-	await := func(stream subscription, match func(ipc.Event) bool) ipc.Event {
+	await := func(stream *subscription, match func(ipc.Event) bool) ipc.Event {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 		defer cancel()
 		for {
 			select {
 			case event := <-stream.events:
-				if event.Sequence <= lastSequence || event.IPCProtocol != ipc.Protocol || event.IPCNegotiatedVersion != ipc.Version {
+				if event.Sequence <= stream.lastSequence || event.IPCProtocol != ipc.Protocol || event.IPCNegotiatedVersion != ipc.Version {
 					t.Fatal("IPC event sequence or protocol metadata is invalid")
 				}
 				if _, err := time.Parse(time.RFC3339Nano, event.GeneratedAt); err != nil {
 					t.Fatal("IPC event has an invalid generation timestamp")
 				}
-				if lastSequence == 0 && event.EventType != ipc.EventTypeHello {
+				if stream.lastSequence == 0 && event.EventType != ipc.EventTypeHello {
 					t.Fatal("IPC subscription did not begin with hello")
 				}
-				lastSequence = event.Sequence
+				stream.lastSequence = event.Sequence
 				if event.EventType == ipc.EventTypeError {
 					t.Fatal("healthy IPC subscription returned an error event")
 				}
@@ -95,12 +95,27 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 	stream := subscribe()
 	await(stream, func(event ipc.Event) bool { return event.EventType == ipc.EventTypeHello })
 	await(stream, state(false))
+	observer := subscribe()
+	await(observer, func(event ipc.Event) bool { return event.EventType == ipc.EventTypeHello })
+	await(observer, state(false))
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
 	event := await(stream, state(true))
 	if event.Status.DesiredState != ipc.DesiredDisconnected {
 		t.Fatal("event stream lost disconnected intent")
 	}
+	await(observer, state(true))
+	observer.cancel()
+	select {
+	case <-observer.done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("independent observer cancellation did not terminate")
+	}
+	var connected ipc.ConnectResponse
+	n.Service("connect", &connected)
+	await(stream, state(false))
+	n.Service("disconnect", &disconnected)
+	await(stream, state(true))
 	n.Stop()
 	select {
 	case <-stream.done:
@@ -109,11 +124,9 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 	}
 	n.Start()
 	n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid && v.UserDisconnected })
-	lastSequence = 0
 	stream = subscribe()
 	await(stream, func(event ipc.Event) bool { return event.EventType == ipc.EventTypeHello })
 	await(stream, state(true))
-	var connected ipc.ConnectResponse
 	n.Service("connect", &connected)
 	event = await(stream, state(false))
 	if event.Status.DesiredState != ipc.DesiredConnected {
