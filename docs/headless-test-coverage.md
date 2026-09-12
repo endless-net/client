@@ -4884,3 +4884,28 @@ to bound pipe-copy waits when descendants retain output handles after process
 exit or context cancellation. Existing command deadlines and graceful-shutdown
 assertions remain intact. This removes identified harness wait hazards; without
 the cancelled job's stack trace it is not proof of the macOS timeout cause.
+
+### 2026-09-12: nineteen-report snapshot for `c5bd840`
+
+The [run for `c5bd8409d8ef85d737f51faf09adde70f1b2358c`](https://github.com/endless-net/client/actions/runs/34698630395)
+has 19 downloaded native reports at this inspection. Every report declares 50
+root tests and the same source SHA. Their terminal root outcomes total **925
+PASS, 25 FAIL, 0 SKIP**. Five repetitions have no uploaded report, leaving 250
+of the full 1,200 expected outcomes unaccounted for; these are not passes or
+inferred skips. The workflow was still active, so this is a partial snapshot.
+
+| Report group | Reports | PASS | FAIL | Failed roots |
+| --- | ---: | ---: | ---: | --- |
+| Four Linux variants, all repetitions | 12 | 588 | 12 | Machine sharing in every report |
+| Windows 2022, all repetitions | 3 | 144 | 6 | Exit route and machine sharing in every report |
+| Windows 2025, all repetitions | 3 | 146 | 4 | Machine sharing in every report; exit route in repetition 1 |
+| macOS Intel, repetition 3 | 1 | 47 | 3 | Exit route, flow consent and machine sharing |
+
+`TestControlPlaneExitProvider` has exactly one root PASS and no failed/skipped
+child in all 19 reports. This supplies Linux IPv4 provider dataplane evidence
+for all 12 Linux repetitions and explicit unsupported-mode evidence for six
+Windows and one macOS Intel repetition. It does not qualify the five absent
+macOS repetitions, IPv6 provision, HA, or subsequent changes to the Client.
+The full matrix remains failed/incomplete. The machine-sharing fixture changes,
+Darwin route corrections, cached token-revocation startup, source-preserving
+subnet mode and process-wait changes made after `c5bd840` require a later run.
