@@ -266,6 +266,41 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 		return
 	}
+	// HC-030: prove the outage is observed by the real agent before testing
+	// traffic under its still-valid signed map. IPC status alone is not proof
+	// that either new or established application connections remain usable.
+	s.SetUnavailable(true)
+	outage := n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.State == ipc.StateDegraded && v.NodeID == initial.NodeID && v.NodeCredentialPresent && v.CachedMapValid && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
+	})
+	for range 3 {
+		first("ok")
+		second("ok")
+		if !fresh("24001") || !fresh("24002") {
+			t.Fatal("temporary control outage interrupted fresh native application access")
+		}
+	}
+	assertICMP("control-unavailable", true)
+	s.SetUnavailable(false)
+	apply(peer)
+	n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		return v.NodeID == initial.NodeID && v.MapRevision > outage.MapRevision && v.CachedMapValid && v.NodeCredentialPresent && v.State != ipc.StateDegraded
+	})
+	first("ok")
+	second("ok")
+	if !fresh("24001") || !fresh("24002") {
+		t.Fatal("control recovery interrupted fresh native application access")
+	}
+	assertICMP("control-recovered", true)
+	registrations := 0
+	for _, event := range s.Events() {
+		if event.Kind == "registered" {
+			registrations++
+		}
+	}
+	if registrations != 1 {
+		t.Fatal("temporary control outage caused another enrollment")
+	}
 	limited := peer
 	limited.ACLRestricted = true
 	limited.ACLGrants = []api.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: protocol, Port: 24002}}}}

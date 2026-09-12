@@ -2863,6 +2863,18 @@ coverage remains incomplete; this matrix does not close missing scenarios.
 
 ## Next work
 
+HC-030 native direct IPv4/IPv6 TCP/UDP scenarios now break control streams and
+return temporary service failures, wait for the real agent's public `degraded`
+status with valid cached authorization, then require three successful exchange
+rounds on both existing sockets and new connections to both fixture ports.
+The protocol-stack peer also requires ICMP echo during the outage. Restoring
+control must deliver a newer signed map, clear degraded status, retain the
+original identity, and preserve existing/new application access and ICMP.
+The transcript must contain exactly one enrollment. These checks run within the
+four existing native direct roots on every platform; CI evidence is pending.
+This covers a short outage within map validity, not expired offline authority,
+reboot, network change or dependency-specific server failure semantics.
+
 HC-028/HC-030 retained-session coverage is now executable in
 `TestControlPlaneNativeRelayTraffic` and `TestControlPlaneNativeRelayFailover`:
 TCP and UDP probe processes open their sockets through the primary Relay before
