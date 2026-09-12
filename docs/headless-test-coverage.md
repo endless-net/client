@@ -3151,6 +3151,26 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+### Running agent DNS map updates: native validation pending
+
+New root `TestControlPlaneNativeDNSMapUpdates` extends HC-025 through the real
+agent with native routing and dual-stack map projection. A signed public
+`Network.DNSConfig` enables peer DNS with `OverrideLocalDNS=false`. Without
+restarting the agent, five maps introduce a peer, replace its IPv4/IPv6 addresses,
+rename it, withdraw it and restore its original name/addresses. Public IPC must
+advance the map revision with WireGuard OK and no degraded state. UDP/TCP queries
+to the agent's `127.0.0.1:53` listener then require exact current A/AAAA answers
+and NXDOMAIN without answers for inactive names.
+
+This exercises the agent-managed DNS path, whose router reapplies the proxy on
+configuration changes. The standalone `dns serve` command still loads a single
+map at startup. The test does not inspect persisted Client state or call runtime
+internals. It does not prove OS resolver selection, continuous availability
+during the apply interval, or application traffic by name. Short tests, vet and
+lint pass; the existing CI discovers the new root, bringing the native inventory
+to 40 roots, and will run it on eight runners with three repetitions. Native
+validation remains pending. Further DNS and platform coverage stays in Client.
+
 ### Completed matrix at 28cf961: one IPv6 UDP failure remains
 
 Run [34676671634](https://github.com/endless-net/client/actions/runs/34676671634)
