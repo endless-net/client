@@ -3062,6 +3062,34 @@ correction/completion additions. None of those changes is validated by this run.
 
 ## Next work
 
+Run 34672491102, source `d0fc32a9f7c9d0d97623953fbbab3f452790089a`,
+passed [Verify (Windows), job 103496467959](https://github.com/endless-net/client/actions/runs/34672491102/job/103496467959).
+Its `internal/client` package passed in 15.318 seconds at 04:35:09 UTC on
+2026-09-12. This is new Windows component evidence after the flow-spool mutex
+fix, not proof of native flow-traffic correctness or cross-process queue locking.
+
+[Windows 2025 repeat 3, job 103496467955](https://github.com/endless-net/client/actions/runs/34672491102/job/103496467955)
+contains 39 roots and fails NativeFlowConsent and NativeRelayTraffic. The flow
+children fail independently: IPv4 TCP reports `flow consent expiry disrupted
+application traffic` at 04:19:33 UTC; its denied-exchange reference deltas are
+received=0, echoed=0. Public status has valid cache, WireGuard OK, handshake and
+no agent error. The counters count application data for this TCP reference, so
+zero does not establish whether a SYN reached the peer. Aggregate received and
+echoed are both 2079; RX=933580, TX=1015448. This is not yet evidence that consent
+expiry caused the failed exchange rather than coinciding with it.
+
+IPv6 UDP exits 1 with an unclassified probe failure at 04:26:13 UTC. Public cache,
+WireGuard and handshake remain valid with no agent error; aggregate reference
+received=2080, echoed=2045. This source predates the process-deadline diagnostic,
+and the fatal unclassified path does not return to the per-denial counter logger.
+No denial, nonce mismatch or process-timeout cause can be inferred from that exit.
+
+The same Windows job's Relay IPv4 TCP connection recovers on its original socket
+after three additional challenges and 2.085 seconds of observation. The original
+immediate assertion remains failed in this historical report. This extends the
+retained-session recovery observation to Windows, but does not qualify the later
+bounded-recovery assertion or explain either flow failure.
+
 The Relay post-outage retained-TCP assertion now explicitly requests bounded
 recovery. After the normal one-second exchange reports blocked, it allows up to
 15 additional seconds of fresh challenges on the same socket/process. Only a
