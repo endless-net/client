@@ -2996,6 +2996,32 @@ separate from the Windows component queue access-denied failure below.
 
 ## Next work
 
+Further results from source `985763edf13e74fc479abb293b26420cc653e6f3`
+show the immediate retained-TCP recovery failure also on Windows 2025:
+[repeat 1](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773671)
+fails `NativeRelayFailover/ipv4`, and
+[repeat 2](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773682)
+fails both IPv4 and IPv6. All three fail at the same post-outage TCP assertion,
+not during initial connection or primary-to-backup failover.
+
+[Ubuntu 22.04 ARM repeat 2](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773689)
+also fails `NativeFlowConsent/ipv6/udp` at 03:51:55 UTC on 2026-09-12:
+the consented exchange is unavailable. Public status is available, cached map
+valid, user-disconnected false, WireGuard OK with a handshake and no agent error.
+Aggregate counters are RX 96636, TX 104792, reference received 868, echoed 862,
+handshake initiations 2, responses 1, other packets 1143. These aggregates do
+not identify which leg lost the particular failed exchange. The stricter probe
+oracle in this source confirms explicit exchange unavailability rather than an
+arbitrary process exit with code 2. Cause remains unresolved.
+
+Flow probes now record reference received/echoed counter deltas around a denied
+exchange, with protocol, address family and fixed test port only. For the UDP
+reference, received counts decrypted inbound packets; echoed counts replies
+queued to its outbound tunnel, not proven delivery to Client. Background packets
+may contribute, so deltas are diagnostic evidence rather than per-packet
+attribution. Pass criteria, deadlines and retry behavior are unchanged. New
+native CI evidence is pending.
+
 Relay TCP session probes now collect a bounded diagnostic observation when an
 expected immediate exchange returns `blocked`. The same probe process and socket
 send fresh challenges for up to 15 additional seconds, recording only a fixed

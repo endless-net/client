@@ -146,7 +146,15 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(applied.WireGuard.ListenPort)))
 	}
 	address := func(port string) string { return net.JoinHostPort(peerIP.String(), port) }
-	fresh := func(port string) bool { return applicationProbe(t, binary, "", protocol, address(port)) }
+	fresh := func(port string) bool {
+		beforeReceived, beforeEchoed := reference.PacketCounts()
+		ok := applicationProbe(t, binary, "", protocol, address(port))
+		if flowLogs && !ok {
+			afterReceived, afterEchoed := reference.PacketCounts()
+			t.Logf("flow denied exchange: protocol=%s ipv6=%t port=%s reference_received_delta=%d reference_echoed_delta=%d", protocol, ipv6, port, afterReceived-beforeReceived, afterEchoed-beforeEchoed)
+		}
+		return ok
+	}
 	apply(peer)
 	for _, port := range []string{"24001", "24002"} {
 		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
