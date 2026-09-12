@@ -49,6 +49,15 @@ run privileged installation tests on a development workstation.
 
 ## Remaining acceptance work
 
+The Linux/macOS suite additionally runs the installed CLI as the existing
+`nobody` account. A non-root UID and successful `version` invocation exclude a
+failed privilege switch or unexecutable binary as false positives. Status,
+connect, disconnect and confirmed local-forget must fail at the protected Unix
+IPC transport with permission denied. The privileged client must retain identity,
+intent and the corresponding TCP access/denial. Hosted evidence is pending.
+This is transport access denial; observer/owner/admin application-role tests
+and Windows token/pipe authorization remain separate work.
+
 - [client-ui, main](https://github.com/endless-net/client-ui/tree/main) owns the
   signed Windows MSI, UI launch and consumer installation on Windows 10/11.
 - This repository owns future signed/notarized macOS packaging and additional

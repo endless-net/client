@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -89,6 +90,10 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	t.Log("reinstall: connected enrolled service")
 	reinstall(t)
 	connected("connected reinstall")
+	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+		assertInstalledUnixPeerDenied(t, binary)
+		connected("connected intent after unprivileged Unix IPC attempts")
+	}
 	stop(t)
 	assertStoppedServiceCommands(t, binary)
 	start(t)
@@ -119,6 +124,10 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	t.Log("reinstall: disconnected enrolled service")
 	reinstall(t)
 	assertDisconnected("disconnected reinstall")
+	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+		assertInstalledUnixPeerDenied(t, binary)
+		assertDisconnected("disconnected intent after unprivileged Unix IPC attempts")
+	}
 	if registrationRequests() != before {
 		t.Fatal("disconnected reinstall attempted registration or refresh")
 	}

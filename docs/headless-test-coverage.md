@@ -2602,6 +2602,14 @@ are absent from this source.
 
 ## Next work
 
+HC-004/053 Unix installation acceptance now checks the pre-existing nobody
+account: a non-root UID and executable installed CLI, then explicit IPC permission
+denial for status/connect/disconnect/confirmed local-forget while the enrolled
+service runs. Both connection states must retain identity and real TCP behavior.
+This applies to the six Linux/macOS runners and awaits native evidence. Windows
+and observer/owner/admin authorization after transport access remain open; these
+checks do not claim all-platform application-role coverage.
+
 The DNS wire root now independently varies the Client listener address family
 and upstream address family, with complete/truncated UDP replies: eight variants
 per runner. Every listener must report exactly the requested loopback address,
