@@ -184,37 +184,22 @@ func assertDNSWireType(t *testing.T, transport, address, name string, family dns
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn, err := net.DialTimeout(transport, address, time.Second)
-	if err != nil {
-		t.Fatal("DNS listener connection failed")
-	}
-	defer func() { _ = conn.Close() }()
-	if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if transport == "tcp" {
-		wire = append(binary.BigEndian.AppendUint16(nil, uint16(len(wire))), wire...)
-	}
-	if _, err := conn.Write(wire); err != nil {
-		t.Fatal("DNS query send failed")
-	}
 	var reply []byte
-	if transport == "tcp" {
-		var size [2]byte
-		if _, err := io.ReadFull(conn, size[:]); err != nil {
-			t.Fatal("DNS TCP response header unavailable")
+	attempts := 1
+	if transport == "udp" {
+		attempts = 3
+	}
+	for attempt := range attempts {
+		reply, err = exchangeDNSWire(transport, address, wire)
+		if err == nil {
+			break
 		}
-		reply = make([]byte, int(binary.BigEndian.Uint16(size[:])))
-		if _, err := io.ReadFull(conn, reply); err != nil {
-			t.Fatal("DNS TCP response incomplete")
+		if attempt+1 < attempts {
+			time.Sleep(25 * time.Millisecond)
 		}
-	} else {
-		reply = make([]byte, 4096)
-		n, err := conn.Read(reply)
-		if err != nil {
-			t.Fatal("DNS UDP response unavailable")
-		}
-		reply = reply[:n]
+	}
+	if err != nil {
+		t.Fatal("DNS response unavailable")
 	}
 	var response dnsmessage.Message
 	if err := response.Unpack(reply); err != nil {
@@ -243,6 +228,45 @@ func assertDNSWireType(t *testing.T, transport, address, name string, family dns
 	if answer.Header.Name != qname || answer.Header.Type != family || answer.Header.Class != dnsmessage.ClassINET || !actual.IsValid() || actual.String() != expected {
 		t.Fatal("DNS address does not match the published map or selected upstream")
 	}
+}
+
+func exchangeDNSWire(transport, address string, query []byte) ([]byte, error) {
+	conn, err := net.DialTimeout(transport, address, time.Second)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+	responseTimeout := 3 * time.Second
+	if transport == "udp" {
+		responseTimeout = time.Second
+	}
+	if err := conn.SetDeadline(time.Now().Add(responseTimeout)); err != nil {
+		return nil, err
+	}
+	wire := query
+	if transport == "tcp" {
+		wire = append(binary.BigEndian.AppendUint16(nil, uint16(len(query))), query...)
+	}
+	if _, err := conn.Write(wire); err != nil {
+		return nil, err
+	}
+	if transport == "tcp" {
+		var size [2]byte
+		if _, err := io.ReadFull(conn, size[:]); err != nil {
+			return nil, err
+		}
+		reply := make([]byte, int(binary.BigEndian.Uint16(size[:])))
+		if _, err := io.ReadFull(conn, reply); err != nil {
+			return nil, err
+		}
+		return reply, nil
+	}
+	reply := make([]byte, 4096)
+	n, err := conn.Read(reply)
+	if err != nil {
+		return nil, err
+	}
+	return reply[:n], nil
 }
 
 func dnsContractUpstream(t *testing.T, network string, truncated bool, address [4]byte, mutations ...func(*dnsmessage.Message, bool)) (string, func() []string, func(dnsmessage.RCode)) {

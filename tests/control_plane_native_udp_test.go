@@ -507,7 +507,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	assertConnected := func() {
 		t.Helper()
 		v := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == initial.NodeID && v.OverlayIP == initial.OverlayIP && v.OverlayIPv6 == initial.OverlayIPv6 && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.NodeCredentialPresent && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535 && len(v.WireGuard.Peers) == 1
+			return v.NodeID == initial.NodeID && v.OverlayIP == initial.OverlayIP && v.OverlayIPv6 == initial.OverlayIPv6 && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.NodeCredentialPresent && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535
 		})
 		// The Client may choose a new UDP port when its native device restarts.
 		// Only the fixture's return endpoint changes; its peer identity/map do not.

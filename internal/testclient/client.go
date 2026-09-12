@@ -326,7 +326,19 @@ func (n *Node) awaitStatusWithin(timeout time.Duration, match func(ipc.StatusRes
 			n.done <- processErr // Preserve the process result for cleanup.
 		default:
 		}
-		n.t.Fatalf("client state deadline: responses=%d failures=%d last_ipc_error=%q ipc_error_counts=%v agent_exited=%t exit_code=%d state=%s control=%s revision=%d peers=%d", responses, failures, lastCategory, errorCategories, exited, exitCode, last.State, last.ControlState, last.MapRevision, last.PeerCount)
+		wgPresent, wgOK, wgError := last.WireGuard != nil, false, false
+		wgPort, wgPeers := 0, 0
+		if last.WireGuard != nil {
+			wgOK, wgError = last.WireGuard.OK, last.WireGuard.Error != ""
+			wgPort, wgPeers = last.WireGuard.ListenPort, len(last.WireGuard.Peers)
+		}
+		agentPresent, agentError := last.Agent != nil && last.Agent.StatePresent, false
+		agentRevision := uint64(0)
+		if last.Agent != nil {
+			agentError = last.Agent.LastError != ""
+			agentRevision = last.Agent.MapRevision
+		}
+		n.t.Fatalf("client state deadline: responses=%d failures=%d last_ipc_error=%q ipc_error_counts=%v agent_exited=%t exit_code=%d state=%s control=%s desired=%s user_disconnected=%t credential=%t cached_map=%t revision=%d peers=%d overlay_ipv4=%t overlay_ipv6=%t wg_present=%t wg_ok=%t wg_error=%t wg_port=%d wg_peers=%d agent_present=%t agent_error=%t agent_revision=%d", responses, failures, lastCategory, errorCategories, exited, exitCode, last.State, last.ControlState, last.DesiredState, last.UserDisconnected, last.NodeCredentialPresent, last.CachedMapValid, last.MapRevision, last.PeerCount, last.OverlayIP != "", last.OverlayIPv6 != "", wgPresent, wgOK, wgError, wgPort, wgPeers, agentPresent, agentError, agentRevision)
 	}
 	return last
 }

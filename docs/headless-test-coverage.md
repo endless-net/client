@@ -4624,3 +4624,28 @@ registration result and complete exactly one node registration after approval.
 This verifies Client input and projection behavior; it does not infer effective
 policy authorization from the requested attribute. The common root count stays
 45 while the expanded root awaits native qualification.
+
+Run [34690909647](https://github.com/endless-net/client/actions/runs/34690909647)
+completed at source `73ebdf2699fd89bb66ce52183178e5a9421fe2a6`.
+All 24 reports contained the same 41-root inventory: 970 PASS, 14 FAIL and
+0 SKIP out of 984 expected outcomes. The twelve system-DNS failures comprised
+all Ubuntu 22.04 amd64/arm64 and Windows repetitions. Ubuntu diagnostics showed
+the systemd stub in use but resolution failure; the source still returned
+NXDOMAIN for an IPv4-only name's AAAA query. Every Windows failure had an
+installed NRPT rule and a successful native `Resolve-DnsName`, proving the old
+Go probe was not the Windows system-resolver path. Both causes are corrected
+after this source.
+
+Two unrelated single-repetition failures were also retained. macOS 15 ARM
+missed the first UDP reply immediately after a live DNS map update; UDP wire
+assertions now retry up to three independent bounded queries while preserving
+exact question, response code and address checks. Windows 2025 repeat 3 timed
+out waiting for diagnostic peer enumeration after a connected agent restart,
+although public state was connected with one projected peer. The lifecycle
+gate now requires the usable WireGuard listener and then proves configuration
+with real TCP/UDP/ICMP traffic; peer enumeration is no longer substituted for
+that traffic evidence. Timeout diagnostics now include bounded public agent
+and WireGuard presence, error, port, peer-count and revision fields if the
+failure recurs. All eight install jobs, all three platform verify jobs and the
+separate Linux control-plane job passed. The aggregate verify job correctly
+failed because the contract matrix was not green.
