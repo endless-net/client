@@ -19,7 +19,7 @@ import (
 func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 	s, n, id := controlScenario(t)
 	initial := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid })
-	alias := filepath.Join(t.TempDir(), "config-alias.json")
+	alias := filepath.Join(filepath.Dir(n.Config), "config-alias.json")
 	if err := os.Symlink(n.Config, alias); err != nil {
 		t.Fatal("hosted runner could not create the configuration path alias")
 	}
@@ -75,10 +75,17 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 		// After release, a new real process must acquire ownership and retain
 		// enrollment and the user's current connection intent.
 		n.Stop()
+		originalPath := n.Config
+		n.Config = alias
 		n.Start()
+		n.Config = originalPath
 		n.AwaitStatus(func(v ipc.StatusResponse) bool {
 			return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid
 		})
+		info, err := os.Lstat(alias)
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Fatal("agent startup or mutation replaced the configuration symlink")
+		}
 	}
 	created := 0
 	for _, event := range s.Events() {

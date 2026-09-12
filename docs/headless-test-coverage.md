@@ -2502,6 +2502,14 @@ HC-001–HC-065 completion remains unproven.
 
 ## Next work
 
+The native ownership test now also starts the successor agent through the file
+symlink after releasing the original owner. The same identity and connection
+intent must survive, subsequent duplicate contenders must still be rejected,
+and filesystem metadata must show that startup/mutations did not replace the
+symlink. The alias lives beside the original configuration, keeping the helper's
+public state-output directory unchanged. This checks legitimate alias use as well
+as duplicate rejection; all-platform execution of the extension remains pending.
+
 Configuration storage and agent locking now resolve the same file location,
 including file/directory symlinks and missing profile directories beneath an
 existing aliased ancestor. Atomic writes therefore target the original file,
