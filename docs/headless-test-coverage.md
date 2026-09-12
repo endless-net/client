@@ -2861,6 +2861,39 @@ assertions, stricter child-outcome verifier, or UDP completed-reply history.
 Those changes require evidence from their own source revision. Full HC-001–HC-065
 coverage remains incomplete; this matrix does not close missing scenarios.
 
+## Partial native evidence: 37-root revision
+
+Snapshot collected on 2026-09-12 for run `34668955037`, source
+`4a8011f90d839e6771d05999933a7738bc9a315f`: fourteen completed contract
+job logs have an identical 37-root inventory, **516 PASS, 2 FAIL, 0 SKIP**.
+Ten remaining contract jobs were still running at this snapshot; there is no
+complete eight-platform qualification for this source.
+
+The four flow-consent leaves total **54 PASS and 2 FAIL**. Both failures are
+IPv6 UDP application unavailability after consent; root-cause limits are below.
+All fourteen completed jobs passed interrupted disconnect/restart and IPC
+negotiation with exact source-commit assertions. This supplies partial Linux
+and macOS evidence, not Windows evidence for those additions. The snapshot
+predates the later forced-termination ownership, retained Relay sessions,
+control-outage traffic, strict probe-denial oracle and DNS response-binding work.
+
+| Runner and repetition | Job | Root outcomes |
+| --- | --- | --- |
+| macos-15-intel, repeat 1 | [103487109024](https://github.com/endless-net/client/actions/runs/34668955037/job/103487109024) | 37 PASS |
+| macos-15, repeat 1 | [103487108968](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108968) | 37 PASS |
+| macos-15, repeat 2 | [103487108921](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108921) | 37 PASS |
+| ubuntu-22.04-arm, repeat 1 | [103487108913](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108913) | 37 PASS |
+| ubuntu-22.04-arm, repeat 2 | [103487108981](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108981) | 37 PASS |
+| ubuntu-22.04-arm, repeat 3 | [103487108946](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108946) | 36 PASS, 1 FAIL |
+| ubuntu-22.04, repeat 1 | [103487108920](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108920) | 37 PASS |
+| ubuntu-22.04, repeat 2 | [103487108911](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108911) | 37 PASS |
+| ubuntu-22.04, repeat 3 | [103487108973](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108973) | 37 PASS |
+| ubuntu-24.04-arm, repeat 1 | [103487108942](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108942) | 37 PASS |
+| ubuntu-24.04-arm, repeat 2 | [103487108935](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108935) | 37 PASS |
+| ubuntu-24.04-arm, repeat 3 | [103487108937](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108937) | 37 PASS |
+| ubuntu-24.04, repeat 1 | [103487108959](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108959) | 37 PASS |
+| ubuntu-24.04, repeat 3 | [103487108890](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108890) | 36 PASS, 1 FAIL |
+
 ## Next work
 
 The DNS response-binding root now includes `invalid-truncated-udp` alongside
