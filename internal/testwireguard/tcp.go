@@ -163,5 +163,11 @@ func newTCP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 		setEndpoint: func(endpoint netip.AddrPort) error {
 			return engine.IpcSet(fmt.Sprintf("public_key=%s\nupdate_only=true\nendpoint=%s\n\n", toHex(clientPublic), endpoint))
 		},
+		rotateEndpoint: func() (string, error) {
+			if err := engine.IpcSet("listen_port=0\n\n"); err != nil {
+				return "", err
+			}
+			return netip.AddrPortFrom(underlayIP, uint16(bind.port.Load())).String(), nil
+		},
 	}
 }

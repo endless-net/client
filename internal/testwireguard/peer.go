@@ -68,6 +68,7 @@ type Peer struct {
 	bind                *observedBind
 	udpHistory          *udpHistory
 	setEndpoint         func(netip.AddrPort) error
+	rotateEndpoint      func() (string, error)
 }
 
 // SetClientEndpoint supplies the endpoint observed through public Client IPC.
@@ -87,6 +88,29 @@ func (p Peer) ConfigureClientEndpoint(endpoint netip.AddrPort) error {
 		return fmt.Errorf("reference peer requires a valid UDP endpoint")
 	}
 	return p.setEndpoint(endpoint)
+}
+
+// RotateEndpoint moves the same reference identity to a fresh underlay UDP
+// port. The returned endpoint is observable fixture state suitable for a new
+// signed peer projection; no Client state is read.
+func (p *Peer) RotateEndpoint(t *testing.T) string {
+	t.Helper()
+	if p.rotateEndpoint == nil {
+		t.Fatal("reference peer does not support endpoint rotation")
+	}
+	previous := p.Endpoint
+	for range 8 {
+		next, err := p.rotateEndpoint()
+		if err != nil {
+			t.Fatal("reference peer could not rotate its UDP endpoint")
+		}
+		if next != "" && next != previous {
+			p.Endpoint = next
+			return next
+		}
+	}
+	t.Fatal("reference peer retained its old UDP endpoint after rotation")
+	return ""
 }
 
 func (p Peer) HandshakeCounts() (uint64, uint64, uint64) {
@@ -262,6 +286,12 @@ func NewUDP(t *testing.T, clientPublic string, clientIP, peerIP, underlayIP neti
 		PublicKey: public, Endpoint: net.JoinHostPort(underlayIP.String(), strconv.Itoa(int(port))), traffic: traffic, bind: bind, udpHistory: history,
 		setEndpoint: func(endpoint netip.AddrPort) error {
 			return engine.IpcSet(fmt.Sprintf("public_key=%s\nupdate_only=true\nendpoint=%s\n\n", toHex(clientPublic), endpoint))
+		},
+		rotateEndpoint: func() (string, error) {
+			if err := engine.IpcSet("listen_port=0\n\n"); err != nil {
+				return "", err
+			}
+			return net.JoinHostPort(underlayIP.String(), strconv.Itoa(int(bind.port.Load()))), nil
 		},
 	}
 }

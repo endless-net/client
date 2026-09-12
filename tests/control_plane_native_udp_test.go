@@ -40,7 +40,7 @@ func TestControlPlaneNativeIPv6TCPTraffic(t *testing.T) {
 }
 
 func exerciseNativeTraffic(t *testing.T, ipv6 bool, protocol string) {
-	exerciseNativeTrafficScenario(t, ipv6, protocol, false, "")
+	exerciseNativeTrafficScenario(t, ipv6, protocol, false, "", true)
 }
 
 func TestControlPlaneNativeLogoutTraffic(t *testing.T) {
@@ -48,14 +48,14 @@ func TestControlPlaneNativeLogoutTraffic(t *testing.T) {
 		for _, family := range []string{"ipv4", "ipv6"} {
 			for _, protocol := range []string{"tcp", "udp"} {
 				t.Run(cleanup+"/"+family+"/"+protocol, func(t *testing.T) {
-					exerciseNativeTrafficScenario(t, family == "ipv6", protocol, false, cleanup)
+					exerciseNativeTrafficScenario(t, family == "ipv6", protocol, false, cleanup, false)
 				})
 			}
 		}
 	}
 }
 
-func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flowLogs bool, cleanup string) {
+func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flowLogs bool, cleanup string, endpointChange bool) {
 	t.Helper()
 	requireControlScenario(t)
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
@@ -192,6 +192,19 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			initiations, responses, other := reference.HandshakeCounts()
 			t.Logf("reference handshake: initiations_received=%d responses_sent=%d other_received=%d", initiations, responses, other)
 			t.Fatalf("native %s failed: endpoint_selected=%t handshake=%t rx=%d tx=%d reference_received=%d reference_echoed=%d", protocol, selected, handshake, rx, tx, received, echoed)
+		}
+	}
+	if endpointChange {
+		peer.Endpoint = reference.RotateEndpoint(t)
+		peer.EndpointCandidates = []string{peer.Endpoint}
+		apply(peer)
+		for _, port := range []string{"24001", "24002"} {
+			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+			err := testclient.Await(ctx, func() bool { return fresh(port) })
+			cancel()
+			if err != nil {
+				t.Fatal("native traffic did not recover through the changed signed peer endpoint")
+			}
 		}
 	}
 	if flowLogs {

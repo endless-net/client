@@ -17,7 +17,7 @@ func TestControlPlaneNativeFlowConsent(t *testing.T) {
 	for _, family := range []string{"ipv4", "ipv6"} {
 		for _, protocol := range []string{"tcp", "udp"} {
 			t.Run(family+"/"+protocol, func(t *testing.T) {
-				exerciseNativeTrafficScenario(t, family == "ipv6", protocol, true, "")
+				exerciseNativeTrafficScenario(t, family == "ipv6", protocol, true, "", false)
 			})
 		}
 	}
