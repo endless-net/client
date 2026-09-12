@@ -125,17 +125,23 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
+		// Endpoint discovery may advance the map independently. Wait for the
+		// revision containing this DNS change, not merely any newer revision.
+		desired, err := s.Snapshot(id)
+		if err != nil {
+			t.Fatal(err)
+		}
 		previous := status.MapRevision
 		status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return nativeDNSMapApplied(v, id, previous)
+			return nativeDNSMapApplied(v, id, previous) && v.MapRevision >= desired.Revision.Network
 		})
 		var diagnostic ipc.DiagnosticsResponse
 		n.Service("diagnostics", &diagnostic)
 		d := diagnostic.Diagnostics
-		if d.Status.NodeID != id || d.Status.MapRevision != status.MapRevision || !d.Status.CachedMapValid ||
+		if d.Status.NodeID != id || d.Status.MapRevision < desired.Revision.Network || !d.Status.CachedMapValid ||
 			d.DNSSummary == nil || !d.DNSSummary.ConfigPresent || !d.DNSSummary.MagicDNSEnabled ||
 			d.DNSSummary.SearchDomain != "scenario.endlessnet" || d.DNSSummary.RecordCount != len(d.DNSSummary.Records) {
-			t.Fatal("public DNS diagnostics did not describe the applied signed map")
+			t.Fatalf("public DNS diagnostics did not describe the applied signed map: wanted_revision=%d status_revision=%d diagnostic_revision=%d identity_matches=%t cache_valid=%t dns_summary_present=%t", desired.Revision.Network, status.MapRevision, d.Status.MapRevision, d.Status.NodeID == id, d.Status.CachedMapValid, d.DNSSummary != nil)
 		}
 		peerRecords := 0
 		for _, record := range d.DNSSummary.Records {

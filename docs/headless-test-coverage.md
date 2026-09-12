@@ -143,6 +143,26 @@ product scope are different conditions; neither is a successful skip.
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
+## DNS diagnostic revision synchronization — 2026-09-12
+
+In the first 16 downloaded reports of [run 34710382160](https://github.com/endless-net/client/actions/runs/34710382160),
+source `f71587a8583b0d5eff1a005338c5e54809bc05e0`, fourteen roots sets pass
+all 53 tests. Windows 2022 repeat 1 and macOS ARM repeat 3 each fail only the
+new `NativeDNSMapUpdates` diagnostic assertion (52 other roots pass). The
+combined assertion did not report which field differed, so these failures
+alone do not establish the cause.
+
+Source inspection found two synchronization flaws in the test: waiting for any
+revision newer than the previous observation could accept an intervening
+endpoint update, and requiring identical revisions from consecutive status and
+diagnostics requests could reject a legitimate newer map. The test now waits
+for at least the signed snapshot revision containing the DNS change, and
+diagnostics must describe that revision or a later one. Exact peer DNS names,
+addresses, withdrawal, record counts and real wire-query assertions remain.
+Failure output now reports revision numbers and presence/match flags only.
+This correction needs its own native qualification; neither failure is marked
+resolved by source inspection or local checks alone.
+
 ## Complete corrected map-expiry matrix — 2026-09-12
 
 [Run 34708283604](https://github.com/endless-net/client/actions/runs/34708283604)
