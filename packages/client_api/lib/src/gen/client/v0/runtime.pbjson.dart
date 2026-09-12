@@ -203,6 +203,47 @@ final $typed_data.Uint8List profileStateDescriptor = $convert.base64Decode(
     'X1NUQVRFX05FRURTX0xPR0lOEAMSIAocUFJPRklMRV9TVEFURV9ORUVEU19BUFBST1ZBTBAEEh'
     'kKFVBST0ZJTEVfU1RBVEVfQkxPQ0tFRBAF');
 
+@$core.Deprecated('Use credentialStateDescriptor instead')
+const CredentialState$json = {
+  '1': 'CredentialState',
+  '2': [
+    {'1': 'CREDENTIAL_STATE_UNSPECIFIED', '2': 0},
+    {'1': 'CREDENTIAL_STATE_ABSENT', '2': 1},
+    {'1': 'CREDENTIAL_STATE_VALID', '2': 2},
+    {'1': 'CREDENTIAL_STATE_EXPIRING', '2': 3},
+    {'1': 'CREDENTIAL_STATE_EXPIRED', '2': 4},
+    {'1': 'CREDENTIAL_STATE_RENEWING', '2': 5},
+    {'1': 'CREDENTIAL_STATE_BLOCKED', '2': 6},
+  ],
+};
+
+/// Descriptor for `CredentialState`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List credentialStateDescriptor = $convert.base64Decode(
+    'Cg9DcmVkZW50aWFsU3RhdGUSIAocQ1JFREVOVElBTF9TVEFURV9VTlNQRUNJRklFRBAAEhsKF0'
+    'NSRURFTlRJQUxfU1RBVEVfQUJTRU5UEAESGgoWQ1JFREVOVElBTF9TVEFURV9WQUxJRBACEh0K'
+    'GUNSRURFTlRJQUxfU1RBVEVfRVhQSVJJTkcQAxIcChhDUkVERU5USUFMX1NUQVRFX0VYUElSRU'
+    'QQBBIdChlDUkVERU5USUFMX1NUQVRFX1JFTkVXSU5HEAUSHAoYQ1JFREVOVElBTF9TVEFURV9C'
+    'TE9DS0VEEAY=');
+
+@$core.Deprecated('Use connectionPhaseDescriptor instead')
+const ConnectionPhase$json = {
+  '1': 'ConnectionPhase',
+  '2': [
+    {'1': 'CONNECTION_PHASE_UNSPECIFIED', '2': 0},
+    {'1': 'CONNECTION_PHASE_DISCONNECTED', '2': 1},
+    {'1': 'CONNECTION_PHASE_CONNECTING', '2': 2},
+    {'1': 'CONNECTION_PHASE_CONNECTED', '2': 3},
+    {'1': 'CONNECTION_PHASE_DISCONNECTING', '2': 4},
+  ],
+};
+
+/// Descriptor for `ConnectionPhase`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List connectionPhaseDescriptor = $convert.base64Decode(
+    'Cg9Db25uZWN0aW9uUGhhc2USIAocQ09OTkVDVElPTl9QSEFTRV9VTlNQRUNJRklFRBAAEiEKHU'
+    'NPTk5FQ1RJT05fUEhBU0VfRElTQ09OTkVDVEVEEAESHwobQ09OTkVDVElPTl9QSEFTRV9DT05O'
+    'RUNUSU5HEAISHgoaQ09OTkVDVElPTl9QSEFTRV9DT05ORUNURUQQAxIiCh5DT05ORUNUSU9OX1'
+    'BIQVNFX0RJU0NPTk5FQ1RJTkcQBA==');
+
 @$core.Deprecated('Use connectionIntentDescriptor instead')
 const ConnectionIntent$json = {
   '1': 'ConnectionIntent',
@@ -375,6 +416,69 @@ final $typed_data.Uint8List profileDescriptor = $convert.base64Decode(
     'UgVzdGF0ZRIWCgZhY3RpdmUYByABKAhSBmFjdGl2ZRIuChNzZWxlY3RlZF9uZXR3b3JrX2lkGA'
     'ggASgJUhFzZWxlY3RlZE5ldHdvcmtJZBI0CglzZWxlY3Rpb24YCSABKAsyFi5jbGllbnQudjAu'
     'UmVzdHJpY3Rpb25SCXNlbGVjdGlvbg==');
+
+@$core.Deprecated('Use credentialStatusDescriptor instead')
+const CredentialStatus$json = {
+  '1': 'CredentialStatus',
+  '2': [
+    {
+      '1': 'state',
+      '3': 1,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.CredentialState',
+      '10': 'state'
+    },
+    {
+      '1': 'expires_at',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'expiresAt'
+    },
+    {
+      '1': 'warning_at',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'warningAt'
+    },
+    {
+      '1': 'automatic_renewal_supported',
+      '3': 4,
+      '4': 1,
+      '5': 8,
+      '10': 'automaticRenewalSupported'
+    },
+    {
+      '1': 'recovery',
+      '3': 5,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.Restriction',
+      '10': 'recovery'
+    },
+    {
+      '1': 'renewal_operation_id',
+      '3': 6,
+      '4': 1,
+      '5': 9,
+      '10': 'renewalOperationId'
+    },
+  ],
+};
+
+/// Descriptor for `CredentialStatus`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List credentialStatusDescriptor = $convert.base64Decode(
+    'ChBDcmVkZW50aWFsU3RhdHVzEjAKBXN0YXRlGAEgASgOMhouY2xpZW50LnYwLkNyZWRlbnRpYW'
+    'xTdGF0ZVIFc3RhdGUSOQoKZXhwaXJlc19hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1l'
+    'c3RhbXBSCWV4cGlyZXNBdBI5Cgp3YXJuaW5nX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLl'
+    'RpbWVzdGFtcFIJd2FybmluZ0F0Ej4KG2F1dG9tYXRpY19yZW5ld2FsX3N1cHBvcnRlZBgEIAEo'
+    'CFIZYXV0b21hdGljUmVuZXdhbFN1cHBvcnRlZBIyCghyZWNvdmVyeRgFIAEoCzIWLmNsaWVudC'
+    '52MC5SZXN0cmljdGlvblIIcmVjb3ZlcnkSMAoUcmVuZXdhbF9vcGVyYXRpb25faWQYBiABKAlS'
+    'EnJlbmV3YWxPcGVyYXRpb25JZA==');
 
 @$core.Deprecated('Use sessionDescriptor instead')
 const Session$json = {
@@ -917,6 +1021,30 @@ const Status$json = {
       '10': 'failures'
     },
     {'1': 'route_table', '3': 25, '4': 1, '5': 9, '10': 'routeTable'},
+    {
+      '1': 'connection_phase',
+      '3': 26,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.ConnectionPhase',
+      '10': 'connectionPhase'
+    },
+    {
+      '1': 'current_operations',
+      '3': 27,
+      '4': 3,
+      '5': 11,
+      '6': '.client.v0.Operation',
+      '10': 'currentOperations'
+    },
+    {
+      '1': 'credential',
+      '3': 28,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.CredentialStatus',
+      '10': 'credential'
+    },
   ],
 };
 
@@ -943,7 +1071,10 @@ final $typed_data.Uint8List statusDescriptor = $convert.base64Decode(
     'MhMuY2xpZW50LnYwLkVuZHBvaW50Ug1zdHVuRW5kcG9pbnRzEjwKD3JlbGF5X2VuZHBvaW50cx'
     'gXIAMoCzITLmNsaWVudC52MC5FbmRwb2ludFIOcmVsYXlFbmRwb2ludHMSLgoIZmFpbHVyZXMY'
     'GCADKAsyEi5jbGllbnQudjAuRmFpbHVyZVIIZmFpbHVyZXMSHwoLcm91dGVfdGFibGUYGSABKA'
-    'lSCnJvdXRlVGFibGU=');
+    'lSCnJvdXRlVGFibGUSRQoQY29ubmVjdGlvbl9waGFzZRgaIAEoDjIaLmNsaWVudC52MC5Db25u'
+    'ZWN0aW9uUGhhc2VSD2Nvbm5lY3Rpb25QaGFzZRJDChJjdXJyZW50X29wZXJhdGlvbnMYGyADKA'
+    'syFC5jbGllbnQudjAuT3BlcmF0aW9uUhFjdXJyZW50T3BlcmF0aW9ucxI7CgpjcmVkZW50aWFs'
+    'GBwgASgLMhsuY2xpZW50LnYwLkNyZWRlbnRpYWxTdGF0dXNSCmNyZWRlbnRpYWw=');
 
 @$core.Deprecated('Use tunnelPeerDescriptor instead')
 const TunnelPeer$json = {

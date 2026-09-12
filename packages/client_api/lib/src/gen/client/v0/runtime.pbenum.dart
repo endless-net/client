@@ -314,5 +314,69 @@ class ProfileState extends $pb.ProtobufEnum {
   const ProfileState._(super.value, super.name);
 }
 
+class CredentialState extends $pb.ProtobufEnum {
+  static const CredentialState CREDENTIAL_STATE_UNSPECIFIED = CredentialState._(
+      0, _omitEnumNames ? '' : 'CREDENTIAL_STATE_UNSPECIFIED');
+  static const CredentialState CREDENTIAL_STATE_ABSENT =
+      CredentialState._(1, _omitEnumNames ? '' : 'CREDENTIAL_STATE_ABSENT');
+  static const CredentialState CREDENTIAL_STATE_VALID =
+      CredentialState._(2, _omitEnumNames ? '' : 'CREDENTIAL_STATE_VALID');
+  static const CredentialState CREDENTIAL_STATE_EXPIRING =
+      CredentialState._(3, _omitEnumNames ? '' : 'CREDENTIAL_STATE_EXPIRING');
+  static const CredentialState CREDENTIAL_STATE_EXPIRED =
+      CredentialState._(4, _omitEnumNames ? '' : 'CREDENTIAL_STATE_EXPIRED');
+  static const CredentialState CREDENTIAL_STATE_RENEWING =
+      CredentialState._(5, _omitEnumNames ? '' : 'CREDENTIAL_STATE_RENEWING');
+  static const CredentialState CREDENTIAL_STATE_BLOCKED =
+      CredentialState._(6, _omitEnumNames ? '' : 'CREDENTIAL_STATE_BLOCKED');
+
+  static const $core.List<CredentialState> values = <CredentialState>[
+    CREDENTIAL_STATE_UNSPECIFIED,
+    CREDENTIAL_STATE_ABSENT,
+    CREDENTIAL_STATE_VALID,
+    CREDENTIAL_STATE_EXPIRING,
+    CREDENTIAL_STATE_EXPIRED,
+    CREDENTIAL_STATE_RENEWING,
+    CREDENTIAL_STATE_BLOCKED,
+  ];
+
+  static final $core.List<CredentialState?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 6);
+  static CredentialState? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const CredentialState._(super.value, super.name);
+}
+
+class ConnectionPhase extends $pb.ProtobufEnum {
+  static const ConnectionPhase CONNECTION_PHASE_UNSPECIFIED = ConnectionPhase._(
+      0, _omitEnumNames ? '' : 'CONNECTION_PHASE_UNSPECIFIED');
+  static const ConnectionPhase CONNECTION_PHASE_DISCONNECTED =
+      ConnectionPhase._(
+          1, _omitEnumNames ? '' : 'CONNECTION_PHASE_DISCONNECTED');
+  static const ConnectionPhase CONNECTION_PHASE_CONNECTING =
+      ConnectionPhase._(2, _omitEnumNames ? '' : 'CONNECTION_PHASE_CONNECTING');
+  static const ConnectionPhase CONNECTION_PHASE_CONNECTED =
+      ConnectionPhase._(3, _omitEnumNames ? '' : 'CONNECTION_PHASE_CONNECTED');
+  static const ConnectionPhase CONNECTION_PHASE_DISCONNECTING =
+      ConnectionPhase._(
+          4, _omitEnumNames ? '' : 'CONNECTION_PHASE_DISCONNECTING');
+
+  static const $core.List<ConnectionPhase> values = <ConnectionPhase>[
+    CONNECTION_PHASE_UNSPECIFIED,
+    CONNECTION_PHASE_DISCONNECTED,
+    CONNECTION_PHASE_CONNECTING,
+    CONNECTION_PHASE_CONNECTED,
+    CONNECTION_PHASE_DISCONNECTING,
+  ];
+
+  static final $core.List<ConnectionPhase?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 4);
+  static ConnectionPhase? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const ConnectionPhase._(super.value, super.name);
+}
+
 const $core.bool _omitEnumNames =
     $core.bool.fromEnvironment('protobuf.omit_enum_names');

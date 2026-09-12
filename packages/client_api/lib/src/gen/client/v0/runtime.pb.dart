@@ -522,6 +522,134 @@ class Profile extends $pb.GeneratedMessage {
   $1.Restriction ensureSelection() => $_ensure(8);
 }
 
+/// Independent of the user session; no credential bytes are exposed.
+class CredentialStatus extends $pb.GeneratedMessage {
+  factory CredentialStatus({
+    CredentialState? state,
+    $0.Timestamp? expiresAt,
+    $0.Timestamp? warningAt,
+    $core.bool? automaticRenewalSupported,
+    $1.Restriction? recovery,
+    $core.String? renewalOperationId,
+  }) {
+    final result = create();
+    if (state != null) result.state = state;
+    if (expiresAt != null) result.expiresAt = expiresAt;
+    if (warningAt != null) result.warningAt = warningAt;
+    if (automaticRenewalSupported != null)
+      result.automaticRenewalSupported = automaticRenewalSupported;
+    if (recovery != null) result.recovery = recovery;
+    if (renewalOperationId != null)
+      result.renewalOperationId = renewalOperationId;
+    return result;
+  }
+
+  CredentialStatus._();
+
+  factory CredentialStatus.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CredentialStatus.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CredentialStatus',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aE<CredentialState>(1, _omitFieldNames ? '' : 'state',
+        enumValues: CredentialState.values)
+    ..aOM<$0.Timestamp>(2, _omitFieldNames ? '' : 'expiresAt',
+        subBuilder: $0.Timestamp.create)
+    ..aOM<$0.Timestamp>(3, _omitFieldNames ? '' : 'warningAt',
+        subBuilder: $0.Timestamp.create)
+    ..aOB(4, _omitFieldNames ? '' : 'automaticRenewalSupported')
+    ..aOM<$1.Restriction>(5, _omitFieldNames ? '' : 'recovery',
+        subBuilder: $1.Restriction.create)
+    ..aOS(6, _omitFieldNames ? '' : 'renewalOperationId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CredentialStatus clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CredentialStatus copyWith(void Function(CredentialStatus) updates) =>
+      super.copyWith((message) => updates(message as CredentialStatus))
+          as CredentialStatus;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CredentialStatus create() => CredentialStatus._();
+  @$core.override
+  CredentialStatus createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CredentialStatus getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CredentialStatus>(create);
+  static CredentialStatus? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  CredentialState get state => $_getN(0);
+  @$pb.TagNumber(1)
+  set state(CredentialState value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasState() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearState() => $_clearField(1);
+
+  /// Absence means no authoritative deadline is known, not unlimited validity.
+  @$pb.TagNumber(2)
+  $0.Timestamp get expiresAt => $_getN(1);
+  @$pb.TagNumber(2)
+  set expiresAt($0.Timestamp value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasExpiresAt() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearExpiresAt() => $_clearField(2);
+  @$pb.TagNumber(2)
+  $0.Timestamp ensureExpiresAt() => $_ensure(1);
+
+  @$pb.TagNumber(3)
+  $0.Timestamp get warningAt => $_getN(2);
+  @$pb.TagNumber(3)
+  set warningAt($0.Timestamp value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasWarningAt() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearWarningAt() => $_clearField(3);
+  @$pb.TagNumber(3)
+  $0.Timestamp ensureWarningAt() => $_ensure(2);
+
+  @$pb.TagNumber(4)
+  $core.bool get automaticRenewalSupported => $_getBF(3);
+  @$pb.TagNumber(4)
+  set automaticRenewalSupported($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasAutomaticRenewalSupported() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearAutomaticRenewalSupported() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $1.Restriction get recovery => $_getN(4);
+  @$pb.TagNumber(5)
+  set recovery($1.Restriction value) => $_setField(5, value);
+  @$pb.TagNumber(5)
+  $core.bool hasRecovery() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearRecovery() => $_clearField(5);
+  @$pb.TagNumber(5)
+  $1.Restriction ensureRecovery() => $_ensure(4);
+
+  @$pb.TagNumber(6)
+  $core.String get renewalOperationId => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set renewalOperationId($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasRenewalOperationId() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearRenewalOperationId() => $_clearField(6);
+}
+
 class Session extends $pb.GeneratedMessage {
   factory Session({
     SessionState? state,
@@ -1638,6 +1766,9 @@ class Status extends $pb.GeneratedMessage {
     $core.Iterable<Endpoint>? relayEndpoints,
     $core.Iterable<$1.Failure>? failures,
     $core.String? routeTable,
+    ConnectionPhase? connectionPhase,
+    $core.Iterable<$1.Operation>? currentOperations,
+    CredentialStatus? credential,
   }) {
     final result = create();
     if (metadata != null) result.metadata = metadata;
@@ -1667,6 +1798,10 @@ class Status extends $pb.GeneratedMessage {
     if (relayEndpoints != null) result.relayEndpoints.addAll(relayEndpoints);
     if (failures != null) result.failures.addAll(failures);
     if (routeTable != null) result.routeTable = routeTable;
+    if (connectionPhase != null) result.connectionPhase = connectionPhase;
+    if (currentOperations != null)
+      result.currentOperations.addAll(currentOperations);
+    if (credential != null) result.credential = credential;
     return result;
   }
 
@@ -1724,6 +1859,12 @@ class Status extends $pb.GeneratedMessage {
     ..pPM<$1.Failure>(24, _omitFieldNames ? '' : 'failures',
         subBuilder: $1.Failure.create)
     ..aOS(25, _omitFieldNames ? '' : 'routeTable')
+    ..aE<ConnectionPhase>(26, _omitFieldNames ? '' : 'connectionPhase',
+        enumValues: ConnectionPhase.values)
+    ..pPM<$1.Operation>(27, _omitFieldNames ? '' : 'currentOperations',
+        subBuilder: $1.Operation.create)
+    ..aOM<CredentialStatus>(28, _omitFieldNames ? '' : 'credential',
+        subBuilder: CredentialStatus.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1963,6 +2104,32 @@ class Status extends $pb.GeneratedMessage {
   $core.bool hasRouteTable() => $_has(24);
   @$pb.TagNumber(25)
   void clearRouteTable() => $_clearField(25);
+
+  /// Observable on the initial snapshot, including for a newly attached UI.
+  @$pb.TagNumber(26)
+  ConnectionPhase get connectionPhase => $_getN(25);
+  @$pb.TagNumber(26)
+  set connectionPhase(ConnectionPhase value) => $_setField(26, value);
+  @$pb.TagNumber(26)
+  $core.bool hasConnectionPhase() => $_has(25);
+  @$pb.TagNumber(26)
+  void clearConnectionPhase() => $_clearField(26);
+
+  /// All nonterminal operations visible to this owner, including inactive profiles.
+  /// Empty for observers. Each operation carries its own profile_id.
+  @$pb.TagNumber(27)
+  $pb.PbList<$1.Operation> get currentOperations => $_getList(26);
+
+  @$pb.TagNumber(28)
+  CredentialStatus get credential => $_getN(27);
+  @$pb.TagNumber(28)
+  set credential(CredentialStatus value) => $_setField(28, value);
+  @$pb.TagNumber(28)
+  $core.bool hasCredential() => $_has(27);
+  @$pb.TagNumber(28)
+  void clearCredential() => $_clearField(28);
+  @$pb.TagNumber(28)
+  CredentialStatus ensureCredential() => $_ensure(27);
 }
 
 class TunnelPeer extends $pb.GeneratedMessage {

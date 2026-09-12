@@ -3,6 +3,8 @@
 - Status: **accepted**, 2026-09-12.
 - Owner: `client`.
 - Contract version: **v0**, explicitly selected by the user.
+- Additive BA/SA alignment: 2026-09-13 (credential deadlines and initial
+  connection/operation snapshot). Version and accepted baseline are unchanged.
 - Canonical source: [service.proto](../proto/client/v0/service.proto),
   [common.proto](../proto/client/v0/common.proto),
   [runtime.proto](../proto/client/v0/runtime.proto),
@@ -157,6 +159,30 @@ showing the action until confirmed.
 | Other mutations | `ChangeResult` |
 
 ## Profile, recovery and routing semantics
+
+Status.connection_phase reports disconnected/connecting/connected/disconnecting
+independently of desired intent and authorization state. A newly attached UI
+must not infer Connecting solely from desired_state. On blocked/error states,
+the UI prioritizes the service/control reason over the progress indication.
+UNSPECIFIED means unavailable information, never connected.
+
+Status.current_operations contains all nonterminal operations visible to the
+owner, including inactive profiles. The first stream snapshot and GetStatus
+include this list atomically with connection_phase. Its entries have profile IDs.
+There are at most 32 nonterminal operations per installation; new commands beyond
+the bound fail LIMIT_EXCEEDED without side effects, while Disconnect remains
+available. The runtime serializes/coalesces Disconnect to honor the bound.
+Terminal transitions remove the entry, emit operation_changed and update status.
+An observer receives the connection phase but no operation list or credential
+deadlines. A reconnect refetches persisted terminal outcomes by saved request ID.
+
+Status.credential describes node-credential expiry independently of Session.
+Absent expiry is unknown and cannot be replaced with the session deadline.
+warning_at must not exceed expires_at. Credential renewal is runtime-owned:
+RenewSession renews the user session and never claims to renew a node credential.
+Expose automatic renewal support, recovery restriction and the associated
+operation ID when one exists. Authoritative credential changes update status.
+No credential or session deadline may be inferred from UI wall-clock defaults.
 
 A profile is one immutable control origin plus a locally stored account identity,
 registration, selected network, requested preferences and connection intent.

@@ -134,6 +134,35 @@ message Profile {
   Restriction selection = 9;
 }
 
+enum CredentialState {
+  CREDENTIAL_STATE_UNSPECIFIED = 0;
+  CREDENTIAL_STATE_ABSENT = 1;
+  CREDENTIAL_STATE_VALID = 2;
+  CREDENTIAL_STATE_EXPIRING = 3;
+  CREDENTIAL_STATE_EXPIRED = 4;
+  CREDENTIAL_STATE_RENEWING = 5;
+  CREDENTIAL_STATE_BLOCKED = 6;
+}
+
+// Independent of the user session; no credential bytes are exposed.
+message CredentialStatus {
+  CredentialState state = 1;
+  // Absence means no authoritative deadline is known, not unlimited validity.
+  google.protobuf.Timestamp expires_at = 2;
+  google.protobuf.Timestamp warning_at = 3;
+  bool automatic_renewal_supported = 4;
+  Restriction recovery = 5;
+  string renewal_operation_id = 6;
+}
+
+enum ConnectionPhase {
+  CONNECTION_PHASE_UNSPECIFIED = 0;
+  CONNECTION_PHASE_DISCONNECTED = 1;
+  CONNECTION_PHASE_CONNECTING = 2;
+  CONNECTION_PHASE_CONNECTED = 3;
+  CONNECTION_PHASE_DISCONNECTING = 4;
+}
+
 message Session {
   SessionState state = 1;
   // Absence means no authoritative deadline, never "already expired".
@@ -248,6 +277,12 @@ message Status {
   repeated Failure failures = 24;
   // Read-only runtime route-table identifier, never a caller-selected path.
   string route_table = 25;
+  // Observable on the initial snapshot, including for a newly attached UI.
+  ConnectionPhase connection_phase = 26;
+  // All nonterminal operations visible to this owner, including inactive profiles.
+  // Empty for observers. Each operation carries its own profile_id.
+  repeated Operation current_operations = 27;
+  CredentialStatus credential = 28;
 }
 
 message TunnelPeer {

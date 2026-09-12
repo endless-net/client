@@ -8,6 +8,7 @@ import (
 	"connectrpc.com/connect"
 	clientipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/clientipc/v0/clientipcconnect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type service struct {
@@ -16,16 +17,27 @@ type service struct {
 
 func (service) GetStatus(context.Context, *connect.Request[clientipc.GetStatusRequest]) (*connect.Response[clientipc.GetStatusResponse], error) {
 	return connect.NewResponse(&clientipc.GetStatusResponse{
-		Status: &clientipc.Status{ServiceState: clientipc.ServiceState_SERVICE_STATE_DISCONNECTED},
+		Status: &clientipc.Status{
+			ServiceState:      clientipc.ServiceState_SERVICE_STATE_DISCONNECTED,
+			ConnectionPhase:   clientipc.ConnectionPhase_CONNECTION_PHASE_CONNECTING,
+			Session:           &clientipc.Session{ExpiresAt: &timestamppb.Timestamp{Seconds: 100}},
+			Credential:        &clientipc.CredentialStatus{ExpiresAt: &timestamppb.Timestamp{Seconds: 200}},
+			CurrentOperations: []*clientipc.Operation{{Id: "connect-operation", State: clientipc.OperationState_OPERATION_STATE_RUNNING}},
+		},
 	}), nil
 }
 
 func (service) WatchEvents(_ context.Context, _ *connect.Request[clientipc.WatchEventsRequest], stream *connect.ServerStream[clientipc.WatchEventsResponse]) error {
+	status, err := (service{}).GetStatus(context.Background(), connect.NewRequest(&clientipc.GetStatusRequest{}))
+	if err != nil {
+		return err
+	}
 	return stream.Send(&clientipc.WatchEventsResponse{
 		Sequence: 1,
 		Event: &clientipc.WatchEventsResponse_Snapshot{
 			Snapshot: &clientipc.SnapshotEvent{
 				Runtime: &clientipc.RuntimeInfo{Protocol: "endlessnet-client-ipc"},
+				Status:  status.Msg.GetStatus(),
 			},
 		},
 	})
@@ -54,6 +66,13 @@ func TestGeneratedProtocols(t *testing.T) {
 			if status.Msg.GetStatus().GetServiceState() != clientipc.ServiceState_SERVICE_STATE_DISCONNECTED {
 				t.Fatalf("unexpected status: %v", status.Msg)
 			}
+			snapshot := status.Msg.GetStatus()
+			if snapshot.GetConnectionPhase() != clientipc.ConnectionPhase_CONNECTION_PHASE_CONNECTING ||
+				len(snapshot.GetCurrentOperations()) != 1 ||
+				snapshot.GetSession().GetExpiresAt().GetSeconds() != 100 ||
+				snapshot.GetCredential().GetExpiresAt().GetSeconds() != 200 {
+				t.Fatalf("initial snapshot lost phase, operation or independent deadlines: %v", snapshot)
+			}
 			stream, err := client.WatchEvents(t.Context(), connect.NewRequest(&clientipc.WatchEventsRequest{}))
 			if err != nil {
 				t.Fatal(err)
@@ -64,6 +83,12 @@ func TestGeneratedProtocols(t *testing.T) {
 			}
 			if stream.Msg().GetSequence() != 1 || stream.Msg().GetSnapshot().GetRuntime().GetProtocol() != "endlessnet-client-ipc" {
 				t.Fatalf("unexpected event: %v", stream.Msg())
+			}
+			initial := stream.Msg().GetSnapshot().GetStatus()
+			if initial.GetConnectionPhase() != clientipc.ConnectionPhase_CONNECTION_PHASE_CONNECTING ||
+				len(initial.GetCurrentOperations()) != 1 ||
+				initial.GetCredential().GetExpiresAt().GetSeconds() == initial.GetSession().GetExpiresAt().GetSeconds() {
+				t.Fatalf("first stream snapshot lost connection or deadline state: %v", initial)
 			}
 			if stream.Receive() || stream.Err() != nil {
 				t.Fatalf("unexpected stream termination: %v", stream.Err())
