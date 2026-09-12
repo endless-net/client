@@ -2896,6 +2896,17 @@ control-outage traffic, strict probe-denial oracle and DNS response-binding work
 
 ## Next work
 
+HC-012/HC-034 now has `TestControlPlaneRouteAdvertisement`: the real CLI must
+reject a malformed advertised CIDR before a registration request reaches the
+contract fixture. Retrying the same profile with one IPv4 and one IPv6 prefix
+must enroll successfully; the signed registration projection must contain the
+requested hostname and both prefixes. Public IPC must report a valid map and
+credential before and after agent restart with the original node identity, and
+the transcript must contain exactly one enrollment. This is the 39th native
+root (39 x 3 x 8 = 936 expected matrix root outcomes); native evidence is pending.
+This checks advertisement submission and registration recovery, not route
+approval, SNAT, router forwarding or access granted to another client.
+
 The native DNS response-binding scenario also distinguishes valid upstream
 negative answers from correlation failures: NXDOMAIN and REFUSED must retain
 their original RCODE and contain no answer, then the same running proxy must
