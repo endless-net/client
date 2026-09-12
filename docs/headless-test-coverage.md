@@ -2438,8 +2438,11 @@ production successfully, then failed `Preserve platform contract reports` with
 validator. Thus all native executions passed, but this attempt does **not**
 qualify the source for publication: the required evidence artifact is missing.
 After confirming that terminal failure, only that job and its dependent gate
-were requested again on the same source. The rerun is pending; the original
-failure remains part of the evidence and no failing test was retried or hidden.
+were requested again on the same source. Attempt 2 was cancelled while pending
+as newer source runs entered the shared concurrency queue; it produced no new
+execution evidence. The original artifact failure remains unresolved for this
+source. No failing test was retried or hidden; the latest full source matrix
+must qualify its own complete artifact set.
 
 This source qualifies the executed TLS hostname rejection and explicit CA trust
 cases on all eight runners, the original native IPC event stream lifecycle,
