@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,7 +28,7 @@ func TestInstalledClient(t *testing.T) {
 	source := requiredPath(t, "ENDLESSNET_TEST_BINARY")
 	artifacts := t.TempDir()
 	var binary, configPath string
-	var start, stop, reinstall, restart, uninstall func(*testing.T)
+	var start, stop, reinstall, restart, uninstall, removeState func(*testing.T)
 	var removed func() bool
 	switch runtime.GOOS {
 	case "linux":
@@ -39,6 +40,7 @@ func TestInstalledClient(t *testing.T) {
 		start = func(t *testing.T) { command(t, "systemctl", "start", "endlessnet-client") }
 		stop = func(t *testing.T) { command(t, "systemctl", "stop", "endlessnet-client") }
 		uninstall = func(t *testing.T) { command(t, "dpkg", "--remove", "endlessnet-client") }
+		removeState = func(t *testing.T) { command(t, "dpkg", "--purge", "endlessnet-client") }
 		t.Cleanup(func() { uninstall(t) })
 		command(t, "dpkg", "--install", deb)
 		command(t, "systemctl", "start", "endlessnet-client")
@@ -64,6 +66,9 @@ func TestInstalledClient(t *testing.T) {
 		start = reinstall
 		stop = func(t *testing.T) { command(t, "launchctl", "bootout", "system/ru.endlessnet.client") }
 		uninstall = func(t *testing.T) { command(t, "sh", filepath.Join(artifacts, "ru.endlessnet.client-uninstall.sh")) }
+		removeState = func(t *testing.T) {
+			command(t, "sh", filepath.Join(artifacts, "ru.endlessnet.client-uninstall.sh"), "--remove-state")
+		}
 		t.Cleanup(func() { uninstall(t) })
 		command(t, "sh", filepath.Join(artifacts, "ru.endlessnet.client-install.sh"))
 		restart = func(t *testing.T) { command(t, "launchctl", "kickstart", "-k", "system/ru.endlessnet.client") }
@@ -91,6 +96,9 @@ func TestInstalledClient(t *testing.T) {
 		}
 		uninstall = func(t *testing.T) {
 			command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(artifacts, "endlessnet-client-uninstall.ps1"))
+		}
+		removeState = func(t *testing.T) {
+			command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(artifacts, "endlessnet-client-uninstall.ps1"), "-RemoveState")
 		}
 		t.Cleanup(func() { uninstall(t) })
 		// This fresh installer only emits service-manager and public file errors;
@@ -167,20 +175,37 @@ func TestInstalledClient(t *testing.T) {
 		t.FailNow()
 	}
 	t.Run("uninstall", func(t *testing.T) {
+		status := waitStatus(t, binary)
+		if status.WireGuard == nil || strings.TrimSpace(status.WireGuard.Interface) == "" {
+			t.Fatal("connected installed service did not publish its network interface")
+		}
+		interfaceName := status.WireGuard.Interface
 		uninstall(t)
 		deadline := time.Now().Add(30 * time.Second)
-		for !removed() {
+		for !removed() || interfaceExists(interfaceName) {
 			if time.Now().After(deadline) {
-				t.Fatal("uninstaller left the service registered or package files installed")
+				t.Fatal("uninstaller left the service, package files or network interface installed")
 			}
 			time.Sleep(time.Second)
+		}
+		if _, err := os.Stat(configPath); err != nil {
+			t.Fatal("ordinary uninstall did not retain enrolled client state")
 		}
 		if runtime.GOOS != "linux" {
 			if _, err := run(binary, "service", "status", "--timeout", "2s"); err == nil {
 				t.Fatal("service still answers IPC after uninstall")
 			}
 		}
+		removeState(t)
+		if _, err := os.Stat(filepath.Dir(configPath)); !os.IsNotExist(err) {
+			t.Fatal("explicit state removal retained the client state directory")
+		}
 	})
+}
+
+func interfaceExists(name string) bool {
+	_, err := net.InterfaceByName(name)
+	return err == nil
 }
 
 func requiredPath(t *testing.T, key string) string {

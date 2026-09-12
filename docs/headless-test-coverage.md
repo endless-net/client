@@ -140,7 +140,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
 | HC-062 | L missing-executable repair preserves identity and connected/disconnected traffic intent on all eight installation runners at `0cf6d73` | Other installation damage and interrupted-repair variants; full identity reset is separate |
 | HC-063 | U local-forget/recovery tests; local forget deliberately retains identity | Full identity-reset product/interface gap; do not infer it from local forget |
-| HC-064 | L uninstall | Explicit binary/state retention versus full removal, enrolled machine |
+| HC-064 | L native uninstall now checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal on all eight installation runners | Qualification of the new assertions; Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
 ## Current implementation increment

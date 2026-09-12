@@ -29,9 +29,12 @@ The suite checks:
 7. Reinstallation of the same artifact while connected and while explicitly
    disconnected, preserving identity, trust and connection intent; explicit
    reconnect must restore real TCP traffic.
-8. Removal of the service; Debian package files must also disappear. Windows
-   and macOS service uninstallers deliberately retain the separately copied
-   binary and state, and IPC must no longer respond.
+8. Removal of the service and live network interface; Debian package files must
+   also disappear. Ordinary removal retains enrolled state on every platform,
+   and IPC must no longer respond. A separate explicit state-removal operation
+   (`dpkg --purge`, `--remove-state`, or `-RemoveState`) must remove the state
+   directory. Windows and macOS service uninstallers retain the separately
+   staged core binary because they do not own its distribution artifact.
 
 While enrolled, the suite also stops the service in both connected and
 disconnected states. Real CLI `status`, `networks`, `diagnostics`, `connect` and
