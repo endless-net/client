@@ -97,10 +97,13 @@ func TestControlPlaneDiagnosticsExport(t *testing.T) {
 	if exported.Status.NodeID != id || !exported.Status.UserDisconnected || exported.Status.DesiredState != ipc.DesiredDisconnected || exported.Status.State != ipc.StateDisconnected {
 		t.Fatal("exported diagnostic status lost disconnected identity or intent")
 	}
+	n.Crash()
+	n.Start()
+	check(true)
 	var repeated ipc.DiagnosticsBundleResponse
 	n.Service("diagnostics-bundle", &repeated)
 	if !repeated.Reused || repeated.Path != bundle.Path || repeated.CreatedAt != bundle.CreatedAt || repeated.ExpiresAt != bundle.ExpiresAt || repeated.SizeBytes != bundle.SizeBytes {
-		t.Fatal("immediate repeated export did not identify the reused artifact")
+		t.Fatal("agent crash recovery did not identify the reusable diagnostic artifact")
 	}
 	var connected ipc.ConnectResponse
 	n.Service("connect", &connected)

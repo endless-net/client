@@ -133,7 +133,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-054 | L/C dedicated privileged Ubuntu container runs a real Client and workload: persistent state restart plus ephemeral retirement/recreation with native TCP evidence | Qualify the new required container job; host/sidecar split, reduced capabilities, container network modes and orchestration lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C public diagnostics export plus executable control-outage isolation and recovery; U path diagnostics | Qualify expanded root; distinguish peer path, DNS and application failures through public commands |
-| HC-057 | C export/reuse, retention and IPv4 UDP flow consent/retry/expiry passed all 24 native repetitions at `a9a1a21`; D FlowConsentAndIdempotency; U flow tests | Crash recovery, comprehensive redaction and remaining retention/flow variants |
+| HC-057 | C export/reuse, agent-crash recovery, retention and IPv4 UDP flow consent/retry/expiry; D FlowConsentAndIdempotency; U flow tests | Qualify expanded diagnostics root; comprehensive redaction and remaining retention/flow variants |
 | HC-058 | L version and runtime platform; native IPC negotiation/restart passed all 24 repetitions at `a9a1a21` | Artifact mismatch and exact release identity |
 | HC-059 | No qualified independent client-endorsed node-admission evidence; server trust/recovery tests belong to HC-021 | BR-05 / Q-05 product decision: independently signed node admission, unsigned-node denial, signing-device loss and recovery |
 | HC-060 | L/C two-version native package/service upgrade preserves the enrolled identity, connected intent and real traffic on every installation runner | Qualify the new upgrade assertions; incompatible-state rollback and insufficient space/privileges |
@@ -4771,3 +4771,11 @@ identity and usable WireGuard runtime. Assertions never read deleted or recreate
 private state. The old provider-side node deliberately remains outside local
 reset semantics; a standalone reset command without uninstall is still a
 separate product/interface decision.
+
+The existing diagnostics root now exercises HC-057 crash recovery. After a
+disconnected agent exports a schema-valid bundle, the harness terminates that
+real process without graceful shutdown and starts it again. Public IPC must
+retain the same node identity and disconnected intent, and a repeated export
+must report the same unexpired artifact with `reused=true` and identical public
+lifecycle metadata. The later expiry path still replaces only the aged bundle
+and preserves unrelated operator files. Hosted qualification remains pending.
