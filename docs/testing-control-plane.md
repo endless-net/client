@@ -1,7 +1,8 @@
 # Client control-plane test environment
 
 The client owns `internal/testcontrol`, a Go fake server built with `httptest`
-and the pinned Client API v1.12.0 DTOs, signing functions and Connect handlers.
+and the Client API DTOs, signing functions and Connect handlers pinned in
+[go.mod](../go.mod).
 It owns no production backend packages. `internal/testclient` drives a separately
 built client executable through CLI and public IPC (Unix sockets or Windows
 named pipes) on disposable GitHub-hosted runners.
@@ -22,8 +23,8 @@ Do not change the server from inside an `UpdateMap` callback.
 
 The server implements current HTTP registration, renewal, enrollment polling,
 completion, server-key, endpoint, map stream, node deletion and session logout.
-Streams negotiate the current protocol and send signed snapshots or resyncs;
-this first implementation does not emit deltas. Current cursors wait for a change
+Streams negotiate the current protocol and send signed snapshots, deltas or resyncs.
+Current cursors wait for a change
 or the requested timeout. Clients still perform their normal wire and signature
 validation. Wire-only faults never overwrite the server's valid map.
 
@@ -42,9 +43,14 @@ request bindings, idempotency, renewal/revocation, browser approval, signed map
 updates, bad signatures, unknown keys, expired maps, cancellation and concurrency.
 
 The parallel `Client contracts` matrix in `.github/workflows/test.yml` runs
-`TestControlPlane*` three times on Ubuntu 22.04/24.04 (amd64 and arm64), Windows 2022/2025 and
-macOS 15 ARM/Intel. Fail-fast is disabled. Each job preserves sanitized text and
-JSONL results; all six jobs are required by verification and publication gates.
+`TestControlPlane*` on Ubuntu 22.04/24.04 (amd64 and arm64), Windows 2022/2025 and
+macOS 15 ARM/Intel. Each platform has three isolated runner jobs, each executing
+the suite once: 24 reports total. Fail-fast is disabled. Each job preserves text
+and JSONL results, source SHA, compiled root inventory and platform/repetition
+identity; all 24 jobs are required by verification and publication gates.
+The suite has a 25-minute process budget within a 30-minute job, accommodating
+the four real-time flow-consent lifecycles and eight cleanup traffic variants.
+Individual CLI, RPC and probe deadlines remain independently bounded.
 Windows uses the same checksum-pinned Wintun dependency as the installer suite.
 Windows agent restart in this driver uses process termination; graceful Windows
 service-manager restart remains a distinct installation-suite observation.
@@ -87,8 +93,12 @@ The `Client control-plane scenarios` job retains the Linux dataplane fixture:
 3. Runs `TestClientDataplane*` three times inside a fresh Linux network namespace,
    with loopback enabled and no production control server.
 
-Process tests require `ENDLESSNET_CONTROL_TEST=1`, `ENDLESSNET_TEST_BINARY`, and
-a disposable GitHub-hosted runner. They skip under `-short`. Never run
+Common native process tests require `ENDLESSNET_CONTROL_TEST=1`, absolute paths
+in `ENDLESSNET_TEST_BINARY` and `ENDLESSNET_PACKET_PROBE`, and the exact source
+SHA in `ENDLESSNET_TEST_COMMIT`. CI embeds that SHA with `-X main.commit` when
+building the Client. The IPC-negotiation scenario compares the public CLI commit
+and native target, plus the agent's IPC commit before and after restart.
+Tests require a disposable GitHub-hosted runner and skip under `-short`. Never run
 the privileged suite on a developer host. Each client uses its own state,
 trust file, IPC socket and interface. State and private identity files are not
 read for assertions; CLI/IPC output is parsed in memory and not dumped on errors.
@@ -114,14 +124,18 @@ teardown cannot trigger cleanup. This correction is subsequent to the v0.5.0 tag
 
 ## Evidence boundaries
 
-The required `verify` job downloads this run's eight platform artifacts and runs
+The required `verify` job downloads this run's 24 platform/repetition artifacts and runs
 [verify-contract-results](../tools/verify-contract-results/main.go). Each build
 records its source SHA and the compiled executable's `-test.list` inventory.
 The verifier requires the same nonempty inventory on every platform, exactly
-three started-and-passed executions per root scenario, no failed or skipped
+one started-and-passed execution per root scenario in each isolated report,
+one matching run/PASS pair for every observed subtest, no failed or skipped
 root/subtest, and successful package completion in every JSONL report. Missing,
 truncated, malformed or wrong-source reports fail the gate. These assertions
-check the executed suite; they do not imply that every HC scenario has a test.
+check the executed suite; they do not imply that every HC scenario has a test
+or detect a planned variant missing from both code and report. The
+[coverage ledger](headless-test-coverage.md) separates implemented checks,
+qualified source snapshots and pending native evidence.
 
 Common contract results are attributed separately to each runner's OS and
 architecture. They do not prove that OS's complete dataplane, DNS resolver,
