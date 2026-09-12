@@ -369,3 +369,12 @@ uses cancellable timers and does not translate lifecycle cancellation into a
 pending-approval result. Tests cover header/body lifetime, in-flight cancellation,
 deadline preservation and cancellation before any local config write. Native RPC
 acceptance/recovery integration and browser action projection remain unfinished.
+
+Browser approval notices now leave the shared workflow through an optional typed
+callback carrying only request ID and approval URL; console rendering belongs to
+the CLI adapter. Newly created requests are persisted before notification, and
+callback failure preserves the pending request for recovery. A zero-wait retry
+can also report the saved approval action when the status endpoint is unavailable.
+Short tests verify durable state before notification and preservation on callback
+failure. This does not yet bind the callback to native Enroll operation events;
+the accepted v0 schema and generated SDKs are unchanged by this internal extraction.

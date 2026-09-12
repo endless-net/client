@@ -143,7 +143,7 @@ func (e enrollmentApprovalRequiredError) Error() string {
 	return "browser approval is required: " + e.ApprovalURL
 }
 
-func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, cfg *client.Config, configPath string, req *clientapi.RegisterNodeRequest, timeout time.Duration) (clientapi.RegisterNodeResponse, error) {
+func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, cfg *client.Config, configPath string, req *clientapi.RegisterNodeRequest, timeout time.Duration, notice func(enrollmentApprovalRequiredError) error) (clientapi.RegisterNodeResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return clientapi.RegisterNodeResponse{}, err
 	}
@@ -170,7 +170,6 @@ func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, c
 		if err := client.SaveConfig(configPath, *cfg); err != nil {
 			return clientapi.RegisterNodeResponse{}, err
 		}
-		fmt.Printf("Open this URL to approve the device:\n%s\n", created.Request.ApprovalURL)
 	} else {
 		if cfg.EnrollmentRequest != nil {
 			savedRequest, err := reusableBrowserEnrollmentRequest(*req, *cfg.EnrollmentRequest)
@@ -185,12 +184,17 @@ func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, c
 				if err := clearBrowserEnrollmentRequest(cfg, configPath); err != nil {
 					return clientapi.RegisterNodeResponse{}, err
 				}
-				return waitForBrowserEnrollmentApproval(ctx, api, cfg, configPath, req, timeout)
+				return waitForBrowserEnrollmentApproval(ctx, api, cfg, configPath, req, timeout, notice)
 			}
 			if ctx.Err() != nil {
 				return clientapi.RegisterNodeResponse{}, ctx.Err()
 			}
 			if timeout == 0 {
+				if notice != nil {
+					if err := notice(enrollmentApprovalRequiredError{RequestID: requestID, ApprovalURL: approvalURL}); err != nil {
+						return clientapi.RegisterNodeResponse{}, err
+					}
+				}
 				return clientapi.RegisterNodeResponse{}, enrollmentApprovalRequiredError{RequestID: requestID, ApprovalURL: approvalURL}
 			}
 			return clientapi.RegisterNodeResponse{}, err
@@ -201,7 +205,6 @@ func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, c
 			if err := client.SaveConfig(configPath, *cfg); err != nil {
 				return clientapi.RegisterNodeResponse{}, err
 			}
-			fmt.Printf("Open this URL to approve the device:\n%s\n", approvalURL)
 		}
 		switch status.Request.Status {
 		case clientapi.NodeEnrollmentRequestApproved, clientapi.NodeEnrollmentRequestEnrolled:
@@ -234,11 +237,15 @@ func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, c
 				return clientapi.RegisterNodeResponse{}, err
 			}
 			*req = replacement
-			return waitForBrowserEnrollmentApproval(ctx, api, cfg, configPath, req, timeout)
+			return waitForBrowserEnrollmentApproval(ctx, api, cfg, configPath, req, timeout, notice)
+		}
+	}
+	if notice != nil {
+		if err := notice(enrollmentApprovalRequiredError{RequestID: requestID, ApprovalURL: approvalURL}); err != nil {
+			return clientapi.RegisterNodeResponse{}, err
 		}
 	}
 	if timeout == 0 {
-		fmt.Println("Enrollment request saved; rerun the command after approving the device.")
 		return clientapi.RegisterNodeResponse{}, enrollmentApprovalRequiredError{
 			RequestID:   requestID,
 			ApprovalURL: approvalURL,

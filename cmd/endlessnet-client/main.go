@@ -792,6 +792,13 @@ func cmdUp(args []string) error {
 		ConfigPath: *configPath, JoinToken: effectiveJoinToken, IdempotencyKey: *idempotencyKey,
 		Hostname: *hostname, HostnameExplicit: flagWasSet(fs, "hostname"), Network: *network,
 		Endpoint: *endpoint, AdvertisedIPs: advertise, Tags: tags, ApprovalTimeout: approvalTimeout,
+		ApprovalNotice: func(notice enrollmentApprovalRequiredError) error {
+			fmt.Printf("Open this URL to approve the device:\n%s\n", notice.ApprovalURL)
+			if approvalTimeout == 0 {
+				fmt.Println("Enrollment request saved; rerun the command after approving the device.")
+			}
+			return nil
+		},
 		Report: func(response clientapi.RegisterNodeResponse) {
 			if strings.EqualFold(strings.TrimSpace(response.Node.ApprovalState), clientapi.NodeApprovalPending) {
 				fmt.Printf("node %s is pending approval\n", response.Node.ID)
@@ -815,6 +822,7 @@ type clientEnrollmentOptions struct {
 	AdvertisedIPs    []string
 	Tags             []string
 	ApprovalTimeout  time.Duration
+	ApprovalNotice   func(enrollmentApprovalRequiredError) error
 	Report           func(clientapi.RegisterNodeResponse)
 }
 
@@ -970,7 +978,7 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 	}
 	var response clientapi.RegisterNodeResponse
 	if browserEnrollment {
-		response, err = waitForBrowserEnrollmentApproval(ctx, api, &cfg, *configPath, &req, approvalTimeout)
+		response, err = waitForBrowserEnrollmentApproval(ctx, api, &cfg, *configPath, &req, approvalTimeout, options.ApprovalNotice)
 	} else {
 		cfg.PendingDirectRegistration = &client.PendingDirectRegistration{Origin: firstControlPlaneURL(cfg), Request: req}
 		if err := client.SaveConfig(*configPath, cfg); err != nil {
