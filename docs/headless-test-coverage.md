@@ -4919,3 +4919,14 @@ later recovery attempt. Component regressions cover overlapping IPv4/IPv6 route
 lifecycles, partial application, and recovery after a failed rollback. Local
 Windows checks do not execute these Darwin-only tests; hosted verification is
 still required. Remote exit-peer underlay coverage remains a separate open gap.
+
+Run `34698630395` is now terminal failure with the same 19 reports; the last
+macOS Intel repetition was cancelled without uploading a report. The subsequent
+[run for `92983ae`](https://github.com/endless-net/client/actions/runs/34701403560)
+started its native matrix. Its [container job](https://github.com/endless-net/client/actions/runs/34701403560/job/103575195348)
+failed during Go VCS status discovery before either container workload ran.
+The build step now registers only `$GITHUB_WORKSPACE` as a safe Git directory
+in the shell's own HOME and checks repository access before building. VCS
+stamping remains enabled. This addresses the suspected checkout/shell HOME
+mismatch; a successful subsequent container build and workload run are still
+required before HC-054 has native evidence.

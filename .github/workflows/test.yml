@@ -361,6 +361,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Configure trust in the shell's HOME too: the checkout action's
+          # container HOME may differ from the one used by Go's VCS stamping.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git status --porcelain > /dev/null
           go build -o "$RUNNER_TEMP/container-client" ./cmd/endlessnet-client
           go build -o "$RUNNER_TEMP/container-packetprobe" ./tools/packetprobe
           go test -c -o "$RUNNER_TEMP/container-tests" ./tests
