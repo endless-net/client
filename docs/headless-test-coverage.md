@@ -3062,6 +3062,17 @@ correction/completion additions. None of those changes is validated by this run.
 
 ## Next work
 
+The installed-service cached-startup scenario now has an explicit disconnected
+counterpart: after disconnected repair, stop the service, make control unavailable
+and start through the OS manager. Public IPC must retain disconnected intent and
+the same enrolled identity; fresh TCP traffic must remain denied and registration
+attempt counts unchanged. Restoring control must still leave traffic denied until
+the subsequent explicit connect. This protects the boundary of automatic cached
+bootstrap and runs in all eight installation jobs. Registration and endpoint
+refresh attempts are counted at the HTTP boundary, so unavailable responses
+cannot hide an attempt before request validation. Native evidence is pending;
+the connected-startup and disconnected-startup claims are separate.
+
 Installed startup without control exposed a Client startup gap: the online
 iteration returned on trust/heartbeat/map request failure before configuring
 WireGuard. The long-running agent now attempts one cached bootstrap before its

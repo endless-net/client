@@ -172,7 +172,9 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	registrationRequests := func() int {
 		count := 0
 		for _, e := range s.Events() {
-			if e.Kind == "registration-request" {
+			// Count at the HTTP boundary, including requests rejected while
+			// unavailable before registration validation can record an event.
+			if e.Kind == "request" && (e.Path == "POST /nodes/register" || strings.HasPrefix(e.Path, "PATCH /nodes/") && strings.HasSuffix(e.Path, "/endpoint")) {
 				count++
 			}
 		}
@@ -194,6 +196,15 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	t.Log("repair: missing executable with disconnected intent")
 	repairMissingBinary()
 	assertDisconnected("disconnected repair after executable loss")
+	stop(t)
+	s.SetUnavailable(true)
+	start(t)
+	assertDisconnected("disconnected startup without control")
+	if registrationRequests() != before {
+		t.Fatal("disconnected startup without control attempted registration or refresh")
+	}
+	s.SetUnavailable(false)
+	assertDisconnected("disconnected intent after control becomes available")
 	if registrationRequests() != before {
 		t.Fatal("failed IPC commands or disconnected restart attempted registration or refresh")
 	}
