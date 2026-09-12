@@ -143,6 +143,22 @@ product scope are different conditions; neither is a successful skip.
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
+## Linux exit LAN policy increment — 2026-09-12
+
+The Linux branch of `TestControlPlaneExitProvider` now adds HC-037 observations
+against a separate local LAN namespace at a private IPv4 address. Both TCP and
+UDP must work before blocking. The real CLI persists `--exit-lan-policy block`
+and the source Client restarts with the same node identity: LAN exchanges must
+then fail while the external exit target remains reachable over both protocols.
+Withdrawing the approved default route must restore LAN access and deny exit
+traffic; restoring it must reapply LAN denial. Persisting `allow` and restarting
+must restore LAN and retain exit traffic. The LAN listener is independently
+checked before source-Client assertions.
+
+Native CI execution is pending. This exercises the existing Linux firewall
+implementation only; IPv6 LAN and Windows/macOS enforcement remain uncovered.
+The non-Linux exit-provider unsupported result is not evidence for HC-037.
+
 ## Join-token expiry increment — 2026-09-12
 
 `TestControlPlaneJoinTokenExpiryRecovery` adds a separate HC-015 native root

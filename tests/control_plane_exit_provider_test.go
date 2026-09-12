@@ -178,4 +178,57 @@ func testLinuxExitProvider(t *testing.T) {
 		return v.NodeID == states[1].NodeID && v.WireGuard != nil && v.WireGuard.OK && v.Agent != nil && v.Agent.LastError == ""
 	})
 	reachable()
+	// HC-037: keep the local LAN independent from the external exit target.
+	{
+		lanNamespace, lanLink := attachRouterResource(t, namespaces[0])
+		namespaceCommand(t, "-n", lanNamespace, "addr", "add", "10.88.0.20/32", "dev", "lo")
+		namespaceCommand(t, "-n", namespaces[0], "route", "add", "10.88.0.20/32", "via", "198.18.98.20", "dev", lanLink)
+		lanServer := exec.Command("ip", "netns", "exec", lanNamespace, binary, "--mode", "serve", "--address", "10.88.0.20:24001")
+		if err := lanServer.Start(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = lanServer.Process.Kill(); _ = lanServer.Wait() })
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		err := testclient.Await(ctx, func() bool {
+			return applicationProbe(t, binary, lanNamespace, "tcp", "10.88.0.20:24001") &&
+				applicationProbe(t, binary, lanNamespace, "udp", "10.88.0.20:24001")
+		})
+		cancel()
+		if err != nil {
+			t.Fatal("local LAN application did not start")
+		}
+		lanAccess := func(want bool) {
+			t.Helper()
+			for _, protocol := range []string{"tcp", "udp"} {
+				if got := applicationProbe(t, binary, namespaces[0], protocol, "10.88.0.20:24001"); got != want {
+					t.Fatalf("exit LAN policy: protocol=%s reachable=%t want=%t", protocol, got, want)
+				}
+			}
+		}
+		setPolicy := func(policy string) {
+			t.Helper()
+			nodes[0].Stop()
+			if _, err := nodes[0].Run("sync", "--config", nodes[0].Config, "--offline", "--exit-lan-policy", policy); err != nil {
+				t.Fatal("could not persist exit LAN preference through the CLI")
+			}
+			nodes[0].Start()
+			nodes[0].AwaitStatus(func(v ipc.StatusResponse) bool {
+				return v.NodeID == states[0].NodeID && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK &&
+					v.Agent != nil && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == ""
+			})
+		}
+		lanAccess(true)
+		setPolicy("block")
+		lanAccess(false)
+		reachable()
+		apply(false)
+		blocked()
+		lanAccess(true)
+		apply(true)
+		lanAccess(false)
+		reachable()
+		setPolicy("allow")
+		lanAccess(true)
+		reachable()
+	}
 }
