@@ -2773,6 +2773,18 @@ public status observation. Those increments require their own exact-source CI.
 
 ## Next work
 
+HC-052/053 now has a 34th common root, `TestControlPlaneCLIIPCFailureBoundary`.
+It drives the shipping CLI over an actual Unix socket or Windows named pipe
+against an HTTP/NDJSON contract fault fixture, without starting an agent. A
+stalled pre-hello response, empty EOF and malformed event must each produce exit
+1, empty stdout and nonempty stderr within the outer deadline. The stalled case
+must honor the explicit two-second CLI deadline; the fixture must have observed
+the public events request so a dial/setup failure cannot satisfy the test.
+This proves CLI consumer behavior only, not agent authorization or recovery.
+The existing real-agent subscription/restart scenario remains separate. CI
+discovers this root in all 24 native jobs and requires the same source inventory;
+the new total is 34 x 3 x 8 = 816 root outcomes. Native evidence is pending.
+
 Windows IPC peer inspection now locks the goroutine to one OS thread for
 impersonation, thread-token inspection and reversion. Previously it could migrate
 between those thread-scoped operations. This is a source-level correctness fix:
