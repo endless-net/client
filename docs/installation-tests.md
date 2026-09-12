@@ -26,10 +26,13 @@ The suite checks:
    service restart.
 6. Public CLI enrollment against the contract testserver, followed by actual
    IPv4 TCP traffic through the installed agent and a WireGuard reference peer.
-7. Reinstallation of the same artifact while connected and while explicitly
+7. Replacement by a higher-version artifact built from the same exact source
+   commit while connected. Both the CLI and running service must report the new
+   version while preserving identity, intent and real TCP traffic.
+8. Reinstallation of the upgraded artifact while connected and while explicitly
    disconnected, preserving identity, trust and connection intent; explicit
    reconnect must restore real TCP traffic.
-8. Removal of the service and live network interface; Debian package files must
+9. Removal of the service and live network interface; Debian package files must
    also disappear. Ordinary removal retains enrolled state on every platform,
    and IPC must no longer respond. A separate explicit state-removal operation
    (`dpkg --purge`, `--remove-state`, or `-RemoveState`) must remove the state
@@ -76,9 +79,11 @@ and Windows token/pipe authorization remain separate work.
 - This repository owns future signed/notarized macOS packaging and additional
   Linux distributions beyond the Ubuntu amd64/arm64 matrix above.
 - Client-owned gaps include installation under an unauthorized local user,
-  interrupted installation, replacement with a different artifact version,
-  full state removal and an actual machine reboot with late network availability.
-  Service restart and same-artifact reinstall do not establish those outcomes.
+  interrupted or incompatible-state upgrades, rollback, insufficient disk
+  space, full identity reset and an actual machine reboot with late network
+  availability. The CI version pair differs only in embedded version metadata,
+  so it proves native package/service replacement rather than compatibility
+  between two independently released source revisions.
 - [system-tests, main](https://github.com/endless-net/system-tests/tree/main) owns
   backend enrollment, two-client tunnel traffic, DNS and route acceptance
   against immutable artifact manifests. The Client-owned installed-service TCP

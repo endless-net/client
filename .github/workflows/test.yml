@@ -130,9 +130,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/install-test"
-          go build -o "$RUNNER_TEMP/install-test/endlessnet-client.exe" ./cmd/endlessnet-client
+          tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*')"
+          initial_version="${tag#v}"
+          upgrade_version="${initial_version}+ci.1"
+          go build -ldflags "-X main.version=$initial_version -X main.commit=$GITHUB_SHA" -o "$RUNNER_TEMP/install-test/endlessnet-client.exe" ./cmd/endlessnet-client
+          go build -ldflags "-X main.version=$upgrade_version -X main.commit=$GITHUB_SHA" -o "$RUNNER_TEMP/install-test/endlessnet-client-upgrade.exe" ./cmd/endlessnet-client
           go build -o "$RUNNER_TEMP/install-test/packetprobe.exe" ./tools/packetprobe
           go test -c -o "$RUNNER_TEMP/install-test/installation.test.exe" ./tests
+          echo "ENDLESSNET_TEST_UPGRADE_BINARY=$RUNNER_TEMP/install-test/endlessnet-client-upgrade.exe" >> "$GITHUB_ENV"
+          echo "ENDLESSNET_TEST_INITIAL_VERSION=$initial_version" >> "$GITHUB_ENV"
+          echo "ENDLESSNET_TEST_UPGRADE_VERSION=$upgrade_version" >> "$GITHUB_ENV"
       - name: Build Debian package using the existing release version
         if: runner.os == 'Linux'
         shell: bash
@@ -144,6 +151,11 @@ jobs:
           [ "${#deb[@]}" -eq 1 ]
           [ "$(dpkg-deb --field "${deb[0]}" Architecture)" = "$(dpkg --print-architecture)" ]
           echo "ENDLESSNET_TEST_DEB=${deb[0]}" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/install-test/upgrade"
+          VERSION="${tag#v}+ci.1" OUTPUT_DIR="$RUNNER_TEMP/install-test/upgrade" bash scripts/build-deb.sh "$(go env GOARCH)"
+          upgrade_deb=("$RUNNER_TEMP/install-test/upgrade/"*.deb)
+          [ "${#upgrade_deb[@]}" -eq 1 ]
+          echo "ENDLESSNET_TEST_UPGRADE_DEB=${upgrade_deb[0]}" >> "$GITHUB_ENV"
       - name: Prepare signed Wintun dependency
         if: runner.os == 'Windows'
         shell: pwsh
@@ -166,8 +178,12 @@ jobs:
           sudo env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
             ENDLESSNET_INSTALL_TEST=1 \
             ENDLESSNET_TEST_BINARY="$RUNNER_TEMP/install-test/endlessnet-client.exe" \
+            ENDLESSNET_TEST_UPGRADE_BINARY="$ENDLESSNET_TEST_UPGRADE_BINARY" \
+            ENDLESSNET_TEST_INITIAL_VERSION="$ENDLESSNET_TEST_INITIAL_VERSION" \
+            ENDLESSNET_TEST_UPGRADE_VERSION="$ENDLESSNET_TEST_UPGRADE_VERSION" \
             ENDLESSNET_PACKET_PROBE="$RUNNER_TEMP/install-test/packetprobe.exe" \
             ENDLESSNET_TEST_DEB="${ENDLESSNET_TEST_DEB:-}" \
+            ENDLESSNET_TEST_UPGRADE_DEB="${ENDLESSNET_TEST_UPGRADE_DEB:-}" \
             "$RUNNER_TEMP/install-test/installation.test.exe" \
             -test.run '^TestInstalledClient$' -test.v -test.timeout 8m \
             2>&1 | tee "$RUNNER_TEMP/install-test/results.log"

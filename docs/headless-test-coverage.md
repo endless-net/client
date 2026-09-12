@@ -136,7 +136,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-057 | C export/reuse, retention and IPv4 UDP flow consent/retry/expiry passed all 24 native repetitions at `a9a1a21`; D FlowConsentAndIdempotency; U flow tests | Crash recovery, comprehensive redaction and remaining retention/flow variants |
 | HC-058 | L version and runtime platform; native IPC negotiation/restart passed all 24 repetitions at `a9a1a21` | Artifact mismatch and exact release identity |
 | HC-059 | No qualified independent client-endorsed node-admission evidence; server trust/recovery tests belong to HC-021 | BR-05 / Q-05 product decision: independently signed node admission, unsigned-node denial, signing-device loss and recovery |
-| HC-060 | L same-source installation | Updating existing enrolled installation, artifact gates and restored access |
+| HC-060 | L/C two-version native package/service upgrade preserves the enrolled identity, connected intent and real traffic on every installation runner | Qualify the new upgrade assertions; incompatible-state rollback and insufficient space/privileges |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
 | HC-062 | L missing-executable repair preserves identity and connected/disconnected traffic intent on all eight installation runners at `0cf6d73` | Other installation damage and interrupted-repair variants; full identity reset is separate |
 | HC-063 | U local-forget/recovery tests; local forget deliberately retains identity | Full identity-reset product/interface gap; do not infer it from local forget |
@@ -4738,3 +4738,15 @@ the CLI path and require the documented unsupported result before registration.
 IPv6 exit provision, HA and observation against a public Internet service remain
 separate acceptance work. The pending common inventory is now 50 roots / 1,200
 native outcomes across the 24-run matrix.
+
+The native installation suite now adds a bounded HC-060 upgrade assertion on
+all eight installation runners. CI builds two unpublished artifacts from the
+same exact source commit with distinct embedded versions. Linux installs the
+second artifact through Debian's real upgrade hooks; macOS and Windows replace
+the stopped service binary through their generated service-install paths. The
+test requires both the public CLI and live service IPC to report the new version,
+while node identity, signed-map trust, connected intent and fresh TCP traffic
+remain unchanged. Subsequent repair and reinstall operations use the upgraded
+artifact. This establishes native replacement behavior without claiming
+compatibility between different source revisions, rollback, interrupted
+upgrades, low-disk behavior or immutable release-manifest acceptance.

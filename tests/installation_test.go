@@ -26,23 +26,35 @@ func TestInstalledClient(t *testing.T) {
 		t.Fatal("installation tests require a GitHub-hosted disposable runner")
 	}
 	source := requiredPath(t, "ENDLESSNET_TEST_BINARY")
+	upgradeSource := requiredPath(t, "ENDLESSNET_TEST_UPGRADE_BINARY")
+	initialVersion := strings.TrimSpace(os.Getenv("ENDLESSNET_TEST_INITIAL_VERSION"))
+	upgradeVersion := strings.TrimSpace(os.Getenv("ENDLESSNET_TEST_UPGRADE_VERSION"))
+	if initialVersion == "" || upgradeVersion == "" || initialVersion == upgradeVersion {
+		t.Fatal("installation test requires distinct initial and upgrade versions")
+	}
+	installSource := source
 	artifacts := t.TempDir()
 	var binary, configPath string
-	var start, stop, reinstall, restart, uninstall, removeState func(*testing.T)
+	var start, stop, reinstall, upgrade, restart, uninstall, removeState func(*testing.T)
 	var removed func() bool
 	switch runtime.GOOS {
 	case "linux":
 		binary = "/opt/endlessnet/bin/endlessnet-client"
 		configPath = "/var/lib/endlessnet/client.json"
 		absent(t, binary, "/var/lib/endlessnet", "/lib/systemd/system/endlessnet-client.service")
-		deb := requiredPath(t, "ENDLESSNET_TEST_DEB")
-		reinstall = func(t *testing.T) { command(t, "dpkg", "--install", deb) }
+		currentDeb := requiredPath(t, "ENDLESSNET_TEST_DEB")
+		upgradeDeb := requiredPath(t, "ENDLESSNET_TEST_UPGRADE_DEB")
+		reinstall = func(t *testing.T) { command(t, "dpkg", "--install", currentDeb) }
+		upgrade = func(t *testing.T) {
+			currentDeb = upgradeDeb
+			command(t, "dpkg", "--install", currentDeb)
+		}
 		start = func(t *testing.T) { command(t, "systemctl", "start", "endlessnet-client") }
 		stop = func(t *testing.T) { command(t, "systemctl", "stop", "endlessnet-client") }
 		uninstall = func(t *testing.T) { command(t, "dpkg", "--remove", "endlessnet-client") }
 		removeState = func(t *testing.T) { command(t, "dpkg", "--purge", "endlessnet-client") }
 		t.Cleanup(func() { uninstall(t) })
-		command(t, "dpkg", "--install", deb)
+		command(t, "dpkg", "--install", currentDeb)
 		command(t, "systemctl", "start", "endlessnet-client")
 		command(t, "systemctl", "is-active", "--quiet", "endlessnet-client")
 		if got := strings.TrimSpace(string(command(t, "/usr/bin/endlessnet", "version"))); !strings.HasPrefix(got, "endlessnet-client ") {
@@ -63,6 +75,12 @@ func TestInstalledClient(t *testing.T) {
 		command(t, "install", "-m", "0755", source, binary)
 		command(t, binary, "service", "render-macos", "--output-dir", artifacts, "--debug=false")
 		reinstall = func(t *testing.T) { command(t, "sh", filepath.Join(artifacts, "ru.endlessnet.client-install.sh")) }
+		upgrade = func(t *testing.T) {
+			stop(t)
+			installSource = upgradeSource
+			copyPublicFile(t, installSource, binary)
+			reinstall(t)
+		}
 		start = reinstall
 		stop = func(t *testing.T) { command(t, "launchctl", "bootout", "system/ru.endlessnet.client") }
 		uninstall = func(t *testing.T) { command(t, "sh", filepath.Join(artifacts, "ru.endlessnet.client-uninstall.sh")) }
@@ -87,6 +105,12 @@ func TestInstalledClient(t *testing.T) {
 		command(t, binary, "service", "render-windows", "--output-dir", artifacts, "--debug=false")
 		reinstall = func(t *testing.T) {
 			command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(artifacts, "endlessnet-client-install.ps1"))
+		}
+		upgrade = func(t *testing.T) {
+			stop(t)
+			installSource = upgradeSource
+			copyPublicFile(t, installSource, binary)
+			reinstall(t)
 		}
 		start = func(t *testing.T) {
 			command(t, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; Start-Service endlessnet-client; (Get-Service endlessnet-client).WaitForStatus('Running', '00:00:30')")
@@ -161,7 +185,7 @@ func TestInstalledClient(t *testing.T) {
 			// Linux restores files from the same Debian package. The macOS and
 			// Windows service installers consume an already-staged core artifact.
 			if runtime.GOOS != "linux" {
-				copyPublicFile(t, source, binary)
+				copyPublicFile(t, installSource, binary)
 			}
 			reinstall(t)
 			// The fixture explicitly stopped the service before removing the
@@ -170,7 +194,7 @@ func TestInstalledClient(t *testing.T) {
 				start(t)
 			}
 		}
-		exerciseInstalledReinstall(t, s, binary, configPath, start, stop, reinstall, repair)
+		exerciseInstalledReinstall(t, s, binary, configPath, initialVersion, upgradeVersion, start, stop, reinstall, upgrade, repair)
 	}) {
 		t.FailNow()
 	}

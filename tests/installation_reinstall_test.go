@@ -20,10 +20,10 @@ import (
 	ipc "github.com/endless-net/client/ipc/v2"
 )
 
-// HC-003: reinstall the same artifact while enrolled. Version upgrades and
-// complete state removal require their own scenarios. Only the real CLI writes
+// HC-003/HC-060: upgrade and reinstall the native artifact while enrolled.
+// Complete state removal remains a separate scenario. Only the real CLI writes
 // enrollment state; assertions never inspect its private files or keys.
-func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, configPath string, start, stop, reinstall, repair func(*testing.T)) {
+func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, configPath, initialVersion, upgradeVersion string, start, stop, reinstall, upgrade, repair func(*testing.T)) {
 	t.Helper()
 	probe := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
 	network, join, err := s.AddNetwork("installed-client", "198.18.95.0/24")
@@ -71,7 +71,7 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	sameIdentity := func(v ipc.StatusResponse) bool {
 		return v.NodeID == initial.NodeID && v.NetworkID == initial.NetworkID && v.Hostname == initial.Hostname && v.OverlayIP == initial.OverlayIP && v.MapSigningTrustPresent && v.NodeCredentialPresent && v.CachedMapValid
 	}
-	connected := func(phase string) {
+	connected := func(phase string) ipc.StatusResponse {
 		t.Helper()
 		defer func() {
 			if !t.Failed() {
@@ -105,10 +105,16 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 		if err != nil {
 			t.Fatal("installed service did not restore real TCP traffic")
 		}
+		return v
 	}
 	var response ipc.ConnectResponse
 	request(t, binary, "connect", &response)
-	connected("initial connect")
+	initialConnected := connected("initial connect")
+	assertInstalledVersion(t, binary, initialVersion, initialConnected)
+	t.Log("upgrade: connected enrolled service")
+	upgrade(t)
+	upgraded := connected("connected version upgrade")
+	assertInstalledVersion(t, binary, upgradeVersion, upgraded)
 	t.Log("reinstall: connected enrolled service")
 	reinstall(t)
 	connected("connected reinstall")
@@ -221,6 +227,21 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	}
 	if created != 1 {
 		t.Fatal("reinstall created another enrollment")
+	}
+}
+
+func assertInstalledVersion(t *testing.T, binary, expected string, status ipc.StatusResponse) {
+	t.Helper()
+	expected = strings.TrimSpace(expected)
+	if expected == "" {
+		t.Fatal("installation test expected version is empty")
+	}
+	output := strings.Split(strings.ReplaceAll(string(command(t, binary, "version")), "\r\n", "\n"), "\n")
+	if len(output) == 0 || output[0] != "endlessnet-client "+expected {
+		t.Fatal("installed CLI did not report the expected artifact version")
+	}
+	if status.ServiceVersion != expected {
+		t.Fatal("running service did not report the expected upgraded version")
 	}
 }
 
