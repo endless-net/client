@@ -130,7 +130,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-051 | C signed two-host service DNS, actual host traffic, target isolation, host-set removal, approval loss and recovery passed all 24 repetitions at `92983ae`; U service discovery/runtime | Health, load distribution and connection-draining semantics require product decisions |
 | HC-052 | L/C bounded IPC waits; independent event subscriptions/cancellation/restart and real CLI listening-timeout exit passed all 24 repetitions at qualified `38050bc`; installed absent-service failure passed all eight runners | Remaining public readiness conditions, slow consumers and stalled native IPC |
 | HC-053 | L/C structured IPC; request validation, non-object rejection, body-size boundaries, subscribers and real CLI NDJSON events passed all 24 repetitions at qualified `38050bc`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
-| HC-054 | L/C Ubuntu container persistent state restart and ephemeral retirement/recreation with native IPv4 TCP passed at `cce41e6`; persistent IPv4/IPv6 TCP/UDP variants are now executable | Qualify expanded container variants; host/sidecar split, reduced capabilities, container network modes and orchestration lifecycle |
+| HC-054 | L/C Ubuntu container persistent state restart with native IPv4/IPv6 TCP/UDP and ephemeral retirement/recreation with IPv4 TCP passed at `169b09c` | Host/sidecar split, reduced capabilities, container network modes and orchestration lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C public diagnostics export with control-outage isolation and recovery passed all 24 repetitions at `92983ae`; U path diagnostics | Distinguish peer path, DNS and application failures through public commands |
 | HC-057 | C export/reuse, agent-crash recovery, retention and IPv4 UDP flow consent/retry/expiry; D FlowConsentAndIdempotency; U flow tests | Qualify expanded diagnostics root; comprehensive redaction and remaining retention/flow variants |
@@ -5280,3 +5280,15 @@ exactly one distinct Client. Both family leaves are mandatory in CI reports.
 Short tests, vet and lint pass. This extends the qualified IPv4 TCP scenario;
 native execution of the new variants is pending. Join-token expiry and provider
 token-lifecycle implementation are not established by this rotation scenario.
+
+### 2026-09-12: container IP and transport variants qualified
+
+[Container job 103587387308](https://github.com/endless-net/client/actions/runs/34706279754/job/103587387308)
+at source `169b09c91a010cf2c850a6bcd58c366de2b26d9c` passes
+`TestContainerWorkload` in 188.08 seconds. All four persistent-state-restart
+leaves (`ipv4/tcp`, `ipv4/udp`, `ipv6/tcp`, `ipv6/udp`) and the existing IPv4 TCP
+ephemeral-recreation leaf pass without skips. This qualifies the transport
+expansion after `cce41e6`, including its lifecycle, policy and endpoint-change
+checks inside Ubuntu 24.04 with NET_ADMIN and `/dev/net/tun`. Process restart
+inside the same container does not establish actual container recreation,
+sidecar integration, other network modes or orchestration lifecycle behavior.
