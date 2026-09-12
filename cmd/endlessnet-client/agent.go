@@ -468,6 +468,7 @@ func cmdAgent(args []string) error {
 		consecutiveFailures := 0
 		endpointState := endpointUpdateState{}
 		disconnectedLogged := false
+		cachedBootstrapAttempted := false
 		for {
 			var snapshot client.AgentSnapshot
 			var mapUnchanged bool
@@ -548,6 +549,21 @@ func cmdAgent(args []string) error {
 					}
 				}
 			}
+			iteration := agentIterationOptions{
+				ConfigPath: *configPath, StateOutput: *stateOutput,
+				ListenPort: *listenPort, Timeout: timeout, STUNTimeout: stunTimeout,
+				RelayTLSConfig: tlsConfig, Offline: *offline, MaxCacheAge: maxCacheAge,
+				WireGuard: wireGuard, WGInterface: firstNonEmpty(*wgInterface, "endlessnet"),
+				ProbeRTT: *probeRTT, FromRevision: streamFromRevision,
+			}
+			if err == nil && !skipForDisconnected && !skipForRecovery && !*offline && !*once && !cachedBootstrapAttempted {
+				cachedBootstrapAttempted = true
+				// Apply previously authorized state before control I/O. The normal
+				// iteration still runs and reports control failures as degraded.
+				if _, bootstrapErr := runAgentCachedBootstrap(ctx, iteration); bootstrapErr != nil {
+					log.Print("agent cached bootstrap unavailable; continuing online sync")
+				}
+			}
 			manualEndpoint := strings.TrimSpace(*endpoint) != "" || strings.TrimSpace(*endpointFile) != ""
 			if err == nil && !skipForDisconnected && !skipForRecovery && !*offline && manualEndpoint {
 				candidates, generated, candidateErr := agentEndpointCandidates(*endpoint, *endpointFile, *listenPort)
@@ -558,20 +574,7 @@ func cmdAgent(args []string) error {
 				}
 			}
 			if err == nil && !skipForDisconnected && !skipForRecovery {
-				snapshot, mapUnchanged, err = runAgentIteration(ctx, agentIterationOptions{
-					ConfigPath:     *configPath,
-					StateOutput:    *stateOutput,
-					ListenPort:     *listenPort,
-					Timeout:        timeout,
-					STUNTimeout:    stunTimeout,
-					RelayTLSConfig: tlsConfig,
-					Offline:        *offline,
-					MaxCacheAge:    maxCacheAge,
-					WireGuard:      wireGuard,
-					WGInterface:    firstNonEmpty(*wgInterface, "endlessnet"),
-					ProbeRTT:       *probeRTT,
-					FromRevision:   streamFromRevision,
-				})
+				snapshot, mapUnchanged, err = runAgentIteration(ctx, iteration)
 			}
 			if err == nil && !skipForDisconnected && !skipForRecovery && !*offline && !manualEndpoint {
 				discovery := wireGuard.LastEndpointDiscovery()
@@ -661,6 +664,22 @@ func cmdAgent(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return run(ctx)
+}
+
+func runAgentCachedBootstrap(ctx context.Context, opts agentIterationOptions) (client.AgentSnapshot, error) {
+	cfg, err := client.LoadConfig(opts.ConfigPath)
+	if err != nil {
+		return client.AgentSnapshot{}, err
+	}
+	if cfg.NodeCredential == "" || cfg.EnrollmentRecovery != nil {
+		return client.AgentSnapshot{}, errors.New("cached bootstrap requires an enrolled node outside recovery")
+	}
+	if err := client.ValidateConfigCurrentDevice(cfg); err != nil {
+		return client.AgentSnapshot{}, err
+	}
+	opts.Offline = true
+	snapshot, _, err := runAgentIteration(ctx, opts)
+	return snapshot, err
 }
 
 func runAgentIteration(ctx context.Context, opts agentIterationOptions) (client.AgentSnapshot, bool, error) {

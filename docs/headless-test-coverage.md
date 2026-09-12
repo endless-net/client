@@ -3062,6 +3062,28 @@ correction/completion additions. None of those changes is validated by this run.
 
 ## Next work
 
+Installed startup without control exposed a Client startup gap: the online
+iteration returned on trust/heartbeat/map request failure before configuring
+WireGuard. The long-running agent now attempts one cached bootstrap before its
+first online iteration, under the existing operation lock and after disconnected
+intent/recovery checks. It requires a node credential, current-device binding,
+verified signed cached map and the configured cache-age limit, and uses the same
+configuration/apply path as explicit offline mode. No ephemeral Relay credential
+is restored from cache. Normal online sync and terminal-credential handling still
+run; control failures still produce degraded status. Once/explicit-offline command
+semantics are unchanged. A failed cache bootstrap does not prevent online repair.
+
+The new short component test confirms that online sync fails while control is
+unavailable, but cached bootstrap retains the node and revision without any
+control request. It rejects modified signed content, a cache older than the
+configured limit and missing node credentials. This test uses component config
+fixtures and no real WireGuard device; it is not contract-only integration
+evidence. The existing eight-platform installed-service scenario remains the
+required proof of actual cached traffic, control recovery and disconnected
+intent. New native evidence is pending; the earlier Windows/macOS failures are
+not retroactively passing. No cache-age default, credential lifetime, protocol
+or version number changed.
+
 Run 34672491102 at source `d0fc32a9f7c9d0d97623953fbbab3f452790089a`
 exposed an installation-fixture sequencing error: Linux missing-executable repair
 reinstalled the Debian package after explicitly stopping the service, then waited
