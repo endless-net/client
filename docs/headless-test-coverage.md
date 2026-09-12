@@ -97,7 +97,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | C durable route-table off/auto passed three times on all eight native platforms; U configuration tests | Other public preferences and live mutation variants |
 | HC-020 | C NetworkSelectionBoundary passed all 24 native repetitions: enrolled network listing/selection, disconnected response before/after restart and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
-| HC-021 | C TLS trust/hostname, unchanged-key intent/traffic, connected/disconnected ordinary and interrupted map-signing rotation, and changed-key native traffic passed all 24 repetitions at qualified source `4f117a0` | Certificate expiry and remaining origin variants |
+| HC-021 | C TLS trust/hostname, unchanged-key intent/traffic, connected/disconnected ordinary and interrupted map-signing rotation, and changed-key native traffic passed all 24 repetitions at qualified source `4f117a0`; expired/not-yet-valid TLS rejection before enrollment and after enrolled restart, followed by recovery, pass in all 19 available `c5bd840` reports | Complete current-source qualification; remaining origin variants and existing-session certificate lifetime semantics |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
@@ -4950,3 +4950,13 @@ every platform and repetition. A passing DNS root with any listener/upstream/
 truncation combination absent is rejected. Verifier regressions omit each leaf
 in turn for every platform identifier and accept the complete set. This enforces
 the audited DNS inventory without adding duplicate network scenarios.
+
+The HC-021 summary likewise no longer lists TLS expiry as an unimplemented
+variant. The 19 available `c5bd840` reports contain all four TLS validity leaves
+as PASS (76 leaves): expired and not-yet-valid certificates, both before
+enrollment and on a new connection after an enrolled agent restart. The source
+asserts rejection before control HTTP, retained identity/intent, recovery after
+a valid certificate is restored, and exactly one enrollment. It does not claim
+retroactive invalidation of an already established TLS connection. These four
+leaves are now mandatory in every platform report, with omission regressions
+for each leaf. Current-source native qualification remains pending.

@@ -98,13 +98,22 @@ func TestRequireBothLinuxSubnetRouterModes(t *testing.T) {
 }
 
 func TestRequireEveryDNSWireVariant(t *testing.T) {
-	names := []string{"TestControlPlaneDNSWireRecovery"}
 	leaves := []string{
 		"udp4/127.0.0.1/complete-udp", "udp4/127.0.0.1/truncated-udp",
 		"udp4/::1/complete-udp", "udp4/::1/truncated-udp",
 		"udp6/127.0.0.1/complete-udp", "udp6/127.0.0.1/truncated-udp",
 		"udp6/::1/complete-udp", "udp6/::1/truncated-udp",
 	}
+	checkRequiredLeaves(t, "TestControlPlaneDNSWireRecovery", leaves)
+}
+
+func TestRequireEveryTLSValidityVariant(t *testing.T) {
+	checkRequiredLeaves(t, "TestControlPlaneTLSTrustBoundary", []string{"expired", "not-yet-valid", "enrolled-expired", "enrolled-not-yet-valid"})
+}
+
+func checkRequiredLeaves(t *testing.T, root string, leaves []string) {
+	t.Helper()
+	names := []string{root}
 	for _, platform := range platforms {
 		required := requiredPlatformSubtests(platform, names)
 		for missing := -1; missing < len(leaves); missing++ {

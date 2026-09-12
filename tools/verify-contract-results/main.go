@@ -117,6 +117,11 @@ func requiredPlatformSubtests(platform string, names []string) []string {
 			}
 		}
 	}
+	if slices.Contains(names, "TestControlPlaneTLSTrustBoundary") {
+		for _, validity := range []string{"expired", "not-yet-valid", "enrolled-expired", "enrolled-not-yet-valid"} {
+			required = append(required, "TestControlPlaneTLSTrustBoundary/"+validity)
+		}
+	}
 	return required
 }
 
