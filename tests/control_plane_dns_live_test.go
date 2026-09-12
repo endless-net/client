@@ -220,6 +220,18 @@ func assertSystemDNSAddress(t *testing.T, binary, name, expected string) {
 			stub := strings.Contains(string(contents), "127.0.0.53") || strings.Contains(link, "stub-resolv.conf")
 			t.Logf("system resolver diagnostic: probe_exit=%d probe_outcome=%s resolvectl_query_ok=%t systemd_stub=%t", probeExit, probeOutcome, managerOK, stub)
 		}
+		if runtime.GOOS == "windows" {
+			managerCtx, managerCancel := context.WithTimeout(t.Context(), 5*time.Second)
+			quotedName := strings.ReplaceAll(name, "'", "''")
+			resolveScript := "$r=Resolve-DnsName -Name '" + quotedName + "' -Type A -DnsOnly -NoHostsFile -ErrorAction Stop; if(-not ($r | Where-Object {$_.IPAddress})){exit 2}"
+			managerOK := exec.CommandContext(managerCtx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", resolveScript).Run() == nil
+			managerCancel()
+			ruleCtx, ruleCancel := context.WithTimeout(t.Context(), 5*time.Second)
+			ruleScript := "$r=Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like 'EndlessNet-*'}; if(-not $r){exit 2}"
+			rulePresent := exec.CommandContext(ruleCtx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", ruleScript).Run() == nil
+			ruleCancel()
+			t.Logf("system resolver diagnostic: probe_exit=%d probe_outcome=%s windows_dns_api_ok=%t nrpt_present=%t", probeExit, probeOutcome, managerOK, rulePresent)
+		}
 		t.Fatal("system resolver did not resolve the published Client DNS name")
 	}
 	if strings.TrimSpace(string(output)) != expected {
