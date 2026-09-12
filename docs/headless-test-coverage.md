@@ -2500,6 +2500,32 @@ belong to HC-021. Installation privilege failures, interrupted installation, act
 OS reboot and other open HC variants are not qualified by this green run. Full
 HC-001–HC-065 completion remains unproven.
 
+## Interrupted rotation matrix: complete failure evidence
+
+Run [34661999142](https://github.com/endless-net/client/actions/runs/34661999142)
+tested source `efcf82bf4792571fea6c5da638932b11621b40a9` and completed with failure.
+All 24 native reports contain the same 33 root scenarios: **768 PASS, 24 FAIL,
+zero SKIP**. Every report failed only `TestControlPlaneMapSigningRotation`.
+Its connected and disconnected ordinary rotation subcases passed in all reports;
+both interrupted subcases failed in all reports (48 passing and 48 failing child
+outcomes, counted separately from the root totals).
+
+All eight installation jobs, the three OS verification jobs and the separate
+Linux control-plane job passed. The required aggregate
+[verify job](https://github.com/endless-net/client/actions/runs/34661999142/job/103470373394)
+failed. Optional external STUN compatibility was skipped and contributes no
+qualification evidence. This source is not qualified for publication.
+
+The interruption fixture returned inconsistent public-error body/header request
+IDs, as described below. Fix `a53850f3d83b5df67cc8d556d21e9d055c8cb027` makes
+those responses contract-valid; it still requires a successful hosted run.
+The four direct-traffic roots passed on every runner, including their added
+post-rotation IPv4/IPv6 TCP/UDP/ICMP checks. This bounded execution evidence does
+not override the failed source gate or establish interrupted recovery.
+
+This run predates the configuration symlink ownership/storage changes and Unix
+SIGTERM shutdown assertion. Their results must come from a later source matrix.
+
 ## Next work
 
 HC-005 foreground shutdown now has an explicit Unix SIGTERM path: the agent's
