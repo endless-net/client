@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	api "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	ipc "github.com/endless-net/client/ipc/v2"
@@ -94,6 +95,50 @@ func TestControlPlaneTLSTrustBoundary(t *testing.T) {
 	initial := n.AwaitStatus(func(v ipc.StatusResponse) bool {
 		return v.NodeID != "" && v.NodeCredentialPresent && v.CachedMapValid
 	})
+	for _, tc := range []struct {
+		name        string
+		from, until time.Duration
+	}{
+		{"enrolled-expired", -2 * time.Hour, -time.Hour},
+		{"enrolled-not-yet-valid", time.Hour, 2 * time.Hour},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Stop closes established TLS connections: this checks a new handshake
+			// after restart, not retroactive rejection of an existing session.
+			n.Stop()
+			now := time.Now()
+			if err := s.SetTLSCertificateValidity(now.Add(tc.from), now.Add(tc.until)); err != nil {
+				t.Fatal(err)
+			}
+			before := len(s.Events())
+			n.Start()
+			degraded := n.AwaitStatus(func(v ipc.StatusResponse) bool {
+				return v.NodeID == initial.NodeID && v.NetworkID == initial.NetworkID &&
+					v.NodeCredentialPresent && v.CachedMapValid && !v.UserDisconnected &&
+					v.DesiredState == ipc.DesiredConnected && v.State == ipc.StateDegraded
+			})
+			if len(s.Events()) != before {
+				t.Fatal("enrolled client reached control HTTP through an invalid TLS lifetime")
+			}
+			if err := s.UpdateMap(initial.NodeID, func(m *api.NetworkMapSnapshot) {}); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.SetTLSCertificateValidity(time.Now().Add(-time.Minute), time.Now().Add(time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+			// Recovery must happen in the running agent without a new enrollment
+			// or explicit trust override, and consume the newer signed map.
+			n.AwaitStatus(func(v ipc.StatusResponse) bool {
+				return v.NodeID == initial.NodeID && v.NetworkID == initial.NetworkID &&
+					v.NodeCredentialPresent && v.CachedMapValid && !v.UserDisconnected &&
+					v.DesiredState == ipc.DesiredConnected && v.State != ipc.StateDegraded &&
+					v.MapRevision > degraded.MapRevision
+			})
+		})
+		if t.Failed() {
+			t.FailNow()
+		}
+	}
 	n.Stop()
 	n.Start()
 	n.AwaitStatus(func(v ipc.StatusResponse) bool {

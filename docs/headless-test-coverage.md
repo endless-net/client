@@ -81,7 +81,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-002 | L installed CLI version | Artifact/dependency failure paths |
 | HC-003 | L noninteractive installation and enrolled same-artifact reinstall on all eight runners, preserving identity, intent and real TCP access | Interrupted installation and artifact replacement variants |
 | HC-004 | L real service and IPC; stopped-service read/mutation/subscription failure and same-identity/intent recovery passed all eight installation runners at `38050bc` | Local authorization and remaining unavailable-service variants |
-| HC-005 | C SingleAgentOwnership including lexical/file-symlink aliases, concurrent duplicate rejection and successor startup passed all 24 repetitions at `4f117a0`; Unix SIGTERM requires clean exit | Hard-link aliases, concurrent startup without an existing owner and remaining termination variants |
+| HC-005 | C SingleAgentOwnership including lexical/file-symlink aliases, concurrent duplicate rejection and successor startup passed all 24 repetitions at `4f117a0`; concurrent startup without an existing owner, winner sync and cleanup passed all 24 repetitions at `1f8df62`; Unix SIGTERM requires clean exit | Hard-link aliases and remaining termination variants |
 | HC-006 | L service restart without interactive login; connected cached-map TCP startup without control and later control recovery passed all eight installation runners at `0cf6d73` | Actual machine reboot and other late-network availability variants |
 | HC-007 | C BrowserEnrollment | Client account binding and completion/error variants against the contract testserver |
 | HC-008 | C BrowserEnrollment; expiry recovery on six runners; pending CLI interruption/resume and active rejection/reapproval passed all 24 repetitions on eight native runners | Interactive/server-side cancellation and foreign poll authorization |
@@ -3150,6 +3150,24 @@ the full source is not yet qualified. Further coverage and validation remain
 owned by `endless-net/client` on `main`.
 
 ## Next work
+
+### Enrolled client TLS lifetime recovery: native validation pending
+
+`TestControlPlaneTLSTrustBoundary` now adds `enrolled-expired` and
+`enrolled-not-yet-valid`. Each stops the real enrolled agent, presents a leaf
+with an invalid lifetime under the already trusted CA, and starts the agent
+again. Public IPC must report the original node/network, credential presence,
+valid cached map, connected intent and degraded state. The participant's HTTP
+transcript must remain unchanged before the valid certificate is restored.
+After restoration, the same running agent must clear degraded state and consume
+a newer signed map without trust override or another enrollment.
+
+This extends HC-021/HC-030 at the CLI/IPC/TLS boundary. It checks new handshakes
+after restart, not rejection of an already established TLS session or actual
+dataplane continuity. The existing native contract matrix invokes this root on
+all eight runners with three repetitions. Native results for these additions
+remain pending; existing passing TLS lifetime leaves only prove the earlier
+registration-time checks. No Client private state or backend runtime is read.
 
 ### Completed matrix at 1f8df62: endpoint and startup race verified
 
