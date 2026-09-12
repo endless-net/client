@@ -120,11 +120,25 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 		n.Stop()
 		func() {
 			ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
-			defer cancel()
+			finished := make(chan struct{}, 2)
+			defer func() {
+				cancel()
+				timer := time.NewTimer(5 * time.Second)
+				defer timer.Stop()
+				for range 2 {
+					select {
+					case <-finished:
+					case <-timer.C:
+						t.Error("startup race cleanup did not reap both processes")
+						return
+					}
+				}
+			}()
 			start := make(chan struct{})
 			results := make(chan bool, 2)
 			for range 2 {
 				go func() {
+					defer func() { finished <- struct{}{} }()
 					args := []string{"agent", "--config", n.Config, "--wg-interface", n.Interface, "--interval", "100ms", "--timeout", "300ms"}
 					if runtime.GOOS == "windows" {
 						args = append(args, "--ipc-pipe", n.Pipe)
@@ -153,9 +167,17 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal("startup race did not resolve within its deadline")
 			}
-			n.AwaitStatus(func(v ipc.StatusResponse) bool {
+			winner := n.AwaitStatus(func(v ipc.StatusResponse) bool {
 				return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid
 			})
+			if !disconnected {
+				if err := s.UpdateMap(id, func(m *api.NetworkMapSnapshot) {}); err != nil {
+					t.Fatal(err)
+				}
+				n.AwaitStatus(func(v ipc.StatusResponse) bool {
+					return v.NodeID == id && v.MapRevision > winner.MapRevision && v.CachedMapValid
+				})
+			}
 			select {
 			case <-results:
 				t.Fatal("startup race winner exited before ownership was released")

@@ -3156,7 +3156,9 @@ owner, in both connected and disconnected states. A barrier releases both
 launches; one must exit specifically with the configuration-ownership error,
 while the other serves public IPC with the original identity and intent. The
 winner is terminated, and a successor must acquire ownership and retain the
-same state. A shared IPC endpoint cannot supply a false-positive loser because
+same state. The connected winner must also consume a later signed map revision.
+Deferred cleanup cancels and waits for both process invocations even if an
+assertion terminates the test early. A shared IPC endpoint cannot supply a false-positive loser because
 address-in-use is not accepted. No private lock or identity file is read.
 This extends the existing mandatory `SingleAgentOwnership` root without adding
 a root count. Short tests, vet and lint pass; the actual startup race awaits
