@@ -2528,6 +2528,14 @@ SIGTERM shutdown assertion. Their results must come from a later source matrix.
 
 ## Next work
 
+HC-025/026 DNS wire recovery now injects SERVFAIL from the selected split
+resolver while keeping the global resolver healthy. UDP and TCP requests must
+preserve private-domain isolation, public and local-map resolution, and recover
+the split answer in the same proxy process when its upstream resumes success.
+Exact observed upstream question counts and domains detect fallback leakage.
+This is DNS response-error recovery, not packet loss, transport timeout, OS
+resolver setup or live map reload; eight-platform qualification remains pending.
+
 A short CLI regression reproduced false success when an event subscription
 timed out or reached EOF before receiving hello. The command now treats those
 unopened streams as errors while preserving successful listening-timeout exit

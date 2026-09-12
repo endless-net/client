@@ -36,8 +36,8 @@ func TestControlPlaneDNSWireRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	peer := api.Peer{ID: "dns-wire-peer", Hostname: "wire-peer", PublicKey: public, AllowedIPs: []string{"100.90.0.20/32", "fd7a:115c:a1e0::20/128"}}
-	globalAddress, globalQueries := dnsContractUpstream(t, [4]byte{203, 0, 113, 4})
-	splitAddress, splitQueries := dnsContractUpstream(t, [4]byte{198, 51, 100, 7})
+	globalAddress, globalQueries, _ := dnsContractUpstream(t, [4]byte{203, 0, 113, 4})
+	splitAddress, splitQueries, setSplitCode := dnsContractUpstream(t, [4]byte{198, 51, 100, 7})
 	for _, present := range []bool{true, false, true} {
 		var peers []api.Peer
 		if present {
@@ -64,6 +64,14 @@ func TestControlPlaneDNSWireRecovery(t *testing.T) {
 			assertDNSWire(t, transport, address, "public.example.", dnsmessage.RCodeSuccess, "203.0.113.4")
 			assertDNSWire(t, transport, address, "db.corp.test.", dnsmessage.RCodeSuccess, "198.51.100.7")
 			assertDNSWire(t, transport, address, "db.blocked.corp.test.", dnsmessage.RCodeServerFailure, "")
+			// A failing selected resolver must not leak the private query to the
+			// healthy global resolver. Recovery uses this same proxy process.
+			setSplitCode(dnsmessage.RCodeServerFailure)
+			assertDNSWire(t, transport, address, "db.corp.test.", dnsmessage.RCodeServerFailure, "")
+			assertDNSWire(t, transport, address, "public.example.", dnsmessage.RCodeSuccess, "203.0.113.4")
+			assertDNSWire(t, transport, address, "wire-peer.scenario.endlessnet.", peerCode, peerAddress)
+			setSplitCode(dnsmessage.RCodeSuccess)
+			assertDNSWire(t, transport, address, "db.corp.test.", dnsmessage.RCodeSuccess, "198.51.100.7")
 		}
 		stop()
 	}
@@ -72,10 +80,11 @@ func TestControlPlaneDNSWireRecovery(t *testing.T) {
 	for _, observation := range []struct {
 		queries []string
 		want    string
+		count   int
 	}{
-		{globalQueries(), "public.example."}, {splitQueries(), "db.corp.test."},
+		{globalQueries(), "public.example.", 12}, {splitQueries(), "db.corp.test.", 18},
 	} {
-		if len(observation.queries) != 6 {
+		if len(observation.queries) != observation.count {
 			t.Fatal("unexpected DNS upstream query count")
 		}
 		for _, query := range observation.queries {
@@ -199,7 +208,7 @@ func assertDNSWireType(t *testing.T, transport, address, name string, family dns
 	}
 }
 
-func dnsContractUpstream(t *testing.T, address [4]byte) (string, func() []string) {
+func dnsContractUpstream(t *testing.T, address [4]byte) (string, func() []string, func(dnsmessage.RCode)) {
 	t.Helper()
 	conn, err := net.ListenPacket("udp4", "127.0.0.1:0")
 	if err != nil {
@@ -208,6 +217,7 @@ func dnsContractUpstream(t *testing.T, address [4]byte) (string, func() []string
 	t.Cleanup(func() { _ = conn.Close() })
 	var mu sync.Mutex
 	var queries []string
+	code := dnsmessage.RCodeSuccess
 	go func() {
 		buffer := make([]byte, 4096)
 		for {
@@ -222,14 +232,18 @@ func dnsContractUpstream(t *testing.T, address [4]byte) (string, func() []string
 			q := query.Questions[0]
 			mu.Lock()
 			queries = append(queries, q.Name.String())
+			responseCode := code
 			mu.Unlock()
-			response := dnsmessage.Message{Header: dnsmessage.Header{ID: query.ID, Response: true}, Questions: query.Questions,
+			response := dnsmessage.Message{Header: dnsmessage.Header{ID: query.ID, Response: true, RCode: responseCode}, Questions: query.Questions,
 				Answers: []dnsmessage.Resource{{Header: dnsmessage.ResourceHeader{Name: q.Name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}, Body: &dnsmessage.AResource{A: address}}}}
+			if responseCode != dnsmessage.RCodeSuccess {
+				response.Answers = nil
+			}
 			wire, err := response.Pack()
 			if err == nil {
 				_, _ = conn.WriteTo(wire, remote)
 			}
 		}
 	}()
-	return conn.LocalAddr().String(), func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), queries...) }
+	return conn.LocalAddr().String(), func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), queries...) }, func(value dnsmessage.RCode) { mu.Lock(); defer mu.Unlock(); code = value }
 }
