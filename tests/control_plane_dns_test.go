@@ -185,17 +185,17 @@ func assertDNSWireType(t *testing.T, transport, address, name string, family dns
 		t.Fatal(err)
 	}
 	var reply []byte
-	attempts := 1
-	if transport == "udp" {
-		attempts = 3
-	}
+	// A signed map can become observable immediately before the replacement
+	// listener accepts its first packet. Keep this retry bounded and require the
+	// exact response below so convergence cannot turn a wrong answer into a pass.
+	attempts := 3
 	for attempt := range attempts {
 		reply, err = exchangeDNSWire(transport, address, wire)
 		if err == nil {
 			break
 		}
 		if attempt+1 < attempts {
-			time.Sleep(25 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
 	}
 	if err != nil {
