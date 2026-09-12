@@ -139,7 +139,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-060 | L/C two-version native package/service upgrade preserves the enrolled identity, connected intent and real traffic on every installation runner | Qualify the new upgrade assertions; incompatible-state rollback and insufficient space/privileges |
 | HC-061 | Publication gate, fixture tests and real GitHub API check | Supported update channels, artifact acceptance and update failures |
 | HC-062 | L missing-executable repair preserves identity and connected/disconnected traffic intent on all eight installation runners at `0cf6d73` | Other installation damage and interrupted-repair variants; full identity reset is separate |
-| HC-063 | U local-forget/recovery tests; local forget deliberately retains identity | Full identity-reset product/interface gap; do not infer it from local forget |
+| HC-063 | L/C explicit native state removal, fresh `NeedsEnrollment`, and reenrollment with a different node identity on every installation runner; local forget deliberately retains identity | Qualify the new assertions; standalone reset without uninstall and provider-side removal remain separate |
 | HC-064 | L native uninstall now checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal on all eight installation runners | Qualification of the new assertions; Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
@@ -4762,3 +4762,12 @@ is an explicit dependency of aggregate `verify`; it is separate from the common
 24-run native inventory so ordinary platform reports cannot turn absence of a
 container runtime into a successful skip. Host/sidecar separation, capability
 denial and orchestrator-specific volumes/restarts remain separate variants.
+
+The HC-063 installation path now continues after explicit state removal. It
+reinstalls the native service, requires public IPC to report `NeedsEnrollment`
+without a node, credential or cached map, and performs a new real CLI enrollment
+against the contract testserver. The replacement service must publish a new node
+identity and usable WireGuard runtime. Assertions never read deleted or recreated
+private state. The old provider-side node deliberately remains outside local
+reset semantics; a standalone reset command without uninstall is still a
+separate product/interface decision.

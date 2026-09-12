@@ -224,6 +224,46 @@ func TestInstalledClient(t *testing.T) {
 		if _, err := os.Stat(filepath.Dir(configPath)); !os.IsNotExist(err) {
 			t.Fatal("explicit state removal retained the client state directory")
 		}
+
+		// HC-063: reinstalling after explicit state removal must begin with no
+		// identity, and a new enrollment must create a different node. The old
+		// provider-side node is deliberately not treated as locally removable.
+		reinstall(t)
+		if runtime.GOOS == "linux" {
+			start(t)
+		}
+		fresh := waitStatus(t, binary)
+		if fresh.State != ipc.StateNeedsEnrollment || fresh.NodeID != "" || fresh.NodeCredentialPresent || fresh.CachedMapPresent {
+			t.Fatal("reinstalled client retained identity after explicit state removal")
+		}
+		replacementNetwork, replacementJoin, err := s.AddNetwork("reset-client", "198.18.96.0/24")
+		if err != nil {
+			t.Fatal(err)
+		}
+		trust, err := json.Marshal(s.Trust())
+		if err != nil {
+			t.Fatal(err)
+		}
+		trustFile := filepath.Join(t.TempDir(), "reset-public-trust.json")
+		if err := os.WriteFile(trustFile, trust, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		stop(t)
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		cmd := exec.CommandContext(ctx, binary, "up", "--config", configPath, "--server", s.URL(), "--network", replacementNetwork.Name, "--join-token-file", "-", "--hostname", "reset-node", "--map-signing-trust-file", trustFile, "--route-table", "auto")
+		cmd.Stdin = strings.NewReader(replacementJoin)
+		err = cmd.Run()
+		cancel()
+		if err != nil {
+			t.Fatal("reenrollment after explicit state removal failed (output withheld)")
+		}
+		start(t)
+		replacement := waitInstalledCondition(t, binary, "identity reset reenrollment", func(v ipc.StatusResponse) bool {
+			return v.NodeID != "" && v.NetworkID == replacementNetwork.ID && v.NodeCredentialPresent && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK
+		})
+		if replacement.NodeID == status.NodeID {
+			t.Fatal("identity reset reused the removed local node identity")
+		}
 	})
 }
 

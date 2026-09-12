@@ -36,8 +36,10 @@ The suite checks:
    also disappear. Ordinary removal retains enrolled state on every platform,
    and IPC must no longer respond. A separate explicit state-removal operation
    (`dpkg --purge`, `--remove-state`, or `-RemoveState`) must remove the state
-   directory. Windows and macOS service uninstallers retain the separately
-   staged core binary because they do not own its distribution artifact.
+   directory. Reinstallation must then return to `NeedsEnrollment`; a new CLI
+   enrollment must create a different node identity. Windows and macOS service
+   uninstallers retain the separately staged core binary because they do not
+   own its distribution artifact.
 
 While enrolled, the suite also stops the service in both connected and
 disconnected states. Real CLI `status`, `networks`, `diagnostics`, `connect` and
@@ -80,8 +82,9 @@ and Windows token/pipe authorization remain separate work.
   Linux distributions beyond the Ubuntu amd64/arm64 matrix above.
 - Client-owned gaps include installation under an unauthorized local user,
   interrupted or incompatible-state upgrades, rollback, insufficient disk
-  space, full identity reset and an actual machine reboot with late network
-  availability. The CI version pair differs only in embedded version metadata,
+  space, a standalone identity-reset command without uninstall and an actual
+  machine reboot with late network availability. The CI version pair differs
+  only in embedded version metadata,
   so it proves native package/service replacement rather than compatibility
   between two independently released source revisions.
 - [system-tests, main](https://github.com/endless-net/system-tests/tree/main) owns
