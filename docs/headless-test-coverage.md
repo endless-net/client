@@ -2455,6 +2455,17 @@ successful gate alone establishes full HC-001–HC-065 coverage.
 
 ## Next work
 
+The interrupted rotation test distinguishes recovery scheduling from tunnel
+intent: a connected agent retries automatically after the renewal fault is
+removed, while an explicitly disconnected agent suppresses background control
+work. In the disconnected subcase the operator repeats the same trust command
+after fault removal; it must resume the existing operation ID and complete
+without connecting. Pending recovery is asserted through `recovery.state`, since
+the top-level status can also reflect disconnected intent or an invalid old map.
+The previous statement that fault removal completes both
+subcases implicitly is superseded by this explicit retry boundary. No Client
+runtime behavior is changed by this test correction.
+
 The map-signing rotation root also covers a stable public
 `temporarily_unavailable` response on credential renewal for both initial intents.
 The Client must expose a recovering operation, retain its operation ID and node

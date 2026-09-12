@@ -64,7 +64,7 @@ func testMapSigningRotation(t *testing.T, disconnected, interrupted bool) {
 		awaitRecovery := func() {
 			t.Helper()
 			n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID == id && v.NodeCredentialPresent && v.Recovery != nil && v.Recovery.OperationID == operationID && v.State == ipc.StateRecovering
+				return v.NodeID == id && v.NodeCredentialPresent && v.Recovery != nil && v.Recovery.OperationID == operationID && v.Recovery.State == ipc.StateRecovering
 			})
 		}
 		awaitRecovery()
@@ -76,6 +76,14 @@ func testMapSigningRotation(t *testing.T, disconnected, interrupted bool) {
 			t.Fatal("interrupted trust recovery did not preserve its public operation identity")
 		}
 		s.ClearResponseFault(http.MethodPost, "/nodes/register")
+		if disconnected {
+			// Explicit disconnect suppresses background control-plane retries.
+			// An operator may resume the pending trust operation without connecting.
+			output, err = n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", newKey)
+			if err != nil || json.Unmarshal(output, &recovered) != nil || recovered.OperationID != operationID || recovered.Outcome != ipc.RecoveryOutcomeAlreadyApplied {
+				t.Fatal("explicit retry did not resume disconnected trust recovery")
+			}
+		}
 	}
 	awaitIntent := func() {
 		t.Helper()
