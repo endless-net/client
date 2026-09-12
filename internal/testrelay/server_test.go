@@ -98,7 +98,15 @@ func TestFixedPeerContractForwardingAndRecovery(t *testing.T) {
 	dial(s.Credential, false)
 	s.SetUnavailable(false)
 	exchange(dial(s.Credential, true))
-	authenticated, sent, received := s.Counts()
+	var authenticated, sent, received uint64
+	deadline := time.Now().Add(time.Second)
+	for {
+		authenticated, sent, received = s.Counts()
+		if authenticated >= 3 && sent == 2 && received >= 1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
 	if authenticated < 3 || sent != 2 || received < 1 {
 		t.Fatal("fixture forwarding observations missing")
 	}
