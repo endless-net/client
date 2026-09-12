@@ -2,9 +2,11 @@ package tests
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -18,6 +20,22 @@ import (
 // executing mutations. The transport is the real platform socket or named pipe.
 func TestControlPlaneIPCNegotiation(t *testing.T) {
 	s, n, id := controlScenario(t)
+	expectedCommit := os.Getenv("ENDLESSNET_TEST_COMMIT")
+	if raw, err := hex.DecodeString(expectedCommit); err != nil || len(raw) != 20 {
+		t.Fatal("native build identity requires the exact CI source commit")
+	}
+	versionOutput, err := n.Run("version")
+	if err != nil || !strings.Contains(string(versionOutput), "\ncommit: "+expectedCommit+"\n") || !strings.Contains(string(versionOutput), "\ntarget: "+runtime.GOOS+"/"+runtime.GOARCH+"\n") {
+		t.Fatal("CLI build identity does not match the CI source and native target (output withheld)")
+	}
+	assertBuildIdentity := func() {
+		t.Helper()
+		status, err := n.Status()
+		if err != nil || status.ServiceCommit != expectedCommit {
+			t.Fatal("running agent IPC build identity does not match the CI source")
+		}
+	}
+	assertBuildIdentity()
 	endpoint := n.Socket
 	if runtime.GOOS == "windows" {
 		endpoint = n.Pipe
@@ -105,6 +123,7 @@ func TestControlPlaneIPCNegotiation(t *testing.T) {
 	n.AwaitStatus(func(v ipc.StatusResponse) bool {
 		return v.NodeID == id && v.CachedMapValid && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
 	})
+	assertBuildIdentity()
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
 	n.AwaitStatus(func(v ipc.StatusResponse) bool {

@@ -2816,6 +2816,14 @@ has 36 roots and still requires its own 864-outcome matrix. This successful
 
 ## Next work
 
+HC-058 native builds now embed the exact GitHub source SHA in `main.commit`.
+The IPC-negotiation root requires the CLI `version` commit and OS/architecture
+to match that source and runner, and requires the running agent's public IPC
+ServiceCommit to match before and after restart. Missing/malformed expected SHA
+fails the scenario. This complements the artifact source/shard gate; it does not
+prove signed release provenance, installer metadata or different-version upgrade.
+No version number is changed. Native evidence for this identity check is pending.
+
 HC-057 native flow consent now runs all four IPv4/IPv6 TCP/UDP combinations.
 Each variant requires real application traffic, no reporting before consent,
 accepted public RPC windows matching the exact source/destination/protocol/port,
