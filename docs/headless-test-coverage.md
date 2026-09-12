@@ -2863,6 +2863,16 @@ coverage remains incomplete; this matrix does not close missing scenarios.
 
 ## Next work
 
+HC-028/HC-030 retained-session coverage is now executable in
+`TestControlPlaneNativeRelayTraffic` and `TestControlPlaneNativeRelayFailover`:
+TCP and UDP probe processes open their sockets through the primary Relay before
+any fault. The same connections must exchange fresh nonces after primary-to-backup
+failover, deny exchange during complete Relay unavailability, and recover after
+the primary returns. New-connection probes and public selected-path assertions
+remain independent requirements. Both IPv4 and IPv6 run in every native matrix
+job; source-specific CI evidence is pending. This does not prove uninterrupted
+delivery during the transition, direct/Relay switching or healthy-backup failback.
+
 `TestControlPlaneSingleAgentOwnership` now adds `crash-connected` and
 `crash-disconnected` variants: forcibly terminate the alias-started agent, then
 start its successor with the canonical configuration path and the same IPC

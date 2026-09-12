@@ -157,15 +157,19 @@ func runNativeRelayTraffic(t *testing.T, failover bool) {
 				selected()
 			}
 			reachable()
-			if backup != nil {
-				primary.SetUnavailable(true)
-				transport = backup
-				reachable()
-			}
+			// Establish both sockets through the primary Relay. Keep these exact
+			// probe processes and connections through failover and outage recovery.
 			tcp := startApplicationSession(t, binary, "", "tcp", address)
 			udp := startApplicationSession(t, binary, "", "udp", address)
 			tcp("ok")
 			udp("ok")
+			if backup != nil {
+				primary.SetUnavailable(true)
+				transport = backup
+				reachable()
+				tcp("ok")
+				udp("ok")
+			}
 			transport.SetUnavailable(true)
 			tcp("blocked")
 			udp("blocked")
@@ -178,6 +182,8 @@ func runNativeRelayTraffic(t *testing.T, failover bool) {
 			primary.SetUnavailable(false)
 			transport = primary
 			reachable()
+			tcp("ok")
+			udp("ok")
 			n.Stop()
 			n.Start()
 			reachable()
