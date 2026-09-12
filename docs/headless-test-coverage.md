@@ -90,8 +90,8 @@ product scope are different conditions; neither is a successful skip.
 | HC-011 | C ephemeral public IPC projection, native TCP access, abrupt process loss, terminal provider cleanup outcome and distinct replacement enrollment passed all 24 repetitions at `92983ae`; CLI join-token --ephemeral forwarding has a component test | Provider absence detection and asynchronous cleanup timing remain outside the Client boundary |
 | HC-012 | C real Client rejects invalid and preserves corrected hostname, endpoint, advertised-prefix and requested-tag registration inputs through browser approval; all four recovery leaves passed every native repeat at `90f8a28`; D request/proof tests | Effective tag/route authorization and additional platform attributes against published responses |
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
-| HC-014 | C user-session rotation, user-RPC denial, node-credential independence, reauthentication and same-node traffic/restart recovery passed all 24 repetitions at `92983ae`; U recovery matrix | Browser/OIDC refresh and other session-expiry timing variants |
-| HC-015 | C join-token rotation denies a new real Client, preserves the existing node credential, signed-map advancement, native traffic and cached restart during a control outage, then restores control and permits replacement-token enrollment; passed all 24 repetitions at `92983ae`; historical R revoked join key | Token expiry and expired-cache variants; node revocation remains separate |
+| HC-014 | C user-session rotation, user-RPC denial, node-credential independence, restart before reauthentication and same-node recovery with IPv4/IPv6 TCP/UDP passed all 24 repetitions at `f71587a`; U recovery matrix | Browser/OIDC refresh and other session-expiry timing variants |
+| HC-015 | C join-token rotation denies a new real Client, preserves the existing node credential, signed-map advancement, IPv4/IPv6 TCP/UDP traffic and cached restart during a control outage, then restores control and permits replacement-token enrollment; passed all 24 repetitions at `f71587a`; historical R revoked join key | Token expiry and expired-cache variants; node revocation remains separate |
 | HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners | Other paths/protocols and denied-access variants |
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
@@ -128,12 +128,12 @@ product scope are different conditions; neither is a successful skip.
 | HC-049 | No C/R evidence audited | Certificate/publication scope and frontend/backend TLS |
 | HC-050 | C signed cross-network machine grant with exact TCP scope, expiry, renewal, live TCP/UDP rights replacement and withdrawal passed all 24 repetitions at `90f8a28`; U two-engine direct/Relay direction and key-rotation tests | New recipient identity and real source-Client variants |
 | HC-051 | C signed two-host service DNS, actual host traffic, target isolation, host-set removal, approval loss and recovery passed all 24 repetitions at `92983ae`; U service discovery/runtime | Health, load distribution and connection-draining semantics require product decisions |
-| HC-052 | L/C bounded IPC waits; independent event subscriptions/cancellation/restart and real CLI listening-timeout exit passed all 24 repetitions at qualified `38050bc`; installed absent-service failure passed all eight runners | Remaining public readiness conditions, slow consumers and stalled native IPC |
+| HC-052 | L/C bounded IPC waits; independent event subscriptions/cancellation/restart and real CLI listening-timeout exit passed all 24 repetitions at qualified `38050bc`; unary timeout before headers/with partial body and same-endpoint recovery passed all 24 at `f71587a`; installed absent-service failure passed all eight runners | Remaining public readiness conditions and slow consumers |
 | HC-053 | L/C structured IPC; request validation, non-object rejection, body-size boundaries, subscribers and real CLI NDJSON events passed all 24 repetitions at qualified `38050bc`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
 | HC-054 | L/C Ubuntu container persistent state restart with native IPv4/IPv6 TCP/UDP and ephemeral retirement/recreation with IPv4 TCP passed at `169b09c` | Host/sidecar split, reduced capabilities, container network modes and orchestration lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C public diagnostics export with control-outage isolation and recovery passed all 24 repetitions at `92983ae`; U path diagnostics | Distinguish peer path, DNS and application failures through public commands |
-| HC-057 | C export/reuse, agent-crash recovery, retention and IPv4 UDP flow consent/retry/expiry; D FlowConsentAndIdempotency; U flow tests | Qualify expanded diagnostics root; comprehensive redaction and remaining retention/flow variants |
+| HC-057 | C export/reuse with byte equality, agent-crash recovery, retention, export-path obstruction and repair passed all 24 repetitions at `f71587a`; IPv4 UDP flow consent/retry/expiry; D FlowConsentAndIdempotency; U flow tests | Comprehensive redaction and remaining retention/flow variants; intermittent native flow failures remain open |
 | HC-058 | L version and runtime platform; native IPC negotiation/restart passed all 24 repetitions at `a9a1a21` | Artifact mismatch and exact release identity |
 | HC-059 | No qualified independent client-endorsed node-admission evidence; server trust/recovery tests belong to HC-021 | BR-05 / Q-05 product decision: independently signed node admission, unsigned-node denial, signing-device loss and recovery |
 | HC-060 | L/C two-version native package/service upgrade preserves the enrolled identity, connected intent and real traffic; passed all eight installation runners at `92983ae` | Incompatible-state rollback and insufficient space/privileges |
@@ -142,6 +142,36 @@ product scope are different conditions; neither is a successful skip.
 | HC-063 | L/C explicit native state removal, fresh `NeedsEnrollment`, and reenrollment with a different node identity passed all eight installation runners at `92983ae`; local forget deliberately retains identity | Standalone reset without uninstall and provider-side removal remain separate |
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
+
+## Complete credential and IPC increment evidence — 2026-09-12
+
+[Run 34710382160](https://github.com/endless-net/client/actions/runs/34710382160)
+completed at source `f71587a8583b0d5eff1a005338c5e54809bc05e0`. All 24 native
+reports identify that source. Of 1272 expected root outcomes (53 per report),
+1266 pass, five fail, and one has no terminal result; no native test is skipped.
+Twenty reports pass all 53 roots. The failures are DNS map diagnostics on
+Windows 2022 repeat 1, Windows 2025 repeat 3 and macOS ARM repeat 3, plus
+application-route startup and flow consent on Windows 2025 repeat 2.
+Windows 2025 repeat 3 times out before `TrustConfirmation` completes.
+The overall gate fails; this is not a successful complete-suite qualification.
+
+The following increments have successful terminal results in every report,
+including all required family/timeout leaves:
+
+- Join-token rotation and user-session expiry/recovery each pass both IPv4
+  and IPv6 variants on all eight runners, three times each. Both TCP and UDP
+  exchanges must advance the reference echo counters at every traffic check.
+- Unary CLI IPC timeout passes both before-response-headers and partial-body
+  stalls, followed by successful recovery against the same native endpoint.
+- Diagnostic export passes byte-preserving reuse across agent crash, retention,
+  unrelated-file preservation, export-directory obstruction and repair.
+
+All eight installation jobs, three platform verification jobs, control-plane
+scenarios and container lifecycle succeed. External STUN is skipped and provides
+no new evidence. DNS revision synchronization (`4628057`) and the increased
+suite budget (`2e04b0a`) postdate this source and still need their own CI results.
+Remaining runtime investigations belong to Client; these observations neither
+test provider implementations nor establish full HC-001–065 completion.
 
 ## Windows evidence and complete-suite budget — 2026-09-12
 
