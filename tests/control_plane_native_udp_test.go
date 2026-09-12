@@ -353,6 +353,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		assertICMP("tcp-only-grant", false)
 		first("blocked")
 		if !fresh("24002") {
+			logNativeInterfaceState(t)
 			t.Fatal("retained grant stopped working")
 		}
 		if fresh("24001") {

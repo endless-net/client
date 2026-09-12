@@ -3151,6 +3151,24 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+Run 34675588798 at source `1f8df62444b6c30e070c87d5f265c27e2e698a93`
+has an independent pair of failures in
+[macOS Intel repeat 3](https://github.com/endless-net/client/actions/runs/34675588798/job/103505041497):
+`NativeTCPTraffic` fails fresh access to retained port 24002 at
+2026-09-12 05:42:46.613 UTC, while the subsequent `NativeIPv6TCPTraffic`
+fails IPv4 underlay selection at 05:42:47.091 UTC. The latter requires an up,
+non-loopback, non-point-to-point interface with usable IPv4 distinct from the
+overlay endpoints. The report does not include the interface snapshot needed to
+determine which condition failed. Timing alone does not establish one cause.
+The browser corrected-endpoint and startup-ownership race roots pass in this
+report; its two traffic failures prevent whole-source qualification.
+
+Both failure locations now log public OS interface indices, flags and address
+family counts, withholding actual addresses. The diagnostic changes no selection,
+retry, timeout or traffic assertion. Local short tests, vet and lint pass; runner
+observations from the new diagnostics remain pending. Investigation stays in
+Client-owned tests and runtime, without changing hosted runner infrastructure.
+
 ### Completed matrix at 0cf6d73: Relay recovery passes, UDP mismatch remains
 
 Run [34673867164](https://github.com/endless-net/client/actions/runs/34673867164)
