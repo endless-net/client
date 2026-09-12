@@ -95,7 +95,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners | Other paths/protocols and denied-access variants |
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
-| HC-019 | C durable route-table off/auto passed three times on all eight native platforms; U configuration tests | Other public preferences and live mutation variants |
+| HC-019 | C durable route-table off/auto passed three times on all eight native platforms; native MTU CLI validation/persistence, IPC/OS agreement and IPv4/IPv6 TCP/UDP checks are executable; U configuration tests | Qualify the new MTU root; other public preferences and live mutation variants |
 | HC-020 | C NetworkSelectionBoundary passed all 24 native repetitions: enrolled network listing/selection, disconnected response before/after restart and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
 | HC-021 | C TLS trust/hostname, unchanged-key intent/traffic, connected/disconnected ordinary and interrupted map-signing rotation, and changed-key native traffic passed all 24 repetitions at qualified source `4f117a0`; expired/not-yet-valid TLS rejection before enrollment and after enrolled restart, followed by recovery, pass in all 19 available `c5bd840` reports | Complete current-source qualification; remaining origin variants and existing-session certificate lifetime semantics |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
@@ -5146,3 +5146,19 @@ No full-matrix acceptance or 65-scenario completion is claimed. The next queued
 targets `cce41e6a3b91fd322f7bb9a91125a1dd3bc251c0` and includes the accumulated
 diagnostics, scenario extensions and aggregate-verifier changes; its results
 must be evaluated separately.
+
+### 2026-09-12: native durable MTU preference scenario
+
+`TestControlPlaneNativeMTUPreference` uses the real enrollment and offline-sync
+CLI with an agent restart between mutations. Each IPv4/IPv6 variant observes
+MTU 1280 after enrollment, 1400 after a saved change, retained 1400 after rejected
+1279, and the documented default 1420 after saving 0. Each phase requires the
+original node identity, ready public IPC, agreement with the OS interface MTU,
+and fresh TCP and UDP application exchanges through the reference peer. No
+saved configuration or identity material is read by the test.
+
+Both address-family leaves are required in every platform report, with omission
+regressions in the aggregate verifier. Local short tests, vet and lint pass.
+The native scenario is not present in `92983ae` or the running `cce41e6` matrix;
+its own hosted execution remains pending. It tests durable preferences across
+process restart, not live MTU changes or path-MTU/fragmentation behavior.
