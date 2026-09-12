@@ -179,6 +179,15 @@ inspection was unavailable because an operation held the WireGuard lock.
 It does not identify which native startup operation was delayed or why.
 The timeout has not been relaxed; Client startup diagnosis remains open.
 
+The next diagnostic increment emits fixed begin/complete messages around TUN
+creation, device activation and route configuration. On a failed readiness
+wait, the harness uses the published `service logs-recent` command with a
+separate bounded request and includes only those exact messages in the report.
+Unknown messages, including a known message with added context, are withheld.
+No network parameters or credentials are included in the stage messages. This
+adds evidence for locating a future recurrence; it is not a startup fix and
+does not extend the readiness deadline. Native qualification is pending.
+
 ## Diagnostic export storage failure increment — 2026-09-12
 
 `TestControlPlaneDiagnosticsExport` now compares the public exported bytes before

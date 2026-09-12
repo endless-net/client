@@ -326,6 +326,7 @@ func (n *Node) awaitStatusWithin(timeout time.Duration, match func(ipc.StatusRes
 	})
 	if err != nil {
 		n.t.Logf("WireGuard inspection states during wait: %v", wireGuardStates)
+		n.logWireGuardStartupStages()
 		exited, exitCode := false, -1
 		select {
 		case processErr := <-n.done:
@@ -356,6 +357,37 @@ func (n *Node) awaitStatusWithin(timeout time.Duration, match func(ipc.StatusRes
 		n.t.Fatalf("client state deadline: responses=%d failures=%d last_ipc_error=%q ipc_error_counts=%v agent_exited=%t exit_code=%d state=%s control=%s desired=%s user_disconnected=%t credential=%t cached_map=%t revision=%d peers=%d overlay_ipv4=%t overlay_ipv6=%t wg_present=%t wg_ok=%t wg_error=%t wg_port=%d wg_peers=%d agent_present=%t agent_error=%t agent_revision=%d", responses, failures, lastCategory, errorCategories, exited, exitCode, last.State, last.ControlState, last.DesiredState, last.UserDisconnected, last.NodeCredentialPresent, last.CachedMapValid, last.MapRevision, last.PeerCount, last.OverlayIP != "", last.OverlayIPv6 != "", wgPresent, wgOK, wgError, wgPort, wgPeers, agentPresent, agentError, agentRevision)
 	}
 	return last
+}
+
+// Collect only fixed public log messages after a failed wait. This separate
+// bounded request does not extend the readiness deadline or inspect agent files.
+func (n *Node) logWireGuardStartupStages() {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := n.command(ctx, append([]string{"service", "logs-recent", "--timeout", "1s"}, n.ipcArgs()...)...).CombinedOutput()
+	var response ipc.RecentLogsResponse
+	if err != nil || json.Unmarshal(out, &response) != nil {
+		n.t.Log("public startup-stage log unavailable")
+		return
+	}
+	var stages []string
+	for _, entry := range response.Logs {
+		if stage := wireGuardStartupStage(entry.Message); stage != "" {
+			stages = append(stages, stage)
+		}
+	}
+	n.t.Logf("public WireGuard startup stages: %v", stages)
+}
+
+func wireGuardStartupStage(message string) string {
+	switch message {
+	case "WireGuard engine: tun-create begin", "WireGuard engine: tun-create complete",
+		"WireGuard engine: device-up begin", "WireGuard engine: device-up complete",
+		"WireGuard engine: routes begin", "WireGuard engine: routes complete":
+		return strings.TrimPrefix(message, "WireGuard engine: ")
+	default:
+		return ""
+	}
 }
 
 // Only exact, known public IPC messages become diagnostic labels. Arbitrary

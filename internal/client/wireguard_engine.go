@@ -342,10 +342,12 @@ func (e *WireGuardEngine) configureLocked(ctx context.Context, plan wireGuardEng
 			result.SyncError = err.Error()
 			return result, err
 		}
+		log.Print("WireGuard engine: device-up begin")
 		if err := e.device.Up(); err != nil {
 			result.UpError = err.Error()
 			return result, fmt.Errorf("start wireguard-go device: %w", err)
 		}
+		log.Print("WireGuard engine: device-up complete")
 		if err := e.runApplyStage(wireGuardEngineStageDeviceUp); err != nil {
 			result.UpError = err.Error()
 			return result, err
@@ -375,10 +377,12 @@ func (e *WireGuardEngine) configureLocked(ctx context.Context, plan wireGuardEng
 	routerChanged := runtimeStarted || !previous.configured || !wireGuardEngineRouterConfigsEqual(plan.routerCfg, previous.routerCfg)
 	if routerChanged {
 		progress.routes = true
+		log.Print("WireGuard engine: routes begin")
 		if err := e.router.Configure(ctx, plan.routerCfg); err != nil {
 			result.RouteError = err.Error()
 			return result, fmt.Errorf("configure wireguard-go routes: %w", err)
 		}
+		log.Print("WireGuard engine: routes complete")
 		if err := e.runApplyStage(wireGuardEngineStageRoutes); err != nil {
 			result.RouteError = err.Error()
 			return result, err
@@ -517,10 +521,12 @@ func (e *WireGuardEngine) restoreRecreatedLocked(previous wireGuardEngineSnapsho
 }
 
 func (e *WireGuardEngine) startLocked(mtu int) error {
+	log.Print("WireGuard engine: tun-create begin")
 	tunDevice, err := e.opts.tunFactory(platformUserspaceTUNName(e.opts.Interface), mtu)
 	if err != nil {
 		return fmt.Errorf("create wireguard-go TUN: %w", err)
 	}
+	log.Print("WireGuard engine: tun-create complete")
 	interfaceName, err := tunDevice.Name()
 	if err != nil {
 		_ = tunDevice.Close()
