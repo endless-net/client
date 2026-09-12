@@ -97,7 +97,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
 | HC-019 | C durable route-table off/auto passed three times on all eight native platforms; U configuration tests | Other public preferences and live mutation variants |
 | HC-020 | C NetworkSelectionBoundary passed all 24 native repetitions: enrolled network listing/selection, disconnected response before/after restart and foreign-network rejection | Product decision for multiple saved profiles and switching; network-scoped selection is not profile support |
-| HC-021 | U control-endpoint security; native TLS trust boundary qualified on Linux/Windows; hostname mismatch extension awaiting CI | macOS TLS qualification, certificate expiry/rotation and remaining origin variants |
+| HC-021 | U control-endpoint security; TLS trust and hostname rejection passed all 24 native executions at `1d84184` (artifact gate failed) | Certificate expiry, new map-signing rotation/intent extensions and remaining origin variants |
 | HC-022 | C Lifecycle logout; LocalForgetAfterUnconfirmedLogout passed three times on all eight runners | Remaining revocation retry, traffic-retirement and profile semantics |
 | HC-023 | C Lifecycle peer projection; R approval changes applied by running agent and WireGuard | Remaining authorization and peer absence variants |
 | HC-024 | C two-Client Linux direct traffic; native real Client IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners (increments below); historical R two agents with real Coordinator | ICMP errors/PMTU, IPv6 underlay, Relay/NAT and full policy variants |
@@ -128,8 +128,8 @@ product scope are different conditions; neither is a successful skip.
 | HC-049 | No C/R evidence audited | Certificate/publication scope and frontend/backend TLS |
 | HC-050 | U sharing/encrypted engine tests | C grant/consent/revoke/expiry/new identity against published contracts without internal access |
 | HC-051 | U service discovery/runtime | Logical service host approval, loss and actual traffic |
-| HC-052 | L/C bounded IPC waits | Public readiness conditions and noninteractive timeout results |
-| HC-053 | L/C structured IPC; native request validation passed all 24 repetitions at `a9a1a21`; D RPC authorization | Non-object/body-size extensions and event stream await hosted evidence; remaining machine output/errors |
+| HC-052 | L/C bounded IPC waits; native event subscription/cancellation/restart passed all 24 executions at `1d84184` (artifact gate failed) | Simultaneous subscription extension, remaining public readiness conditions and noninteractive timeout results |
+| HC-053 | L/C structured IPC; native request validation including non-object rejection passed all 24 executions at `1d84184` (artifact gate failed); D RPC authorization | Body-size and simultaneous event-subscriber extensions await hosted evidence; remaining machine output/errors |
 | HC-054 | No C/R evidence audited | Container persistent versus ephemeral lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C status/diagnostics; U path diagnostics | Distinguishable control/path/DNS/application failures |
@@ -2411,6 +2411,44 @@ profile and explicitly restrict its origin list, preventing failover to the
 valid IP origin retained after the first enrollment attempt. This is a fixture
 correction, not evidence of bypassed Client certificate validation. Complete
 HC-001–HC-065 coverage and the remaining platform variants are still open.
+
+## Complete 32-root execution evidence; artifact upload failure
+
+Run [34660106943, first attempt](https://github.com/endless-net/client/actions/runs/34660106943/attempts/1)
+completed with failure at source `1d841847390288d7ab7804624dd777374a0abbf4`.
+All 24 job logs contain identical 32-root inventories: **768 PASS, 0 FAIL,
+0 SKIP**. The following links identify the original repetitions, including the
+failed artifact-upload job; each log contains all 32 passing root outcomes.
+
+| Runner | Repeat 1 | Repeat 2 | Repeat 3 |
+| --- | --- | --- | --- |
+| macos-15 | [103461308446](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308446) | [103461308511](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308511) | [103461308500](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308500) |
+| macos-15-intel | [103461308534](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308534) | [103461308525](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308525) | [103461308498](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308498) |
+| ubuntu-22.04 | [103461308411](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308411) | [103461308575](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308575) | [103461308491](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308491) |
+| ubuntu-22.04-arm | [103461308439](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308439) | [103461308541](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308541) | [103461308419](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308419) |
+| ubuntu-24.04 | [103461308475](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308475) | [103461308552](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308552) | [103461308529](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308529) |
+| ubuntu-24.04-arm | [103461308453](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308453) | [103461308469](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308469) | [103461308509](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308509) |
+| windows-2022 | [103461308471](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308471) | [103461308457](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308457) | [103461308442](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308442) |
+| windows-2025 | [103461308538](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308538) | [103461308473](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308473) | [103461308423](https://github.com/endless-net/client/actions/runs/34660106943/job/103461308423) |
+
+The macOS Intel repeat-2 job completed compilation, native tests and JSON report
+production successfully, then failed `Preserve platform contract reports` with
+`Failed to CreateArtifact: Unable to make request: ENOTFOUND`. Aggregate
+`verify` failed its dependency check and did not run the complete-artifact
+validator. Thus all native executions passed, but this attempt does **not**
+qualify the source for publication: the required evidence artifact is missing.
+After confirming that terminal failure, only that job and its dependent gate
+were requested again on the same source. The rerun is pending; the original
+failure remains part of the evidence and no failing test was retried or hidden.
+
+This source qualifies the executed TLS hostname rejection and explicit CA trust
+cases on all eight runners, the original native IPC event stream lifecycle,
+and rejection of null/array/scalar mutation bodies without changing intent.
+It predates request-size boundaries, simultaneous subscription isolation,
+AAAA DNS records, trust-confirmation intent repair and map-signing rotation.
+Those additions require their own hosted evidence. The current working inventory
+is 33 roots / 792 outcomes; neither the 32-root execution evidence nor a future
+successful gate alone establishes full HC-001–HC-065 coverage.
 
 ## Next work
 
