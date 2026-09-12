@@ -5054,3 +5054,13 @@ with an error and no agent projection. This is an initialization/readiness
 failure, distinct from Ubuntu ARM's final recovery DNS timeout. Do not count
 the DNS diagnostic change as a fix for either failure. Eight native reports
 remain uninspected or pending; the full matrix is not qualified.
+
+Windows 2025 repetition 2 also reports a failed TCP probe in the flow-consent
+expiry observation loop, with zero fresh packets at the reference peer while
+public IPC still reports a valid map, ready WireGuard and a handshake. The loop
+spans time both before and after expiry: its old failure wording is not proof
+that expiry caused the loss or that the failing probe started after expiry.
+The scenario now reports probe start/end relative to expiry and successful probe
+counts on each side. Completion also explicitly requires a successful probe
+started after expiry. Existing no-report and window-bound assertions remain.
+Local short tests, vet and lint pass; native execution of the change is pending.

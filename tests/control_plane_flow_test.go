@@ -153,13 +153,20 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id, protocol st
 	// than replacing it with a revocation. Traffic must survive the expiry.
 	ctx, cancel := context.WithDeadline(t.Context(), expires.Add(10*time.Second))
 	defer cancel()
+	beforeExpiry, afterExpiry := 0, 0
 	if err := testclient.Await(ctx, func() bool {
+		started := time.Now()
 		if !fresh("24001") {
-			t.Fatal("flow consent expiry disrupted application traffic")
+			t.Fatalf("traffic failed during consent-expiry observation: probe_started_relative_to_expiry=%s probe_finished_relative_to_expiry=%s successful_before=%d successful_after=%d", started.Sub(expires).Round(time.Millisecond), time.Since(expires).Round(time.Millisecond), beforeExpiry, afterExpiry)
+		}
+		if started.Before(expires) {
+			beforeExpiry++
+		} else {
+			afterExpiry++
 		}
 		// Drain the documented five-second RPC deadline before measuring
 		// silence; window timestamps still enforce the exact expiry below.
-		return time.Now().After(expires.Add(5 * time.Second))
+		return afterExpiry > 0 && time.Now().After(expires.Add(5*time.Second))
 	}); err != nil {
 		t.Fatal("flow consent expiry observation interrupted")
 	}
