@@ -40,7 +40,9 @@ and gRPC bindings and exports `package:endlessnet_client_api/client_api.dart`.
 Both use [buf.gen.yaml](../buf.gen.yaml) and must be consumed from pinned
 immutable source. Generator pins match the Management pipeline:
 protoc-gen-go 1.36.10, protoc-gen-connect-go 1.19.1, protoc_plugin 25.0.0.
-Run `buf generate` and `goimports -w clientipc` from the repository root.
+Run `buf generate`, `buf build -o clientipc/rpc/client.binpb` and
+`goimports -w clientipc` from the repository root. The embedded descriptor is
+the runtime digest source, not the frozen compatibility baseline.
 CI regenerates both SDKs, checks tracked and untracked changes, tests Go unary
 and streaming calls over Connect/gRPC, and analyzes Dart with locked dependencies.
 Control-plane DTOs remain owned by their existing producer modules; these
@@ -63,11 +65,16 @@ rules and FILE breaking rules remain enabled.
 
 ## Transport and identity
 
-The schema is independent of the transport binding. Desktop binding must preserve
-authenticated local peer identity over Windows named pipes and Linux/macOS Unix
-sockets. Choose and demonstrate a concrete RPC stack (gRPC or Connect) with Go
-and Dart before implementing the cutover. This contract does not create a TCP
-listener or claim that a particular Dart library supports named pipes.
+The desktop binding is gRPC over local unencrypted HTTP/2, using OS-authenticated
+Windows named pipes and Linux/macOS Unix sockets. The producer-owned
+`clientipc/local` Go package supplies the listener and generated client;
+`clientipc/rpc` enforces annotated access through a runtime authorization callback
+and exact protocol metadata. No TCP listener or HTTP/1 fallback is created.
+The Unix runtime/package owner must create a protected parent directory and
+assign the socket group; socket permissions are 0660. Stale-socket recovery is
+an explicit runtime responsibility, never an arbitrary-path deletion by the SDK.
+Go transport tests cover unary and streaming calls. The Dart pipe adapter and
+production runtime integration remain cutover work, not established acceptance.
 
 Android and iOS use the same messages through a separately validated native
 runtime/VPN-service or extension bridge. They do not assume a desktop daemon,
@@ -78,8 +85,12 @@ and platform adapter exist. Missing capability entries mean unsupported.
 
 `GetRuntimeInfo` is the bootstrap call. `protocol` is
 `endlessnet-client-ipc`, `ipc_version` is 0 and `contract_sha256` identifies the
-exact published descriptor. The future binding must require that same digest on
-subsequent calls and reject mismatches before side effects. A generated default
+exact published descriptor. All subsequent RPCs require exactly one value for
+each metadata header: `X-EndlessNet-IPC-Protocol: endlessnet-client-ipc`,
+`X-EndlessNet-IPC-Version: 0`, and `X-EndlessNet-IPC-Contract-SHA256` matching
+the descriptor digest. Authorization precedes metadata validation; authenticated
+bootstrap alone may omit these headers to diagnose mismatched installation.
+Reject mismatches before side effects. A generated default
 zero does not prove successful negotiation: protocol, digest and instance ID must
 all be nonempty and valid. Version ranges in update metadata describe pairing
 only; they do not enable negotiation to HTTP v2.

@@ -80,6 +80,7 @@ jobs:
       - name: Regenerate Go and Dart bindings
         run: |
           buf generate
+          buf build -o clientipc/rpc/client.binpb
           goimports -w clientipc
       - name: Test generated Go protocols
         working-directory: clientipc
@@ -100,3 +101,21 @@ jobs:
           name: client-ipc-v0-descriptor
           path: client-ipc-v0.binpb
           if-no-files-found: error
+
+  local-transport:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: clientipc/go.mod
+          cache: false
+      - name: Test authenticated local gRPC
+        working-directory: clientipc
+        run: go test -short ./...
