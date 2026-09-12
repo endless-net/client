@@ -105,6 +105,9 @@ func TestControlPlaneDiagnosticsExport(t *testing.T) {
 	if !repeated.Reused || repeated.Path != bundle.Path || repeated.CreatedAt != bundle.CreatedAt || repeated.ExpiresAt != bundle.ExpiresAt || repeated.SizeBytes != bundle.SizeBytes {
 		t.Fatal("agent crash recovery did not identify the reusable diagnostic artifact")
 	}
+	if reusedData, err := os.ReadFile(repeated.Path); err != nil || !bytes.Equal(reusedData, data) {
+		t.Fatal("reused diagnostic artifact changed across agent crash recovery")
+	}
 	var connected ipc.ConnectResponse
 	n.Service("connect", &connected)
 	check(false)
@@ -136,4 +139,45 @@ func TestControlPlaneDiagnosticsExport(t *testing.T) {
 	if err != nil || int64(len(newData)) != renewed.SizeBytes || json.Unmarshal(newData, &newExport) != nil || newExport.Status.NodeID != id || newExport.Status.UserDisconnected || newExport.Status.DesiredState != ipc.DesiredConnected {
 		t.Fatal("replacement diagnostic export did not capture current connected intent")
 	}
+	// Replace only the public export directory with an operator-owned file.
+	// This is deterministic even on privileged runners where chmod alone
+	// cannot reliably deny writes. Keep all private agent files untouched.
+	heldDirectory := directory + "-held"
+	if err := os.Rename(directory, heldDirectory); err != nil {
+		t.Fatal("could not isolate the public export directory")
+	}
+	restored := false
+	t.Cleanup(func() {
+		if !restored {
+			_ = os.Remove(directory)
+			_ = os.Rename(heldDirectory, directory)
+		}
+	})
+	const obstruction = "operator-owned export path obstruction"
+	if err := os.WriteFile(directory, []byte(obstruction), 0o600); err != nil {
+		t.Fatal("could not obstruct the public export path")
+	}
+	if output, err := n.ServiceCommand("diagnostics-bundle"); err == nil || len(bytes.TrimSpace(output)) == 0 {
+		t.Fatal("unavailable export directory did not return a CLI failure diagnostic")
+	}
+	check(false)
+	if retained, err := os.ReadFile(directory); err != nil || string(retained) != obstruction {
+		t.Fatal("failed export modified the operator-owned obstruction")
+	}
+	if err := os.Remove(directory); err != nil {
+		t.Fatal("could not remove the export path obstruction")
+	}
+	if err := os.Rename(heldDirectory, directory); err != nil {
+		t.Fatal("could not restore the public export directory")
+	}
+	restored = true
+	var recovered ipc.DiagnosticsBundleResponse
+	n.Service("diagnostics-bundle", &recovered)
+	if !recovered.Reused || recovered.Path != renewed.Path || recovered.SizeBytes != renewed.SizeBytes {
+		t.Fatal("export did not recover the retained artifact after directory repair")
+	}
+	if recoveredData, err := os.ReadFile(recovered.Path); err != nil || !bytes.Equal(recoveredData, newData) {
+		t.Fatal("export directory failure or recovery changed the retained artifact")
+	}
+	check(false)
 }

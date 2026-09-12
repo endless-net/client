@@ -143,6 +143,22 @@ product scope are different conditions; neither is a successful skip.
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
+## Diagnostic export storage failure increment — 2026-09-12
+
+`TestControlPlaneDiagnosticsExport` now compares the public exported bytes before
+and after crash reuse. It also temporarily replaces only its configured public
+export directory with an operator-owned regular file, requires a CLI failure
+diagnostic, checks that public diagnostics still report the original connected
+identity and valid cache, and verifies that the obstruction remains unchanged.
+After restoring the directory, the same running agent must successfully reuse
+the retained artifact with identical bytes. This adds HC-056/HC-057 export-path
+failure isolation and recovery without reading private Client state.
+
+The existing mandatory native root runs in the eight-platform, three-repeat
+Client CI matrix. This extension has passed local short tests, vet and lint;
+native execution is pending. It does not establish disk-full behavior, arbitrary
+filesystem failures, or application traffic continuity during export failure.
+
 ## Current implementation increment
 
 Commit `0c0dd6b` adds a one-shot post-registration response loss in testcontrol,
