@@ -9,6 +9,36 @@ import (
 	"github.com/endless-net/client/internal/testcontrol"
 )
 
+func TestDeniedJoinTokenCanBeReplacedWithoutForgettingEnrollment(t *testing.T) {
+	setInstallationStateDirForTest(t, t.TempDir())
+	s := testcontrol.New(t)
+	network, token, err := s.AddNetwork("token-recovery", "100.95.0.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := s.RotateJoinToken(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(t.TempDir(), "client.json")
+	args := []string{"--config", config, "--server", s.URL(), "--network", network.Name, "--hostname", "retry-node", "--join-token"}
+	if err := cmdUp(append(args, token)); err == nil {
+		t.Fatal("retired token authorized registration")
+	}
+	if _, err := captureStdout(t, func() error { return cmdUp(append(args, replacement)) }); err != nil {
+		t.Fatal("replacement token could not recover the same client configuration")
+	}
+	registered := 0
+	for _, event := range s.Events() {
+		if event.Kind == "registered" {
+			registered++
+		}
+	}
+	if registered != 1 {
+		t.Fatal("replacement token did not complete exactly one enrollment")
+	}
+}
+
 func TestInvalidBrowserInputCanBeCorrected(t *testing.T) {
 	for _, tc := range []struct{ flag, invalid, valid string }{
 		{"--advertise", "not-a-cidr", "192.0.2.0/24"},

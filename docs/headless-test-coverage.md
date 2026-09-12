@@ -143,6 +143,26 @@ product scope are different conditions; neither is a successful skip.
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
+## Same-client registration recovery increment — 2026-09-12
+
+Both join-token retirement roots now retry the replacement token using the
+same Client instance and configuration path that received the registration
+denial. No private state is read or reset. This strengthens recovery coverage:
+the previously qualified rotation scenario used a fresh replacement instance
+and could not detect failed enrollment poisoning a later retry. Exactly two
+distinct successful registrations are still required across the initial node
+and the recovered candidate. Native evidence for this stricter retry is pending.
+
+The stricter recovery exposed a Client bug: `cmdUp` retained its pending request
+after an explicit authorization denial, so replacing the token was rejected as
+changed input. A short real-command regression failed before the fix and passes
+after it. The Client now clears only that pending attempt after a validated
+registration authorization-denied response (HTTP status, JSON content type and
+matching request ID), allowing a fresh registration operation with the new token.
+Identity is preserved. Transport uncertainty, malformed responses and temporary
+errors retain replay state; the existing response-loss immutability regression
+still passes. Native qualification remains pending.
+
 ## Linux exit LAN policy increment — 2026-09-12
 
 The Linux branch of `TestControlPlaneExitProvider` now adds HC-037 observations

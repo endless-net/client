@@ -936,7 +936,15 @@ func cmdUp(args []string) error {
 		if err := client.SaveConfig(*configPath, cfg); err != nil {
 			return err
 		}
+		attempt := &registrationAttemptTransport{base: api.HTTPClient.Transport}
+		api.HTTPClient.Transport = attempt
 		response, err = api.RegisterNode(req)
+		if err != nil && attempt.denied && req.JoinToken != "" && req.NodeCredential == "" {
+			cfg.PendingDirectRegistration = nil
+			if saveErr := client.SaveConfig(*configPath, cfg); saveErr != nil {
+				return errors.Join(err, saveErr)
+			}
+		}
 	}
 	if err != nil {
 		return err

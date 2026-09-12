@@ -171,8 +171,9 @@ func exerciseJoinTokenRetirement(t *testing.T, family string, expire bool) {
 			t.Fatal(err)
 		}
 	}
-	replacementClient := testclient.New(t, s)
-	replacementClient.Enroll(s, network.Name, replacement, "--hostname", "replacement-node")
+	// Retry the actual failed Client, retaining its public CLI configuration
+	// path. A fresh instance would hide poisoned enrollment/retry state.
+	candidate.Enroll(s, network.Name, replacement, "--hostname", "replacement-node")
 	registrations := 0
 	registeredIDs := map[string]bool{}
 	for _, event := range s.Events() {
