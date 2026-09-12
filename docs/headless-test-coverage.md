@@ -3151,6 +3151,43 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+### Completed matrix at 1f8df62: endpoint and startup race verified
+
+Run [34675588798](https://github.com/endless-net/client/actions/runs/34675588798)
+completed on 2026-09-12 at exact source
+`1f8df62444b6c30e070c87d5f265c27e2e698a93`. All 24 reports contain the same
+39 root names: **933 PASS, 3 FAIL, 0 SKIP** across 936 root executions.
+
+| Runner | Three repetitions: PASS / FAIL / SKIP |
+| --- | --- |
+| ubuntu-22.04 | 117 / 0 / 0 |
+| ubuntu-24.04 | 117 / 0 / 0 |
+| ubuntu-22.04-arm | 117 / 0 / 0 |
+| ubuntu-24.04-arm | 117 / 0 / 0 |
+| windows-2022 | 117 / 0 / 0 |
+| windows-2025 | 116 / 1 / 0 |
+| macos-15-intel | 115 / 2 / 0 |
+| macos-15 | 117 / 0 / 0 |
+
+The final Windows 2022 reports
+([repeat 1](https://github.com/endless-net/client/actions/runs/34675588798/job/103505041589),
+[repeat 3](https://github.com/endless-net/client/actions/runs/34675588798/job/103505041531))
+each pass all 39 roots. All 72 browser invalid-input recovery leaves pass,
+including the corrected endpoint projection. All 24 `SingleAgentOwnership`
+roots pass with the simultaneous startup race, winner synchronization and
+process cleanup assertions. All 96 Relay family leaves pass. These are bounded
+scenario results, not complete HC coverage or proof against intermittent faults.
+
+All eight installation jobs, three platform Verify jobs and the separate Client
+control-plane job pass. Optional external STUN is skipped. The aggregate
+[verify gate](https://github.com/endless-net/client/actions/runs/34675588798/job/103509317868)
+fails because of the three native failures described below; this source is not
+qualified for publication. The later UDP digest correlation, interface snapshot
+and inspection-presence diagnostics are absent from this source and still need
+native evidence. Follow-up remains owned by `endless-net/client` on `main`:
+diagnose those failures and implement the remaining HC/BR/AC platform variants.
+No provider or infrastructure changes are justified by this result.
+
 [Windows 2025 repeat 2](https://github.com/endless-net/client/actions/runs/34675588798/job/103505041486)
 at source `1f8df62444b6c30e070c87d5f265c27e2e698a93` fails only
 `NativeFlowConsent/ipv6/tcp` at 2026-09-12 05:37:17 UTC during the expiry loop.
