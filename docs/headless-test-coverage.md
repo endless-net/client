@@ -3060,6 +3060,52 @@ the flow queue mutex fix, retained-TCP observation, per-probe flow counters,
 missing-executable repair, installed startup without control and browser input
 correction/completion additions. None of those changes is validated by this run.
 
+## Completed 39-root matrix at d0fc32a
+
+Run [34672491102](https://github.com/endless-net/client/actions/runs/34672491102),
+source `d0fc32a9f7c9d0d97623953fbbab3f452790089a`, has completed all 24
+native contract jobs. Every report contains the same 39 root test names:
+**907 PASS, 29 FAIL, 0 SKIP** across 936 executions. Nine jobs pass and fifteen
+fail. These counts describe repeated test executions, not HC coverage percentages.
+
+| Runner | Three repetitions: PASS / FAIL / SKIP |
+| --- | --- |
+| ubuntu-22.04 | 111 / 6 / 0 |
+| ubuntu-24.04 | 111 / 6 / 0 |
+| ubuntu-22.04-arm | 111 / 6 / 0 |
+| ubuntu-24.04-arm | 111 / 6 / 0 |
+| windows-2022 | 117 / 0 / 0 |
+| windows-2025 | 112 / 5 / 0 |
+| macos-15-intel | 117 / 0 / 0 |
+| macos-15 | 117 / 0 / 0 |
+
+The final [macOS ARM repeat 3 report](https://github.com/endless-net/client/actions/runs/34672491102/job/103496467994)
+passes all 39 roots. Failures are limited to `NativeRelayTraffic` (15 root
+executions), `NativeRelayFailover` (13), and `NativeFlowConsent` (one Windows
+2025 repeat 3 execution, with IPv4 TCP and IPv6 UDP child failures). The Relay
+observations and unresolved flow diagnostics below remain applicable; this run
+predates the bounded retained-TCP recovery assertion. All 72 browser invalid-input
+correction/completion leaves pass (three variants in each of 24 jobs), but the
+later signed endpoint-projection assertion is not part of this source.
+
+All three platform Verify jobs and the separate Client control-plane job pass.
+All eight installation jobs fail: Linux reaches the stopped-service repair
+expectation described below; Windows and macOS reach the cached-startup check.
+The final [macOS ARM installation report](https://github.com/endless-net/client/actions/runs/34672491102/job/103496467972)
+also times out in `cached traffic after service startup without control`, before
+the traffic probe, with public cache validity and connected intent present.
+It passes fresh installation and disconnected service restart; enrolled reinstall
+fails and subsequent uninstall evidence is absent. Do not interpret this as
+measured packet loss or successful installation qualification.
+
+The aggregate [verify gate](https://github.com/endless-net/client/actions/runs/34672491102/job/103500740557)
+fails; optional external STUN is skipped. This source is not qualified for
+publication. Cached bootstrap, explicit Linux repaired-service startup, bounded
+TCP recovery, signed endpoint propagation and deferred fatal-probe counters
+remain awaiting evidence from a source containing those changes. Follow-up
+implementation and native validation remain owned by `endless-net/client` on
+`main`; no provider or infrastructure validation is claimed.
+
 ## Next work
 
 Per-exchange flow diagnostics now run in a defer, so an unclassified fatal probe
