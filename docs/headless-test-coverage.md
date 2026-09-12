@@ -5325,3 +5325,16 @@ usable IPv4 underlay. The interface inventory reports the physical interfaces
 without IPv4; the remaining IPv4 interface is point-to-point. This is a repeated
 failure class requiring investigation, not proof that Client configuration or
 consent expiry caused the underlay loss. The other matrix reports are pending.
+
+### 2026-09-12: independent node restart with an expired user session
+
+`TestControlPlaneSessionExpiryRecovery` now runs IPv4 and IPv6 with fresh TCP
+and UDP exchanges and bidirectional reference forwarding. In addition to
+denying expired-session user RPCs, retaining node authority and recovering user
+RPCs after reauthentication, it restarts the real agent before reauthentication.
+The restarted node must consume a new signed map and carry traffic while the
+user RPC remains denied. The existing post-reauthentication restart and
+exactly-one-registration assertion remain. Both family leaves are required in
+CI reports. Short tests, vet and lint pass; these expanded native variants are
+pending and are absent from the running `169b09c` matrix. Browser/OIDC refresh
+and provider session-expiration scheduling remain outside this evidence.
