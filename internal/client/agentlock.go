@@ -15,15 +15,11 @@ type AgentLock struct {
 }
 
 func AgentLockPath(configPath string) (string, error) {
-	configPath = strings.TrimSpace(configPath)
-	if configPath == "" {
-		var err error
-		configPath, err = DefaultConfigPath()
-		if err != nil {
-			return "", err
-		}
+	resolved, err := resolveConfigPath(configPath)
+	if err != nil {
+		return "", err
 	}
-	return configPath + ".agent.lock", nil
+	return resolved + ".agent.lock", nil
 }
 
 func AcquireAgentLock(path string) (*AgentLock, error) {

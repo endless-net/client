@@ -164,7 +164,43 @@ func resolveConfigPath(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Clean(abs), nil
+	resolved, err := resolveConfigFileLocation(filepath.Clean(abs))
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "linux" && resolved == "/etc/endlessnet/client.json" {
+		return "", errors.New("client state path /etc/endlessnet/client.json is unsupported; use /var/lib/endlessnet/client.json")
+	}
+	return resolved, nil
+}
+
+// Resolve the existing ancestor as well as an existing file. A fresh profile
+// may have missing directories, but it must use the same location once created.
+// Dangling symlinks and symlink loops fail instead of becoming separate stores.
+func resolveConfigFileLocation(path string) (string, error) {
+	candidate := path
+	var missing []string
+	for {
+		resolved, err := filepath.EvalSymlinks(candidate)
+		if err == nil {
+			for i := len(missing) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, missing[i])
+			}
+			return resolved, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		if info, statErr := os.Lstat(candidate); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+			return "", err
+		}
+		parent := filepath.Dir(candidate)
+		if parent == candidate {
+			return "", err
+		}
+		missing = append(missing, filepath.Base(candidate))
+		candidate = parent
+	}
 }
 
 func loadConfigFile(path string) (Config, error) {

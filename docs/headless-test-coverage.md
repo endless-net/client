@@ -2502,6 +2502,17 @@ HC-001–HC-065 completion remains unproven.
 
 ## Next work
 
+Configuration storage and agent locking now resolve the same file location,
+including file/directory symlinks and missing profile directories beneath an
+existing aliased ancestor. Atomic writes therefore target the original file,
+and a file alias cannot select a different lock by its basename. Dangling links
+and loops fail; the unsupported Linux state location remains rejected after
+resolution. Linux/macOS component checks exercise shared store/lock ownership,
+alias preservation after write, missing profiles and dangling links. They do not
+run on the local Windows workstation; the strict eight-platform native alias
+probe remains the required evidence. Hard links and path replacement races are
+not covered by this change. Hosted qualification of the fix is pending.
+
 The native single-agent ownership root adds a file symlink naming its existing
 configuration as a fourth simultaneous contender, with a distinct IPC endpoint.
 It must receive the same ownership error as the direct and lexical paths while
