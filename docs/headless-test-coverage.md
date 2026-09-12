@@ -3151,6 +3151,17 @@ owned by `endless-net/client` on `main`.
 
 ## Next work
 
+HC-005 now also races two real agent processes after stopping the existing
+owner, in both connected and disconnected states. A barrier releases both
+launches; one must exit specifically with the configuration-ownership error,
+while the other serves public IPC with the original identity and intent. The
+winner is terminated, and a successor must acquire ownership and retain the
+same state. A shared IPC endpoint cannot supply a false-positive loser because
+address-in-use is not accepted. No private lock or identity file is read.
+This extends the existing mandatory `SingleAgentOwnership` root without adding
+a root count. Short tests, vet and lint pass; the actual startup race awaits
+native CI on all eight platforms and does not claim hard-link alias coverage.
+
 Per-exchange flow diagnostics now run in a defer, so an unclassified fatal probe
 exit also records reference received/echoed deltas. `classified=false` preserves
 the distinction from explicit network denial; such failures still fail the test.

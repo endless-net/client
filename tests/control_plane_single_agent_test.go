@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -10,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 	ipc "github.com/endless-net/client/ipc/v2"
@@ -112,6 +115,63 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 				return v.NodeID == id && v.MapRevision > recovered.MapRevision && v.CachedMapValid
 			})
 		}
+		// Race without an existing owner. A lock-specific loser and a live IPC
+		// winner exclude address-in-use or two failed startups as success.
+		n.Stop()
+		func() {
+			ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+			defer cancel()
+			start := make(chan struct{})
+			results := make(chan bool, 2)
+			for range 2 {
+				go func() {
+					args := []string{"agent", "--config", n.Config, "--wg-interface", n.Interface, "--interval", "100ms", "--timeout", "300ms"}
+					if runtime.GOOS == "windows" {
+						args = append(args, "--ipc-pipe", n.Pipe)
+					} else {
+						args = append(args, "--ipc-socket", n.Socket)
+					}
+					cmd := exec.CommandContext(ctx, n.Binary, args...)
+					if n.Namespace != "" {
+						cmd = exec.CommandContext(ctx, "ip", append([]string{"netns", "exec", n.Namespace, n.Binary}, args...)...)
+					}
+					cmd.Env = append(os.Environ(), n.Environment...)
+					var output bytes.Buffer
+					cmd.Stdout, cmd.Stderr = &output, &output
+					<-start
+					err := cmd.Run()
+					var exit *exec.ExitError
+					results <- errors.As(err, &exit) && exit.ExitCode() == 1 && strings.Contains(output.String(), "agent already running for this config")
+				}()
+			}
+			close(start)
+			select {
+			case rejected := <-results:
+				if !rejected {
+					t.Fatal("startup race did not produce a configuration-ownership rejection (output withheld)")
+				}
+			case <-ctx.Done():
+				t.Fatal("startup race did not resolve within its deadline")
+			}
+			n.AwaitStatus(func(v ipc.StatusResponse) bool {
+				return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid
+			})
+			select {
+			case <-results:
+				t.Fatal("startup race winner exited before ownership was released")
+			default:
+			}
+			cancel()
+			select {
+			case <-results:
+			case <-time.After(5 * time.Second):
+				t.Fatal("startup race winner did not terminate")
+			}
+		}()
+		n.Start()
+		n.AwaitStatus(func(v ipc.StatusResponse) bool {
+			return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid
+		})
 	}
 	created := 0
 	for _, event := range s.Events() {
