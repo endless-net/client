@@ -112,7 +112,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-033 | C durable route installation disable/restore passed three times on all eight native platforms; U configuration tests | Per-resource selection and remaining route-selection semantics |
 | HC-034 | C native route advertisement and explicit platform boundary; Linux two-Client subnet forwarding/SNAT, approval, withdrawal, router outage and recovery are executable; U hook rendering | Qualify the common root on every runner; non-Linux router dataplane is explicitly unsupported; IPv6, no-SNAT, independent policy and other router variants |
 | HC-035 | No C/R evidence audited | Site-to-site scope and reverse-path tests |
-| HC-036 | C native IPv4/IPv6 default-route selection, reference egress hop, withdrawal and recovery | Qualify on all native runners; production public-address and DNS observation remain release acceptance |
+| HC-036 | C native IPv4/IPv6 default-route selection, same-host reference egress hop, withdrawal and recovery | Qualify on all native runners; remote exit-peer underlay and remote control connectivity while default routes are active are not proved; production public-address and DNS observation remain release acceptance |
 | HC-037 | U exit-LAN rules | LAN allowed/denied with real exit traffic |
 | HC-038 | C real Linux Client acting as an IPv4 exit provider for another real Client, including default-route advertisement/approval, TCP/UDP forwarding, SNAT-dependent return traffic, withdrawal and provider restart recovery; non-Linux clients return an executable unsupported result | Qualify the new root on every runner; IPv6 provider, no-SNAT, HA and production public-address observation |
 | HC-039 | No C/R evidence audited | Role-specific HA semantics and failure recovery |
@@ -4779,3 +4779,54 @@ retain the same node identity and disconnected intent, and a repeated export
 must report the same unexpired artifact with `reused=true` and identical public
 lifecycle metadata. The later expiry path still replaces only the aged bundle
 and preserves unrelated operator files. Hosted qualification remains pending.
+
+### 2026-09-12: limits of the Darwin default-route correction
+
+Source `52edca1` expands each Darwin default route into two `/1` routes to
+preserve the physical interface's `/0` during withdrawal. Its
+[native CI run](https://github.com/endless-net/client/actions/runs/34700234967)
+was still pending at this inspection; compilation is not native route evidence.
+The follow-up component regression exercises failure of the second route
+mutation for both addition and deletion, restoration of the previous route set,
+and a successful retry. It must execute on Darwin CI before it is qualified.
+
+Preserving `/0` does not itself preserve remote peer reachability while `/1`
+routes are installed. `magicbind.go` opens ordinary UDP sockets;
+`magicbind_mark_other.go` provides no non-Linux socket mark, and the Darwin
+router configuration has no explicit endpoint exclusions. The current
+`TestControlPlaneNativeExitRoute` uses a same-host reference peer, so success
+does not prove that an off-host WireGuard endpoint or control server remains
+reachable through the physical network. HC-036 therefore still needs a
+Client-owned remote-underlay test and any corresponding routing correction.
+This inspection does not establish the cause of the earlier macOS runner's
+interface loss, nor does it establish that `52edca1` resolves that failure.
+
+The installation workflow constructs `${initial_version}+ci.1` for its second
+unpublished artifact. The user explicitly authorized adding `+ci.1` on
+2026-09-12. This approval covers that test artifact suffix; HC-060 still requires
+native qualification. The 50 common test roots are
+an executable inventory, not a count of fully accepted HC scenarios or a
+percentage of the 65-scenario objective.
+
+The follow-up Darwin setup correction tracks only successfully added routes
+for cleanup and rejects `file exists` rather than adopting an existing route.
+Its component regression injects both an existing-route conflict and a
+permission failure after the first `/1` was installed. Cleanup must remove that
+first half, preserve the pre-existing second half, and never attempt to delete
+a route whose installation was not reached. Native execution remains pending.
+
+The completed [Windows 2025 repetition 3 job](https://github.com/endless-net/client/actions/runs/34698630395/job/103567055140)
+for source `c5bd840` reports only `TestControlPlaneNativeMachineSharing` as a
+failed root: IPv4 cannot reach the granted TCP service and IPv6 reports a local
+endpoint binding mismatch. This is evidence for the older fixture failures
+addressed by `47e62ec`, not evidence that the corrected fixture passes.
+
+The [Windows 2025 repetition 1 job](https://github.com/endless-net/client/actions/runs/34698630395/job/103567055274)
+and [Windows 2022 repetition 2 job](https://github.com/endless-net/client/actions/runs/34698630395/job/103567055161)
+also fail `TestControlPlaneNativeExitRoute/ipv4`. On Windows 2025, the failure
+occurs on the first approved-route traffic assertion; IPv6 passes. Thus the
+exit-route failure is not confined to Darwin, and the Darwin route correction
+cannot be considered a resolution of the Windows failure. The reference-hop
+test now reports TCP and UDP outcomes separately and requires fresh forwarded
+packet counts on each reachability phase, including recovery. This avoids
+using packets from the initial connection as evidence of the recovered path.

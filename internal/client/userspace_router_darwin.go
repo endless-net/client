@@ -50,8 +50,12 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 	if r.configured {
 		_ = r.Down(ctx)
 	}
+	// Failed setup owns only routes whose add command succeeded. In
+	// particular, EEXIST does not grant ownership of another interface's route.
+	applied := cfg
+	applied.Routes = nil
 	fail := func(err error) error {
-		_ = r.cleanup(ctx, cfg)
+		_ = r.cleanup(ctx, applied)
 		return err
 	}
 	if out, err := r.runner(ctx, "ifconfig", cfg.Interface, "mtu", fmt.Sprint(cfg.MTU), "up"); err != nil {
@@ -78,9 +82,10 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 		if route.Addr().Is6() {
 			family = "-inet6"
 		}
-		if out, err := r.runner(ctx, "route", "-n", "add", family, route.String(), "-interface", cfg.Interface); err != nil && !strings.Contains(strings.ToLower(string(out)), "file exists") {
+		if out, err := r.runner(ctx, "route", "-n", "add", family, route.String(), "-interface", cfg.Interface); err != nil {
 			return fail(fmt.Errorf("configure darwin TUN route: %s", commandError(err, out)))
 		}
+		applied.Routes = append(applied.Routes, route)
 	}
 	if darwinShouldConfigureDNS(cfg) {
 		if out, err := r.inputRunner(ctx, darwinUserspaceDNSCommands(cfg), "scutil"); err != nil {
@@ -146,7 +151,9 @@ func (r *darwinWireGuardEngineRouter) reconcileRoutes(ctx context.Context, cfg w
 // Darwin already has a default route for the physical interface. Installing a
 // second /0 either fails with EEXIST or replaces the route that keeps the host
 // online. Two /1 routes win by longest-prefix match while leaving that default
-// route intact for peer endpoints and for immediate recovery on withdrawal.
+// route intact for recovery on withdrawal. Endpoint reachability while these
+// routes are active requires separate underlay routing; retaining /0 alone
+// does not bypass the more specific tunnel routes.
 func darwinSystemRoutes(routes []netip.Prefix) []netip.Prefix {
 	result := make([]netip.Prefix, 0, len(routes)+2)
 	for _, route := range routes {

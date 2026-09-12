@@ -61,6 +61,97 @@ func TestDarwinDefaultRoutesPreservePhysicalInterfaceDefaults(t *testing.T) {
 	}
 }
 
+func TestDarwinSetupFailurePreservesUnownedRoutes(t *testing.T) {
+	for _, failure := range []string{"file exists", "permission denied"} {
+		t.Run(failure, func(t *testing.T) {
+			installed := map[string]string{"128.0.0.0/1": "physical"}
+			r := &darwinWireGuardEngineRouter{runner: func(_ context.Context, name string, args ...string) ([]byte, error) {
+				if name == "ifconfig" {
+					return nil, nil
+				}
+				if name != "route" || len(args) != 6 {
+					t.Fatalf("unexpected command %s %v", name, args)
+				}
+				prefix := args[3]
+				if args[1] == "add" {
+					if prefix == "128.0.0.0/1" {
+						return []byte(failure), errors.New(failure)
+					}
+					installed[prefix] = "client"
+				} else {
+					if installed[prefix] != "client" {
+						t.Fatalf("cleanup attempted to remove unowned route %s", prefix)
+					}
+					delete(installed, prefix)
+				}
+				return nil, nil
+			}}
+			cfg := wireGuardEngineRouterConfig{Interface: "utun99", MTU: 1280,
+				Routes: []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("203.0.113.0/24")}}
+			if err := r.Configure(t.Context(), cfg); err == nil || !strings.Contains(err.Error(), failure) {
+				t.Fatalf("setup failure was not propagated: %v", err)
+			}
+			if r.configured || len(installed) != 1 || installed["128.0.0.0/1"] != "physical" {
+				t.Fatalf("failed setup leaked or removed routes: %v", installed)
+			}
+		})
+	}
+}
+
+func TestDarwinDefaultRoutePartialFailureRestoresRouteSet(t *testing.T) {
+	for _, operation := range []string{"add", "delete"} {
+		t.Run(operation, func(t *testing.T) {
+			original := wireGuardEngineRouterConfig{Interface: "utun99", MTU: 1280}
+			next := cloneWireGuardEngineRouterConfig(original)
+			next.Routes = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}
+			installed := map[string]bool{}
+			if operation == "delete" {
+				original, next = next, original
+				installed["0.0.0.0/1"], installed["128.0.0.0/1"] = true, true
+			}
+			fail := true
+			r := &darwinWireGuardEngineRouter{configured: true, current: cloneWireGuardEngineRouterConfig(original), runner: func(_ context.Context, name string, args ...string) ([]byte, error) {
+				if name != "route" || len(args) != 6 {
+					t.Fatalf("unexpected command %s %v", name, args)
+				}
+				if fail && args[1] == operation && args[3] == "128.0.0.0/1" {
+					return nil, errors.New("second half rejected")
+				}
+				if args[1] == "add" {
+					installed[args[3]] = true
+				} else {
+					delete(installed, args[3])
+				}
+				return nil, nil
+			}}
+			if err := r.Configure(t.Context(), next); err == nil {
+				t.Fatal("partial route failure was accepted")
+			}
+			assertRoutes := func(cfg wireGuardEngineRouterConfig) {
+				t.Helper()
+				want := darwinSystemRoutes(cfg.Routes)
+				if len(installed) != len(want) {
+					t.Fatalf("route set after operation: %v; want %v", installed, want)
+				}
+				for _, route := range want {
+					if !installed[route.String()] {
+						t.Fatalf("missing route %s", route)
+					}
+				}
+			}
+			assertRoutes(original)
+			if !wireGuardEngineRouterConfigsEqual(r.current, original) {
+				t.Fatal("failed operation changed committed configuration")
+			}
+			fail = false
+			if err := r.Configure(t.Context(), next); err != nil {
+				t.Fatal(err)
+			}
+			assertRoutes(next)
+		})
+	}
+}
+
 func TestDarwinUserspaceDNSPreservesScopedAndSearchDomains(t *testing.T) {
 	script := darwinUserspaceDNSCommands(wireGuardEngineRouterConfig{
 		Interface:        "utun99",

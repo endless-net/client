@@ -89,11 +89,19 @@ func TestControlPlaneNativeExitRoute(t *testing.T) {
 				t.Helper()
 				ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 				defer cancel()
-				if err := testclient.Await(ctx, func() bool { return probe("tcp") && probe("udp") }); err != nil {
-					t.Fatal("approved default route did not carry TCP and UDP through the exit peer")
+				var tcpOK, udpOK bool
+				beforeTo, beforeFrom := reference.ForwardedPacketCounts()
+				if err := testclient.Await(ctx, func() bool {
+					tcpOK = probe("tcp")
+					udpOK = probe("udp")
+					return tcpOK && udpOK
+				}); err != nil {
+					toResource, fromResource := reference.ForwardedPacketCounts()
+					t.Fatalf("approved default route did not carry TCP and UDP through the exit peer: tcp=%t udp=%t forwarded=%d/%d before=%d/%d",
+						tcpOK, udpOK, toResource, fromResource, beforeTo, beforeFrom)
 				}
 				toResource, fromResource := reference.ForwardedPacketCounts()
-				if toResource == 0 || fromResource == 0 {
+				if toResource <= beforeTo || fromResource <= beforeFrom {
 					t.Fatal("egress traffic bypassed the reference forwarding hop")
 				}
 			}
