@@ -291,11 +291,23 @@ func systemResolverCommand(ctx context.Context, binary, name, expected string) *
 
 func assertSystemDNSNameAbsent(t *testing.T, binary, listener, name string) {
 	t.Helper()
-	directCtx, directCancel := context.WithTimeout(t.Context(), 3*time.Second)
-	directOutput, directErr := packetProbeCommand(directCtx, "", binary, "--mode", "resolve", "--address", name, "--dns", listener).CombinedOutput()
-	directCancel()
-	directExit, directExitOK := directErr.(*exec.ExitError)
-	if !directExitOK || directExit.ExitCode() != 3 || strings.TrimSpace(string(directOutput)) != "DNS name not found" {
+	directNameNotFound := false
+	for range 3 {
+		directCtx, directCancel := context.WithTimeout(t.Context(), 3*time.Second)
+		directOutput, directErr := packetProbeCommand(directCtx, "", binary, "--mode", "resolve", "--address", name, "--dns", listener).CombinedOutput()
+		directCancel()
+		directExit, directExitOK := directErr.(*exec.ExitError)
+		if directExitOK && directExit.ExitCode() == 3 && strings.TrimSpace(string(directOutput)) == "DNS name not found" {
+			directNameNotFound = true
+			break
+		}
+		select {
+		case <-time.After(200 * time.Millisecond):
+		case <-t.Context().Done():
+			t.Fatal("Client DNS negative convergence wait interrupted")
+		}
+	}
+	if !directNameNotFound {
 		t.Fatal("Client DNS listener did not return the name-not-found outcome")
 	}
 	if runtime.GOOS == "windows" {
