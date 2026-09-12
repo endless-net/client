@@ -47,6 +47,21 @@ func TestInvalidBrowserInputCanBeCorrected(t *testing.T) {
 			if created != 1 {
 				t.Fatal("corrected browser input did not create exactly one approval request")
 			}
+			if err := s.DecideEnrollment(approval.RequestID, true); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := captureStdout(t, func() error { return cmdUp(append(args, tc.valid)) }); err != nil {
+				t.Fatal("corrected browser input could not complete approved enrollment")
+			}
+			registered := 0
+			for _, event := range s.Events() {
+				if event.Kind == "registered" {
+					registered++
+				}
+			}
+			if registered != 1 {
+				t.Fatal("approved corrected input did not register exactly one node")
+			}
 		})
 	}
 }

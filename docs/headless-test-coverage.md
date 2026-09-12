@@ -2996,6 +2996,16 @@ separate from the Windows component queue access-denied failure below.
 
 ## Next work
 
+Browser input correction coverage now continues after approval. For each of the
+three malformed-input variants, the fixture approves the one corrected request,
+the real CLI completes it and the agent exposes a valid cached map and credential
+through public IPC. The signed result must retain the intended hostname and,
+for the advertisement variant, the corrected prefix. Exactly one approval request
+and one registered node must exist in the fixture transcript. The short command
+regression also completes the approved request; the agent/projection assertions
+are native CI only. This adds approval-completion evidence requirements without
+claiming that an accepted endpoint is reachable or an advertised route authorized.
+
 The browser input regression now also covers invalid hostname and endpoint.
 Both new short cases failed before the fix because an enrollment POST was sent.
 The browser branch now checks the effective request hostname and optional

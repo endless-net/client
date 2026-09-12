@@ -28,7 +28,7 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 				t.Fatal(err)
 			}
 			n := testclient.New(t, s)
-			args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--hostname", "route-node", "--map-signing-trust-file", n.TrustFile, "--approval-timeout", "0", tc.flag}
+			args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--hostname", "route-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off", "--approval-timeout", "0", tc.flag}
 			_, err = n.Run(append(args, tc.invalid)...)
 			var exit *exec.ExitError
 			if !errors.As(err, &exit) || exit.ExitCode() != 1 {
@@ -46,9 +46,11 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 				t.Fatal("corrected browser input did not report approval required (output withheld)")
 			}
 			created := 0
+			requestID := ""
 			for _, event := range s.Events() {
 				if event.Kind == "enrollment" {
 					created++
+					requestID = event.Path
 				}
 				if event.Kind == "registered" {
 					t.Fatal("browser input enrolled without approval")
@@ -56,6 +58,38 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 			}
 			if created != 1 {
 				t.Fatal("corrected browser input did not create one approval request")
+			}
+			if err := s.DecideEnrollment(requestID, true); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := n.Run(append(args, tc.valid)...); err != nil {
+				t.Fatal("corrected browser input could not complete approved enrollment")
+			}
+			n.Start()
+			status := n.AwaitStatus(func(v ipc.StatusResponse) bool {
+				return v.NodeID != "" && v.CachedMapValid && v.NodeCredentialPresent
+			})
+			projection, err := s.Snapshot(status.NodeID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if projection.Node.Hostname != "route-node" {
+				t.Fatal("approved browser enrollment lost the corrected hostname")
+			}
+			if tc.flag == "--advertise" && !slices.Equal(projection.Node.AdvertisedIPs, []string{tc.valid}) {
+				t.Fatal("approved browser enrollment lost the corrected prefix")
+			}
+			created, registered := 0, 0
+			for _, event := range s.Events() {
+				if event.Kind == "enrollment" {
+					created++
+				}
+				if event.Kind == "registered" {
+					registered++
+				}
+			}
+			if created != 1 || registered != 1 {
+				t.Fatal("browser correction or completion duplicated enrollment")
 			}
 		})
 	}
