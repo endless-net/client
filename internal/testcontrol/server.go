@@ -294,6 +294,23 @@ func (s *Server) AddNetwork(name, cidr string) (api.Network, string, error) {
 	return clone(n), token, nil
 }
 
+// RotateJoinToken revokes one fixture-issued registration credential and
+// returns a replacement for the same network. Existing node credentials are
+// deliberately independent from this test control.
+func (s *Server) RotateJoinToken(token string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	networkID, ok := s.joins[token]
+	if !ok {
+		return "", errors.New("unknown join token")
+	}
+	delete(s.joins, token)
+	replacement := rand.Text()
+	s.joins[replacement] = networkID
+	s.recordLocked(Event{Kind: "join-token-rotated"})
+	return replacement, nil
+}
+
 func (s *Server) Events() []Event    { s.mu.Lock(); defer s.mu.Unlock(); return clone(s.events) }
 func (s *Server) ActiveStreams() int { s.mu.Lock(); defer s.mu.Unlock(); return s.active }
 func (s *Server) recordLocked(e Event) {

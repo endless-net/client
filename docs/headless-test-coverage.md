@@ -91,7 +91,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-012 | D request/proof tests | Real Client allowed/denied registration attributes and effective access against published contract responses |
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
 | HC-014 | C user-session rotation, user-RPC denial, node-credential independence, reauthentication and same-node traffic/restart recovery are executable; U recovery matrix | Qualify the native root on every runner; browser/OIDC refresh and other session-expiry timing variants |
-| HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
+| HC-015 | C join-token rotation denies a new real Client, preserves the existing node credential, signed-map advancement, native traffic and restart, then replacement-token enrollment is executable; historical R revoked join key | Qualify the native root on every runner; token expiry and offline variants; node revocation remains separate |
 | HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners | Other paths/protocols and denied-access variants |
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
 | HC-018 | C connected/disconnected intent survives process restart with native IPv4/IPv6 TCP/UDP and ICMP echo checks on all eight runners; historical R traffic checks | Host reboot, crash during intent write and other platform/network variants |
@@ -4605,3 +4605,13 @@ NRPT rule and successful `Resolve-DnsName` while the Go packet probe bypassed
 that platform path; Windows assertions now use the native resolver API and
 also require the Client listener's exact negative wire outcome. The correction
 and bounded OS resolver convergence wait require a new complete matrix.
+
+`TestControlPlaneJoinTokenRotation` adds HC-015 at the public registration and
+node-credential boundaries. A real enrolled Client first establishes native
+TCP traffic. The fixture rotates only its join token; the old token must deny a
+second Client, while the first Client consumes a newer signed map, retains its
+node credential and traffic, and survives restart. The replacement token must
+then enroll exactly one distinct node. The fixture control models token
+revocation without reading a producer database, and the test observes only CLI,
+IPC, signed-map and traffic outcomes. Token expiry and offline enrollment remain
+separate. The pending common inventory is now 45 roots / 1,080 outcomes.
