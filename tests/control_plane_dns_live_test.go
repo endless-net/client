@@ -58,7 +58,7 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 		status = n.AwaitStatus(func(v ipc.StatusResponse) bool { return nativeDNSMapApplied(v, id, previous) })
 	}
 	setPeer("system-peer-one", "198.18.97.20")
-	assertSystemDNSAddress(t, binary, "system-peer-one.scenario.endlessnet", "198.18.97.20")
+	assertSystemDNSAddress(t, binary, n.Interface, "system-peer-one.scenario.endlessnet", "198.18.97.20")
 	assertSystemDNSNameAbsent(t, binary, "absent-one.scenario.endlessnet")
 
 	var disconnected ipc.DisconnectResponse
@@ -78,7 +78,7 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 	status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
 		return nativeDNSMapApplied(v, id, previous) && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
 	})
-	assertSystemDNSAddress(t, binary, "system-peer-two.scenario.endlessnet", "198.18.97.21")
+	assertSystemDNSAddress(t, binary, n.Interface, "system-peer-two.scenario.endlessnet", "198.18.97.21")
 	assertSystemDNSNameAbsent(t, binary, "absent-two.scenario.endlessnet")
 }
 
@@ -197,7 +197,7 @@ func assertDNSListenerUnavailable(t *testing.T, transport, address string) {
 	}
 }
 
-func assertSystemDNSAddress(t *testing.T, binary, name, expected string) {
+func assertSystemDNSAddress(t *testing.T, binary, interfaceName, name, expected string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -211,14 +211,26 @@ func assertSystemDNSAddress(t *testing.T, binary, name, expected string) {
 		if strings.TrimSpace(string(output)) == "application exchange unavailable" {
 			probeOutcome = "unavailable"
 		}
+		directCtx, directCancel := context.WithTimeout(t.Context(), 3*time.Second)
+		directOutput, directErr := packetProbeCommand(directCtx, "", binary, "--mode", "resolve", "--address", name, "--dns", "127.0.0.1:53").CombinedOutput()
+		directOK := directErr == nil && strings.TrimSpace(string(directOutput)) == expected
+		directCancel()
 		if runtime.GOOS == "linux" {
 			managerCtx, managerCancel := context.WithTimeout(t.Context(), 3*time.Second)
 			managerOK := exec.CommandContext(managerCtx, "resolvectl", "query", "--", name).Run() == nil
 			managerCancel()
+			dnsCtx, dnsCancel := context.WithTimeout(t.Context(), 3*time.Second)
+			dnsOutput, dnsErr := exec.CommandContext(dnsCtx, "resolvectl", "dns", interfaceName).CombinedOutput()
+			linkDNSOK := dnsErr == nil && strings.Contains(string(dnsOutput), "127.0.0.1")
+			dnsCancel()
+			domainCtx, domainCancel := context.WithTimeout(t.Context(), 3*time.Second)
+			domainOutput, domainErr := exec.CommandContext(domainCtx, "resolvectl", "domain", interfaceName).CombinedOutput()
+			linkDomainOK := domainErr == nil && strings.Contains(string(domainOutput), "~scenario.endlessnet")
+			domainCancel()
 			contents, _ := os.ReadFile("/etc/resolv.conf")
 			link, _ := os.Readlink("/etc/resolv.conf")
 			stub := strings.Contains(string(contents), "127.0.0.53") || strings.Contains(link, "stub-resolv.conf")
-			t.Logf("system resolver diagnostic: probe_exit=%d probe_outcome=%s resolvectl_query_ok=%t systemd_stub=%t", probeExit, probeOutcome, managerOK, stub)
+			t.Logf("system resolver diagnostic: probe_exit=%d probe_outcome=%s direct_listener_ok=%t resolvectl_query_ok=%t link_dns_ok=%t link_domain_ok=%t systemd_stub=%t", probeExit, probeOutcome, directOK, managerOK, linkDNSOK, linkDomainOK, stub)
 		}
 		if runtime.GOOS == "windows" {
 			managerCtx, managerCancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -230,7 +242,7 @@ func assertSystemDNSAddress(t *testing.T, binary, name, expected string) {
 			ruleScript := "$r=Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like 'EndlessNet-*'}; if(-not $r){exit 2}"
 			rulePresent := exec.CommandContext(ruleCtx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", ruleScript).Run() == nil
 			ruleCancel()
-			t.Logf("system resolver diagnostic: probe_exit=%d probe_outcome=%s windows_dns_api_ok=%t nrpt_present=%t", probeExit, probeOutcome, managerOK, rulePresent)
+			t.Logf("system resolver diagnostic: probe_exit=%d probe_outcome=%s direct_listener_ok=%t windows_dns_api_ok=%t nrpt_present=%t", probeExit, probeOutcome, directOK, managerOK, rulePresent)
 		}
 		t.Fatal("system resolver did not resolve the published Client DNS name")
 	}

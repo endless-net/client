@@ -90,7 +90,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-011 | CLI join-token --ephemeral forwarding has a component test; no C/R lifecycle evidence | Define client normal/crash lifecycle observations; token-option forwarding does not prove expiry |
 | HC-012 | D request/proof tests | Real Client allowed/denied registration attributes and effective access against published contract responses |
 | HC-013 | C BrowserEnrollment; R registered-node rejection and reapproval restore real traffic | Remaining pending/denial and browser completion variants |
-| HC-014 | U recovery matrix | C session expiry, reauthentication and preservation |
+| HC-014 | C user-session rotation, user-RPC denial, node-credential independence, reauthentication and same-node traffic/restart recovery are executable; U recovery matrix | Qualify the native root on every runner; browser/OIDC refresh and other session-expiry timing variants |
 | HC-015 | R revoked join key denies a new client while existing map access/renewal survives | Agent/dataplane, expiry and offline variants; node revocation remains separate |
 | HC-016 | C initial cached-map status and native direct IPv4/IPv6 TCP/UDP and ICMP echo on all eight runners | Other paths/protocols and denied-access variants |
 | HC-017 | C native direct IPv4/IPv6 TCP/UDP and ICMP echo blocked/restored by disconnect/connect and agent restart on all eight runners with original identity; historical R direct TCP/UDP | Remaining established-flow, other paths and operation-failure variants |
@@ -4579,3 +4579,15 @@ both usable hosts. Direct peer authorization is asserted separately from
 logical-service membership. Health interpretation, balancing and connection
 draining are still product gaps. This raises the pending common inventory to
 43 roots / 1,032 native outcomes.
+
+`TestControlPlaneSessionExpiryRecovery` adds HC-014 at the public credential
+boundaries. The CLI first logs in through the discovery document and performs
+an authenticated user RPC, then enrolls and starts the real agent. The fixture
+rotates only the user session. The old session must be denied by the user RPC,
+while the independent node credential continues consuming a newer signed map
+and keeps native TCP traffic available. Login with the replacement session
+must restore the user RPC without changing the node ID or registering again;
+agent restart must retain that identity and traffic. The testserver exposes the
+standard discovery document and a fixture-only session-rotation control; the
+test never reads the Client config or service state. This raises the pending
+common inventory to 44 roots / 1,056 native outcomes.

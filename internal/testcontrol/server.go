@@ -121,6 +121,11 @@ func NewWithListener(t testing.TB, listener net.Listener) *Server {
 	}
 	s := &Server{key: key, trust: trust, mapKey: key, mapTrust: trust, session: rand.Text(), networks: map[string]api.Network{}, joins: map[string]string{}, nodes: map[string]*node{}, operations: map[string]operation{}, enrollments: map[string]*enrollment{}, changed: make(chan struct{}), streams: make(chan struct{}), closed: make(chan struct{}), faults: map[string]api.ErrorCode{}, mapFaults: map[string]string{}}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /.well-known/endlessnet", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, struct {
+			ManagementURL string `json:"management_url"`
+		}{ManagementURL: s.URL()})
+	})
 	mux.HandleFunc("GET /client/readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /server-key", s.serverKey)
 	mux.HandleFunc("POST /nodes/register", s.register)
@@ -246,6 +251,15 @@ func (s *Server) RotateMapSigningKey() error {
 	return nil
 }
 func (s *Server) SessionToken() string { s.mu.Lock(); defer s.mu.Unlock(); return s.session }
+
+// RotateSession invalidates the previous user credential and returns the new
+// fixture credential. Registered clients keep their independent node token.
+func (s *Server) RotateSession() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.session = rand.Text()
+	return s.session
+}
 
 func clone[T any](v T) T {
 	b, err := json.Marshal(v)
