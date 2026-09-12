@@ -55,6 +55,12 @@ keyed enrollment request digest, caller-bound lookup, operation transition rules
 terminal immutability, nonterminal retention and 24-hour completed retention.
 These are storage/domain unit tests, not full runtime, provider or UI acceptance.
 
+`internal/client/service_rpc_transport_test.go` additionally exercises the actual
+local gRPC guard and ConfigStore acceptance: OS identity becomes the durable
+owner, reconnect recovers a request by its original ID, an identical retry does
+not prepare again, and a conflicting payload returns typed INVALID_ARGUMENT.
+Its preparation fixture is not an implementation of the profile provider.
+
 The corrected descriptor and transport pipeline passed all jobs on
 [client commit b3929b7](https://github.com/endless-net/client/actions/runs/34720790036).
 That run includes Windows/Linux/macOS local transport, Buf baseline checks,

@@ -84,6 +84,8 @@ jobs:
           buf generate
           buf build -o clientipc/rpc/client.binpb
           goimports -w clientipc
+          cd clientipc
+          go run ./internal/dartmetadata
       - name: Test generated Go protocols
         working-directory: clientipc
         run: go test -short ./...

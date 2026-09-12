@@ -45,6 +45,8 @@ protoc-gen-go 1.36.10, protoc-gen-connect-go 1.19.1, protoc_plugin 25.0.0.
 Run `buf generate`, `buf build -o clientipc/rpc/client.binpb` and
 `goimports -w clientipc` from the repository root. The embedded descriptor is
 the runtime digest source, not the frozen compatibility baseline.
+Then run `go run ./internal/dartmetadata` from `clientipc` to regenerate the
+exported Dart `ClientContract` pairing metadata from that same descriptor.
 CI regenerates both SDKs, checks tracked and untracked changes, tests Go unary
 and streaming calls over Connect/gRPC, and analyzes Dart with locked dependencies.
 Control-plane DTOs remain owned by their existing producer modules; these

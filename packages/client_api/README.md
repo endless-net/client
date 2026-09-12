@@ -13,3 +13,9 @@ local gRPC channel to the generated ClientServiceClient. These bindings do not
 implement Windows named-pipe dialing, Unix peer credentials or a mobile bridge.
 The Go Connect handler supports the gRPC protocol used by this Dart client.
 No HTTP Connect wrapper or production transport adapter is included.
+
+`ClientContract` exports the exact descriptor SHA-256, protocol/version and
+lowercase gRPC metadata. Bootstrap must validate all three plus the runtime
+instance ID; subsequent calls send `ClientContract.metadata`. Regenerate these
+constants after the embedded descriptor with `go run ./internal/dartmetadata`
+from `clientipc`. CI regenerates and checks them together with both SDKs.
