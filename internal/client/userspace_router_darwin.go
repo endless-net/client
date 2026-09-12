@@ -4,6 +4,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
 	"os/exec"
@@ -100,48 +101,64 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 // Route-only map changes must not flap utun: asynchronous interface-down
 // events can stop WireGuard while its new peer configuration is being applied.
 func (r *darwinWireGuardEngineRouter) reconcileRoutes(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
-	change := func(operation string, route netip.Prefix) error {
-		changed := make([]netip.Prefix, 0, 2)
-		for _, systemRoute := range darwinSystemRoutes([]netip.Prefix{route}) {
-			family := "-inet"
-			if systemRoute.Addr().Is6() {
-				family = "-inet6"
-			}
-			out, err := r.runner(ctx, "route", "-n", operation, family, systemRoute.String(), "-interface", cfg.Interface)
-			if err != nil {
-				rollback := "delete"
-				if operation == "delete" {
-					rollback = "add"
-				}
-				for i := len(changed) - 1; i >= 0; i-- {
-					rollbackFamily := "-inet"
-					if changed[i].Addr().Is6() {
-						rollbackFamily = "-inet6"
-					}
-					_, _ = r.runner(ctx, "route", "-n", rollback, rollbackFamily, changed[i].String(), "-interface", cfg.Interface)
-				}
-				return fmt.Errorf("%s darwin TUN route: %s", operation, commandError(err, out))
-			}
-			changed = append(changed, systemRoute)
+	previous := darwinSystemRoutes(r.current.Routes)
+	desired := darwinSystemRoutes(cfg.Routes)
+	installed := slices.Clone(previous)
+	type mutation struct {
+		operation string
+		route     netip.Prefix
+	}
+	var changes []mutation
+	change := func(m mutation) error {
+		family := "-inet"
+		if m.route.Addr().Is6() {
+			family = "-inet6"
+		}
+		out, err := r.runner(ctx, "route", "-n", m.operation, family, m.route.String(), "-interface", cfg.Interface)
+		if err != nil {
+			return fmt.Errorf("%s darwin TUN route: %s", m.operation, commandError(err, out))
+		}
+		if m.operation == "add" {
+			installed = append(installed, m.route)
+		} else {
+			installed = slices.DeleteFunc(installed, func(p netip.Prefix) bool { return p == m.route })
 		}
 		return nil
 	}
-	// Track each successful mutation so engine rollback can reconcile back to
-	// the previous map even if a later route command fails.
-	for _, route := range slices.Clone(r.current.Routes) {
-		if !slices.Contains(cfg.Routes, route) {
-			if err := change("delete", route); err != nil {
+	apply := func(m mutation) error {
+		if err := change(m); err != nil {
+			var rollbackErr error
+			for i := len(changes) - 1; i >= 0; i-- {
+				inverse := changes[i]
+				if inverse.operation == "add" {
+					inverse.operation = "delete"
+				} else {
+					inverse.operation = "add"
+				}
+				rollbackErr = errors.Join(rollbackErr, change(inverse))
+			}
+			if rollbackErr != nil {
+				// Keep the actual successful mutations so later recovery or Down
+				// does not mistake the old logical map for installed OS routes.
+				r.current.Routes = slices.Clone(installed)
+			}
+			return errors.Join(err, rollbackErr)
+		}
+		changes = append(changes, m)
+		return nil
+	}
+	for _, route := range previous {
+		if !slices.Contains(desired, route) {
+			if err := apply(mutation{"delete", route}); err != nil {
 				return err
 			}
-			r.current.Routes = slices.DeleteFunc(slices.Clone(r.current.Routes), func(p netip.Prefix) bool { return p == route })
 		}
 	}
-	for _, route := range cfg.Routes {
-		if !slices.Contains(r.current.Routes, route) {
-			if err := change("add", route); err != nil {
+	for _, route := range desired {
+		if !slices.Contains(previous, route) {
+			if err := apply(mutation{"add", route}); err != nil {
 				return err
 			}
-			r.current.Routes = append(slices.Clone(r.current.Routes), route)
 		}
 	}
 	r.current = cloneWireGuardEngineRouterConfig(cfg)
@@ -167,7 +184,13 @@ func darwinSystemRoutes(routes []netip.Prefix) []netip.Prefix {
 			result = append(result, netip.MustParsePrefix("::/1"), netip.MustParsePrefix("8000::/1"))
 		}
 	}
-	return result
+	unique := result[:0]
+	for _, route := range result {
+		if !slices.Contains(unique, route) {
+			unique = append(unique, route)
+		}
+	}
+	return unique
 }
 
 func (r *darwinWireGuardEngineRouter) Down(ctx context.Context) error {

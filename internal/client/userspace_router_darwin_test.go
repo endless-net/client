@@ -61,6 +61,96 @@ func TestDarwinDefaultRoutesPreservePhysicalInterfaceDefaults(t *testing.T) {
 	}
 }
 
+func TestDarwinOverlappingDefaultRouteLifecycle(t *testing.T) {
+	for _, prefixes := range [][]string{{"0.0.0.0/0", "0.0.0.0/1", "128.0.0.0/1"}, {"::/0", "::/1", "8000::/1"}} {
+		t.Run(prefixes[0], func(t *testing.T) {
+			installed := map[string]bool{}
+			r := &darwinWireGuardEngineRouter{runner: func(_ context.Context, name string, args ...string) ([]byte, error) {
+				if name == "ifconfig" {
+					return nil, nil
+				}
+				prefix := args[3]
+				if prefix == prefixes[0] {
+					t.Fatal("attempted to modify system default")
+				}
+				if args[1] == "add" {
+					if installed[prefix] {
+						return nil, errors.New("duplicate route")
+					}
+					installed[prefix] = true
+				} else {
+					if !installed[prefix] {
+						return nil, errors.New("absent route")
+					}
+					delete(installed, prefix)
+				}
+				return nil, nil
+			}}
+			for _, step := range []struct {
+				routes []string
+				want   []string
+			}{
+				{prefixes[:2], prefixes[1:]},
+				{prefixes[1:2], prefixes[1:2]},
+				{prefixes[:1], prefixes[1:]},
+				{prefixes[:2], prefixes[1:]},
+				{nil, nil},
+			} {
+				cfg := wireGuardEngineRouterConfig{Interface: "utun99", MTU: 1280}
+				for _, value := range step.routes {
+					cfg.Routes = append(cfg.Routes, netip.MustParsePrefix(value))
+				}
+				if err := r.Configure(t.Context(), cfg); err != nil {
+					t.Fatal(err)
+				}
+				if len(installed) != len(step.want) {
+					t.Fatalf("routes=%v want=%v", installed, step.want)
+				}
+				for _, value := range step.want {
+					if !installed[value] {
+						t.Fatalf("missing retained route %s", value)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestDarwinFailedRollbackRetainsRoutesForRecovery(t *testing.T) {
+	original := wireGuardEngineRouterConfig{Interface: "utun99", MTU: 1280}
+	installed := map[string]bool{}
+	fail := true
+	r := &darwinWireGuardEngineRouter{configured: true, current: original, runner: func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name != "route" {
+			t.Fatal("route recovery disturbed interface")
+		}
+		if fail && (args[3] == "128.0.0.0/1" || args[1] == "delete") {
+			return nil, errors.New("injected route failure")
+		}
+		if args[1] == "add" {
+			installed[args[3]] = true
+		} else {
+			delete(installed, args[3])
+		}
+		return nil, nil
+	}}
+	next := original
+	next.Routes = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}
+	if err := r.Configure(t.Context(), next); err == nil {
+		t.Fatal("failed rollback was accepted")
+	}
+	if len(installed) != 1 || !installed["0.0.0.0/1"] {
+		t.Fatalf("unexpected partial routes: %v", installed)
+	}
+	fail = false
+	if err := r.Configure(t.Context(), original); err != nil {
+		t.Fatal(err)
+	}
+	if len(installed) != 0 {
+		t.Fatalf("recovery leaked routes after failed rollback: %v", installed)
+	}
+}
+
 func TestDarwinSetupFailurePreservesUnownedRoutes(t *testing.T) {
 	for _, failure := range []string{"file exists", "permission denied"} {
 		t.Run(failure, func(t *testing.T) {

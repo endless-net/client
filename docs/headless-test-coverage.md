@@ -4909,3 +4909,13 @@ macOS repetitions, IPv6 provision, HA, or subsequent changes to the Client.
 The full matrix remains failed/incomplete. The machine-sharing fixture changes,
 Darwin route corrections, cached token-revocation startup, source-preserving
 subnet mode and process-wait changes made after `c5bd840` require a later run.
+
+The Darwin `/0` expansion also needs set-based reconciliation when the same map
+contains an explicit `/1`. Route setup now deduplicates expanded prefixes;
+updates compare the actual unique system-route sets. Removing `/0` preserves
+an independently required `/1`. A failed update rolls back completed mutations;
+if rollback also fails, the router retains the actual remaining routes for a
+later recovery attempt. Component regressions cover overlapping IPv4/IPv6 route
+lifecycles, partial application, and recovery after a failed rollback. Local
+Windows checks do not execute these Darwin-only tests; hosted verification is
+still required. Remote exit-peer underlay coverage remains a separate open gap.
