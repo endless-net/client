@@ -50,6 +50,10 @@ func TestControlPlaneNativeMachineSharing(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			recipientAllowedIPs := []string{netip.PrefixFrom(netip.MustParseAddr(snapshot.Node.AssignedIP), 32).String()}
+			if value := snapshot.Node.AssignedIPv6; value != "" {
+				recipientAllowedIPs = append(recipientAllowedIPs, netip.PrefixFrom(netip.MustParseAddr(value), 128).String())
+			}
 			reference := testwireguard.NewTCP(t, snapshot.Node.PublicKey, clientIP, sharedIP, underlay)
 			peer := api.Peer{
 				ID: "shared-node", NetworkID: "shared-network", Hostname: "shared-node",
@@ -61,7 +65,7 @@ func TestControlPlaneNativeMachineSharing(t *testing.T) {
 				return api.SharePeerGrant{
 					GrantID: "machine-share", RecipientNetworkID: snapshot.Network.ID,
 					RecipientNodeID: snapshot.Node.ID, RecipientPublicKey: snapshot.Node.PublicKey,
-					RecipientAllowedIPs: []string{netip.PrefixFrom(clientIP, clientIP.BitLen()).String()},
+					RecipientAllowedIPs: append([]string(nil), recipientAllowedIPs...),
 					SourceNetworkID:     peer.NetworkID, SourceNodeID: peer.ID, SourcePublicKey: peer.PublicKey,
 					SourceAllowedIPs: append([]string(nil), peer.AllowedIPs...),
 					Rights:           []api.ShareTraffic{{Protocol: "tcp", FirstPort: 24001, LastPort: 24001}},
@@ -114,7 +118,7 @@ func TestControlPlaneNativeMachineSharing(t *testing.T) {
 
 			apply(nil, nil)
 			blocked()
-			expires := time.Now().Add(5 * time.Second)
+			expires := time.Now().Add(12 * time.Second)
 			apply([]api.Peer{peer}, []api.SharePeerGrant{grant(1, expires)})
 			reachable()
 			timer := time.NewTimer(time.Until(expires) + 100*time.Millisecond)
