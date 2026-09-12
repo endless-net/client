@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,6 +58,7 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 	}
 	setPeer("system-peer-one", "198.18.97.20")
 	assertSystemDNSAddress(t, binary, "system-peer-one.scenario.endlessnet", "198.18.97.20")
+	assertSystemDNSNameAbsent(t, binary, "absent-one.scenario.endlessnet")
 
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
@@ -76,6 +78,7 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 		return nativeDNSMapApplied(v, id, previous) && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
 	})
 	assertSystemDNSAddress(t, binary, "system-peer-two.scenario.endlessnet", "198.18.97.21")
+	assertSystemDNSNameAbsent(t, binary, "absent-two.scenario.endlessnet")
 }
 
 // HC-025: the running native agent applies DNS changes from signed maps.
@@ -203,6 +206,17 @@ func assertSystemDNSAddress(t *testing.T, binary, name, expected string) {
 	}
 	if strings.TrimSpace(string(output)) != expected {
 		t.Fatal("system resolver returned an address outside the published Client map")
+	}
+}
+
+func assertSystemDNSNameAbsent(t *testing.T, binary, name string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	output, err := packetProbeCommand(ctx, "", binary, "--mode", "resolve", "--address", name).CombinedOutput()
+	exit, ok := err.(*exec.ExitError)
+	if !ok || exit.ExitCode() != 3 || strings.TrimSpace(string(output)) != "DNS name not found" {
+		t.Fatal("system resolver did not return the Client DNS name-not-found outcome")
 	}
 }
 
