@@ -20,7 +20,13 @@ func TestContainerWorkload(t *testing.T) {
 	}
 	requireControlScenario(t)
 	t.Run("persistent-state-restart", func(t *testing.T) {
-		exerciseNativeTrafficScenario(t, false, "tcp", false, "", true)
+		for _, family := range []string{"ipv4", "ipv6"} {
+			for _, protocol := range []string{"tcp", "udp"} {
+				t.Run(family+"/"+protocol, func(t *testing.T) {
+					exerciseNativeTrafficScenario(t, family == "ipv6", protocol, false, "", true)
+				})
+			}
+		}
 	})
 	t.Run("ephemeral-recreation", func(t *testing.T) {
 		exerciseEphemeralLifecycle(t)

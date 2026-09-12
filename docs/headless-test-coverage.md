@@ -130,7 +130,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-051 | C signed two-host service DNS, actual host traffic, target isolation, host-set removal, approval loss and recovery passed all 24 repetitions at `92983ae`; U service discovery/runtime | Health, load distribution and connection-draining semantics require product decisions |
 | HC-052 | L/C bounded IPC waits; independent event subscriptions/cancellation/restart and real CLI listening-timeout exit passed all 24 repetitions at qualified `38050bc`; installed absent-service failure passed all eight runners | Remaining public readiness conditions, slow consumers and stalled native IPC |
 | HC-053 | L/C structured IPC; request validation, non-object rejection, body-size boundaries, subscribers and real CLI NDJSON events passed all 24 repetitions at qualified `38050bc`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
-| HC-054 | L/C dedicated privileged Ubuntu container runs a real Client and workload: persistent state restart plus ephemeral retirement/recreation with native TCP evidence | Qualify the new required container job; host/sidecar split, reduced capabilities, container network modes and orchestration lifecycle |
+| HC-054 | L/C Ubuntu container persistent state restart and ephemeral retirement/recreation with native IPv4 TCP passed at `cce41e6`; persistent IPv4/IPv6 TCP/UDP variants are now executable | Qualify expanded container variants; host/sidecar split, reduced capabilities, container network modes and orchestration lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C public diagnostics export with control-outage isolation and recovery passed all 24 repetitions at `92983ae`; U path diagnostics | Distinguish peer path, DNS and application failures through public commands |
 | HC-057 | C export/reuse, agent-crash recovery, retention and IPv4 UDP flow consent/retry/expiry; D FlowConsentAndIdempotency; U flow tests | Qualify expanded diagnostics root; comprehensive redaction and remaining retention/flow variants |
@@ -5162,3 +5162,19 @@ regressions in the aggregate verifier. Local short tests, vet and lint pass.
 The native scenario is not present in `92983ae` or the running `cce41e6` matrix;
 its own hosted execution remains pending. It tests durable preferences across
 process restart, not live MTU changes or path-MTU/fragmentation behavior.
+
+### 2026-09-12: first successful container lifecycle evidence
+
+[Container job 103581615827](https://github.com/endless-net/client/actions/runs/34704108878/job/103581615827)
+for source `cce41e6a3b91fd322f7bb9a91125a1dd3bc251c0` passes
+`TestContainerWorkload` in 66.75 seconds, with successful persistent-state-restart
+and ephemeral-recreation subtests and no skips. This qualifies the checkout
+trust/dependency repairs and the initial IPv4 TCP workload checks. The job runs
+inside Ubuntu 24.04 with NET_ADMIN and `/dev/net/tun`; it does not recreate the
+container itself or qualify a sidecar/container-orchestration lifecycle.
+
+The persistent workload now runs all four IPv4/IPv6 TCP/UDP variants, including
+the existing lifecycle, policy and signed endpoint-change checks. Ephemeral
+recreation retains its IPv4 TCP evidence boundary. Local short tests, vet and
+lint pass; the three added persistent variants require a later native container
+run and are not covered by the successful job above.
