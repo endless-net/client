@@ -78,7 +78,7 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 			return fail(fmt.Errorf("configure darwin TUN address: %s", commandError(err, out)))
 		}
 	}
-	for _, route := range darwinSystemRoutes(cfg.Routes) {
+	for _, route := range splitDefaultRoutes(cfg.Routes) {
 		family := "-inet"
 		if route.Addr().Is6() {
 			family = "-inet6"
@@ -101,8 +101,8 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 // Route-only map changes must not flap utun: asynchronous interface-down
 // events can stop WireGuard while its new peer configuration is being applied.
 func (r *darwinWireGuardEngineRouter) reconcileRoutes(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
-	previous := darwinSystemRoutes(r.current.Routes)
-	desired := darwinSystemRoutes(cfg.Routes)
+	previous := splitDefaultRoutes(r.current.Routes)
+	desired := splitDefaultRoutes(cfg.Routes)
 	installed := slices.Clone(previous)
 	type mutation struct {
 		operation string
@@ -165,34 +165,6 @@ func (r *darwinWireGuardEngineRouter) reconcileRoutes(ctx context.Context, cfg w
 	return nil
 }
 
-// Darwin already has a default route for the physical interface. Installing a
-// second /0 either fails with EEXIST or replaces the route that keeps the host
-// online. Two /1 routes win by longest-prefix match while leaving that default
-// route intact for recovery on withdrawal. Endpoint reachability while these
-// routes are active requires separate underlay routing; retaining /0 alone
-// does not bypass the more specific tunnel routes.
-func darwinSystemRoutes(routes []netip.Prefix) []netip.Prefix {
-	result := make([]netip.Prefix, 0, len(routes)+2)
-	for _, route := range routes {
-		if route.Bits() != 0 {
-			result = append(result, route)
-			continue
-		}
-		if route.Addr().Is4() {
-			result = append(result, netip.MustParsePrefix("0.0.0.0/1"), netip.MustParsePrefix("128.0.0.0/1"))
-		} else {
-			result = append(result, netip.MustParsePrefix("::/1"), netip.MustParsePrefix("8000::/1"))
-		}
-	}
-	unique := result[:0]
-	for _, route := range result {
-		if !slices.Contains(unique, route) {
-			unique = append(unique, route)
-		}
-	}
-	return unique
-}
-
 func (r *darwinWireGuardEngineRouter) Down(ctx context.Context) error {
 	if !r.configured {
 		return nil
@@ -207,7 +179,7 @@ func (r *darwinWireGuardEngineRouter) cleanup(ctx context.Context, cfg wireGuard
 	if darwinShouldConfigureDNS(cfg) {
 		_, _ = r.inputRunner(ctx, darwinUserspaceDNSRemoveCommands(cfg.Interface), "scutil")
 	}
-	for _, route := range darwinSystemRoutes(cfg.Routes) {
+	for _, route := range splitDefaultRoutes(cfg.Routes) {
 		family := "-inet"
 		if route.Addr().Is6() {
 			family = "-inet6"

@@ -122,3 +122,48 @@ func TestWindowsFailedRouteUpdateRequiresFullRestore(t *testing.T) {
 		t.Fatal("partial route failure did not allow full restoration of prior configuration")
 	}
 }
+
+func TestWindowsExitRoutesPreserveDefaultAndOverlappingHalfRoutes(t *testing.T) {
+	for _, family := range []struct{ full, low, high string }{
+		{"0.0.0.0/0", "0.0.0.0/1", "128.0.0.0/1"},
+		{"::/0", "::/1", "8000::/1"},
+	} {
+		t.Run(family.full, func(t *testing.T) {
+			full := wireGuardEngineRouterConfig{Interface: "EndlessNet", MTU: 1280,
+				Routes: []netip.Prefix{netip.MustParsePrefix(family.full), netip.MustParsePrefix(family.low)}}
+			setup := windowsUserspaceRouterScript(full, false)
+			for _, prefix := range []string{family.low, family.high} {
+				if strings.Count(setup, "New-NetRoute -DestinationPrefix '"+prefix+"'") != 1 {
+					t.Fatalf("default expansion must install each half exactly once: %s", prefix)
+				}
+			}
+			if strings.Contains(setup, "-DestinationPrefix '"+family.full+"'") {
+				t.Fatal("exit configuration competes with the physical default route")
+			}
+			half := cloneWireGuardEngineRouterConfig(full)
+			half.Routes = []netip.Prefix{netip.MustParsePrefix(family.low)}
+			for _, transition := range []struct {
+				from, to wireGuardEngineRouterConfig
+				verb     string
+			}{
+				{full, half, "Remove-NetRoute"},
+				{half, full, "New-NetRoute"},
+			} {
+				script := windowsUserspaceRouteUpdateScript(transition.from, transition.to)
+				if strings.Count(script, transition.verb+" -DestinationPrefix '"+family.high+"'") != 1 ||
+					strings.Contains(script, "-DestinationPrefix '"+family.low+"'") ||
+					strings.Contains(script, "-DestinationPrefix '"+family.full+"'") {
+					t.Fatal("default transition disturbed a retained half route or the physical default")
+				}
+			}
+			empty := cloneWireGuardEngineRouterConfig(full)
+			empty.Routes = nil
+			withdraw := windowsUserspaceRouteUpdateScript(full, empty)
+			for _, prefix := range []string{family.low, family.high} {
+				if strings.Count(withdraw, "Remove-NetRoute -DestinationPrefix '"+prefix+"' -InterfaceAlias $ifName") != 1 {
+					t.Fatal("withdrawal did not remove exactly the client-owned exit halves")
+				}
+			}
+		})
+	}
+}

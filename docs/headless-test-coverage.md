@@ -5196,3 +5196,23 @@ without sleeping or reading Client internals. Both native family leaves are
 mandatory in every platform report. Local short tests, vet and lint pass; native
 expiry/retirement/recovery is executable but unqualified until its own CI run.
 This does not cover node-credential expiry or application/route-specific leases.
+
+### 2026-09-12: Windows exit route metric collision
+
+[Windows 2022 repeat 2](https://github.com/endless-net/client/actions/runs/34704108878/job/103581615692)
+and [repeat 3](https://github.com/endless-net/client/actions/runs/34704108878/job/103581615709)
+at source `cce41e6a3b91fd322f7bb9a91125a1dd3bc251c0` fail the IPv4 exit
+traffic check. Failure diagnostics identify a selected physical `/0` with route
+metric 0 and interface metric 10; the Client `/0` has route metric 5 and
+interface metric 5. Both effective metrics are 10, and reference forwarding
+remains zero. These observations establish the wrong route selection in those
+two jobs; they do not explain unrelated application or consent failures.
+
+Windows now expands each approved default into two more-specific `/1` routes,
+using the same helper as Darwin, whose expansion behavior is unchanged.
+Updates compare expanded route sets so an explicit overlapping `/1` survives
+default withdrawal and duplicate halves are not installed. IPv4/IPv6 regression
+checks cover installation, transitions and withdrawal on the Client interface.
+Local short tests, vet and lint pass; native execution of this fix is pending.
+Preserving the physical `/0` does not establish off-host tunnel/control endpoint
+bypass: separate underlay routing and its evidence remain required.

@@ -69,16 +69,18 @@ func (r *windowsWireGuardEngineRouter) Down(ctx context.Context) error {
 // Updating routes must not delete/recreate the interface addresses: that
 // interrupts established flows and starts duplicate-address detection again.
 func windowsUserspaceRouteUpdateScript(previous, next wireGuardEngineRouterConfig) string {
+	previousRoutes := splitDefaultRoutes(previous.Routes)
+	nextRoutes := splitDefaultRoutes(next.Routes)
 	var b strings.Builder
 	b.WriteString("$ErrorActionPreference='Stop';")
 	fmt.Fprintf(&b, "$ifName=%s;", quotePowerShellSingle(next.Interface))
-	for _, route := range previous.Routes {
-		if !slices.Contains(next.Routes, route) {
+	for _, route := range previousRoutes {
+		if !slices.Contains(nextRoutes, route) {
 			fmt.Fprintf(&b, "Remove-NetRoute -DestinationPrefix %s -InterfaceAlias $ifName -PolicyStore ActiveStore -Confirm:$false;", quotePowerShellSingle(route.String()))
 		}
 	}
-	for _, route := range next.Routes {
-		if !slices.Contains(previous.Routes, route) {
+	for _, route := range nextRoutes {
+		if !slices.Contains(previousRoutes, route) {
 			nextHop := "0.0.0.0"
 			if route.Addr().Is6() {
 				nextHop = "::"
@@ -106,7 +108,7 @@ func windowsUserspaceRouterScript(cfg wireGuardEngineRouterConfig, down bool) st
 	for _, address := range cfg.Addresses {
 		fmt.Fprintf(&b, "New-NetIPAddress -InterfaceAlias $ifName -IPAddress %s -PrefixLength %d -PolicyStore ActiveStore | Out-Null;", quotePowerShellSingle(address.Addr().String()), address.Bits())
 	}
-	for _, route := range cfg.Routes {
+	for _, route := range splitDefaultRoutes(cfg.Routes) {
 		nextHop := "0.0.0.0"
 		if route.Addr().Is6() {
 			nextHop = "::"

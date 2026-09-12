@@ -219,7 +219,7 @@ func TestDarwinDefaultRoutePartialFailureRestoresRouteSet(t *testing.T) {
 			}
 			assertRoutes := func(cfg wireGuardEngineRouterConfig) {
 				t.Helper()
-				want := darwinSystemRoutes(cfg.Routes)
+				want := splitDefaultRoutes(cfg.Routes)
 				if len(installed) != len(want) {
 					t.Fatalf("route set after operation: %v; want %v", installed, want)
 				}
