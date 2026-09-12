@@ -109,17 +109,17 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 		defer cancel()
-		beforeTo, beforeFrom := reference.ForwardedPacketCounts()
-		if err := testclient.Await(ctx, func() bool {
-			tcpOK := applicationProbe(t, binary, "", "tcp", address)
-			udpOK := applicationProbe(t, binary, "", "udp", address)
-			return tcpOK && udpOK
-		}); err != nil {
-			t.Fatal("node TCP and UDP traffic did not remain reachable")
-		}
-		toPeer, fromPeer := reference.ForwardedPacketCounts()
-		if toPeer <= beforeTo || fromPeer <= beforeFrom {
-			t.Fatal("session lifecycle traffic did not produce fresh bidirectional peer forwarding")
+		for _, protocol := range []string{"tcp", "udp"} {
+			if err := testclient.Await(ctx, func() bool {
+				beforeReceived, beforeEchoed := reference.PacketCounts()
+				if !applicationProbe(t, binary, "", protocol, address) {
+					return false
+				}
+				received, echoed := reference.PacketCounts()
+				return received > beforeReceived && echoed > beforeEchoed
+			}); err != nil {
+				t.Fatalf("%s lifecycle traffic did not produce a fresh reference peer echo", protocol)
+			}
 		}
 	}
 	apply()

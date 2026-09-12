@@ -143,6 +143,25 @@ product scope are different conditions; neither is a successful skip.
 | HC-064 | L native uninstall checks service and TUN removal, ordinary enrolled-state retention, and explicit state removal; passed all eight installation runners at `92983ae` | Windows/macOS distribution-owned binary removal remains outside the core service uninstaller |
 | HC-065 | C terminal revoke, native direct IPv4/IPv6 TCP/UDP retirement and ICMP echo denial across agent restart on all eight runners; Linux direct TCP/UDP; historical R deleted Client sync denied and peer withdrawn | Offline leases and remaining path/platform variants, separately verified local removal |
 
+## First corrected map-expiry native evidence — 2026-09-12
+
+The first six downloaded native reports from [run 34708283604](https://github.com/endless-net/client/actions/runs/34708283604)
+identify source `90f8a2860b55b08466842a51bbe3fdcf207ab521`: Ubuntu 24.04
+amd64 and Ubuntu 22.04 arm64, each with repetitions 1–3. Every report has
+50 passing and two failing root results. `NativeCachedMapExpiry` passes in
+both IPv4 and IPv6 in all six reports. This is the first native confirmation
+of the packet-filter expiry fix, limited to these two platform variants;
+the remaining platform reports and the complete matrix are still pending.
+
+The two failing roots are `JoinTokenRotation` and `SessionExpiryRecovery`.
+Both TCP and UDP probes succeeded before the new counter assertion failed.
+The tests incorrectly queried `ForwardedPacketCounts` on `NewTCP`, which has
+no router/resource link and therefore returns zero from that accessor.
+They now use the reference echo endpoint's `PacketCounts`, independently
+requiring fresh received and echoed counts for each successful TCP/UDP probe.
+The lifecycle assertions and native traffic requirements remain in place.
+This test correction still requires native qualification on its own source.
+
 ## Diagnostic export storage failure increment — 2026-09-12
 
 `TestControlPlaneDiagnosticsExport` now compares the public exported bytes before
