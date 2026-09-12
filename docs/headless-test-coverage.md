@@ -2816,6 +2816,21 @@ has 36 roots and still requires its own 864-outcome matrix. This successful
 
 ## Next work
 
+Run `34668100780`, source `8a0d75cf3294db832828ebdd4c7da0c02509a032`, failed
+the native logout root on Ubuntu 22.04 ARM repetition 2
+([job 103484236542](https://github.com/endless-net/client/actions/runs/34668100780/job/103484236542)).
+The logout/ipv4/udp leaf failed during its initial traffic baseline, before
+cleanup: an unknown 32-byte echo differed in all 32 bytes, with zero zero-valued
+bytes. The whole root took 97.34s; the failed leaf took 5.42s. This supplies no
+successful cleanup evidence for that leaf and shows the nonce-mismatch class is
+not Windows-specific. Unknown replies remain fatal, not classified as denial.
+
+Source inspection found the reference echo copies its input before swapping
+addresses/ports, and the [pinned ChannelTUN implementation](https://github.com/tailscale/wireguard-go/blob/ae172d45f0f7/tun/tuntest/tuntest.go)
+copies incoming packets before handing them to the echo loop. This does not
+establish the failure's cause or exclude corruption elsewhere, duplication or
+late delivery from another probe. No runtime fix is claimed from this audit.
+
 HC-018 adds `TestControlPlaneInterruptedDisconnect`, the 37th common root.
 The contract peer applies one authenticated offline request but holds its HTTP
 response. While the real disconnect CLI is still waiting, the driver forcibly
