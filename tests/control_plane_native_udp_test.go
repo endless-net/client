@@ -171,7 +171,11 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 				t.Logf("flow failed exchange: protocol=%s ipv6=%t port=%s classified=%t reference_received_delta=%d reference_echoed_delta=%d", protocol, ipv6, port, classified, afterReceived-beforeReceived, afterEchoed-beforeEchoed)
 			}
 		}()
-		ok = applicationProbe(t, binary, "", protocol, address(port))
+		options := []string(nil)
+		if flowLogs {
+			options = []string{"--exchange-timeout", "2s"}
+		}
+		ok = applicationProbe(t, binary, "", protocol, address(port), options...)
 		classified = true
 		return ok
 	}

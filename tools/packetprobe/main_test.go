@@ -253,15 +253,8 @@ func TestSessionHandlesLateReplies(t *testing.T) {
 }
 
 func TestProbeExchangesApplicationPayload(t *testing.T) {
-	tcp, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	tcp, udp := commonTCPUDPPort(t)
 	defer func() { _ = tcp.Close() }()
-	udp, err := net.ListenPacket("udp4", tcp.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	defer func() { _ = udp.Close() }()
 	go func() { _ = serveTCP(tcp) }()
 	go func() { _ = serveUDP(udp) }()
@@ -269,6 +262,54 @@ func TestProbeExchangesApplicationPayload(t *testing.T) {
 		if err := probe(protocol, tcp.Addr().String()); err != nil {
 			t.Fatalf("%s exchange: %v", protocol, err)
 		}
+	}
+}
+
+func commonTCPUDPPort(t *testing.T) (net.Listener, net.PacketConn) {
+	t.Helper()
+	for range 100 {
+		tcp, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		udp, err := net.ListenPacket("udp4", tcp.Addr().String())
+		if err == nil {
+			return tcp, udp
+		}
+		_ = tcp.Close()
+	}
+	t.Fatal("could not reserve one loopback port for TCP and UDP")
+	return nil, nil
+}
+
+func TestConfiguredExchangeTimeoutAllowsDelayedReply(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+	done := make(chan error, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			done <- err
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		body := make([]byte, 32)
+		if _, err := io.ReadFull(conn, body); err != nil {
+			done <- err
+			return
+		}
+		time.Sleep(1200 * time.Millisecond)
+		_, err = conn.Write(body)
+		done <- err
+	}()
+	if err := probeDNSWithTimeout("tcp", listener.Addr().String(), "", 2*time.Second); err != nil {
+		t.Fatal("configured application exchange timeout rejected a timely reply")
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 

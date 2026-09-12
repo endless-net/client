@@ -118,6 +118,10 @@ func probeNetwork(network, address string) string {
 }
 
 func probeDNS(network, address, dnsServer string) error {
+	return probeDNSWithTimeout(network, address, dnsServer, time.Second)
+}
+
+func probeDNSWithTimeout(network, address, dnsServer string, exchangeTimeout time.Duration) error {
 	if network != "tcp" && network != "udp" {
 		return errors.New("network must be tcp or udp")
 	}
@@ -127,7 +131,7 @@ func probeDNS(network, address, dnsServer string) error {
 		return errUnreachable
 	}
 	defer func() { _ = conn.Close() }()
-	x := applicationExchange{datagram: network == "udp"}
+	x := applicationExchange{datagram: network == "udp", timeout: exchangeTimeout}
 	return x.exchange(conn)
 }
 
@@ -135,6 +139,7 @@ func probeDNS(network, address, dnsServer string) error {
 // A delayed echo can be discarded, but only the current nonce proves success.
 type applicationExchange struct {
 	datagram      bool
+	timeout       time.Duration
 	pending       map[[32]byte]struct{}
 	completed     map[[32]byte]struct{}
 	recent        [128][32]byte
@@ -144,7 +149,11 @@ type applicationExchange struct {
 }
 
 func (x *applicationExchange) exchange(conn net.Conn) error {
-	if err := conn.SetDeadline(time.Now().Add(time.Second)); err != nil {
+	deadline := x.timeout
+	if deadline <= 0 {
+		deadline = time.Second
+	}
+	if err := conn.SetDeadline(time.Now().Add(deadline)); err != nil {
 		return errDeadlineSetup
 	}
 	if len(x.pending) >= 128 {
@@ -235,6 +244,10 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 // session keeps one network connection while the parent changes policy. Its
 // stdin/stdout protocol exposes only readiness and an exchange outcome.
 func session(network, address string, input io.Reader, output io.Writer) error {
+	return sessionWithTimeout(network, address, input, output, time.Second)
+}
+
+func sessionWithTimeout(network, address string, input io.Reader, output io.Writer, exchangeTimeout time.Duration) error {
 	if network != "tcp" && network != "udp" {
 		return errors.New("network must be tcp or udp")
 	}
@@ -247,7 +260,7 @@ func session(network, address string, input io.Reader, output io.Writer) error {
 		return err
 	}
 	scanner := bufio.NewScanner(input)
-	x := applicationExchange{datagram: network == "udp"}
+	x := applicationExchange{datagram: network == "udp", timeout: exchangeTimeout}
 	for scanner.Scan() {
 		if scanner.Text() != "exchange" {
 			return errors.New("invalid session command")
@@ -271,17 +284,29 @@ func main() {
 	address := fs.String("address", "", "IPv4 address and port")
 	network := fs.String("network", "tcp", "tcp or udp for probes")
 	dnsServer := fs.String("dns", "", "explicit DNS resolver host:port")
+	exchangeTimeout := fs.Duration("exchange-timeout", time.Second, "application exchange deadline")
 	_ = fs.Parse(os.Args[1:])
 	var err error
+	if *exchangeTimeout <= 0 || *exchangeTimeout > 5*time.Second {
+		err = errors.New("exchange-timeout must be greater than zero and at most 5s")
+	}
 	switch *mode {
 	case "serve":
-		err = serve(*address)
+		if err == nil {
+			err = serve(*address)
+		}
 	case "probe":
-		err = probeDNS(*network, *address, *dnsServer)
+		if err == nil {
+			err = probeDNSWithTimeout(*network, *address, *dnsServer, *exchangeTimeout)
+		}
 	case "resolve":
-		err = resolve(*address, *dnsServer, os.Stdout)
+		if err == nil {
+			err = resolve(*address, *dnsServer, os.Stdout)
+		}
 	case "session":
-		err = session(*network, *address, os.Stdin, os.Stdout)
+		if err == nil {
+			err = sessionWithTimeout(*network, *address, os.Stdin, os.Stdout, *exchangeTimeout)
+		}
 	default:
 		err = errors.New("mode must be serve, probe, resolve or session")
 	}
