@@ -27,7 +27,7 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 	n.Start()
 	defer n.Stop()
 	status := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID != "" && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK
+		return nativeDNSMapApplied(v, "", 0)
 	})
 	id := status.NodeID
 	key, err := wg.GeneratePrivateKey()
@@ -58,8 +58,7 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 		}
 		previous := status.MapRevision
 		status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == id && v.CachedMapValid && v.MapRevision > previous &&
-				v.WireGuard != nil && v.WireGuard.OK && v.State != ipc.StateDegraded
+			return nativeDNSMapApplied(v, id, previous)
 		})
 		for _, transport := range []string{"udp", "tcp"} {
 			for _, hostname := range []string{"live-peer", "renamed-peer"} {
@@ -86,13 +85,22 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 	var connected ipc.ConnectResponse
 	n.Service("connect", &connected)
 	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == id && v.NodeCredentialPresent && v.CachedMapValid &&
+		return nativeDNSMapApplied(v, id, 0) && v.NodeCredentialPresent &&
 			!v.UserDisconnected && v.DesiredState == ipc.DesiredConnected &&
-			v.WireGuard != nil && v.WireGuard.OK && v.State != ipc.StateDegraded
+			v.State != ipc.StateDegraded
 	})
 	for _, transport := range []string{"udp", "tcp"} {
 		assertDNSWire(t, transport, "127.0.0.1:53", "live-peer.scenario.endlessnet.", dnsmessage.RCodeSuccess, "198.18.96.20")
 		assertDNSWireType(t, transport, "127.0.0.1:53", "live-peer.scenario.endlessnet.", dnsmessage.TypeAAAA, dnsmessage.RCodeSuccess, "fd96::20")
 		assertDNSWire(t, transport, "127.0.0.1:53", "renamed-peer.scenario.endlessnet.", dnsmessage.RCodeNameError, "")
 	}
+}
+
+func nativeDNSMapApplied(status ipc.StatusResponse, nodeID string, afterRevision uint64) bool {
+	return (nodeID == "" || status.NodeID == nodeID) && status.NodeID != "" &&
+		status.CachedMapValid && status.MapRevision > afterRevision &&
+		status.Agent != nil && status.Agent.StatePresent &&
+		status.Agent.SnapshotState == ipc.AgentSnapshotCurrent &&
+		status.Agent.MapRevision == status.MapRevision &&
+		status.WireGuard != nil && status.WireGuard.OK && status.State != ipc.StateDegraded
 }
