@@ -2896,6 +2896,23 @@ control-outage traffic, strict probe-denial oracle and DNS response-binding work
 
 ## Next work
 
+The later 2026-09-12 snapshot of run `34668955037` extends the partial evidence
+above to nineteen completed jobs with the same 37-root inventory: **701 PASS,
+2 FAIL, 0 SKIP**, including **74 PASS and 2 FAIL** flow-consent leaves. Five
+contract jobs were still live. Additional completed jobs are listed below.
+Windows 2025 now has all three repetitions: 111 root PASS outcomes and all twelve
+flow-consent leaves PASS. Interrupted disconnect and exact CLI/IPC build-commit
+assertions passed on that Windows runner too. This does not qualify Windows 2022,
+the complete eight-platform matrix, or changes after source `4a8011f`.
+
+| Additional runner and repetition | Job | Root outcomes |
+| --- | --- | --- |
+| windows-2025, repeat 1 | [103487108918](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108918) | 37 PASS |
+| windows-2025, repeat 2 | [103487108991](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108991) | 37 PASS |
+| windows-2025, repeat 3 | [103487109015](https://github.com/endless-net/client/actions/runs/34668955037/job/103487109015) | 37 PASS |
+| macos-15, repeat 3 | [103487108993](https://github.com/endless-net/client/actions/runs/34668955037/job/103487108993) | 37 PASS |
+| macos-15-intel, repeat 3 | [103487109054](https://github.com/endless-net/client/actions/runs/34668955037/job/103487109054) | 37 PASS |
+
 The DNS response-binding root now includes `invalid-truncated-udp` alongside
 `udp-answer` and `tcp-answer`, for both IP families. All seven invalid response
 variants must produce SERVFAIL without any upstream TCP question when the
