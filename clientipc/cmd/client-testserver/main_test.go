@@ -43,11 +43,11 @@ func TestHostServesLocalScriptAndVerifies(t *testing.T) {
 	}
 	inputR, inputW := io.Pipe()
 	outputR, outputW := io.Pipe()
-	t.Cleanup(func() { inputW.Close(); outputR.Close() })
+	t.Cleanup(func() { _ = inputW.Close(); _ = outputR.Close() })
 	done := make(chan error, 1)
 	go func() {
-		defer outputW.Close()
-		defer inputR.Close()
+		defer func() { _ = outputW.Close() }()
+		defer func() { _ = inputR.Close() }()
 		done <- run([]string{"--script", script, "--endpoint", endpoint}, inputR, outputW)
 	}()
 	decoder := json.NewDecoder(outputR)

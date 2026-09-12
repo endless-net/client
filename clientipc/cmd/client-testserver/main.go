@@ -60,7 +60,7 @@ func run(args []string, input io.Reader, output io.Writer) error {
 	if err != nil {
 		return errors.New("cannot listen on test endpoint")
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	handler := script.Handler(func(ctx context.Context, required pb.Access, _ string) error {
 		if _, ok := local.PeerFromContext(ctx); !ok {
 			return rpc.Error(connect.CodeUnauthenticated, pb.ErrorCode_ERROR_CODE_UNAUTHENTICATED)
@@ -77,7 +77,7 @@ func run(args []string, input io.Reader, output io.Writer) error {
 	server := local.NewServer(handler)
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 	if err := json.NewEncoder(output).Encode(map[string]string{"event": "ready", "contract_sha256": rpc.Digest()}); err != nil {
 		return errors.New("cannot report readiness")
 	}
