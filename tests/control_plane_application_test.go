@@ -134,7 +134,19 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 			apply(nil)
 			blocked()
 			assertDNS(dnsmessage.RCodeNameError, "")
-			apply(route(time.Now().Add(time.Minute)))
+			restoredRoutes := route(time.Now().Add(time.Minute))
+			apply(restoredRoutes)
+			reachable()
+			assertDNS(dnsmessage.RCodeSuccess, resourceIP.String())
+
+			// Retire the connector's underlay endpoint without changing its key,
+			// application identity or route lease. Recovery requires consuming
+			// the new endpoint from the signed projection.
+			nextEndpoint := reference.RotateEndpoint(t)
+			blocked()
+			peer.Endpoint = nextEndpoint
+			peer.EndpointCandidates = []string{nextEndpoint}
+			apply(restoredRoutes)
 			reachable()
 			assertDNS(dnsmessage.RCodeSuccess, resourceIP.String())
 			apply(nil)

@@ -5011,3 +5011,20 @@ HC-040 positive phases now require fresh bidirectional connector packet counts,
 so recovery cannot reuse the initial forwarding observation. Short tests, vet
 and lint pass locally. Neither addition establishes the DNS failure's cause;
 the strengthened native scenario remains pending in CI.
+
+Three further inspected `92983ae` reports — Ubuntu 22.04 repetition 3, Ubuntu
+24.04 repetition 2 and macOS Intel repetition 1 — each contain 50 PASS roots,
+no FAIL/SKIP roots and successful package completion. The inspected subtotal is
+now 599 PASS and one FAIL across 12 reports. Both macOS architectures therefore
+have one complete successful repetition; the remaining native repetitions are
+still required. Linux, Windows and macOS component verification jobs also pass
+in this run. None of these results qualifies later source changes.
+
+HC-040 now retires the reference connector's UDP endpoint while keeping its
+key, application and route lease. New application probes must fail against the
+retired endpoint; a signed map changing only the peer endpoint must restore TCP
+access with fresh bidirectional forwarding and the exact DNS answer. Both IP
+families execute this phase. This covers recipient recovery from a stale
+connector endpoint, not connector process restart, automatic health discovery
+or multi-connector failover. Local short tests, vet and lint pass; native
+qualification of the added phase remains pending.
