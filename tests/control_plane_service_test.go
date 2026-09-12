@@ -115,19 +115,19 @@ func TestControlPlaneNativeServiceCatalog(t *testing.T) {
 			}
 
 			apply("pending", nil)
-			assertServiceDNS(t, lookupNetwork, nil)
+			assertServiceDNS(t, clientDNSListenerAddress(status), lookupNetwork, nil)
 			apply("approved", hosts)
-			resolved := assertServiceDNS(t, lookupNetwork, hostIPs)
+			resolved := assertServiceDNS(t, clientDNSListenerAddress(status), lookupNetwork, hostIPs)
 			for _, address := range resolved {
 				assertHostTraffic(address)
 			}
 			apply("approved", hosts[1:])
-			assertServiceDNS(t, lookupNetwork, hostIPs[1:])
+			assertServiceDNS(t, clientDNSListenerAddress(status), lookupNetwork, hostIPs[1:])
 			assertHostTraffic(hostIPs[1])
 			apply("pending", nil)
-			assertServiceDNS(t, lookupNetwork, nil)
+			assertServiceDNS(t, clientDNSListenerAddress(status), lookupNetwork, nil)
 			apply("approved", hosts)
-			resolved = assertServiceDNS(t, lookupNetwork, hostIPs)
+			resolved = assertServiceDNS(t, clientDNSListenerAddress(status), lookupNetwork, hostIPs)
 			for _, address := range resolved {
 				assertHostTraffic(address)
 			}
@@ -135,10 +135,10 @@ func TestControlPlaneNativeServiceCatalog(t *testing.T) {
 	}
 }
 
-func assertServiceDNS(t *testing.T, network string, expected []netip.Addr) []netip.Addr {
+func assertServiceDNS(t *testing.T, listener, network string, expected []netip.Addr) []netip.Addr {
 	t.Helper()
 	resolver := net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, "udp", "127.0.0.1:53")
+		return (&net.Dialer{}).DialContext(ctx, "udp", listener)
 	}}
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()

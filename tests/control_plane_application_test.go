@@ -124,7 +124,7 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 			}
 			assertDNS := func(code dnsmessage.RCode, expected string) {
 				t.Helper()
-				assertDNSWireType(t, "udp", "127.0.0.1:53", "portal.scenario.endlessnet.", dnsType, code, expected)
+				assertDNSWireType(t, "udp", clientDNSListenerAddress(status), "portal.scenario.endlessnet.", dnsType, code, expected)
 			}
 			route := func(expiry time.Time) []api.ApplicationRoute {
 				return []api.ApplicationRoute{{Connector: connector, CIDRs: []string{routeCIDR}, ExpiresAt: expiry}}
