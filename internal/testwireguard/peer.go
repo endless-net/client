@@ -24,8 +24,9 @@ import (
 
 type observedBind struct {
 	conn.Bind
-	port                          atomic.Uint32
-	initiations, responses, other atomic.Uint64
+	port                                                     atomic.Uint32
+	initiations, responseAttempts, responses, responseErrors atomic.Uint64
+	other                                                    atomic.Uint64
 }
 
 func (b *observedBind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
@@ -50,13 +51,18 @@ func (b *observedBind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
 }
 
 func (b *observedBind) Send(packets [][]byte, endpoint conn.Endpoint, offset int) error {
+	responses := uint64(0)
+	for _, packet := range packets {
+		if len(packet)-offset == 92 && binary.LittleEndian.Uint32(packet[offset:offset+4]) == 2 {
+			responses++
+		}
+	}
+	b.responseAttempts.Add(responses)
 	err := b.Bind.Send(packets, endpoint, offset)
 	if err == nil {
-		for _, packet := range packets {
-			if len(packet)-offset == 92 && binary.LittleEndian.Uint32(packet[offset:offset+4]) == 2 {
-				b.responses.Add(1)
-			}
-		}
+		b.responses.Add(responses)
+	} else {
+		b.responseErrors.Add(responses)
 	}
 	return err
 }
@@ -115,6 +121,10 @@ func (p *Peer) RotateEndpoint(t *testing.T) string {
 
 func (p Peer) HandshakeCounts() (uint64, uint64, uint64) {
 	return p.bind.initiations.Load(), p.bind.responses.Load(), p.bind.other.Load()
+}
+
+func (p Peer) HandshakeResponseCounts() (uint64, uint64) {
+	return p.bind.responseAttempts.Load(), p.bind.responseErrors.Load()
 }
 
 type trafficCounters struct{ received, echoed atomic.Uint64 }

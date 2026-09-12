@@ -135,6 +135,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}()
 	}
 	peer := api.Peer{ID: "protocol-peer", Hostname: "udp-peer", PublicKey: reference.PublicKey, Endpoint: reference.Endpoint, EndpointCandidates: []string{reference.Endpoint}, AllowedIPs: []string{netip.PrefixFrom(peerIP, peerIP.BitLen()).String()}}
+	firstClientListenPort, clientListenPort := 0, 0
 	apply := func(desired api.Peer) {
 		t.Helper()
 		if err := s.UpdatePeers(initial.NodeID, []api.Peer{desired}); err != nil {
@@ -152,6 +153,10 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 		if applied.WireGuard.ListenPort <= 0 || applied.WireGuard.ListenPort > 65535 {
 			t.Fatal("client did not publish a usable WireGuard listen port")
+		}
+		clientListenPort = applied.WireGuard.ListenPort
+		if firstClientListenPort == 0 {
+			firstClientListenPort = clientListenPort
 		}
 		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(applied.WireGuard.ListenPort)))
 	}
@@ -216,15 +221,20 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			status, err := n.Status()
 			received, echoed := reference.PacketCounts()
 			initiations, responses, other := reference.HandshakeCounts()
+			responseAttempts, responseErrors := reference.HandshakeResponseCounts()
 			var wgOK, handshake, agentError, inspectionError bool
 			peerCount := 0
 			var rx, tx uint64
+			latestHandshake := int64(0)
+			currentListenPort := 0
 			if status.WireGuard != nil {
 				wgOK = status.WireGuard.OK
 				inspectionError = status.WireGuard.Error != ""
 				peerCount = len(status.WireGuard.Peers)
+				currentListenPort = status.WireGuard.ListenPort
 				for _, p := range status.WireGuard.Peers {
 					handshake = handshake || p.LatestHandshakeUnix > 0
+					latestHandshake = max(latestHandshake, p.LatestHandshakeUnix)
 					rx += p.TransferRXBytes
 					tx += p.TransferTXBytes
 				}
@@ -232,8 +242,8 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			if status.Agent != nil {
 				agentError = status.Agent.LastError != ""
 			}
-			t.Logf("flow failure: protocol=%s ipv6=%t status_available=%t cached_map_valid=%t disconnected=%t wireguard_ok=%t handshake=%t agent_error_present=%t rx=%d tx=%d reference_received=%d reference_echoed=%d initiations=%d responses=%d other=%d", protocol, ipv6, err == nil, status.CachedMapValid, status.UserDisconnected, wgOK, handshake, agentError, rx, tx, received, echoed, initiations, responses, other)
-			t.Logf("flow inspection: wireguard_present=%t inspection_error_present=%t peers=%d agent_present=%t", status.WireGuard != nil, inspectionError, peerCount, status.Agent != nil)
+			t.Logf("flow failure: protocol=%s ipv6=%t status_available=%t cached_map_valid=%t disconnected=%t wireguard_ok=%t handshake=%t agent_error_present=%t rx=%d tx=%d reference_received=%d reference_echoed=%d initiations=%d response_attempts=%d responses=%d response_errors=%d other=%d", protocol, ipv6, err == nil, status.CachedMapValid, status.UserDisconnected, wgOK, handshake, agentError, rx, tx, received, echoed, initiations, responseAttempts, responses, responseErrors, other)
+			t.Logf("flow inspection: wireguard_present=%t inspection_error_present=%t peers=%d agent_present=%t first_client_listen_port=%d configured_client_listen_port=%d current_client_listen_port=%d latest_handshake_unix=%d", status.WireGuard != nil, inspectionError, peerCount, status.Agent != nil, firstClientListenPort, clientListenPort, currentListenPort, latestHandshake)
 		}()
 		checkNativeFlowConsent(t, s, initial.NodeID, protocol, clientIP, peerIP, fresh)
 		return
