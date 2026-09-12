@@ -2950,6 +2950,21 @@ control-outage traffic, strict probe-denial oracle and DNS response-binding work
 
 ## Next work
 
+HC-062 now has executable installed-client repair coverage inside
+`TestInstalledClient/enrolled-reinstall`. On disposable hosted runners only,
+the fixture stops the installed service, verifies its executable is the known
+regular absolute path, removes that executable and requires a file-not-found
+launch failure. Linux reinstalls the same Debian package; macOS/Windows restage
+the same core binary and rerun their service installer. Both connected and
+disconnected intent are tested. Public IPC must preserve node/network/hostname,
+overlay address, trust and credential, with valid cached map; real TCP access
+must return only for connected intent. Disconnected repair must not register or
+refresh, and the complete lifecycle must still have one original enrollment.
+Private identity/configuration files are neither read nor removed. No local
+installer run was performed; all eight native installation results are pending.
+This covers missing-executable repair, not different-version upgrade, arbitrary
+file corruption, complete identity reset or reboot recovery.
+
 Run `34670764847`, source `985763edf13e74fc479abb293b26420cc653e6f3`, failed
 [Verify (Windows), job 103491773672](https://github.com/endless-net/client/actions/runs/34670764847/job/103491773672)
 on 2026-09-12 at 03:38:36 UTC in

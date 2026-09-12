@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/netip"
 	"os"
@@ -22,7 +23,7 @@ import (
 // HC-003: reinstall the same artifact while enrolled. Version upgrades and
 // complete state removal require their own scenarios. Only the real CLI writes
 // enrollment state; assertions never inspect its private files or keys.
-func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, configPath string, start, stop, reinstall func(*testing.T)) {
+func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, configPath string, start, stop, reinstall, repair func(*testing.T)) {
 	t.Helper()
 	probe := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
 	network, join, err := s.AddNetwork("installed-client", "198.18.95.0/24")
@@ -95,6 +96,27 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	assertStoppedServiceCommands(t, binary)
 	start(t)
 	connected("restart after unavailable IPC while connected")
+	repairMissingBinary := func() {
+		t.Helper()
+		stop(t)
+		info, err := os.Lstat(binary)
+		if !filepath.IsAbs(binary) || err != nil || !info.Mode().IsRegular() {
+			t.Fatal("repair fixture requires the known installed executable")
+		}
+		if err := os.Remove(binary); err != nil {
+			t.Fatal("could not remove the stopped service executable")
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		err = exec.CommandContext(ctx, binary, "version").Run()
+		cancel()
+		if !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("missing installed executable did not produce the expected launch failure")
+		}
+		repair(t)
+	}
+	t.Log("repair: missing executable with connected intent")
+	repairMissingBinary()
+	connected("connected repair after executable loss")
 
 	var disconnected ipc.DisconnectResponse
 	request(t, binary, "disconnect", &disconnected)
@@ -130,6 +152,9 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	assertStoppedServiceCommands(t, binary)
 	start(t)
 	assertDisconnected("restart after unavailable IPC while disconnected")
+	t.Log("repair: missing executable with disconnected intent")
+	repairMissingBinary()
+	assertDisconnected("disconnected repair after executable loss")
 	if registrationRequests() != before {
 		t.Fatal("failed IPC commands or disconnected restart attempted registration or refresh")
 	}

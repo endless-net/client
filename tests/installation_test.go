@@ -149,7 +149,15 @@ func TestInstalledClient(t *testing.T) {
 	// Keep the contract peer alive through the later OS uninstall operation.
 	s := testcontrol.New(t)
 	if !t.Run("enrolled-reinstall", func(t *testing.T) {
-		exerciseInstalledReinstall(t, s, binary, configPath, start, stop, reinstall)
+		repair := func(t *testing.T) {
+			// Linux restores files from the same Debian package. The macOS and
+			// Windows service installers consume an already-staged core artifact.
+			if runtime.GOOS != "linux" {
+				copyPublicFile(t, source, binary)
+			}
+			reinstall(t)
+		}
+		exerciseInstalledReinstall(t, s, binary, configPath, start, stop, reinstall, repair)
 	}) {
 		t.FailNow()
 	}
