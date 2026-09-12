@@ -462,6 +462,33 @@ func (s *Server) Snapshot(id string) (api.NetworkMapSnapshot, error) {
 	return clone(n.Map.Snapshot()), nil
 }
 
+// SetMapValidity publishes a new revision with an explicit signature window.
+// It controls only the contract participant's signed response, never Client state.
+func (s *Server) SetMapValidity(id string, issuedAt time.Time, lifetime time.Duration) error {
+	if issuedAt.IsZero() || lifetime <= 0 {
+		return errors.New("map validity requires an issue time and positive lifetime")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := s.nodes[id]
+	if n == nil {
+		return errors.New("unknown node")
+	}
+	m := clone(n.Map.Snapshot())
+	m.Revision.Network++
+	m.Network.Revision = m.Revision.Network
+	signature, err := api.SignNetworkMapSnapshotAt(s.mapKey, m, issuedAt, lifetime)
+	if err != nil {
+		return err
+	}
+	n.Map.Revision = m.Revision
+	n.Map.Network.Revision = m.Network.Revision
+	n.Map.MapSignature = signature
+	n.Delta = nil
+	s.recordLocked(Event{Kind: "map-updated", NodeID: id})
+	return nil
+}
+
 // UpdateMap validates and signs a new projection, then wakes subscribers.
 func (s *Server) UpdateMap(id string, edit func(*api.NetworkMapSnapshot)) error {
 	s.mu.Lock()

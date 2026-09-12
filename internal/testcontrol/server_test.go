@@ -342,6 +342,26 @@ func TestPeerDeltaAndResync(t *testing.T) {
 	}
 }
 
+func TestMapValidityIsEnforcedByPublicContract(t *testing.T) {
+	s, a, _, registered, _ := setup(t)
+	base := registered.Snapshot()
+	issuedAt := time.Now().UTC().Truncate(time.Second)
+	check(t, s.SetMapValidity(registered.Node.ID, issuedAt, 30*time.Second))
+	event, err := a.ReadMapStreamEvent(registered.Node.ID, api.MapCursor{Revision: base.Revision, MapHash: base.MapSignature.PayloadHash}, time.Second)
+	check(t, err)
+	if _, err := api.ApplyMapStreamEvent(base, event, s.Trust(), issuedAt.Add(time.Second)); err != nil {
+		t.Fatal("short-lived signed map was not initially usable")
+	}
+	if _, err := api.ApplyMapStreamEvent(base, event, s.Trust(), issuedAt.Add(time.Minute)); err == nil {
+		t.Fatal("expired signed map remained valid under the public contract")
+	}
+	for _, lifetime := range []time.Duration{0, -time.Second} {
+		if err := s.SetMapValidity(registered.Node.ID, issuedAt, lifetime); err == nil {
+			t.Fatal("fixture accepted an invalid map lifetime")
+		}
+	}
+}
+
 func TestRegistrationBindingAndRevocation(t *testing.T) {
 	s, a, req, result, key := setup(t)
 	heartbeat, err := a.UpdateNodeEndpointState(result.Node.ID, api.UpdateNodeEndpointRequest{Status: api.NodeStatusOnline})

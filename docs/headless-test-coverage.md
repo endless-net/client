@@ -106,7 +106,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-027 | C delta/resync and TCP grant withdrawal with retained UDP; native IPv4/IPv6 TCP/UDP port withdrawal/restoration, ICMP denial under TCP-only grants, ICMP-only TCP/UDP isolation and exact destination denial/recovery on all eight runners; historical R node/port withdrawal | Remaining Client direction/destination correlation, ICMP errors/PMTU and other policy/transport variants |
 | HC-028 | C native single-Relay and two-Relay failover IPv4/IPv6 TCP/UDP, outage denial, recovery and agent restart passed all 24 native repetitions | NAT, direct/Relay transitions, existing-session failover, healthy-backup failback and remaining Relay variants |
 | HC-029 | C native signed endpoint rotation now requires stale-endpoint denial followed by IPv4/IPv6 TCP/UDP recovery; U endpoint/reconnect tests | Qualify the native rotation root on every runner; external network change and additional stale response ordering variants |
-| HC-030 | C typed/malformed errors; L connected cached-map TCP startup without control, later map advancement and disconnected no-auto-connect passed all eight installation runners at `0cf6d73`; historical R short dependency/process outages | Map/lease expiry, edge/transport/storage outage and remaining variants |
+| HC-030 | C typed/malformed errors and executable native cached-map signature expiry/outage/restart recovery; L connected cached-map TCP startup without control, later map advancement and disconnected no-auto-connect passed all eight installation runners at `0cf6d73`; historical R short dependency/process outages | Qualify the new cached-map expiry root; other lease expiry, edge/transport/storage outage and remaining variants |
 | HC-031 | Central ACL tests are not evidence of a local inbound preference | No local inbound toggle found in current CLI/IPC/config; product and contract gap |
 | HC-032 | C RoutedResource passed three times on all eight native platforms: IPv4/IPv6 TCP/UDP through an IP forwarding peer, route withdrawal and recovery | Full Client router roles, SNAT, HA and remaining resource variants |
 | HC-033 | C durable route installation disable/restore passed three times on all eight native platforms; U configuration tests | Per-resource selection and remaining route-selection semantics |
@@ -5178,3 +5178,21 @@ the existing lifecycle, policy and signed endpoint-change checks. Ephemeral
 recreation retains its IPv4 TCP evidence boundary. Local short tests, vet and
 lint pass; the three added persistent variants require a later native container
 run and are not covered by the successful job above.
+
+### 2026-09-12: expiry of previously accepted cached authority
+
+`TestControlPlaneNativeCachedMapExpiry` covers IPv4 and IPv6 through a real
+Client and reference peer. A short-lived, valid signed map first permits TCP
+and UDP while control is unavailable. After signature expiry, fresh traffic
+must fail while public IPC retains node credentials and connected intent but
+marks the cached map invalid. Offline CLI reuse must fail; an agent restart
+must not restore access. A fresh signed map after control recovery must restore
+the same identity and both application protocols.
+
+The participant's `SetMapValidity` publishes an explicit signature window through
+the existing map contract. Its regression applies the same wire event through
+the published contract before and after expiry, proving acceptance then denial
+without sleeping or reading Client internals. Both native family leaves are
+mandatory in every platform report. Local short tests, vet and lint pass; native
+expiry/retirement/recovery is executable but unqualified until its own CI run.
+This does not cover node-credential expiry or application/route-specific leases.
