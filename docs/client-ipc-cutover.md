@@ -285,3 +285,18 @@ key remain absent until approved product metadata and shipped UI content supply
 them. Their absence is not a complete UF-23 implementation: client-ui still owns
 localized offline help and presentation, and the client/distribution integration
 must provide build metadata and approved destinations before release acceptance.
+
+## Preference validation foundation (2026-09-13)
+
+`service_rpc_preferences.go` validates the complete typed patch before returning
+its ordered key set. Explicit false remains present; empty patches, unknown wire
+fields, unspecified/unknown lifecycle enums and malformed reset key lists are
+rejected without a partial result. Reset requires nonempty unique known keys.
+Tests cover all eight preference keys and input immutability.
+
+These helpers are not yet bound to Set/ResetPreferences and do not persist or
+apply settings. Per-profile overrides, effective policy projection, provider
+support checks, atomic application/rollback and lifecycle adapters remain needed.
+In particular, a structurally known PLATFORM_MANAGED enum does not authorize a
+user override; the applicable provider's allowed values must still be enforced.
+UF-18/UF-21 acceptance is not established by these structural tests.
