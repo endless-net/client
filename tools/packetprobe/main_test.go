@@ -13,7 +13,7 @@ import (
 )
 
 func TestUDPPreviouslyCompletedEchoCannotSatisfyNewExchange(t *testing.T) {
-	for _, mode := range []string{"duplicate-and-current", "duplicate-only", "unknown-reply"} {
+	for _, mode := range []string{"duplicate-and-current", "duplicate-only", "unknown-reply", "unknown-then-current"} {
 		t.Run(mode, func(t *testing.T) {
 			server, err := net.ListenPacket("udp4", "127.0.0.1:0")
 			if err != nil {
@@ -34,13 +34,16 @@ func TestUDPPreviouslyCompletedEchoCannotSatisfyNewExchange(t *testing.T) {
 						_, _ = server.WriteTo(packet, address)
 						continue
 					}
-					if mode == "unknown-reply" {
+					if mode == "unknown-reply" || mode == "unknown-then-current" {
 						packet[0] ^= 1
 						_, _ = server.WriteTo(packet, address)
-						return
+						if mode == "unknown-reply" {
+							return
+						}
+						packet[0] ^= 1
 					}
 					_, _ = server.WriteTo(previous, address)
-					if mode == "duplicate-and-current" {
+					if mode == "duplicate-and-current" || mode == "unknown-then-current" {
 						_, _ = server.WriteTo(packet, address)
 					}
 				}
@@ -67,6 +70,10 @@ func TestUDPPreviouslyCompletedEchoCannotSatisfyNewExchange(t *testing.T) {
 			case "unknown-reply":
 				if err == nil || errors.Is(err, errUnreachable) {
 					t.Fatal("an unknown reply was accepted or classified as denial")
+				}
+			case "unknown-then-current":
+				if err != nil {
+					t.Fatal("an old unknown UDP reply prevented the current nonce from proving reachability")
 				}
 			}
 		})

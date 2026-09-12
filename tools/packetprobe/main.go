@@ -167,12 +167,16 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 	if err != nil || n == 0 {
 		return errUnreachable
 	}
+	var datagramMismatch error
 	for {
 		if x.datagram {
 			// Preserve datagram boundaries and reject truncated/oversized echoes.
 			var packet [33]byte
 			n, err := conn.Read(packet[:])
 			if err != nil {
+				if datagramMismatch != nil {
+					return datagramMismatch
+				}
 				return errUnreachable
 			}
 			if n != len(x.frame) {
@@ -203,7 +207,14 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 					zero++
 				}
 			}
-			return fmt.Errorf("application response mismatch: different_bytes=%d zero_bytes=%d request_sha256=%x reply_sha256=%x", different, zero, sha256.Sum256(request[:]), sha256.Sum256(reply[:]))
+			mismatch := fmt.Errorf("application response mismatch: different_bytes=%d zero_bytes=%d request_sha256=%x reply_sha256=%x", different, zero, sha256.Sum256(request[:]), sha256.Sum256(reply[:]))
+			if x.datagram {
+				if datagramMismatch == nil {
+					datagramMismatch = mismatch
+				}
+				continue
+			}
+			return mismatch
 		}
 		delete(x.pending, reply)
 		if x.datagram {
