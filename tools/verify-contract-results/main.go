@@ -90,7 +90,7 @@ func verifyReports(dir, sha string) (int, error) {
 			if err != nil {
 				return 0, fmt.Errorf("%s: missing execution report", platform)
 			}
-			err = verifyEvents(file, names)
+			err = verifyEvents(file, names, requiredPlatformSubtests(platformName, names)...)
 			closeErr := file.Close()
 			if err != nil {
 				return 0, fmt.Errorf("%s: %w", platform, err)
@@ -103,9 +103,19 @@ func verifyReports(dir, sha string) (int, error) {
 	return len(common), nil
 }
 
-func verifyEvents(reader io.Reader, names []string) error {
+func requiredPlatformSubtests(platform string, names []string) []string {
+	if strings.HasPrefix(platform, "ubuntu-") && slices.Contains(names, "TestControlPlaneSubnetRouter") {
+		return []string{"TestControlPlaneSubnetRouter/snat", "TestControlPlaneSubnetRouter/preserve-source"}
+	}
+	return nil
+}
+
+func verifyEvents(reader io.Reader, names []string, requiredSubtests ...string) error {
 	states := make(map[string]*outcome, len(names))
 	for _, name := range names {
+		states[name] = &outcome{}
+	}
+	for _, name := range requiredSubtests {
 		states[name] = &outcome{}
 	}
 	packagePass := false

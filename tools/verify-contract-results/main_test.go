@@ -69,6 +69,34 @@ func TestRejectIncompleteOrUnequalExecution(t *testing.T) {
 	}
 }
 
+func TestRequireBothLinuxSubnetRouterModes(t *testing.T) {
+	names := []string{"TestControlPlaneSubnetRouter"}
+	for _, platform := range platforms {
+		t.Run(platform, func(t *testing.T) {
+			required := requiredPlatformSubtests(platform, names)
+			for _, children := range [][]string{nil, {"snat"}, {"preserve-source"}, {"snat", "preserve-source"}} {
+				var report bytes.Buffer
+				encoder := json.NewEncoder(&report)
+				write := func(action, test string) {
+					_ = encoder.Encode(event{Action: action, Test: test, Package: "client/contracts"})
+				}
+				write("run", names[0])
+				for _, child := range children {
+					write("run", names[0]+"/"+child)
+					write("pass", names[0]+"/"+child)
+				}
+				write("pass", names[0])
+				write("pass", "")
+				err := verifyEvents(&report, names, required...)
+				wantFailure := strings.HasPrefix(platform, "ubuntu-") && len(children) != 2
+				if (err != nil) != wantFailure {
+					t.Fatalf("children=%v: error=%v, want failure=%t", children, err, wantFailure)
+				}
+			}
+		})
+	}
+}
+
 func TestRequireThreeIsolatedReportsOnEightPlatforms(t *testing.T) {
 	const sha = "0123456789012345678901234567890123456789"
 	write := func(path string, value []byte) {

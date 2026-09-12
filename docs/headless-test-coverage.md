@@ -4853,3 +4853,12 @@ router-restart assertions run in both modes. This is executable source-preservin
 Client forwarding coverage, not evidence of automatic host configuration in
 no-SNAT mode. Linux hosted qualification remains pending; the non-Linux branch
 continues to assert only the explicit unsupported SNAT result.
+
+The report verifier requires both `TestControlPlaneSubnetRouter/snat` and
+`TestControlPlaneSubnetRouter/preserve-source` to start and pass exactly once
+in every Linux repetition. A successful parent with either child absent is
+rejected. The requirement does not apply to the non-Linux unsupported-mode
+branch. Component verifier tests cover both missing variants, complete absence,
+and complete execution across all eight platform identifiers. Other scenario
+subtest inventories still need an explicit requirement-by-requirement audit;
+rejecting observed skips alone does not prove that every variant ran.
