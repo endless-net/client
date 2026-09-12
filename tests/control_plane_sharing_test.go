@@ -131,6 +131,30 @@ func TestControlPlaneNativeMachineSharing(t *testing.T) {
 			blocked()
 			apply([]api.Peer{peer}, []api.SharePeerGrant{grant(2, time.Now().Add(time.Minute))})
 			reachable()
+			// Change rights while retaining the same peer and grant identity. The
+			// reference serves every tested port/protocol, so the newly allowed
+			// probes also establish that earlier denials were not dead services.
+			replacement := grant(3, time.Now().Add(time.Minute))
+			replacement.Rights = []api.ShareTraffic{
+				{Protocol: "tcp", FirstPort: 24002, LastPort: 24002},
+				{Protocol: "udp", FirstPort: 24001, LastPort: 24001},
+			}
+			apply([]api.Peer{peer}, []api.SharePeerGrant{replacement})
+			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+			err = testclient.Await(ctx, func() bool {
+				tcpOK := probe("tcp", wrongPort)
+				udpOK := probe("udp", allowedAddress)
+				return tcpOK && udpOK
+			})
+			cancel()
+			if err != nil {
+				t.Fatal("updated sharing rights did not enable the newly granted TCP port and UDP protocol")
+			}
+			if probe("tcp", allowedAddress) || probe("udp", wrongPort) {
+				t.Fatal("updated sharing rights retained revoked TCP access or allowed an ungranted UDP port")
+			}
+			apply([]api.Peer{peer}, []api.SharePeerGrant{grant(4, time.Now().Add(time.Minute))})
+			reachable()
 			apply(nil, nil)
 			blocked()
 		})

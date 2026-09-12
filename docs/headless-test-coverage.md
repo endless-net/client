@@ -4970,3 +4970,27 @@ existing TCP/UDP and reference-forwarding observations; it does not establish
 the cause of the previous Windows failures or change routing behavior. Short
 tests, vet, and lint pass locally; execution of this diagnostic remains pending
 in Windows native CI.
+
+### 2026-09-12: first eight native reports for `92983ae`
+
+The first eight downloaded contract artifacts from
+[run 34701403560](https://github.com/endless-net/client/actions/runs/34701403560)
+identify source `92983ae0adf6c0746e25c56ed027b8576e932f50`. Ubuntu 22.04 amd64
+repetitions 1–2, Ubuntu 22.04 ARM repetitions 1–3 and Ubuntu 24.04 ARM repetitions
+1–2 each have 50 PASS roots. Ubuntu 24.04 ARM repetition 3 has 49 PASS roots and
+one FAIL: `TestControlPlaneNativeApplicationRoute/ipv6` reports `DNS response
+unavailable`. The subtotal is 399 PASS, one FAIL and zero SKIP root outcomes;
+other reports and the complete matrix remain pending.
+
+All eight reports pass both machine-sharing address families and both Linux
+subnet-router modes (16 successful leaves for each root). This qualifies the
+earlier sharing fixture repair and source-preserving subnet checks only for
+these executions, without asserting Windows/macOS results or the entire HC scope.
+
+The sharing scenario now additionally replaces rights on the same grant and
+peer: TCP 24001 is revoked while TCP 24002 and UDP 24001 become reachable;
+UDP 24002 remains denied. Restoring the original rights must restore TCP 24001
+and deny the replacement rights before final withdrawal. The positive probes
+establish that previously denied services actually respond when authorized.
+This extension passes local short-test compilation, vet and lint; native
+execution is pending and is not included in the `92983ae` evidence above.
