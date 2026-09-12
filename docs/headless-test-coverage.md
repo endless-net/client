@@ -3062,6 +3062,29 @@ correction/completion additions. None of those changes is validated by this run.
 
 ## Next work
 
+Run 34672491102 at source `d0fc32a9f7c9d0d97623953fbbab3f452790089a`
+now supplies retained-session observations from four completed Linux jobs:
+[Ubuntu 24.04 repeat 1](https://github.com/endless-net/client/actions/runs/34672491102/job/103496467983),
+[Ubuntu 22.04 repeat 1](https://github.com/endless-net/client/actions/runs/34672491102/job/103496468007),
+[repeat 2](https://github.com/endless-net/client/actions/runs/34672491102/job/103496468128)
+and [repeat 3](https://github.com/endless-net/client/actions/runs/34672491102/job/103496468091).
+Every one of their 16 Relay IPv4/IPv6 TCP failures reports `outcome=recovered`,
+`attempts=1`, 493–583 ms into the additional observation after the initial
+one-second exchange timeout. The same process/socket accepts a fresh challenge;
+no redial or agent restart occurs. Original assertions still fail, so these
+reports are not green evidence. They establish retained-session recovery for
+these cases, contradicting permanent connection loss as their explanation.
+
+[RFC 6298 section 5](https://www.rfc-editor.org/rfc/rfc6298.html#section-5)
+requires retransmission backoff after timeout. The observed delay is consistent
+with transport retransmission timing, but without a packet trace it does not
+identify which endpoint's timer caused it. A one-second application exchange
+deadline is not a TCP recovery guarantee. The recovery assertion needs an
+explicit bounded recovery observation on the same socket, separately from
+immediate access and outage-denial assertions; no reconnect, skipped failure,
+unrelated probe exit or stale nonce may count as success. Other platform
+repetitions and the separate flow/installation failures remain unqualified.
+
 Cached-bootstrap component checks additionally reject missing cached maps,
 mismatched device fingerprints and an enrollment in the recovering phase. Like
 the existing invalid-signature, age-limit and missing-credential cases, each must
