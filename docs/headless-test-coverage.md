@@ -5064,3 +5064,12 @@ The scenario now reports probe start/end relative to expiry and successful probe
 counts on each side. Completion also explicitly requires a successful probe
 started after expiry. Existing no-report and window-bound assertions remain.
 Local short tests, vet and lint pass; native execution of the change is pending.
+
+The aggregate verifier now requires 22 additional native leaves on every
+platform/repetition: IPv4 and IPv6 application routes, exit routes, routed
+resources, machine sharing and service catalogs; all four address/protocol
+combinations for flow consent; and all eight logout/local-forget combinations.
+Omission regressions remove each required leaf in turn on every platform and
+verify rejection despite a passing parent, while accepting complete reports.
+These checks enforce existing scenario variants and do not substitute for their
+native execution. Local short tests, vet and lint pass.

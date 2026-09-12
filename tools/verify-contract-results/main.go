@@ -105,6 +105,27 @@ func verifyReports(dir, sha string) (int, error) {
 
 func requiredPlatformSubtests(platform string, names []string) []string {
 	var required []string
+	for _, root := range []string{
+		"TestControlPlaneNativeApplicationRoute", "TestControlPlaneNativeExitRoute",
+		"TestControlPlaneNativeMachineSharing", "TestControlPlaneRoutedResource",
+		"TestControlPlaneNativeServiceCatalog",
+	} {
+		if slices.Contains(names, root) {
+			required = append(required, root+"/ipv4", root+"/ipv6")
+		}
+	}
+	for _, family := range []string{"ipv4", "ipv6"} {
+		for _, protocol := range []string{"tcp", "udp"} {
+			if slices.Contains(names, "TestControlPlaneNativeFlowConsent") {
+				required = append(required, "TestControlPlaneNativeFlowConsent/"+family+"/"+protocol)
+			}
+			if slices.Contains(names, "TestControlPlaneNativeLogoutTraffic") {
+				for _, cleanup := range []string{"logout", "local-forget"} {
+					required = append(required, "TestControlPlaneNativeLogoutTraffic/"+cleanup+"/"+family+"/"+protocol)
+				}
+			}
+		}
+	}
 	if strings.HasPrefix(platform, "ubuntu-") && slices.Contains(names, "TestControlPlaneSubnetRouter") {
 		required = append(required, "TestControlPlaneSubnetRouter/snat", "TestControlPlaneSubnetRouter/preserve-source")
 	}

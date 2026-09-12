@@ -140,6 +140,21 @@ func checkRequiredLeaves(t *testing.T, root string, leaves []string) {
 	}
 }
 
+func TestRequireNativeAddressAndProtocolVariants(t *testing.T) {
+	for _, root := range []string{
+		"TestControlPlaneNativeApplicationRoute", "TestControlPlaneNativeExitRoute",
+		"TestControlPlaneNativeMachineSharing", "TestControlPlaneRoutedResource",
+		"TestControlPlaneNativeServiceCatalog",
+	} {
+		t.Run(root, func(t *testing.T) { checkRequiredLeaves(t, root, []string{"ipv4", "ipv6"}) })
+	}
+	checkRequiredLeaves(t, "TestControlPlaneNativeFlowConsent", []string{"ipv4/tcp", "ipv4/udp", "ipv6/tcp", "ipv6/udp"})
+	checkRequiredLeaves(t, "TestControlPlaneNativeLogoutTraffic", []string{
+		"logout/ipv4/tcp", "logout/ipv4/udp", "logout/ipv6/tcp", "logout/ipv6/udp",
+		"local-forget/ipv4/tcp", "local-forget/ipv4/udp", "local-forget/ipv6/tcp", "local-forget/ipv6/udp",
+	})
+}
+
 func TestRequireThreeIsolatedReportsOnEightPlatforms(t *testing.T) {
 	const sha = "0123456789012345678901234567890123456789"
 	write := func(path string, value []byte) {
