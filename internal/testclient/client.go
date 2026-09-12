@@ -96,6 +96,9 @@ func (n *Node) command(ctx context.Context, args ...string) *exec.Cmd {
 		cmd = exec.CommandContext(ctx, n.Binary, args...)
 	}
 	cmd.Env = append(os.Environ(), n.Environment...)
+	// A descendant may retain a copied output pipe after the Client exits.
+	// Context cancellation alone does not bound os/exec's pipe-copy wait.
+	cmd.WaitDelay = 2 * time.Second
 	return cmd
 }
 func (n *Node) MustRun(args ...string) []byte {
@@ -174,7 +177,16 @@ func (n *Node) Stop() {
 	case <-n.done:
 	case <-time.After(5 * time.Second):
 		_ = cmd.Process.Kill()
-		<-n.done
+		n.awaitKilledProcess()
+	}
+}
+
+func (n *Node) awaitKilledProcess() {
+	n.t.Helper()
+	select {
+	case <-n.done:
+	case <-time.After(5 * time.Second):
+		n.t.Error("agent process wait did not complete after forced termination")
 	}
 }
 
@@ -189,7 +201,7 @@ func (n *Node) StopWithSignal(signal os.Signal) {
 	n.cmd = nil
 	if err := cmd.Process.Signal(signal); err != nil {
 		_ = cmd.Process.Kill()
-		<-n.done
+		n.awaitKilledProcess()
 		n.t.Fatal("could not deliver the foreground termination signal")
 	}
 	select {
@@ -199,7 +211,7 @@ func (n *Node) StopWithSignal(signal os.Signal) {
 		}
 	case <-time.After(5 * time.Second):
 		_ = cmd.Process.Kill()
-		<-n.done
+		n.awaitKilledProcess()
 		n.t.Fatal("foreground signal shutdown required a forced kill")
 	}
 }

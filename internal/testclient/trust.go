@@ -76,6 +76,7 @@ func runTrustCommand(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd.WaitDelay = 2 * time.Second
 	output, err := cmd.Output()
 	if err == nil {
 		return nil

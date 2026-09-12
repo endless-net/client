@@ -4875,3 +4875,12 @@ execution termination and the existing `always()` report steps. A timed-out
 execution still fails the job and cannot pass the aggregate gate. This is a
 report-preservation change, not a fix or qualification of the stalled native
 scenario. Artifact upload after timeout remains to be verified on hosted CI.
+
+Inspection of the Client harness found an unbounded wait after forced process
+termination in `Stop` and `StopWithSignal`. These paths now bound the final
+process wait and mark the test failed if it does not finish. Client CLI/agent
+commands and native test-trust commands also use a two-second `exec.Cmd.WaitDelay`
+to bound pipe-copy waits when descendants retain output handles after process
+exit or context cancellation. Existing command deadlines and graceful-shutdown
+assertions remain intact. This removes identified harness wait hazards; without
+the cancelled job's stack trace it is not proof of the macOS timeout cause.
