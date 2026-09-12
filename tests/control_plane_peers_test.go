@@ -344,11 +344,17 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string,
 		return true
 	}
 	var exit *exec.ExitError
-	if errors.As(err, &exit) && exit.ExitCode() == 2 {
+	if errors.As(err, &exit) && packetProbeReportsDenial(exit.ExitCode(), output) {
 		return false
 	}
 	t.Fatalf("application probe could not classify network access: %s: %v", packetProbeFailureReason(output), err)
 	return false
+}
+
+func packetProbeReportsDenial(exitCode int, output []byte) bool {
+	// Flag parsing and runtime panics also use exit 2. Only the probe's
+	// explicit exchange outcome can establish a denied traffic assertion.
+	return exitCode == 2 && (string(output) == "application exchange unavailable\n" || string(output) == "application exchange unavailable\r\n")
 }
 
 func packetProbeFailureReason(output []byte) string {

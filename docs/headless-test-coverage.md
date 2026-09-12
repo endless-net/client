@@ -2863,6 +2863,16 @@ coverage remains incomplete; this matrix does not close missing scenarios.
 
 ## Next work
 
+The application traffic oracle now requires both exit code 2 and the exact
+`application exchange unavailable` output line before asserting denial. Exit 2
+alone also represents Go flag-parser failures and runtime panics, so it cannot
+establish a policy/outage result. A short regression reproduced four false
+denials before the fix (flag error, empty output, panic and extra output), and
+also checks LF/CRLF denial messages, wrong exit codes, success and nonce mismatch.
+Unexpected failures still fail the test using bounded diagnostic filtering.
+This tightens all callers of the shared probe helper, including native and
+installation tests; it does not explain or suppress the unknown UDP nonce.
+
 HC-030 native direct IPv4/IPv6 TCP/UDP scenarios now break control streams and
 return temporary service failures, wait for the real agent's public `degraded`
 status with valid cached authorization, then require three successful exchange
