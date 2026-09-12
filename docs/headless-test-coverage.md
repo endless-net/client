@@ -156,6 +156,14 @@ probes. Reference traffic counters do not advance for that exchange. Public
 inspection reports a 99.297-second handshake age, valid cache, healthy WireGuard
 and available physical IPv4 interfaces before cleanup. Cause remains open.
 
+Failed flow probes now also report reference-peer wire-counter deltas over
+that individual exchange: received initiations, attempted/sent/failed responses,
+and other received datagrams. These are observations at the independent peer's
+UDP boundary, with no Client private state or payload logging. An increase in
+other datagrams alone does not establish successful decryption or application
+delivery. This diagnostic addition preserves the traffic assertion and all
+probe deadlines; its native execution still requires CI evidence.
+
 [Windows 2025 repeat 3](https://github.com/endless-net/client/actions/runs/34710382160/job/103600590934)
 also fails the DNS diagnostic assertion and reaches the overall 30-minute Go
 test deadline. Its 52 completed roots total 1794.25 seconds; the final

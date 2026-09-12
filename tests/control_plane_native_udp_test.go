@@ -164,11 +164,16 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	flowObservationStarted := false
 	fresh := func(port string) bool {
 		beforeReceived, beforeEchoed := reference.PacketCounts()
+		beforeInitiations, beforeResponses, beforeOther := reference.HandshakeCounts()
+		beforeResponseAttempts, beforeResponseErrors := reference.HandshakeResponseCounts()
 		classified, ok := false, false
 		defer func() {
 			if flowLogs && flowObservationStarted && (!classified || !ok) {
 				afterReceived, afterEchoed := reference.PacketCounts()
 				t.Logf("flow failed exchange: protocol=%s ipv6=%t port=%s classified=%t reference_received_delta=%d reference_echoed_delta=%d", protocol, ipv6, port, classified, afterReceived-beforeReceived, afterEchoed-beforeEchoed)
+				afterInitiations, afterResponses, afterOther := reference.HandshakeCounts()
+				afterResponseAttempts, afterResponseErrors := reference.HandshakeResponseCounts()
+				t.Logf("flow failed exchange wire: initiations_received_delta=%d responses_sent_delta=%d response_attempts_delta=%d response_errors_delta=%d other_datagrams_received_delta=%d", afterInitiations-beforeInitiations, afterResponses-beforeResponses, afterResponseAttempts-beforeResponseAttempts, afterResponseErrors-beforeResponseErrors, afterOther-beforeOther)
 			}
 		}()
 		options := []string(nil)
