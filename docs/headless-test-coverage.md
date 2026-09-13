@@ -11,6 +11,29 @@ Scope: [HC-001–HC-065, architecture main](https://github.com/endless-net/archi
 [business requirements](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-business-analysis.md),
 and [system design / IT specifications](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-system-design.md).
 
+## 2026-09-13: hosted execution not established for recent native changes
+
+Read-only GitHub observation at 09:23 UTC:
+
+- [Protobuf contract run 34749065778](https://github.com/endless-net/client/actions/runs/34749065778),
+  source `c0e669434547574b8b97628c4fef3dfe53b17907`, completed with
+  `startup_failure`, zero jobs and zero check-runs in suite `94114423475`.
+  No test executed in this run. The inspected API responses did not explain
+  the startup failure; no runner/host, billing or workflow cause is asserted.
+- [Test run 34748987138](https://github.com/endless-net/client/actions/runs/34748987138),
+  source `75a29e4f708eea57c5c44d4a423f3ea4dcf14635`, was cancelled with zero jobs.
+  It does not qualify the typed signing-identity runtime change.
+- [Protobuf contract run 34748743095](https://github.com/endless-net/client/actions/runs/34748743095),
+  source `9ea9bac0be56fb620b8f89e5c055a94615b40dbc`, remained queued, including
+  validation and the Windows/macOS/Linux local-transport jobs. It does not yet
+  qualify the testserver's independent-stream cancellation test.
+
+These observations are execution gaps, not failed test assertions and not
+positive acceptance evidence. Local short tests do not replace the missing
+hosted results. No run was restarted and no runner infrastructure was changed
+as part of this inspection. Keep the earlier completed evidence tied to its
+original source SHA; do not transfer it to these newer commits.
+
 ## 2026-09-13: native v0 transport and request-validation cutover
 
 The old OpenAPI v2 specification and its self-consistency tests have now also
@@ -23,7 +46,7 @@ The remaining HTTP v2 handler, endpoint registration, request negotiation,
 JSON/NDJSON codecs and response writer were removed as well. No caller outside
 the retired handler tests used them. Direct component tests for peer context,
 owner claim/release and administrator/owner authorization remain while their
-callbacks are migrated. The old DTOs and OpenAPI description are still residue,
+callbacks are migrated. The old DTOs are still residue,
 not an HTTP listener or runtime fallback. Native request-validation, authorization,
 event-stream and operation tests described below are the relevant coverage;
 deleting retired-protocol tests does not supply missing runtime acceptance.
