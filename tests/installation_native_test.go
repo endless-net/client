@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"testing"
 	"time"
@@ -31,8 +32,22 @@ func awaitInstalledNative(t *testing.T, binary, operation string, target proto.M
 		return ready()
 	})
 	if err != nil {
-		t.Fatal("installed native service condition was not reached")
+		t.Fatalf("installed native service condition was not reached: %s", installedNativeObservation(target))
 	}
+}
+
+// Timeout evidence is an explicit numeric/boolean allowlist, never a protobuf
+// dump: installed status can contain identities, browser actions and failures.
+func installedNativeObservation(target proto.Message) string {
+	response, ok := target.(*ipc.GetStatusResponse)
+	if !ok || response.GetStatus() == nil {
+		return "status unavailable"
+	}
+	s := response.Status
+	a := s.GetAgent()
+	return fmt.Sprintf("service=%d control=%d connection=%d desired=%d disconnected=%t map=%d agent_present=%t agent_state=%d agent_map=%d agent_failure=%t",
+		s.ServiceState, s.ControlState, s.ConnectionPhase, s.GetIntent().GetDesiredState(), s.UserDisconnected,
+		s.MapRevision, a != nil, a.GetSnapshotState(), a.GetMapRevision(), a.GetLastFailure() != nil)
 }
 
 func waitInstalledNativeCondition(t *testing.T, binary string, predicate func(*ipc.Status) bool) *ipc.Status {
