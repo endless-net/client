@@ -52,15 +52,15 @@ func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
 		if status.GetStoredState().GetTokenPresent() {
 			t.Fatal("join-token fixture unexpectedly has a user session")
 		}
-		want := ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN
-		if status.AccountId == "" {
-			want = ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT
-		}
+		// This fixture enrolls only with a join token, without selecting a user
+		// account. Status may expose the signed map's account ID; that metadata
+		// is not the profile's authenticated account context for ListNetworks.
+		want := ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
 		response, err := consumer.ListNetworks(ctx, connect.NewRequest(&ipc.ListNetworksRequest{Profile: &ipc.ProfileRef{ProfileId: status.ActiveProfileId}}))
 		if response != nil || rpc.FailureFromError(err).GetCode() != want {
-			t.Fatal("node enrollment was used as a cached account catalog fallback")
+			t.Fatalf("accountless node catalog: response_present=%t failure_code=%d, want=%d", response != nil, rpc.FailureFromError(err).GetCode(), want)
 		}
 	}
 	for _, disconnected := range []bool{false, true} {
