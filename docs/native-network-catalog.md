@@ -27,8 +27,17 @@ state, not permission to pick a replacement. Failed reads return no partial cata
 The pinned upstream Network message exposes ID/name only. CIDRs are not invented.
 Account IDs come from the scoped request. Selection restrictions remain UNSUPPORTED
 until the native switch provider exists; the whole network-selection capability
-is not advertised. Native SelectNetwork
-execution/rollback, per-network details and installed-agent acceptance remain open.
+is not advertised. Native SelectNetwork now implements only exact-ID reselection
+of the active profile's current enrolled network as a durable SUCCEEDED no-op:
+SelectionResult carries the current network ID and continuity is PRESERVED.
+It does not look up names, query a cached
+catalog, reconnect, or change connection intent. Owner/CAS/idempotency admission
+still applies; unfinished operations reject with BUSY, missing enrollment rejects
+with NEEDS_ENROLLMENT, and another network remains UNSUPPORTED. Short tests cover
+connected/disconnected intent retention, failure without mutation and exact replay
+after coordinator restart. This is not network-switch implementation or acceptance.
+Actual SelectNetwork switching/rollback, per-network details and installed-agent
+acceptance remain open; the legacy process selection scenario still needs replacement.
 
 Short tests cover request authorization/account/page binding, deterministic native
 pagination and changed-catalog rejection, immutable response ownership, missing
