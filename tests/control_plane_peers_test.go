@@ -228,25 +228,31 @@ func exerciseConnectionIntent(t *testing.T, s *testcontrol.Server, nodes [2]*tes
 		}
 	}
 	runNativeControlMutation(t, source, "disconnect", "9c1d2000-0000-4000-8000-000000000001")
+	t.Log("native connection-intent phase: disconnected after mutation")
 	assertDisconnected()
 	source.Stop()
 	source.Start()
+	t.Log("native connection-intent phase: disconnected after restart")
 	assertDisconnected()
 	runNativeControlMutation(t, source, "connect", "9c1d2000-0000-4000-8000-000000000002")
+	t.Log("native connection-intent phase: connected after mutation")
 	assertTraffic()
 	// A repeated connect and a process restart must preserve connected intent.
 	runNativeControlMutation(t, source, "connect", "9c1d2000-0000-4000-8000-000000000003")
 	source.Stop()
 	source.Start()
+	t.Log("native connection-intent phase: connected after restart")
 	assertTraffic()
 	s.SetUnavailable(true)
 	defer s.SetUnavailable(false)
 	for i, n := range nodes {
+		t.Logf("native connection-intent phase: current outage observation for node index %d", i)
 		n.AwaitNativeStatus(func(v *native.Status) bool {
 			return v.NodeId == initial[i].NodeId && v.ActiveProfileId == initial[i].ActiveProfileId && nativeCurrentAgentFailure(v) &&
 				v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 		})
 	}
+	t.Log("native connection-intent phase: connected traffic during control outage")
 	assertTraffic()
 	s.SetUnavailable(false)
 	update(t, s, initial[0].NodeId, func(m *api.NetworkMapSnapshot) { m.Network.Name = "control-restored" })
@@ -254,10 +260,12 @@ func exerciseConnectionIntent(t *testing.T, s *testcontrol.Server, nodes [2]*tes
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Log("native connection-intent phase: current recovered map")
 	source.AwaitNativeStatus(func(v *native.Status) bool {
 		return v.NodeId == initial[0].NodeId && v.MapRevision >= recovered.Revision.Network && v.ConnectionPhase == native.ConnectionPhase_CONNECTION_PHASE_CONNECTED &&
 			v.Agent != nil && v.Agent.SnapshotState == native.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.MapRevision == v.MapRevision && v.Agent.LastFailure == nil
 	})
+	t.Log("native connection-intent phase: connected traffic after control recovery")
 	assertTraffic()
 	registrations := 0
 	for _, event := range s.Events() {

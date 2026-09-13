@@ -146,6 +146,23 @@ requires exit 1, empty stdout, no timeout and a transport permission-denied erro
 Cross-platform short tests verify argument construction; real denied-peer socket
 execution, remaining reinstall phases and cleanup need a fresh hosted run.
 
+## Direct-peer post-MTU result — source f299b24
+
+[Control-plane job 103716995697](https://github.com/endless-net/client/actions/runs/34754603819/job/103716995697)
+failed all three repetitions later in `exerciseConnectionIntent`, after two
+logged agent restarts. The previous diagnostics gate no longer failed: execution
+reached this helper only after initial direct traffic/handshake/counter checks,
+peer withdrawal denial, restored traffic and application-policy exercise.
+This is partial exact-source evidence that the original MTU-related diagnostics
+barrier was removed, not a successful complete direct-peer scenario.
+
+The helper previously reported only its outer caller line, so those logs cannot
+distinguish connected-after-restart status from subsequent outage/recovery
+observations. Fixed public phase labels now identify each boundary without
+printing identities, credentials or arbitrary error details. Status predicates,
+traffic assertions, timeouts and enrollment-count checks remain unchanged.
+Connection-intent restart/outage/recovery acceptance remains open.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
