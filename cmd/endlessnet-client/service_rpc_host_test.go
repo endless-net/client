@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/endless-net/client/clientipc/local"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
@@ -60,6 +63,23 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	defer cancelRequest()
 	if _, err := consumer.Bootstrap(requestCtx); err != nil {
 		t.Fatal("agent did not expose native bootstrap", err)
+	}
+	transportFlag := "--ipc-socket"
+	if runtime.GOOS == "windows" {
+		transportFlag = "--ipc-pipe"
+	}
+	for command, response := range map[string]proto.Message{
+		"status": &ipc.GetStatusResponse{}, "runtime-info": &ipc.GetRuntimeInfoResponse{}, "support-info": &ipc.GetSupportInfoResponse{},
+	} {
+		output, err := captureStdout(t, func() error {
+			return cmdService([]string{command, transportFlag, endpoint, "--timeout", "5s"})
+		})
+		if err != nil {
+			t.Fatal(command, err)
+		}
+		if err := protojson.Unmarshal([]byte(output), response); err != nil {
+			t.Fatal("CLI response does not follow native protobuf JSON", command, err)
+		}
 	}
 	if err := stop(); err != nil {
 		t.Fatal(err)

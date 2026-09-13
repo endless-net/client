@@ -2813,7 +2813,6 @@ func TestCmdServiceIPCCommandsUseServicePipeFacade(t *testing.T) {
 		name string
 		args []string
 	}{
-		{name: "status", args: []string{"status"}},
 		{name: "connect", args: []string{"connect"}},
 		{name: "disconnect", args: []string{"disconnect"}},
 		{name: "logout", args: []string{"logout"}},

@@ -589,3 +589,12 @@ mixed/platform-inappropriate endpoints are rejected. No-endpoint headless mode
 remains available. This is a source cutover, not deployed acceptance: CLI/UI and
 helper consumers still need migration, old handler/test code remains to remove,
 native runtime status observation and the remaining providers are unfinished.
+
+CLI `service status`, `service runtime-info` and `service support-info` now use
+native v0 with mandatory Bootstrap contract/digest verification and protobuf JSON
+output (not the retired HTTP response envelope). Windows, Linux and macOS use
+their own default local endpoint; mixed or wrong-platform flags fail before I/O.
+The former v2 status case was replaced with real local-host CLI dispatch tests
+which decode replies against the accepted generated messages. Invalid arguments
+and timeouts are covered too. Other CLI mutations/events, helper and UI migration
+and live runtime status observation remain separate unfinished work.

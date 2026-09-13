@@ -23,7 +23,7 @@ import (
 
 func cmdService(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, events, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, diagnostics, diagnostics-bundle, or logs-recent")
+		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, runtime-info, support-info, events, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, diagnostics, diagnostics-bundle, or logs-recent")
 	}
 	switch args[0] {
 	case "enroll":
@@ -66,8 +66,8 @@ func cmdService(args []string) error {
 			fmt.Printf("Open this URL to approve the device:\n%s\n", approvalURL)
 		}
 		return nil
-	case "status":
-		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathStatus, nil, &ipc.StatusResponse{})
+	case "status", "runtime-info", "support-info":
+		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
 	case "events":
 		return cmdServiceIPCEvents(args[0], args[1:])
 	case "connect":
