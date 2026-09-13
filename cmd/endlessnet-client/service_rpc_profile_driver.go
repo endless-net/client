@@ -51,6 +51,8 @@ func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 			if err != nil || !result.OK {
 				return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED)
 			}
+			invalidateAgentSnapshot(opts)
+			requestAgentSync(opts)
 			return nil
 		},
 	}

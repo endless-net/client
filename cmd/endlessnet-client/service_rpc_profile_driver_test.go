@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -125,6 +127,58 @@ func TestRPCProfileStopNotifiesOfflineAfterTeardown(t *testing.T) {
 			}
 			if !reflect.DeepEqual(before, store.Read()) {
 				t.Fatal("offline notification overwrote persisted configuration")
+			}
+		})
+	}
+}
+
+func TestRPCProfileStartRefreshesAgentOnlyAfterSuccessfulApply(t *testing.T) {
+	for _, mode := range []string{"success", "wake-already-pending", "configure-error", "configure-rejected", "unverified-map"} {
+		t.Run(mode, func(t *testing.T) {
+			fixture := newRecoveryTestFixture(t, "https://control.example.test")
+			cfg, err := client.LoadConfig(fixture.ConfigPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg.EnrollmentRecovery = nil
+			cfg.MapSigningTrust = testSigningTrustBundle(t, testMapSigningPublicKey(t, cfg.CachedMap.MapSignature))
+			if mode == "unverified-map" {
+				cfg.MapSigningTrust = &fixture.NewTrust
+			}
+			statePath := filepath.Join(t.TempDir(), "agent-state.json")
+			if err := writeAgentFailureSnapshot(statePath, fixture.ConfigPath, errors.New("synthetic previous control failure")); err != nil {
+				t.Fatal(err)
+			}
+			wake := make(chan struct{}, 1)
+			if mode == "wake-already-pending" {
+				wake <- struct{}{}
+			}
+			wg := &testAgentWireGuard{configure: func(client.Config, api.RegisterNodeResponse) (client.WireGuardApplyResult, error) {
+				if mode == "configure-error" {
+					return client.WireGuardApplyResult{}, errors.New("synthetic apply error")
+				}
+				return client.WireGuardApplyResult{OK: mode != "configure-rejected"}, nil
+			}}
+			driver := agentRPCProfileDriver(agentIPCOptions{WireGuard: wg, StateOutput: statePath, SyncWake: wake})
+			err = driver.Start(t.Context(), cfg)
+			succeeded := mode == "success" || mode == "wake-already-pending"
+			if (err == nil) != succeeded {
+				t.Fatal("unexpected native start outcome", err)
+			}
+			_, statErr := os.Stat(statePath)
+			if succeeded {
+				if !os.IsNotExist(statErr) || len(wake) != 1 {
+					t.Fatal("successful native start retained stale state or did not wake agent")
+				}
+			} else if statErr != nil || len(wake) != 0 {
+				t.Fatal("failed native start invalidated state or woke agent")
+			}
+			wantCalls := 1
+			if mode == "unverified-map" {
+				wantCalls = 0
+			}
+			if wg.configureCalls != wantCalls {
+				t.Fatal("unexpected Configure call count")
 			}
 		})
 	}
