@@ -453,6 +453,13 @@ func cmdAgent(args []string) error {
 			WireGuard:      wireGuard,
 			SyncWake:       syncWake,
 		}
+		// The lifetime lock is held here. Recovery belongs to the runtime, not
+		// the contract transport, which must never replace a caller's path.
+		if *ipcPipe == "" {
+			if err := recoverAgentRPCSocket(*ipcSocket); err != nil {
+				return err
+			}
+		}
 		stopIPC, rpcMutations, err := startAgentRPC(ctx, cancelRuntime, ipcOpts)
 		if err != nil {
 			return err
