@@ -194,6 +194,17 @@ target and exact protocol/version/descriptor digest. Its old range-negotiation
 probes are still pending replacement; this partial migration is not successful
 execution of that guarded scenario or installed-artifact pairing evidence.
 
+The negotiation scenario is now fully native: eleven missing, duplicate or
+mismatched protocol/version/digest variants use a generated gRPC client without
+the normal header injector over the real platform endpoint. GetRuntimeInfo must
+remain available for diagnosis; GetStatus and a fully formed Disconnect must
+return typed CONTRACT_MISMATCH. A valid client then checks request-ID lookup is
+NOT_FOUND and enrollment, intent and host identity remain unchanged. Restart
+requires a new instance with the same build/contract; valid Disconnect/Connect
+must still complete without another registration. The retired HTTP range and
+overlap probes are removed. Short tests compile this guarded process scenario;
+platform execution and installed-artifact pairing remain CI work.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP
