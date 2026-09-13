@@ -105,6 +105,15 @@ func listenDNSProxyPairWith(address string, listenTCP func(string) (net.Listener
 		attempts = 16
 	}
 	var lastErr error
+	// Keep rejected reservations until selection finishes. Releasing one early
+	// lets the OS repeatedly return the same port excluded by the other transport.
+	// At most attempts sockets are retained, and none escape on failure/success.
+	var rejected []io.Closer
+	defer func() {
+		for _, socket := range rejected {
+			_ = socket.Close()
+		}
+	}()
 	for attempt := range attempts {
 		if attempt%2 == 1 {
 			udp, err := listenUDP(address)
@@ -115,7 +124,7 @@ func listenDNSProxyPairWith(address string, listenTCP func(string) (net.Listener
 			if err == nil {
 				return tcp, udp, nil
 			}
-			_ = udp.Close()
+			rejected = append(rejected, udp)
 			lastErr = err
 			continue
 		}
@@ -127,7 +136,7 @@ func listenDNSProxyPairWith(address string, listenTCP func(string) (net.Listener
 		if err == nil {
 			return tcp, udp, nil
 		}
-		_ = tcp.Close()
+		rejected = append(rejected, tcp)
 		lastErr = err
 	}
 	return nil, nil, lastErr

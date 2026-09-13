@@ -594,5 +594,13 @@ administrator admission, durable adoption and recovery remain the supported IPC
 path. The import guard now includes the migrated recovery test file. Other v2
 DTOs and handlers remain pending cutover; this removal is not a full-runtime claim.
 
+DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
+bounded search finishes, preventing immediate reuse of the same port excluded
+by the other transport. Deterministic tests cover allocator reuse, exhaustion,
+early allocation failure and closure of rejected sockets without closing the
+selected pair. Explicit ports still fail without relocation. This addresses a
+repeatable selection failure mechanism observed during Windows short tests;
+it does not guarantee a free pair under arbitrary OS port exclusions.
+
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.
