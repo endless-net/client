@@ -284,6 +284,26 @@ failure as Connect resource-exhausted / `ERROR_CODE_LIMIT_EXCEEDED`, not a
 deadline or malformed JSON. The precise exceeded field is not established.
 Later global-revision inspection changes are not covered by these source results.
 
+## Installed macOS and container follow-up — source 2661d75
+
+[macOS 15 installed job 103727525056](https://github.com/endless-net/client/actions/runs/34756879165/job/103727525056)
+tested `2661d753991a178b2f33e275bc7a9768da13f67b`. It reached control recovery
+at 2026-09-13 13:07:04 UTC after completing cached traffic following service
+startup without control. The preceding `connected` helper requires both native
+status/diagnostics and fresh TCP traffic with increasing reference-peer receive
+and echo counters. This is installed macOS cached-startup traffic evidence, not
+merely a mock status assertion. The control-recovery status wait failed at
+13:07:49 UTC; full installed lifecycle acceptance remains open. Subsequent
+global-policy cursor fixes are not validated by this older source result.
+
+[Container job 103727524971](https://github.com/endless-net/client/actions/runs/34756879165/job/103727524971)
+failed all four persistent-state family/protocol cases and ephemeral recreation
+at native runtime readiness. The existing failure does not distinguish a typed
+RPC failure, invalid protobuf JSON, or an absent runtime instance identifier.
+Commit `33b724a` adds the last bounded `NativeService` error and an instance-presence
+boolean to that timeout without changing readiness or its deadline. Its new
+diagnostic requires a subsequent runner result; container acceptance remains open.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
