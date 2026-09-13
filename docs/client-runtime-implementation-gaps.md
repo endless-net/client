@@ -136,6 +136,14 @@ limits and failure redaction. The agent test verifies that an unverified map
 does not invoke route collection. No real OS route command is executed by these
 unit tests; platform execution qualification belongs to the later test phase.
 
+Snapshot intent audit: `snapshotLocked` clears provider-supplied intent and the
+user-disconnected flag before projecting the durable configuration, including
+when that configuration has no intent. This prevents a cleared intent from
+reappearing through a stale observation. The regression
+`TestRPCSnapshotDoesNotRestoreClearedIntentFromObservation` checks both owner
+and observer snapshots. This proves projection precedence, not actual tunnel
+shutdown or backend session revocation.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. `client`

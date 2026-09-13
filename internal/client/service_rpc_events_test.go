@@ -173,6 +173,29 @@ func TestRPCObserverSnapshotExcludesPrivateState(t *testing.T) {
 	}
 }
 
+func TestRPCSnapshotDoesNotRestoreClearedIntentFromObservation(t *testing.T) {
+	m, owner, _ := rpcConnectFixture(t)
+	if err := m.PublishStatus(&ipc.Status{Metadata: m.Metadata(), UserDisconnected: true,
+		Intent: &ipc.ConnectionIntent{DesiredState: ipc.DesiredState_DESIRED_STATE_DISCONNECTED}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.ConnectionIntent = nil
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, peer := range []local.Peer{owner, {Identity: "uid:2000"}} {
+		snapshot, err := m.snapshotAs(peer, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snapshot.Status.UserDisconnected || snapshot.Status.GetIntent().GetDesiredState() != ipc.DesiredState_DESIRED_STATE_UNSPECIFIED {
+			t.Fatal("snapshot restored cleared durable intent from stale observation")
+		}
+	}
+}
+
 func TestRPCEventQueueNeverSilentlyDrops(t *testing.T) {
 	for _, large := range []bool{false, true} {
 		s := &rpcSubscriber{queue: make(chan *ipc.WatchEventsResponse, rpcEventQueueCount), done: make(chan struct{})}

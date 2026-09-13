@@ -184,6 +184,8 @@ func (m *ClientRPCMutations) snapshotLocked(peer local.Peer, build *ipc.BuildIde
 		status.PendingAction = &ipc.UserAction{Kind: ipc.UserAction_KIND_WAIT_FOR_APPROVAL, ReasonKey: "node_approval_pending"}
 	}
 	// Intent is durable command state, not a delayed provider observation.
+	status.Intent = nil
+	status.UserDisconnected = false
 	if intent := cfg.ConnectionIntent; intent != nil {
 		status.Intent = &ipc.ConnectionIntent{}
 		status.UserDisconnected = intent.DesiredState == ConnectionIntentDesiredDisconnected
