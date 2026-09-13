@@ -45,14 +45,14 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
 	var operationID, requestID string
 	var profileID string
-	requiresProfile := command == "preferences" || command == "managed-settings" || command == "session" || command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent"
+	requiresProfile := command == "preferences" || command == "managed-settings" || command == "session" || command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent" || command == "exit-nodes" || command == "exit-node"
 	if requiresProfile {
 		fs.StringVar(&profileID, "profile-id", "", "required target profile")
 	}
 	var wait bool
 	var pageSize uint
 	var pageToken string
-	if command == "profiles" || command == "networks" || command == "peers" || command == "logs-recent" {
+	if command == "profiles" || command == "networks" || command == "peers" || command == "logs-recent" || command == "exit-nodes" {
 		fs.UintVar(&pageSize, "page-size", 0, "page size; 0 uses 100, maximum 500")
 		fs.StringVar(&pageToken, "page-token", "", "opaque token from the previous page")
 	}
@@ -143,6 +143,18 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 		message = response.Msg
 	case "diagnostics":
 		response, err := consumer.GetDiagnostics(ctx, connect.NewRequest(&ipc.GetDiagnosticsRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
+	case "exit-nodes":
+		response, err := consumer.ListExitNodes(ctx, connect.NewRequest(&ipc.ListExitNodesRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}, Page: &ipc.PageRequest{PageSize: uint32(pageSize), PageToken: pageToken}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
+	case "exit-node":
+		response, err := consumer.GetExitNode(ctx, connect.NewRequest(&ipc.GetExitNodeRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
 		if err != nil {
 			return err
 		}

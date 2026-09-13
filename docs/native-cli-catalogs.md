@@ -1,5 +1,16 @@
 # Native CLI catalogs and diagnostics
 
+`service exit-nodes --profile-id <id> [--page-size <0..500>] [--page-token <token>]`
+and `service exit-node --profile-id <id>` call ListExitNodes and GetExitNode over
+native local transport. Output preserves protobuf presence, exact allowed family
+modes, requested/effective IDs and separate IPv4/IPv6 apply/fail-closed state.
+The CLI does not infer a selectable exit from a peer default route or turn partial
+dual-stack application into success. Native failures propagate without fallback.
+Producer testserver fixtures cover exact paginated requests, partial application,
+unsupported and owner-required errors; missing profile and oversized pages fail
+before connection. These are CLI contract tests, not an implemented runtime exit
+catalog, route selection or proof of protected traffic on any platform.
+
 `service export-diagnostics-bundle --operation-id <uuid> --profile-id <id>`
 reads a successful CreateDiagnosticsBundle operation, then its caller-bound
 handle. It accepts no filesystem path or caller-supplied digest. Before writing
