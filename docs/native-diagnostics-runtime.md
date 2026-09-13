@@ -7,16 +7,23 @@ a single fixed-name diagnostics.json ZIP entry. Source and encoded JSON/archive
 sizes are bounded to 5 MiB; partial/failure markers remain visible. Tests inspect
 the archive content, nested/repeated redaction, source immutability and JSON size
 expansion. This builder is not yet wired to CreateDiagnosticsBundle: durable
-operation execution and owner/profile-bound expiring storage remain unfinished.
+operation execution and storage integration remain unfinished.
 
-A separate process-local bundle cache primitive now owns immutable archive bytes
+A separate bundle store primitive now owns immutable archive bytes
 and cloned metadata. It binds opaque UUID handles to owner/profile, expires them
 after 15 minutes, supports bounded 64 KiB/default and 256 KiB/maximum reads, and
 limits retention to 32 handles/20 MiB without evicting live handles silently.
 Foreign/expired handles return NOT_FOUND; explicit revocation removes a profile's
 entries. Tests cover binding, expiry, offsets, copy ownership and capacity. This
-cache is not yet connected to RPC or logout hooks and is not restart-persistent;
-durable artifact storage and atomic operation publication are still required.
+store is not yet connected to RPC or logout hooks. Its optional file-backed mode
+atomically persists creation and revocation before publishing changes in memory,
+restores immutable descriptors/bytes after restart, validates hashes, size, TTL,
+identity and capacity, and ignores expired records. Archives stay outside the
+main configuration. Files use mode 0600 and existing machine-DPAPI protection on
+Windows; the integrating runtime must supply a private ACL-protected directory
+and hold its single-writer agent lock. Tests cover restart, durable revocation,
+expiry, malformed storage and failed-write rollback. Runtime wiring and atomic
+operation publication are still required; this is not installed-service evidence.
 
 The retired HTTP Diagnostics route and agent callback are removed. Its old path
 must return 404. The native local transport test verifies owner-only collection,

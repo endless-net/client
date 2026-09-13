@@ -58,11 +58,15 @@ func TestRPCBundleStoreCapacityAndRevocation(t *testing.T) {
 	}
 	_, err := store.put("owner", "profile", []byte{1})
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
-	store.revoke("other", "profile")
+	if err := store.revoke("other", "profile"); err != nil {
+		t.Fatal(err)
+	}
 	if store.bytes != rpcBundleStoreMaxBytes {
 		t.Fatal("foreign revocation changed store")
 	}
-	store.revoke("owner", "profile")
+	if err := store.revoke("owner", "profile"); err != nil {
+		t.Fatal(err)
+	}
 	if store.bytes != 0 {
 		t.Fatal("revocation retained bytes")
 	}
@@ -103,7 +107,9 @@ func TestRPCBundleStoreReadBoundsAndRevokedHandles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store.revoke("owner", "profile")
+	if err := store.revoke("owner", "profile"); err != nil {
+		t.Fatal(err)
+	}
 	_, err = store.read("owner", "profile", &ipc.ReadDiagnosticsBundleRequest{BundleId: metadata.BundleId})
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_NOT_FOUND)
 	if _, err := store.read("owner", "other-profile", &ipc.ReadDiagnosticsBundleRequest{BundleId: other.BundleId}); err != nil {

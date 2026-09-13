@@ -22,13 +22,14 @@ type clientRPCBundleRecord struct {
 	metadata       *ipc.BundleResult
 }
 
-// Process-local cache primitive. This is not durable artifact storage or an RPC
-// implementation. Runtime integration must revoke on owner/profile/logout changes.
+// Runtime integration must revoke on owner/profile/logout changes. The zero
+// value is memory-only; openClientRPCBundleStore supplies durable persistence.
 type clientRPCBundleStore struct {
-	mu    sync.Mutex
-	items map[string]clientRPCBundleRecord
-	bytes int
-	now   func() time.Time
+	mu      sync.Mutex
+	items   map[string]clientRPCBundleRecord
+	bytes   int
+	now     func() time.Time
+	persist func(map[string]clientRPCBundleRecord) error
 }
 
 func (s *clientRPCBundleStore) pruneLocked() {
@@ -49,7 +50,7 @@ func (s *clientRPCBundleStore) timeNow() time.Time {
 }
 
 func (s *clientRPCBundleStore) put(owner, profile string, data []byte) (*ipc.BundleResult, error) {
-	if owner == "" || profile == "" || len(data) == 0 || len(data) > rpcBundleMaxBytes {
+	if owner == "" || profile == "" || len(owner) > 4096 || len(profile) > 4096 || len(data) == 0 || len(data) > rpcBundleMaxBytes {
 		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	s.mu.Lock()
@@ -72,6 +73,12 @@ func (s *clientRPCBundleStore) put(owner, profile string, data []byte) (*ipc.Bun
 		s.items = map[string]clientRPCBundleRecord{}
 	}
 	s.items[id] = clientRPCBundleRecord{owner: owner, profile: profile, data: append([]byte(nil), data...), metadata: metadata}
+	if s.persist != nil {
+		if err := s.persist(s.items); err != nil {
+			delete(s.items, id)
+			return nil, rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+		}
+	}
 	s.bytes += len(data)
 	return proto.Clone(metadata).(*ipc.BundleResult), nil
 }
@@ -98,13 +105,22 @@ func (s *clientRPCBundleStore) read(owner, profile string, request *ipc.ReadDiag
 	return &ipc.ReadDiagnosticsBundleResponse{Data: append([]byte(nil), item.data[request.Offset:end]...), NextOffset: end, Eof: end == uint64(len(item.data))}, nil
 }
 
-func (s *clientRPCBundleStore) revoke(owner, profile string) {
+func (s *clientRPCBundleStore) revoke(owner, profile string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	remaining := make(map[string]clientRPCBundleRecord, len(s.items))
+	remainingBytes := 0
 	for id, item := range s.items {
-		if strings.EqualFold(item.owner, owner) && item.profile == profile {
-			delete(s.items, id)
-			s.bytes -= len(item.data)
+		if !strings.EqualFold(item.owner, owner) || item.profile != profile {
+			remaining[id] = item
+			remainingBytes += len(item.data)
 		}
 	}
+	if s.persist != nil {
+		if err := s.persist(remaining); err != nil {
+			return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+		}
+	}
+	s.items, s.bytes = remaining, remainingBytes
+	return nil
 }
