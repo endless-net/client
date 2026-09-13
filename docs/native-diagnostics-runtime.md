@@ -117,8 +117,15 @@ post-fault map and a current error-free agent snapshot, avoiding acceptance of a
 unrelated revision that already exceeded one. Temporary outage/restart still checks
 retained identity, credential/cache presence and exactly one registration. Predicate
 tests distinguish control health from current/previous agent failure; the process
-scenarios remain unexecuted locally. The typed terminal-error matrix and other
-legacy status consumers still need conversion.
+scenarios remain unexecuted locally. The eight-case typed terminal-error matrix
+now uses the same native fixture and status: unknown/revoked/expired credentials
+must reach NEEDS_ENROLLMENT with an explicit StoredState projection showing no
+credential or cache; invalid credentials, binding, session, policy and temporary
+errors retain enrollment. Nonterminal recovery requires the named post-fault map
+and a current error-free agent snapshot. This preserves the distinction between
+terminal map-stream cleanup and the separate enrollment-renewal recovery flow.
+Other legacy status consumers still need conversion; these process scenarios need
+isolated CI execution before they count as acceptance evidence.
 
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native

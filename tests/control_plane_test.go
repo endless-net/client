@@ -34,7 +34,7 @@ func TestControlPlaneRecoveryErrorMatrix(t *testing.T) {
 		{"temporary", api.ErrorCodeTemporarilyUnavailable, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, n, id := controlScenario(t)
+			s, n, id := nativeControlScenario(t)
 			n.Stop()
 			body, err := json.Marshal(api.PublicError{SchemaVersion: api.SchemaVersion, ErrorCode: tc.code, DiagnosticMessage: "node_credential_unknown revoked expired", RequestID: "test-request"})
 			if err != nil {
@@ -50,17 +50,21 @@ func TestControlPlaneRecoveryErrorMatrix(t *testing.T) {
 			}
 			n.Start()
 			if tc.terminal {
-				n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.State == ipc.StateNeedsEnrollment && v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent
+				n.AwaitNativeStatus(func(v *native.Status) bool {
+					return v.ServiceState == native.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT && v.NodeId == "" &&
+						v.StoredState != nil && !v.StoredState.NodeCredentialPresent && !v.StoredState.CachedMapPresent
 				})
 			} else {
-				v := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.State == ipc.StateDegraded })
-				if v.NodeID != id || !v.NodeCredentialPresent || !v.CachedMapValid {
+				v := n.AwaitNativeStatus(nativeCurrentAgentFailure)
+				if v.NodeId != id || !v.GetStoredState().GetNodeCredentialPresent() || !v.GetStoredState().GetCachedMapValid() {
 					t.Fatal("nonterminal code cleared enrollment")
 				}
 				s.ClearResponseFault("GET", path)
 				update(t, s, id, func(m *api.NetworkMapSnapshot) { m.Network.Name = "after-error" })
-				n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid && v.MapRevision > 1 })
+				n.AwaitNativeStatus(func(v *native.Status) bool {
+					return v.NodeId == id && v.GetStoredState().GetCachedMapValid() && v.GetNetwork().GetName() == "after-error" &&
+						v.Agent != nil && v.Agent.SnapshotState == native.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.LastFailure == nil
+				})
 			}
 		})
 	}
