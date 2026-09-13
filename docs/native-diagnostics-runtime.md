@@ -628,6 +628,15 @@ agent error, and ephemeral registration is projected only from a verified map.
 A post-signature map mutation must not supply ephemeral state. These are status
 projection tests, not installed-agent or UI acceptance evidence.
 
+Four retired enrollment/auto-connect tests are replaced by native provider/driver
+composition tests. Approved enrollment persists verified node/map/credential and
+the caller's registration identity before the independent Connect stage. Driver
+error and unsuccessful apply return APPLY_FAILED without changing registration;
+successful apply still wakes synchronization when readiness is degraded, and
+status retains the actual connected phase separately from degraded control.
+This is in-process provider/driver coverage, not full RPC or installed lifecycle
+acceptance and not permission to combine Enroll and Connect into one operation.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,
