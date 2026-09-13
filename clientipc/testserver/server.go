@@ -37,6 +37,7 @@ type Server struct {
 	steps    map[string][]Step
 	failures []string
 	active   int
+	idle     chan struct{}
 }
 
 func New() *Server { return &Server{steps: make(map[string][]Step)} }
@@ -86,6 +87,9 @@ func (s *Server) take(method string, request proto.Message) (Step, error) {
 		return Step{}, rpc.Error(connect.CodeInvalidArgument, pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	s.steps[method] = queue[1:]
+	if s.active == 0 {
+		s.idle = make(chan struct{})
+	}
 	s.active++
 	return step, nil
 }
@@ -94,6 +98,31 @@ func (s *Server) finish() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.active--
+	if s.active == 0 {
+		close(s.idle)
+	}
+}
+
+// WaitIdle waits for admitted handlers to finish after the consumer closes its
+// channels. It neither cancels handlers nor consumes or verifies expectations.
+// The host must still call Verify before reporting successful completion.
+func (s *Server) WaitIdle(ctx context.Context) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		s.mu.Lock()
+		active, idle := s.active, s.idle
+		s.mu.Unlock()
+		if active == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-idle:
+		}
+	}
 }
 
 func wait(ctx context.Context, release <-chan struct{}) error {

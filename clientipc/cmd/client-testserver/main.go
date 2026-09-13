@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
@@ -98,11 +99,19 @@ func run(args []string, input io.Reader, output io.Writer) error {
 		}
 		return errors.New("testserver transport failed")
 	case command := <-commands:
-		if err := script.Verify(); err != nil {
-			return err
-		}
 		if command != "verify" {
 			return errors.New("parent ended without explicit verification")
+		}
+		// Parent-side channel termination and server-side handler completion
+		// are asynchronous. Wait for completion, not an arbitrary sleep, while
+		// retaining failures for leaked streams and unconsumed expectations.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := script.WaitIdle(ctx); err != nil {
+			return errors.New("testserver calls did not finish before verification")
+		}
+		if err := script.Verify(); err != nil {
+			return err
 		}
 		if err := server.Close(); err != nil {
 			return errors.New("cannot stop testserver")
