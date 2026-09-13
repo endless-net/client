@@ -440,3 +440,12 @@ retained work and startup completion without caller replay. The production agent
 still needs to start this worker with agentRPCEnroll, supervise its completion and
 wire the native listener; full local-transport and real OS/system acceptance are
 not established by the coordinator/provider tests.
+
+The native local-transport acceptance test now obtains its registered node through
+Enroll rather than directly editing config. It covers unavailable-worker rejection,
+OS-authenticated acceptance, caller-context cancellation after acceptance, approval
+events without the poll token, a new local client recovering by request ID, worker
+restart and the terminal EnrollmentResult before Connect. The control provider is
+synthetic; this tests the actual local RPC/worker/journal composition, not a real
+control-plane approval or production process restart. The test is shared by the
+Windows/Linux/macOS build targets; this local run proves only the current host.

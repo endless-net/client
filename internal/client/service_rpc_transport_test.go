@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -183,12 +184,87 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	}
 	_, err = client.Connect(ctx, connect.NewRequest(&ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile}))
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
-	if err := m.store.Update(func(cfg *Config) error {
-		cfg.NodeID = "synthetic-test-node"
-		cfg.CachedMap = &clientapi.RegisterNodeResponse{}
-		return nil
-	}); err != nil {
+	enrollment := &ipc.EnrollRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile,
+		Mode: ipc.EnrollmentMode_ENROLLMENT_MODE_INTERACTIVE, Authentication: &ipc.EnrollRequest_BrowserLogin{BrowserLogin: true}}
+	_, err = client.Enroll(ctx, connect.NewRequest(enrollment))
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	enrollCtx, stopEnrollment := context.WithCancel(ctx)
+	enrollDone, err := service.StartEnrollmentWorker(enrollCtx, func(_ context.Context, cfg Config, _ ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
+		cfg.EnrollmentRequestID = "native-approval"
+		cfg.EnrollmentPollToken = "synthetic-private-poll-token"
+		if err := save(cfg); err != nil {
+			return nil, err
+		}
+		return &ipc.UserAction{Kind: ipc.UserAction_KIND_OPEN_BROWSER, BrowserUrl: "https://control.example.test/approve"}, nil
+	})
+	if err != nil {
+		stopEnrollment()
 		t.Fatal(err)
+	}
+	defer func() { stopEnrollment(); <-enrollDone }()
+	enrollRequestCtx, cancelEnrollRequest := context.WithCancel(ctx)
+	enrolled, err := client.Enroll(enrollRequestCtx, connect.NewRequest(enrollment))
+	cancelEnrollRequest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	waiting := false
+	for switchEvents.Receive() {
+		op := switchEvents.Msg().GetOperationChanged()
+		if op.GetId() == enrolled.Msg.Operation.Id && op.State == ipc.OperationState_OPERATION_STATE_WAITING_FOR_USER {
+			if op.UserAction.GetKind() != ipc.UserAction_KIND_OPEN_BROWSER || strings.Contains(op.String(), "synthetic-private-poll-token") {
+				t.Fatal("unsafe native approval event")
+			}
+			waiting = true
+			break
+		}
+	}
+	if !waiting {
+		t.Fatal("native approval event missing", switchEvents.Err())
+	}
+	reattached, err := local.NewClient(endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reattached.Close()
+	if _, err := reattached.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	tracked, err := reattached.GetOperation(ctx, connect.NewRequest(&ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_RequestId{RequestId: enrollment.Mutation.RequestId}}))
+	if err != nil || tracked.Msg.Operation.Id != enrolled.Msg.Operation.Id || tracked.Msg.Operation.State != ipc.OperationState_OPERATION_STATE_WAITING_FOR_USER {
+		t.Fatal("reattachment lost approval operation", err)
+	}
+	// Restart the executor while retaining the listener/journal and consumer.
+	stopEnrollment()
+	<-enrollDone
+	resumeCtx, stopResumedEnrollment := context.WithCancel(ctx)
+	defer stopResumedEnrollment()
+	resumedDone, err := service.StartEnrollmentWorker(resumeCtx, func(_ context.Context, cfg Config, _ ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
+		if cfg.EnrollmentRequestID != "native-approval" {
+			t.Error("approval state not recovered")
+		}
+		cfg.EnrollmentRequestID, cfg.EnrollmentPollToken = "", ""
+		cfg.NodeID = "synthetic-test-node"
+		cfg.CachedMap = &clientapi.RegisterNodeResponse{Node: clientapi.Node{ID: cfg.NodeID}}
+		return nil, save(cfg)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { stopResumedEnrollment(); <-resumedDone }()
+	registrationCompleted := false
+	for switchEvents.Receive() {
+		op := switchEvents.Msg().GetOperationChanged()
+		if op.GetId() == enrolled.Msg.Operation.Id && rpcOperationTerminal(op.State) {
+			if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.GetEnrollment().GetNodeId() != "synthetic-test-node" {
+				t.Fatal("native enrollment result missing")
+			}
+			registrationCompleted = true
+			break
+		}
+	}
+	if !registrationCompleted {
+		t.Fatal("native enrollment completion event missing", switchEvents.Err())
 	}
 	connected, err := client.Connect(ctx, connect.NewRequest(&ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile}))
 	if err != nil {
