@@ -20,6 +20,15 @@ func TestNativeServiceQueryRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestNativeServiceOperationRequiresOneLookup(t *testing.T) {
+	for _, args := range [][]string{nil, {"--request-id", " "}, {"--request-id", "request", "--operation-id", "operation"}} {
+		var output bytes.Buffer
+		if err := cmdServiceRPCQuery("operation", args, &output); err == nil || output.Len() != 0 {
+			t.Fatal("ambiguous or empty lookup accepted", args)
+		}
+	}
+}
+
 func TestNativeServiceEndpointUsesPlatformDefaults(t *testing.T) {
 	want := map[string]string{"windows": local.DefaultWindowsPipe, "linux": local.DefaultUnixSocket, "darwin": local.DefaultDarwinSocket}[runtime.GOOS]
 	got, err := nativeServiceEndpoint("", "")

@@ -42,11 +42,29 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	fs := flag.NewFlagSet("service "+command, flag.ContinueOnError)
 	pipe, socket := serviceIPCTransportFlags(fs)
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
+	var operationID, requestID string
+	if command == "operation" {
+		fs.StringVar(&operationID, "operation-id", "", "accepted operation UUID")
+		fs.StringVar(&requestID, "request-id", "", "original mutation request UUID for lost-response recovery")
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
 		return fmt.Errorf("service %s does not accept positional arguments", command)
+	}
+	var lookup *ipc.GetOperationRequest
+	if command == "operation" {
+		operationID, requestID = strings.TrimSpace(operationID), strings.TrimSpace(requestID)
+		if (operationID == "") == (requestID == "") {
+			return fmt.Errorf("service operation requires exactly one of --operation-id or --request-id")
+		}
+		lookup = &ipc.GetOperationRequest{}
+		if operationID != "" {
+			lookup.Lookup = &ipc.GetOperationRequest_OperationId{OperationId: operationID}
+		} else {
+			lookup.Lookup = &ipc.GetOperationRequest_RequestId{RequestId: requestID}
+		}
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
 	if err != nil {
@@ -69,6 +87,12 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	var message proto.Message
 	switch command {
+	case "operation":
+		response, err := consumer.GetOperation(ctx, connect.NewRequest(lookup))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
 	case "runtime-info":
 		message = &ipc.GetRuntimeInfoResponse{Runtime: info}
 	case "events":

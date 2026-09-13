@@ -608,3 +608,12 @@ command and its tests were removed. Replacement tests cover native local CLI
 subscription, timeout before/after snapshot, EOF, sequence/metadata corruption
 and output failure. Automatic reconnect is not implied; callers must resubscribe
 for a fresh snapshot after a reported stream failure.
+
+CLI `service operation --request-id UUID` or `--operation-id UUID` now reads the
+durable v0 operation through a new authenticated connection, after Bootstrap.
+Exactly one lookup is required. It emits the generated GetOperationResponse as
+protobuf JSON and never retries a mutation. Real local-host tests create an
+operation, recover the identical record by both identifiers through CLI dispatch,
+and verify NOT_FOUND with no output for an unknown request. This is the recovery
+primitive for upcoming native CLI mutations, not evidence that all mutation
+commands have already migrated.

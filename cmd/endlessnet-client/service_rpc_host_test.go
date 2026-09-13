@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
@@ -90,6 +91,32 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	event := new(ipc.WatchEventsResponse)
 	if err := protojson.Unmarshal([]byte(eventOutput), event); err != nil || event.Sequence != 1 || event.GetSnapshot() == nil {
 		t.Fatal("native CLI did not emit the opening snapshot", err)
+	}
+	requestID := "c96bfe40-876a-4bc8-95da-4fdd494ab48d"
+	accepted, err := consumer.CreateProfile(requestCtx, connect.NewRequest(&ipc.CreateProfileRequest{
+		Mutation:    &ipc.MutationContext{RequestId: requestID, ExpectedInstanceId: event.Metadata.InstanceId, ExpectedRevision: event.Metadata.Revision},
+		DisplayName: "CLI recovery", ControlOrigin: "https://control.example.test",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for flag, id := range map[string]string{"--request-id": requestID, "--operation-id": accepted.Msg.Operation.Id} {
+		output, err := captureStdout(t, func() error {
+			return cmdService([]string{"operation", flag, id, transportFlag, endpoint, "--timeout", "5s"})
+		})
+		if err != nil {
+			t.Fatal("CLI operation lookup failed", flag, err)
+		}
+		response := new(ipc.GetOperationResponse)
+		if err := protojson.Unmarshal([]byte(output), response); err != nil || !proto.Equal(response.Operation, accepted.Msg.Operation) {
+			t.Fatal("CLI did not recover the original operation", flag, err)
+		}
+	}
+	output, err := captureStdout(t, func() error {
+		return cmdService([]string{"operation", "--request-id", "3d68cf78-6998-42dc-9b62-aaae3dfc6535", transportFlag, endpoint, "--timeout", "5s"})
+	})
+	if connect.CodeOf(err) != connect.CodeNotFound || output != "" {
+		t.Fatal("unknown request was not reported as missing", err)
 	}
 	if err := stop(); err != nil {
 		t.Fatal(err)
