@@ -90,7 +90,7 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 		}
 	}
 	assertConnectionCapability(bootstrapInfo)
-	publishAgentRPCObservation(requestCtx, mutations, opts, ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED)
+	publishAgentRPCObservation(requestCtx, mutations, opts, ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED, nil)
 	observed, err := consumer.GetStatus(requestCtx, connect.NewRequest(&ipc.GetStatusRequest{}))
 	if err != nil || observed.Msg.Status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED {
 		t.Fatal("native host did not publish runtime observation", err)

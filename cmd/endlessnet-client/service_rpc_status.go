@@ -24,7 +24,15 @@ func agentRPCIterationPhase(snapshot client.AgentSnapshot, failed bool) ipc.Conn
 	return ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED
 }
 
-func publishAgentRPCObservation(ctx context.Context, mutations *client.ClientRPCMutations, opts agentIPCOptions, phase ipc.ConnectionPhase) {
+func publishAgentRPCObservation(ctx context.Context, mutations *client.ClientRPCMutations, opts agentIPCOptions, phase ipc.ConnectionPhase, failure error) {
+	// Persist the current failure before observing the state file. Otherwise
+	// subscribers learn of it one retry/backoff iteration late. The caller holds
+	// the iteration lock, so a later iteration cannot overwrite this checkpoint.
+	if failure != nil {
+		if err := writeAgentFailureSnapshot(opts.StateOutput, opts.ConfigPath, failure); err != nil {
+			log.Print("agent failure state write failed")
+		}
+	}
 	if mutations == nil || ctx.Err() != nil {
 		return
 	}

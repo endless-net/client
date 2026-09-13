@@ -507,7 +507,7 @@ func cmdAgent(args []string) error {
 				if err == nil {
 					phase = ipcv0.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED
 				}
-				publishAgentRPCObservation(ctx, rpcMutations, ipcOpts, phase)
+				publishAgentRPCObservation(ctx, rpcMutations, ipcOpts, phase, nil)
 				operationMu.Unlock()
 				if *once {
 					if err != nil {
@@ -620,7 +620,7 @@ func cmdAgent(args []string) error {
 				}
 			}
 			phase := agentRPCIterationPhase(snapshot, err != nil || skipForDisconnected || skipForRecovery)
-			publishAgentRPCObservation(ctx, rpcMutations, ipcOpts, phase)
+			publishAgentRPCObservation(ctx, rpcMutations, ipcOpts, phase, err)
 			operationMu.Unlock()
 			if skipForDisconnected {
 				proceed, woken := waitForAgentSync(ctx, interval, syncWake)
@@ -633,11 +633,6 @@ func cmdAgent(args []string) error {
 				continue
 			}
 			if skipForRecovery {
-				if err != nil {
-					if failureErr := writeAgentFailureSnapshot(*stateOutput, *configPath, err); failureErr != nil {
-						log.Printf("agent recovery state write failed: %v", failureErr)
-					}
-				}
 				proceed, _ := waitForAgentSync(ctx, interval, syncWake)
 				if !proceed {
 					return nil
@@ -645,16 +640,10 @@ func cmdAgent(args []string) error {
 				continue
 			}
 			if *once {
-				if err != nil {
-					_ = writeAgentFailureSnapshot(*stateOutput, *configPath, err)
-				}
 				return err
 			}
 			nextDelay := interval
 			if err != nil {
-				if failureErr := writeAgentFailureSnapshot(*stateOutput, *configPath, err); failureErr != nil {
-					log.Printf("agent failure state write failed: %v", failureErr)
-				}
 				consecutiveFailures++
 				nextDelay = agentReconnectDelay(interval, reconnectMaxDelay, consecutiveFailures, *reconnectJitter, randomJitterUnit())
 				log.Printf("agent sync failed: %v; reconnecting in %s", err, nextDelay.Round(time.Millisecond))
