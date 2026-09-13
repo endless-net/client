@@ -66,16 +66,25 @@ func TestRPCUIQuitPreferencesAndExecution(t *testing.T) {
 	if err != nil || !proto.Equal(op, retry) {
 		t.Fatal("preference retry changed outcome", err)
 	}
-	store, err := OpenConfigStore(m.store.path)
+	store := reopenRPCStoreFromDisk(t, m.store)
+	m, err = NewClientRPCMutations(store)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if rpcUIQuit(store.Read().RPCState.Profiles[profile.ProfileId]) != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT {
 		t.Fatal("UI quit override not durable")
 	}
+	retry, err = m.setPreferencesAs(peer, r)
+	if err != nil || !proto.Equal(op, retry) {
+		t.Fatal("disk-backed preference replay changed outcome")
+	}
 	quit := notify()
 	if quit.State != ipc.OperationState_OPERATION_STATE_PENDING || quit.Kind != ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE || m.store.Read().ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
 		t.Fatal("UI quit did not schedule disconnect")
+	}
+	m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
+	if err != nil {
+		t.Fatal(err)
 	}
 	stops := 0
 	if err := m.ReconcileDisconnect(t.Context(), ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
@@ -91,6 +100,16 @@ func TestRPCUIQuitPreferencesAndExecution(t *testing.T) {
 	reset, err := m.resetPreferencesAs(peer, &ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT}})
 	if err != nil || !reset.GetChange().Changed || m.store.Read().RPCState.Profiles[profile.ProfileId].UIQuit != nil {
 		t.Fatal("reset did not remove override", err)
+	}
+	m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept = notify()
+	if kept.GetState() != ipc.OperationState_OPERATION_STATE_SUCCEEDED || kept.GetChange().GetChanged() ||
+		rpcUIQuit(m.store.Read().RPCState.Profiles[profile.ProfileId]) != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT ||
+		m.store.Read().ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected || stops != 1 {
+		t.Fatal("reset UI quit preference restored an override or reconnected the runtime")
 	}
 }
 

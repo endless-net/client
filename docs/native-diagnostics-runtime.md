@@ -756,6 +756,13 @@ again once complete. The journal test retains separate request identities and
 their individual retention deadlines after reopening. These remain unit-level
 durability checks, not installed runtime acceptance.
 
+UI-quit preference coverage now rebuilds the store after setting the override,
+after accepting the pending lifecycle Disconnect, and after resetting the
+override. Exact preference replay preserves its terminal operation; pending quit
+still performs one teardown, and reset defaults to keeping the already-disconnected
+intent rather than reconnecting. This tests producer persistence, not actual UI
+shutdown notification, OS lifecycle integration or installed service acceptance.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,
