@@ -676,6 +676,12 @@ without changing the profile, operation journal or enrollment authority. There i
 no per-Enroll server override or implicit public-server fallback. These are domain
 admission tests; backend routing and installed enrollment require separate evidence.
 
+The unused legacy agent status assembler, IPC metadata constructor, tunnel
+inspection conversion and connection-intent status overlay are removed. Native
+status and diagnostics providers remain the service observation path. Headless
+status still uses other retired projection DTOs; removing this dead assembler
+does not establish complete removal of the old contract or system acceptance.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

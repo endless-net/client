@@ -341,46 +341,6 @@ func agentServiceIPCConfigStore(opts agentIPCOptions) (*client.ConfigStore, erro
 }
 
 
-func serviceIPCMetadata() ipc.Metadata {
-	return ipc.Metadata{
-		IPCProtocol:      ipc.Protocol,
-		IPCVersion:       ipc.Version,
-		IPCMinSupported:  ipc.MinSupportedVersion,
-		ServiceVersion:   version,
-		ServiceCommit:    commit,
-		ServiceBuildDate: buildDate,
-	}
-}
-
-func serviceWireGuardInspection(engine agentWireGuard) ipc.WireGuardInspection {
-	inspection, available := engine.TryInspection()
-	if !available {
-		inspection.Error = "wireguard-go operation in progress; inspection unavailable"
-	}
-	return wireGuardInspection(inspection)
-}
-
-func wireGuardInspection(inspection client.WireGuardInspection) ipc.WireGuardInspection {
-	peers := make([]ipc.WireGuardPeerInspection, 0, len(inspection.Peers))
-	for _, peer := range inspection.Peers {
-		peers = append(peers, ipc.WireGuardPeerInspection{
-			PublicKey: peer.PublicKey, Endpoint: peer.Endpoint, AllowedIPs: append([]string(nil), peer.AllowedIPs...),
-			LatestHandshakeUnix: peer.LatestHandshakeUnix, TransferRXBytes: peer.TransferRXBytes,
-			TransferTXBytes: peer.TransferTXBytes, PersistentKeepaliveSeconds: peer.PersistentKeepaliveSeconds,
-		})
-	}
-	routes := make([]ipc.WireGuardRouteInspection, 0, len(inspection.Routes))
-	for _, route := range inspection.Routes {
-		routes = append(routes, ipc.WireGuardRouteInspection{
-			Target: route.Target, Interface: route.Interface, UsesInterface: route.UsesInterface, Error: route.Error,
-		})
-	}
-	return ipc.WireGuardInspection{
-		OK: inspection.OK, Interface: inspection.Interface, MTU: inspection.MTU,
-		ListenPort: inspection.ListenPort, PeerCount: inspection.PeerCount,
-		Peers: peers, Routes: routes, Error: inspection.Error,
-	}
-}
 
 func pathCandidateStatus(status client.PathCandidateStatus) ipc.PathCandidateStatus {
 	return ipc.PathCandidateStatus{
@@ -408,23 +368,6 @@ func peerPathStatuses(statuses []client.PeerPathStatus) []ipc.PeerPathStatus {
 	return out
 }
 
-func applyAgentConnectionIntentStatus(payload *ipc.StatusResponse, intent client.ConnectionIntent) {
-	switch payload.ControlState {
-	case ipc.ControlStateCacheInvalid, ipc.ControlStateError:
-		return
-	}
-	payload.DesiredState = ipc.DesiredDisconnected
-	payload.UserDisconnected = true
-	payload.ConnectionIntent = &ipc.ConnectionIntentStatus{
-		DesiredState: ipc.DesiredDisconnected,
-		Reason:       intent.Reason,
-		UpdatedAt:    intent.UpdatedAt,
-	}
-	payload.ControlState = ipc.ControlStateDisconnected
-	if payload.Agent != nil {
-		payload.Agent.ConnectionPaused = true
-	}
-}
 
 
 func downAgentWireGuard(ctx context.Context, opts agentIPCOptions) (client.WireGuardApplyResult, error) {
@@ -448,34 +391,6 @@ func loadAgentSnapshotIfAvailable(path string) *client.AgentSnapshot {
 	return &loaded
 }
 
-func agentIPCStatusForConfig(ctx context.Context, opts agentIPCOptions, cfg client.Config, agentState *client.AgentSnapshot) ipc.StatusResponse {
-	response := serviceIPCStatusForConfig(cfg)
-	controlCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
-	defer cancel()
-	attachServiceIPCControlAvailability(controlCtx, &response, cfg.ControlURLs()...)
-	if agentState != nil {
-		attachServiceIPCAgentStatus(&response, *agentState)
-	}
-	if opts.WireGuard != nil {
-		converted := serviceWireGuardInspection(opts.WireGuard)
-		response.WireGuard = &converted
-	}
-	response.State = serviceStateFromControlState(response.ControlState, response.CachedMapError != "")
-	response.Metadata = serviceIPCMetadata()
-	attachAgentConnectionIntentStatus(&response, opts)
-	return response
-}
-
-func attachAgentConnectionIntentStatus(response *ipc.StatusResponse, opts agentIPCOptions) {
-	if intent, disconnected, err := agentConnectionIntentStore(opts).Disconnected(); err != nil {
-		response.ConnectionIntentError = err.Error()
-		response.ControlState = ipc.ControlStateError
-		response.State = ipc.StateError
-	} else if disconnected {
-		applyAgentConnectionIntentStatus(response, intent)
-		response.State = serviceStateFromControlState(response.ControlState, response.CachedMapError != "")
-	}
-}
 
 func agentSnapshotMatchesStatus(status ipc.StatusResponse, snapshot client.AgentSnapshot) bool {
 	return agentSnapshotIdentityMatchesStatus(status, snapshot) &&
