@@ -439,22 +439,6 @@ func applyAgentConnectionIntentStatus(payload *ipc.StatusResponse, intent client
 	}
 }
 
-func enrollmentStatusAfterConnect(ctx context.Context, opts agentIPCOptions, connected ipc.ConnectResponse) ipc.StatusResponse {
-	status, err := agentIPCStatus(ctx, opts)
-	if err == nil {
-		return status
-	}
-	return ipc.StatusResponse{
-		Metadata:        serviceIPCMetadata(),
-		State:           ipc.StateError,
-		ControlState:    ipc.ControlStateError,
-		DesiredState:    connected.DesiredState,
-		NodeID:          connected.NodeID,
-		NetworkID:       connected.NetworkID,
-		MapRevision:     connected.MapRevision,
-		LocalStateError: err.Error(),
-	}
-}
 
 func downAgentWireGuard(ctx context.Context, opts agentIPCOptions) (client.WireGuardApplyResult, error) {
 	if opts.WireGuard == nil {
@@ -465,13 +449,6 @@ func downAgentWireGuard(ctx context.Context, opts agentIPCOptions) (client.WireG
 
 const serverMapSigningTrustChangedError = "server map signing trust changed"
 
-func agentIPCStatus(ctx context.Context, opts agentIPCOptions) (ipc.StatusResponse, error) {
-	cfg, err := client.LoadConfig(opts.ConfigPath)
-	if err != nil {
-		return ipc.StatusResponse{}, serviceIPCConfigError(err)
-	}
-	return agentIPCStatusForConfig(ctx, opts, cfg, loadAgentSnapshotIfAvailable(opts.StateOutput)), nil
-}
 
 func loadAgentSnapshotIfAvailable(path string) *client.AgentSnapshot {
 	if strings.TrimSpace(path) == "" {

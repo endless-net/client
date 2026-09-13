@@ -619,8 +619,8 @@ check and ConnectRequest DTO are removed. The replacement hostname test applies
 the verified enrolled map twice through the native driver, retains node/network/
 credential identity, makes no remote registration calls, and schedules separate
 agent synchronization. This is driver coverage, not proof of the complete agent
-sync loop. ConnectResponse remains temporarily in retired helper code and its
-tests and is not exposed as a supported IPC response.
+sync loop. The retired ConnectResponse DTO and its status fallback are now
+removed as well.
 
 Lifecycle status assertions now use native Status instead of the retired DTO:
 pending approval retains its request/action, unenrolled state rejects an unbound
@@ -660,8 +660,14 @@ Native driver tests cover successful cached-map application and reject pending,
 rejected or incomplete local enrollment even with a valid signed cache. Rejection
 must preserve persisted identity and the existing snapshot and must not configure
 the tunnel or wake synchronization. This is in-process driver evidence, not
-installed lifecycle acceptance. The legacy enrollment status fallback still
-requires migration.
+installed lifecycle acceptance.
+
+The enrollment status fallback test is replaced by native durable-operation
+coverage: a successful Connect survives store reopening, and exact replay returns
+the same terminal operation without another driver start. Corrupt persisted state
+must fail reopening without replacing the file or inventing a status/profile from
+an earlier result. This is in-process domain/store evidence, not an installed
+agent crash/restart or UI acceptance test.
 
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded

@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"os"
 	"reflect"
 	"sync"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestRPCConnectRejectsDurableRecoveryWithoutChangingIntent(t *testing.T) {
@@ -154,6 +156,63 @@ func TestRPCConnectDurabilityAndFailure(t *testing.T) {
 		if err := m.ReconcileConnect(t.Context(), driver); err != nil || starts != 1 {
 			t.Fatal("completed connect repeated side effects", err)
 		}
+	}
+}
+
+func TestRPCConnectResultSurvivesRestartButCorruptStoreFailsClosed(t *testing.T) {
+	m, peer, profile := rpcConnectFixture(t)
+	request := &ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}
+	op, err := m.connectAs(peer, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	starts := 0
+	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Start: func(context.Context, Config) error {
+		starts++
+		return nil
+	}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+		t.Error("successful Connect unexpectedly invoked cleanup")
+		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
+	}}
+	if err := m.ReconcileConnect(t.Context(), driver); err != nil {
+		t.Fatal(err)
+	}
+	lookup := &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}}
+	completed, err := m.operationAs(peer, lookup)
+	if err != nil || completed.GetState() != ipc.OperationState_OPERATION_STATE_SUCCEEDED || completed.GetProfileId() != profile.ProfileId {
+		t.Fatal("Connect lost its terminal operation identity")
+	}
+	// Forget the process cache so reopening actually decodes durable bytes.
+	configStores.Delete(m.store.path)
+	t.Cleanup(func() { configStores.Delete(m.store.path) })
+	store, err := OpenConfigStore(m.store.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := NewClientRPCMutations(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed, err := restarted.connectAs(peer, request)
+	if err != nil || !proto.Equal(completed, replayed) {
+		t.Fatal("restarted Connect did not replay the original durable result")
+	}
+	if err := restarted.ReconcileConnect(t.Context(), driver); err != nil || starts != 1 {
+		t.Fatal("restart reapplied a completed Connect")
+	}
+	// A broken persisted store cannot bootstrap from the previous connection
+	// result. It must fail instead of synthesizing a replacement status/profile.
+	broken := []byte("{")
+	if err := os.WriteFile(m.store.path, broken, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configStores.Delete(m.store.path)
+	if _, err := OpenConfigStore(m.store.path); err == nil {
+		t.Fatal("corrupt native store was accepted during restart")
+	}
+	after, err := os.ReadFile(m.store.path)
+	if err != nil || string(after) != string(broken) {
+		t.Fatal("failed restart overwrote corrupt evidence")
 	}
 }
 

@@ -264,15 +264,3 @@ type StatusResponse struct {
 	Agent                     *AgentStatus            `json:"agent,omitempty"`
 	WireGuard                 *WireGuardInspection    `json:"wireguard,omitempty"`
 }
-
-type ConnectResponse struct {
-	Metadata
-	State            ServiceState         `json:"state"`
-	ControlState     ControlState         `json:"control_state,omitempty"`
-	DesiredState     DesiredState         `json:"desired_state,omitempty"`
-	UserDisconnected bool                 `json:"user_disconnected,omitempty"`
-	NodeID           string               `json:"node_id,omitempty"`
-	NetworkID        string               `json:"network_id,omitempty"`
-	MapRevision      uint64               `json:"map_revision,omitempty"`
-	WireGuard        WireGuardApplyResult `json:"wireguard"`
-}

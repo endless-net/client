@@ -1782,26 +1782,6 @@ func TestAgentOnlineNetworkMapActivatesRestrictedEnrollmentAfterApproval(t *test
 }
 
 
-func TestEnrollmentStatusAfterConnectKeepsConnectionResultWhenHealthUnavailable(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "client.json")
-	if err := os.WriteFile(configPath, []byte("{"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	connected := ipc.ConnectResponse{
-		State:        ipc.StateConnected,
-		DesiredState: ipc.DesiredConnected,
-		NodeID:       "node-1",
-		NetworkID:    "net-1",
-		MapRevision:  7,
-	}
-	status := enrollmentStatusAfterConnect(context.Background(), agentIPCOptions{ConfigPath: configPath}, connected)
-	if status.State != ipc.StateError || status.ControlState != ipc.ControlStateError || status.LocalStateError == "" {
-		t.Fatalf("fallback enrollment status = %#v", status)
-	}
-	if status.NodeID != connected.NodeID || status.NetworkID != connected.NetworkID || status.MapRevision != connected.MapRevision {
-		t.Fatalf("fallback enrollment status lost connection identity: %#v", status)
-	}
-}
 
 func TestCmdServiceRenderSystemdWritesArtifacts(t *testing.T) {
 	outputDir := t.TempDir()
