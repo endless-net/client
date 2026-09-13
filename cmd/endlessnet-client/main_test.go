@@ -1654,44 +1654,6 @@ func TestCmdUpBindsExplicitDirectEnrollmentNetwork(t *testing.T) {
 	}
 }
 
-func TestAgentIPCEnrollmentServerPriority(t *testing.T) {
-	t.Run("request", func(t *testing.T) {
-		got, err := agentIPCEnrollmentServer(agentIPCOptions{}, "  https://request.example.test/  ")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != "https://request.example.test/" {
-			t.Fatalf("enrollment server = %q, want request server", got)
-		}
-	})
-
-	t.Run("saved config", func(t *testing.T) {
-		configPath := filepath.Join(t.TempDir(), "client.json")
-		if err := client.SaveConfig(configPath, client.Config{
-			ControlPlaneURLs: []string{"https://saved.example.test/", "https://secondary.example.test/"},
-		}); err != nil {
-			t.Fatal(err)
-		}
-		got, err := agentIPCEnrollmentServer(agentIPCOptions{ConfigPath: configPath}, "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != "https://saved.example.test" {
-			t.Fatalf("enrollment server = %q, want saved primary server", got)
-		}
-	})
-
-	t.Run("public default", func(t *testing.T) {
-		configPath := filepath.Join(t.TempDir(), "client.json")
-		got, err := agentIPCEnrollmentServer(agentIPCOptions{ConfigPath: configPath}, "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != defaultPublicServerURL {
-			t.Fatalf("enrollment server = %q, want public default %q", got, defaultPublicServerURL)
-		}
-	})
-}
 
 func TestAgentOnlineNetworkMapActivatesRestrictedEnrollmentAfterApproval(t *testing.T) {
 	for _, initial := range []string{clientapi.NodeApprovalPending, clientapi.NodeApprovalRejected} {

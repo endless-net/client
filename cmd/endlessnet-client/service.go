@@ -340,19 +340,6 @@ func agentServiceIPCConfigStore(opts agentIPCOptions) (*client.ConfigStore, erro
 	return client.OpenConfigStore(opts.ConfigPath)
 }
 
-func agentIPCEnrollmentServer(opts agentIPCOptions, requested string) (string, error) {
-	if requested = strings.TrimSpace(requested); requested != "" {
-		return requested, nil
-	}
-	store, err := agentServiceIPCConfigStore(opts)
-	if err != nil {
-		return "", serviceIPCConfigError(err)
-	}
-	if configured := firstControlPlaneURL(store.Read()); configured != "" {
-		return configured, nil
-	}
-	return defaultPublicServerURL, nil
-}
 
 func serviceIPCMetadata() ipc.Metadata {
 	return ipc.Metadata{

@@ -669,6 +669,13 @@ must fail reopening without replacing the file or inventing a status/profile fro
 an earlier result. This is in-process domain/store evidence, not an installed
 agent crash/restart or UI acceptance test.
 
+Enrollment origin admission replaces the retired request/config/default server
+priority helper. Native admission accepts the selected profile's canonical HTTPS
+origin and rejects missing, foreign-primary, foreign-failover and insecure origins
+without changing the profile, operation journal or enrollment authority. There is
+no per-Enroll server override or implicit public-server fallback. These are domain
+admission tests; backend routing and installed enrollment require separate evidence.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

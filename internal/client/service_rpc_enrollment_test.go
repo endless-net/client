@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 
 	"github.com/endless-net/client/clientipc/local"
@@ -94,6 +95,43 @@ func TestRPCEnrollmentAdmissionRejectsInvalidInputWithoutMutation(t *testing.T) 
 			assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 			if m.store.Read().RPCState.Enrollment != nil || m.Metadata().Revision != before {
 				t.Fatal("invalid request mutated runtime")
+			}
+		})
+	}
+}
+
+func TestRPCEnrollmentRequiresOnlyTheSelectedProfileOrigin(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		urls  []string
+		valid bool
+	}{
+		{"profile origin", []string{"https://control.test"}, true},
+		{"canonical equivalent", []string{"https://CONTROL.test:443/"}, true},
+		{"missing", nil, false},
+		{"foreign primary", []string{"https://other.test"}, false},
+		{"foreign failover", []string{"https://control.test", "https://other.test"}, false},
+		{"insecure", []string{"http://control.test"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, peer, req := enrollmentAdmissionTest(t)
+			if err := m.store.Update(func(cfg *Config) error {
+				cfg.ControlPlaneURLs = tc.urls
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			before := m.store.Read()
+			op, err := m.enrollAs(peer, req)
+			if tc.valid {
+				if err != nil || op.GetProfileId() != req.Profile.ProfileId || m.store.Read().RPCState.Enrollment == nil {
+					t.Fatal("selected profile origin did not admit enrollment")
+				}
+				return
+			}
+			assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+			if !reflect.DeepEqual(before, m.store.Read()) {
+				t.Fatal("invalid origin changed profile, journal or enrollment authority")
 			}
 		})
 	}

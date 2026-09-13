@@ -60,13 +60,6 @@ func clientConfigErrorCode(err error) string {
 	return cliErrorConfigUnavailable
 }
 
-func serviceIPCConfigError(err error) ipc.Error {
-	status := http.StatusInternalServerError
-	if client.IsClientStateFormatUnsupported(err) || client.IsClientStateVersionUnsupported(err) {
-		status = http.StatusConflict
-	}
-	return ipc.NewError(status, clientConfigErrorCode(err), err)
-}
 
 const (
 	cliErrorInvalidTimeout         = "invalid_timeout"
