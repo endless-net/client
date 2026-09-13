@@ -21,6 +21,8 @@ type clientRPCTrust struct {
 	AnnouncementID string                        `json:"announcement_id"`
 	Authority      []byte                        `json:"authority"`
 	Announced      *clientapi.SigningTrustBundle `json:"announced,omitempty"`
+	DownStarted    bool                          `json:"down_started,omitempty"`
+	Adopted        bool                          `json:"adopted,omitempty"`
 }
 
 func (m *ClientRPCMutations) trustServerIdentityAs(peer local.Peer, request *ipc.TrustServerIdentityRequest) (*ipc.Operation, error) {

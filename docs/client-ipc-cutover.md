@@ -742,3 +742,21 @@ and replaced announcements, provider failure, changed local authority, cancellat
 and restart with protected checkpoint persistence. Down, trust adoption and
 credential recovery are still subsequent unfinished stages; TrustServerIdentity
 is intentionally not exposed yet.
+
+The native trust adoption stage now serializes Down with profile/agent tunnel
+work, checkpoints DownStarted before the driver call, and rechecks the exact
+confirmation and local authority both before and after Down. It atomically saves
+the new trust in the root and active profile together with a stable recovery
+operation/idempotency ID, preserving credentials for typed renewal. Enrolled
+operations remain RUNNING; adoption alone is not recovery success. Unenrolled
+trust completes with a ChangeResult; an identical bundle completes unchanged
+without Down. Down failure leaves trust and credentials intact. Restart after an
+uncertain Down repeats the idempotent stop without claiming preserved continuity.
+The automatic agent loop skips native trust plans rather than applying a map or
+invoking the old recovery path outside the native journal.
+
+Local short tests cover adoption, paired profile persistence, no-op, Down failure,
+stale trust/authority, authority replacement during Down, missing verification,
+cancellation/restart and repeat reconciliation. Validation: go vet, golangci-lint
+and go test -short. Network recovery, worker/RPC integration and release acceptance
+remain unfinished; TrustServerIdentity is still intentionally not exposed.

@@ -417,6 +417,7 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 	}
 	var updated *ipc.Operation
 	logoutDownStarted := false
+	trustDownStarted, trustAdopted := false, false
 	err := m.store.Update(func(cfg *Config) error {
 		if cfg.RPCState == nil {
 			return rpc.Error(connect.CodeNotFound, ipc.ErrorCode_ERROR_CODE_NOT_FOUND)
@@ -443,7 +444,11 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 				cfg.RPCState.Logout = nil
 			}
 			if updated.Kind == ipc.OperationKind_OPERATION_KIND_TRUST_SERVER_IDENTITY && rpcOperationTerminal(updated.State) && cfg.RPCState.Trust != nil && cfg.RPCState.Trust.OperationID == updated.Id {
+				trustDownStarted = cfg.RPCState.Trust.DownStarted
 				cfg.RPCState.Trust = nil
+			}
+			if updated.Kind == ipc.OperationKind_OPERATION_KIND_TRUST_SERVER_IDENTITY && cfg.RPCState.Trust != nil && cfg.RPCState.Trust.OperationID == updated.Id {
+				trustDownStarted, trustAdopted = cfg.RPCState.Trust.DownStarted, cfg.RPCState.Trust.Adopted
 			}
 			if updated.Kind == ipc.OperationKind_OPERATION_KIND_ENROLL && rpcOperationTerminal(updated.State) &&
 				cfg.RPCState.Enrollment != nil && cfg.RPCState.Enrollment.OperationID == updated.Id {
@@ -492,6 +497,18 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 	if updated.Kind == ipc.OperationKind_OPERATION_KIND_CONNECT && m.observedStatus != nil {
 		// Applying configuration alone is not a fresh connectivity observation.
 		m.observedStatus.ConnectionPhase = ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED
+	}
+	if trustDownStarted {
+		if m.observedStatus == nil {
+			m.observedStatus = &ipc.Status{}
+		}
+		m.observedStatus.ConnectionPhase = ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED
+		if updated.State == ipc.OperationState_OPERATION_STATE_RUNNING {
+			m.observedStatus.ConnectionPhase = ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTING
+		}
+		if trustAdopted || updated.State == ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+			m.observedStatus.ConnectionPhase = ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED
+		}
 	}
 	m.publishMutationLocked(updated)
 	return updated, nil

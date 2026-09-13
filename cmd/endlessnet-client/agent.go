@@ -549,7 +549,11 @@ func cmdAgent(args []string) error {
 			}
 			if err == nil && !skipForDisconnected {
 				cfg := configStore.Read()
-				if recovery := cfg.EnrollmentRecovery; recovery != nil {
+				if cfg.RPCState != nil && cfg.RPCState.Trust != nil {
+					// Native trust owns both recovery and tunnel resumption. The
+					// automatic loop must not bypass its durable operation journal.
+					skipForRecovery = true
+				} else if recovery := cfg.EnrollmentRecovery; recovery != nil {
 					if recovery.Phase == client.RecoveryPhaseRecovering || recovery.Retryable {
 						if _, downErr := downAgentWireGuard(ctx, ipcOpts); downErr != nil {
 							skipForRecovery = true
