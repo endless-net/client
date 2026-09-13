@@ -2,6 +2,11 @@
 
 Status: in progress. This is a coverage audit, not a completion claim.
 
+The [2026-09-13 native runtime gap audit](native-runtime-gap-audit.md) identifies
+nine v0 methods without runtime overrides and the partial network-selection,
+preferences and lifecycle implementations. Consumer mock coverage and historical
+HTTP evidence do not close these implementation gaps.
+
 Scope: [HC-001–HC-065, architecture main](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-use-cases.md),
 [business requirements](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-business-analysis.md),
 and [system design / IT specifications](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-system-design.md).
