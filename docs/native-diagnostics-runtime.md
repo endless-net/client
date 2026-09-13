@@ -106,8 +106,8 @@ The fresh-install stage now checks native runtime protocol/version/digest,
 platform/architecture, status snapshot identity and unenrolled state. It no longer
 expects profile-less diagnostics or network catalogs to return an empty report;
 diagnostics without a profile must fail explicitly. Other installation stages
-(disconnect/restart, enrolled reinstall/upgrade, uninstall and identity reset) still
-use legacy helpers and require conversion. The fresh-install migration is compiled
+(disconnect/restart, enrolled reinstall/upgrade, uninstall and identity reset) now
+also use native helpers. The fresh-install migration is compiled
 by short tests, not installer acceptance evidence; no local installer was run.
 
 Malformed control-response and temporary-outage scenarios now also use native
@@ -280,13 +280,22 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The enrolled installer upgrade/reinstall/repair scenario now uses native status,
+profile/map-bound tunnel diagnostics and typed connect/disconnect operations with
+request/CAS metadata and terminal-result checks. RuntimeInfo must match the expected
+artifact version and the observed service instance; TCP recovery must increment
+reference-peer counters. Preserved node/network/profile, credentials, trust,
+connected/disconnected restart and cached-outage traffic remain explicit checks.
+The old generic JSON request helper has been removed. Local short tests compile
+these guarded scenarios; installed-service and cross-artifact acceptance need CI.
+
 The installer lifecycle outside enrolled reinstall/upgrade now uses native
 status and profile/map-bound tunnel diagnostics for uninstall interface discovery
 and explicit state-removal/reenrollment checks. Fresh installation no longer
 accepts profile-less disconnect: the CLI must reject the otherwise complete
 mutation metadata for a missing profile, and restart must preserve unenrolled
 state without creating credentials or intent. The enrolled reinstall scenario
-retains its separate disconnected-intent coverage and still needs migration.
+retains its separate disconnected-intent coverage and now also uses native IPC.
 Local short tests compile these guarded installer scenarios; no installer,
 service-manager or OS interface deletion acceptance was executed locally.
 

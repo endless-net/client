@@ -339,15 +339,3 @@ func command(t *testing.T, name string, args ...string) []byte {
 	}
 	return output
 }
-
-func request(t *testing.T, binary, operation string, target any) {
-	t.Helper()
-	timeout := "5s"
-	if operation == "connect" || operation == "disconnect" {
-		timeout = "30s"
-	}
-	output := command(t, binary, "service", operation, "--timeout", timeout)
-	if err := json.Unmarshal(output, target); err != nil {
-		t.Fatalf("%s returned invalid JSON: %v", operation, err)
-	}
-}

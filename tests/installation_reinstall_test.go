@@ -13,11 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-003/HC-060: upgrade and reinstall the native artifact while enrolled.
@@ -51,27 +53,27 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 		t.Fatal("installed CLI enrollment failed (output withheld)")
 	}
 	start(t)
-	initial := waitInstalledCondition(t, binary, "bootstrap enrollment", func(v ipc.StatusResponse) bool {
-		return v.NodeID != "" && v.NetworkID == network.ID && v.NodeCredentialPresent && v.CachedMapValid
+	initial := waitInstalledCondition(t, binary, "bootstrap enrollment", func(v *ipc.Status) bool {
+		return v.NodeId != "" && v.ActiveProfileId != "" && nativeOverlayAddress(v, false).IsValid() && v.GetNetwork().GetId() == network.ID && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 	})
-	snapshot, err := s.Snapshot(initial.NodeID)
+	snapshot, err := s.Snapshot(initial.NodeId)
 	if err != nil {
 		t.Fatal(err)
 	}
 	peerIP := netip.MustParseAddr("198.18.95.20")
-	clientIP := netip.MustParseAddr(initial.OverlayIP)
+	clientIP := nativeOverlayAddress(initial, false)
 	underlay := nativePeerUnderlay(t, clientIP, peerIP)
 	reference := testwireguard.NewTCP(t, snapshot.Node.PublicKey, clientIP, peerIP, underlay)
 	peer := api.Peer{ID: "installed-reference", Hostname: "installed-reference", PublicKey: reference.PublicKey, Endpoint: reference.Endpoint, EndpointCandidates: []string{reference.Endpoint}, AllowedIPs: []string{netip.PrefixFrom(peerIP, 32).String()}}
-	if err := s.UpdatePeers(initial.NodeID, []api.Peer{peer}); err != nil {
+	if err := s.UpdatePeers(initial.NodeId, []api.Peer{peer}); err != nil {
 		t.Fatal(err)
 	}
 	address := net.JoinHostPort(peerIP.String(), "24001")
 	fresh := func() bool { return applicationProbe(t, probe, "", "tcp", address) }
-	sameIdentity := func(v ipc.StatusResponse) bool {
-		return v.NodeID == initial.NodeID && v.NetworkID == initial.NetworkID && v.Hostname == initial.Hostname && v.OverlayIP == initial.OverlayIP && v.MapSigningTrustPresent && v.NodeCredentialPresent && v.CachedMapValid
+	sameIdentity := func(v *ipc.Status) bool {
+		return v != nil && v.NodeId == initial.NodeId && v.ActiveProfileId == initial.ActiveProfileId && v.GetNetwork().GetId() == initial.GetNetwork().GetId() && v.Hostname == initial.Hostname && nativeOverlayAddress(v, false) == nativeOverlayAddress(initial, false) && v.GetStoredState().GetMapSigningTrustPresent() && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 	}
-	connected := func(phase string) ipc.StatusResponse {
+	connected := func(phase string) *ipc.Status {
 		t.Helper()
 		defer func() {
 			if !t.Failed() {
@@ -79,36 +81,45 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 			}
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
-			output, err := exec.CommandContext(ctx, binary, "service", "status", "--timeout", "2s").Output()
-			var current ipc.StatusResponse
-			if err != nil || json.Unmarshal(output, &current) != nil {
-				t.Log("installed connection diagnostic: public_status_available=false")
+			output, err := exec.CommandContext(ctx, binary, "service", "diagnostics", "--profile-id", initial.ActiveProfileId, "--timeout", "2s").Output()
+			response := &ipc.GetDiagnosticsResponse{}
+			if err != nil || protojson.Unmarshal(output, response) != nil {
+				t.Log("installed connection diagnostic: native_diagnostics_available=false")
 				return
 			}
-			wgOK, validPort, endpointMatches := false, false, false
-			peers := 0
-			if current.WireGuard != nil {
-				wgOK = current.WireGuard.OK
-				validPort = current.WireGuard.ListenPort > 0 && current.WireGuard.ListenPort <= 65535
-				peers = len(current.WireGuard.Peers)
-				endpointMatches = peers == 1 && current.WireGuard.Peers[0].Endpoint == reference.Endpoint
-			}
-			t.Logf("installed connection diagnostic: public_status_available=true same_identity=%t wireguard_ok=%t valid_listen_port=%t wireguard_peers=%d endpoint_matches=%t", sameIdentity(current), wgOK, validPort, peers, endpointMatches)
+			d := response.GetDiagnostics()
+			tunnel := d.GetTunnel()
+			endpointMatches := len(tunnel.GetPeers()) == 1 && tunnel.Peers[0].GetEndpoint() == reference.Endpoint
+			t.Logf("installed connection diagnostic: native_diagnostics_available=true same_identity=%t tunnel_ok=%t valid_listen_port=%t tunnel_peers=%d endpoint_matches=%t",
+				sameIdentity(d.GetStatus()), tunnel.GetOk(), tunnel.GetListenPort() > 0 && tunnel.GetListenPort() <= 65535, len(tunnel.GetPeers()), endpointMatches)
 		}()
-		v := waitInstalledCondition(t, binary, phase, func(v ipc.StatusResponse) bool {
-			return sameIdentity(v) && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.PeerCount == 1 && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535 && len(v.WireGuard.Peers) == 1 && v.WireGuard.Peers[0].Endpoint == reference.Endpoint
+		v := waitInstalledCondition(t, binary, phase, func(v *ipc.Status) bool {
+			return sameIdentity(v) && !v.UserDisconnected && v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED && v.PeerCount == 1 && v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED && v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.MapRevision == v.MapRevision
 		})
-		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(v.WireGuard.ListenPort)))
+		diagnostics := &ipc.GetDiagnosticsResponse{}
+		awaitInstalledNative(t, binary, "diagnostics", diagnostics, func() bool {
+			d := diagnostics.GetDiagnostics()
+			tunnel := d.GetTunnel()
+			return sameIdentity(d.GetStatus()) && d.GetStatus().GetMapRevision() >= v.MapRevision && tunnel.GetOk() && tunnel.GetFailure() == nil &&
+				tunnel.GetListenPort() > 0 && tunnel.GetListenPort() <= 65535 && len(tunnel.GetPeers()) == 1 && tunnel.Peers[0].GetPeerId() == peer.ID && tunnel.Peers[0].GetEndpoint() == reference.Endpoint
+		}, "--profile-id", v.ActiveProfileId)
+		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(diagnostics.Diagnostics.Tunnel.ListenPort)))
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		err := testclient.Await(ctx, fresh)
+		err := testclient.Await(ctx, func() bool {
+			beforeReceived, beforeEchoed := reference.PacketCounts()
+			if !fresh() {
+				return false
+			}
+			received, echoed := reference.PacketCounts()
+			return received > beforeReceived && echoed > beforeEchoed
+		})
 		cancel()
 		if err != nil {
 			t.Fatal("installed service did not restore real TCP traffic")
 		}
 		return v
 	}
-	var response ipc.ConnectResponse
-	request(t, binary, "connect", &response)
+	runInstalledNativeMutation(t, binary, "connect", "6b110000-0000-4000-8000-000000000001")
 	initialConnected := connected("initial connect")
 	assertInstalledVersion(t, binary, initialVersion, initialConnected)
 	t.Log("upgrade: connected enrolled service")
@@ -150,25 +161,24 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	stop(t)
 	s.SetUnavailable(true)
 	start(t)
-	offline := waitInstalledCondition(t, binary, "service startup without control", func(v ipc.StatusResponse) bool {
-		return sameIdentity(v) && v.State == ipc.StateDegraded && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
+	offline := waitInstalledCondition(t, binary, "service startup without control", func(v *ipc.Status) bool {
+		return sameIdentity(v) && nativeCurrentAgentFailure(v) && !v.UserDisconnected && v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED
 	})
 	connected("cached traffic after service startup without control")
 	s.SetUnavailable(false)
-	if err := s.UpdatePeers(initial.NodeID, []api.Peer{peer}); err != nil {
+	if err := s.UpdatePeers(initial.NodeId, []api.Peer{peer}); err != nil {
 		t.Fatal(err)
 	}
-	waitInstalledCondition(t, binary, "control recovery after service startup", func(v ipc.StatusResponse) bool {
-		return sameIdentity(v) && v.MapRevision > offline.MapRevision && v.State != ipc.StateDegraded
+	waitInstalledCondition(t, binary, "control recovery after service startup", func(v *ipc.Status) bool {
+		return sameIdentity(v) && v.MapRevision > offline.MapRevision && v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.MapRevision == v.MapRevision && v.Agent.LastFailure == nil
 	})
 	connected("traffic after late control recovery")
 
-	var disconnected ipc.DisconnectResponse
-	request(t, binary, "disconnect", &disconnected)
+	runInstalledNativeMutation(t, binary, "disconnect", "6b110000-0000-4000-8000-000000000002")
 	assertDisconnected := func(phase string) {
 		t.Helper()
-		waitInstalledCondition(t, binary, phase, func(v ipc.StatusResponse) bool {
-			return sameIdentity(v) && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+		waitInstalledCondition(t, binary, phase, func(v *ipc.Status) bool {
+			return sameIdentity(v) && v.UserDisconnected && v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_DISCONNECTED
 		})
 		if fresh() {
 			t.Fatal("disconnected installed service delivered overlay traffic")
@@ -214,14 +224,14 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	if registrationRequests() != before {
 		t.Fatal("failed IPC commands or disconnected restart attempted registration or refresh")
 	}
-	request(t, binary, "connect", &response)
+	runInstalledNativeMutation(t, binary, "connect", "6b110000-0000-4000-8000-000000000003")
 	connected("reconnect after reinstall")
 	created := 0
 	for _, e := range s.Events() {
 		if e.Kind == "registered" {
 			created++
 		}
-		if (e.Kind == "registered" || e.Kind == "registration-refreshed") && e.NodeID != initial.NodeID {
+		if (e.Kind == "registered" || e.Kind == "registration-refreshed") && e.NodeID != initial.NodeId {
 			t.Fatal("reinstall changed the enrollment identity")
 		}
 	}
@@ -230,7 +240,7 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	}
 }
 
-func assertInstalledVersion(t *testing.T, binary, expected string, status ipc.StatusResponse) {
+func assertInstalledVersion(t *testing.T, binary, expected string, status *ipc.Status) {
 	t.Helper()
 	expected = strings.TrimSpace(expected)
 	if expected == "" {
@@ -240,30 +250,14 @@ func assertInstalledVersion(t *testing.T, binary, expected string, status ipc.St
 	if len(output) == 0 || output[0] != "endlessnet-client "+expected {
 		t.Fatal("installed CLI did not report the expected artifact version")
 	}
-	if status.ServiceVersion != expected {
+	info := waitInstalledNativeRuntime(t, binary)
+	if info.GetBuild().GetVersion() != expected || info.InstanceId != status.GetMetadata().GetInstanceId() {
 		t.Fatal("running service did not report the expected upgraded version")
 	}
 }
 
-func waitInstalledCondition(t *testing.T, binary, phase string, predicate func(ipc.StatusResponse) bool) ipc.StatusResponse {
+func waitInstalledCondition(t *testing.T, binary, phase string, predicate func(*ipc.Status) bool) *ipc.Status {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
-	defer cancel()
-	var status ipc.StatusResponse
-	responses := 0
-	err := testclient.Await(ctx, func() bool {
-		output, err := exec.CommandContext(ctx, binary, "service", "status", "--timeout", "2s").Output()
-		if err != nil {
-			return false
-		}
-		if err := json.Unmarshal(output, &status); err != nil {
-			t.Fatal("installed service returned invalid public status")
-		}
-		responses++
-		return predicate(status)
-	})
-	if err != nil {
-		t.Fatalf("installed service phase=%q timed out: responses=%d state=%s control=%s desired=%s disconnected=%t node=%t network=%t credential=%t trust=%t cache=%t cache_valid=%t peers=%d wireguard=%t local_error=%t cache_error=%t intent_error=%t", phase, responses, status.State, status.ControlState, status.DesiredState, status.UserDisconnected, status.NodeID != "", status.NetworkID != "", status.NodeCredentialPresent, status.MapSigningTrustPresent, status.CachedMapPresent, status.CachedMapValid, status.PeerCount, status.WireGuard != nil, status.LocalStateError != "", status.CachedMapError != "", status.ConnectionIntentError != "")
-	}
-	return status
+	t.Logf("installed native phase: %s", phase)
+	return waitInstalledNativeCondition(t, binary, predicate)
 }
