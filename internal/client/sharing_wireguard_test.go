@@ -73,9 +73,20 @@ func testSharingEncryptedTransport(t *testing.T, transport string) {
 	}
 	exchange := func(sender int, packet []byte, allowed bool) {
 		t.Helper()
+		logTransport := func() {
+			// Emit only transport counters and booleans, never keys or raw IPC.
+			for i, engine := range engines {
+				inspection, available := engine.TryInspection()
+				t.Logf("sharing transport: engine=%d sender=%t inspection_available=%t inspection_ok=%t listening=%t peers=%d", i, i == sender, available, inspection.OK, inspection.ListenPort > 0, len(inspection.Peers))
+				for peerIndex, peer := range inspection.Peers {
+					t.Logf("sharing transport: engine=%d peer=%d expected_endpoint=%t handshake=%t rx_bytes=%d tx_bytes=%d", i, peerIndex, peer.Endpoint == endpoints[i], peer.LatestHandshakeUnix > 0, peer.TransferRXBytes, peer.TransferTXBytes)
+				}
+			}
+		}
 		select {
 		case tuns[sender].Outbound <- packet:
 		case <-time.After(3 * time.Second):
+			logTransport()
 			t.Fatal("TUN did not consume outgoing packet")
 		}
 		timeout := 500 * time.Millisecond
@@ -85,13 +96,16 @@ func testSharingEncryptedTransport(t *testing.T, transport string) {
 		select {
 		case got := <-tuns[1-sender].Inbound:
 			if !allowed {
+				logTransport()
 				t.Fatal("forbidden packet crossed encrypted tunnel")
 			}
 			if !bytes.Equal(got, packet) {
+				logTransport()
 				t.Fatal("decrypted packet differs from injected packet")
 			}
 		case <-time.After(timeout):
 			if allowed {
+				logTransport()
 				t.Fatal("authorized packet did not cross encrypted tunnel")
 			}
 		}
