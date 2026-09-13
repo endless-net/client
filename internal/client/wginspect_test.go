@@ -8,6 +8,38 @@ import (
 	"testing"
 )
 
+func TestRouteInspectionDistinguishesMissingObservationFromOtherInterface(t *testing.T) {
+	for _, tc := range []struct {
+		name, output, iface string
+		failed, uses        bool
+	}{
+		{name: "empty", failed: true},
+		{name: "whitespace", output: "\n \t", failed: true},
+		{name: "missing-device", output: "100.64.0.3 via 192.0.2.1", failed: true},
+		{name: "truncated-device", output: "100.64.0.3 dev", failed: true},
+		{name: "tunnel", output: "100.64.0.3 dev wg0 src 100.64.0.2", iface: "wg0", uses: true},
+		{name: "other-interface", output: "100.64.0.3 via 192.0.2.1 dev eth0", iface: "eth0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			runner := func(_ context.Context, name string, args ...string) ([]byte, error) {
+				calls++
+				if name != "ip" || strings.Join(args, " ") != "route get 100.64.0.3" {
+					t.Fatal("unexpected route lookup command")
+				}
+				return []byte(tc.output), nil
+			}
+			got := inspectRoute(t.Context(), runner, "ip", "wg0", "100.64.0.3")
+			if calls != 1 || got.Target != "100.64.0.3" || got.Interface != tc.iface || got.UsesInterface != tc.uses || (got.Error != "") != tc.failed {
+				t.Fatalf("incorrect route observation: %+v", got)
+			}
+			if tc.failed && got.Error != "route lookup did not identify an interface" {
+				t.Fatal("missing observation must use a fixed failure, not raw output")
+			}
+		})
+	}
+}
+
 func TestInspectWireGuardParsesLiveStateWithoutPrivateKey(t *testing.T) {
 	privateKey := "secret-interface-private-key"
 	runner := func(ctx context.Context, name string, args ...string) ([]byte, error) {

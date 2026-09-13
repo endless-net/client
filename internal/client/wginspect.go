@@ -181,6 +181,10 @@ func inspectRoute(ctx context.Context, runner CommandRunner, ipCommand, iface, t
 		return route
 	}
 	route.Interface = parseRouteInterface(string(out))
+	if route.Interface == "" {
+		route.Error = "route lookup did not identify an interface"
+		return route
+	}
 	route.UsesInterface = route.Interface == iface
 	return route
 }
