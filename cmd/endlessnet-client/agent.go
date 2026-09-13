@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/endless-net/client/clientipc/local"
 	"github.com/endless-net/client/internal/client"
-	ipc "github.com/endless-net/client/ipc/v2"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
@@ -352,7 +352,7 @@ func cmdAgent(args []string) error {
 		log.Printf("agent debug mode enabled windows_service=%t debug_log_dir=%q", *windowsService, strings.TrimSpace(*debugLogDir))
 	}
 	if *windowsService && strings.TrimSpace(*ipcPipe) == "" {
-		*ipcPipe = ipc.DefaultWindowsPipe
+		*ipcPipe = local.DefaultWindowsPipe
 	}
 	var recentLogs *recentLogBuffer
 	if strings.TrimSpace(*ipcPipe) != "" || strings.TrimSpace(*ipcSocket) != "" {
@@ -411,7 +411,9 @@ func cmdAgent(args []string) error {
 			return err
 		}
 	}
-	run := func(ctx context.Context) error {
+	run := func(parentCtx context.Context) (runErr error) {
+		ctx, cancelRuntime := context.WithCancelCause(parentCtx)
+		defer cancelRuntime(nil)
 		lockPath, err := client.AgentLockPath(*configPath)
 		if err != nil {
 			return err
@@ -459,11 +461,15 @@ func cmdAgent(args []string) error {
 			WireGuard:      wireGuard,
 			SyncWake:       syncWake,
 		}
-		stopIPC, err := startAgentIPC(ctx, ipcOpts)
+		stopIPC, err := startAgentRPC(ctx, cancelRuntime, ipcOpts)
 		if err != nil {
 			return err
 		}
-		defer stopIPC()
+		defer func() {
+			if err := stopIPC(); runErr == nil && err != nil {
+				runErr = err
+			}
+		}()
 		var streamFromRevision uint64
 		consecutiveFailures := 0
 		endpointState := endpointUpdateState{}

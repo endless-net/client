@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -772,82 +771,6 @@ func applyAgentConnectionIntentStatus(payload *ipc.StatusResponse, intent client
 	if payload.Agent != nil {
 		payload.Agent.ConnectionPaused = true
 	}
-}
-
-func startAgentIPC(ctx context.Context, opts agentIPCOptions) (func(), error) {
-	if opts.DiagnosticsStore == nil && strings.TrimSpace(opts.DiagnosticsDir) != "" {
-		opts.DiagnosticsStore = newDiagnosticsStore(opts.DiagnosticsDir)
-	}
-	if opts.DiagnosticsStore != nil {
-		if err := opts.DiagnosticsStore.Prune(); err != nil {
-			return nil, fmt.Errorf("prune diagnostics bundle store: %w", err)
-		}
-	}
-	stops := []func(){}
-	if pipe := strings.TrimSpace(opts.Pipe); pipe != "" {
-		listener, err := client.ListenWindowsServicePipe(pipe)
-		if err != nil {
-			return nil, err
-		}
-		stop, err := startAgentIPCListener(ctx, listener, client.WindowsServiceIPCConnContext, opts)
-		if err != nil {
-			_ = listener.Close()
-			return nil, err
-		}
-		stops = append(stops, stop)
-	}
-	if socket := strings.TrimSpace(opts.UnixSocket); socket != "" {
-		// The Windows stub always returns an error, while Linux and macOS use the
-		// real listener implementation selected by build tags.
-		listener, err := client.ListenUnixServiceSocket(socket) //nolint:staticcheck // Linux and macOS return dynamic errors.
-		if err != nil {                                         //nolint:staticcheck // Real implementations can fail dynamically.
-			for _, stop := range stops {
-				stop()
-			}
-			return nil, err
-		}
-		stop, err := startAgentIPCListener(ctx, listener, client.UnixServiceIPCConnContext, opts)
-		if err != nil {
-			_ = listener.Close()
-			for _, stop := range stops {
-				stop()
-			}
-			return nil, err
-		}
-		stops = append(stops, stop)
-	}
-	if len(stops) == 0 {
-		return func() {}, nil
-	}
-	return func() {
-		for _, stop := range stops {
-			stop()
-		}
-	}, nil
-}
-
-func startAgentIPCListener(ctx context.Context, listener net.Listener, connContext func(context.Context, net.Conn) context.Context, opts agentIPCOptions) (func(), error) {
-	if listener == nil {
-		return nil, errors.New("service IPC listener is nil")
-	}
-	handler := client.NewServiceIPCHandler(agentIPCHandlers(opts))
-	server := client.NewLocalHTTPServer(handler)
-	server.ConnContext = connContext
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
-			log.Printf("service ipc stopped: %v", err)
-		}
-	}()
-	go func() {
-		<-ctx.Done()
-		_ = server.Close()
-	}()
-	return func() {
-		_ = server.Close()
-		<-done
-	}, nil
 }
 
 func connectAgentTunnel(ctx context.Context, opts agentIPCOptions) (ipc.ConnectResponse, error) {

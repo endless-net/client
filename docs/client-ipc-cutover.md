@@ -579,3 +579,13 @@ started worker. Unit tests cover listener failure, missing enrollment provider
 and a corrupt enrollment plan failing while the listener is blocked in Accept.
 The production agent still calls the old IPC host; replacing that call, wiring
 status observation and migrating consumers remain required cutover work.
+
+The production agent entry point now opens the native v0 local host with the
+typed profile/logout and enrollment providers. The old agent HTTP IPC startup
+functions were removed; there is no transport fallback. Host failure cancels the
+agent loop and is returned after workers drain, before engine close. A real local
+transport test covers native bootstrap, repeated stop and rejection after stop;
+mixed/platform-inappropriate endpoints are rejected. No-endpoint headless mode
+remains available. This is a source cutover, not deployed acceptance: CLI/UI and
+helper consumers still need migration, old handler/test code remains to remove,
+native runtime status observation and the remaining providers are unfinished.
