@@ -15,7 +15,6 @@ const (
 
 const (
 	PathStatus         = "/status"
-	PathEvents         = "/events"
 	PathEnroll         = "/enroll"
 	PathConnect        = "/connect"
 	PathServerIdentity = "/server-identity"
@@ -27,7 +26,6 @@ const (
 
 const (
 	OperationStatus         = "status"
-	OperationEvents         = "events"
 	OperationEnroll         = "enroll"
 	OperationConnect        = "connect"
 	OperationServerIdentity = "server_identity"
@@ -35,14 +33,6 @@ const (
 	OperationDisconnect     = "disconnect"
 	OperationLogout         = "logout"
 	OperationLocalForget    = "logout.local_forget"
-)
-
-type EventType string
-
-const (
-	EventTypeHello         EventType = "hello"
-	EventTypeStatusChanged EventType = "status_changed"
-	EventTypeError         EventType = "error"
 )
 
 type ServiceState string
@@ -400,16 +390,4 @@ type RecoveryHelperResult struct {
 	Outcome   RecoveryOperationOutcome `json:"outcome"`
 	State     ServiceState             `json:"state"`
 	ErrorCode string                   `json:"error_code,omitempty"`
-}
-
-type EventsRequest struct{}
-
-type Event struct {
-	Metadata
-	EventType   EventType       `json:"event_type"`
-	Sequence    int             `json:"sequence"`
-	GeneratedAt string          `json:"generated_at"`
-	Status      *StatusResponse `json:"status,omitempty"`
-	ErrorCode   string          `json:"error_code,omitempty"`
-	Error       string          `json:"error,omitempty"`
 }

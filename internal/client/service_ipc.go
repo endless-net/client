@@ -11,10 +11,6 @@ import (
 	ipc "github.com/endless-net/client/ipc/v2"
 )
 
-type ServiceIPCEventWriter interface {
-	Send(ipc.Event) error
-}
-
 type ServiceIPCAuthorizer func(*http.Request, ServiceIPCEndpoint) error
 
 type ServiceIPCEndpoint struct {
@@ -158,7 +154,6 @@ func supportedServiceIPCTransport(transport string) bool {
 type ServiceIPCHandlers struct {
 	Authorize      ServiceIPCAuthorizer
 	Status         func(context.Context, ipc.StatusRequest) (ipc.StatusResponse, error)
-	Events         func(context.Context, ipc.EventsRequest, ServiceIPCEventWriter) error
 	Enroll         func(context.Context, ipc.EnrollRequest) (ipc.EnrollResponse, error)
 	Connect        func(context.Context, ipc.ConnectRequest) (ipc.ConnectResponse, error)
 	ServerIdentity func(context.Context, ipc.ServerIdentityRequest) (ipc.ServerIdentityResponse, error)
