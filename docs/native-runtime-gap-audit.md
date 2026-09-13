@@ -204,6 +204,21 @@ offline control state. Root short tests, vet and lint pass locally. These are no
 installed or actual-traffic acceptance: the original hosted offline/recovery
 assertions remain unchanged and still need a fresh source run.
 
+## Native traffic fixture completion follow-up — 2026-09-13
+
+The shared native TCP/UDP scenario now uses HTTPS regardless of whether flow
+logging is enabled; previously only its flow-log branch enabled TLS. Ephemeral
+lifecycle (HC-011) and native exit-route (HC-036) scenarios also use HTTPS with
+explicit runner-scoped certificate trust. The replacement ephemeral node shares
+the test's OS trust installation and receives its own Linux process CA file;
+the same certificate is not registered for cleanup twice.
+
+These changes remove bootstrap origin mismatches without changing packet-count,
+route withdrawal, terminal cleanup or recovery assertions. Local root short
+tests, vet and lint pass; short mode skips the privileged traffic scenarios.
+The exit-route reference still proves only the client egress hop, not a public
+Internet address, and hosted traffic acceptance remains outstanding.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,

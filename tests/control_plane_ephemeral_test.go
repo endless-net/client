@@ -24,7 +24,7 @@ func TestControlPlaneEphemeralLifecycle(t *testing.T) {
 func exerciseEphemeralLifecycle(t *testing.T) {
 	t.Helper()
 	requireControlScenario(t)
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	network, token, err := s.AddNetwork("ephemeral", "198.18.90.0/24")
 	if err != nil {
 		t.Fatal(err)
@@ -33,6 +33,7 @@ func exerciseEphemeralLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	n.TrustControlTLS(s)
 	n.Enroll(s, network.Name, token, "--route-table", "auto")
 	n.Start()
 	status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
@@ -91,6 +92,8 @@ func exerciseEphemeralLifecycle(t *testing.T) {
 	}
 	n.Stop()
 
+	// OS trust remains installed for this test; New supplies the replacement's
+	// separate process-scoped CA file on Linux. Do not register duplicate cleanup.
 	replacement := testclient.New(t, s)
 	replacement.Enroll(s, network.Name, token, "--hostname", "next-ephemeral-job")
 	replacement.Start()

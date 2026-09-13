@@ -74,24 +74,13 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			t.Fatal("fixture address collision: ICMP peer is reachable before Client setup")
 		}
 	}
-	var s *testcontrol.Server
-	if flowLogs {
-		listener, err := net.Listen("tcp4", "127.0.0.1:0")
-		if err != nil {
-			t.Fatal(err)
-		}
-		s = testcontrol.NewWithListener(t, listener)
-	} else {
-		s = testcontrol.New(t)
-	}
+	s := testcontrol.NewTLS(t)
 	network, join, err := s.AddNetwork("native-udp", "198.18.94.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
-	if flowLogs {
-		n.TrustControlTLS(s)
-	}
+	n.TrustControlTLS(s)
 	n.Enroll(s, network.Name, join, "--route-table", "auto")
 	n.Start()
 	defer n.Stop()
