@@ -76,6 +76,13 @@ missing methods at its pinned source. The current count is eight because
 `GetUpdateInfo` now has an explicit unavailable-source implementation. This
 reduces missing overrides, not the remaining update-discovery requirement.
 
+US-12 unit increment: `TestRPCUIQuitReplayDoesNotApplyChangedPreference` checks
+that an acknowledged keep-intent notification replays the original operation
+after changing the preference to disconnect, both before and after reopening
+the durable store. Replay must not change revision or connected intent. A new
+request ID must still schedule disconnect using the new preference. This tests
+local durable admission, not OS suspend/logoff integration or completed Down.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. `client`

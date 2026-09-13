@@ -125,6 +125,46 @@ func TestRPCUIQuitRejectsUnsupportedPatchAtomically(t *testing.T) {
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 }
 
+func TestRPCUIQuitReplayDoesNotApplyChangedPreference(t *testing.T) {
+	m, peer, profile := rpcConnectFixture(t)
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	request := &ipc.NotifyLifecycleRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Event: ipc.LifecycleEvent_LIFECYCLE_EVENT_UI_QUIT}
+	original, err := m.notifyLifecycleAs(peer, request)
+	if err != nil || original.GetState() != ipc.OperationState_OPERATION_STATE_SUCCEEDED || original.GetChange().GetChanged() {
+		t.Fatal("initial keep-intent notification failed", err)
+	}
+	_, err = m.setPreferencesAs(peer, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, restart := range []bool{false, true} {
+		if restart {
+			m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		revision := m.Metadata().Revision
+		replayed, err := m.notifyLifecycleAs(peer, request)
+		if err != nil || !proto.Equal(original, replayed) {
+			t.Fatalf("restart=%t: original lifecycle outcome was not replayed: %v", restart, err)
+		}
+		if m.Metadata().Revision != revision || m.store.Read().ConnectionIntent.DesiredState != ConnectionIntentDesiredConnected {
+			t.Fatalf("restart=%t: replay applied the newer disconnect preference", restart)
+		}
+	}
+	// A genuinely new notification must still execute the current preference.
+	fresh, err := m.notifyLifecycleAs(peer, &ipc.NotifyLifecycleRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Event: ipc.LifecycleEvent_LIFECYCLE_EVENT_UI_QUIT})
+	if err != nil || fresh.GetState() != ipc.OperationState_OPERATION_STATE_PENDING || fresh.GetId() == original.GetId() || m.store.Read().ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
+		t.Fatal("new lifecycle notification did not apply current preference", err)
+	}
+}
+
 func TestRPCPreferenceChangeInvalidatesEffectiveSettings(t *testing.T) {
 	m, peer, profile := rpcConnectFixture(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
