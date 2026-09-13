@@ -33,6 +33,16 @@ at pending and artifact-saved boundaries, and cover replay, readback, cancellati
 capacity, provider failure and owner/profile changes. This is not installed-service
 or process-kill acceptance evidence.
 
+The native local-transport short test now exercises CreateDiagnosticsBundle,
+GetOperation and chunked ReadDiagnosticsBundle together with the real worker and
+file-backed store. It cancels the accepted request, checks unpublished-handle
+denial, validates ZIP content/SHA-256/size, checks replay without recollection,
+and revokes the current connection's access after an owner change. A separate
+worker test interrupts collection, verifies the durable RUNNING plan survives,
+then restarts the coordinator/worker and completes it without replaying a request.
+These controlled tests do not validate UI rendering, installed service restart,
+process-kill boundaries, or platform inspection completeness.
+
 ReadDiagnosticsBundle now checks current owner admission and the durable successful
 CreateDiagnosticsBundle outcome before copying a chunk. Its descriptor must match
 the stored artifact exactly. Orphaned/unpublished archives, removed profiles and
