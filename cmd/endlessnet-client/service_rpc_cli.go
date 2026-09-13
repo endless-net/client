@@ -44,6 +44,10 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	pipe, socket := serviceIPCTransportFlags(fs)
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
 	var operationID, requestID string
+	var profileID string
+	if command == "server-identity" {
+		fs.StringVar(&profileID, "profile-id", "", "required target profile")
+	}
 	var wait bool
 	var pageSize uint
 	var pageToken string
@@ -61,6 +65,9 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	if fs.NArg() != 0 {
 		return fmt.Errorf("service %s does not accept positional arguments", command)
+	}
+	if command == "server-identity" && strings.TrimSpace(profileID) == "" {
+		return fmt.Errorf("--profile-id is required")
 	}
 	if pageSize > 500 {
 		return fmt.Errorf("--page-size cannot exceed 500")
@@ -99,6 +106,12 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	var message proto.Message
 	switch command {
+	case "server-identity":
+		response, err := consumer.GetServerIdentity(ctx, connect.NewRequest(&ipc.GetServerIdentityRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
 	case "profiles":
 		response, err := consumer.ListProfiles(ctx, connect.NewRequest(&ipc.ListProfilesRequest{Page: &ipc.PageRequest{PageSize: uint32(pageSize), PageToken: pageToken}}))
 		if err != nil {

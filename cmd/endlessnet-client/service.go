@@ -26,12 +26,10 @@ func cmdService(args []string) error {
 		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, runtime-info, support-info, events, operation, profiles, create-profile, select-profile, rename-profile, remove-profile, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, diagnostics, diagnostics-bundle, or logs-recent")
 	}
 	switch args[0] {
-	case "status", "runtime-info", "support-info", "events", "operation", "profiles":
+	case "status", "runtime-info", "support-info", "events", "operation", "profiles", "server-identity":
 		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
 	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile", "local-forget", "enroll":
 		return cmdServiceRPCMutation(args[0], args[1:], os.Stdout)
-	case "server-identity":
-		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathServerIdentity, nil, &ipc.ServerIdentityResponse{})
 	case "trust-server":
 		fs := flag.NewFlagSet("service trust-server", flag.ExitOnError)
 		ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)

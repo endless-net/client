@@ -21,6 +21,8 @@ import (
 // Production listener cutover happens after its remaining domain methods and
 // consumers are migrated. It never forwards requests to the HTTP v2 handler.
 type ClientRPCService struct {
+	// Configure before serving; reads public signing authority only.
+	ServerIdentityProvider ClientRPCServerIdentityProvider
 	clientipcconnect.UnimplementedClientServiceHandler
 	mutations        *ClientRPCMutations
 	build            *ipc.BuildIdentity

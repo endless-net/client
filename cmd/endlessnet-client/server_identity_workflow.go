@@ -8,6 +8,11 @@ import (
 	"github.com/endless-net/client/internal/client"
 )
 
+func agentRPCServerIdentity(ctx context.Context, cfg client.Config) (clientapi.SigningTrustBundle, error) {
+	_, announced, err := inspectConfiguredServerIdentity(ctx, cfg)
+	return announced, err
+}
+
 // inspectConfiguredServerIdentity reads validated local and announced public
 // trust without changing registration or accepting the announced authority.
 // It deliberately has no dependency on the retired IPC response schema.

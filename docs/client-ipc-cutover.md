@@ -712,3 +712,13 @@ request and returns the caller's cancellation. Tests cover changed/invalid trust
 preserved local authority, absent Authorization and in-flight cancellation. The
 old response adapter currently delegates to it; native GetServerIdentity exposure,
 announcement binding and TrustServerIdentity execution still remain to implement.
+
+GetServerIdentity is now served natively and `service server-identity --profile-id`
+uses it instead of HTTP v2. The provider receives only profile origin/public trust;
+authorization precedes provider I/O and is rechecked afterward. Changed runtime
+state rejects a stale result. Announcement identity binds profile/origin and both
+validated bundles without accepting the remote key. Tests cover unauthorized
+access, provider input isolation, stable/changed announcements, stale reads,
+sanitized provider failure and empty-profile CLI rejection. TrustServerIdentity
+confirmation/execution and release acceptance remain unfinished; this read does
+not assert that identity recovery is available end to end.

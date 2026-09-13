@@ -124,6 +124,12 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 		t.Fatal("unknown request was not reported as missing", err)
 	}
 	profileCommandCounter := 0
+	identityOutput, identityErr := captureStdout(t, func() error {
+		return cmdService([]string{"server-identity", transportFlag, endpoint, "--profile-id", accepted.Msg.Operation.ProfileId, "--timeout", "5s"})
+	})
+	if connect.CodeOf(identityErr) != connect.CodeFailedPrecondition || identityOutput != "" {
+		t.Fatal("empty profile identity was fabricated", identityErr)
+	}
 	profileCommand := func(command string, extra ...string) *ipc.Operation {
 		t.Helper()
 		listed, err := captureStdout(t, func() error { return cmdService([]string{"profiles", transportFlag, endpoint, "--timeout", "5s"}) })
