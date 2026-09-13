@@ -52,16 +52,17 @@ func TestRPCObservedDataplanePhaseDuringControlFailure(t *testing.T) {
 
 type mapBoundStatusEngine struct {
 	*testAgentWireGuard
-	t             *testing.T
-	network, node string
-	revision      uint64
-	available     bool
-	calls         int
+	t              *testing.T
+	network, node  string
+	revision       uint64
+	globalRevision uint64
+	available      bool
+	calls          int
 }
 
-func (e *mapBoundStatusEngine) TryMapInspection(network, node string, revision uint64) (client.WireGuardInspection, bool) {
+func (e *mapBoundStatusEngine) TryMapInspection(network, node string, revision, globalRevision uint64) (client.WireGuardInspection, bool) {
 	e.calls++
-	if network != e.network || node != e.node || revision != e.revision {
+	if network != e.network || node != e.node || revision != e.revision || globalRevision != e.globalRevision {
 		e.t.Fatal("status inspection was not bound to the verified map")
 	}
 	return client.WireGuardInspection{OK: true}, e.available
@@ -80,6 +81,8 @@ func TestNativeCachedStatusUsesMapBoundLiveInspection(t *testing.T) {
 	cfg.EnrollmentRecovery = nil
 	cfg.RPCState = &client.ClientRPCState{ActiveProfileID: "profile"}
 	cfg.ConnectionIntent = &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredConnected}
+	cfg.CachedMap.Revision.Global = 12
+	cfg.MapGlobalRevision = 12
 	cfg.CachedMap.MapSignature, err = api.SignNetworkMap(testMapSigningKey(t), *cfg.CachedMap)
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +92,7 @@ func TestNativeCachedStatusUsesMapBoundLiveInspection(t *testing.T) {
 	if err != nil {
 		t.Fatal("test requires a verified signed cache")
 	}
-	engine := &mapBoundStatusEngine{testAgentWireGuard: &testAgentWireGuard{}, t: t, network: networkMap.Network.ID, node: networkMap.Node.ID, revision: networkMap.Network.Revision}
+	engine := &mapBoundStatusEngine{testAgentWireGuard: &testAgentWireGuard{}, t: t, network: networkMap.Network.ID, node: networkMap.Node.ID, revision: networkMap.Network.Revision, globalRevision: 12}
 	for _, available := range []bool{false, true} {
 		engine.available = available
 		status := buildAgentRPCStatusWithProbe(t.Context(), agentIPCOptions{WireGuard: engine}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED, false)

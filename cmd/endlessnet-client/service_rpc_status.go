@@ -143,7 +143,7 @@ func buildAgentRPCStatusWithProbe(ctx context.Context, opts agentIPCOptions, cfg
 		}
 		status.ControlState = ipc.ControlState_CONTROL_STATE_OFFLINE_CACHE // A verified cache is not a live probe.
 		if opts.WireGuard != nil && cfg.RPCState != nil && cfg.RPCState.Trust == nil {
-			inspection, available := opts.WireGuard.TryMapInspection(networkMap.Network.ID, networkMap.Node.ID, networkMap.Network.Revision)
+			inspection, available := opts.WireGuard.TryMapInspection(networkMap.Network.ID, networkMap.Node.ID, networkMap.Network.Revision, networkMap.Revision.Global)
 			phase = agentRPCObservedDataplanePhase(status, inspection, available)
 			status.ConnectionPhase = phase
 		}

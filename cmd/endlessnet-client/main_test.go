@@ -85,7 +85,7 @@ func (w *testAgentWireGuard) TryInspection() (client.WireGuardInspection, bool) 
 
 func (*testAgentWireGuard) PathStatus() []client.PeerPathStatus { return nil }
 
-func (*testAgentWireGuard) TryMapInspection(string, string, uint64) (client.WireGuardInspection, bool) {
+func (*testAgentWireGuard) TryMapInspection(string, string, uint64, uint64) (client.WireGuardInspection, bool) {
 	return client.WireGuardInspection{}, false
 }
 
