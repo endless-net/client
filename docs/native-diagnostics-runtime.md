@@ -64,15 +64,21 @@ The retired HTTP Diagnostics and DiagnosticsBundle routes and agent callbacks
 are removed. Their old paths must return 404, including POST of the former bundle
 request. The native local transport test verifies owner-only collection,
 current instance metadata, explicit partial/failure state, raw driver error
-suppression and access revocation on an existing connection. Remaining bundle
-redaction/intent tests call the builder directly. The old path-returning bundle
+suppression and access revocation on an existing connection. The retired typed
+HTTP diagnostics builder, conversions and OS-version wrappers are removed.
+Native tests cover redaction and preservation of disconnected intent during busy
+tunnel inspection. The old path-returning bundle
 transport test is removed; native transport now checks immutable handle/chunk
 delivery instead. The legacy seven-day JSON-file store and its path-returning,
 minute-window reuse tests are removed. Native tests own bounded immutable storage,
 TTL/replay, redaction, ACL and linked-file/parent rejection. Both open and persistence
 validate path components; only the standard macOS /tmp and /var aliases to /private
 are allowed. Symlink tests skip on hosts that cannot create symlinks.
-Legacy DTO/builder removal remains pending, as do UI and
+Legacy diagnostics DTO removal is still blocked on test conversion in
+tests/control_plane_diagnostics_test.go, tests/control_plane_dns_live_test.go,
+tests/installation_test.go and tests/control_plane_test.go. These references do
+not keep the removed HTTP runtime handlers alive. Standalone headless diagnostic
+output remains separate from service IPC. UI and
 installed-service acceptance; transport unit evidence does not prove these.
 
 The agent now configures GetDiagnostics from engine Inspection and local interface

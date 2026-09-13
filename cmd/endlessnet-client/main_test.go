@@ -3360,81 +3360,6 @@ func TestRecentLogBufferRedactsAndLimitsServiceLogs(t *testing.T) {
 	}
 }
 
-func TestAgentIPCDiagnosticsIncludesRecentRedactedLogs(t *testing.T) {
-	dir := t.TempDir()
-	configPath := filepath.Join(dir, "client.json")
-	if err := client.SaveConfig(configPath, client.Config{
-		ControlPlaneURLs: []string{"https://api.example.test"},
-		Token:            "secret-session-token",
-		PrivateKey:       "secret-private-key",
-		NodeID:           "node-1",
-		NodeCredential:   "secret-node-credential",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	logs := newRecentLogBuffer(5)
-	_, _ = fmt.Fprintln(logs, "agent ready")
-	_, _ = fmt.Fprintln(logs, "PrivateKey = secret-private-key")
-	_, _ = fmt.Fprintln(logs, `{"node_credential":"secret-node-credential"}`)
-	_, _ = fmt.Fprintln(logs, `powershell -Command install -EnrollToken enr_secret_diagnostics_log`)
-	statePath := filepath.Join(dir, "agent-state.json")
-	agentState := client.AgentSnapshot{
-		GeneratedAt: "2026-07-07T00:00:00Z",
-		NodeID:      "node-1",
-		STUN:        client.AgentSTUNSnapshot{Error: "join_token=enr_secret_diagnostics_state"},
-		Relay:       client.AgentRelaySnapshot{Error: `{"node_credential":"secret-node-credential"}`},
-		Apply:       &client.WireGuardApplyResult{UpError: "PrivateKey = secret-private-key"},
-	}
-	rawState, err := json.Marshal(agentState)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(statePath, rawState, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	opts := agentIPCOptions{
-		ConfigPath:     configPath,
-		StateOutput:    statePath,
-		DiagnosticsDir: dir,
-		RecentLogs:     logs,
-	}
-	diagnostics, err := buildServiceIPCDiagnostics(opts, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if diagnostics.Runtime.GOOS != runtime.GOOS || diagnostics.Runtime.GOARCH != runtime.GOARCH || diagnostics.Runtime.OS.Name != runtime.GOOS {
-		t.Fatalf("diagnostics runtime = %#v", diagnostics.Runtime)
-	}
-	if !diagnostics.Config.TokenPresent || !diagnostics.Config.PrivateKeyPresent || !diagnostics.Config.NodeCredentialPresent {
-		t.Fatalf("diagnostics config presence flags = %#v", diagnostics.Config)
-	}
-	if diagnostics.Status.Agent == nil || !diagnostics.Status.Agent.StatePresent {
-		t.Fatalf("diagnostics agent status = %#v", diagnostics.Status.Agent)
-	}
-	if len(diagnostics.RecentLogs) != 4 {
-		t.Fatalf("diagnostics recent_logs = %#v, want 4 redacted entries", diagnostics.RecentLogs)
-	}
-	raw, err := json.Marshal(diagnostics)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if matches, err := filepath.Glob(filepath.Join(dir, "diagnostics-*.json")); err != nil || len(matches) != 0 {
-		t.Fatalf("GET diagnostics created bundle files: matches=%#v err=%v", matches, err)
-	}
-	text := string(raw)
-	for _, secret := range []string{"secret-session-token", "secret-private-key", "secret-node-credential", "enr_secret_diagnostics_log", "enr_secret_diagnostics_state"} {
-		if strings.Contains(text, secret) {
-			t.Fatalf("diagnostics recent logs leaked %q: %s", secret, text)
-		}
-	}
-	for _, want := range []string{"agent ready", "[redacted private key line]", "[redacted node credential line]", "[redacted token line]"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("diagnostics recent logs missing %q: %s", want, text)
-		}
-	}
-}
-
 func TestAgentIPCSelectNetworkCurrentNetwork(t *testing.T) {
 	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 7)
 	configPath := filepath.Join(t.TempDir(), "client.json")
@@ -3622,13 +3547,6 @@ func TestDiagnosticsPayloadIncludesSupportSummaries(t *testing.T) {
 	}
 	if lastErrors, ok := payload["last_errors"].([]string); !ok || len(lastErrors) != 0 {
 		t.Fatalf("diagnostics last_errors = %#v, want empty []string", payload["last_errors"])
-	}
-	typed := serviceIPCDiagnosticsPayload(cfg, serviceIPCStatusForConfig(cfg), nil)
-	if typed.DNSSummary == nil || typed.DNSSummary.SearchDomain != "nodes.prod.example" || typed.DNSSummary.RecordCount != 2 || !typed.DNSSummary.ConfigPresent || !typed.DNSSummary.MagicDNSEnabled || len(typed.DNSSummary.SplitDomains) != 1 {
-		t.Fatalf("typed diagnostics DNS summary = %#v", typed.DNSSummary)
-	}
-	if typed.RouteSummary == nil || typed.RouteSummary.AllowedIPCount != 4 || typed.RouteSummary.SubnetRouteCount != 2 || !typed.RouteSummary.DefaultRoutePresent {
-		t.Fatalf("typed diagnostics route summary = %#v", typed.RouteSummary)
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {

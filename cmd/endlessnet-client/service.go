@@ -436,30 +436,6 @@ func wireGuardInspection(inspection client.WireGuardInspection) ipc.WireGuardIns
 	}
 }
 
-func networkInterfaceStatuses(statuses []client.NetworkInterfaceStatus) []ipc.NetworkInterfaceStatus {
-	out := make([]ipc.NetworkInterfaceStatus, 0, len(statuses))
-	for _, status := range statuses {
-		out = append(out, ipc.NetworkInterfaceStatus{
-			Name: status.Name, Index: status.Index, MTU: status.MTU,
-			Flags: append([]string(nil), status.Flags...), AddressCount: status.AddressCount,
-			Addresses: append([]string(nil), status.Addresses...), Prefixes: append([]string(nil), status.Prefixes...),
-			Error: status.Error,
-		})
-	}
-	return out
-}
-
-func overlayCIDRConflicts(conflicts []client.OverlayCIDRConflict) []ipc.OverlayCIDRConflict {
-	out := make([]ipc.OverlayCIDRConflict, 0, len(conflicts))
-	for _, conflict := range conflicts {
-		out = append(out, ipc.OverlayCIDRConflict{
-			OverlayCIDR: conflict.OverlayCIDR, LocalPrefix: conflict.LocalPrefix,
-			Interface: conflict.Interface, AddressFamily: conflict.AddressFamily, Reason: conflict.Reason,
-		})
-	}
-	return out
-}
-
 func pathCandidateStatus(status client.PathCandidateStatus) ipc.PathCandidateStatus {
 	return ipc.PathCandidateStatus{
 		Type: status.Type, Tier: status.Tier, Priority: status.Priority, State: status.State,
@@ -941,40 +917,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 			return selectAgentNetwork(ctx, opts, req)
 		},
 	}
-}
-
-func buildServiceIPCDiagnostics(opts agentIPCOptions, logLimit int) (ipc.Diagnostics, error) {
-	cfg, err := client.LoadConfig(opts.ConfigPath)
-	if err != nil {
-		return ipc.Diagnostics{}, serviceIPCConfigError(err)
-	}
-	agentState := loadAgentSnapshotIfAvailable(opts.StateOutput)
-	status := serviceIPCStatusForConfig(cfg)
-	if agentState != nil {
-		attachServiceIPCAgentStatus(&status, *agentState)
-	}
-	if opts.WireGuard != nil {
-		converted := serviceWireGuardInspection(opts.WireGuard)
-		status.WireGuard = &converted
-	}
-	status.State = serviceStateFromControlState(status.ControlState, status.CachedMapError != "")
-	status.Metadata = serviceIPCMetadata()
-	attachAgentConnectionIntentStatus(&status, opts)
-	payload := serviceIPCDiagnosticsPayload(cfg, status, agentState)
-	entries := recentLogEntries(opts.RecentLogs, positiveIntOr(logLimit, 100))
-	payload.RecentLogs = make([]ipc.LogEntry, 0, len(entries))
-	for _, entry := range entries {
-		payload.RecentLogs = append(payload.RecentLogs, ipc.LogEntry{Timestamp: entry.Timestamp, Message: entry.Message})
-	}
-	interfaces := client.LocalInterfaceStatuses()
-	payload.Interfaces = networkInterfaceStatuses(interfaces)
-	payload.RouteConflicts = overlayCIDRConflicts(serviceIPCDiagnosticsRouteConflicts(cfg, interfaces, opts.WGInterface))
-	payload.RouteConflictCount = len(payload.RouteConflicts)
-	payload, err = sanitizeServiceIPCDiagnosticsPayload(payload)
-	if err != nil {
-		return ipc.Diagnostics{}, ipc.NewError(http.StatusInternalServerError, "diagnostics_snapshot_failed", err)
-	}
-	return payload, nil
 }
 
 func selectAgentNetwork(ctx context.Context, opts agentIPCOptions, req ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error) {
