@@ -913,41 +913,7 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 				Outcome:      ipc.LogoutOutcomeRemoteCleanupUnconfirmed,
 			}, nil
 		},
-		SelectNetwork: func(ctx context.Context, req ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error) {
-			return selectAgentNetwork(ctx, opts, req)
-		},
 	}
-}
-
-func selectAgentNetwork(ctx context.Context, opts agentIPCOptions, req ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error) {
-	networkRef := firstNonEmpty(req.NetworkID, req.NetworkName)
-	if strings.TrimSpace(networkRef) == "" {
-		return ipc.SelectNetworkResponse{}, ipc.NewError(http.StatusBadRequest, "network_ref_required", errors.New("network_id or network_name is required"))
-	}
-	cfg, err := client.LoadConfig(opts.ConfigPath)
-	if err != nil {
-		return ipc.SelectNetworkResponse{}, serviceIPCConfigError(err)
-	}
-	if cfg.CachedMap == nil {
-		return ipc.SelectNetworkResponse{}, ipc.NewError(http.StatusConflict, "network_selection_requires_enrollment", errors.New("network selection requires an enrolled device"))
-	}
-	networkMap, err := verifiedCachedNetworkMap(&cfg)
-	if err != nil {
-		return ipc.SelectNetworkResponse{}, ipc.NewError(http.StatusConflict, cliErrorNetworkMapUnavailable, err)
-	}
-	if networkRef != networkMap.Network.ID && !strings.EqualFold(networkRef, networkMap.Network.Name) {
-		return ipc.SelectNetworkResponse{}, ipc.NewError(http.StatusConflict, "network_selection_requires_enrollment", errors.New("switching networks requires a new network-scoped enrollment token"))
-	}
-	status := agentIPCStatusForConfig(ctx, opts, cfg, loadAgentSnapshotIfAvailable(opts.StateOutput))
-	return ipc.SelectNetworkResponse{
-		Metadata:          serviceIPCMetadata(),
-		State:             status.State,
-		DesiredState:      status.DesiredState,
-		SelectedNetworkID: networkMap.Network.ID,
-		SelectedNetwork:   networkMap.Network,
-		NodeID:            networkMap.Node.ID,
-		MapRevision:       networkMap.Network.Revision,
-	}, nil
 }
 
 func agentIPCStatus(ctx context.Context, opts agentIPCOptions) (ipc.StatusResponse, error) {

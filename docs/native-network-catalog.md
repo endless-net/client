@@ -8,6 +8,15 @@ unsupported switch projection and revoked access on an existing connection.
 This replaces the former Windows HTTP catalog assertion. The old DTO/spec cleanup
 is still pending.
 
+The retired agent-side `selectAgentNetwork` callback and its HTTP DTO tests are
+also removed. They accepted case-insensitive names and reconstructed the current
+network from the cached map. Current-ID success, disconnected intent retention,
+typed rejection and durable replay are now checked by
+[`service_rpc_select_network_test.go`](../internal/client/service_rpc_select_network_test.go)
+and the native process boundary scenario. Remaining generic HTTP handlers/DTOs
+are separate cleanup work; removing this callback is not cross-network switch
+acceptance or a new runtime revalidation.
+
 The agent configures ListNetworks using typed UserService ListNetworks for the
 requested profile's active account and user session. This is not the retired IPC
 callback that reported only the cached map's current network; that callback is
