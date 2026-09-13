@@ -29,6 +29,9 @@ func writeServiceRPCEvents(ctx context.Context, stream serviceRPCEventStream, in
 		if sequence == 0 && (event.GetSnapshot() == nil || event.GetSnapshot().GetRuntime().GetInstanceId() != instance || event.GetSnapshot().Status == nil) {
 			return errors.New("native event stream must begin with a full snapshot")
 		}
+		if sequence != 0 && event.GetSnapshot() != nil {
+			return errors.New("native event stream repeated its opening snapshot; resubscribe for a fresh snapshot")
+		}
 		encoded, err := protojson.Marshal(event)
 		if err != nil {
 			return err

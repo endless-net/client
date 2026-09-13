@@ -26,7 +26,7 @@ func TestServiceNativeEventsValidateSubscription(t *testing.T) {
 		Event: &ipc.WatchEventsResponse_Snapshot{Snapshot: &ipc.SnapshotEvent{Runtime: &ipc.RuntimeInfo{InstanceId: "instance"}, Status: &ipc.Status{}}}}
 	second := &ipc.WatchEventsResponse{Sequence: 2, Metadata: &ipc.SnapshotMetadata{InstanceId: "instance", Revision: 2},
 		Event: &ipc.WatchEventsResponse_StatusChanged{StatusChanged: &ipc.Status{}}}
-	for _, scenario := range []string{"timeout", "timeout before snapshot", "EOF", "EOF before snapshot", "status first", "gap", "new instance", "revision regression", "missing event", "missing metadata"} {
+	for _, scenario := range []string{"timeout", "timeout before snapshot", "EOF", "EOF before snapshot", "status first", "repeated snapshot", "gap", "new instance", "revision regression", "missing event", "missing metadata"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -44,6 +44,8 @@ func TestServiceNativeEventsValidateSubscription(t *testing.T) {
 				stream.events = nil
 			case "status first":
 				a.Event = b.Event
+			case "repeated snapshot":
+				b.Event = a.Event
 			case "gap":
 				b.Sequence = 3
 			case "new instance":
@@ -62,6 +64,9 @@ func TestServiceNativeEventsValidateSubscription(t *testing.T) {
 			}
 			if scenario == "timeout" && len(strings.Split(strings.TrimSpace(output.String()), "\n")) != 2 {
 				t.Fatal("events not written as NDJSON")
+			}
+			if scenario == "repeated snapshot" && len(strings.Split(strings.TrimSpace(output.String()), "\n")) != 1 {
+				t.Fatal("repeated snapshot reached CLI output")
 			}
 		})
 	}

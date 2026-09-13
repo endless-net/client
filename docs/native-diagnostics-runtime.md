@@ -261,6 +261,14 @@ same endpoint once the fault is cleared. The old HTTP JSON fixture is removed.
 Short tests compile this guarded scenario; actual process deadlines and socket/
 named-pipe recovery still require isolated CI execution.
 
+The CLI event-failure fixture is now native HTTP/2 gRPC too: bootstrap succeeds,
+then WatchEvents times out before its snapshot, ends empty, returns malformed
+protobuf, or starts with status instead of snapshot. All must fail with empty
+result output; repairing the same endpoint must yield exactly one snapshot and
+a normal listening deadline. The CLI now also rejects a repeated snapshot after
+opening, with a short regression test proving that invalid record is not emitted.
+The process fixture is compiled locally, not platform-executed acceptance evidence.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP
