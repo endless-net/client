@@ -18,7 +18,7 @@ func (s *ClientRPCService) purgeBundles() error {
 	total := 0
 	for id, item := range s.bundleStore.items {
 		keep := false
-		if s.bundleStore.timeNow().Before(item.metadata.ExpiresAt.AsTime()) && strings.EqualFold(cfg.LocalOwnerID, item.owner) && cfg.RPCState != nil {
+		if s.bundleStore.timeNow().Before(item.metadata.ExpiresAt.AsTime()) && strings.EqualFold(cfg.LocalOwnerID, item.installationOwner) && cfg.RPCState != nil {
 			if plan, pending := cfg.RPCState.Bundles[id]; pending {
 				keep = strings.EqualFold(plan.Owner, item.owner) && plan.ProfileID == item.profile && bundlePlanAllowed(cfg, plan)
 			} else {

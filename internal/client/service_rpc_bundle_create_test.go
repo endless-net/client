@@ -36,7 +36,7 @@ func TestRPCBundleCreateAndRestartRecovery(t *testing.T) {
 				}); err != nil {
 					t.Fatal(err)
 				}
-				savedMetadata, err = store.putID(op.Id, peer.Identity, profile.ProfileId, []byte("saved archive"))
+				savedMetadata, err = store.putID(op.Id, peer.Identity, peer.Identity, profile.ProfileId, []byte("saved archive"))
 				if err != nil {
 					t.Fatal(err)
 				}

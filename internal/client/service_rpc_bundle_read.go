@@ -44,7 +44,7 @@ func (s *ClientRPCService) readDiagnosticsBundleAs(ctx context.Context, peer loc
 	}
 	s.bundleStore.mu.Lock()
 	item, exists := s.bundleStore.items[request.BundleId]
-	matches := exists && proto.Equal(item.metadata, metadata)
+	matches := exists && strings.EqualFold(item.installationOwner, cfg.LocalOwnerID) && proto.Equal(item.metadata, metadata)
 	s.bundleStore.mu.Unlock()
 	if !matches {
 		return nil, rpc.Error(connect.CodeNotFound, ipc.ErrorCode_ERROR_CODE_NOT_FOUND)

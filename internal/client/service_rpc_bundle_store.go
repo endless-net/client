@@ -17,9 +17,10 @@ import (
 const rpcBundleStoreMaxBytes = 4 * rpcBundleMaxBytes
 
 type clientRPCBundleRecord struct {
-	owner, profile string
-	data           []byte
-	metadata       *ipc.BundleResult
+	owner, profile    string
+	installationOwner string
+	data              []byte
+	metadata          *ipc.BundleResult
 }
 
 // Runtime integration must revoke on owner/profile/logout changes. The zero
@@ -56,14 +57,14 @@ func (s *clientRPCBundleStore) put(owner, profile string, data []byte) (*ipc.Bun
 	if err != nil {
 		return nil, err
 	}
-	return s.putID(id, owner, profile, data)
+	return s.putID(id, owner, owner, profile, data)
 }
 
-func (s *clientRPCBundleStore) putID(id, owner, profile string, data []byte) (*ipc.BundleResult, error) {
+func (s *clientRPCBundleStore) putID(id, owner, installationOwner, profile string, data []byte) (*ipc.BundleResult, error) {
 	if !validRPCUUID(id) {
 		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
-	if owner == "" || profile == "" || len(owner) > 4096 || len(profile) > 4096 || len(data) == 0 || len(data) > rpcBundleMaxBytes {
+	if owner == "" || profile == "" || len(owner) > 4096 || len(installationOwner) > 4096 || len(profile) > 4096 || len(data) == 0 || len(data) > rpcBundleMaxBytes {
 		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	s.mu.Lock()
@@ -84,7 +85,7 @@ func (s *clientRPCBundleStore) putID(id, owner, profile string, data []byte) (*i
 	if s.items == nil {
 		s.items = map[string]clientRPCBundleRecord{}
 	}
-	s.items[id] = clientRPCBundleRecord{owner: owner, profile: profile, data: append([]byte(nil), data...), metadata: metadata}
+	s.items[id] = clientRPCBundleRecord{owner: owner, installationOwner: installationOwner, profile: profile, data: append([]byte(nil), data...), metadata: metadata}
 	if s.persist != nil {
 		if err := s.persist(s.items); err != nil {
 			delete(s.items, id)

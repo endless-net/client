@@ -20,10 +20,11 @@ import (
 const rpcBundleFileMaxBytes = 2*rpcBundleStoreMaxBytes + (1 << 20)
 
 type clientRPCBundleDiskRecord struct {
-	Owner    string `json:"owner"`
-	Profile  string `json:"profile"`
-	Data     []byte `json:"data"`
-	Metadata []byte `json:"metadata"`
+	Owner             string `json:"owner"`
+	InstallationOwner string `json:"installation_owner"`
+	Profile           string `json:"profile"`
+	Data              []byte `json:"data"`
+	Metadata          []byte `json:"metadata"`
 }
 
 // path must be inside the agent's private, ACL-protected state directory, never
@@ -79,7 +80,7 @@ func openClientRPCBundleStore(path string, now func() time.Time) (*clientRPCBund
 			if err != nil {
 				return err
 			}
-			records = append(records, clientRPCBundleDiskRecord{Owner: item.owner, Profile: item.profile, Data: item.data, Metadata: metadata})
+			records = append(records, clientRPCBundleDiskRecord{Owner: item.owner, InstallationOwner: item.installationOwner, Profile: item.profile, Data: item.data, Metadata: metadata})
 		}
 		raw, err := json.Marshal(records)
 		if err != nil {
@@ -121,7 +122,7 @@ func (s *clientRPCBundleStore) restore(raw []byte) error {
 			return invalid
 		}
 		digest := sha256.Sum256(record.Data)
-		if record.Owner == "" || record.Profile == "" || len(record.Owner) > 4096 || len(record.Profile) > 4096 ||
+		if record.Owner == "" || record.Profile == "" || len(record.Owner) > 4096 || len(record.InstallationOwner) > 4096 || len(record.Profile) > 4096 ||
 			!validRPCUUID(metadata.BundleId) || seen[metadata.BundleId] || len(metadata.ProtoReflect().GetUnknown()) != 0 ||
 			len(record.Data) == 0 || len(record.Data) > rpcBundleMaxBytes || metadata.SizeBytes != uint64(len(record.Data)) ||
 			metadata.Sha256 != hex.EncodeToString(digest[:]) || metadata.CreatedAt.CheckValid() != nil || metadata.ExpiresAt.CheckValid() != nil {
@@ -140,7 +141,7 @@ func (s *clientRPCBundleStore) restore(raw []byte) error {
 			s.dirty = true
 			continue
 		}
-		s.items[metadata.BundleId] = clientRPCBundleRecord{owner: record.Owner, profile: record.Profile, data: record.Data, metadata: metadata}
+		s.items[metadata.BundleId] = clientRPCBundleRecord{owner: record.Owner, installationOwner: record.InstallationOwner, profile: record.Profile, data: record.Data, metadata: metadata}
 		s.bytes += len(record.Data)
 	}
 	return nil

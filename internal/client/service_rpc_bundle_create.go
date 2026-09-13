@@ -13,10 +13,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Owner is the authenticated requester, not necessarily the installation owner.
+// The admitted role is internal durable command authority, never caller input;
+// the installation-owner snapshot separately revokes work on ownership changes.
 type clientRPCBundlePlan struct {
-	Owner            string `json:"owner"`
-	ProfileID        string `json:"profile_id"`
-	AcceptedRevision uint64 `json:"accepted_revision"`
+	Owner             string `json:"owner"`
+	InstallationOwner string `json:"installation_owner"`
+	Administrator     bool   `json:"administrator"`
+	ProfileID         string `json:"profile_id"`
+	AcceptedRevision  uint64 `json:"accepted_revision"`
 }
 
 func (m *ClientRPCMutations) createBundleAs(peer local.Peer, request *ipc.CreateDiagnosticsBundleRequest) (*ipc.Operation, error) {
@@ -32,14 +37,14 @@ func (m *ClientRPCMutations) createBundleAs(peer local.Peer, request *ipc.Create
 			cfg.RPCState.Bundles = map[string]clientRPCBundlePlan{}
 		}
 		op.ProfileId = profile.ID
-		cfg.RPCState.Bundles[op.Id] = clientRPCBundlePlan{Owner: peer.Identity, ProfileID: profile.ID, AcceptedRevision: cfg.RPCState.Revision + 1}
+		cfg.RPCState.Bundles[op.Id] = clientRPCBundlePlan{Owner: peer.Identity, InstallationOwner: cfg.LocalOwnerID, Administrator: peer.Administrator, ProfileID: profile.ID, AcceptedRevision: cfg.RPCState.Revision + 1}
 		return nil
 	})
 	return op, err
 }
 
 func bundlePlanAllowed(cfg Config, plan clientRPCBundlePlan) bool {
-	if cfg.RPCState == nil || !strings.EqualFold(cfg.LocalOwnerID, plan.Owner) || plan.ProfileID != cfg.RPCState.ActiveProfileID {
+	if cfg.RPCState == nil || !strings.EqualFold(cfg.LocalOwnerID, plan.InstallationOwner) || plan.ProfileID != cfg.RPCState.ActiveProfileID {
 		return false
 	}
 	if _, exists := cfg.RPCState.Profiles[plan.ProfileID]; !exists {
@@ -107,7 +112,7 @@ func (s *ClientRPCService) executeBundle(ctx context.Context, id string, plan cl
 	s.bundleStore.pruneLocked()
 	item, exists := s.bundleStore.items[id]
 	var metadata *ipc.BundleResult
-	if exists && strings.EqualFold(item.owner, plan.Owner) && item.profile == plan.ProfileID {
+	if exists && strings.EqualFold(item.owner, plan.Owner) && strings.EqualFold(item.installationOwner, plan.InstallationOwner) && item.profile == plan.ProfileID {
 		metadata = proto.Clone(item.metadata).(*ipc.BundleResult)
 	}
 	s.bundleStore.mu.Unlock()
@@ -117,7 +122,7 @@ func (s *ClientRPCService) executeBundle(ctx context.Context, id string, plan cl
 	}
 	collected := false
 	if !exists {
-		observation, err := s.diagnosticsAs(ctx, local.Peer{Identity: plan.Owner}, &ipc.GetDiagnosticsRequest{Profile: &ipc.ProfileRef{ProfileId: plan.ProfileID}})
+		observation, err := s.diagnosticsAs(ctx, local.Peer{Identity: plan.Owner, Administrator: plan.Administrator}, &ipc.GetDiagnosticsRequest{Profile: &ipc.ProfileRef{ProfileId: plan.ProfileID}})
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -128,7 +133,7 @@ func (s *ClientRPCService) executeBundle(ctx context.Context, id string, plan cl
 			if err != nil {
 				failure = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED, ReasonKey: "bundle_archive_unavailable"}
 			} else {
-				metadata, err = s.bundleStore.putID(id, plan.Owner, plan.ProfileID, data)
+				metadata, err = s.bundleStore.putID(id, plan.Owner, plan.InstallationOwner, plan.ProfileID, data)
 				if err != nil {
 					if connect.CodeOf(err) != connect.CodeResourceExhausted {
 						return err

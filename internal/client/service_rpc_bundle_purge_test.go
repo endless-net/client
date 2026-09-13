@@ -22,7 +22,7 @@ func TestRPCBundlePurgePreservesRecoveryAndRemovesDurableOrphans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.bundleStore.putID(op.Id, peer.Identity, profile.ProfileId, []byte("recoverable")); err != nil {
+	if _, err := s.bundleStore.putID(op.Id, peer.Identity, peer.Identity, profile.ProfileId, []byte("recoverable")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.bundleStore.put(peer.Identity, profile.ProfileId, []byte("orphan")); err != nil {

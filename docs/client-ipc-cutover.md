@@ -927,3 +927,19 @@ logout, peer lookup or diagnostics probe. The native host test compares all
 eight currently wired capabilities through Bootstrap, CLI and opening snapshot.
 These are local/component checks; complete diagnostics content, approved support
 resources and installed artifact/platform acceptance still require evidence.
+
+### Diagnostics archive administrator scope
+
+The durable diagnostics plan retains the authenticated requester's identity and
+admitted administrator role separately from the installation-owner snapshot.
+An administrator can collect on an unowned installation or one owned by another
+principal without claiming ownership. Archive bytes remain bound to the original
+requester: another administrator cannot read them merely by knowing the handle.
+Reads recheck current authorization. Installation ownership changes invalidate
+the archive before physical purging, including after process restart. Pending
+plans retain the existing profile, cleanup-journal and snapshot-consistency checks.
+
+`TestRPCAdministratorBundleScopeAndRestart` covers both installation states,
+durable plan execution, restored archive reads, foreign/demoted callers and
+ownership revocation. These component checks do not replace the platform CI
+diagnostics export scenario or full BA/SA acceptance.
