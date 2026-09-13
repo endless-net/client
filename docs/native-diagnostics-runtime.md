@@ -696,6 +696,15 @@ with the generated message and check offline cache, zero control requests and
 typed encoding failure. The report envelope and raw diagnostic attachments remain
 headless artifacts; the interactive headless `status` command still needs migration.
 
+The headless `status` command now also emits protobuf JSON in its `status` field;
+the old flat status JSON is no longer emitted. Route-conflict, optional live
+WireGuard/path inspection and control-metrics sections remain separate headless
+diagnostic fields. Text output reads the same native message. Command tests cover
+ready/unavailable control, preserved verified-map identity, absence of credentials
+and unspecified connection phase rather than inferring an active tunnel from
+readiness. Privileged inspection flags still require CI validation. Retired
+projection functions remain only for tests awaiting migration/removal.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

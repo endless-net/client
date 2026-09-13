@@ -150,11 +150,9 @@ func cmdStatus(args []string) error {
 			return err
 		}
 	}
-	status := statusPayload(cfg)
+	nativeStatus := buildAgentRPCStatus(context.Background(), agentIPCOptions{}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED)
+	status := map[string]any{}
 	attachLocalRouteConflicts(status, cfg, false, *wgInterface)
-	controlCtx, controlCancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
-	defer controlCancel()
-	attachControlAvailability(controlCtx, status, cfg.ControlURLs()...)
 	if *controlMetrics {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -175,12 +173,17 @@ func cmdStatus(args []string) error {
 			}
 			return err
 		}
-		attachAgentStatus(status, agentState)
+		attachAgentRPCSnapshot(nativeStatus, agentState)
 	}
 	if strings.TrimSpace(*wgInterface) != "" {
 		attachLiveWireGuardStatus(status, cfg, *wgInterface, []string(routeTargets), *probeRTT, 5*time.Second, relayResult, relayErr)
 	}
 	if *jsonOutput {
+		encoded, err := protojson.Marshal(nativeStatus)
+		if err != nil {
+			return err
+		}
+		status["status"] = json.RawMessage(encoded)
 		raw, err := json.MarshalIndent(status, "", "  ")
 		if err != nil {
 			return err
@@ -188,37 +191,23 @@ func cmdStatus(args []string) error {
 		fmt.Println(string(raw))
 		return nil
 	}
-	nodeID, _ := status["node_id"].(string)
-	networkName, _ := status["network_name"].(string)
-	overlayIP, _ := status["overlay_ip"].(string)
-	controlState, _ := status["control_state"].(string)
-	fmt.Printf("node_id: %s\n", firstNonEmpty(nodeID, "-"))
-	fmt.Printf("network: %s\n", firstNonEmpty(networkName, "-"))
-	fmt.Printf("overlay_ip: %s\n", firstNonEmpty(overlayIP, "-"))
-	fmt.Printf("control_state: %s\n", controlState)
-	fmt.Printf("map_revision: %v\n", status["map_revision"])
-	fmt.Printf("route_table: %v\n", status["route_table"])
-	fmt.Printf("peers: %v\n", status["peer_count"])
-	stunCount := 0
-	if endpoints, ok := status["stun_endpoints"].([]any); ok {
-		stunCount = len(endpoints)
-	}
-	relayCount := 0
-	if endpoints, ok := status["relay_endpoints"].([]any); ok {
-		relayCount = len(endpoints)
-	}
-	fmt.Printf("stun: %d\n", stunCount)
-	fmt.Printf("relays: %d\n", relayCount)
+	fmt.Printf("node_id: %s\n", firstNonEmpty(nativeStatus.NodeId, "-"))
+	fmt.Printf("network: %s\n", firstNonEmpty(nativeStatus.GetNetwork().GetName(), "-"))
+	fmt.Printf("overlay_addresses: %s\n", strings.Join(nativeStatus.OverlayAddresses, ", "))
+	fmt.Printf("control_state: %s\n", nativeStatus.ControlState)
+	fmt.Printf("connection_phase: %s\n", nativeStatus.ConnectionPhase)
+	fmt.Printf("map_revision: %d\n", nativeStatus.MapRevision)
+	fmt.Printf("route_table: %s\n", cfg.WireGuardRouteTable)
+	fmt.Printf("peers: %d\n", nativeStatus.PeerCount)
+	fmt.Printf("stun: %d\n", len(nativeStatus.StunEndpoints))
+	fmt.Printf("relays: %d\n", len(nativeStatus.RelayEndpoints))
 	fmt.Printf("route_conflicts: %v\n", status["route_conflict_count"])
 	if conflicts, ok := status["route_conflicts"].([]client.OverlayCIDRConflict); ok {
 		for _, conflict := range conflicts {
 			fmt.Printf("route_conflict: %s overlaps %s on %s\n", conflict.OverlayCIDR, conflict.LocalPrefix, conflict.Interface)
 		}
 	}
-	if agent, ok := status["agent"].(map[string]any); ok && agent["state_present"] == true {
-		fmt.Printf("agent_relay_ok: %v\n", agent["relay_ok"])
-		fmt.Printf("agent_stun_ok: %v\n", agent["stun_ok"])
-	}
+	fmt.Printf("agent_snapshot: %s\n", nativeStatus.GetAgent().GetSnapshotState())
 	if wg, ok := status["wireguard"].(client.WireGuardInspection); ok {
 		fmt.Printf("wireguard_ok: %v\n", wg.OK)
 		fmt.Printf("wireguard_peers: %d\n", wg.PeerCount)
