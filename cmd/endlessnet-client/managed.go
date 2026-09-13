@@ -143,9 +143,12 @@ func (e enrollmentApprovalRequiredError) Error() string {
 	return "browser approval is required: " + e.ApprovalURL
 }
 
-func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, cfg *client.Config, configPath string, req *clientapi.RegisterNodeRequest, timeout time.Duration, notice func(enrollmentApprovalRequiredError) error) (clientapi.RegisterNodeResponse, error) {
+func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, cfg *client.Config, save func(client.Config) error, req *clientapi.RegisterNodeRequest, timeout time.Duration, notice func(enrollmentApprovalRequiredError) error) (clientapi.RegisterNodeResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return clientapi.RegisterNodeResponse{}, err
+	}
+	if save == nil {
+		return clientapi.RegisterNodeResponse{}, errors.New("enrollment persistence is required")
 	}
 	requestID := strings.TrimSpace(cfg.EnrollmentRequestID)
 	pollToken := strings.TrimSpace(cfg.EnrollmentPollToken)
@@ -167,7 +170,7 @@ func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, c
 		savedRequest := *req
 		cfg.EnrollmentRequest = &savedRequest
 		cfg.NodeApprovalState = clientapi.NodeEnrollmentRequestPending
-		if err := client.SaveConfig(configPath, *cfg); err != nil {
+		if err := save(*cfg); err != nil {
 			return clientapi.RegisterNodeResponse{}, err
 		}
 	} else {
@@ -181,10 +184,10 @@ func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, c
 		status, err := api.NodeEnrollmentRequestStatus(requestID, pollToken)
 		if err != nil {
 			if clientapi.IsControlPlaneStatus(err, http.StatusNotFound) {
-				if err := clearBrowserEnrollmentRequest(cfg, configPath); err != nil {
+				if err := clearBrowserEnrollmentRequest(cfg, save); err != nil {
 					return clientapi.RegisterNodeResponse{}, err
 				}
-				return waitForBrowserEnrollmentApproval(ctx, api, cfg, configPath, req, timeout, notice)
+				return waitForBrowserEnrollmentApproval(ctx, api, cfg, save, req, timeout, notice)
 			}
 			if ctx.Err() != nil {
 				return clientapi.RegisterNodeResponse{}, ctx.Err()
@@ -202,7 +205,7 @@ func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, c
 		if currentApprovalURL := strings.TrimSpace(status.Request.ApprovalURL); currentApprovalURL != "" {
 			approvalURL = currentApprovalURL
 			cfg.ApprovalURL = approvalURL
-			if err := client.SaveConfig(configPath, *cfg); err != nil {
+			if err := save(*cfg); err != nil {
 				return clientapi.RegisterNodeResponse{}, err
 			}
 		}
@@ -217,7 +220,7 @@ func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, c
 			}
 			return *completed.Registration, nil
 		case clientapi.NodeEnrollmentRequestRejected:
-			if err := clearBrowserEnrollmentRequest(cfg, configPath); err != nil {
+			if err := clearBrowserEnrollmentRequest(cfg, save); err != nil {
 				return clientapi.RegisterNodeResponse{}, err
 			}
 			return clientapi.RegisterNodeResponse{}, errors.New("enrollment request was rejected")
@@ -233,11 +236,11 @@ func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, c
 			if err != nil {
 				return clientapi.RegisterNodeResponse{}, err
 			}
-			if err := clearBrowserEnrollmentRequest(cfg, configPath); err != nil {
+			if err := clearBrowserEnrollmentRequest(cfg, save); err != nil {
 				return clientapi.RegisterNodeResponse{}, err
 			}
 			*req = replacement
-			return waitForBrowserEnrollmentApproval(ctx, api, cfg, configPath, req, timeout, notice)
+			return waitForBrowserEnrollmentApproval(ctx, api, cfg, save, req, timeout, notice)
 		}
 	}
 	if notice != nil {
@@ -297,14 +300,14 @@ func waitForBrowserEnrollmentApproval(ctx context.Context, api *clientapi.API, c
 	}
 }
 
-func clearBrowserEnrollmentRequest(cfg *client.Config, configPath string) error {
+func clearBrowserEnrollmentRequest(cfg *client.Config, save func(client.Config) error) error {
 	cfg.EnrollmentRequestID = ""
 	cfg.EnrollmentPollToken = ""
 	cfg.ApprovalURL = ""
 	cfg.EnrollmentRequest = nil
 	cfg.PendingDirectRegistration = nil
 	cfg.NodeApprovalState = ""
-	return client.SaveConfig(configPath, *cfg)
+	return save(*cfg)
 }
 
 func reusableBrowserEnrollmentRequest(current, saved clientapi.RegisterNodeRequest) (clientapi.RegisterNodeRequest, error) {

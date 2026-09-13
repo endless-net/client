@@ -91,7 +91,7 @@ func TestCancelledTypedEnrollmentHasNoLocalSideEffects(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "client.json")
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	err := enrollConfiguredClient(ctx, client.Config{}, clientEnrollmentOptions{ConfigPath: path})
+	err := enrollConfiguredClient(ctx, client.Config{}, clientEnrollmentOptions{Save: func(updated client.Config) error { return client.SaveConfig(path, updated) }})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}

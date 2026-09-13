@@ -789,7 +789,8 @@ func cmdUp(args []string) error {
 		cfg.SubnetRouterSNAT = true
 	}
 	return enrollConfiguredClient(context.Background(), cfg, clientEnrollmentOptions{
-		ConfigPath: *configPath, JoinToken: effectiveJoinToken, IdempotencyKey: *idempotencyKey,
+		Save:      func(updated client.Config) error { return client.SaveConfig(*configPath, updated) },
+		JoinToken: effectiveJoinToken, IdempotencyKey: *idempotencyKey,
 		Hostname: *hostname, HostnameExplicit: flagWasSet(fs, "hostname"), Network: *network,
 		Endpoint: *endpoint, AdvertisedIPs: advertise, Tags: tags, ApprovalTimeout: approvalTimeout,
 		ApprovalNotice: func(notice enrollmentApprovalRequiredError) error {
@@ -812,7 +813,7 @@ func cmdUp(args []string) error {
 // The registration workflow consumes typed input, not command-line arguments or
 // HTTP IPC DTOs. The CLI supplies reporting; native runtime callers omit it.
 type clientEnrollmentOptions struct {
-	ConfigPath       string
+	Save             func(client.Config) error
 	JoinToken        string
 	IdempotencyKey   string
 	Hostname         string
@@ -830,7 +831,10 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	configPath, idempotencyKey := &options.ConfigPath, &options.IdempotencyKey
+	if options.Save == nil {
+		return errors.New("enrollment persistence is required")
+	}
+	idempotencyKey := &options.IdempotencyKey
 	hostname, network, endpoint := &options.Hostname, &options.Network, &options.Endpoint
 	effectiveJoinToken := options.JoinToken
 	advertise, tags, approvalTimeout := options.AdvertisedIPs, options.Tags, options.ApprovalTimeout
@@ -860,7 +864,7 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 		keysChanged = true
 	}
 	if keysChanged {
-		if err := client.SaveConfig(*configPath, cfg); err != nil {
+		if err := options.Save(cfg); err != nil {
 			return err
 		}
 	}
@@ -978,10 +982,10 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 	}
 	var response clientapi.RegisterNodeResponse
 	if browserEnrollment {
-		response, err = waitForBrowserEnrollmentApproval(ctx, api, &cfg, *configPath, &req, approvalTimeout, options.ApprovalNotice)
+		response, err = waitForBrowserEnrollmentApproval(ctx, api, &cfg, options.Save, &req, approvalTimeout, options.ApprovalNotice)
 	} else {
 		cfg.PendingDirectRegistration = &client.PendingDirectRegistration{Origin: firstControlPlaneURL(cfg), Request: req}
-		if err := client.SaveConfig(*configPath, cfg); err != nil {
+		if err := options.Save(cfg); err != nil {
 			return err
 		}
 		attempt := &registrationAttemptTransport{base: api.HTTPClient.Transport}
@@ -989,7 +993,7 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 		response, err = api.RegisterNode(req)
 		if err != nil && attempt.denied && req.JoinToken != "" && req.NodeCredential == "" {
 			cfg.PendingDirectRegistration = nil
-			if saveErr := client.SaveConfig(*configPath, cfg); saveErr != nil {
+			if saveErr := options.Save(cfg); saveErr != nil {
 				return errors.Join(err, saveErr)
 			}
 		}
@@ -1031,7 +1035,7 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 		if _, err := client.BindConfigDeviceFingerprint(&cfg, deviceFingerprint); err != nil {
 			return err
 		}
-		if err := client.SaveConfig(*configPath, cfg); err != nil {
+		if err := options.Save(cfg); err != nil {
 			return err
 		}
 		if approvalState == clientapi.NodeApprovalRejected {
@@ -1058,7 +1062,7 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 	if _, err := client.BindConfigDeviceFingerprint(&cfg, deviceFingerprint); err != nil {
 		return err
 	}
-	if err := client.SaveConfig(*configPath, cfg); err != nil {
+	if err := options.Save(cfg); err != nil {
 		return err
 	}
 	if options.Report != nil {

@@ -682,7 +682,7 @@ func TestWaitForBrowserEnrollmentCompletesApprovedSavedRequestWithoutWaiting(t *
 	}
 	req := savedRequest
 	req.IdempotencyID = "new-idempotency-key-that-must-not-replace-the-saved-request"
-	response, err := waitForBrowserEnrollmentApproval(t.Context(), clientapi.NewAPI(server.URL, ""), &cfg, configPath, &req, 0, nil)
+	response, err := waitForBrowserEnrollmentApproval(t.Context(), clientapi.NewAPI(server.URL, ""), &cfg, func(updated client.Config) error { return client.SaveConfig(configPath, updated) }, &req, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -767,7 +767,7 @@ func TestWaitForBrowserEnrollmentReplacesExpiredSavedRequest(t *testing.T) {
 		t.Context(),
 		clientapi.NewAPI(server.URL, ""),
 		&cfg,
-		configPath,
+		func(updated client.Config) error { return client.SaveConfig(configPath, updated) },
 		&req,
 		0,
 		nil,
@@ -831,7 +831,7 @@ func TestWaitForBrowserEnrollmentReplacesMissingSavedRequest(t *testing.T) {
 		t.Context(),
 		clientapi.NewAPI(server.URL, ""),
 		&cfg,
-		configPath,
+		func(updated client.Config) error { return client.SaveConfig(configPath, updated) },
 		&req,
 		0,
 		nil,

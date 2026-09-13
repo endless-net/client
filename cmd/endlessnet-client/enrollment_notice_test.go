@@ -34,7 +34,7 @@ func TestBrowserEnrollmentNoticeFollowsDurableSave(t *testing.T) {
 			req := clientapi.RegisterNodeRequest{Hostname: "node-a", IdempotencyID: "request-proof"}
 			noticeFailure := errors.New("cannot record user action")
 			calls := 0
-			_, err := waitForBrowserEnrollmentApproval(t.Context(), clientapi.NewAPI(server.URL, ""), &cfg, path, &req, 0, func(notice enrollmentApprovalRequiredError) error {
+			_, err := waitForBrowserEnrollmentApproval(t.Context(), clientapi.NewAPI(server.URL, ""), &cfg, func(updated client.Config) error { return client.SaveConfig(path, updated) }, &req, 0, func(notice enrollmentApprovalRequiredError) error {
 				calls++
 				if notice.RequestID != "request-1" || notice.ApprovalURL != approvalURL {
 					t.Fatal("incorrect approval notice")

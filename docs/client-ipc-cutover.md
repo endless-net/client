@@ -378,3 +378,13 @@ can also report the saved approval action when the status endpoint is unavailabl
 Short tests verify durable state before notification and preservation on callback
 failure. This does not yet bind the callback to native Enroll operation events;
 the accepted v0 schema and generated SDKs are unchanged by this internal extraction.
+
+The shared registration workflow and browser request persistence now require an
+explicit config-save callback instead of accepting a config path and overwriting
+the file themselves. The CLI supplies file persistence; a native runtime adapter
+must supply profile/operation-guarded transactions. Rejected saves stop the
+workflow: tests cover installation-key config, pending request (before registration
+is sent), and verified result (before success reporting). Installation identity
+binding still uses the installation-state subsystem; this change does not claim
+that all enrollment effects are already part of one RPC transaction. Native
+profile guards, operation recovery and browser event wiring remain to implement.
