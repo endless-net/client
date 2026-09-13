@@ -16,7 +16,6 @@ import (
 	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -192,13 +191,6 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 		assertDNSWireType(t, transport, listener, "live-peer.scenario.endlessnet.", dnsmessage.TypeAAAA, dnsmessage.RCodeSuccess, "fd96::20")
 		assertDNSWire(t, transport, listener, "renamed-peer.scenario.endlessnet.", dnsmessage.RCodeNameError, "")
 	}
-}
-
-func clientDNSListenerAddress(status ipc.StatusResponse) string {
-	if runtime.GOOS == "linux" {
-		return net.JoinHostPort(status.OverlayIP, "53")
-	}
-	return "127.0.0.1:53"
 }
 
 func assertDNSListenerUnavailable(t *testing.T, transport, address string) {

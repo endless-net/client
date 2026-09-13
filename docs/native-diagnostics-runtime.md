@@ -280,6 +280,16 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The IPv4/IPv6 logical-service discovery scenario now uses native status,
+applied-map gates and tunnel diagnostics, and the last legacy DNS-listener
+address helper has been removed. Each discovered host must independently echo
+TCP traffic with fresh receive/echo counters while undeclared UDP/ports remain
+denied by its signed peer ACL. DNS must expose exactly the approved host set,
+remove drained hosts and remain absent for pending approval after agent restart.
+Approval gating here concerns service discovery, not revocation of independent
+direct-IP ACL grants. Local short tests compile this guarded scenario; actual
+service DNS/traffic/restart acceptance for each platform remains CI work.
+
 The IPv4/IPv6 application-route scenario now uses native status, applied-map
 gates, tunnel diagnostics and DNS listener selection. Signed route withdrawal,
 connector endpoint rotation and lease expiry retain their positive forwarding

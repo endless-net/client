@@ -10,10 +10,10 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-051: a real native Client consumes a signed logical-service catalog with
@@ -32,28 +32,31 @@ func TestControlPlaneNativeServiceCatalog(t *testing.T) {
 			n.Enroll(s, network.Name, token, "--route-table", "auto")
 			n.Start()
 			defer n.Stop()
-			status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
-			clientIP := netip.MustParseAddr(status.OverlayIP)
+			status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
+			})
+			nodeID, profileID := status.NodeId, status.ActiveProfileId
+			clientIP := nativeOverlayAddress(status, false)
 			hostIPs := []netip.Addr{netip.MustParseAddr("198.18.92.20"), netip.MustParseAddr("198.18.92.21")}
 			prefixBits := 32
 			lookupNetwork := "ip4"
 			if family == "ipv6" {
-				if err := s.UpdateMap(status.NodeID, func(m *api.NetworkMapSnapshot) {
+				if err := s.UpdateMap(nodeID, func(m *api.NetworkMapSnapshot) {
 					m.Network.IPv6CIDR = "fd92::/64"
 					m.Node.AssignedIPv6 = "fd92::1"
 				}); err != nil {
 					t.Fatal(err)
 				}
-				status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.OverlayIPv6 == "fd92::1" && v.CachedMapValid
+				status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+					return v.NodeId == nodeID && v.ActiveProfileId == profileID && nativeOverlayAddress(v, true).String() == "fd92::1" && v.GetStoredState().GetCachedMapValid()
 				})
-				clientIP = netip.MustParseAddr(status.OverlayIPv6)
+				clientIP = nativeOverlayAddress(status, true)
 				hostIPs = []netip.Addr{netip.MustParseAddr("fd92::20"), netip.MustParseAddr("fd92::21")}
 				prefixBits = 128
 				lookupNetwork = "ip6"
 			}
-			underlay := nativePeerUnderlay(t, netip.MustParseAddr(status.OverlayIP), hostIPs[0])
-			snapshot, err := s.Snapshot(status.NodeID)
+			underlay := nativePeerUnderlay(t, nativeOverlayAddress(status, false), hostIPs[0])
+			snapshot, err := s.Snapshot(nodeID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -80,54 +83,67 @@ func TestControlPlaneNativeServiceCatalog(t *testing.T) {
 				t.Helper()
 				service.ApprovalStatus = approval
 				service.Hosts = selected
-				if err := s.UpdateMap(status.NodeID, func(m *api.NetworkMapSnapshot) {
+				if err := s.UpdateMap(nodeID, func(m *api.NetworkMapSnapshot) {
 					m.Peers = peers
 					m.Network.Services = []api.AdvertisedService{service}
 				}); err != nil {
 					t.Fatal(err)
 				}
-				current, err := s.Snapshot(status.NodeID)
+				current, err := s.Snapshot(nodeID)
 				if err != nil {
 					t.Fatal(err)
 				}
-				status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.MapRevision >= current.Revision.Network && v.PeerCount == len(peers) &&
-						v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotCurrent &&
-						v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" &&
-						v.WireGuard != nil && v.WireGuard.OK
-				})
+				status = awaitNativePeerMap(t, n, status, current.Revision.Network, uint32(len(peers)))
+				port := nativeTunnelPort(t, n, status)
 				for i := range references {
-					references[i].SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+					references[i].SetClientEndpoint(t, netip.AddrPortFrom(underlay, port))
 				}
 			}
 			binary := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
 			assertHostTraffic := func(hostIP netip.Addr) {
 				t.Helper()
+				hostIndex := slices.Index(hostIPs, hostIP)
+				if hostIndex < 0 {
+					t.Fatal("service resolved a host outside the reference set")
+				}
 				address := net.JoinHostPort(hostIP.String(), "24001")
 				ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 				defer cancel()
-				if err := testclient.Await(ctx, func() bool { return applicationProbe(t, binary, "", "tcp", address) }); err != nil {
+				if err := testclient.Await(ctx, func() bool {
+					beforeReceived, beforeEchoed := references[hostIndex].PacketCounts()
+					if !applicationProbe(t, binary, "", "tcp", address) {
+						return false
+					}
+					received, echoed := references[hostIndex].PacketCounts()
+					return received > beforeReceived && echoed > beforeEchoed
+				}); err != nil {
 					t.Fatal("approved service host did not become reachable")
 				}
-				if applicationProbe(t, binary, "", "udp", address) || applicationProbe(t, binary, "", "tcp", net.JoinHostPort(hostIP.String(), "24002")) {
+				udpOK := applicationProbe(t, binary, "", "udp", address)
+				wrongPortOK := applicationProbe(t, binary, "", "tcp", net.JoinHostPort(hostIP.String(), "24002"))
+				if udpOK || wrongPortOK {
 					t.Fatal("service host policy allowed an undeclared protocol or port")
 				}
 			}
 
 			apply("pending", nil)
-			assertServiceDNS(t, clientDNSListenerAddress(status), lookupNetwork, nil)
+			assertServiceDNS(t, nativeDNSListenerAddress(status), lookupNetwork, nil)
+			n.Stop()
+			n.Start()
+			status = awaitNativePeerMap(t, n, status, status.MapRevision, uint32(len(peers)))
+			assertServiceDNS(t, nativeDNSListenerAddress(status), lookupNetwork, nil)
 			apply("approved", hosts)
-			resolved := assertServiceDNS(t, clientDNSListenerAddress(status), lookupNetwork, hostIPs)
+			resolved := assertServiceDNS(t, nativeDNSListenerAddress(status), lookupNetwork, hostIPs)
 			for _, address := range resolved {
 				assertHostTraffic(address)
 			}
 			apply("approved", hosts[1:])
-			assertServiceDNS(t, clientDNSListenerAddress(status), lookupNetwork, hostIPs[1:])
+			assertServiceDNS(t, nativeDNSListenerAddress(status), lookupNetwork, hostIPs[1:])
 			assertHostTraffic(hostIPs[1])
 			apply("pending", nil)
-			assertServiceDNS(t, clientDNSListenerAddress(status), lookupNetwork, nil)
+			assertServiceDNS(t, nativeDNSListenerAddress(status), lookupNetwork, nil)
 			apply("approved", hosts)
-			resolved = assertServiceDNS(t, clientDNSListenerAddress(status), lookupNetwork, hostIPs)
+			resolved = assertServiceDNS(t, nativeDNSListenerAddress(status), lookupNetwork, hostIPs)
 			for _, address := range resolved {
 				assertHostTraffic(address)
 			}
