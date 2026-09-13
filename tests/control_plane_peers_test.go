@@ -390,6 +390,7 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string,
 			exitCode = exit.ExitCode()
 		}
 		if exit != nil && packetProbeReportsDenial(exitCode, output) {
+			t.Logf("application probe unavailable: stage=%s", packetProbeUnavailableStage(output))
 			return false
 		}
 		if attempt == 1 && deadlineExceeded && len(output) == 0 {
@@ -404,7 +405,20 @@ func applicationProbe(t *testing.T, binary, namespace, protocol, address string,
 func packetProbeReportsDenial(exitCode int, output []byte) bool {
 	// Flag parsing and runtime panics also use exit 2. Only the probe's
 	// explicit exchange outcome can establish a denied traffic assertion.
-	return exitCode == 2 && (string(output) == "application exchange unavailable\n" || string(output) == "application exchange unavailable\r\n")
+	return exitCode == 2 && packetProbeUnavailableStage(output) != ""
+}
+
+func packetProbeUnavailableStage(output []byte) string {
+	for _, stage := range []string{"exchange", "dial", "write", "read"} {
+		message := "application exchange unavailable"
+		if stage != "exchange" {
+			message += ": " + stage
+		}
+		if string(output) == message+"\n" || string(output) == message+"\r\n" {
+			return stage
+		}
+	}
+	return ""
 }
 
 func packetProbeFailureReason(output []byte) string {

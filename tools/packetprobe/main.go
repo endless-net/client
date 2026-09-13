@@ -70,6 +70,9 @@ func serve(address string) error {
 }
 
 var errUnreachable = errors.New("application exchange unavailable")
+var errDialUnavailable = fmt.Errorf("%w: dial", errUnreachable)
+var errWriteUnavailable = fmt.Errorf("%w: write", errUnreachable)
+var errReadUnavailable = fmt.Errorf("%w: read", errUnreachable)
 var errNameNotFound = errors.New("DNS name not found")
 var errDeadlineSetup = errors.New("application deadline setup failed")
 
@@ -128,7 +131,7 @@ func probeDNSWithTimeout(network, address, dnsServer string, exchangeTimeout tim
 	dialer := net.Dialer{Timeout: time.Second, Resolver: resolver(dnsServer)}
 	conn, err := dialer.Dial(probeNetwork(network, address), address)
 	if err != nil {
-		return errUnreachable
+		return errDialUnavailable
 	}
 	defer func() { _ = conn.Close() }()
 	x := applicationExchange{datagram: network == "udp", timeout: exchangeTimeout}
@@ -174,7 +177,7 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 		x.pending[request] = struct{}{}
 	}
 	if err != nil || n == 0 {
-		return errUnreachable
+		return errWriteUnavailable
 	}
 	var datagramMismatch error
 	for {
@@ -186,7 +189,7 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 				if datagramMismatch != nil {
 					return datagramMismatch
 				}
-				return errUnreachable
+				return errReadUnavailable
 			}
 			if n != len(x.frame) {
 				return errors.New("application response length mismatch")
@@ -196,7 +199,7 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 			n, err := io.ReadFull(conn, x.frame[x.filled:])
 			x.filled += n
 			if err != nil {
-				return errUnreachable
+				return errReadUnavailable
 			}
 		}
 		reply := x.frame
@@ -253,7 +256,7 @@ func sessionWithTimeout(network, address string, input io.Reader, output io.Writ
 	}
 	conn, err := net.DialTimeout(probeNetwork(network, address), address, time.Second)
 	if err != nil {
-		return errUnreachable
+		return errDialUnavailable
 	}
 	defer func() { _ = conn.Close() }()
 	if _, err := fmt.Fprintln(output, "ready"); err != nil {

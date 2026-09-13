@@ -11,6 +11,12 @@ func TestPacketProbeDenialRequiresExplicitExchangeOutcome(t *testing.T) {
 	}{
 		{"unavailable", 2, "application exchange unavailable\n", true},
 		{"windows-unavailable", 2, "application exchange unavailable\r\n", true},
+		{"dial", 2, "application exchange unavailable: dial\n", true},
+		{"write", 2, "application exchange unavailable: write\r\n", true},
+		{"read", 2, "application exchange unavailable: read\n", true},
+		{"unknown-stage", 2, "application exchange unavailable: unknown\n", false},
+		{"stage-extra-output", 2, "application exchange unavailable: dial\nextra\n", false},
+		{"stage-wrong-exit", 1, "application exchange unavailable: read\n", false},
 		{"flag-error", 2, "flag provided but not defined: -invalid\n", false},
 		{"empty", 2, "", false},
 		{"panic", 2, "panic: fixture failure\n", false},
