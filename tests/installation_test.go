@@ -15,6 +15,7 @@ import (
 	"time"
 
 	native "github.com/endless-net/client/clientipc/v0"
+	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 )
 
@@ -183,7 +184,12 @@ func TestInstalledClient(t *testing.T) {
 		t.FailNow()
 	}
 	// Keep the contract peer alive through the later OS uninstall operation.
-	s := testcontrol.New(t)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := testcontrol.NewWithListener(t, listener)
+	testclient.New(t, s).TrustInstalledControlTLS(s)
 	if !t.Run("enrolled-reinstall", func(t *testing.T) {
 		repair := func(t *testing.T) {
 			// Linux restores files from the same Debian package. The macOS and

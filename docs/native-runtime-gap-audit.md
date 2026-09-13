@@ -84,6 +84,17 @@ certificate verification, exact trust cleanup and the disposable-runner guard.
 This inspection identifies a concrete fixture incompatibility, not a successful
 reinstall/upgrade run or proof that no other installation defects remain.
 
+Fixture implementation follow-up: `TestInstalledClient` now creates the HTTPS
+listener and calls `TrustInstalledControlTLS` before bootstrap. Windows/macOS
+reuse existing machine-trust setup. Linux exclusively creates a random-named
+public certificate under `/usr/local/share/ca-certificates`, refreshes the CA
+bundle, and removes that exact file plus refreshes the bundle during cleanup.
+The helper rejects local and self-hosted execution before any filesystem or
+trust-store action; its admission guard is short-tested. This is disposable test
+trust, not production configuration or disabled certificate verification. Local
+short tests do not execute installation or trust-store mutation; actual hosted
+bootstrap/reinstall/upgrade and certificate cleanup remain unqualified.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
