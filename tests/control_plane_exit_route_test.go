@@ -12,10 +12,10 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-036: a real native Client consumes an approved IPv4 or IPv6 default route,
@@ -36,8 +36,11 @@ func TestControlPlaneNativeExitRoute(t *testing.T) {
 			n.Enroll(s, network.Name, token, "--route-table", "auto")
 			n.Start()
 			defer n.Stop()
-			status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
-			clientIP := netip.MustParseAddr(status.OverlayIP)
+			status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
+			})
+			nodeID, profileID := status.NodeId, status.ActiveProfileId
+			clientIP := nativeOverlayAddress(status, false)
 			resourceIP := netip.MustParseAddr("203.0.113.20")
 			defer func() {
 				if t.Failed() {
@@ -46,19 +49,21 @@ func TestControlPlaneNativeExitRoute(t *testing.T) {
 			}()
 			peerHost, exitRoute := "198.18.92.20/32", "0.0.0.0/0"
 			if family == "ipv6" {
-				if err := s.UpdateMap(status.NodeID, func(m *api.NetworkMapSnapshot) {
+				if err := s.UpdateMap(nodeID, func(m *api.NetworkMapSnapshot) {
 					m.Network.IPv6CIDR = "fd92::/64"
 					m.Node.AssignedIPv6 = "fd92::1"
 				}); err != nil {
 					t.Fatal(err)
 				}
-				status = n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.OverlayIPv6 == "fd92::1" && v.CachedMapValid })
-				clientIP = netip.MustParseAddr(status.OverlayIPv6)
+				status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+					return v.NodeId == nodeID && v.ActiveProfileId == profileID && nativeOverlayAddress(v, true).String() == "fd92::1" && v.GetStoredState().GetCachedMapValid()
+				})
+				clientIP = nativeOverlayAddress(status, true)
 				resourceIP = netip.MustParseAddr("2001:db8:ffff::20")
 				peerHost, exitRoute = "fd92::20/128", "::/0"
 			}
-			underlay := nativePeerUnderlay(t, netip.MustParseAddr(status.OverlayIP), resourceIP)
-			snapshot, err := s.Snapshot(status.NodeID)
+			underlay := nativePeerUnderlay(t, nativeOverlayAddress(status, false), resourceIP)
+			snapshot, err := s.Snapshot(nodeID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -71,19 +76,15 @@ func TestControlPlaneNativeExitRoute(t *testing.T) {
 			apply := func(allowed []string) {
 				t.Helper()
 				peer.AllowedIPs = append([]string(nil), allowed...)
-				if err := s.UpdatePeers(status.NodeID, []api.Peer{peer}); err != nil {
+				if err := s.UpdatePeers(nodeID, []api.Peer{peer}); err != nil {
 					t.Fatal(err)
 				}
-				current, err := s.Snapshot(status.NodeID)
+				current, err := s.Snapshot(nodeID)
 				if err != nil {
 					t.Fatal(err)
 				}
-				status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.MapRevision >= current.Revision.Network && v.PeerCount == 1 &&
-						v.Agent != nil && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" &&
-						v.WireGuard != nil && v.WireGuard.OK
-				})
-				reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+				status = awaitNativePeerMap(t, n, status, current.Revision.Network, 1)
+				reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, nativeTunnelPort(t, n, status)))
 			}
 			binary := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
 			address := net.JoinHostPort(resourceIP.String(), "24001")

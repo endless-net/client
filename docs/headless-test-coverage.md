@@ -13,6 +13,14 @@ and [system design / IT specifications](https://github.com/endless-net/architect
 
 ## 2026-09-13: native v0 transport and request-validation cutover
 
+HC-036's [`TestControlPlaneNativeExitRoute`](../tests/control_plane_exit_route_test.go)
+now uses v0 status and profile/node/map-bound tunnel diagnostics. Each default
+route grant, withdrawal and restoration must reach the current applied map
+before probing IPv4/IPv6 TCP and UDP; reference forwarding counters still prove
+the exit hop. This is not coverage of the separate exit-node selection RPCs or
+a production public-IP observation. Fresh native runner execution is pending;
+local short compilation and historical HTTP-based runs cannot establish it.
+
 HC-019's [`TestControlPlaneNativeMTUPreference`](../tests/control_plane_mtu_test.go)
 now observes generated v0 status and diagnostics instead of HTTP v2 DTOs.
 It requires the expected peer-map revision to be applied, binds tunnel inspection
