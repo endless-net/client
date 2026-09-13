@@ -110,6 +110,8 @@ func (n *Node) awaitNativeReady() {
 		// NativeService returns only fixed diagnostics or canonical numeric codes;
 		// never expose subprocess output or the runtime instance identifier here.
 		n.t.Logf("native runtime readiness: instance_present=%t error=%v", instancePresent, lastErr)
+		completed, failed := observeAgentCompletion(n.done)
+		n.t.Logf("agent readiness observation: completion_observed=%t unsuccessful_exit=%t", completed, failed)
 		n.t.Fatal("native runtime did not become ready")
 	}
 }
