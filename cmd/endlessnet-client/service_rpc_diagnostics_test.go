@@ -39,7 +39,11 @@ func TestAgentRPCDiagnosticsVerifiesMapAndDoesNotWaitForEngine(t *testing.T) {
 				t.Fatal(err)
 			}
 			engine := &nonblockingDiagnosticsEngine{testAgentWireGuard: &testAgentWireGuard{}}
-			provider := agentRPCDiagnostics(agentIPCOptions{ConfigStore: store, WireGuard: engine, WGInterface: "endlessnet"})
+			routeCalls := 0
+			provider := agentRPCDiagnostics(agentIPCOptions{ConfigStore: store, WireGuard: engine, WGInterface: "endlessnet", ObserveRoutes: func(context.Context, string, []string) []client.WireGuardRouteInspection {
+				routeCalls++
+				return []client.WireGuardRouteInspection{{Target: "192.0.2.1", Interface: "observed0"}}
+			}})
 			out, err := provider(t.Context())
 			if err != nil || !out.TunnelBusy || engine.calls != 1 {
 				t.Fatal("busy engine blocked or was misreported", err)
@@ -49,6 +53,9 @@ func TestAgentRPCDiagnosticsVerifiesMapAndDoesNotWaitForEngine(t *testing.T) {
 			}
 			if !valid && len(out.RouteConflicts) != 0 {
 				t.Fatal("unverified map conflicts leaked")
+			}
+			if valid && (routeCalls != 1 || len(out.OSRoutes) != 1 || out.OSRoutes[0].Interface != "observed0") || !valid && (routeCalls != 0 || len(out.OSRoutes) != 0) {
+				t.Fatal("OS route collection bypassed verified-map boundary")
 			}
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()

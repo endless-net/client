@@ -41,7 +41,7 @@ Additional partial implementations must not be mistaken for complete domains:
 | Area | Source evidence | Remaining work |
 | --- | --- | --- |
 | Preferences/policy | `service_rpc_uiquit.go` accepts only a single `UI_QUIT` key for Set/Reset; `service_rpc_preferences_test.go` and `service_rpc_uiquit_test.go` exist | Implement the remaining specified settings and policy controls; unit-test presence versus false, locks/source, requested/effective state and atomic patch rejection |
-| Diagnostics | `service_rpc_diagnostics.go` always reports `diagnostics_os_routes_not_collected`; `service_rpc_diagnostics_test.go` exists | Collect actual platform route observations through bounded providers and test typed projection/failures; do not substitute desired configuration for observed OS state |
+| Diagnostics | `service_rpc_diagnostics.go` projects bounded OS route samples; missing samples remain explicitly unavailable and supplied samples remain incomplete | Qualify platform command execution later; extend route coverage beyond host-address sampling without substituting desired configuration for observed OS state |
 | Updates | `service_rpc_update.go` reports `update_source_not_configured`; `service_rpc_update_test.go` exists | Bind an approved distribution source and verify its projection; unavailable is not up-to-date, and unavailable-path tests do not prove update discovery |
 
 Existing test filenames above identify starting points for review, not assertions
@@ -62,7 +62,7 @@ Paths in the table are under `internal/client/` unless qualified otherwise.
 | US-04 networks/peers | `service_rpc_networks.go`, `service_rpc_select_network.go`, `service_rpc_peers.go` | `TestRPCSelectCurrentNetworkIsDurableNoop`; peer pagination/event suites | Current-network no-op is not cross-network selection; audit real provider switching and stale catalogs |
 | US-05 exit | Eight-method gap inventory above includes all four exit methods | No runtime implementation to qualify; CLI/SDK coverage is insufficient | Verified backend policy consumption, durable selection and family-specific effects |
 | US-06 trust/recovery | `service_rpc_trust_worker.go`, `service_rpc_trust_recovery.go` | `TestRPCTrustWorkerRecoveryAndIndependentDisconnect` | Audit exact authority tuple, replay and privilege outcomes; helper/OS integration remains later evidence |
-| US-07 diagnostics | `service_rpc_diagnostics.go`, bundle worker/store/read handlers | `TestRPCDiagnosticsRejectsChangedContextAndInvalidProvider`, `TestRPCAdministratorBundleScopeAndRestart` | Actual OS route collection missing; inspect redaction, bounds and archive lifecycle coverage separately |
+| US-07 diagnostics | `service_rpc_diagnostics.go`, bundle worker/store/read handlers, `route_observations.go` | `TestRPCDiagnosticsRejectsChangedContextAndInvalidProvider`, `TestRPCAdministratorBundleScopeAndRestart`, injected route collector tests | Route sampling implemented but platform execution unqualified; inspect redaction, bounds and archive lifecycle coverage separately |
 | US-08 profiles/logout | Profile, logout and forget handlers | `TestRPCProfileRemovalGuards`, `TestRPCForgetCancelsQueuedEnrollmentAfterRestart`, `TestRPCProfilePaginationBindingsAndPrivacy` | Audit all removal/cleanup/replay cases; remote revocation depends on backend result |
 | US-09 session/renewal | Missing `GetSession` and `RenewSession` overrides | No runtime implementation to qualify | Session authority and durable renewal require updated backend contract consumption |
 | US-10 preferences/policy | `service_rpc_uiquit.go`, preference validators | `TestRPCUIQuitRejectsUnsupportedPatchAtomically` rejects mixed UI-quit/DNS patch without changing revision or override | Implement remaining settings; rejection is not DNS/routes/policy functionality |
@@ -88,15 +88,30 @@ host address of each peer, rather than only the first address. The unit test
 `TestWireGuardRouteTargetsRetainEveryPeerAddress` covers a dual-stack peer,
 additional host addresses, equivalent textual duplicates, invalid values and
 subnet exclusions. Agent/CLI route-target consumers receive the complete host
-list; this does not close the missing native diagnostics OS-route collector.
+list; the separate OS sampling implementation and its limits are described below.
 
 The diagnostics service now accepts a separate `OSRoutes` observation list and
 projects it only with a verified profile map. Desired `Tunnel.Routes` are never
 used as OS evidence. `TestRPCDiagnosticsSeparatesObservedRoutesFromDesiredRoutes`
 checks this boundary, interface comparison, failed observations, redaction,
 copy isolation, address validation and entry limits. Partial observations retain
-the incomplete marker. The agent still needs a bounded platform collector wired
-to this field; this service-level increment does not establish OS collection.
+the incomplete marker.
+
+`ObserveOSRoutes` is now wired into agent diagnostics after map verification.
+It samples up to 32 unique literal host addresses with a shared three-second
+deadline and a 16 KiB per-command output bound. Linux uses `ip route get`, macOS
+uses `route -n get`, and Windows uses `Find-NetRoute` with exactly one unique
+interface alias and a hidden process window. Untrusted address text is never
+interpolated into a command. Subnets, scoped addresses, unsupported platforms,
+lookup failures and exhausted collection budgets do not become successful route
+claims. Responses remain marked partial: sampling peer host addresses is not
+full routing-table or subnet/exit acceptance.
+
+`route_observations_test.go` covers all three command/parser branches with an
+injected executor, duplicate/invalid addresses, cancellation, target/output
+limits and failure redaction. The agent test verifies that an unverified map
+does not invoke route collection. No real OS route command is executed by these
+unit tests; platform execution qualification belongs to the later test phase.
 
 ## External dependencies and approvals
 

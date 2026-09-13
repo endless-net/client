@@ -37,6 +37,11 @@ func agentRPCDiagnostics(opts agentIPCOptions) client.ClientRPCDiagnosticsProvid
 		} else {
 			result.PeerFailures = append(result.PeerFailures, &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "diagnostics_current_paths_unavailable"})
 		}
+		observeRoutes := opts.ObserveRoutes
+		if observeRoutes == nil {
+			observeRoutes = client.ObserveOSRoutes
+		}
+		result.OSRoutes = observeRoutes(ctx, inspection.Interface, client.WireGuardRouteTargetsForPeers(networkMap.Peers))
 		return result, ctx.Err()
 	}
 }

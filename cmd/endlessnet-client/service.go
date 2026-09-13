@@ -289,6 +289,7 @@ type agentIPCOptions struct {
 	Timeout        time.Duration
 	WireGuard      agentWireGuard
 	SyncWake       chan struct{}
+	ObserveRoutes  func(context.Context, string, []string) []client.WireGuardRouteInspection
 }
 
 func requestAgentSync(opts agentIPCOptions) {
