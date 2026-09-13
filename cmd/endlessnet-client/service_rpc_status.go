@@ -208,7 +208,7 @@ func probeAgentRPCControl(ctx context.Context, origins []string) *ipc.ControlPro
 }
 
 func attachAgentRPCSnapshot(status *ipc.Status, snapshot client.AgentSnapshot) {
-	if status.Network == nil || snapshot.NodeID != status.NodeId || snapshot.NetworkID != status.Network.Id || snapshot.MapRevision > status.MapRevision {
+	if status.ActiveProfileId == "" || snapshot.ProfileID != status.ActiveProfileId || status.Network == nil || snapshot.NodeID != status.NodeId || snapshot.NetworkID != status.Network.Id || snapshot.MapRevision > status.MapRevision {
 		return
 	}
 	state := ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT

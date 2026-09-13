@@ -773,6 +773,9 @@ func runAgentIteration(ctx context.Context, opts agentIterationOptions) (client.
 		ProbeRTT:           opts.ProbeRTT,
 	})
 	snapshot.Apply = applyResult
+	if cfg.RPCState != nil {
+		snapshot.ProfileID = cfg.RPCState.ActiveProfileID
+	}
 	raw, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
 		return client.AgentSnapshot{}, false, err
@@ -797,6 +800,9 @@ func writeAgentFailureSnapshot(stateOutput, configPath string, failure error) er
 		LastError:   redactDiagnosticsStringForJSON(failure.Error()),
 	}
 	if cfg, err := client.LoadConfig(configPath); err == nil {
+		if cfg.RPCState != nil {
+			snapshot.ProfileID = cfg.RPCState.ActiveProfileID
+		}
 		snapshot.NodeID = cfg.NodeID
 		snapshot.NetworkID = cfg.NetworkID
 		snapshot.MapRevision = cfg.MapRevision

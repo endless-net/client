@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -36,16 +37,45 @@ func TestRPCStatusRejectsUnverifiedCache(t *testing.T) {
 }
 
 func TestRPCStatusAgentSnapshotMustMatchVerifiedIdentity(t *testing.T) {
-	status := &ipc.Status{NodeId: "node", Network: &ipc.Network{Id: "network"}, MapRevision: 3, Agent: &ipc.AgentStatus{}}
-	for _, snapshot := range []client.AgentSnapshot{{NodeID: "other", NetworkID: "network", MapRevision: 3}, {NodeID: "node", NetworkID: "other", MapRevision: 3}, {NodeID: "node", NetworkID: "network", MapRevision: 4}} {
+	status := &ipc.Status{ActiveProfileId: "profile", NodeId: "node", Network: &ipc.Network{Id: "network"}, MapRevision: 3, Agent: &ipc.AgentStatus{}}
+	for _, snapshot := range []client.AgentSnapshot{{ProfileID: "profile", NodeID: "other", NetworkID: "network", MapRevision: 3}, {ProfileID: "profile", NodeID: "node", NetworkID: "other", MapRevision: 3}, {ProfileID: "profile", NodeID: "node", NetworkID: "network", MapRevision: 4}, {ProfileID: "previous-profile", NodeID: "node", NetworkID: "network", MapRevision: 3}, {NodeID: "node", NetworkID: "network", MapRevision: 3}} {
 		attachAgentRPCSnapshot(status, snapshot)
 		if status.Agent.NodeId != "" {
 			t.Fatal("foreign or future snapshot was attached")
 		}
 	}
-	attachAgentRPCSnapshot(status, client.AgentSnapshot{NodeID: "node", NetworkID: "network", MapRevision: 2, LastError: "private diagnostic"})
+	attachAgentRPCSnapshot(status, client.AgentSnapshot{ProfileID: "profile", NodeID: "node", NetworkID: "network", MapRevision: 2, LastError: "private diagnostic"})
 	if status.Agent.SnapshotState != ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS || status.Agent.TargetMapRevision != 3 || status.Agent.LastFailure.ReasonKey != "agent_observation_failed" {
 		t.Fatal("previous snapshot or diagnostic projection incorrect")
+	}
+}
+
+func TestRPCFailureSnapshotPersistsProfileBinding(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "client.json")
+	store, err := client.OpenConfigStore(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Update(func(cfg *client.Config) error {
+		cfg.ControlPlaneURLs = []string{"https://control.example.test"}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mutations, err := client.NewClientRPCMutations(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mutations.AdoptInitialProfile(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := writeAgentFailureSnapshot(path, configPath, errors.New("synthetic failure")); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := client.LoadAgentSnapshot(path)
+	if err != nil || snapshot.ProfileID == "" || snapshot.ProfileID != store.Read().RPCState.ActiveProfileID {
+		t.Fatal("failure snapshot lost its profile binding", err)
 	}
 }
 

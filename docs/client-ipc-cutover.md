@@ -696,3 +696,11 @@ guards reject concurrent stale snapshots. Tests cover the apply/inspection/error
 matrix and delivery of an observation through the native local host. System
 validation must still establish actual routing/connectivity and observation timing;
 control probes/inspection are not peer reachability proof.
+
+Agent diagnostic snapshots now carry the source profile ID on both successful
+iterations and failure writes. Native status requires that ID to match the active
+profile in addition to node/network/revision checks. An unbound old snapshot or
+a different profile with coincident node/network IDs is not attached; a prior map
+revision of the same profile remains explicitly PREVIOUS. Tests cover rejection
+of foreign/unbound snapshots and persistence of the failure snapshot binding.
+This local runtime artifact change does not change the v0 protobuf schema/version.

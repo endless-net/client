@@ -49,6 +49,7 @@ type AgentRelaySnapshot struct {
 }
 
 type AgentSnapshot struct {
+	ProfileID   string                `json:"profile_id,omitempty"`
 	GeneratedAt string                `json:"generated_at"`
 	NodeID      string                `json:"node_id"`
 	NetworkID   string                `json:"network_id"`
