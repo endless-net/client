@@ -254,43 +254,47 @@ State с иным форматом или версией не поддержив
 plaintext и неизвестные protected-форматы отклоняются; см.
 [`internal/client/config_protection_windows.go`](../../internal/client/config_protection_windows.go).
 
-Локальный IPC использует protocol v2 (`current = min = 2`) и работает через
-защищенный OS-local transport. Клиент обязательно передает protocol/current/min
-headers; сервер выбирает максимальную версию пересечения диапазонов:
+Локальный runtime IPC использует Client Protobuf v0 через gRPC/HTTP2 по
+защищённому OS-local transport. Bootstrap проверяет protocol, v0 и digest
+контракта; HTTP IPC v2, согласование диапазонов версий и fallback не используются:
 
 - Windows: `\\.\pipe\endlessnet-service`;
 - Linux: `/run/endlessnet/client.sock`;
 - macOS: `/var/run/endlessnet/client.sock`.
 
 Контракт описан в
-[`docs/client-ipc-v2.openapi.yaml`](../client-ipc-v2.openapi.yaml),
-реализация — в
-[`internal/client/service_ipc.go`](../../internal/client/service_ipc.go),
-[`service_ipc_windows.go`](../../internal/client/service_ipc_windows.go) и
-[`service_ipc_unix.go`](../../internal/client/service_ipc_unix.go).
+[`proto/client/v0/service.proto`](../../proto/client/v0/service.proto),
+транспорт — в [`clientipc/local`](../../clientipc/local/local.go),
+runtime host — в
+[`cmd/endlessnet-client/service_rpc_host.go`](../../cmd/endlessnet-client/service_rpc_host.go),
+авторизация и durable acceptance — в
+[`internal/client/service_rpc.go`](../../internal/client/service_rpc.go).
 
-Observer доступны status, поток изменившихся состояний, server identity и список
-сетей. Первый пользователь, запускающий enrollment, фиксируется в защищённом
-state как локальный владелец по Windows SID или Unix UID. Владелец и
-administrator/root могут выполнять enroll, connect, disconnect, logout и выбор
-сети, читать redacted diagnostics и recent logs, а также создавать bounded
-diagnostics bundle; другому обычному пользователю IPC возвращает
-`owner_required`. Доверие новому server identity и явный `POST /logout/local`
-всегда требуют administrator/root. Обычный `POST /logout` сначала выполняет
-bounded remote cleanup; если сервер не подтвердил revoke/delete, enrollment
-сохраняется и UI может предложить отдельный local forget. Успешный ответ имеет
-typed outcome `remote_cleanup_confirmed` или `remote_cleanup_unconfirmed`.
-Обе logout-операции сохраняют device/WireGuard keys, локального владельца,
-control origin и подтверждённый trust, но очищают session и node-bound state и
-устанавливают intent `disconnected`;
-administrator/root может выполнять owner-операции независимо от него.
-Существующий enrollment без владельца не может быть захвачен обычным локальным
-пользователем: первый claim для такого state требует administrator/root.
-Pending-ответ `/enroll` не содержит `wireguard_apply`; после синхронного запуска
-туннеля IPC v2 возвращает `wireguard_apply.ok = true`.
-`GET /diagnostics` не пишет файлы; bounded bundle создается отдельным
-`POST /diagnostics/bundle`. На Windows service defaults используют `C:\Program Files\EndlessNet`
-для бинаря и `C:\ProgramData\EndlessNet` для state/config/diagnostics.
+Observer доступны `GetRuntimeInfo`, `GetStatus`, `WatchEvents` и
+`GetSupportInfo`; server identity, каталоги сетей и профилей требуют owner.
+Разрешения каждого RPC определяются options контракта. `CreateProfile` и
+`Enroll` допускают первоначальный claim: OS-аутентифицированный Windows SID
+или Unix UID атомарно фиксируется как локальный владелец вместе с принятием
+операции. Существующий enrollment без владельца не может быть захвачен обычным
+пользователем: для такого state требуется administrator/root. Administrator/root
+может выполнять owner-операции; administrator-only RPC недоступны обычному owner.
+
+Ответ о принятии mutation не означает завершение операции или работающий туннель.
+Результат восстанавливается через `GetOperation` по исходному request ID;
+состояние наблюдается через типизированные snapshot/events. Diagnostics bundle
+создаётся отдельной операцией `CreateDiagnosticsBundle` и читается через
+`ReadDiagnosticsBundle`, а не через файловый путь из HTTP-ответа.
+На Windows service defaults используют `C:\Program Files\EndlessNet` для бинаря
+и `C:\ProgramData\EndlessNet` для state/config/diagnostics.
+
+Перенос runtime host не означает, что весь репозиторий уже очищен от legacy:
+оставшиеся HTTP IPC v2 handlers и их тесты требуют отдельной миграции.
+Native Unix transport проверяется в
+[`service_rpc_unix_test.go`](../../internal/client/service_rpc_unix_test.go)
+на Linux/macOS: OS UID, режим сокета, занятый endpoint, ordered events и
+owner RPC при открытом потоке. Это компонентная проверка, не приёмка
+установленного сервиса или реального сетевого трафика; результат GitHub runners
+для нового теста пока не подтверждён.
 
 ### 9. Платформенная матрица
 

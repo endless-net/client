@@ -92,6 +92,13 @@ func TestUnixServiceSocketRPCContract(t *testing.T) {
 	}
 	// Successful owner-only access also proves that the failed second Listen
 	// left the original socket reachable. The event stream remains open.
+	profiles, err := consumer.ListProfiles(ctx, connect.NewRequest(&ipc.ListProfilesRequest{}))
+	if err != nil {
+		t.Fatalf("owner catalog with an open stream: %v", err)
+	}
+	if len(profiles.Msg.Profiles) != 1 || profiles.Msg.Profiles[0].Id != accepted.Msg.Operation.ProfileId {
+		t.Fatal("owner catalog did not expose the committed profile")
+	}
 	if _, err := consumer.GetStatus(ctx, connect.NewRequest(&ipc.GetStatusRequest{})); err != nil {
 		t.Fatalf("owner status with an open stream: %v", err)
 	}
