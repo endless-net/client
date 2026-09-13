@@ -17,6 +17,7 @@ import (
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 	ipc "github.com/endless-net/client/clientipc/v0"
+	"github.com/endless-net/client/internal/client"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
@@ -87,6 +88,7 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 			response := &ipc.GetDiagnosticsResponse{}
 			if err != nil {
 				t.Logf("installed connection diagnostic: native_diagnostics_available=false deadline=%t error=%v", ctx.Err() != nil, testclient.NativeServiceCommandError("diagnostics", output))
+				t.Log(installedInterfaceSummary(client.LocalInterfaceStatuses()))
 				return
 			}
 			if protojson.Unmarshal(output, response) != nil {
