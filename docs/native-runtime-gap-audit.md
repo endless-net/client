@@ -321,6 +321,23 @@ remain rejected. Regression cases distinguish zero, the unavailable sentinel,
 Linux loopback 65536, uint32 maximum and invalid values. This correction still
 requires installed Windows runner confirmation; it does not close acceptance.
 
+## Windows role and installation follow-up — source 204180a
+
+On 2026-09-13, [Windows Verify job 103740091961](https://github.com/endless-net/client/actions/runs/34763410679/job/103740091961)
+passed on source `204180aaeb9354a620f593a47a23f967a11830bc`, which includes
+`a93d6e6`. The local transport test now distinguishes an observer whose ownership
+claim requires a fresh subscription from an administrator whose unchanged access
+must continue receiving typed status, operation and profile-invalidation events.
+This is hosted Windows verification evidence, not full platform acceptance.
+
+The same-source [Windows 2022 installed job 103740092060](https://github.com/endless-net/client/actions/runs/34763410679/job/103740092060)
+passed the initial-connect, connected-upgrade and connected-reinstall checks,
+then failed with `restricted Windows peer failed for an unclassified reason
+(output withheld)`. This moves the observed installation failure beyond initial
+diagnostics, but does not prove restricted-peer authorization or the remaining
+installation lifecycle. The underlying subprocess failure still needs diagnosis;
+an unclassified result is not evidence of the expected authorization rejection.
+
 ## Methods without a runtime override
 
 Follow-up at [client main source d6e38bc](https://github.com/endless-net/client/tree/d6e38bc48888c1d18881464c942bc66dea1952c0):
