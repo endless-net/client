@@ -11,6 +11,12 @@ current runtime still lacks authoritative backend session expiry/renewal input
 and returns an unimplemented failure. Provider integration belongs to client and
 the upstream session API owner; expiry must not be guessed from node credentials.
 
+Negative local transport fixtures cover unsupported session/renewal providers,
+NEEDS_LOGIN, stale CAS and owner denial. Both the transport code and typed Failure
+must survive unchanged, stdout stays empty and the strict request sequence allows
+no automatic retry or enrollment. Renewal rejects caller callback URLs, tokens,
+enrollment token files and browser-login flags before opening a connection.
+
 The retired HTTP recent-logs route and agent callback are removed. A regression
 test requires 404 on that old path. Buffer redaction tests now exercise the buffer
 directly; native log transport and profile isolation tests own RPC evidence. The

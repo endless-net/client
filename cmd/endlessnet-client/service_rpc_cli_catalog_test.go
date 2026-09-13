@@ -70,15 +70,22 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 	failures := []struct {
 		command, method string
 		request         proto.Message
+		code            ipc.ErrorCode
+		transportCode   connect.Code
 	}{
-		{"diagnostics", "GetDiagnostics", &ipc.GetDiagnosticsRequest{Profile: ref}},
-		{"peers", "ListPeers", &ipc.ListPeersRequest{Profile: ref, Page: &ipc.PageRequest{}}},
+		{"diagnostics", "GetDiagnostics", &ipc.GetDiagnosticsRequest{Profile: ref}, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, connect.CodeUnavailable},
+		{"peers", "ListPeers", &ipc.ListPeersRequest{Profile: ref, Page: &ipc.PageRequest{}}, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, connect.CodeUnavailable},
+		{"session", "GetSession", &ipc.GetSessionRequest{Profile: ref}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},
+		{"renew-session", "RenewSession", &ipc.RenewSessionRequest{Mutation: mutation, Profile: ref}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},
+		{"renew-session", "RenewSession", &ipc.RenewSessionRequest{Mutation: mutation, Profile: ref}, ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN, connect.CodeFailedPrecondition},
+		{"renew-session", "RenewSession", &ipc.RenewSessionRequest{Mutation: mutation, Profile: ref}, ipc.ErrorCode_ERROR_CODE_STALE_STATE, connect.CodeFailedPrecondition},
+		{"renew-session", "RenewSession", &ipc.RenewSessionRequest{Mutation: mutation, Profile: ref}, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED, connect.CodePermissionDenied},
 	}
 	for _, tc := range failures {
 		if err := fixture.Expect(testserver.Step{Method: "GetRuntimeInfo", Request: &ipc.GetRuntimeInfoRequest{}, Responses: []proto.Message{&ipc.GetRuntimeInfoResponse{Runtime: &ipc.RuntimeInfo{Protocol: rpc.Protocol, ContractSha256: rpc.Digest(), InstanceId: "instance"}}}}); err != nil {
 			t.Fatal(err)
 		}
-		if err := fixture.Expect(testserver.Step{Method: tc.method, Request: tc.request, Err: rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)}); err != nil {
+		if err := fixture.Expect(testserver.Step{Method: tc.method, Request: tc.request, Err: rpc.Error(tc.transportCode, tc.code)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -116,10 +123,14 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		}
 	}
 	for _, tc := range failures {
+		args := []string{tc.command, transportFlag, endpoint, "--profile-id", ref.ProfileId, "--timeout", "5s"}
+		if tc.command == "renew-session" {
+			args = append(args, "--request-id", mutation.RequestId, "--expected-instance-id", "instance", "--expected-revision", "7")
+		}
 		output, err := captureStdout(t, func() error {
-			return cmdService([]string{tc.command, transportFlag, endpoint, "--profile-id", ref.ProfileId, "--timeout", "5s"})
+			return cmdService(args)
 		})
-		if err == nil || output != "" || rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_UNAVAILABLE {
+		if err == nil || output != "" || rpc.FailureFromError(err).GetCode() != tc.code || connect.CodeOf(err) != tc.transportCode {
 			t.Fatal("native failure must be returned without fallback or success output", tc.command, err)
 		}
 	}
@@ -142,6 +153,17 @@ func TestNativeCatalogCLIRejectsMissingContext(t *testing.T) {
 		var output bytes.Buffer
 		if err := cmdServiceRPCMutation(command, []string{"--profile-id", "profile-a"}, &output); err == nil || output.Len() != 0 {
 			t.Fatal("missing durable CAS accepted", command)
+		}
+	}
+}
+
+func TestNativeSessionCLIRejectsCallerSuppliedRenewalSecrets(t *testing.T) {
+	base := []string{"--profile-id", "profile", "--request-id", "b10b8dab-f1a2-46a0-b489-0e151c2bcc51", "--expected-instance-id", "instance", "--expected-revision", "7"}
+	for _, flag := range []string{"--callback-url", "--enrollment-token-file", "--browser-login", "--token"} {
+		var output bytes.Buffer
+		args := append(append([]string(nil), base...), flag, "synthetic-value")
+		if err := cmdServiceRPCMutation("renew-session", args, &output); err == nil || output.Len() != 0 {
+			t.Fatal("renewal accepted out-of-contract input", flag)
 		}
 	}
 }
