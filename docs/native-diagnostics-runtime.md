@@ -280,6 +280,18 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The complete two-client Linux namespace peer fixture now uses native IPC for
+status, diagnostics and local mutations, including direct peer withdrawal/restore,
+ACL protocol/port replacement, fresh-snapshot headless DNS, connection intent and
+credential retirement. Tunnel observations require node/profile/map binding;
+handshake/counters must identify the expected remote node, and withdrawal must
+remove the inspected peer before traffic denial is evaluated. Applied-map gates
+require current, error-free agent observations with matching map and peer counts.
+Short regression tests reject foreign identities, stale/missing snapshots,
+inconsistent peer counts, agent failures and unknown connection phase. These are
+local predicate checks plus process-scenario compilation, not Linux networking
+acceptance or evidence for other operating systems.
+
 The two-client connection-intent subscenario now captures native node/profile
 baselines and issues typed connect/disconnect mutations with fresh CAS metadata
 and distinct request IDs, waiting for successful terminal operations. Explicit
@@ -289,7 +301,7 @@ connect and a repeated connect restore traffic without reenrollment. During a
 control outage, current agent failure and retained verified cache are observed
 independently of traffic. Recovery requires a current error-free applied map.
 This guarded Linux namespace scenario is compiled by local short tests, not
-executed; full two-client fixture migration and CI acceptance remain pending.
+executed; two-client networking acceptance remains pending in CI.
 
 The two-client credential-retirement subscenario now captures its own native
 status baseline rather than accepting legacy status DTOs. Terminal cleanup and
@@ -298,8 +310,8 @@ receiver must retain a current applied map and an inspected tunnel peer explicit
 matching the retired sender. Existing TCP/UDP sockets and fresh overlay exchanges
 must be denied while the same receiver applications remain reachable by underlay;
 no new registration request is allowed. The enclosing Linux namespace peer/policy
-fixture still contains legacy observations and is not fully migrated. Local short
-tests only compile this guarded scenario; real traffic/restart evidence needs CI.
+fixture also uses native observations. Local short tests only compile this guarded
+scenario; real traffic/restart evidence needs CI.
 
 The user-session expiry scenario now uses native status and profile/map-bound
 tunnel diagnostics in both IP families. Backend-observed headless user RPC denial

@@ -23,7 +23,6 @@ import (
 	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // namespaceCommand is fixture setup only. Client state and keys are never read.
@@ -91,7 +90,7 @@ func TestClientDataplaneDirectPeerTrafficAndWithdrawal(t *testing.T) {
 		t.Fatal(err)
 	}
 	var nodes [2]*testclient.Node
-	var states [2]ipc.StatusResponse
+	var states [2]*native.Status
 	endpoints := [2]string{"192.0.2.2:51820", "192.0.2.3:51820"}
 	for i := range nodes {
 		n := testclient.New(t, s)
@@ -99,59 +98,73 @@ func TestClientDataplaneDirectPeerTrafficAndWithdrawal(t *testing.T) {
 		n.AgentArgs = []string{"--listen-port", "51820", "--endpoint", endpoints[i]}
 		n.Enroll(s, network.Name, token, "--route-table", "auto")
 		n.Start()
-		states[i] = n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
+		states[i] = n.AwaitNativeStatus(func(v *native.Status) bool {
+			return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
+		})
 		nodes[i] = n
 	}
 	var peers [2]api.Peer
 	for i := range nodes {
 		remote := 1 - i
-		m, err := s.Snapshot(states[remote].NodeID)
+		m, err := s.Snapshot(states[remote].NodeId)
 		if err != nil {
 			t.Fatal(err)
 		}
 		peers[i] = api.Peer{ID: m.Node.ID, Hostname: m.Node.Hostname, PublicKey: m.Node.PublicKey, Endpoint: endpoints[remote], AllowedIPs: []string{m.Node.AssignedIP + "/32"}}
-		if err := s.UpdatePeers(states[i].NodeID, []api.Peer{peers[i]}); err != nil {
+		if err := s.UpdatePeers(states[i].NodeId, []api.Peer{peers[i]}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, n := range nodes {
-		n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.PeerCount == 1 && v.WireGuard != nil && v.WireGuard.OK })
+	for i, n := range nodes {
+		current, err := s.Snapshot(states[i].NodeId)
+		if err != nil {
+			t.Fatal(err)
+		}
+		states[i] = awaitNativePeerMap(t, n, states[i], current.Revision.Network, 1)
 	}
 	for i := range nodes {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		err := testclient.Await(ctx, func() bool { return pingPeer(namespaces[i], states[1-i].OverlayIP) == nil })
+		err := testclient.Await(ctx, func() bool { return pingPeer(namespaces[i], nativeOverlayAddress(states[1-i], false).String()) == nil })
 		cancel()
 		if err != nil {
 			t.Fatalf("peer %d did not pass overlay traffic", i)
 		}
-		nodes[i].AwaitStatus(func(v ipc.StatusResponse) bool {
-			if v.WireGuard == nil || len(v.WireGuard.Peers) != 1 {
+		awaitNativePeerTunnel(t, nodes[i], states[i], func(tunnel *native.TunnelInspection) bool {
+			if len(tunnel.Peers) != 1 {
 				return false
 			}
-			p := v.WireGuard.Peers[0]
-			return p.LatestHandshakeUnix > 0 && p.TransferRXBytes > 0 && p.TransferTXBytes > 0
+			p := tunnel.Peers[0]
+			return p.GetPeerId() == states[1-i].NodeId && p.GetLatestHandshake() != nil && p.LatestHandshake.CheckValid() == nil &&
+				p.LatestHandshake.AsTime().After(time.Unix(0, 0)) && p.ReceivedBytes > 0 && p.TransmittedBytes > 0
 		})
 	}
 	// Withdraw only the receiving side. Successful denial cannot be explained
 	// by removing the sender's route or stopping either client process.
-	if err := s.UpdatePeers(states[1].NodeID, nil); err != nil {
+	if err := s.UpdatePeers(states[1].NodeId, nil); err != nil {
 		t.Fatal(err)
 	}
-	nodes[1].AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.PeerCount == 0 && v.WireGuard != nil && v.WireGuard.PeerCount == 0
-	})
+	withdrawn, err := s.Snapshot(states[1].NodeId)
+	if err != nil {
+		t.Fatal(err)
+	}
+	states[1] = awaitNativePeerMap(t, nodes[1], states[1], withdrawn.Revision.Network, 0)
+	awaitNativePeerTunnel(t, nodes[1], states[1], func(tunnel *native.TunnelInspection) bool { return len(tunnel.Peers) == 0 })
 	for range 3 {
-		if pingPeer(namespaces[0], states[1].OverlayIP) == nil {
+		if pingPeer(namespaces[0], nativeOverlayAddress(states[1], false).String()) == nil {
 			t.Fatal("withdrawn peer still accepted overlay traffic")
 		}
 	}
-	if err := s.UpdatePeers(states[1].NodeID, []api.Peer{peers[1]}); err != nil {
+	if err := s.UpdatePeers(states[1].NodeId, []api.Peer{peers[1]}); err != nil {
 		t.Fatal(err)
 	}
-	nodes[1].AwaitStatus(func(v ipc.StatusResponse) bool { return v.PeerCount == 1 })
+	restored, err := s.Snapshot(states[1].NodeId)
+	if err != nil {
+		t.Fatal(err)
+	}
+	states[1] = awaitNativePeerMap(t, nodes[1], states[1], restored.Revision.Network, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if err := testclient.Await(ctx, func() bool { return pingPeer(namespaces[0], states[1].OverlayIP) == nil }); err != nil {
+	if err := testclient.Await(ctx, func() bool { return pingPeer(namespaces[0], nativeOverlayAddress(states[1], false).String()) == nil }); err != nil {
 		t.Fatal("restored peer did not recover traffic")
 	}
 	exerciseApplicationPolicy(t, s, nodes, states, peers)
@@ -263,7 +276,7 @@ func exerciseConnectionIntent(t *testing.T, s *testcontrol.Server, nodes [2]*tes
 // HC-025: public DNS CLI/proxy and real applications using that resolver. Each
 // dns serve invocation intentionally loads a fresh signed-map snapshot; this
 // does not claim OS resolver integration or a live reload contract for the CLI.
-func exercisePeerDNS(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.Node, states [2]ipc.StatusResponse, peers [2]api.Peer) {
+func exercisePeerDNS(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.Node, states [2]*native.Status, peers [2]api.Peer) {
 	t.Helper()
 	n := nodes[0]
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
@@ -291,16 +304,14 @@ func exercisePeerDNS(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.N
 		if present {
 			desired = []api.Peer{peer}
 		}
-		if err := s.UpdatePeers(states[0].NodeID, desired); err != nil {
+		if err := s.UpdatePeers(states[0].NodeId, desired); err != nil {
 			t.Fatal(err)
 		}
-		m, err := s.Snapshot(states[0].NodeID)
+		m, err := s.Snapshot(states[0].NodeId)
 		if err != nil {
 			t.Fatal(err)
 		}
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.MapRevision >= m.Revision.Network && v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotCurrent && v.Agent.LastError == "" && v.PeerCount == len(desired)
-		})
+		awaitNativePeerMap(t, n, states[0], m.Revision.Network, uint32(len(desired)))
 		cmd := exec.Command("ip", "netns", "exec", n.Namespace, n.Binary, "dns", "serve", "--config", n.Config, "--listen", dnsAddress, "--domain", domain)
 		output, err := cmd.StdoutPipe()
 		if err != nil {
@@ -325,11 +336,11 @@ func exercisePeerDNS(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.N
 		case <-time.After(5 * time.Second):
 			t.Fatal("public DNS proxy startup deadline")
 		}
-		lookup(states[0].Hostname+"."+domain, states[0].OverlayIP)
+		lookup(states[0].Hostname+"."+domain, nativeOverlayAddress(states[0], false).String())
 		if present {
-			lookup(name, states[1].OverlayIP)
+			lookup(name, nativeOverlayAddress(states[1], false).String())
 			resolved := n.MustRun("dns", "resolve", "--config", n.Config, "--domain", domain, "--name", name)
-			if strings.TrimSpace(string(resolved)) != states[1].OverlayIP {
+			if strings.TrimSpace(string(resolved)) != nativeOverlayAddress(states[1], false).String() {
 				t.Fatal("DNS CLI differs from DNS wire resolution")
 			}
 			for _, protocol := range []string{"tcp", "udp"} {
@@ -532,7 +543,7 @@ func packetProbeCommand(ctx context.Context, namespace, binary string, args ...s
 }
 
 // HC-024/HC-027: published protocol and destination-port policy with payload checks.
-func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.Node, states [2]ipc.StatusResponse, peers [2]api.Peer) {
+func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.Node, states [2]*native.Status, peers [2]api.Peer) {
 	t.Helper()
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
 	if !filepath.IsAbs(binary) {
@@ -557,7 +568,7 @@ func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*te
 		t.Helper()
 		for _, protocol := range []string{"tcp", "udp"} {
 			for _, port := range []int{24001, 24002} {
-				address := net.JoinHostPort(states[1].OverlayIP, strconv.Itoa(port))
+				address := net.JoinHostPort(nativeOverlayAddress(states[1], false).String(), strconv.Itoa(port))
 				allowed := !restricted || (protocol == "tcp" && port == 24001) || (protocol == "udp" && port == 24002)
 				if allowed {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -585,17 +596,16 @@ func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*te
 	limited.ACLGrants = []api.ACLGrant{{DestinationCIDRs: limited.AllowedIPs, AllowedPorts: []api.ACLPort{{Protocol: "tcp", Port: 24001}, {Protocol: "udp", Port: 24002}}}}
 	apply := func(peer api.Peer) {
 		t.Helper()
-		if err := s.UpdatePeers(states[0].NodeID, []api.Peer{peer}); err != nil {
+		if err := s.UpdatePeers(states[0].NodeId, []api.Peer{peer}); err != nil {
 			t.Fatal(err)
 		}
-		m, err := s.Snapshot(states[0].NodeID)
+		m, err := s.Snapshot(states[0].NodeId)
 		if err != nil {
 			t.Fatal(err)
 		}
-		nodes[0].AwaitStatus(func(v ipc.StatusResponse) bool {
-			// Cached metadata may precede actual tunnel/ACL application. Require
-			// the public successful agent snapshot for that same current map.
-			return v.MapRevision >= m.Revision.Network && v.PeerCount == 1 && v.Agent != nil && v.Agent.StatePresent && v.Agent.SnapshotState == ipc.AgentSnapshotCurrent && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" && v.WireGuard != nil && v.WireGuard.OK
+		current := awaitNativePeerMap(t, nodes[0], states[0], m.Revision.Network, 1)
+		awaitNativePeerTunnel(t, nodes[0], current, func(tunnel *native.TunnelInspection) bool {
+			return len(tunnel.Peers) == 1 && tunnel.Peers[0].GetPeerId() == states[1].NodeId
 		})
 	}
 	apply(limited)
@@ -607,7 +617,7 @@ func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*te
 		protocol string
 		port     int
 	}{{"tcp", 24001}, {"udp", 24002}} {
-		session := startApplicationSession(t, binary, nodes[0].Namespace, flow.protocol, net.JoinHostPort(states[1].OverlayIP, strconv.Itoa(flow.port)))
+		session := startApplicationSession(t, binary, nodes[0].Namespace, flow.protocol, net.JoinHostPort(nativeOverlayAddress(states[1], false).String(), strconv.Itoa(flow.port)))
 		session("ok")
 		sessions = append(sessions, session)
 	}
@@ -618,13 +628,13 @@ func exerciseApplicationPolicy(t *testing.T, s *testcontrol.Server, nodes [2]*te
 	for range 3 {
 		sessions[1]("ok")
 		sessions[0]("blocked")
-		if !applicationProbe(t, binary, nodes[0].Namespace, "udp", net.JoinHostPort(states[1].OverlayIP, "24002")) {
+		if !applicationProbe(t, binary, nodes[0].Namespace, "udp", net.JoinHostPort(nativeOverlayAddress(states[1], false).String(), "24002")) {
 			t.Fatal("TCP withdrawal interrupted another authorized overlay flow")
 		}
 		if !applicationProbe(t, binary, nodes[1].Namespace, "tcp", "127.0.0.1:24001") {
 			t.Fatal("TCP denial coincided with application failure")
 		}
-		if applicationProbe(t, binary, nodes[0].Namespace, "tcp", net.JoinHostPort(states[1].OverlayIP, "24001")) {
+		if applicationProbe(t, binary, nodes[0].Namespace, "tcp", net.JoinHostPort(nativeOverlayAddress(states[1], false).String(), "24001")) {
 			t.Fatal("withdrawn TCP grant still passed fresh traffic")
 		}
 		sessions[1]("ok")
