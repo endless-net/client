@@ -2,16 +2,82 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/internal/client"
 )
+
+func TestNativeLogoutResumesAfterSessionFailureWithoutRepeatingNodeRevocation(t *testing.T) {
+	var nodeCalls, sessionCalls atomic.Int32
+	var failSession atomic.Bool
+	failSession.Store(true)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodDelete && r.URL.Path == "/nodes/node-1":
+			nodeCalls.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPost && r.URL.Path == "/auth/logout":
+			sessionCalls.Add(1)
+			if failSession.Load() {
+				http.Error(w, "synthetic session failure", http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		default:
+			t.Error("unexpected remote cleanup request")
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	cfg := client.Config{ControlPlaneURLs: []string{server.URL}, NodeID: "node-1", Token: "synthetic-session", LocalOwnerID: "owner"}
+	before := cfg
+	before.ControlPlaneURLs = append([]string(nil), cfg.ControlPlaneURLs...)
+	var persisted []byte
+	checkpoint := func(progress client.ClientRPCLogoutProgress) error {
+		var err error
+		persisted, err = json.Marshal(progress)
+		return err
+	}
+	_, err := agentRPCLogout(t.Context(), cfg, client.ClientRPCLogoutProgress{}, checkpoint)
+	if err == nil || nodeCalls.Load() != 1 || sessionCalls.Load() != 1 {
+		t.Fatal("session failure did not follow exactly one node revocation")
+	}
+	// Recreate worker progress from the serialized checkpoint, as on restart.
+	var resumed client.ClientRPCLogoutProgress
+	if err := json.Unmarshal(persisted, &resumed); err != nil {
+		t.Fatal(err)
+	}
+	if !resumed.NodeRevoked || resumed.SessionRevoked {
+		t.Fatal("failure lost confirmed node progress or falsely confirmed session cleanup")
+	}
+	failSession.Store(false)
+	if _, err := agentRPCLogout(t.Context(), cfg, resumed, checkpoint); err != nil {
+		t.Fatal("session cleanup did not resume")
+	}
+	if err := json.Unmarshal(persisted, &resumed); err != nil {
+		t.Fatal(err)
+	}
+	if !resumed.NodeRevoked || !resumed.SessionRevoked || nodeCalls.Load() != 1 || sessionCalls.Load() != 2 {
+		t.Fatal("resumed cleanup repeated node revocation or lost session confirmation")
+	}
+	// A resumed fully confirmed provider must perform no further remote effects.
+	if _, err := agentRPCLogout(t.Context(), cfg, resumed, checkpoint); err != nil || nodeCalls.Load() != 1 || sessionCalls.Load() != 2 {
+		t.Fatal("confirmed cleanup repeated a remote effect")
+	}
+	if !reflect.DeepEqual(cfg, before) {
+		t.Fatal("remote provider changed local configuration before caller commit")
+	}
+}
 
 func TestTypedRemoteLogoutResumesConfirmedNodeAndStopsOnCheckpointFailure(t *testing.T) {
 	for _, resumed := range []bool{false, true} {

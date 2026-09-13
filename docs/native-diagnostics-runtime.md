@@ -554,5 +554,10 @@ disconnected phase and user intent. A persisted, profile-bound stale signing
 failure must not override durable recovery state. These replace the corresponding
 retired DTO assertions; remaining legacy mutation-handler tests still need migration.
 
+Native logout provider tests also cover node revocation followed by session
+failure, reconstruction from serialized progress, session-only retry and replay
+of fully confirmed progress without additional remote effects. This is an
+in-process provider test, not evidence of installed-agent crash recovery.
+
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.
