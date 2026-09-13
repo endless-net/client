@@ -21,10 +21,10 @@ initial source audit; that audit is not yet a complete BA/SA matrix.
 | --- | --- | --- |
 | Transport | Authenticated local gRPC on Windows pipe and Unix sockets; Go/Dart interoperability | in progress |
 | Runtime | All specified v0 capabilities backed by real providers and durable state | in progress |
-| Consumers | CLI, helper, Flutter UI and emulator use generated v0 API | pending |
-| Retirement | Delete old schema, IPC implementation, routes, DTOs and obsolete tests | pending |
-| Distribution | New descriptor/digest and generated SDK pins in core/UI pairing | pending |
-| Coverage | US-01–14, UI-AC-01–27 and relevant headless IT implemented with negative cases | pending |
+| Consumers | Client-owned CLI, helper and test consumers use generated v0 API | source migration observed; complete behavior audit pending |
+| Retirement | Delete old schema, IPC implementation, routes, DTOs and obsolete tests | inspected agent/CLI/helper use v0; exhaustive retirement audit pending |
+| Distribution | Client-owned descriptor/digest, SDKs and core compatibility metadata | pending; consuming UI distribution is an external dependency |
+| Coverage | Client producer obligations from US-01–14 and relevant headless BA/SA, including negative cases | incomplete; UI rendering/interaction acceptance is external |
 | Acceptance | Pinned artifacts, supported platform/provider tests, explicit limits | pending |
 
 Schema/SDK compilation is not runtime or product acceptance. Existing UI/OS
@@ -35,6 +35,38 @@ The accepted BA and SA live in architecture and client-ui; do not duplicate the
 requirements here. Update this ledger with actual test paths/results as the
 cutover progresses. Do not use unavailable placeholders or fake success to
 claim a specified capability is implemented.
+
+## Current source-boundary audit (2026-09-13)
+
+Inspected client source at `4fd4bb1`:
+
+- `cmd/endlessnet-client/service_rpc_host.go`: `startAgentRPC` binds the native
+  local listener and `ClientRPCService`; listener errors are returned, not used
+  to start an older protocol. Explicitly disabled IPC opens no listener.
+- `cmd/endlessnet-client/service_rpc_cli.go`, `service_rpc_cli_mutation.go` and
+  `service_rpc_cli_bundle.go`: consumers use `local.NewClient` and bootstrap the
+  v0 pairing before their operations.
+- `cmd/endlessnet-client-recovery-helper/main.go`: recovery uses the same local
+  client/bootstrap boundary, not HTTP v2 DTOs.
+- `clientipc/local/local.go`: generated gRPC client over a custom OS-local dialer;
+  the `http://endlessnet.local` base URL is not a TCP endpoint or legacy HTTP IPC
+  fallback. HTTP/2 here is the gRPC transport, not the retired JSON protocol.
+- `clientipc/local/local_windows.go` and `local_unix.go`: local named pipes or
+  absolute Unix sockets. Remote Windows pipes and non-absolute Unix endpoints
+  are rejected. This inspection is not new platform execution evidence.
+
+Targeted searches in `cmd`, `internal` and `clientipc` found no old IPC v2 route
+or listener among the inspected runtime paths. Matches for backend failover,
+relay/direct path fallback, and negative tests are not legacy IPC support and
+must not be removed merely because they contain the word `fallback`.
+
+This is a bounded source audit, not proof that all obsolete artifacts/tests have
+been removed or that all specified methods are implemented. The runtime gap
+matrix remains authoritative for missing functionality. Flutter UI migration,
+consumer SDK adoption and UI-specific acceptance belong to `client-ui`; they
+remain external follow-up work and do not authorize changes there. Earlier
+sections below retain their historical state and are not current completion
+claims.
 
 ## Transport foundation evidence (2026-09-13)
 
