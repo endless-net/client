@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testcontrol"
 	ipc "github.com/endless-net/client/ipc/v2"
 )
@@ -143,23 +144,22 @@ func TestInstalledClient(t *testing.T) {
 	}
 
 	if !t.Run("fresh-install", func(t *testing.T) {
-		status := waitStatus(t, binary)
-		if status.State != ipc.StateNeedsEnrollment || status.NodeCredentialPresent || status.NodeID != "" || status.PeerCount != 0 {
+		info := waitInstalledNativeRuntime(t, binary)
+		status := waitInstalledNativeUnenrolled(t, binary)
+		if status.GetStoredState().GetNodeCredentialPresent() || status.NodeId != "" || status.PeerCount != 0 || status.GetNetwork().GetId() != "" || status.ActiveProfileId != "" {
 			t.Fatal("fresh service must need enrollment and have no node credentials, node or peers")
 		}
 		if got := string(command(t, binary, "version")); !strings.HasPrefix(got, "endlessnet-client ") {
 			t.Fatal("installed executable did not return its version")
 		}
-		var networks ipc.NetworksResponse
-		request(t, binary, "networks", &networks)
-		if len(networks.Networks) != 0 || networks.SelectedNetworkID != "" {
-			t.Fatal("fresh service must have no networks or selected network")
+		platform := map[string]native.Platform{"windows": native.Platform_PLATFORM_WINDOWS, "linux": native.Platform_PLATFORM_LINUX, "darwin": native.Platform_PLATFORM_MACOS}[runtime.GOOS]
+		if info.GetBuild().GetPlatform() != platform || info.GetBuild().GetArchitecture() != runtime.GOARCH {
+			t.Fatal("native runtime must identify the installed platform")
 		}
-		var diagnostics ipc.DiagnosticsResponse
-		request(t, binary, "diagnostics", &diagnostics)
-		d := diagnostics.Diagnostics
-		if d.GeneratedAt == "" || d.Runtime.GOOS != runtime.GOOS || d.Runtime.GOARCH != runtime.GOARCH || d.Config.NodeCredentialPresent {
-			t.Fatal("diagnostics must identify this platform and the unenrolled configuration")
+		// Fresh installation has no profile. Do not make owner/profile-scoped
+		// catalog or diagnostics calls and pretend their empty data is a report.
+		if output, err := run(binary, "service", "diagnostics", "--timeout", "2s"); err == nil || len(output) == 0 {
+			t.Fatal("profile-less native diagnostics did not fail explicitly")
 		}
 	}) {
 		t.FailNow()

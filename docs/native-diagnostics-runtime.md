@@ -84,7 +84,7 @@ compiled but skipped by local short verification; CI execution is still required
 The shared test harness now waits for native runtime-info at startup and exposes
 strict protobuf helpers without converting responses to HTTP DTOs.
 Legacy diagnostics DTO removal still requires test conversion in
-tests/installation_test.go and tests/control_plane_test.go. These references do
+tests/control_plane_test.go. These references do
 not keep the removed HTTP runtime handlers alive. Standalone headless diagnostic
 output remains separate from service IPC. UI and
 installed-service acceptance remain open; transport unit evidence does not prove these.
@@ -97,6 +97,14 @@ ordering, missing/duplicate and obsolete addresses. These process/network scenar
 remain skipped by short verification and require CI execution. Other unmigrated
 scenarios still use the separate legacy DNS-listener helper; no DTO translation
 or fallback was added to the native scenarios.
+
+The fresh-install stage now checks native runtime protocol/version/digest,
+platform/architecture, status snapshot identity and unenrolled state. It no longer
+expects profile-less diagnostics or network catalogs to return an empty report;
+diagnostics without a profile must fail explicitly. Other installation stages
+(disconnect/restart, enrolled reinstall/upgrade, uninstall and identity reset) still
+use legacy helpers and require conversion. The fresh-install migration is compiled
+by short tests, not installer acceptance evidence; no local installer was run.
 
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
