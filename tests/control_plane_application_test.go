@@ -9,10 +9,10 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
-	ipc "github.com/endless-net/client/ipc/v2"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -32,30 +32,33 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 			n.Enroll(s, network.Name, token, "--route-table", "auto")
 			n.Start()
 			defer n.Stop()
-			status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
-			clientIP := netip.MustParseAddr(status.OverlayIP)
+			status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
+			})
+			nodeID, profileID := status.NodeId, status.ActiveProfileId
+			clientIP := nativeOverlayAddress(status, false)
 			resourceIP := netip.MustParseAddr("198.18.98.20")
 			peerHost := "198.18.93.20/32"
 			routeCIDR := resourceIP.String() + "/32"
 			dnsType := dnsmessage.TypeA
 			if family == "ipv6" {
-				if err := s.UpdateMap(status.NodeID, func(m *api.NetworkMapSnapshot) {
+				if err := s.UpdateMap(nodeID, func(m *api.NetworkMapSnapshot) {
 					m.Network.IPv6CIDR = "fd93::/64"
 					m.Node.AssignedIPv6 = "fd93::1"
 				}); err != nil {
 					t.Fatal(err)
 				}
-				status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.OverlayIPv6 == "fd93::1" && v.CachedMapValid
+				status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+					return v.NodeId == nodeID && v.ActiveProfileId == profileID && nativeOverlayAddress(v, true).String() == "fd93::1" && v.GetStoredState().GetCachedMapValid()
 				})
-				clientIP = netip.MustParseAddr(status.OverlayIPv6)
+				clientIP = nativeOverlayAddress(status, true)
 				resourceIP = netip.MustParseAddr("fd98::20")
 				peerHost = "fd93::20/128"
 				routeCIDR = resourceIP.String() + "/128"
 				dnsType = dnsmessage.TypeAAAA
 			}
-			underlay := nativePeerUnderlay(t, netip.MustParseAddr(status.OverlayIP), resourceIP)
-			snapshot, err := s.Snapshot(status.NodeID)
+			underlay := nativePeerUnderlay(t, nativeOverlayAddress(status, false), resourceIP)
+			snapshot, err := s.Snapshot(nodeID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -78,24 +81,19 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 			}
 			apply := func(routes []api.ApplicationRoute) {
 				t.Helper()
-				if err := s.UpdateMap(status.NodeID, func(m *api.NetworkMapSnapshot) {
+				if err := s.UpdateMap(nodeID, func(m *api.NetworkMapSnapshot) {
 					application.Routes = routes
 					m.Peers = []api.Peer{peer}
 					m.Network.Applications = []api.Application{application}
 				}); err != nil {
 					t.Fatal(err)
 				}
-				current, err := s.Snapshot(status.NodeID)
+				current, err := s.Snapshot(nodeID)
 				if err != nil {
 					t.Fatal(err)
 				}
-				status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.MapRevision >= current.Revision.Network && v.PeerCount == 1 &&
-						v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotCurrent &&
-						v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" &&
-						v.WireGuard != nil && v.WireGuard.OK
-				})
-				reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+				status = awaitNativePeerMap(t, n, status, current.Revision.Network, 1)
+				reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, nativeTunnelPort(t, n, status)))
 			}
 			binary := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
 			address := net.JoinHostPort(resourceIP.String(), "24001")
@@ -103,7 +101,8 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 			probe := func(protocol, target string) bool { return applicationProbe(t, binary, "", protocol, target) }
 			blocked := func() {
 				t.Helper()
-				if probe("tcp", address) || probe("udp", address) || probe("tcp", wrongPort) {
+				tcpOK, udpOK, wrongPortOK := probe("tcp", address), probe("udp", address), probe("tcp", wrongPort)
+				if tcpOK || udpOK || wrongPortOK {
 					t.Fatal("application traffic bypassed its signed route and TCP target")
 				}
 			}
@@ -115,7 +114,8 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 				if err := testclient.Await(ctx, func() bool { return probe("tcp", address) }); err != nil {
 					t.Fatal("application TCP target did not become reachable")
 				}
-				if probe("udp", address) || probe("tcp", wrongPort) {
+				udpOK, wrongPortOK := probe("udp", address), probe("tcp", wrongPort)
+				if udpOK || wrongPortOK {
 					t.Fatal("application grant permitted a protocol or port outside its target")
 				}
 				toResource, fromResource := reference.ForwardedPacketCounts()
@@ -125,7 +125,7 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 			}
 			assertDNS := func(code dnsmessage.RCode, expected string) {
 				t.Helper()
-				assertDNSWireType(t, "udp", clientDNSListenerAddress(status), "portal.scenario.endlessnet.", dnsType, code, expected)
+				assertDNSWireType(t, "udp", nativeDNSListenerAddress(status), "portal.scenario.endlessnet.", dnsType, code, expected)
 			}
 			route := func(expiry time.Time) []api.ApplicationRoute {
 				return []api.ApplicationRoute{{Connector: connector, CIDRs: []string{routeCIDR}, ExpiresAt: expiry}}
@@ -153,7 +153,9 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 			blocked()
 			assertDNS(dnsmessage.RCodeNameError, "")
 
-			expires := time.Now().Add(8 * time.Second)
+			// Leave room for map application, diagnostics and bounded negative
+			// protocol probes before testing the expiry boundary itself.
+			expires := time.Now().Add(30 * time.Second)
 			apply(route(expires))
 			reachable()
 			assertDNS(dnsmessage.RCodeSuccess, resourceIP.String())
@@ -164,6 +166,12 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 			case <-t.Context().Done():
 				t.Fatal("application expiry wait interrupted")
 			}
+			blocked()
+			assertDNS(dnsmessage.RCodeNameError, "")
+			n.Stop()
+			n.Start()
+			status = awaitNativePeerMap(t, n, status, status.MapRevision, 1)
+			reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, nativeTunnelPort(t, n, status)))
 			blocked()
 			assertDNS(dnsmessage.RCodeNameError, "")
 			apply(route(time.Now().Add(time.Minute)))

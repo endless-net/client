@@ -280,6 +280,16 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The IPv4/IPv6 application-route scenario now uses native status, applied-map
+gates, tunnel diagnostics and DNS listener selection. Signed route withdrawal,
+connector endpoint rotation and lease expiry retain their positive forwarding
+counter checks and protocol/port denial checks. Expired access and its DNS record
+must remain unavailable after agent restart, before a fresh signed grant restores
+both for the same node/profile. Lease timing allows 30 seconds for initial map and
+probe setup instead of the former eight-second window. Local short tests compile
+this guarded scenario; per-platform traffic, expiry and restart acceptance still
+requires CI. This is dataplane/DNS evidence scope, not native UI resource actions.
+
 The complete two-client Linux namespace peer fixture now uses native IPC for
 status, diagnostics and local mutations, including direct peer withdrawal/restore,
 ACL protocol/port replacement, fresh-snapshot headless DNS, connection intent and
