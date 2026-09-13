@@ -21,12 +21,13 @@ import (
 // No private config reads, server file paths, mtime-based expiry or directory repair.
 func TestControlPlaneDiagnosticsExport(t *testing.T) {
 	requireControlScenario(t)
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	network, token, err := s.AddNetwork("diagnostics", "100.90.0.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	n.TrustControlTLS(s)
 	n.Enroll(s, network.Name, token)
 	n.Start()
 	initial := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.NodeId != "" && v.ActiveProfileId != "" && v.MapRevision > 0 })

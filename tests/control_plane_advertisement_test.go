@@ -23,12 +23,13 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 		{"--tag", "invalid\ntag", "role-router"},
 	} {
 		t.Run("browser-invalid-input-recovery/"+strings.TrimPrefix(tc.flag, "--"), func(t *testing.T) {
-			s := testcontrol.New(t)
+			s := testcontrol.NewTLS(t)
 			network, _, err := s.AddNetwork("browser-advertisement", "100.90.0.0/24")
 			if err != nil {
 				t.Fatal(err)
 			}
 			n := testclient.New(t, s)
+			n.TrustControlTLS(s)
 			args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--hostname", "route-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off", "--approval-timeout", "0", tc.flag}
 			_, err = n.Run(append(args, tc.invalid)...)
 			var exit *exec.ExitError
@@ -111,12 +112,13 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 			}
 		})
 	}
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	network, token, err := s.AddNetwork("advertisement", "100.90.0.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	n.TrustControlTLS(s)
 	_, err = n.Run("up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--join-token", token, "--hostname", "route-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off", "--advertise", "not-a-cidr")
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 1 {

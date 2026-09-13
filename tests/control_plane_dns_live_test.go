@@ -27,12 +27,13 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 	if !filepath.IsAbs(binary) {
 		t.Fatal("system DNS requires the packetprobe binary")
 	}
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	network, join, err := s.AddNetwork("native-system-dns", "198.18.97.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	n.TrustControlTLS(s)
 	n.Enroll(s, network.Name, join, "--route-table", "auto")
 	n.Start()
 	defer n.Stop()
@@ -84,12 +85,13 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 // Queries target its DNS listener; this does not prove OS resolver selection.
 func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 	requireControlScenario(t)
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	network, join, err := s.AddNetwork("native-dns", "198.18.96.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	n.TrustControlTLS(s)
 	n.Enroll(s, network.Name, join, "--route-table", "auto")
 	n.Start()
 	defer n.Stop()
