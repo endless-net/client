@@ -222,6 +222,46 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 		}
 		original = response.Operation
 	}
+	info, err := consumer.Bootstrap(requestCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forgetArgs := []string{"local-forget", transportFlag, endpoint, "--timeout", "5s", "--profile-id", accepted.Msg.Operation.ProfileId,
+		"--expected-instance-id", original.Metadata.InstanceId, "--expected-revision", fmt.Sprint(original.Metadata.Revision),
+		"--request-id", "28ab0d8e-6e10-4292-a273-4a6be96fdc26", "--confirm-local-forget"}
+	forgottenOutput, forgetErr := captureStdout(t, func() error { return cmdService(forgetArgs) })
+	if info.CallerAccess != ipc.Access_ACCESS_ADMINISTRATOR {
+		if connect.CodeOf(forgetErr) != connect.CodePermissionDenied || forgottenOutput != "" {
+			t.Fatal("local forget bypassed OS administrator authorization", forgetErr)
+		}
+	} else {
+		if forgetErr != nil {
+			t.Fatal("native CLI local forget failed", forgetErr)
+		}
+		forgotten := new(ipc.ForgetLocalEnrollmentResponse)
+		if err := protojson.Unmarshal([]byte(forgottenOutput), forgotten); err != nil {
+			t.Fatal(err)
+		}
+		for forgotten.Operation.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+			if forgotten.Operation.State == ipc.OperationState_OPERATION_STATE_FAILED {
+				t.Fatal("native cleanup failed")
+			}
+			select {
+			case <-requestCtx.Done():
+				t.Fatal(requestCtx.Err())
+			case <-time.After(10 * time.Millisecond):
+			}
+			polled, err := consumer.GetOperation(requestCtx, connect.NewRequest(&ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: forgotten.Operation.Id}}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			forgotten.Operation = polled.Msg.Operation
+		}
+		cleanup := forgotten.Operation.GetCleanup()
+		if cleanup.GetOutcome() != ipc.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_UNCONFIRMED || !cleanup.GetLocalRegistrationRemoved() {
+			t.Fatal("local cleanup incorrectly claimed remote revocation")
+		}
+	}
 	if err := stop(); err != nil {
 		t.Fatal(err)
 	}

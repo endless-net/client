@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/endless-net/client/clientipc/local"
@@ -36,6 +37,16 @@ func TestNativeMutationRequiresDurableIdentityAndCAS(t *testing.T) {
 			if err := cmdServiceRPCMutation(command, args, &output); err == nil || output.Len() != 0 {
 				t.Fatal("invalid mutation accepted", command, args)
 			}
+		}
+	}
+}
+
+func TestNativeLocalForgetRequiresExplicitConfirmation(t *testing.T) {
+	for _, args := range [][]string{nil, {"--confirm-local-forget=false"}} {
+		var output bytes.Buffer
+		err := cmdServiceRPCMutation("local-forget", args, &output)
+		if err == nil || !strings.Contains(err.Error(), "requires --confirm-local-forget") || output.Len() != 0 {
+			t.Fatal("unconfirmed cleanup reached dispatch", err)
 		}
 	}
 }

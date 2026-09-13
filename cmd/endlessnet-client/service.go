@@ -68,7 +68,7 @@ func cmdService(args []string) error {
 		return nil
 	case "status", "runtime-info", "support-info", "events", "operation", "profiles":
 		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
-	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile":
+	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile", "local-forget":
 		return cmdServiceRPCMutation(args[0], args[1:], os.Stdout)
 	case "server-identity":
 		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathServerIdentity, nil, &ipc.ServerIdentityResponse{})
@@ -96,28 +96,6 @@ func cmdService(args []string) error {
 			ConfirmedControlOrigin: strings.TrimSpace(*confirmedControlOrigin),
 			ConfirmedKeyID:         strings.TrimSpace(*confirmedKeyID),
 		}, &payload); err != nil {
-			return err
-		}
-		return json.NewEncoder(os.Stdout).Encode(payload)
-	case "local-forget":
-		fs := flag.NewFlagSet("service local-forget", flag.ExitOnError)
-		ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)
-		timeoutValue := fs.String("timeout", "2m", "maximum time to wait for local enrollment cleanup")
-		confirmed := fs.Bool("confirm-local-forget", false, "confirm local cleanup when remote credential revocation is unconfirmed")
-		if err := fs.Parse(args[1:]); err != nil {
-			return err
-		}
-		if !*confirmed {
-			return errors.New("local-forget requires --confirm-local-forget")
-		}
-		timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
-		if err != nil {
-			return err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		var payload ipc.LocalForgetResponse
-		if err := newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket).Request(ctx, http.MethodPost, ipc.PathLocalForget, ipc.LocalForgetRequest{Confirmed: true}, &payload); err != nil {
 			return err
 		}
 		return json.NewEncoder(os.Stdout).Encode(payload)

@@ -640,3 +640,12 @@ instead of directly changing active-profile state, create/rename/remove an empty
 inactive profile and traverse both catalog pages. Real platform handover,
 enrollment CLI and remaining providers/consumers still require migration or
 system evidence.
+
+CLI `service local-forget` now invokes v0 ForgetLocalEnrollment with explicit
+request identity, CAS, target profile and `--confirm-local-forget`. Missing or
+false confirmation is rejected before connecting. The old HTTP cleanup command
+was removed. Local-host CLI coverage follows the authenticated OS role: a
+non-administrator must receive PERMISSION_DENIED; an administrator must recover
+terminal cleanup reporting REMOTE_UNCONFIRMED, never confirmed remote revocation.
+Only the host's actual role branch runs locally; privileged cross-platform and
+enrolled-device cleanup acceptance remain separate system-test obligations.
