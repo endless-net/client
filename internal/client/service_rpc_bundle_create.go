@@ -146,8 +146,10 @@ func (s *ClientRPCService) executeBundle(ctx context.Context, id string, plan cl
 		if metadata != nil && !s.bundleStore.timeNow().Before(metadata.ExpiresAt.AsTime()) {
 			failure = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_NOT_FOUND, ReasonKey: "bundle_expired_before_publication"}
 		}
-		if !bundlePlanAllowed(*cfg, plan) || (collected && !reflect.DeepEqual(*cfg, baseline)) {
+		if !bundlePlanAllowed(*cfg, plan) {
 			failure = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_STALE_STATE, ReasonKey: "bundle_scope_changed"}
+		} else if collected && !reflect.DeepEqual(*cfg, baseline) {
+			failure = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_STALE_STATE, ReasonKey: "bundle_snapshot_changed"}
 		}
 		if failure != nil {
 			op.State = ipc.OperationState_OPERATION_STATE_FAILED

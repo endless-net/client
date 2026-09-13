@@ -45,6 +45,9 @@ func TestRPCBundleRejectsConcurrentRevisionChange(t *testing.T) {
 			if err != nil || result.GetState() != ipc.OperationState_OPERATION_STATE_FAILED || result.GetFailure().GetCode() != ipc.ErrorCode_ERROR_CODE_STALE_STATE || result.GetBundle() != nil {
 				t.Fatal("concurrent revision change did not reject the bundle")
 			}
+			if phase == "publication" && result.GetFailure().GetReasonKey() != "bundle_snapshot_changed" {
+				t.Fatal("publication snapshot race was misclassified as a scope change")
+			}
 			if len(m.store.Read().RPCState.Bundles) != 0 {
 				t.Fatal("terminal failure retained a collection plan")
 			}

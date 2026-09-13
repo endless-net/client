@@ -105,8 +105,9 @@ func TestControlPlaneDiagnosticsExport(t *testing.T) {
 	}
 	bundle := op.GetBundle()
 	if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || bundle == nil || bundle.GetCreatedAt().CheckValid() != nil || bundle.GetExpiresAt().CheckValid() != nil || bundle.ExpiresAt.AsTime().Sub(bundle.CreatedAt.AsTime()) != 15*time.Minute || bundle.SizeBytes == 0 || bundle.SizeBytes > 5<<20 {
-		t.Fatalf("invalid bundle result: operation_state=%d failure_code=%d bundle_present=%t created_valid=%t expires_valid=%t size_bytes=%d",
-			op.GetState(), op.GetFailure().GetCode(), bundle != nil, bundle.GetCreatedAt().CheckValid() == nil, bundle.GetExpiresAt().CheckValid() == nil, bundle.GetSizeBytes())
+		t.Fatalf("invalid bundle result: operation_state=%d failure_code=%d scope_changed=%t publication_snapshot_changed=%t bundle_present=%t created_valid=%t expires_valid=%t size_bytes=%d",
+			op.GetState(), op.GetFailure().GetCode(), op.GetFailure().GetReasonKey() == "bundle_scope_changed", op.GetFailure().GetReasonKey() == "bundle_snapshot_changed",
+			bundle != nil, bundle.GetCreatedAt().CheckValid() == nil, bundle.GetExpiresAt().CheckValid() == nil, bundle.GetSizeBytes())
 	}
 	download := func() []byte {
 		t.Helper()
