@@ -22,8 +22,10 @@ Short tests cover search, pagination, changed observations, duplicate identities
 owner/config/profile changes, cancellation, invalid queries, map tampering,
 unavailable engine observations and foreign-peer paths. These are controlled
 producer tests, not installed-agent or cross-platform acceptance. The full peer
-capability is not advertised: peer probe actions and complete UI/system scenario
-validation remain follow-up work in client and client-ui. No proto or version
+capability is not advertised: complete UI/system scenario
+validation remains follow-up work in client and client-ui. The accepted v0
+surface contains ListPeers and path observations, not a separate ProbePeer RPC.
+No proto or version
 change is required for this handler.
 
 `TestRPCPeersLocalTransportOwnershipAndPagination` runs the real producer handler
@@ -34,3 +36,11 @@ search and access revocation on the existing connection. Its map/provider are
 controlled fixtures; map signature verification remains covered separately by
 the source-adapter tests. This is short local transport evidence, not real tunnel
 or installed cross-platform acceptance.
+
+Changed runtime status publications now invalidate DOMAIN_PEERS for the active
+profile after the refreshed snapshot, at the same committed revision. This is a
+conservative invalidation, not an assertion that peer data necessarily changed.
+Identical or rejected status observations emit nothing. Observer streams do not
+receive private profile-scoped invalidations. Independent path-monitor changes
+still require runtime observation/publication before an event can be delivered;
+pagination additionally detects changed data at query time.

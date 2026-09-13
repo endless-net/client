@@ -256,7 +256,7 @@ func (m *ClientRPCMutations) subscribe(peer local.Peer, build *ipc.BuildIdentity
 	return s, nil
 }
 
-func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation) {
+func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation, invalidatedDomains ...ipc.Domain) {
 	cfg := m.store.Read()
 	m.recordDiagnosticTransitionLocked(cfg, operation)
 	for subscriber := range m.subscribers {
@@ -286,6 +286,11 @@ func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation) {
 		subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_Snapshot{Snapshot: snapshot}})
 		if snapshot.Runtime.CallerAccess == ipc.Access_ACCESS_OBSERVER {
 			continue
+		}
+		if cfg.RPCState != nil && cfg.RPCState.ActiveProfileID != "" {
+			for _, domain := range invalidatedDomains {
+				subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_Invalidated{Invalidated: &ipc.DomainInvalidated{Domain: domain, ProfileId: cfg.RPCState.ActiveProfileID}}})
+			}
 		}
 		if operation != nil {
 			record := cfg.RPCState.Operations[operation.RequestId]
@@ -364,7 +369,9 @@ func (m *ClientRPCMutations) publishStatus(status *ipc.Status, configFingerprint
 		return err
 	}
 	m.observedStatus = status
-	m.publishMutationLocked(nil)
+	// Paths and membership are queried separately from Status. A committed
+	// observation invalidates that projection without disclosing it to observers.
+	m.publishMutationLocked(nil, ipc.Domain_DOMAIN_PEERS)
 	return nil
 }
 
