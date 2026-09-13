@@ -66,6 +66,7 @@ type ClientRPCMutations struct {
 	observedStatus   *ipc.Status
 	cancelApply      context.CancelFunc
 	cancelEnrollment context.CancelFunc
+	cancelLogout     context.CancelFunc
 	subscribers      map[*rpcSubscriber]struct{}
 }
 
@@ -304,6 +305,9 @@ func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, r
 		return nil, false, err
 	}
 	if !reused {
+		if state := m.store.Read().RPCState; state != nil && state.DisconnectOperationID == accepted.Id && m.cancelLogout != nil {
+			m.cancelLogout() // Yield remote logout only after accepted disconnect intent.
+		}
 		if state := m.store.Read().RPCState; accepted.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT && state != nil && state.Enrollment != nil && state.Enrollment.CancelRequested && m.cancelEnrollment != nil {
 			m.cancelEnrollment()
 		}

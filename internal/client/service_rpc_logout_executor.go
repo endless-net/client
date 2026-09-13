@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"crypto/hmac"
+	"errors"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/rpc"
@@ -38,9 +39,20 @@ func (m *ClientRPCMutations) ReconcileLogout(ctx context.Context, driver ClientR
 		return err
 	}
 	cfg = m.store.Read()
+	logoutCtx, cancel := context.WithCancel(ctx)
+	m.mu.Lock()
+	m.cancelLogout = cancel
+	if current := m.store.Read(); current.RPCState.DisconnectOperationID != "" {
+		cancel()
+	}
+	m.mu.Unlock()
+	defer func() { m.mu.Lock(); m.cancelLogout = nil; m.mu.Unlock(); cancel() }()
+	if logoutCtx.Err() != nil {
+		return ctx.Err()
+	}
 	var checkpointErr error
 	checkpoint := m.LogoutProgressCallback(plan.OperationID, cfg)
-	requestID, remoteErr := provider(ctx, cfg, plan.Progress, func(progress ClientRPCLogoutProgress) error {
+	requestID, remoteErr := provider(logoutCtx, cfg, plan.Progress, func(progress ClientRPCLogoutProgress) error {
 		if checkpointErr == nil {
 			checkpointErr = checkpoint(progress)
 		}
@@ -48,6 +60,9 @@ func (m *ClientRPCMutations) ReconcileLogout(ctx context.Context, driver ClientR
 	})
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if logoutCtx.Err() != nil {
+		return nil
 	}
 	if checkpointErr != nil {
 		return checkpointErr
@@ -68,15 +83,21 @@ func (m *ClientRPCMutations) ReconcileLogout(ctx context.Context, driver ClientR
 		}); err != nil {
 			return err
 		}
-		continuity, stopErr = driver.Stop(ctx)
+		continuity, stopErr = driver.Stop(logoutCtx)
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		if logoutCtx.Err() != nil {
+			return nil
 		}
 		if plan.DownStarted && continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED {
 			continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN
 		}
 	}
 	_, err = m.ReconcileOperation(plan.OperationID, func(current *Config, op *ipc.Operation) error {
+		if err := logoutCtx.Err(); err != nil {
+			return err
+		}
 		if op.ProfileId != current.RPCState.ActiveProfileID || !hmac.Equal(logoutAuthority(*current), logoutAuthority(cfg)) {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
@@ -111,5 +132,8 @@ func (m *ClientRPCMutations) ReconcileLogout(ctx context.Context, driver ClientR
 		op.Outcome = &ipc.Operation_Cleanup{Cleanup: &ipc.CleanupResult{Outcome: ipc.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_CONFIRMED, LocalRegistrationRemoved: true, ControlRequestId: requestID}}
 		return nil
 	})
+	if errors.Is(err, context.Canceled) && ctx.Err() == nil {
+		return nil
+	}
 	return err
 }

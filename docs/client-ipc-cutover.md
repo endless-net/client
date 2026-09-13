@@ -548,3 +548,11 @@ CleanupResult before deleting registration. A changed session/authority cannot
 inherit an old cleanup correlation. Tests prune the terminal logout record,
 exercise actual profile handover, and verify both preservation and rejection of
 stale correlation. This is local contract evidence, not deployed revocation proof.
+
+Accepted Disconnect now preempts an in-flight Logout attempt through a separate
+provider context. It retains the logout operation and confirmed remote progress,
+releases the worker for Down and allows later logout reconciliation to continue.
+Rejected CAS/input never cancels the remote attempt. The worker test blocks a
+logout provider, accepts Disconnect, verifies durable successful disconnection and
+checks that the session and logout progress remain recoverable. Actual network
+provider cancellation latency and OS Down latency still require system evidence.
