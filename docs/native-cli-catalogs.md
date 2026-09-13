@@ -11,6 +11,12 @@ failure may still leave a partial external output; it is reported as failure.
 Unit readers cover chunk/metadata corruption and cancellation, not an installed
 producer bundle provider. Native bundle creation/storage remains unfinished.
 
+The strict native fixture also exercises the complete export command through a
+real local pipe/socket: GetRuntimeInfo, exact operation lookup and two contiguous
+ReadDiagnosticsBundle requests. Wrong-profile or pending operations never read
+chunks; second-chunk owner revocation and digest mismatch leave stdout empty.
+The valid case emits exactly the artifact bytes, not protobuf JSON or a path.
+
 `service preferences` and `service managed-settings` read their native producer
 methods with a required profile ID. Output retains protobuf presence, effective
 values, setting source, locks and mutation restrictions; the CLI does not invent
