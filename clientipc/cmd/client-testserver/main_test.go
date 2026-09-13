@@ -38,7 +38,7 @@ func TestHostServesLocalScriptAndVerifies(t *testing.T) {
 		endpoint = filepath.Join(shortDir, "rpc.sock")
 	}
 	script := filepath.Join(dir, "scenario.json")
-	if err := os.WriteFile(script, []byte(`{"steps":[{"method":"GetStatus","request":{},"responses":[{"status":{"connectionPhase":"CONNECTION_PHASE_CONNECTING"}}]}]}`), 0600); err != nil {
+	if err := os.WriteFile(script, []byte(`{"steps":[{"method":"GetStatus","request":{},"responses":[{"status":{"connectionPhase":"CONNECTION_PHASE_CONNECTING"}}]},{"method":"WatchEvents","request":{},"responses":[{"sequence":"1"},{"sequence":"2"}],"response_gates":["","next-status"]}]}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	inputR, inputW := io.Pipe()
@@ -62,6 +62,14 @@ func TestHostServesLocalScriptAndVerifies(t *testing.T) {
 	defer client.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
+	stream, err := client.WatchEvents(ctx, connect.NewRequest(&pb.WatchEventsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stream.Close() }()
+	if !stream.Receive() || stream.Msg().GetSequence() != 1 {
+		t.Fatal("initial stream event missing")
+	}
 	// Role simulation is configured by the host, never supplied by the consumer.
 	_, err = client.Connect(ctx, connect.NewRequest(&pb.ConnectRequest{}))
 	if rpc.FailureFromError(err).GetCode() != pb.ErrorCode_ERROR_CODE_OWNER_REQUIRED {
@@ -70,6 +78,16 @@ func TestHostServesLocalScriptAndVerifies(t *testing.T) {
 	response, err := client.GetStatus(ctx, connect.NewRequest(&pb.GetStatusRequest{}))
 	if err != nil || response.Msg.GetStatus().GetConnectionPhase() != pb.ConnectionPhase_CONNECTION_PHASE_CONNECTING {
 		t.Fatalf("script RPC failed: %v", err)
+	}
+	if _, err := io.WriteString(inputW, "release next-status\n"); err != nil {
+		t.Fatal(err)
+	}
+	event = nil
+	if err := decoder.Decode(&event); err != nil || event["event"] != "released" || len(event) != 1 {
+		t.Fatal("missing safe release acknowledgement")
+	}
+	if !stream.Receive() || stream.Msg().GetSequence() != 2 || stream.Receive() || stream.Err() != nil {
+		t.Fatal("controlled stream did not complete", stream.Err())
 	}
 	client.Close()
 	if _, err := io.WriteString(inputW, "verify\n"); err != nil {

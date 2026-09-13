@@ -41,6 +41,7 @@ type Server struct {
 	failures []string
 	active   int
 	idle     chan struct{}
+	gates    map[string]chan struct{}
 }
 
 func New() *Server { return &Server{steps: make(map[string][]Step)} }

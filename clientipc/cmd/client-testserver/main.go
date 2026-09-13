@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -83,42 +84,58 @@ func run(args []string, input io.Reader, output io.Writer) error {
 		return errors.New("cannot report readiness")
 	}
 	commands := make(chan string, 1)
+	stopCommands := make(chan struct{})
+	defer close(stopCommands)
 	go func() {
+		defer close(commands)
 		scanner := bufio.NewScanner(input)
 		scanner.Buffer(make([]byte, 64), 1024)
-		if scanner.Scan() {
-			commands <- scanner.Text()
-		} else {
-			commands <- ""
+		for scanner.Scan() {
+			select {
+			case commands <- scanner.Text():
+			case <-stopCommands:
+				return
+			}
 		}
 	}()
-	select {
-	case err := <-done:
-		if err == nil || err == http.ErrServerClosed {
-			return errors.New("testserver stopped before verification")
-		}
-		return errors.New("testserver transport failed")
-	case command := <-commands:
-		if command != "verify" {
-			return errors.New("parent ended without explicit verification")
-		}
-		// Parent-side channel termination and server-side handler completion
-		// are asynchronous. Wait for completion, not an arbitrary sleep, while
-		// retaining failures for leaked streams and unconsumed expectations.
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := script.WaitIdle(ctx); err != nil {
-			return errors.New("testserver calls did not finish before verification")
-		}
-		if err := script.Verify(); err != nil {
-			return err
-		}
-		if err := server.Close(); err != nil {
-			return errors.New("cannot stop testserver")
-		}
-		if err := <-done; err != http.ErrServerClosed {
+	for {
+		select {
+		case err := <-done:
+			if err == nil || err == http.ErrServerClosed {
+				return errors.New("testserver stopped before verification")
+			}
 			return errors.New("testserver transport failed")
+		case command := <-commands:
+			if strings.HasPrefix(command, "release ") {
+				if err := script.ReleaseGate(strings.TrimPrefix(command, "release ")); err != nil {
+					return err
+				}
+				if err := json.NewEncoder(output).Encode(map[string]string{"event": "released"}); err != nil {
+					return errors.New("cannot report gate release")
+				}
+				continue
+			}
+			if command != "verify" {
+				return errors.New("parent ended without explicit verification")
+			}
+			// Parent-side channel termination and server-side handler completion
+			// are asynchronous. Wait for completion, not an arbitrary sleep, while
+			// retaining failures for leaked streams and unconsumed expectations.
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := script.WaitIdle(ctx); err != nil {
+				return errors.New("testserver calls did not finish before verification")
+			}
+			if err := script.Verify(); err != nil {
+				return err
+			}
+			if err := server.Close(); err != nil {
+				return errors.New("cannot stop testserver")
+			}
+			if err := <-done; err != http.ErrServerClosed {
+				return errors.New("testserver transport failed")
+			}
+			return json.NewEncoder(output).Encode(map[string]string{"event": "verified"})
 		}
-		return json.NewEncoder(output).Encode(map[string]string{"event": "verified"})
 	}
 }

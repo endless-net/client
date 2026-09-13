@@ -21,11 +21,12 @@ type Script struct {
 }
 
 type ScriptStep struct {
-	Method    string            `json:"method"`
-	Request   json.RawMessage   `json:"request"`
-	Responses []json.RawMessage `json:"responses"`
-	Failure   *ScriptFailure    `json:"failure,omitempty"`
-	HoldOpen  bool              `json:"hold_open,omitempty"`
+	Method        string            `json:"method"`
+	Request       json.RawMessage   `json:"request"`
+	Responses     []json.RawMessage `json:"responses"`
+	Failure       *ScriptFailure    `json:"failure,omitempty"`
+	HoldOpen      bool              `json:"hold_open,omitempty"`
+	ResponseGates []string          `json:"response_gates,omitempty"`
 }
 
 type ScriptFailure struct {
@@ -48,6 +49,7 @@ func Load(reader io.Reader) (*Server, error) {
 		return nil, errors.New("test script requires 1..4096 steps")
 	}
 	server := New()
+	server.gates = make(map[string]chan struct{})
 	methods := pb.File_client_v0_service_proto.Services().ByName("ClientService").Methods()
 	for _, input := range script.Steps {
 		method := methods.ByName(protoreflect.Name(input.Method))
@@ -59,6 +61,23 @@ func Load(reader io.Reader) (*Server, error) {
 			return nil, err
 		}
 		step := Step{Method: input.Method, Request: request, HoldOpen: input.HoldOpen}
+		if len(input.ResponseGates) != 0 {
+			if !method.IsStreamingServer() || len(input.ResponseGates) != len(input.Responses) {
+				return nil, errors.New("response gates require one name per stream response")
+			}
+			for _, name := range input.ResponseGates {
+				if name == "" {
+					step.ResponseRelease = append(step.ResponseRelease, nil)
+					continue
+				}
+				if !validGateName(name) || server.gates[name] != nil || len(server.gates) >= 4096 {
+					return nil, errors.New("invalid or duplicate response gate")
+				}
+				gate := make(chan struct{})
+				server.gates[name] = gate
+				step.ResponseRelease = append(step.ResponseRelease, gate)
+			}
+		}
 		for _, raw := range input.Responses {
 			response, err := decodeMessage(method.Output(), raw)
 			if err != nil {

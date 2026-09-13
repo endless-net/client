@@ -24,8 +24,7 @@ responses and cancellation tests. Scripts clone all messages when enqueued.
 nil gates send immediately, while other gates wait for release or cancellation.
 This supports an initial snapshot followed by a controlled later status event
 without blocking unrelated unary calls. The gate slice is copied on enqueue.
-Unary methods and mismatched gate counts are rejected. This is currently an
-in-process Go fixture facility; JSON/stdin control has not yet been added.
+Unary methods and mismatched gate counts are rejected.
 
 Call `Verify` after the scenario and after all RPCs finish. `WaitIdle(ctx)` can
 synchronize handler completion after consumer channels close; it does not
@@ -66,8 +65,17 @@ Example synthetic scenario:
 
 Message bodies use protobuf JSON. Unknown fields and invalid message types are
 rejected without echoing script contents. Scripts are limited to 8 MiB and 4096
-steps. Streaming responses are emitted in array order. JSON scripts do not
-support the in-process `Release` synchronization primitive.
+steps. Streaming responses are emitted in array order. The optional
+`response_gates` array has exactly one string per streaming response: an empty
+string sends immediately; a unique name waits for a parent signal. Names contain
+1–64 lowercase ASCII letters, digits, underscores or hyphens; a script may define
+at most 4096 gates. Unary gates and duplicate names are rejected before serving.
+For example, `"response_gates":["","network-changed"]` sends the first event
+immediately and holds the second until stdin receives `release network-changed`.
+The parent waits for the JSON `released` acknowledgement, then awaits/asserts the
+consumer's observed event. Acknowledgement proves release, not consumer delivery.
+Unknown or repeated releases fail the run without echoing the supplied name.
+The whole-step in-process `Release` channel remains unavailable in JSON.
 
 For WatchEvents, `"hold_open": true` sends the declared responses and then waits
 for consumer cancellation. Other RPCs can run while that subscription remains
