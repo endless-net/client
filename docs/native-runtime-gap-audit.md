@@ -35,6 +35,20 @@ binding and requirement trace evidence in `client-ui`, and exact-source GitHub
 runner validation. Neither these local tests nor legacy removal close US-01–14
 or Android/iOS platform acceptance. The original dated findings follow unchanged.
 
+## Direct-peer runner follow-up — 2026-09-13
+
+Direct-peer follow-up: [control-plane job 103707722163](https://github.com/endless-net/client/actions/runs/34750299641/job/103707722163)
+at source `b474b49dc91b60aa36fe9f7d4649ed8ff4c65b2e` failed all three attempts
+of `TestClientDataplaneDirectPeerTrafficAndWithdrawal`. Each reached the
+post-traffic diagnostics gate, then reported 601 requests and 601 request
+failures with no decoded diagnostics response. This narrows the investigation
+to RPC/subprocess/decoding failure; it is not evidence of a peer ID, handshake
+or counter mismatch. It does not qualify withdrawal or full traffic acceptance.
+The harness now recognizes only a complete canonical typed CLI failure line,
+reports numeric codes, and withholds all other subprocess output. The timeout
+and successful tunnel/peer assertions remain unchanged; root cause and the
+required runtime fix remain unconfirmed until a fresh runner observation.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,

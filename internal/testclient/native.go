@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"connectrpc.com/connect"
+	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -17,9 +20,26 @@ import (
 func (n *Node) NativeService(operation string, target proto.Message, options ...string) error {
 	out, err := n.ServiceCommand(operation, options...)
 	if err != nil {
-		return fmt.Errorf("native service %s failed (output withheld)", operation)
+		return nativeServiceCommandError(operation, out)
 	}
 	return decodeNativeService(out, target)
+}
+
+// Recognize only the complete canonical typed failure line emitted by the CLI.
+// Never retain subprocess output or infer a code from a substring in diagnostics.
+func nativeServiceCommandError(operation string, output []byte) error {
+	if len(output) <= 256 {
+		line := strings.TrimSpace(string(output))
+		for code := connect.CodeCanceled; code <= connect.CodeUnauthenticated; code++ {
+			for number := range ipc.ErrorCode_name {
+				failure := ipc.ErrorCode(number)
+				if number != 0 && line == rpc.Error(code, failure).Error() {
+					return fmt.Errorf("native service %s failed (transport=%d failure=%d; output withheld)", operation, code, failure)
+				}
+			}
+		}
+	}
+	return fmt.Errorf("native service %s failed (unclassified subprocess failure; output withheld)", operation)
 }
 
 func decodeNativeService(out []byte, target proto.Message) error {

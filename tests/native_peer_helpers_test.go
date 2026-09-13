@@ -56,11 +56,13 @@ func awaitNativePeerTunnel(t *testing.T, node *testclient.Node, baseline *ipc.St
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
 	var last *ipc.Diagnostics
+	var lastRequestError error
 	attempts, requestFailures := 0, 0
 	if err := testclient.Await(ctx, func() bool {
 		attempts++
 		response := &ipc.GetDiagnosticsResponse{}
-		if node.NativeService("diagnostics", response, "--profile-id", baseline.ActiveProfileId, "--timeout", "1s") != nil {
+		if err := node.NativeService("diagnostics", response, "--profile-id", baseline.ActiveProfileId, "--timeout", "1s"); err != nil {
+			lastRequestError = err // NativeService returns only fixed, sanitized diagnostics.
 			requestFailures++
 			return false
 		}
@@ -69,7 +71,7 @@ func awaitNativePeerTunnel(t *testing.T, node *testclient.Node, baseline *ipc.St
 		return d.GetStatus().GetNodeId() == baseline.NodeId && d.GetStatus().GetActiveProfileId() == baseline.ActiveProfileId &&
 			d.GetStatus().GetMapRevision() >= baseline.MapRevision && d.GetTunnel().GetOk() && d.GetTunnel().GetFailure() == nil && predicate(d.Tunnel)
 	}); err != nil {
-		t.Fatalf("native diagnostics did not expose the expected profile/map-bound tunnel peers: attempts=%d request_failures=%d last={%s}", attempts, requestFailures, nativePeerTunnelSummary(last, baseline))
+		t.Fatalf("native diagnostics did not expose the expected profile/map-bound tunnel peers: attempts=%d request_failures=%d last_request_error=%v last={%s}", attempts, requestFailures, lastRequestError, nativePeerTunnelSummary(last, baseline))
 	}
 }
 
