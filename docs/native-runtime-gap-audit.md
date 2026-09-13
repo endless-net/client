@@ -234,6 +234,23 @@ are deliberately not changed by this fixture migration. Unsupported-platform
 router/exit-provider CLI checks also require separate native-command review,
 not a blind TLS substitution.
 
+## Ubuntu contract repetition result — source 92085ba
+
+[Ubuntu 24.04 repetition 1, job 103717701573](https://github.com/endless-net/client/actions/runs/34754925762/job/103717701573)
+tested `92085ba8dfaad3cc77f3f8718229692f0330a44b`. Its log explicitly records
+`PASS` for `TestControlPlaneRouteAdvertisement` (including four browser invalid
+input/recovery cases) and `TestControlPlaneNativeApplicationRoute` for both IPv4
+and IPv6. These results qualify those tests on this source/platform only, not
+the whole matrix or subsequent commits.
+
+The same job failed cached-map expiry at its native status wait and diagnostics
+export with `invalid bundle result`, then accumulated HTTP-fixture startup
+failures before the test process's 40-minute timeout. Later TLS migrations and
+offline projection changes are not part of this source and need fresh evidence.
+The diagnostics test now reports fixed numeric operation/failure codes and
+descriptor-validity booleans on that assertion, without IDs or archive contents.
+It retains the success, lifetime and size requirements unchanged.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
