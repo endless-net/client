@@ -18,8 +18,10 @@ import (
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
+	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
 	ipc "github.com/endless-net/client/ipc/v2"
+	"google.golang.org/protobuf/proto"
 )
 
 type recoveryTestFixture struct {
@@ -432,19 +434,49 @@ func recoverySuccessResponse(t *testing.T, signingKey ed25519.PrivateKey, req cl
 func TestRecoveryStatusMapsAllDocumentedStates(t *testing.T) {
 	tests := []struct {
 		phase   client.RecoveryPhase
-		state   ipc.ServiceState
-		control ipc.ControlState
+		state   native.ServiceState
+		control native.ControlState
+		code    native.ErrorCode
 	}{
-		{client.RecoveryPhaseRecovering, ipc.StateRecovering, ipc.ControlStateRecovering},
-		{client.RecoveryPhaseBlocked, ipc.StateRecoveryBlocked, ipc.ControlStateRecoveryBlocked},
-		{client.RecoveryPhasePolicyBlocked, ipc.StatePolicyBlocked, ipc.ControlStatePolicyBlocked},
-		{client.RecoveryPhaseNeedsLogin, ipc.StateNeedsLogin, ipc.ControlStateNeedsLogin},
+		{client.RecoveryPhaseRecovering, native.ServiceState_SERVICE_STATE_RECOVERING, native.ControlState_CONTROL_STATE_RECOVERING, native.ErrorCode_ERROR_CODE_UNAVAILABLE},
+		{client.RecoveryPhaseBlocked, native.ServiceState_SERVICE_STATE_RECOVERY_BLOCKED, native.ControlState_CONTROL_STATE_RECOVERY_BLOCKED, native.ErrorCode_ERROR_CODE_UNAVAILABLE},
+		{client.RecoveryPhasePolicyBlocked, native.ServiceState_SERVICE_STATE_POLICY_BLOCKED, native.ControlState_CONTROL_STATE_POLICY_BLOCKED, native.ErrorCode_ERROR_CODE_POLICY_BLOCKED},
+		{client.RecoveryPhaseNeedsLogin, native.ServiceState_SERVICE_STATE_NEEDS_LOGIN, native.ControlState_CONTROL_STATE_NEEDS_LOGIN, native.ErrorCode_ERROR_CODE_NEEDS_LOGIN},
 	}
 	for _, tc := range tests {
-		state, control := ipcRecoveryState(tc.phase)
-		if state != tc.state || control != tc.control {
-			t.Fatalf("phase %q = %q/%q, want %q/%q", tc.phase, state, control, tc.state, tc.control)
-		}
+		t.Run(string(tc.phase), func(t *testing.T) {
+			for _, retryable := range []bool{false, true} {
+				recovery, err := client.NewEnrollmentRecovery("operation-1", "registration-id-1", "https://control.example.test", "key-2", time.Now())
+				if err != nil {
+					t.Fatal(err)
+				}
+				recovery = recovery.WithFailure(tc.phase, "synthetic-internal-code", "control-request-1", retryable, time.Now())
+				cfg := client.Config{NodeID: "node-1", EnrollmentRecovery: &recovery,
+					ConnectionIntent: &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredDisconnected}}
+				status := buildAgentRPCStatus(t.Context(), agentIPCOptions{}, cfg, native.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED)
+				// Exercise the public protobuf representation, not a retired DTO.
+				raw, err := proto.Marshal(status)
+				if err != nil {
+					t.Fatal(err)
+				}
+				decoded := new(native.Status)
+				if err := proto.Unmarshal(raw, decoded); err != nil {
+					t.Fatal(err)
+				}
+				if decoded.ServiceState != tc.state || decoded.ControlState != tc.control ||
+					decoded.GetRecovery().GetState() != tc.state || decoded.GetRecovery().GetOperationId() != recovery.OperationID {
+					t.Fatal("native status lost durable recovery state or operation correlation")
+				}
+				failure := decoded.GetRecovery().GetFailure()
+				if failure == nil || failure.Code != tc.code || failure.ControlRequestId != recovery.RequestID || failure.Retryable != retryable {
+					t.Fatal("native recovery failure lost typed classification or request correlation")
+				}
+				if decoded.ConnectionPhase != native.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED ||
+					!decoded.UserDisconnected || decoded.GetIntent().GetDesiredState() != native.DesiredState_DESIRED_STATE_DISCONNECTED {
+					t.Fatal("recovery state changed actual phase or disconnected intent")
+				}
+			}
+		})
 	}
 }
 
@@ -453,8 +485,8 @@ func TestDurableRecoveryStateOverridesStaleAgentSigningError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := client.Config{NodeID: "node-1", NetworkID: "network-1", NodeCredential: "credential", EnrollmentRecovery: &recovery}
-	snapshot := client.AgentSnapshot{NodeID: "node-1", NetworkID: "network-1", LastError: serverMapSigningTrustChangedError}
+	cfg := client.Config{NodeID: "node-1", NetworkID: "network-1", NodeCredential: "credential", EnrollmentRecovery: &recovery,
+		ControlPlaneURLs: []string{"https://control.example.test"}}
 	configPath := filepath.Join(t.TempDir(), "client.json")
 	if err := client.SaveConfig(configPath, cfg); err != nil {
 		t.Fatal(err)
@@ -463,9 +495,27 @@ func TestDurableRecoveryStateOverridesStaleAgentSigningError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	status := agentIPCStatusForConfig(context.Background(), agentIPCOptions{ConfigPath: configPath, ConfigStore: store}, cfg, &snapshot)
-	if status.State != ipc.StateRecovering || status.ControlState != ipc.ControlStateRecovering || status.Recovery == nil || status.Recovery.OperationID != recovery.OperationID {
-		t.Fatalf("stale agent error replaced durable recovery state: %#v", status)
+	mutations, err := client.NewClientRPCMutations(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mutations.AdoptInitialProfile(); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	if err := writeAgentFailureSnapshot(statePath, configPath, errors.New(serverMapSigningTrustChangedError)); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := client.LoadAgentSnapshot(statePath)
+	if err != nil || snapshot.LastError != serverMapSigningTrustChangedError || snapshot.ProfileID == "" {
+		t.Fatal("stale signing failure fixture is missing its profile binding")
+	}
+	status := buildAgentRPCStatus(t.Context(), agentIPCOptions{ConfigPath: configPath, ConfigStore: store, StateOutput: statePath},
+		store.Read(), native.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED)
+	if status.ServiceState != native.ServiceState_SERVICE_STATE_RECOVERING ||
+		status.ControlState != native.ControlState_CONTROL_STATE_RECOVERING ||
+		status.GetRecovery().GetOperationId() != recovery.OperationID || status.GetAgent().GetLastFailure() != nil {
+		t.Fatal("stale agent failure replaced durable native recovery state")
 	}
 }
 

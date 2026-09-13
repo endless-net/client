@@ -547,5 +547,12 @@ filtering, absent/invalid handshakes, keepalive bounds, copied counters/addresse
 and exclusion of unverified or failed-inspection live data.
 Path tests additionally cover applied-map binding, busy/disconnected engine,
 nested-copy ownership, direct selection/RTT conversion and malformed observations.
+Recovery status tests now exercise the native protobuf projection for recovering,
+blocked, policy-blocked and login-required states. Binary round trips preserve
+operation and control-request correlation, both retryability values, actual
+disconnected phase and user intent. A persisted, profile-bound stale signing
+failure must not override durable recovery state. These replace the corresponding
+retired DTO assertions; remaining legacy mutation-handler tests still need migration.
+
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.
