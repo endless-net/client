@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -33,6 +34,13 @@ func openClientRPCBundleStore(path string, now func() time.Time) (*clientRPCBund
 	if path == "" {
 		return nil, errors.New("bundle state path is required")
 	}
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, errors.New("invalid bundle state path")
+	}
+	if err := validateRPCBundlePath(path); err != nil {
+		return nil, err
+	}
 	info, err := os.Lstat(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, errors.New("cannot inspect bundle state")
@@ -56,6 +64,9 @@ func openClientRPCBundleStore(path string, now func() time.Time) (*clientRPCBund
 		}
 	}
 	s.persist = func(items map[string]clientRPCBundleRecord) error {
+		if err := validateRPCBundlePath(path); err != nil {
+			return err
+		}
 		ids := make([]string, 0, len(items))
 		for id := range items {
 			ids = append(ids, id)

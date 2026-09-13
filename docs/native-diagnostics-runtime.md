@@ -67,7 +67,12 @@ current instance metadata, explicit partial/failure state, raw driver error
 suppression and access revocation on an existing connection. Remaining bundle
 redaction/intent tests call the builder directly. The old path-returning bundle
 transport test is removed; native transport now checks immutable handle/chunk
-delivery instead. Legacy DTO/builder/store removal remains pending, as do UI and
+delivery instead. The legacy seven-day JSON-file store and its path-returning,
+minute-window reuse tests are removed. Native tests own bounded immutable storage,
+TTL/replay, redaction, ACL and linked-file/parent rejection. Both open and persistence
+validate path components; only the standard macOS /tmp and /var aliases to /private
+are allowed. Symlink tests skip on hosts that cannot create symlinks.
+Legacy DTO/builder removal remains pending, as do UI and
 installed-service acceptance; transport unit evidence does not prove these.
 
 The agent now configures GetDiagnostics from engine Inspection and local interface

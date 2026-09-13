@@ -5,6 +5,7 @@ package client
 import (
 	"os"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -13,6 +14,14 @@ import (
 type diagnosticsFileAttributeTagInfo struct {
 	FileAttributes uint32
 	ReparseTag     uint32
+}
+
+func isRPCBundleReparsePoint(info os.FileInfo) bool {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return true
+	}
+	data, ok := info.Sys().(*syscall.Win32FileAttributeData)
+	return ok && data.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
 
 func diagnosticsFilePermissionsSecure(path string, info os.FileInfo) bool {

@@ -3362,7 +3362,6 @@ func TestRecentLogBufferRedactsAndLimitsServiceLogs(t *testing.T) {
 
 func TestAgentIPCDiagnosticsIncludesRecentRedactedLogs(t *testing.T) {
 	dir := t.TempDir()
-	prepareDiagnosticsTestDirectory(t, dir)
 	configPath := filepath.Join(dir, "client.json")
 	if err := client.SaveConfig(configPath, client.Config{
 		ControlPlaneURLs: []string{"https://api.example.test"},
@@ -3639,43 +3638,6 @@ func TestDiagnosticsPayloadIncludesSupportSummaries(t *testing.T) {
 	for _, want := range []string{"nodes.prod.example", "corp.example", "100.64.0.1", "100.64.0.53", "10.8.0.0/24", "0.0.0.0/0"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("diagnostics payload missing %q: %s", want, out)
-		}
-	}
-}
-
-func TestDiagnosticsStoreWritesRedactedPayload(t *testing.T) {
-	dir := t.TempDir()
-	prepareDiagnosticsTestDirectory(t, dir)
-	payload := diagnosticsPayload(client.Config{
-		ControlPlaneURLs:   []string{"https://api.example.test"},
-		Token:              "secret-token",
-		IdentityPrivateKey: "secret-identity-private-key",
-		PrivateKey:         "secret-private-key",
-		NodeID:             "node-1",
-		NodeCredential:     "secret-node-credential",
-	})
-	payload["unexpected"] = map[string]any{
-		"private_key": "unexpected-secret-private-key",
-		"message":     "join_token=enr_secret_diagnostics_bundle",
-	}
-	bundle, err := newDiagnosticsStore(dir).Write(payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if filepath.Dir(bundle.Path) != dir {
-		t.Fatalf("bundle path = %s, want under %s", bundle.Path, dir)
-	}
-	raw, err := os.ReadFile(bundle.Path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := string(raw)
-	if !strings.Contains(out, `"node_credential_present": true`) {
-		t.Fatalf("diagnostics bundle missing redacted presence flags: %s", out)
-	}
-	for _, secret := range []string{"secret-token", "secret-identity-private-key", "secret-private-key", "secret-node-credential", "unexpected-secret-private-key", "enr_secret_diagnostics_bundle"} {
-		if strings.Contains(out, secret) {
-			t.Fatalf("diagnostics bundle leaked %q: %s", secret, out)
 		}
 	}
 }
