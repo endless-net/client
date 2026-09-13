@@ -217,6 +217,17 @@ disconnected intent. No automatic reenrollment is allowed in the bounded observa
 window. These replace the legacy cleanup scenarios; local short tests compile
 them, while process/restart and remote-effect acceptance remain isolated CI work.
 
+The operator trust-confirmation process scenario now uses native profile-scoped
+identity, mutation metadata and operations. CLI confirmation requires the complete
+origin/key/announcement tuple instead of the retired yes flag. Wrong origin,
+missing key or malformed announcement are rejected without an operation; a
+well-formed wrong key/announcement reaches the worker and must fail STALE_STATE.
+Pinned identity remains unchanged and a named signed-map update must still arrive.
+Unchanged trust completes as a no-op while disconnected, with exact operation
+replay after restart and no extra registration. This migrates confirmation
+boundaries, not successful signing-key rotation; those separate scenarios still
+need migration. Short tests compile this guarded test; process acceptance remains CI.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP
