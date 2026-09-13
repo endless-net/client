@@ -150,6 +150,18 @@ selection, DNS, ownership and interrupted cleanup). Those still require conversi
 These process scenarios have not been executed locally and are not CI acceptance
 evidence merely because their short-test compilation succeeds.
 
+The single-agent ownership process scenario is now migrated to native status and
+Disconnect/GetOperation. Canonical, lexical and symlink aliases still race for
+one configuration; distinct endpoints rule out address-in-use as the rejection
+cause. The live host must retain its instance ID after duplicate rejection, while
+graceful successor and crash recovery must expose new instance IDs. Node, network,
+active profile, credential/cache and connection intent remain bound across these
+transitions, and the concurrent-start winner must remain available through native
+IPC. Exactly one registration is required. This replaces the ownership scenario's
+legacy requests mentioned above; interrupted cleanup and the other listed consumers
+remain pending. Local short tests compile this guarded scenario, not execute its
+process races, symlink handling or per-platform restart acceptance.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP

@@ -15,25 +15,27 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
-	ipc "github.com/endless-net/client/ipc/v2"
+	ipc "github.com/endless-net/client/clientipc/v0"
 )
 
 // HC-005: real processes must have exclusive ownership of one configuration.
 // We never inspect the lock file, process-private state or persisted identity.
 func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 	s, n, id := nativeControlScenario(t)
-	initial := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid })
+	initial := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.NodeId == id && v.GetStoredState().GetCachedMapValid() })
+	if initial.GetMetadata().GetInstanceId() == "" || initial.ActiveProfileId == "" || initial.GetNetwork().GetId() == "" {
+		t.Fatal("native owner snapshot omitted instance, profile or network identity")
+	}
 	alias := filepath.Join(filepath.Dir(n.Config), "config-alias.json")
 	if err := os.Symlink(n.Config, alias); err != nil {
 		t.Fatal("hosted runner could not create the configuration path alias")
 	}
 	for _, disconnected := range []bool{false, true} {
 		if disconnected {
-			var response ipc.DisconnectResponse
-			n.Service("disconnect", &response)
+			runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
 		}
-		before := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == id && v.UserDisconnected == disconnected && v.CachedMapValid
+		before := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == id && v.UserDisconnected == disconnected && v.GetStoredState().GetCachedMapValid()
 		})
 		// Preserve lexical aliases instead of letting filepath.Join clean them.
 		// All paths name the existing configuration; no identity file is read.
@@ -65,15 +67,18 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 		if t.Failed() {
 			t.FailNow()
 		}
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid
+		preserved := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == id && v.GetNetwork().GetId() == initial.GetNetwork().GetId() && v.ActiveProfileId == initial.ActiveProfileId && v.UserDisconnected == disconnected && v.GetIntent().GetDesiredState() == before.GetIntent().GetDesiredState() && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 		})
+		if preserved.GetMetadata().GetInstanceId() != before.GetMetadata().GetInstanceId() {
+			t.Fatal("duplicate startup replaced the live native host")
+		}
 		if !disconnected {
 			if err := s.UpdateMap(id, func(m *api.NetworkMapSnapshot) {}); err != nil {
 				t.Fatal(err)
 			}
-			n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID == id && v.MapRevision > before.MapRevision && v.CachedMapValid
+			n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId == id && v.MapRevision > before.MapRevision && v.GetStoredState().GetCachedMapValid()
 			})
 		}
 		// After release, a new real process must acquire ownership and retain
@@ -87,9 +92,12 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 		n.Config = alias
 		n.Start()
 		n.Config = originalPath
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid
+		successor := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == id && v.GetNetwork().GetId() == initial.GetNetwork().GetId() && v.ActiveProfileId == initial.ActiveProfileId && v.UserDisconnected == disconnected && v.GetIntent().GetDesiredState() == before.GetIntent().GetDesiredState() && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 		})
+		if successor.GetMetadata().GetInstanceId() == "" || successor.GetMetadata().GetInstanceId() == before.GetMetadata().GetInstanceId() {
+			t.Fatal("successor did not expose a new native host instance")
+		}
 		info, err := os.Lstat(alias)
 		if err != nil || info.Mode()&os.ModeSymlink == 0 {
 			t.Fatal("agent startup or mutation replaced the configuration symlink")
@@ -104,15 +112,18 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 		t.Logf("checking forced termination and successor startup: %s", state)
 		n.Crash()
 		n.Start()
-		recovered := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid
+		recovered := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == id && v.GetNetwork().GetId() == initial.GetNetwork().GetId() && v.ActiveProfileId == initial.ActiveProfileId && v.UserDisconnected == disconnected && v.GetIntent().GetDesiredState() == before.GetIntent().GetDesiredState() && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 		})
+		if recovered.GetMetadata().GetInstanceId() == "" || recovered.GetMetadata().GetInstanceId() == successor.GetMetadata().GetInstanceId() {
+			t.Fatal("crash recovery reused the previous native host instance")
+		}
 		if !disconnected {
 			if err := s.UpdateMap(id, func(m *api.NetworkMapSnapshot) {}); err != nil {
 				t.Fatal(err)
 			}
-			n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID == id && v.MapRevision > recovered.MapRevision && v.CachedMapValid
+			n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId == id && v.MapRevision > recovered.MapRevision && v.GetStoredState().GetCachedMapValid()
 			})
 		}
 		// Race without an existing owner. A lock-specific loser and a live IPC
@@ -167,15 +178,15 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal("startup race did not resolve within its deadline")
 			}
-			winner := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid
+			winner := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId == id && v.GetNetwork().GetId() == initial.GetNetwork().GetId() && v.ActiveProfileId == initial.ActiveProfileId && v.UserDisconnected == disconnected && v.GetIntent().GetDesiredState() == before.GetIntent().GetDesiredState() && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 			})
 			if !disconnected {
 				if err := s.UpdateMap(id, func(m *api.NetworkMapSnapshot) {}); err != nil {
 					t.Fatal(err)
 				}
-				n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.NodeID == id && v.MapRevision > winner.MapRevision && v.CachedMapValid
+				n.AwaitNativeStatus(func(v *ipc.Status) bool {
+					return v.NodeId == id && v.MapRevision > winner.MapRevision && v.GetStoredState().GetCachedMapValid()
 				})
 			}
 			select {
@@ -191,8 +202,8 @@ func TestControlPlaneSingleAgentOwnership(t *testing.T) {
 			}
 		}()
 		n.Start()
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == id && v.NetworkID == initial.NetworkID && v.UserDisconnected == disconnected && v.DesiredState == before.DesiredState && v.NodeCredentialPresent && v.CachedMapValid
+		n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == id && v.GetNetwork().GetId() == initial.GetNetwork().GetId() && v.ActiveProfileId == initial.ActiveProfileId && v.UserDisconnected == disconnected && v.GetIntent().GetDesiredState() == before.GetIntent().GetDesiredState() && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 		})
 	}
 	created := 0
