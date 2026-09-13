@@ -606,6 +606,13 @@ func cmdAgent(args []string) error {
 				discovery := wireGuard.LastEndpointDiscovery()
 				if len(discovery.Candidates) > 0 {
 					_, err = updatePublishedEndpoint(*configPath, timeout, discovery.Candidates, true, endpointTTL, &endpointState, endpointUpdateDebounce, time.Now().UTC())
+					if err == nil {
+						var applied bool
+						snapshot, applied, err = applyAgentPublishedMap(ctx, iteration, snapshot)
+						if applied {
+							mapUnchanged = false
+						}
+					}
 				}
 			}
 			if err != nil {

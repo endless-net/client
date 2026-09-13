@@ -68,6 +68,25 @@ func TestAgentCachedBootstrapWithoutControl(t *testing.T) {
 			if len(s.Events()) != before {
 				t.Fatal("cached bootstrap made a control request")
 			}
+			// The endpoint-returned map must converge in the same iteration,
+			// including validation failures, without another backend request.
+			previous := client.AgentSnapshot{NodeID: cfg.NodeID, MapRevision: cfg.MapRevision - 1}
+			opts := agentIterationOptions{ConfigPath: path, StateOutput: filepath.Join(t.TempDir(), "published-state.json"), MaxCacheAge: time.Hour}
+			current, applied, err := applyAgentPublishedMap(t.Context(), opts, previous)
+			if scenario == "valid" {
+				if err != nil || !applied || current.MapRevision != cfg.MapRevision || current.NodeID != cfg.NodeID {
+					t.Fatal("endpoint map did not produce a fresh matching observation", err)
+				}
+				unchanged, appliedAgain, err := applyAgentPublishedMap(t.Context(), opts, current)
+				if err != nil || appliedAgain || unchanged.GeneratedAt != current.GeneratedAt {
+					t.Fatal("same map was needlessly reapplied", err)
+				}
+			} else if err == nil || applied {
+				t.Fatal("invalid endpoint map was accepted")
+			}
+			if len(s.Events()) != before {
+				t.Fatal("endpoint map apply made another control request")
+			}
 		})
 	}
 }
