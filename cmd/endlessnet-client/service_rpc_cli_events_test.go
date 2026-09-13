@@ -6,6 +6,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	"connectrpc.com/connect"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
@@ -79,3 +82,37 @@ func TestServiceNativeEventsValidateSubscription(t *testing.T) {
 type serviceRPCFailWriter struct{ err error }
 
 func (w serviceRPCFailWriter) Write([]byte) (int, error) { return 0, w.err }
+
+// Model a delayed context timer deterministically, without sleeps: the deadline
+// has elapsed, but Err/Done have not yet been published by the scheduler.
+type serviceRPCDelayedDeadline struct {
+	context.Context
+	deadline time.Time
+}
+
+func (c serviceRPCDelayedDeadline) Deadline() (time.Time, bool) { return c.deadline, true }
+
+func TestServiceEventsElapsedDeadlineBeforeContextTimer(t *testing.T) {
+	first := &ipc.WatchEventsResponse{Sequence: 1, Metadata: &ipc.SnapshotMetadata{InstanceId: "instance", Revision: 1},
+		Event: &ipc.WatchEventsResponse_Snapshot{Snapshot: &ipc.SnapshotEvent{Runtime: &ipc.RuntimeInfo{InstanceId: "instance"}, Status: &ipc.Status{}}}}
+	for _, expired := range []bool{false, true} {
+		for _, opened := range []bool{false, true} {
+			for _, code := range []connect.Code{connect.CodeDeadlineExceeded, connect.CodeUnavailable, connect.CodePermissionDenied} {
+				deadline := time.Now().Add(time.Hour)
+				if expired {
+					deadline = time.Now().Add(-time.Hour)
+				}
+				ctx := serviceRPCDelayedDeadline{Context: context.Background(), deadline: deadline}
+				stream := &serviceRPCEventsFixture{err: connect.NewError(code, errors.New("synthetic transport outcome"))}
+				if opened {
+					stream.events = []*ipc.WatchEventsResponse{first}
+				}
+				var output bytes.Buffer
+				err := writeServiceRPCEvents(ctx, stream, "instance", &output)
+				if (err == nil) != (expired && opened && code == connect.CodeDeadlineExceeded) {
+					t.Fatalf("deadline=%t snapshot=%t code=%s: wrong termination outcome", expired, opened, code)
+				}
+			}
+		}
+	}
+}

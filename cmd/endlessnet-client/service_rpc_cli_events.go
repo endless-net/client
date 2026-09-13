@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"connectrpc.com/connect"
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -42,7 +43,11 @@ func writeServiceRPCEvents(ctx context.Context, stream serviceRPCEventStream, in
 		sequence, revision = event.Sequence, event.Metadata.Revision
 	}
 	err := stream.Err()
-	if sequence != 0 && ctx.Err() != nil && (errors.Is(err, ctx.Err()) || connect.CodeOf(err) == connect.CodeDeadlineExceeded || connect.CodeOf(err) == connect.CodeCanceled) {
+	deadline, bounded := ctx.Deadline()
+	// The transport may observe the elapsed deadline before the context timer
+	// publishes Err. Do not mistake that scheduling race for a failed stream.
+	expired := bounded && !time.Now().Before(deadline)
+	if sequence != 0 && (ctx.Err() != nil || expired) && (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || connect.CodeOf(err) == connect.CodeDeadlineExceeded || connect.CodeOf(err) == connect.CodeCanceled) {
 		return nil // The explicitly bounded subscription completed after opening.
 	}
 	if err != nil {
