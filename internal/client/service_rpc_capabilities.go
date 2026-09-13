@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"sort"
 
 	"connectrpc.com/connect"
@@ -36,11 +37,25 @@ func (m *ClientRPCMutations) runtimeInfoLocked(peer local.Peer, build *ipc.Build
 // acceptance claim. Rebootstrap instead of sending a second snapshot or letting
 // old subscribers keep the readiness of a stopped/replaced worker.
 func (m *ClientRPCMutations) setProfileWorkerReadiness(worker *clientRPCProfileWorker, ready bool) {
-	capabilities := []ipc.Capability{ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_PROFILES}
+	capabilities := []ipc.Capability{ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_PROFILES, ipc.Capability_CAPABILITY_LOCAL_FORGET}
 	if worker.logout {
 		capabilities = append(capabilities, ipc.Capability_CAPABILITY_LOGOUT)
 	}
 	m.setWorkerCapabilities(worker, ready, capabilities...)
+}
+
+// Read-only providers share the serving context rather than an executor. The
+// token participates only in readiness bookkeeping; it starts no worker.
+func (s *ClientRPCService) startReadCapabilities(ctx context.Context) func() {
+	capabilities := []ipc.Capability{ipc.Capability_CAPABILITY_SUPPORT_INFO}
+	if s.PeersProvider != nil {
+		capabilities = append(capabilities, ipc.Capability_CAPABILITY_PEERS)
+	}
+	token := &clientRPCProfileWorker{ctx: ctx}
+	s.mutations.setWorkerCapabilities(token, true, capabilities...)
+	clear := func() { s.mutations.setWorkerCapabilities(token, false, capabilities...) }
+	stop := context.AfterFunc(ctx, clear)
+	return func() { stop(); clear() }
 }
 
 func (m *ClientRPCMutations) setWorkerCapabilities(worker *clientRPCProfileWorker, ready bool, capabilities ...ipc.Capability) {

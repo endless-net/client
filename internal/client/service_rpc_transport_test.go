@@ -186,7 +186,7 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 		assertRPCFailure(t, switchEvents.Err(), ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		_ = switchEvents.Close()
 		info, err := client.Bootstrap(ctx)
-		if err != nil || len(info.Capabilities) != 4 {
+		if err != nil || len(info.Capabilities) != 5 {
 			t.Fatal("bootstrap did not expose ready profile and enrollment workers", err)
 		}
 		switchEvents, err = client.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))

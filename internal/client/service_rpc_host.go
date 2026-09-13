@@ -55,6 +55,8 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 		}
 		return err
 	}
+	stopReadCapabilities := s.startReadCapabilities(workerCtx)
+	defer stopReadCapabilities()
 	server := local.NewServer(s.Handler())
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- server.Serve(listener) }()

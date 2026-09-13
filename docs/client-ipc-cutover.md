@@ -911,3 +911,19 @@ without replaying it. Separate tests cover absent enrollment/logout providers,
 independent shutdown and readiness without profile/enrollment side effects.
 These checks make implemented commands reachable by native consumers; they are
 not full BA/SA, installed platform or released-artifact acceptance evidence.
+
+LOCAL_FORGET now follows the profile worker that owns tunnel stop and local
+cleanup; administrator authorization and explicit confirmation remain mandatory.
+DIAGNOSTICS requires the bundle worker/storage plus both diagnostics and recent
+logs providers. PEERS is advertised only when its provider is configured, for
+the serving host's lifetime. SUPPORT_INFO covers the available local metadata
+read; missing links/offline topic keys remain absent. None of these readiness
+claims removes truncation, missing data or caller/profile checks from responses.
+
+Provider-combination tests observe capabilities at listener startup and verify
+their removal after listener failure. Missing diagnostics/logs/storage never
+advertise the complete diagnostic family; discovery performs no enrollment,
+logout, peer lookup or diagnostics probe. The native host test compares all
+eight currently wired capabilities through Bootstrap, CLI and opening snapshot.
+These are local/component checks; complete diagnostics content, approved support
+resources and installed artifact/platform acceptance still require evidence.

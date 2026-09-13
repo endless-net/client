@@ -24,12 +24,20 @@ func (s *ClientRPCService) startBundleWorker(ctx context.Context) (<-chan error,
 	}
 	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	s.bundleWorker = w
+	var capabilities []ipc.Capability
+	if s.DiagnosticsProvider != nil && s.RecentLogsProvider != nil {
+		capabilities = []ipc.Capability{ipc.Capability_CAPABILITY_DIAGNOSTICS}
+	}
+	s.mutations.setWorkerCapabilities(w, true, capabilities...)
+	stopReadiness := context.AfterFunc(ctx, func() { s.mutations.setWorkerCapabilities(w, false, capabilities...) })
 	done := make(chan error, 1)
 	go func() {
 		var err error
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 		defer func() {
+			stopReadiness()
+			s.mutations.setWorkerCapabilities(w, false, capabilities...)
 			s.bundleMu.Lock()
 			s.bundleWorker = nil
 			s.bundleMu.Unlock()
