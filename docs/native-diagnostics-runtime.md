@@ -711,6 +711,14 @@ failover outcomes, exact ordered 503/200 attempts, no credential headers or body
 disclosure, and stopping after primary success. Cached-map and snapshot legacy
 projection tests still require migration before their remaining DTOs can be removed.
 
+The final cached-map and agent-snapshot tests now use native Status, retaining
+IPv4/IPv6, account selection, relay/STUN endpoints, path counters and secret
+exclusion checks. Snapshot projection requires profile/map binding. The legacy
+status producer and ready-implies-connected mapper are removed, along with the
+last `ipc/v2/contract.go` file. Boundary tests reject retired imports across all
+`cmd`, `internal` and `tests` Go sources. This proves source-level removal, not
+complete UF runtime, UI, installed lifecycle or release acceptance.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

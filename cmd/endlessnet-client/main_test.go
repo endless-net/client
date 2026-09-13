@@ -23,7 +23,6 @@ import (
 
 	nativeipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
-	ipc "github.com/endless-net/client/ipc/v2"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
@@ -2168,29 +2167,6 @@ func TestLoginRejectsInlineSessionTokenForRemoteServer(t *testing.T) {
 	}
 }
 
-func TestServiceStateFromControlState(t *testing.T) {
-	for _, tc := range []struct {
-		control          ipc.ControlState
-		cachedMapInvalid bool
-		want             ipc.ServiceState
-	}{
-		{control: ipc.ControlStateNotRegistered, want: ipc.StateNeedsEnrollment},
-		{control: ipc.ControlStateReady, want: ipc.StateConnected},
-		{control: ipc.ControlStateRegistered, want: ipc.StateConnected},
-		{control: ipc.ControlStatePendingApproval, want: ipc.StateNeedsApproval},
-		{control: ipc.ControlStateDegraded, want: ipc.StateDegraded},
-		{control: ipc.ControlStateCacheInvalid, want: ipc.StateError},
-		{control: ipc.ControlStateError, want: ipc.StateError},
-		{control: ipc.ControlStateOfflineCache, want: ipc.StateDegraded},
-		{control: ipc.ControlStateDisconnected, want: ipc.StateDisconnected},
-		{control: "", want: ipc.StateDisconnected},
-		{control: ipc.ControlStateReady, cachedMapInvalid: true, want: ipc.StateError},
-	} {
-		if got := serviceStateFromControlState(tc.control, tc.cachedMapInvalid); got != tc.want {
-			t.Fatalf("serviceStateFromControlState(%q, %t) = %q, want %q", tc.control, tc.cachedMapInvalid, got, tc.want)
-		}
-	}
-}
 
 func TestCacheNetworkMapRedactsNodeCredential(t *testing.T) {
 	cfg := client.Config{}
@@ -2764,7 +2740,7 @@ endlessnet_relay_draining 0
 	}
 }
 
-func TestStatusPayloadReportsCachedMapWithoutSecrets(t *testing.T) {
+func TestNativeStatusReportsCachedMapWithoutSecrets(t *testing.T) {
 	cached := signedTestNetworkMap(t, "net-1", "node-1", 7)
 	cached.Network.Name = "default"
 	cached.Node.AssignedIP = "100.64.0.2"
@@ -2800,26 +2776,26 @@ func TestStatusPayloadReportsCachedMapWithoutSecrets(t *testing.T) {
 		CachedMap:          &cached,
 	}
 
-	status := statusPayload(cfg)
-	if status["identity_private_key_present"] != true {
-		t.Fatalf("status identity_private_key_present = %#v, want true", status["identity_private_key_present"])
+	status := buildAgentRPCStatusWithProbe(t.Context(), agentIPCOptions{}, cfg, nativeipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED, false)
+	if !status.GetStoredState().GetIdentityPrivateKeyPresent() {
+		t.Fatal("native status lost identity key presence")
 	}
-	if status["control_state"] != "ready" || status["overlay_ip"] != "100.64.0.2" || status["overlay_ipv6"] != "fd7a:115c:a1e0::2" || status["peer_count"] != float64(1) {
-		t.Fatalf("status payload = %#v", status)
+	if status.ControlState != nativeipc.ControlState_CONTROL_STATE_OFFLINE_CACHE || len(status.OverlayAddresses) != 2 || status.OverlayAddresses[0] != "100.64.0.2" || status.OverlayAddresses[1] != "fd7a:115c:a1e0::2" || status.PeerCount != 1 {
+		t.Fatal("native status lost verified cache facts")
 	}
-	if status["account_id"] != "acct-1" || status["hostname"] != "node-a" {
-		t.Fatalf("status overview fields = account_id:%#v hostname:%#v", status["account_id"], status["hostname"])
+	if status.AccountId != "acct-1" || status.Hostname != "node-a" {
+		t.Fatal("native status lost account or hostname")
 	}
 	cfg.ActiveAccountID = ""
-	status = statusPayload(cfg)
-	if status["account_id"] != "acct-map" {
-		t.Fatalf("status account fallback = %#v, want acct-map", status["account_id"])
+	status = buildAgentRPCStatusWithProbe(t.Context(), agentIPCOptions{}, cfg, nativeipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED, false)
+	if status.AccountId != "acct-map" {
+		t.Fatal("native status lost verified map account")
 	}
-	if relays, ok := status["relay_endpoints"].([]any); !ok || len(relays) != 2 {
-		t.Fatalf("status relay_endpoints = %#v, want 2 entries", status["relay_endpoints"])
+	if len(status.RelayEndpoints) != 2 {
+		t.Fatal("native status lost relay endpoints")
 	}
-	if stun, ok := status["stun_endpoints"].([]any); !ok || len(stun) != 1 {
-		t.Fatalf("status stun_endpoints = %#v, want 1 entry", status["stun_endpoints"])
+	if len(status.StunEndpoints) != 1 {
+		t.Fatal("native status lost STUN endpoints")
 	}
 	raw, err := json.Marshal(status)
 	if err != nil {
@@ -2842,15 +2818,22 @@ func TestStatusPayloadReportsCachedMapWithoutSecrets(t *testing.T) {
 }
 
 
-func TestStatusPayloadIncludesAgentStateWithoutSecrets(t *testing.T) {
-	status := statusPayload(client.Config{
+func TestNativeStatusIncludesBoundAgentStateWithoutSecrets(t *testing.T) {
+	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 9)
+	status := buildAgentRPCStatusWithProbe(t.Context(), agentIPCOptions{}, client.Config{
 		ControlPlaneURLs: []string{"https://api.example.test"},
 		Token:            "secret-token",
 		PrivateKey:       "secret-private-key",
 		NodeID:           "node-1",
+		NetworkID:        "net-1",
+		MapRevision:      9,
+		CachedMap:        &networkMap,
+		MapSigningTrust:  testSigningTrustBundle(t, testMapSigningPublicKey(t, networkMap.MapSignature)),
+		RPCState:         &client.ClientRPCState{ActiveProfileID: "profile"},
 		NodeCredential:   "secret-node-credential",
-	})
-	attachAgentStatus(status, client.AgentSnapshot{
+	}, nativeipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED, false)
+	attachAgentRPCSnapshot(status, client.AgentSnapshot{
+		ProfileID:   "profile",
 		GeneratedAt: "2026-06-24T00:00:00Z",
 		NodeID:      "node-1",
 		NetworkID:   "net-1",
@@ -2874,19 +2857,18 @@ func TestStatusPayloadIncludesAgentStateWithoutSecrets(t *testing.T) {
 			SelectedPath: "relay",
 		}},
 	})
-	agent, ok := status["agent"].(map[string]any)
-	if !ok || agent["state_present"] != true || agent["stun_ok"] != true || agent["relay_ok"] != true {
-		t.Fatalf("agent status = %#v", status["agent"])
+	agent := status.GetAgent()
+	if agent.GetSnapshotState() != nativeipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT || !agent.StunOk || !agent.RelayOk {
+		t.Fatal("native snapshot lost observed STUN/relay state")
 	}
-	if agent["relay_attempt_count"] != 2 || agent["path_count"] != 1 {
-		t.Fatalf("agent counts = %#v", agent)
+	if agent.RelayAttemptCount != 2 || agent.RelayPathCount != 1 || agent.DirectPathCount != 0 {
+		t.Fatal("native snapshot lost path and relay attempt counts")
 	}
-	if agent["overlay_ipv6"] != "fd7a:115c:a1e0::2" {
-		t.Fatalf("agent overlay_ipv6 = %#v", agent)
+	if len(agent.OverlayAddresses) != 2 || agent.OverlayAddresses[1] != "fd7a:115c:a1e0::2" {
+		t.Fatal("native snapshot lost IPv6 address")
 	}
-	selectedRelay, ok := agent["selected_relay"].(map[string]string)
-	if !ok || selectedRelay["protocol"] != relayauth.EndpointProtocolTLS || selectedRelay["addr"] != "127.0.0.1:9443" {
-		t.Fatalf("selected relay = %#v", agent["selected_relay"])
+	if agent.GetSelectedRelay().GetProtocol() != relayauth.EndpointProtocolTLS || agent.GetSelectedRelay().GetAddress() != "127.0.0.1:9443" {
+		t.Fatal("native snapshot lost selected relay")
 	}
 	raw, err := json.Marshal(status)
 	if err != nil {

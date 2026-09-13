@@ -276,8 +276,16 @@ func TestWorkflowRunnerSelectors(t *testing.T) {
 }
 
 func TestOnlyIPCContractIsPublic(t *testing.T) {
-	if _, err := os.Stat("ipc/v2/contract.go"); err != nil {
+	if _, err := os.Stat("proto/client/v0/service.proto"); err != nil {
 		t.Fatalf("public IPC contract is missing: %v", err)
+	}
+	if _, err := os.Stat("ipc/v2"); err == nil {
+		entries, readErr := os.ReadDir("ipc/v2")
+		if readErr != nil || len(entries) != 0 {
+			t.Fatal("retired IPC v2 package must not contain files")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
 	}
 	if _, err := os.Stat("ipc/v1/contract.go"); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("superseded IPC v1 contract still exists")

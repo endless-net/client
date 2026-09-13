@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/client"
-	ipc "github.com/endless-net/client/ipc/v2"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
@@ -360,37 +359,6 @@ func loadAgentSnapshotIfAvailable(path string) *client.AgentSnapshot {
 	return &loaded
 }
 
-func serviceStateFromControlState(controlState ipc.ControlState, cachedMapInvalid bool) ipc.ServiceState {
-	if cachedMapInvalid {
-		return ipc.StateError
-	}
-	switch controlState {
-	case ipc.ControlStatePendingApproval:
-		return ipc.StateNeedsApproval
-	case ipc.ControlStateDegraded, ipc.ControlStateOfflineCache:
-		return ipc.StateDegraded
-	case ipc.ControlStateServerIdentityChanged:
-		return ipc.StateServerIdentityChanged
-	case ipc.ControlStateRecovering:
-		return ipc.StateRecovering
-	case ipc.ControlStateRecoveryBlocked:
-		return ipc.StateRecoveryBlocked
-	case ipc.ControlStatePolicyBlocked:
-		return ipc.StatePolicyBlocked
-	case ipc.ControlStateNeedsLogin:
-		return ipc.StateNeedsLogin
-	case ipc.ControlStateReady, ipc.ControlStateRegistered:
-		return ipc.StateConnected
-	case ipc.ControlStateCacheInvalid, ipc.ControlStateError:
-		return ipc.StateError
-	case ipc.ControlStateNotRegistered:
-		return ipc.StateNeedsEnrollment
-	case ipc.ControlStateDisconnected:
-		return ipc.StateDisconnected
-	default:
-		return ipc.StateDisconnected
-	}
-}
 
 func positiveIntOr(value, fallback int) int {
 	if value > 0 {

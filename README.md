@@ -77,8 +77,9 @@ runners; release and APT credentials are restricted to their dedicated jobs.
 
 ## Public Go package
 
-`ipc/v2` is the repository's only public Go boundary. It exposes the strict
-local service IPC v2 contract and transport clients. Persisted state, identity,
+The local service contract is [Protobuf client.v0](proto/client/v0/service.proto),
+with generated Go bindings and transport clients in `clientipc`. The retired
+`ipc/v2` package is removed; there is no compatibility fallback. Persisted state, identity,
 diagnostics implementation, and STUN implementation are internal details.
 Control-plane DTOs and signed wire verification remain in the pinned
 `github.com/endless-net/client-api/clientapi` module.
