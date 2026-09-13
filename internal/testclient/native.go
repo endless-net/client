@@ -99,10 +99,17 @@ func (n *Node) awaitNativeReady() {
 	n.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	var lastErr error
+	var instancePresent bool
 	if err := Await(ctx, func() bool {
 		response := &ipc.GetRuntimeInfoResponse{}
-		return n.NativeService("runtime-info", response, "--timeout", "1s") == nil && response.GetRuntime().GetInstanceId() != ""
+		lastErr = n.NativeService("runtime-info", response, "--timeout", "1s")
+		instancePresent = response.GetRuntime().GetInstanceId() != ""
+		return lastErr == nil && instancePresent
 	}); err != nil {
+		// NativeService returns only fixed diagnostics or canonical numeric codes;
+		// never expose subprocess output or the runtime instance identifier here.
+		n.t.Logf("native runtime readiness: instance_present=%t error=%v", instancePresent, lastErr)
 		n.t.Fatal("native runtime did not become ready")
 	}
 }
