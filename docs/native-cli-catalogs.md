@@ -32,3 +32,18 @@ lookup identity or the caller's input. Short tests cover these negative outcomes
 one terminal cancellation lookup and reporter mutation without command replay.
 The now-unused legacy IPC client factory is removed. Other legacy DTO users and
 runtime/test harness migration remain outside this completed CLI wait change.
+
+## Managed enrollment-to-connect binding
+
+`up` now rejects cross-profile/cross-instance plans and validates each accepted
+or polled operation against the retained request ID, kind, profile and instance.
+Revisions must not regress, including relative to prior progress. Successful
+enrollment must identify the expected profile and a nonempty enrolled node before
+its revision can become Connect CAS. Nil acceptance responses fail without panic.
+Inputs are cloned and cancellation is checked before the first mutation.
+
+Short tests cover mismatches at enrollment acceptance, polling and connection
+acceptance; missing responses, malformed enrollment outcomes, regressing revision,
+and invalid plans. Invalid enrollment never dispatches Connect and neither
+mutation is replayed. These consumer tests do not validate signed node material
+or real tunnel continuity; those remain producer/system acceptance work.
