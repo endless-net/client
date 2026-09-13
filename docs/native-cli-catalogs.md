@@ -47,3 +47,32 @@ acceptance; missing responses, malformed enrollment outcomes, regressing revisio
 and invalid plans. Invalid enrollment never dispatches Connect and neither
 mutation is replayed. These consumer tests do not validate signed node material
 or real tunnel continuity; those remain producer/system acceptance work.
+
+## Native recent-log query boundary (provider foundation)
+
+The runtime service now implements ListRecentLogs through an explicitly
+profile-scoped `ClientRPCRecentLogsProvider`. It authorizes before collection and
+again after collection, rejects a changed configuration, honors cancellation,
+and never passes configuration or credentials to the provider. Unknown protobuf
+fields are discarded and messages pass through producer redaction. Responses
+accept at most 500 chronological entries of at most 4096 UTF-8 message bytes;
+invalid timestamps/text/order and oversized snapshots fail rather than silently
+truncating (ListRecentLogs has no truncation indicator).
+
+Page cursors bind the caller, profile, instance, config revision, page size and
+the complete redacted log snapshot. Append/rotation invalidates a continuation
+with STALE_STATE, even without a config revision change. Consumers can explicitly
+restart from the first page; the server never silently combines snapshots.
+
+Short tests cover admission, provider failure sanitization, cancellation,
+ownership/revision changes during collection, snapshot ownership, empty/final
+pages, changed callers/page sizes/buffers, redaction and malformed/oversized data.
+This is handler-level evidence, not installed-agent or cross-platform acceptance.
+
+**Still incomplete:** the agent does not configure this provider and therefore
+still returns typed UNSUPPORTED. Its retired shared recent-log buffer cannot be
+attached as a profile-specific source: it has no reliable profile attribution.
+The owning `client` repository must implement that source and native host tests;
+`client-ui` must verify refresh after stale cursors against the real provider.
+Capabilities remain unadvertised. GetDiagnostics/bundle providers, raw-log
+redaction completeness and runtime/system acceptance remain separate open work.

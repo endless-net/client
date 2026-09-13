@@ -23,6 +23,7 @@ type ClientRPCService struct {
 	// Configure before serving; reads public signing authority only.
 	ServerIdentityProvider ClientRPCServerIdentityProvider
 	TrustRecoveryProvider  ClientRPCTrustRecoveryProvider
+	RecentLogsProvider     ClientRPCRecentLogsProvider
 	clientipcconnect.UnimplementedClientServiceHandler
 	mutations        *ClientRPCMutations
 	build            *ipc.BuildIdentity
