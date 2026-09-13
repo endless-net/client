@@ -1390,24 +1390,6 @@ func markNodeOfflineBestEffort(cfg client.Config) {
 	}
 }
 
-func markNodeOfflineConfigBestEffort(configPath string) {
-	cfg, err := client.LoadConfig(configPath)
-	if err != nil {
-		log.Printf("warning: skipped marking node offline: %v", err)
-		return
-	}
-	changed, err := publishNodeOffline(&cfg)
-	if err != nil {
-		log.Printf("warning: skipped marking node offline: %v", err)
-		return
-	}
-	if changed {
-		if err := client.SaveConfig(configPath, cfg); err != nil {
-			log.Printf("warning: failed to save offline node status: %v", err)
-		}
-	}
-}
-
 func publishNodeOffline(cfg *client.Config) (bool, error) {
 	if cfg == nil {
 		return false, errors.New("client config is required")

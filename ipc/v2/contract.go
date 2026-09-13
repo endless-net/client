@@ -313,16 +313,6 @@ type ConnectResponse struct {
 	WireGuard        WireGuardApplyResult `json:"wireguard"`
 }
 
-type DisconnectRequest struct{}
-
-type DisconnectResponse struct {
-	Metadata
-	State            ServiceState         `json:"state"`
-	DesiredState     DesiredState         `json:"desired_state"`
-	UserDisconnected bool                 `json:"user_disconnected"`
-	WireGuard        WireGuardApplyResult `json:"wireguard"`
-}
-
 type LogoutRequest struct{}
 
 type LogoutResponse struct {

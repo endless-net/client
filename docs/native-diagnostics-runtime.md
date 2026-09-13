@@ -594,6 +594,13 @@ administrator admission, durable adoption and recovery remain the supported IPC
 path. The import guard now includes the migrated recovery test file. Other v2
 DTOs and handlers remain pending cutover; this removal is not a full-runtime claim.
 
+The unused HTTP-v2 Disconnect handler and DTOs are also removed, together with
+its config-reloading offline notification helper. Native Disconnect uses the
+durable operation coordinator; the native driver sends its bounded best-effort
+offline notification only after teardown and does not adopt the response map.
+Headless down retains its separate command workflow. Logout, local-forget,
+enrollment and status legacy adapters still require removal.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

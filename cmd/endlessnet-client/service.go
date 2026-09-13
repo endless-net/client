@@ -720,23 +720,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 			requestAgentSync(opts)
 			return payload, nil
 		},
-		Disconnect: func(ctx context.Context, req ipc.DisconnectRequest) (ipc.DisconnectResponse, error) {
-			if err := agentConnectionIntentStore(opts).SetDisconnected("user_disconnect"); err != nil {
-				return ipc.DisconnectResponse{}, ipc.NewError(http.StatusInternalServerError, "connection_intent_update_failed", err)
-			}
-			markNodeOfflineConfigBestEffort(opts.ConfigPath)
-			result, err := downAgentWireGuard(ctx, opts)
-			if err != nil {
-				return ipc.DisconnectResponse{}, ipc.NewError(http.StatusInternalServerError, "disconnect_failed", err)
-			}
-			return ipc.DisconnectResponse{
-				Metadata:         serviceIPCMetadata(),
-				State:            ipc.StateDisconnected,
-				DesiredState:     ipc.DesiredDisconnected,
-				UserDisconnected: true,
-				WireGuard:        wireGuardApplyResult(result),
-			}, nil
-		},
 		Logout: func(ctx context.Context, req ipc.LogoutRequest) (ipc.LogoutResponse, error) {
 			if _, err := downAgentWireGuard(ctx, opts); err != nil {
 				return ipc.LogoutResponse{}, ipc.NewError(http.StatusInternalServerError, "logout_failed", err)
