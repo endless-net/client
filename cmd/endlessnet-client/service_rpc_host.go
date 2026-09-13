@@ -41,6 +41,13 @@ func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agent
 	service.ServerIdentityProvider = agentRPCServerIdentity
 	service.TrustRecoveryProvider = agentRPCTrustRecovery
 	service.NetworksProvider = agentRPCNetworks
+	service.DiagnosticsProvider = func(ctx context.Context) (client.ClientRPCDiagnosticsObservation, error) {
+		if err := ctx.Err(); err != nil {
+			return client.ClientRPCDiagnosticsObservation{}, err
+		}
+		osVersion, _ := diagnosticsOSVersion()["version"].(string)
+		return client.ClientRPCDiagnosticsObservation{OSVersion: osVersion, Tunnel: opts.WireGuard.Inspection(), Interfaces: client.LocalInterfaceStatuses()}, nil
+	}
 	hostCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	var hostErr error

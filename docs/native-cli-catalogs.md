@@ -93,7 +93,12 @@ response). These are local tests, not installed-service or distribution evidence
 
 **Still incomplete:** this source covers native transitions, not all network,
 tunnel, DNS or OS diagnostics. The owning `client` repository must supply those
-additional profile-scoped records and GetDiagnostics/bundle providers;
+additional profile-scoped records and complete diagnostics/bundle providers;
 `client-ui` must verify refresh after stale cursors against the real provider.
 The whole diagnostics capability remains unadvertised until its family is ready.
 Raw debug-log redaction and full runtime/system acceptance remain open work.
+
+GetDiagnostics now has a [partial active-profile runtime provider](native-diagnostics-runtime.md)
+for native status, transition logs, interface metadata and tunnel summary. Missing
+sections are explicit failures with `truncated=true`; this does not complete the
+diagnostics family or enable its capability.
