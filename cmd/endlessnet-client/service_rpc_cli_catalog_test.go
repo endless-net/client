@@ -50,6 +50,8 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		args              []string
 		request, response proto.Message
 	}{
+		{"update-info", "GetUpdateInfo", nil, &ipc.GetUpdateInfoRequest{}, &ipc.GetUpdateInfoResponse{Info: &ipc.UpdateInfo{State: ipc.UpdateState_UPDATE_STATE_SOURCE_UNAVAILABLE}}},
+		{"update-info", "GetUpdateInfo", []string{"--reported-ui", `{"commit":"ui-claim","architecture":"arm64"}`}, &ipc.GetUpdateInfoRequest{ReportedUi: &ipc.BuildIdentity{Commit: "ui-claim", Architecture: "arm64"}}, &ipc.GetUpdateInfoResponse{Info: &ipc.UpdateInfo{ReportedUi: &ipc.BuildIdentity{Commit: "ui-claim", Architecture: "arm64"}, State: ipc.UpdateState_UPDATE_STATE_VERIFICATION_FAILED}}},
 		{"resources", "ListResources", []string{"--page-size", "4", "--page-token", "opaque-page", "--search", " HOST ", "--kinds", "host,subnet,service,application"}, &ipc.ListResourcesRequest{Profile: ref, Page: &ipc.PageRequest{PageSize: 4, PageToken: "opaque-page"}, Search: " HOST ", Kinds: []ipc.ResourceKind{ipc.ResourceKind_RESOURCE_KIND_HOST, ipc.ResourceKind_RESOURCE_KIND_SUBNET, ipc.ResourceKind_RESOURCE_KIND_SERVICE, ipc.ResourceKind_RESOURCE_KIND_APPLICATION}}, &ipc.ListResourcesResponse{Resources: []*ipc.Resource{
 			{Id: "host", Kind: ipc.ResourceKind_RESOURCE_KIND_HOST, Target: &ipc.Resource_Host{Host: &ipc.HostTarget{Hostname: "host.test"}}, Enabled: &ipc.BooleanSetting{Requested: proto.Bool(false)}},
 			{Id: "subnet", Kind: ipc.ResourceKind_RESOURCE_KIND_SUBNET, Target: &ipc.Resource_Subnet{Subnet: &ipc.SubnetTarget{Cidr: "192.0.2.0/24"}}},
@@ -94,6 +96,7 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		code            ipc.ErrorCode
 		transportCode   connect.Code
 	}{
+		{"update-info", "GetUpdateInfo", &ipc.GetUpdateInfoRequest{}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},
 		{"resources", "ListResources", &ipc.ListResourcesRequest{Profile: ref, Page: &ipc.PageRequest{}}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},
 		{"set-resource-enabled", "SetResourceEnabled", &ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: "resource-exact-id", Enabled: true}, ipc.ErrorCode_ERROR_CODE_RESOURCE_CONFLICT, connect.CodeFailedPrecondition},
 		{"set-resource-enabled", "SetResourceEnabled", &ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: "resource-exact-id", Enabled: true}, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED, connect.CodePermissionDenied},
@@ -139,7 +142,10 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		}
 	}()
 	for _, tc := range cases {
-		args := append([]string{tc.command, transportFlag, endpoint, "--profile-id", "profile-a", "--timeout", "5s"}, tc.args...)
+		args := append([]string{tc.command, transportFlag, endpoint, "--timeout", "5s"}, tc.args...)
+		if tc.command != "update-info" {
+			args = append(args, "--profile-id", ref.ProfileId)
+		}
 		if tc.command == "set-preferences" || tc.command == "reset-preferences" || tc.command == "renew-session" || tc.command == "select-network" || tc.command == "diagnostics-bundle" || tc.command == "select-exit-node" || tc.command == "clear-exit-node" || tc.command == "set-resource-enabled" {
 			args = append(args, "--request-id", mutation.RequestId, "--expected-instance-id", "instance", "--expected-revision", "7")
 		}
@@ -153,7 +159,10 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		}
 	}
 	for _, tc := range failures {
-		args := []string{tc.command, transportFlag, endpoint, "--profile-id", ref.ProfileId, "--timeout", "5s"}
+		args := []string{tc.command, transportFlag, endpoint, "--timeout", "5s"}
+		if tc.command != "update-info" {
+			args = append(args, "--profile-id", ref.ProfileId)
+		}
 		if tc.command == "renew-session" || tc.command == "clear-exit-node" || tc.command == "select-exit-node" || tc.command == "set-resource-enabled" {
 			args = append(args, "--request-id", mutation.RequestId, "--expected-instance-id", "instance", "--expected-revision", "7")
 		}

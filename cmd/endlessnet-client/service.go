@@ -22,6 +22,8 @@ func cmdService(args []string) error {
 		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, runtime-info, support-info, events, operation, profiles, create-profile, select-profile, rename-profile, remove-profile, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, exit-nodes, exit-node, select-exit-node, clear-exit-node, set-resource-enabled, resources, peers, preferences, set-preferences, reset-preferences, managed-settings, session, renew-session, diagnostics, diagnostics-bundle, or logs-recent")
 	}
 	switch args[0] {
+	case "update-info":
+		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
 	case "export-diagnostics-bundle":
 		return cmdServiceRPCBundleExport(args[1:], os.Stdout)
 	case "status", "runtime-info", "support-info", "events", "operation", "profiles", "server-identity", "networks", "peers", "preferences", "managed-settings", "session", "diagnostics", "logs-recent", "exit-nodes", "exit-node", "resources":

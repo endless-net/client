@@ -45,6 +45,10 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
 	var operationID, requestID string
 	var profileID string
+	var reportedUIJSON string
+	if command == "update-info" {
+		fs.StringVar(&reportedUIJSON, "reported-ui", "", "optional BuildIdentity protobuf JSON; caller claim, not runtime attestation")
+	}
 	requiresProfile := command == "preferences" || command == "managed-settings" || command == "session" || command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent" || command == "exit-nodes" || command == "exit-node" || command == "resources"
 	if requiresProfile {
 		fs.StringVar(&profileID, "profile-id", "", "required target profile")
@@ -75,6 +79,13 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	if fs.NArg() != 0 {
 		return fmt.Errorf("service %s does not accept positional arguments", command)
+	}
+	var reportedUI *ipc.BuildIdentity
+	if reportedUIJSON != "" {
+		reportedUI = &ipc.BuildIdentity{}
+		if len(reportedUIJSON) > 4096 || protojson.Unmarshal([]byte(reportedUIJSON), reportedUI) != nil {
+			return fmt.Errorf("--reported-ui requires bounded BuildIdentity protobuf JSON")
+		}
 	}
 	if requiresProfile && strings.TrimSpace(profileID) == "" {
 		return fmt.Errorf("--profile-id is required")
@@ -158,6 +169,12 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 		message = response.Msg
 	case "exit-nodes":
 		response, err := consumer.ListExitNodes(ctx, connect.NewRequest(&ipc.ListExitNodesRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}, Page: &ipc.PageRequest{PageSize: uint32(pageSize), PageToken: pageToken}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
+	case "update-info":
+		response, err := consumer.GetUpdateInfo(ctx, connect.NewRequest(&ipc.GetUpdateInfoRequest{ReportedUi: reportedUI}))
 		if err != nil {
 			return err
 		}
