@@ -884,7 +884,10 @@ func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevisio
 			if err := client.SaveConfig(configPath, cfg); err != nil {
 				return cfg, clientapi.RegisterNodeResponse{}, false, err
 			}
-			if heartbeatMap.Network.Revision > previousRevision {
+			// Endpoint publication can advance the cache after the last applied
+			// snapshot. A verified heartbeat projection ahead of that snapshot
+			// must be applied before waiting for another stream event.
+			if heartbeatMap.Network.Revision > previousRevision || (fromRevision != 0 && heartbeatMap.Network.Revision > fromRevision) {
 				return cfg, heartbeatMap, false, nil
 			}
 		}
