@@ -684,3 +684,15 @@ rejected approval, output failure, connect-only mode and preserved caller CAS.
 These providers are synthetic; deployed approval, live tunnel health and CLI
 system acceptance remain required. Old `up --server/--join-token/--approval-timeout`
 arguments are not retained as compatibility behavior.
+
+The agent synchronization loop now publishes native status observations through
+the same mutation journal/event service. CONNECTED phase requires both successful
+application and successful live WireGuard inspection in a nonfailed iteration;
+missing/failed observations remain UNSPECIFIED. The disconnected-intent branch
+rechecks intent under the runtime operation lock and publishes DISCONNECTED only
+after confirmed Down. This also prevents a stale outer-loop intent check from
+tearing down a newly selected connected state. Existing observation CAS/fingerprint
+guards reject concurrent stale snapshots. Tests cover the apply/inspection/error
+matrix and delivery of an observation through the native local host. System
+validation must still establish actual routing/connectivity and observation timing;
+control probes/inspection are not peer reachability proof.

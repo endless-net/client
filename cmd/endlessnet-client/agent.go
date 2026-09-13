@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/endless-net/client/clientipc/local"
+	ipcv0 "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
@@ -461,7 +462,7 @@ func cmdAgent(args []string) error {
 			WireGuard:      wireGuard,
 			SyncWake:       syncWake,
 		}
-		stopIPC, err := startAgentRPC(ctx, cancelRuntime, ipcOpts)
+		stopIPC, rpcMutations, err := startAgentRPC(ctx, cancelRuntime, ipcOpts)
 		if err != nil {
 			return err
 		}
@@ -490,9 +491,26 @@ func cmdAgent(args []string) error {
 					log.Printf("agent local connection intent is disconnected since %s; network sync paused", updatedAt)
 					disconnectedLogged = true
 				}
-				if _, downErr := downAgentWireGuard(ctx, ipcOpts); downErr != nil {
-					err = fmt.Errorf("enforce disconnected WireGuard state: %w", downErr)
+				operationMu.Lock()
+				_, stillDisconnected, intentErr := agentConnectionIntentStore(ipcOpts).Disconnected()
+				if intentErr == nil && !stillDisconnected {
+					operationMu.Unlock()
+					continue
 				}
+				if intentErr != nil {
+					err = intentErr
+				}
+				if result, downErr := downAgentWireGuard(ctx, ipcOpts); downErr != nil {
+					err = fmt.Errorf("enforce disconnected WireGuard state: %w", downErr)
+				} else if !result.OK {
+					err = errors.New("enforce disconnected WireGuard state: Down was not confirmed")
+				}
+				phase := ipcv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED
+				if err == nil {
+					phase = ipcv0.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED
+				}
+				publishAgentRPCObservation(ctx, rpcMutations, ipcOpts, phase)
+				operationMu.Unlock()
 				if *once {
 					if err != nil {
 						_ = writeAgentFailureSnapshot(*stateOutput, *configPath, err)
@@ -599,6 +617,8 @@ func cmdAgent(args []string) error {
 					}
 				}
 			}
+			phase := agentRPCIterationPhase(snapshot, err != nil || skipForDisconnected || skipForRecovery)
+			publishAgentRPCObservation(ctx, rpcMutations, ipcOpts, phase)
 			operationMu.Unlock()
 			if skipForDisconnected {
 				proceed, woken := waitForAgentSync(ctx, interval, syncWake)

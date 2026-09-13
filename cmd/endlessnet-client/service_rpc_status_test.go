@@ -68,6 +68,22 @@ func TestRPCControlProbeDoesNotFollowRedirectsOrSendCredentials(t *testing.T) {
 	}
 }
 
+func TestRPCIterationPhaseRequiresApplyAndInspection(t *testing.T) {
+	for _, apply := range []bool{false, true} {
+		for _, inspected := range []bool{false, true} {
+			for _, failed := range []bool{false, true} {
+				phase := agentRPCIterationPhase(client.AgentSnapshot{Apply: &client.WireGuardApplyResult{OK: apply}, WireGuard: &client.WireGuardInspection{OK: inspected}}, failed)
+				if (phase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED) != (apply && inspected && !failed) {
+					t.Fatal("phase not based on live apply and inspection")
+				}
+			}
+		}
+	}
+	if agentRPCIterationPhase(client.AgentSnapshot{}, false) != ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED {
+		t.Fatal("absent observations treated as connected")
+	}
+}
+
 func TestRPCObservationUsesNativeProjection(t *testing.T) {
 	store, err := client.OpenConfigStore(filepath.Join(t.TempDir(), "client.json"))
 	if err != nil {

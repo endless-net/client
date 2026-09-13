@@ -14,16 +14,16 @@ import (
 
 // startAgentRPC opens only the native v0 transport. There is no old IPC fallback.
 // A host failure cancels the agent loop; stop joins workers before engine close.
-func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agentIPCOptions) (func() error, error) {
+func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agentIPCOptions) (func() error, *client.ClientRPCMutations, error) {
 	pipe, socket := strings.TrimSpace(opts.Pipe), strings.TrimSpace(opts.UnixSocket)
 	if pipe == "" && socket == "" {
-		return func() error { return nil }, nil
+		return func() error { return nil }, nil, nil
 	}
 	if fail == nil || opts.ConfigStore == nil || opts.OperationMu == nil || opts.WireGuard == nil {
-		return nil, errors.New("native agent RPC requires runtime context, store, operation lock and engine")
+		return nil, nil, errors.New("native agent RPC requires runtime context, store, operation lock and engine")
 	}
 	if (pipe != "" && socket != "") || (runtime.GOOS == "windows" && socket != "") || (runtime.GOOS != "windows" && pipe != "") {
-		return nil, errors.New("native agent RPC requires exactly one platform-local endpoint")
+		return nil, nil, errors.New("native agent RPC requires exactly one platform-local endpoint")
 	}
 	endpoint := socket
 	if pipe != "" {
@@ -31,11 +31,11 @@ func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agent
 	}
 	mutations, err := client.NewClientRPCMutations(opts.ConfigStore)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	listener, err := local.Listen(endpoint)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	service := client.NewClientRPCService(mutations, &ipc.BuildIdentity{Version: version})
 	hostCtx, cancel := context.WithCancel(ctx)
@@ -54,5 +54,5 @@ func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agent
 		stopOnce.Do(cancel)
 		<-done
 		return hostErr
-	}, nil
+	}, mutations, nil
 }

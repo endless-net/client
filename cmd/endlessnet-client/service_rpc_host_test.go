@@ -46,7 +46,7 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancelCause(t.Context())
 	defer cancel(nil)
-	stop, err := startAgentRPC(ctx, cancel, opts)
+	stop, mutations, err := startAgentRPC(ctx, cancel, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,6 +64,11 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	defer cancelRequest()
 	if _, err := consumer.Bootstrap(requestCtx); err != nil {
 		t.Fatal("agent did not expose native bootstrap", err)
+	}
+	publishAgentRPCObservation(requestCtx, mutations, opts, ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED)
+	observed, err := consumer.GetStatus(requestCtx, connect.NewRequest(&ipc.GetStatusRequest{}))
+	if err != nil || observed.Msg.Status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED {
+		t.Fatal("native host did not publish runtime observation", err)
 	}
 	transportFlag := "--ipc-socket"
 	if runtime.GOOS == "windows" {
@@ -286,7 +291,7 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	failedStop, err := startAgentRPC(ctx, cancel, opts)
+	failedStop, _, err := startAgentRPC(ctx, cancel, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +311,7 @@ func TestAgentNativeRPCHostRejectsMixedEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = startAgentRPC(t.Context(), func(error) {}, agentIPCOptions{
+	_, _, err = startAgentRPC(t.Context(), func(error) {}, agentIPCOptions{
 		Pipe: "pipe", UnixSocket: "socket", ConfigStore: store, OperationMu: &sync.Mutex{}, WireGuard: &testAgentWireGuard{},
 	})
 	if err == nil {

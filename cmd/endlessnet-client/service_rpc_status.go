@@ -3,16 +3,35 @@ package main
 import (
 	"context"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"connectrpc.com/connect"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+func agentRPCIterationPhase(snapshot client.AgentSnapshot, failed bool) ipc.ConnectionPhase {
+	if !failed && snapshot.Apply != nil && snapshot.Apply.OK && snapshot.WireGuard != nil && snapshot.WireGuard.OK {
+		return ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
+	}
+	return ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED
+}
+
+func publishAgentRPCObservation(ctx context.Context, mutations *client.ClientRPCMutations, opts agentIPCOptions, phase ipc.ConnectionPhase) {
+	if mutations == nil || ctx.Err() != nil {
+		return
+	}
+	if err := observeAgentRPCStatus(ctx, mutations, opts, phase); err != nil && ctx.Err() == nil && connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		log.Print("native runtime status observation failed")
+	}
+}
 
 // The connection coordinator supplies its actual phase. Stored enrollment,
 // cached-map presence and connected intent do not establish tunnel connectivity.
