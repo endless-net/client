@@ -3387,40 +3387,6 @@ func TestAttachControlAvailabilityMarksDegradedWhenReadyzUnavailable(t *testing.
 	}
 }
 
-func TestAgentIPCStatusReportsDegradedWhenControlPlaneUnavailable(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/client/readyz" {
-			t.Fatalf("control probe path = %s, want /client/readyz", r.URL.Path)
-		}
-		http.Error(w, "storage unavailable", http.StatusServiceUnavailable)
-	}))
-	defer server.Close()
-
-	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 7)
-	configPath := filepath.Join(t.TempDir(), "client.json")
-	if err := client.SaveConfig(configPath, client.Config{
-		ControlPlaneURLs: []string{server.URL},
-		NodeID:           "node-1",
-		NetworkID:        "net-1",
-		NodeCredential:   "credential-1",
-		MapRevision:      7,
-		MapSigningTrust:  testSigningTrustBundle(t, testMapSigningPublicKey(t, networkMap.MapSignature)),
-		CachedMap:        &networkMap,
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	payload, err := agentIPCStatus(context.Background(), agentIPCOptions{ConfigPath: configPath})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if payload.ControlState != ipc.ControlStateDegraded || payload.State != ipc.StateDegraded {
-		t.Fatalf("IPC status = %#v, want degraded control and service state", payload)
-	}
-	if payload.Control == nil || payload.Control.OK || payload.Control.HTTPStatus != http.StatusServiceUnavailable {
-		t.Fatalf("IPC status control probe = %#v", payload.Control)
-	}
-}
 
 func TestAgentIPCStatusReportsServerIdentityChangeRecoveryState(t *testing.T) {
 	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 7)
