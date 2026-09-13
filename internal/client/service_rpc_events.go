@@ -34,6 +34,8 @@ type rpcSubscriber struct {
 	sequence uint64
 	abort    func()
 	sending  bool
+	// Access is read/written under the owning mutations lock.
+	access ipc.Access
 }
 
 func (s *rpcSubscriber) enqueue(event *ipc.WatchEventsResponse) {
@@ -60,6 +62,14 @@ func (s *rpcSubscriber) enqueue(event *ipc.WatchEventsResponse) {
 }
 
 func (s *rpcSubscriber) next(ctx context.Context) (*ipc.WatchEventsResponse, error) {
+	if err := ctx.Err(); err != nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.closed {
+			return nil, s.err
+		}
+		return nil, err
+	}
 	select {
 	case <-ctx.Done():
 		s.mu.Lock()
@@ -79,6 +89,9 @@ func (s *rpcSubscriber) next(ctx context.Context) (*ipc.WatchEventsResponse, err
 			return nil, s.err
 		}
 		s.bytes -= proto.Size(event)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		return event, nil
 	}
 }
@@ -211,6 +224,7 @@ func (m *ClientRPCMutations) subscribe(peer local.Peer, build *ipc.BuildIdentity
 		return nil, err
 	}
 	s := &rpcSubscriber{peer: peer, build: proto.Clone(build).(*ipc.BuildIdentity), queue: make(chan *ipc.WatchEventsResponse, rpcEventQueueCount), done: make(chan struct{}), abort: abort}
+	s.access = snapshot.Runtime.CallerAccess
 	s.enqueue(&ipc.WatchEventsResponse{Metadata: snapshot.Status.Metadata, Event: &ipc.WatchEventsResponse_Snapshot{Snapshot: snapshot}})
 	if m.subscribers == nil {
 		m.subscribers = map[*rpcSubscriber]struct{}{}
@@ -224,6 +238,12 @@ func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation) {
 	m.recordDiagnosticTransitionLocked(cfg, operation)
 	for subscriber := range m.subscribers {
 		snapshot, err := m.snapshotLocked(subscriber.peer, subscriber.build, cfg)
+		if err == nil && subscriber.access != ipc.Access_ACCESS_OBSERVER && snapshot.Runtime.CallerAccess == ipc.Access_ACCESS_OBSERVER {
+			// Queued owner snapshots/operations must not outlive owner access.
+			// Terminate rather than silently discarding numbered events. A new
+			// subscription starts from an observer-filtered snapshot.
+			err = rpc.Error(connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+		}
 		if err != nil {
 			subscriber.mu.Lock()
 			if !subscriber.closed {
@@ -237,6 +257,7 @@ func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation) {
 			subscriber.mu.Unlock()
 			continue
 		}
+		subscriber.access = snapshot.Runtime.CallerAccess
 		metadata := snapshot.Status.Metadata
 		// Snapshot also refreshes role after an initial ownership claim.
 		subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_Snapshot{Snapshot: snapshot}})

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -485,27 +484,6 @@ func peerPathStatuses(statuses []client.PeerPathStatus) []ipc.PeerPathStatus {
 	return out
 }
 
-func serviceIPCEvent(eventType ipc.EventType, sequence int) ipc.Event {
-	return ipc.Event{
-		Metadata:    serviceIPCMetadata(),
-		EventType:   eventType,
-		Sequence:    sequence,
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
-	}
-}
-
-func serviceIPCErrorEvent(sequence int, err error) ipc.Event {
-	code := ipc.ErrorRequestFailed
-	var ipcErr ipc.Error
-	if errors.As(err, &ipcErr) {
-		code = ipcErr.Code
-	}
-	event := serviceIPCEvent(ipc.EventTypeError, sequence)
-	event.ErrorCode = code
-	event.Error = redactDiagnosticsStringForJSON(err.Error())
-	return event
-}
-
 func applyAgentConnectionIntentStatus(payload *ipc.StatusResponse, intent client.ConnectionIntent) {
 	switch payload.ControlState {
 	case ipc.ControlStateCacheInvalid, ipc.ControlStateError:
@@ -686,9 +664,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 		MutationLock: opts.OperationMu,
 		Status: func(ctx context.Context, req ipc.StatusRequest) (ipc.StatusResponse, error) {
 			return agentIPCStatus(ctx, opts)
-		},
-		Events: func(ctx context.Context, req ipc.EventsRequest, writer client.ServiceIPCEventWriter) error {
-			return streamAgentIPCEvents(ctx, opts, writer)
 		},
 		Enroll: func(ctx context.Context, req ipc.EnrollRequest) (ipc.EnrollResponse, error) {
 			ownerClaimed, err := claimAgentServiceIPCOwner(ctx, opts)
@@ -1053,59 +1028,6 @@ func buildServiceIPCDiagnostics(opts agentIPCOptions, logLimit int) (ipc.Diagnos
 		return ipc.Diagnostics{}, ipc.NewError(http.StatusInternalServerError, "diagnostics_snapshot_failed", err)
 	}
 	return payload, nil
-}
-
-func streamAgentIPCEvents(ctx context.Context, opts agentIPCOptions, writer client.ServiceIPCEventWriter) error {
-	if writer == nil {
-		return errors.New("service IPC event writer is required")
-	}
-	sequence := 1
-	if err := writer.Send(serviceIPCEvent(ipc.EventTypeHello, sequence)); err != nil {
-		return err
-	}
-	sequence++
-	lastStatus := ""
-	sendStatus := func() error {
-		payload, err := agentIPCStatus(ctx, opts)
-		if err != nil {
-			if sendErr := writer.Send(serviceIPCErrorEvent(sequence, err)); sendErr != nil {
-				return sendErr
-			}
-			sequence++
-			return nil
-		}
-		raw, err := json.Marshal(payload)
-		if err != nil {
-			return err
-		}
-		fingerprint := string(raw)
-		if fingerprint == lastStatus {
-			return nil
-		}
-		lastStatus = fingerprint
-		event := serviceIPCEvent(ipc.EventTypeStatusChanged, sequence)
-		event.Status = &payload
-		if err := writer.Send(event); err != nil {
-			return err
-		}
-		sequence++
-		return nil
-	}
-	if err := sendStatus(); err != nil {
-		return err
-	}
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			if err := sendStatus(); err != nil {
-				return err
-			}
-		}
-	}
 }
 
 func selectAgentNetwork(ctx context.Context, opts agentIPCOptions, req ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error) {

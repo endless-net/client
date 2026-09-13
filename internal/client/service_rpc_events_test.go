@@ -216,6 +216,82 @@ func TestRPCUnsubscribeAndCancellation(t *testing.T) {
 	}
 }
 
+func TestRPCEventCancellationWinsOverQueuedSnapshot(t *testing.T) {
+	m := newRPCStoreTest(t)
+	sub, err := m.subscribe(local.Peer{Identity: "uid:1000"}, &ipc.BuildIdentity{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.unsubscribe(sub)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	// Both the queue and ctx.Done are ready: a select alone chooses randomly.
+	for range 100 {
+		event, err := sub.next(ctx)
+		if event != nil || err != context.Canceled {
+			t.Fatal("cancelled stream returned a queued event", event, err)
+		}
+	}
+	if len(sub.queue) != 1 {
+		t.Fatal("pre-cancelled read consumed the initial snapshot")
+	}
+}
+
+func TestRPCEventOwnerRevocationClosesPrivateQueue(t *testing.T) {
+	for _, sending := range []bool{false, true} {
+		t.Run(map[bool]string{false: "queued", true: "sending"}[sending], func(t *testing.T) {
+			m, peer, profile := rpcConnectFixture(t)
+			status := &ipc.Status{Metadata: m.Metadata(), ActiveProfileId: profile.ProfileId, AccountId: "private-account"}
+			if err := m.PublishStatus(status); err != nil {
+				t.Fatal(err)
+			}
+			aborted := false
+			sub, err := m.subscribe(peer, &ipc.BuildIdentity{}, func() { aborted = true })
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer m.unsubscribe(sub)
+			// Keep the private initial snapshot queued; simulate a blocked sender
+			// separately to verify the transport-abort hook without blocking I/O.
+			sub.mu.Lock()
+			sub.sending = sending
+			sub.mu.Unlock()
+			m.mu.Lock()
+			err = m.store.Update(func(cfg *Config) error {
+				cfg.LocalOwnerID = "replacement-owner"
+				cfg.RPCState.Revision++
+				return nil
+			})
+			if err == nil {
+				m.publishMutationLocked(nil)
+			}
+			m.mu.Unlock()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if aborted != sending {
+				t.Fatal("incorrect blocked-send abort", aborted)
+			}
+			for range 10 {
+				event, err := sub.next(t.Context())
+				assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+				if event != nil {
+					t.Fatal("revoked owner received a queued event")
+				}
+			}
+			fresh, err := m.subscribe(peer, &ipc.BuildIdentity{}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer m.unsubscribe(fresh)
+			event, err := fresh.next(t.Context())
+			if err != nil || event.Sequence != 1 || event.GetSnapshot().Runtime.CallerAccess != ipc.Access_ACCESS_OBSERVER || event.GetSnapshot().Status.AccountId != "" {
+				t.Fatal("reattachment did not start with filtered observer snapshot", err)
+			}
+		})
+	}
+}
+
 func TestRPCObservationRejectsConcurrentConfigChange(t *testing.T) {
 	m := newRPCStoreTest(t)
 	err := m.ObserveStatus(func(Config) (*ipc.Status, error) {

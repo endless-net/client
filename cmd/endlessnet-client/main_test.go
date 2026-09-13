@@ -4188,49 +4188,6 @@ func TestAgentIPCStatusIncludesVersionedContractMetadata(t *testing.T) {
 	}
 }
 
-func TestAgentIPCEventsStreamSendsHelloAndStatus(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	configPath := filepath.Join(t.TempDir(), "client.json")
-	if err := client.SaveConfig(configPath, client.Config{
-		NodeID:         "node-1",
-		NetworkID:      "net-1",
-		NodeCredential: "credential-1",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	writer := &capturingServiceIPCEventWriter{cancel: cancel}
-	if err := streamAgentIPCEvents(ctx, agentIPCOptions{ConfigPath: configPath}, writer); err != nil {
-		t.Fatal(err)
-	}
-	if len(writer.events) != 2 {
-		t.Fatalf("events = %#v, want hello and status", writer.events)
-	}
-	if writer.events[0].EventType != ipc.EventTypeHello || writer.events[0].IPCProtocol != ipc.Protocol {
-		t.Fatalf("hello event = %#v", writer.events[0])
-	}
-	statusEvent := writer.events[1]
-	if statusEvent.EventType != ipc.EventTypeStatusChanged {
-		t.Fatalf("status event = %#v", statusEvent)
-	}
-	if statusEvent.Status == nil || statusEvent.Status.State != ipc.StateConnected || statusEvent.Status.DesiredState != client.ConnectionIntentDesiredConnected {
-		t.Fatalf("status event status = %#v", statusEvent.Status)
-	}
-}
-
-type capturingServiceIPCEventWriter struct {
-	cancel func()
-	events []ipc.Event
-}
-
-func (w *capturingServiceIPCEventWriter) Send(value ipc.Event) error {
-	w.events = append(w.events, value)
-	if len(w.events) >= 2 && w.cancel != nil {
-		w.cancel()
-	}
-	return nil
-}
-
 func TestAttachControlAvailabilityKeepsReadyWhenReadyzOK(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/client/readyz" {
