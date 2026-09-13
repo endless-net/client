@@ -776,3 +776,22 @@ This prepares the native executor integration but does not complete it: the v0
 executor still needs authority-checked atomic result application, retry/terminal
 operation transitions and worker/RPC wiring. Validation is local go vet,
 golangci-lint and go test -short, not release or cross-platform acceptance.
+
+The native trust recovery reconciler now rechecks the adopted trust, active
+profile, registration authority, recovery identity and map state before and after
+the provider call. Successful verified results atomically update an explicit
+allowlist of registration/map fields in both root and saved profile and complete
+the operation. Retryable failures retain the original operation/idempotency plan;
+terminal re-enrollment responses clear node-bound state in both copies and report
+NEEDS_ENROLLMENT with correlation. Other final failures preserve registration.
+Canceled, stale or malformed results cannot overwrite it. Runtime-private provider
+errors are sanitized, and the command adapter maps control-plane error categories
+to native failure codes without embedding raw errors in IPC.
+
+Tests cover success, retry across a new mutations instance, terminal cleanup,
+policy blocking, cancellation, stale authority, malformed results, provider errors
+and preservation of session/installation keys/trust/intent. Adapter tests cover
+revocation, temporary unavailability, authentication, policy and identity-binding
+failures. Local validation: go vet, golangci-lint and go test -short. Worker/RPC
+wiring, explicit tunnel resumption semantics and end-to-end acceptance remain
+unfinished; TrustServerIdentity is not yet exposed to callers.
