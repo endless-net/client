@@ -26,7 +26,14 @@ func TestControlPlaneTrustConfirmation(t *testing.T) {
 	identity := func() *ipc.ServerIdentity {
 		t.Helper()
 		response := &ipc.GetServerIdentityResponse{}
-		if err := n.NativeService("server-identity", response, "--profile-id", profile); err != nil {
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			err = n.NativeService("server-identity", response, "--profile-id", profile)
+			if !testclient.IsNativeStaleState(err) {
+				break
+			}
+		}
+		if err != nil {
 			t.Fatal(err)
 		}
 		v := response.Identity
@@ -102,10 +109,25 @@ func TestControlPlaneTrustConfirmation(t *testing.T) {
 	}
 	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
 	status = n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.UserDisconnected && v.ActiveProfileId == profile })
-	args := append(testclient.NativeMutationArguments("00000000-0000-4000-8000-000000000002", status),
-		"--confirmed-control-origin", initial.ControlOrigin, "--confirmed-key-id", initial.AnnouncedKeyId, "--confirmed-announcement-id", initial.AnnouncementId)
+	var args []string
 	response := &ipc.TrustServerIdentityResponse{}
-	if err := n.NativeService("trust-server", response, args...); err != nil {
+	for attempt := 0; attempt < 3; attempt++ {
+		args = append(testclient.NativeMutationArguments("00000000-0000-4000-8000-000000000002", status),
+			"--confirmed-control-origin", initial.ControlOrigin, "--confirmed-key-id", initial.AnnouncedKeyId, "--confirmed-announcement-id", initial.AnnouncementId)
+		err = n.NativeService("trust-server", response, args...)
+		if !testclient.IsNativeStaleState(err) || attempt == 2 {
+			break
+		}
+		// Only a rejected admission can refresh CAS. The no-op assertion and
+		// restart replay below must retain the original confirmed trust tuple.
+		observed := identity()
+		refreshed := &ipc.GetStatusResponse{}
+		if n.NativeService("status", refreshed) != nil || !nativeTrustRetryContextMatches(status, refreshed.Status, initial, observed) {
+			t.Fatal("native no-op trust context changed after CAS rejection")
+		}
+		status = refreshed.Status
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	if response.GetOperation().GetId() == "" {
