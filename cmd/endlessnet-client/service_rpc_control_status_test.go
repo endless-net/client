@@ -54,7 +54,8 @@ func TestNativeStatusControlAvailabilityAndFailover(t *testing.T) {
 				t.Fatal("failed readiness did not degrade native status")
 			}
 			if mode == "failover" {
-				if secondaryCalls.Load() != 1 || len(status.Control.Attempts) != 2 || status.Control.Origin != secondary.URL {
+				if secondaryCalls.Load() != 1 || len(status.Control.Attempts) != 2 || status.Control.Origin != secondary.URL ||
+					status.Control.Attempts[0].HttpStatus != http.StatusServiceUnavailable || status.Control.Attempts[1].HttpStatus != http.StatusOK {
 					t.Fatal("native control failover lost ordered attempts")
 				}
 			} else if secondaryCalls.Load() != 0 {

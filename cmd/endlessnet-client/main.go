@@ -2869,68 +2869,6 @@ func routeConflictErrorForMap(networkMap clientapi.RegisterNodeResponse, ignored
 	return routeConflictError(client.OverlayCIDRConflicts(networkMap, client.LocalInterfaceStatuses(), ignoredInterfaces...))
 }
 
-func attachControlAvailability(ctx context.Context, payload map[string]any, serverURLs ...string) {
-	urls := clientapi.NormalizeControlPlaneURLs(serverURLs...)
-	if len(urls) == 0 {
-		return
-	}
-	attempts := make([]map[string]any, 0, len(urls))
-	for _, serverURL := range urls {
-		control := probeControlReadyz(ctx, serverURL)
-		attempts = append(attempts, control)
-		if control["ok"] == true {
-			if len(attempts) > 1 {
-				control["attempts"] = attempts
-			}
-			payload["control"] = control
-			return
-		}
-	}
-	control := attempts[len(attempts)-1]
-	if len(attempts) > 1 {
-		control["attempts"] = attempts
-	}
-	payload["control"] = control
-	markControlDegraded(payload)
-}
-
-func probeControlReadyz(ctx context.Context, serverURL string) map[string]any {
-	readyURL := strings.TrimRight(strings.TrimSpace(serverURL), "/") + "/client/readyz"
-	control := map[string]any{
-		"ok":  false,
-		"url": readyURL,
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, readyURL, nil)
-	if err != nil {
-		control["error"] = err.Error()
-		return control
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		control["error"] = err.Error()
-		return control
-	}
-	defer func() { _ = resp.Body.Close() }()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
-	control["http_status"] = resp.StatusCode
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		control["ok"] = true
-		return control
-	}
-	control["error"] = resp.Status
-	return control
-}
-
-func markControlDegraded(payload map[string]any) {
-	switch fmt.Sprint(payload["control_state"]) {
-	case string(ipc.ControlStateReady), string(ipc.ControlStateRegistered):
-		payload["control_state"] = ipc.ControlStateDegraded
-		return
-	}
-	if valid, _ := payload["cached_map_valid"].(bool); valid {
-		payload["control_state"] = ipc.ControlStateDegraded
-	}
-}
 
 func attachAgentStatus(payload map[string]any, snapshot client.AgentSnapshot) {
 	selectedRelay := map[string]string{}

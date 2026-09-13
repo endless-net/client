@@ -705,6 +705,12 @@ and unspecified connection phase rather than inferring an active tunnel from
 readiness. Privileged inspection flags still require CI validation. Retired
 projection functions remain only for tests awaiting migration/removal.
 
+The retired map-based readiness probe, degradation helper and three corresponding
+tests are removed. Native control-status coverage checks ready, unavailable and
+failover outcomes, exact ordered 503/200 attempts, no credential headers or body
+disclosure, and stopping after primary success. Cached-map and snapshot legacy
+projection tests still require migration before their remaining DTOs can be removed.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,
