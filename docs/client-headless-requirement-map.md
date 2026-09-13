@@ -112,6 +112,17 @@ families are identified in the IT table, rather than counted as proof by name.
 
 ## Remaining assertion audit
 
+IT-26 admission assertions inspected: `TestRPCDurableReplayBeforeCAS` reopens
+the saved config, checks a new instance identity, forbids preparation during
+replay, accepts refreshed CAS for the same semantic payload, rejects a changed
+payload and rejects a genuinely new stale-instance request.
+`TestRPCConcurrentSameRequestHasOneDurableAdmission` adds sixteen synchronized
+callers with independently cloned copies of one request. It requires one domain
+preparation, one new admission, one journal record, one revision increment and
+identical operations for every caller, then replays the result from disk after
+restart. This qualifies generic local admission only; per-method preparation,
+worker effects, response-loss transport and the full IT-26 outcome remain open.
+
 - Expand each review entry into exact unit assertions and missing branches; do
   not mark a row implemented from a filename or successful package test.
 - Reconcile the local v0 requirement variants with these BA/IT rows and the

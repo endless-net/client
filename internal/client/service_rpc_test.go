@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -148,6 +149,56 @@ func TestRPCDurableReplayBeforeCAS(t *testing.T) {
 	newRequest.Mutation.ExpectedInstanceId = m.instanceID
 	_, _, err = restarted.acceptAs(peer, rpcCreateProfile, newRequest, rpcPrepareTest)
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+}
+
+func TestRPCConcurrentSameRequestHasOneDurableAdmission(t *testing.T) {
+	m := newRPCStoreTest(t)
+	peer := local.Peer{Identity: "uid:1000"}
+	request := rpcCreateRequest(t, m)
+	revision := m.Metadata().Revision
+	const count = 16
+	operations := make([]*ipc.Operation, count)
+	errors := make([]error, count)
+	reused := make([]bool, count)
+	var preparations atomic.Int32
+	prepare := func(cfg *Config, operation *ipc.Operation) error {
+		preparations.Add(1)
+		return rpcPrepareTest(cfg, operation)
+	}
+	start := make(chan struct{})
+	var waiting, finished sync.WaitGroup
+	waiting.Add(count)
+	for i := range count {
+		copy := proto.Clone(request).(*ipc.CreateProfileRequest)
+		finished.Go(func() {
+			waiting.Done()
+			<-start
+			operations[i], reused[i], errors[i] = m.acceptAs(peer, rpcCreateProfile, copy, prepare)
+		})
+	}
+	waiting.Wait()
+	close(start)
+	finished.Wait()
+	newAdmissions := 0
+	for i := range count {
+		if errors[i] != nil || operations[i] == nil || !proto.Equal(operations[0], operations[i]) {
+			t.Fatalf("caller %d did not receive the same durable result: %v", i, errors[i])
+		}
+		if !reused[i] {
+			newAdmissions++
+		}
+	}
+	if preparations.Load() != 1 || newAdmissions != 1 || len(m.store.Read().RPCState.Operations) != 1 || m.Metadata().Revision != revision+1 {
+		t.Fatal("concurrent retries repeated preparation, journal entry or revision")
+	}
+	restarted, err := NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed, wasReused, err := restarted.acceptAs(peer, rpcCreateProfile, request, prepare)
+	if err != nil || !wasReused || !proto.Equal(operations[0], replayed) || preparations.Load() != 1 {
+		t.Fatal("concurrent admission was not durably replayable after restart", err)
+	}
 }
 
 func TestRPCRequestDigestDoesNotPersistEnrollmentToken(t *testing.T) {
