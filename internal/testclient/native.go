@@ -84,15 +84,23 @@ func (n *Node) AwaitNativeStatus(match func(*ipc.Status) bool) *ipc.Status {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var status *ipc.Status
+	var lastErr error
 	if err := Await(ctx, func() bool {
 		response := &ipc.GetStatusResponse{}
-		if n.NativeService("status", response, "--timeout", "1s") != nil {
+		lastErr = n.NativeService("status", response, "--timeout", "1s")
+		if lastErr != nil {
 			return false
 		}
 		status = response.Status
 		return status != nil && match(status)
 	}); err != nil {
 		n.logWireGuardStartupStages()
+		// Keep only public enum values, counters and shape predicates. The last
+		// successful observation can precede a failed read; report both separately.
+		n.t.Logf("native status last observation: present=%t service=%d control=%d connection=%d desired=%d disconnected=%t revision=%d map=%d agent_present=%t agent_state=%d agent_map=%d agent_failure=%d last_read_error=%v",
+			status != nil, status.GetServiceState(), status.GetControlState(), status.GetConnectionPhase(),
+			status.GetIntent().GetDesiredState(), status.GetUserDisconnected(), status.GetMetadata().GetRevision(), status.GetMapRevision(),
+			status.GetAgent() != nil, status.GetAgent().GetSnapshotState(), status.GetAgent().GetMapRevision(), status.GetAgent().GetLastFailure().GetCode(), lastErr)
 		n.t.Fatal("native status condition not reached")
 	}
 	return status
