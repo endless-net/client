@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	nativeipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
 	ipc "github.com/endless-net/client/ipc/v2"
 
@@ -1050,7 +1051,32 @@ func TestCmdAgentWritesFailureStateForTamperedMapWithoutReplacingOutput(t *testi
 		t.Fatal(err)
 	}
 
-	err := cmdAgent([]string{"--once", "--config", configPath, "--state-output", statePath, "--timeout", "1s"})
+	store, err := client.OpenConfigStore(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutations, err := client.NewClientRPCMutations(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Profile admission requires HTTPS; the component test uses a local HTTP
+	// control-plane fixture after admission, without changing production rules.
+	if err := store.Update(func(cfg *client.Config) error {
+		cfg.ControlPlaneURLs = []string{"https://control.example.test"}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mutations.AdoptInitialProfile(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Update(func(cfg *client.Config) error {
+		cfg.ControlPlaneURLs = []string{server.URL}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err = cmdAgent([]string{"--once", "--config", configPath, "--state-output", statePath, "--timeout", "1s"})
 	if err == nil || !strings.Contains(err.Error(), "payload hash mismatch") {
 		t.Fatalf("cmdAgent error = %v, want payload hash mismatch", err)
 	}
@@ -1080,15 +1106,12 @@ func TestCmdAgentWritesFailureStateForTamperedMapWithoutReplacingOutput(t *testi
 			t.Fatalf("agent failure state leaked %q: %#v", secret, snapshot)
 		}
 	}
-	status, err := agentIPCStatus(context.Background(), agentIPCOptions{ConfigPath: configPath, StateOutput: statePath})
-	if err != nil {
-		t.Fatal(err)
+	status := buildAgentRPCStatus(t.Context(), agentIPCOptions{StateOutput: statePath}, saved, nativeipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED)
+	if status.ConnectionPhase == nativeipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED || status.ServiceState == nativeipc.ServiceState_SERVICE_STATE_CONNECTED || !status.GetStoredState().GetCachedMapValid() || status.MapRevision != 7 {
+		t.Fatal("native status inferred connection or replaced retained verified map")
 	}
-	if status.ControlState != ipc.ControlStateDegraded || status.State != ipc.StateDegraded {
-		t.Fatalf("IPC status after tampered map failure = %#v, want degraded", status)
-	}
-	if status.Agent == nil || !strings.Contains(status.Agent.LastError, "payload hash mismatch") {
-		t.Fatalf("IPC status missing agent last_error: %#v", status)
+	if status.GetAgent().GetLastFailure().GetCode() != nativeipc.ErrorCode_ERROR_CODE_UNAVAILABLE || status.GetAgent().GetLastFailure().GetReasonKey() != "agent_observation_failed" {
+		t.Fatalf("native status lost bound failure: profile=%q snapshot_profile=%q node_match=%t network_match=%t revision=%d snapshot_revision=%d", status.ActiveProfileId, snapshot.ProfileID, status.NodeId == snapshot.NodeID, status.GetNetwork().GetId() == snapshot.NetworkID, status.MapRevision, snapshot.MapRevision)
 	}
 }
 
