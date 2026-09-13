@@ -122,6 +122,12 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 			if err := ApplyLocalLogoutCleanup(cfg, m.now()); err != nil {
 				return err
 			}
+			profile := cfg.RPCState.Profiles[op.ProfileId]
+			if err := ApplyLocalLogoutCleanup(&profile.Configuration, m.now()); err != nil {
+				return err
+			}
+			profile.LogoutConfirmation = nil
+			cfg.RPCState.Profiles[profile.ID] = profile
 			op.Outcome = &ipc.Operation_Cleanup{Cleanup: &ipc.CleanupResult{Outcome: ipc.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_UNCONFIRMED, LocalRegistrationRemoved: true, ControlRequestId: requestID}}
 		}
 		if stopErr != nil {

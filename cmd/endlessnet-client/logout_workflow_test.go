@@ -78,7 +78,7 @@ func TestTypedRemoteLogoutPreservesLocalStateUntilCallerCommit(t *testing.T) {
 			if err := client.SaveConfig(path, cfg); err != nil {
 				t.Fatal(err)
 			}
-			err := revokeConfiguredClient(t.Context(), cfg, client.ClientRPCLogoutProgress{}, func(client.ClientRPCLogoutProgress) error { return nil })
+			_, err := agentRPCLogout(t.Context(), cfg, client.ClientRPCLogoutProgress{}, func(client.ClientRPCLogoutProgress) error { return nil })
 			if (err == nil) != (stage == "confirmed") {
 				t.Fatalf("unexpected cleanup result: %v", err)
 			}

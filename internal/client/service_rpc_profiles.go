@@ -82,11 +82,12 @@ func (m *ClientRPCMutations) listProfilesWithSelectionAs(peer local.Peer, reques
 // state lives in the top-level Config until a safe tunnel-context switch saves
 // it here. Never expose Configuration through the local contract.
 type clientRPCProfile struct {
-	ID            string                 `json:"id"`
-	DisplayName   string                 `json:"display_name"`
-	ControlOrigin string                 `json:"control_origin"`
-	Configuration Config                 `json:"configuration"`
-	UIQuit        *ipc.LifecycleBehavior `json:"ui_quit,omitempty"`
+	ID                 string                       `json:"id"`
+	DisplayName        string                       `json:"display_name"`
+	ControlOrigin      string                       `json:"control_origin"`
+	Configuration      Config                       `json:"configuration"`
+	UIQuit             *ipc.LifecycleBehavior       `json:"ui_quit,omitempty"`
+	LogoutConfirmation *clientRPCLogoutConfirmation `json:"logout_confirmation,omitempty"`
 }
 
 func rpcProfileDisplayName(value string) (string, error) {

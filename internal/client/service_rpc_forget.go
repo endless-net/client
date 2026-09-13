@@ -73,6 +73,7 @@ func (m *ClientRPCMutations) forgetInactiveEnrollmentAs(peer local.Peer, request
 		if err := ApplyLocalLogoutCleanup(&profile.Configuration, m.now()); err != nil {
 			return err
 		}
+		profile.LogoutConfirmation = nil
 		cfg.RPCState.Profiles[profile.ID] = profile
 		op.ProfileId = profile.ID
 		op.Continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED

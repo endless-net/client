@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"crypto/hmac"
 	"time"
 
 	"connectrpc.com/connect"
@@ -21,6 +22,9 @@ func (m *ClientRPCMutations) connectAs(peer local.Peer, request *ipc.ConnectRequ
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		if cfg.NodeID == "" || cfg.CachedMap == nil {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
+		}
+		if confirmed := profile.LogoutConfirmation; confirmed != nil && confirmed.Progress.NodeRevoked && hmac.Equal(confirmed.Authority, logoutAuthority(*cfg)) {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
 		}
 		for _, record := range cfg.RPCState.Operations {

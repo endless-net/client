@@ -1,7 +1,9 @@
 package client
 
 import (
-	"reflect"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/json"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
@@ -20,6 +22,24 @@ type ClientRPCLogoutProgress struct {
 type clientRPCLogout struct {
 	OperationID string                  `json:"operation_id"`
 	Progress    ClientRPCLogoutProgress `json:"progress"`
+	DownStarted bool                    `json:"down_started,omitempty"`
+}
+
+type clientRPCLogoutConfirmation struct {
+	Authority []byte                  `json:"authority"`
+	Progress  ClientRPCLogoutProgress `json:"progress"`
+}
+
+func logoutAuthority(cfg Config) []byte {
+	if cfg.RPCState == nil {
+		return nil
+	}
+	values := []string{cfg.RPCState.ActiveProfileID, cfg.LocalOwnerID, cfg.ActiveAccountID, cfg.ManagementURL, cfg.NodeID, cfg.NodeCredential, cfg.Token, cfg.DeviceFingerprint, cfg.PrivateKey, cfg.IdentityPrivateKey}
+	values = append(values, cfg.ControlPlaneURLs...)
+	encoded, _ := json.Marshal(values)
+	hash := hmac.New(sha256.New, cfg.RPCState.DigestKey)
+	_, _ = hash.Write(encoded)
+	return hash.Sum(nil)
 }
 
 func (m *ClientRPCMutations) logoutAs(peer local.Peer, request *ipc.LogoutRequest) (*ipc.Operation, error) {
@@ -48,6 +68,9 @@ func (m *ClientRPCMutations) logoutAs(peer local.Peer, request *ipc.LogoutReques
 		}
 		op.ProfileId = profile.ID
 		cfg.RPCState.Logout = &clientRPCLogout{OperationID: op.Id}
+		if previous := profile.LogoutConfirmation; previous != nil && hmac.Equal(previous.Authority, logoutAuthority(*cfg)) {
+			cfg.RPCState.Logout.Progress = previous.Progress
+		}
 		return nil
 	})
 	return op, err
@@ -62,14 +85,16 @@ func (m *ClientRPCMutations) LogoutProgressCallback(operationID string, initial 
 			plan := cfg.RPCState.Logout
 			if plan == nil || plan.OperationID != operationID || op.Kind != ipc.OperationKind_OPERATION_KIND_LOGOUT || op.State != ipc.OperationState_OPERATION_STATE_RUNNING ||
 				expected.RPCState == nil || cfg.RPCState.ActiveProfileID != op.ProfileId || expected.RPCState.ActiveProfileID != op.ProfileId ||
-				cfg.LocalOwnerID != expected.LocalOwnerID || cfg.ActiveAccountID != expected.ActiveAccountID || cfg.ManagementURL != expected.ManagementURL ||
-				!reflect.DeepEqual(cfg.ControlPlaneURLs, expected.ControlPlaneURLs) || !reflect.DeepEqual(enrollmentFields(*cfg), enrollmentFields(expected)) {
+				!hmac.Equal(logoutAuthority(*cfg), logoutAuthority(expected)) {
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 			}
 			if plan.Progress.NodeRevoked && !progress.NodeRevoked || plan.Progress.SessionRevoked && !progress.SessionRevoked || progress.SessionRevoked && !progress.NodeRevoked {
 				return rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 			}
 			plan.Progress = progress
+			profile := cfg.RPCState.Profiles[op.ProfileId]
+			profile.LogoutConfirmation = &clientRPCLogoutConfirmation{Authority: logoutAuthority(*cfg), Progress: progress}
+			cfg.RPCState.Profiles[profile.ID] = profile
 			return nil
 		})
 		return err

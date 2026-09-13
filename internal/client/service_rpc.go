@@ -429,6 +429,9 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 			if !validRPCOperationTransition(previous, updated) {
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 			}
+			if updated.Kind == ipc.OperationKind_OPERATION_KIND_LOGOUT && rpcOperationTerminal(updated.State) && cfg.RPCState.Logout != nil && cfg.RPCState.Logout.OperationID == updated.Id {
+				cfg.RPCState.Logout = nil
+			}
 			if updated.Kind == ipc.OperationKind_OPERATION_KIND_ENROLL && rpcOperationTerminal(updated.State) &&
 				cfg.RPCState.Enrollment != nil && cfg.RPCState.Enrollment.OperationID == updated.Id {
 				cfg.RPCState.Enrollment = nil
@@ -455,10 +458,10 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 	if state := m.store.Read().RPCState; state != nil && state.ActiveProfileID != previousActive {
 		m.observedStatus = nil
 	}
-	if updated.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT && updated.State == ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+	if (updated.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT || updated.Kind == ipc.OperationKind_OPERATION_KIND_LOGOUT) && updated.State == ipc.OperationState_OPERATION_STATE_SUCCEEDED {
 		m.observedStatus = nil
 	}
-	if updated.Kind == ipc.OperationKind_OPERATION_KIND_DISCONNECT || updated.Kind == ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE || updated.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT {
+	if updated.Kind == ipc.OperationKind_OPERATION_KIND_DISCONNECT || updated.Kind == ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE || updated.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT || updated.Kind == ipc.OperationKind_OPERATION_KIND_LOGOUT {
 		if m.observedStatus == nil {
 			m.observedStatus = &ipc.Status{}
 		}

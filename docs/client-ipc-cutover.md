@@ -517,3 +517,16 @@ failure. Tests cover exact acceptance replay, disk persistence, a new coordinato
 stale credentials, no progress rollback and session-only continuation. The CLI
 still runs without durable operation progress until its native RPC migration;
 the native Logout executor, terminal outcomes and service exposure remain open.
+
+The native Logout executor now performs remote confirmation, durable progress,
+Down and local cleanup in that order. Remote failure reports
+REMOTE_CLEANUP_REQUIRED with correlation and retains registration; Down failure
+also retains local data. Per-profile confirmation checkpoints are bound to the
+original authority with a keyed digest, survive a failed operation and are reused
+only for matching credentials on explicit retry. Connect rejects an already
+revoked authority. Successful cleanup removes both active and saved-profile
+credential copies and clears confirmation state. Down-start progress avoids
+claiming uninterrupted continuity after an ambiguous restart. Tests cover remote
+and Down failures, explicit retry, retained steps and removal of credential copies.
+The agent adapter calls the typed remote workflow, but worker/RPC exposure and
+production host integration still remain to wire; this is not full UF-12 evidence.

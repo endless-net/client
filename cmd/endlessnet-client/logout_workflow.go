@@ -8,6 +8,15 @@ import (
 	"github.com/endless-net/client/internal/client"
 )
 
+func agentRPCLogout(ctx context.Context, cfg client.Config, progress client.ClientRPCLogoutProgress, checkpoint func(client.ClientRPCLogoutProgress) error) (string, error) {
+	err := revokeConfiguredClient(ctx, cfg, progress, checkpoint)
+	var remote remoteCleanupError
+	if errors.As(err, &remote) {
+		return remote.RequestID, err
+	}
+	return "", err
+}
+
 // revokeConfiguredClient confirms all applicable remote cleanup before the
 // caller may delete local registration. It never writes config, removes files
 // or invokes a CLI command. Native callers retain their operation context.
