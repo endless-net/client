@@ -59,12 +59,13 @@ func TestNativeAgentFailureIsNotInferredFromControlHealth(t *testing.T) {
 func nativeControlScenario(t *testing.T) (*testcontrol.Server, *testclient.Node, string) {
 	t.Helper()
 	requireControlScenario(t)
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	network, token, err := s.AddNetwork("scenario", "100.90.0.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	n.TrustControlTLS(s)
 	n.Enroll(s, network.Name, token)
 	n.Start()
 	status := n.AwaitNativeStatus(func(v *ipc.Status) bool {

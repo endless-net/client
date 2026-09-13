@@ -219,6 +219,21 @@ tests, vet and lint pass; short mode skips the privileged traffic scenarios.
 The exit-route reference still proves only the client egress hop, not a public
 Internet address, and hosted traffic acceptance remains outstanding.
 
+## Shared recovery and relay fixture follow-up — 2026-09-13
+
+`nativeControlScenario`, used by recovery/error-matrix and lifecycle scenarios,
+now supplies HTTPS and explicit runner-scoped trust before enrollment. Native
+relay traffic/failover and machine-sharing scenarios use the same TLS fixture.
+Their public-error classification, signed grant expiration, relay-only traffic
+and recovery assertions are unchanged; TLS setup is not evidence they passed.
+
+The HTTP fixtures in local IPC unary-timeout and stream-fault tests are not
+control-plane agent bootstrap paths: those tests create a separate local
+protobuf handler and never start the agent. They do not imply HTTP IPC v2 and
+are deliberately not changed by this fixture migration. Unsupported-platform
+router/exit-provider CLI checks also require separate native-command review,
+not a blind TLS substitution.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
