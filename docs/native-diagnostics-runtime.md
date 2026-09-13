@@ -280,6 +280,17 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The two-client connection-intent subscenario now captures native node/profile
+baselines and issues typed connect/disconnect mutations with fresh CAS metadata
+and distinct request IDs, waiting for successful terminal operations. Explicit
+desired intent and actual connection phase must survive restart. Disconnect denies
+TCP, UDP and incoming overlay ping while receiver applications remain alive;
+connect and a repeated connect restore traffic without reenrollment. During a
+control outage, current agent failure and retained verified cache are observed
+independently of traffic. Recovery requires a current error-free applied map.
+This guarded Linux namespace scenario is compiled by local short tests, not
+executed; full two-client fixture migration and CI acceptance remain pending.
+
 The two-client credential-retirement subscenario now captures its own native
 status baseline rather than accepting legacy status DTOs. Terminal cleanup and
 restart must clear native enrollment/cache while preserving the profile. The

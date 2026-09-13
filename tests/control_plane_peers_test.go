@@ -20,6 +20,7 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	ipc "github.com/endless-net/client/ipc/v2"
@@ -154,82 +155,95 @@ func TestClientDataplaneDirectPeerTrafficAndWithdrawal(t *testing.T) {
 		t.Fatal("restored peer did not recover traffic")
 	}
 	exerciseApplicationPolicy(t, s, nodes, states, peers)
-	exerciseConnectionIntent(t, s, nodes, states)
+	exerciseConnectionIntent(t, s, nodes)
 	exercisePeerDNS(t, s, nodes, states, peers)
 	exerciseCredentialRetirement(t, s, nodes)
 }
 
 // HC-017/HC-018/HC-030: persisted user intent and outage behavior must agree with
 // application traffic, without a new enrollment or private-state inspection.
-func exerciseConnectionIntent(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.Node, initial [2]ipc.StatusResponse) {
+func exerciseConnectionIntent(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.Node) {
 	t.Helper()
-	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
+	binary := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
+	var initial [2]*native.Status
+	var addresses [2]string
+	for i, node := range nodes {
+		initial[i] = node.AwaitNativeStatus(func(v *native.Status) bool {
+			return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
+		})
+		addresses[i] = nativeOverlayAddress(initial[i], false).String()
+	}
 	source := nodes[0]
 	assertDisconnected := func() {
 		t.Helper()
-		source.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.State == ipc.StateDisconnected && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected && v.NodeID == initial[0].NodeID && v.NodeCredentialPresent && v.CachedMapValid
+		source.AwaitNativeStatus(func(v *native.Status) bool {
+			return v.ConnectionPhase == native.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED && v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED &&
+				v.NodeId == initial[0].NodeId && v.ActiveProfileId == initial[0].ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 		})
 		for range 3 {
-			if !applicationProbe(t, binary, nodes[1].Namespace, "tcp", "127.0.0.1:24001") {
-				t.Fatal("disconnect denial coincided with application failure")
+			for _, protocol := range []string{"tcp", "udp"} {
+				if !applicationProbe(t, binary, nodes[1].Namespace, protocol, "127.0.0.1:24001") {
+					t.Fatal("disconnect denial coincided with application failure")
+				}
+				if applicationProbe(t, binary, source.Namespace, protocol, net.JoinHostPort(addresses[1], "24001")) {
+					t.Fatalf("user-disconnected client still passed %s application traffic", protocol)
+				}
 			}
-			if applicationProbe(t, binary, source.Namespace, "tcp", net.JoinHostPort(initial[1].OverlayIP, "24001")) {
-				t.Fatal("user-disconnected client still passed application traffic")
-			}
-			if pingPeer(nodes[1].Namespace, initial[0].OverlayIP) == nil {
+			if pingPeer(nodes[1].Namespace, addresses[0]) == nil {
 				t.Fatal("user-disconnected client still received overlay traffic")
 			}
 		}
 	}
 	assertTraffic := func() {
 		t.Helper()
-		source.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == initial[0].NodeID && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.WireGuard != nil && v.WireGuard.OK
+		source.AwaitNativeStatus(func(v *native.Status) bool {
+			return v.NodeId == initial[0].NodeId && v.ActiveProfileId == initial[0].ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() &&
+				!v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_CONNECTED && v.ConnectionPhase == native.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 		})
 		for i := range nodes {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			err := testclient.Await(ctx, func() bool { return pingPeer(nodes[i].Namespace, initial[1-i].OverlayIP) == nil })
+			err := testclient.Await(ctx, func() bool { return pingPeer(nodes[i].Namespace, addresses[1-i]) == nil })
 			cancel()
 			if err != nil {
 				t.Fatal("connection intent did not restore bidirectional traffic")
 			}
 		}
 		for _, protocol := range []string{"tcp", "udp"} {
-			if !applicationProbe(t, binary, source.Namespace, protocol, net.JoinHostPort(initial[1].OverlayIP, "24001")) {
+			if !applicationProbe(t, binary, source.Namespace, protocol, net.JoinHostPort(addresses[1], "24001")) {
 				t.Fatalf("connected client did not pass %s application traffic", protocol)
 			}
 		}
 	}
-	var disconnected ipc.DisconnectResponse
-	source.Service("disconnect", &disconnected)
+	runNativeControlMutation(t, source, "disconnect", "9c1d2000-0000-4000-8000-000000000001")
 	assertDisconnected()
 	source.Stop()
 	source.Start()
 	assertDisconnected()
-	var connected ipc.ConnectResponse
-	source.Service("connect", &connected)
+	runNativeControlMutation(t, source, "connect", "9c1d2000-0000-4000-8000-000000000002")
 	assertTraffic()
 	// A repeated connect and a process restart must preserve connected intent.
-	source.Service("connect", &connected)
+	runNativeControlMutation(t, source, "connect", "9c1d2000-0000-4000-8000-000000000003")
 	source.Stop()
 	source.Start()
 	assertTraffic()
 	s.SetUnavailable(true)
-	for _, n := range nodes {
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.State == ipc.StateDegraded && v.NodeCredentialPresent && v.CachedMapValid
+	defer s.SetUnavailable(false)
+	for i, n := range nodes {
+		n.AwaitNativeStatus(func(v *native.Status) bool {
+			return v.NodeId == initial[i].NodeId && v.ActiveProfileId == initial[i].ActiveProfileId && nativeCurrentAgentFailure(v) &&
+				v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 		})
 	}
 	assertTraffic()
 	s.SetUnavailable(false)
-	update(t, s, initial[0].NodeID, func(m *api.NetworkMapSnapshot) { m.Network.Name = "control-restored" })
-	recovered, err := s.Snapshot(initial[0].NodeID)
+	update(t, s, initial[0].NodeId, func(m *api.NetworkMapSnapshot) { m.Network.Name = "control-restored" })
+	recovered, err := s.Snapshot(initial[0].NodeId)
 	if err != nil {
 		t.Fatal(err)
 	}
-	source.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == initial[0].NodeID && v.MapRevision >= recovered.Revision.Network && v.State == ipc.StateConnected
+	source.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.NodeId == initial[0].NodeId && v.MapRevision >= recovered.Revision.Network && v.ConnectionPhase == native.ConnectionPhase_CONNECTION_PHASE_CONNECTED &&
+			v.Agent != nil && v.Agent.SnapshotState == native.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.MapRevision == v.MapRevision && v.Agent.LastFailure == nil
 	})
 	assertTraffic()
 	registrations := 0
@@ -237,7 +251,7 @@ func exerciseConnectionIntent(t *testing.T, s *testcontrol.Server, nodes [2]*tes
 		if event.Kind == "registered" {
 			registrations++
 		}
-		if event.Kind == "registration-refreshed" && event.NodeID != initial[0].NodeID && event.NodeID != initial[1].NodeID {
+		if event.Kind == "registration-refreshed" && event.NodeID != initial[0].NodeId && event.NodeID != initial[1].NodeId {
 			t.Fatal("credential refresh changed node identity")
 		}
 	}
