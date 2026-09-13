@@ -304,6 +304,23 @@ Commit `33b724a` adds the last bounded `NativeService` error and an instance-pre
 boolean to that timeout without changing readiness or its deadline. Its new
 diagnostic requires a subsequent runner result; container acceptance remains open.
 
+## Windows interface MTU follow-up — 2026-09-13
+
+[Windows 2025 installed job 103735355395](https://github.com/endless-net/client/actions/runs/34761426252/job/103735355395)
+on source `110d8594c8bd1a4baae46c403a6c34850a070d89` returned diagnostics
+`LIMIT_EXCEEDED`. The bounded test-process inventory reported four interfaces,
+one invalid MTU, and no other exceeded interface bounds. This is not a dump of
+the service's private state. [Go's Windows adapter](https://go.dev/src/net/interface_windows.go)
+explicitly maps OS MTU `0xffffffff` to `-1`; the native uint32 projection previously
+rejected that sentinel along with invalid numeric values.
+
+The projection now represents precisely `-1` as unavailable MTU (`0` plus interface
+`UNAVAILABLE` / `interface_mtu_unavailable`), preserving the remaining diagnostics.
+Other negative values, uint32 overflow, collection bounds and tunnel-MTU limits
+remain rejected. Regression cases distinguish zero, the unavailable sentinel,
+Linux loopback 65536, uint32 maximum and invalid values. This correction still
+requires installed Windows runner confirmation; it does not close acceptance.
+
 ## Methods without a runtime override
 
 Follow-up at [client main source d6e38bc](https://github.com/endless-net/client/tree/d6e38bc48888c1d18881464c942bc66dea1952c0):
