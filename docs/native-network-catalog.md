@@ -17,6 +17,12 @@ and the native process boundary scenario. Remaining generic HTTP handlers/DTOs
 are separate cleanup work; removing this callback is not cross-network switch
 acceptance or a new runtime revalidation.
 
+The old HTTP selection route and `ServiceIPCHandlers.SelectNetwork` field are
+removed as well. The retired-route regression requires 404 for both GET and POST;
+the Windows HTTP fixture no longer provides or asserts a v2 selection response.
+The generic legacy contract DTO/spec definitions still need final cleanup with
+the rest of IPC v2; they are not a supported alternative to native SelectNetwork.
+
 The agent configures ListNetworks using typed UserService ListNetworks for the
 requested profile's active account and user session. This is not the retired IPC
 callback that reported only the cached map's current network; that callback is

@@ -612,7 +612,6 @@ func TestServiceIPCEndpointPrivilegeMatrix(t *testing.T) {
 		{http.MethodPost, ipc.PathDisconnect, ServiceIPCPrivilegeOwner, true},
 		{http.MethodPost, ipc.PathLogout, ServiceIPCPrivilegeOwner, true},
 		{http.MethodPost, ipc.PathLocalForget, ServiceIPCPrivilegeAdministrator, true},
-		{http.MethodPost, ipc.PathSelectNetwork, ServiceIPCPrivilegeOwner, true},
 	} {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, newServiceIPCTestRequest(tc.method, tc.path, bytes.NewBufferString(`{}`)))
@@ -634,13 +633,15 @@ func TestServiceIPCRetiredCatalogRoutesAreAbsent(t *testing.T) {
 	}
 }
 
-func TestServiceIPCRetiredBundleRouteIsAbsent(t *testing.T) {
+func TestServiceIPCRetiredMutationRoutesAreAbsent(t *testing.T) {
 	handler := NewServiceIPCHandler(ServiceIPCHandlers{})
-	for _, method := range []string{http.MethodPost, http.MethodGet} {
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, newServiceIPCTestRequest(method, ipc.PathDiagnosticsBundle, strings.NewReader(`{}`)))
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("retired bundle route returned %d, want 404", rec.Code)
+	for _, path := range []string{ipc.PathDiagnosticsBundle, ipc.PathSelectNetwork} {
+		for _, method := range []string{http.MethodPost, http.MethodGet} {
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, newServiceIPCTestRequest(method, path, strings.NewReader(`{}`)))
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("retired mutation route %s returned %d, want 404", path, rec.Code)
+			}
 		}
 	}
 }

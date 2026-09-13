@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/Microsoft/go-winio"
-	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	client "github.com/endless-net/client/internal/client"
 	ipc "github.com/endless-net/client/ipc/v2"
 )
@@ -73,13 +72,6 @@ func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {
 			},
 			Logout: func(ctx context.Context, req ipc.LogoutRequest) (ipc.LogoutResponse, error) {
 				return ipc.LogoutResponse{State: ipc.StateNeedsEnrollment}, nil
-			},
-			SelectNetwork: func(ctx context.Context, req ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error) {
-				networkID := strings.TrimSpace(req.NetworkID)
-				if networkID == "" {
-					return ipc.SelectNetworkResponse{}, ipc.NewError(http.StatusBadRequest, "network_id_required", errors.New("network_id is required"))
-				}
-				return ipc.SelectNetworkResponse{SelectedNetworkID: networkID, SelectedNetwork: clientapi.Network{ID: networkID, Name: "E2E"}}, nil
 			},
 		}),
 		ConnContext: client.WindowsServiceIPCConnContext,
@@ -139,14 +131,6 @@ func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {
 	}
 	if disconnect.State != ipc.StateDisconnected {
 		t.Fatalf("disconnect = %#v", disconnect)
-	}
-
-	var selected ipc.SelectNetworkResponse
-	if err := ipcClient.Request(ctx, http.MethodPost, ipc.PathSelectNetwork, ipc.SelectNetworkRequest{NetworkID: "net_e2e"}, &selected); err != nil {
-		t.Fatal(err)
-	}
-	if selected.SelectedNetworkID != "net_e2e" {
-		t.Fatalf("selected = %#v", selected)
 	}
 
 	assertWindowsServiceIPCEventStream(t, ctx, ipcClient)

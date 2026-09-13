@@ -176,7 +176,6 @@ type ServiceIPCHandlers struct {
 	Disconnect     func(context.Context, ipc.DisconnectRequest) (ipc.DisconnectResponse, error)
 	Logout         func(context.Context, ipc.LogoutRequest) (ipc.LogoutResponse, error)
 	LocalForget    func(context.Context, ipc.LocalForgetRequest) (ipc.LocalForgetResponse, error)
-	SelectNetwork  func(context.Context, ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error)
 	MutationLock   sync.Locker
 }
 
@@ -191,7 +190,6 @@ func NewServiceIPCHandler(handlers ServiceIPCHandlers) http.Handler {
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathDisconnect, ipc.OperationDisconnect, ServiceIPCPrivilegeOwner, true), handlers.Disconnect, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathLogout, ipc.OperationLogout, ServiceIPCPrivilegeOwner, true), handlers.Logout, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathLocalForget, ipc.OperationLocalForget, ServiceIPCPrivilegeAdministrator, true), handlers.LocalForget, handlers.Authorize, handlers.MutationLock)
-	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathSelectNetwork, ipc.OperationSelectNetwork, ServiceIPCPrivilegeOwner, true), handlers.SelectNetwork, handlers.Authorize, handlers.MutationLock)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		negotiatedRequest, ipcErr := negotiateServiceIPCRequest(r)
 		if ipcErr != nil {
