@@ -23,8 +23,6 @@ const (
 	PathDisconnect     = "/disconnect"
 	PathLogout         = "/logout"
 	PathLocalForget    = "/logout/local"
-	PathDiagnostics    = "/diagnostics"
-	PathRecentLogs     = "/logs/recent"
 )
 
 const (
@@ -37,8 +35,6 @@ const (
 	OperationDisconnect     = "disconnect"
 	OperationLogout         = "logout"
 	OperationLocalForget    = "logout.local_forget"
-	OperationDiagnostics    = "diagnostics"
-	OperationRecentLogs     = "logs.recent"
 )
 
 type EventType string

@@ -246,44 +246,6 @@ paths:
                 $ref: "#/components/schemas/LogoutResponse"
         default:
           $ref: "#/components/responses/IPCError"
-  /diagnostics:
-    parameters: *ipcVersionHeaders
-    get:
-      operationId: diagnostics
-      x-endlessnet-required-privilege: owner
-      summary: Read a redacted diagnostics snapshot without filesystem side effects.
-      responses:
-        "200":
-          description: Redacted diagnostics snapshot.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DiagnosticsResponse"
-        default:
-          $ref: "#/components/responses/IPCError"
-  /logs/recent:
-    parameters: *ipcVersionHeaders
-    get:
-      operationId: logs.recent
-      x-endlessnet-required-privilege: owner
-      summary: Read recent redacted service log entries.
-      parameters:
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 1000
-      responses:
-        "200":
-          description: Recent service logs.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LogsRecentResponse"
-        default:
-          $ref: "#/components/responses/IPCError"
 components:
   parameters:
     IPCProtocol:

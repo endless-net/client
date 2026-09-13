@@ -14,6 +14,11 @@ import (
 
 func TestRetiredOperationsAreAbsentFromHTTPContract(t *testing.T) {
 	spec := readOpenAPISpec(t)
+	for _, path := range []string{"/diagnostics:", "/logs/recent:"} {
+		if strings.Contains(spec, path) {
+			t.Fatalf("retired HTTP contract still contains %q", path)
+		}
+	}
 	for _, retired := range []string{"/network/select:", "operationId: network.select", "SelectNetworkRequest", "SelectNetworkResponse", "/networks:", "operationId: networks", "NetworksResponse", "NetworkSummary", "/diagnostics/bundle:", "operationId: diagnostics.bundle", "DiagnosticsBundleResponse"} {
 		if strings.Contains(spec, retired) {
 			t.Fatalf("retired HTTP contract still contains %q", retired)
@@ -36,8 +41,6 @@ func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
 		ipc.PathDisconnect,
 		ipc.PathLogout,
 		ipc.PathLocalForget,
-		ipc.PathDiagnostics,
-		ipc.PathRecentLogs,
 	} {
 		requireOpenAPIPath(t, spec, path)
 	}
@@ -52,8 +55,6 @@ func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
 		ipc.OperationDisconnect,
 		ipc.OperationLogout,
 		ipc.OperationLocalForget,
-		ipc.OperationDiagnostics,
-		ipc.OperationRecentLogs,
 	} {
 		requireOpenAPILine(t, spec, "operationId: "+operation)
 	}
