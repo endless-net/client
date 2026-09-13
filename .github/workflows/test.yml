@@ -39,6 +39,9 @@ jobs:
           go-version-file: go.mod
           cache: false
       - run: go test -short ./...
+      - name: Test client IPC module
+        working-directory: clientipc
+        run: go test -short ./...
 
   verify-linux:
     if: ${{ github.event_name != 'push' }}

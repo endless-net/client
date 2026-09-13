@@ -18,7 +18,9 @@ services or infrastructure are authorized by this implementation plan.
 ## Confirmed source gaps
 
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
-workflow. Full verification, installation and contract matrices run on PR or
+workflow, separately in the root and nested `clientipc` Go modules. The root
+package pattern does not traverse nested modules. Full verification,
+installation and contract matrices run on PR or
 explicit manual dispatch. CodeQL and Protobuf contract checks no longer run on
 push. Tag-triggered publication workflows are unchanged; publication still
 requires exact-source full manual evidence, not a green short-test push. No PR
@@ -60,7 +62,7 @@ Paths in the table are under `internal/client/` unless qualified otherwise.
 
 | Scenario | Runtime / contract implementation | Unit starting point and verified limit | Remaining client work / external dependency |
 | --- | --- | --- | --- |
-| US-01 bootstrap | `service_rpc_host.go`, `service_rpc_capabilities.go`; protected transport in `clientipc/local` | `service_rpc_host_capabilities_test.go`; root short tests do not run the nested `clientipc` module | Audit startup/identity/capability failure variants and separate nested-module unit execution |
+| US-01 bootstrap | `service_rpc_host.go`, `service_rpc_capabilities.go`; protected transport in `clientipc/local` | `service_rpc_host_capabilities_test.go`; separate `go test -short ./...` in `clientipc` passed locally on Windows on 2026-09-13 and is included in push CI | Audit startup/identity/capability failure variants; local Windows results do not qualify Unix transport or all bootstrap requirements |
 | US-02 enrollment | `service_rpc_enrollment_worker.go`, `service_rpc_enrollment_executor.go` | `TestRPCEnrollmentWorkerRecoveryAndShutdown` | Trace approval, denial, expiry, cancellation and ownership outcomes individually; actual backend approval is external |
 | US-03 connection | `service_rpc_connect.go`, `service_rpc_disconnect.go` | `TestRPCConnectDurabilityAndFailure`, `TestRPCDisconnectPreemptsApplyOnlyAfterAcceptance` | Audit remaining races and recovery boundaries; unit driver results are not OS traffic evidence |
 | US-04 networks/peers | `service_rpc_networks.go`, `service_rpc_select_network.go`, `service_rpc_peers.go` | `TestRPCSelectCurrentNetworkIsDurableNoop`; peer pagination/event suites | Current-network no-op is not cross-network selection; audit real provider switching and stale catalogs |
