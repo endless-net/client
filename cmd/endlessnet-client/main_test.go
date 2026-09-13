@@ -84,10 +84,6 @@ func (w *testAgentWireGuard) TryInspection() (client.WireGuardInspection, bool) 
 	return w.Inspection(), true
 }
 
-func testSuccessfulIPCWireGuardApply() *ipc.WireGuardApplyResult {
-	return &ipc.WireGuardApplyResult{OK: true, Method: "wireguard-go", Interface: "endlessnet", Changed: true}
-}
-
 func (*testAgentWireGuard) PathStatus() []client.PeerPathStatus { return nil }
 
 func (*testAgentWireGuard) TryPathStatus(string, string, uint64) ([]client.PeerPathStatus, bool) {
