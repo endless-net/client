@@ -3,9 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
+	"net/http"
 	"os"
 
+	"connectrpc.com/connect"
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
+	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
 )
@@ -36,7 +41,11 @@ func agentRPCEnroll(ctx context.Context, cfg client.Config, input client.ClientR
 		return nil, errors.New("invalid native enrollment input")
 	}
 	var action *ipc.UserAction
+	var retryableTransport bool
 	err := enrollConfiguredClient(ctx, cfg, clientEnrollmentOptions{
+		RequestOutcome: func(status int, err error) {
+			retryableTransport = retryableEnrollmentHTTPStatus(status) || retryableRPCEnrollmentError(err)
+		},
 		Save: save, JoinToken: input.Token, IdempotencyKey: input.OperationID,
 		Hostname: hostname, HostnameExplicit: input.Hostname != "", Network: defaultNetworkName, Tags: []string{"mode:" + mode},
 		ApprovalNotice: func(notice enrollmentApprovalRequiredError) error {
@@ -53,5 +62,37 @@ func agentRPCEnroll(ctx context.Context, cfg client.Config, input client.ClientR
 	if errors.As(err, &approval) {
 		return &ipc.UserAction{Kind: ipc.UserAction_KIND_OPEN_BROWSER, BrowserUrl: approval.ApprovalURL, ReasonKey: "approve_enrollment"}, nil
 	}
+	if err != nil && (retryableTransport || retryableRPCEnrollmentError(err)) {
+		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	}
 	return action, err
+}
+
+func retryableEnrollmentHTTPStatus(status int) bool {
+	switch status {
+	case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return false
+}
+
+// Retry transport outages and explicitly temporary HTTP responses, not malformed
+// registration, rejected identity, invalid signatures or authorization failures.
+func retryableRPCEnrollmentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	var network *net.OpError
+	if errors.As(err, &network) {
+		return true
+	}
+	for _, status := range []int{http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout} {
+		if clientapi.IsControlPlaneStatus(err, status) {
+			return true
+		}
+	}
+	return false
 }

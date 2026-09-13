@@ -6,9 +6,47 @@ import (
 	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
+	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+func TestRPCEnrollmentExecutorRetriesAmbiguousResponseWithOriginalPlan(t *testing.T) {
+	m, peer, request := enrollmentAdmissionTest(t)
+	op, err := m.enrollAs(peer, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var first ClientRPCEnrollmentInput
+	err = m.ReconcileEnrollment(t.Context(), func(_ context.Context, cfg Config, input ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
+		first = input
+		cfg.PendingDirectRegistration = &PendingDirectRegistration{Origin: "https://control.test", Request: clientapi.RegisterNodeRequest{IdempotencyID: input.OperationID}}
+		if err := save(cfg); err != nil {
+			return nil, err
+		}
+		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	})
+	if err != nil || m.store.Read().RPCState.Enrollment == nil {
+		t.Fatal("temporary failure discarded plan", err)
+	}
+	current, err := m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
+	if err != nil || current.State != ipc.OperationState_OPERATION_STATE_RUNNING || current.Outcome != nil {
+		t.Fatal("temporary failure was terminalized", err)
+	}
+	err = m.ReconcileEnrollment(t.Context(), func(_ context.Context, cfg Config, input ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
+		if input != first || cfg.PendingDirectRegistration == nil || cfg.PendingDirectRegistration.Request.IdempotencyID != input.OperationID {
+			t.Fatal("retry replaced original request")
+		}
+		cfg.PendingDirectRegistration = nil
+		cfg.NodeID = "recovered-node"
+		cfg.CachedMap = &clientapi.RegisterNodeResponse{Node: clientapi.Node{ID: cfg.NodeID}}
+		return nil, save(cfg)
+	})
+	if err != nil || m.store.Read().RPCState.Enrollment != nil {
+		t.Fatal("retry did not finish", err)
+	}
+}
 
 func TestRPCEnrollmentActionRejectsUnsafeBrowserURLs(t *testing.T) {
 	for _, address := range []string{"", "http://control.test/approve", "https://user:password@control.test/approve", "javascript:alert(1)", "https://control.test/\n"} {

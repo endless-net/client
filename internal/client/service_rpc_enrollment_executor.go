@@ -72,6 +72,11 @@ func (m *ClientRPCMutations) ReconcileEnrollment(ctx context.Context, provider C
 	if checkpointErr != nil {
 		return checkpointErr
 	}
+	// An ambiguous registration response must retain its original plan and
+	// idempotency key. The worker retries it on its bounded polling cadence.
+	if failure := rpc.FailureFromError(executeErr); failure != nil && failure.Code == ipc.ErrorCode_ERROR_CODE_UNAVAILABLE {
+		return nil
+	}
 	if action != nil && !validEnrollmentAction(action) {
 		executeErr = rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
 	}

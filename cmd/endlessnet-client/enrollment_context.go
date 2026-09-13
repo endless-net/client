@@ -13,6 +13,7 @@ import (
 type enrollmentContextTransport struct {
 	lifetime context.Context
 	base     http.RoundTripper
+	outcome  func(int, error)
 }
 
 func (t enrollmentContextTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -27,6 +28,13 @@ func (t enrollmentContextTransport) RoundTrip(req *http.Request) (*http.Response
 		base = http.DefaultTransport
 	}
 	response, err := base.RoundTrip(req.Clone(ctx))
+	if t.outcome != nil {
+		status := 0
+		if response != nil {
+			status = response.StatusCode
+		}
+		t.outcome(status, err)
+	}
 	if err != nil || response == nil || response.Body == nil {
 		finish()
 		return response, err

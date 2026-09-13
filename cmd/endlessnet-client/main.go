@@ -814,6 +814,7 @@ func cmdUp(args []string) error {
 // HTTP IPC DTOs. The CLI supplies reporting; native runtime callers omit it.
 type clientEnrollmentOptions struct {
 	Save             func(client.Config) error
+	RequestOutcome   func(int, error)
 	JoinToken        string
 	IdempotencyKey   string
 	Hostname         string
@@ -869,7 +870,7 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 		}
 	}
 	api := apiFromConfig(cfg)
-	api.HTTPClient.Transport = enrollmentContextTransport{lifetime: ctx, base: api.HTTPClient.Transport}
+	api.HTTPClient.Transport = enrollmentContextTransport{lifetime: ctx, base: api.HTTPClient.Transport, outcome: options.RequestOutcome}
 	if !client.HasSigningTrust(cfg) {
 		if strings.TrimSpace(effectiveJoinToken) == "" && strings.TrimSpace(cfg.Token) == "" && !browserEnrollment {
 			return errors.New("map signing trust anchor is required")

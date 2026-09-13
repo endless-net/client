@@ -457,3 +457,13 @@ resurrect old browser links. Other callers (including another administrator) do
 not receive the initiating caller's browser action. Unit tests cover ownership
 and stale observations; local-transport tests compare GetStatus with recovered
 GetOperation during approval and check action removal after completion.
+
+Temporary enrollment transport failures now retain the RUNNING operation, protected
+plan and original registration idempotency key for the worker's next attempt.
+The agent classifies network errors/timeouts and temporary HTTP statuses at the
+transport boundary because SDK failover may flatten them into diagnostic strings.
+No retry decision parses error text. Authorization/input/signature failures remain
+terminal; cancellation of the runtime remains recoverable shutdown. Tests cover
+HTTP 429/5xx versus 4xx, certificate/identity errors, and successful reconciliation
+after an ambiguous response using the same saved request and operation. Actual
+network-loss/approval recovery against deployed control plane remains system work.
