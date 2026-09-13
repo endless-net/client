@@ -11,10 +11,10 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-014: expiry of a user session denies user RPCs without revoking the
@@ -77,27 +77,28 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 	n.MustRun("up", "--config", n.Config, "--network", network.Name, "--hostname", "session-node", "--route-table", "auto")
 	n.Start()
 	defer n.Stop()
-	status := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID != "" && v.CachedMapValid && v.NodeCredentialPresent
+	status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && v.GetStoredState().GetNodeCredentialPresent() && nativeOverlayAddress(v, false).IsValid()
 	})
-	nodeID := status.NodeID
-	clientIP, peerIP := netip.MustParseAddr(status.OverlayIP), netip.MustParseAddr("198.18.90.20")
+	nodeID := status.NodeId
+	profileID := status.ActiveProfileId
+	clientIP, peerIP := nativeOverlayAddress(status, false), netip.MustParseAddr("198.18.90.20")
 	if family == "ipv6" {
 		if err := s.UpdateMap(nodeID, func(m *api.NetworkMapSnapshot) {
 			m.Network.IPv6CIDR, m.Node.AssignedIPv6 = "fd90::/64", "fd90::1"
 		}); err != nil {
 			t.Fatal(err)
 		}
-		status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == nodeID && v.OverlayIPv6 == "fd90::1" && v.CachedMapValid
+		status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == nodeID && nativeOverlayAddress(v, true).String() == "fd90::1" && v.GetStoredState().GetCachedMapValid()
 		})
-		clientIP, peerIP = netip.MustParseAddr(status.OverlayIPv6), netip.MustParseAddr("fd90::20")
+		clientIP, peerIP = nativeOverlayAddress(status, true), netip.MustParseAddr("fd90::20")
 	}
 	snapshot, err := s.Snapshot(nodeID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	underlay := nativePeerUnderlay(t, netip.MustParseAddr(status.OverlayIP), peerIP)
+	underlay := nativePeerUnderlay(t, nativeOverlayAddress(status, false), peerIP)
 	reference := testwireguard.NewTCP(t, snapshot.Node.PublicKey, clientIP, peerIP, underlay)
 	peer := api.Peer{
 		ID: "session-peer", Hostname: "session-peer", PublicKey: reference.PublicKey,
@@ -113,14 +114,14 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == nodeID && v.MapRevision >= current.Revision.Network &&
-				v.PeerCount == 1 && v.NodeCredentialPresent && v.CachedMapValid &&
-				v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotCurrent &&
-				v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" &&
-				v.WireGuard != nil && v.WireGuard.OK
+		status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == nodeID && v.ActiveProfileId == profileID && v.MapRevision >= current.Revision.Network &&
+				v.PeerCount == 1 && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() &&
+				v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT &&
+				v.Agent.MapRevision == v.MapRevision && v.Agent.LastFailure == nil &&
+				v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 		})
-		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, nativeTunnelPort(t, n, status)))
 	}
 	binary := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
 	address := net.JoinHostPort(peerIP.String(), "24001")
@@ -147,8 +148,8 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 	accounts("expired-session", false)
 	apply()
 	reachable()
-	current, err := n.Status()
-	if err != nil || current.NodeID != nodeID || !current.NodeCredentialPresent || !current.CachedMapValid {
+	current := &ipc.GetStatusResponse{}
+	if n.NativeService("status", current) != nil || current.GetStatus().GetNodeId() != nodeID || current.GetStatus().GetActiveProfileId() != profileID || !current.GetStatus().GetStoredState().GetNodeCredentialPresent() || !current.GetStatus().GetStoredState().GetCachedMapValid() {
 		t.Fatal("user session expiry changed the independent node enrollment")
 	}
 	// A fresh process must still use the independent node credential while
@@ -160,8 +161,8 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 	accounts("expired-session-after-restart", false)
 	login(newSession)
 	accounts("reauthenticated", true)
-	current, err = n.Status()
-	if err != nil || current.NodeID != nodeID || !current.NodeCredentialPresent {
+	current = &ipc.GetStatusResponse{}
+	if n.NativeService("status", current) != nil || current.GetStatus().GetNodeId() != nodeID || current.GetStatus().GetActiveProfileId() != profileID || !current.GetStatus().GetStoredState().GetNodeCredentialPresent() {
 		t.Fatal("reauthentication replaced the enrolled node")
 	}
 	n.Stop()

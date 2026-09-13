@@ -280,6 +280,15 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The user-session expiry scenario now uses native status and profile/map-bound
+tunnel diagnostics in both IP families. Backend-observed headless user RPC denial
+must coexist with the same enrolled node, active profile and current applied map;
+TCP and UDP probes must produce fresh reference-peer receive/echo counts. Agent
+restart before reauthentication must preserve that separation, and subsequent
+headless login and restart must not create another node registration. This is
+not evidence for native browser-login UI or renewal acceptance. Local short tests
+compile the guarded scenario; real session/traffic/restart execution belongs to CI.
+
 The cached-map expiry scenario now uses native status and profile/map-bound
 tunnel diagnostics for both IPv4 and IPv6. Each successful TCP and UDP probe
 must increment reference-peer receive/echo counters. Expiry during an outage
