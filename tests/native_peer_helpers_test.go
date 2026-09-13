@@ -8,7 +8,31 @@ import (
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+func nativeTunnelHandshakeUnix(peer *ipc.TunnelPeer) int64 {
+	stamp := peer.GetLatestHandshake()
+	if stamp == nil || stamp.CheckValid() != nil {
+		return 0
+	}
+	return max(0, stamp.AsTime().Unix())
+}
+
+func TestNativeTunnelHandshakeRequiresValidPositiveTimestamp(t *testing.T) {
+	for _, peer := range []*ipc.TunnelPeer{
+		nil, {}, {LatestHandshake: &timestamppb.Timestamp{}},
+		{LatestHandshake: &timestamppb.Timestamp{Seconds: -1}},
+		{LatestHandshake: &timestamppb.Timestamp{Seconds: 100, Nanos: 1000000000}},
+	} {
+		if nativeTunnelHandshakeUnix(peer) != 0 {
+			t.Fatal("absent or invalid handshake became a positive observation")
+		}
+	}
+	if nativeTunnelHandshakeUnix(&ipc.TunnelPeer{LatestHandshake: timestamppb.New(time.Unix(100, 0))}) != 100 {
+		t.Fatal("valid native handshake timestamp lost")
+	}
+}
 
 func nativePeerMapApplied(status, baseline *ipc.Status, revision uint64, count uint32) bool {
 	return status != nil && baseline.GetNodeId() != "" && baseline.GetActiveProfileId() != "" &&

@@ -17,7 +17,6 @@ import (
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
-	ipc "github.com/endless-net/client/ipc/v2"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -96,29 +95,31 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	n.Enroll(s, network.Name, join, "--route-table", "auto")
 	n.Start()
 	defer n.Stop()
-	initial := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
+	initial := n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
+	})
 	if ipv6 {
 		// Supply the dual-stack projection through the signed public contract.
 		// The Client must configure its real OS IPv6 address and route itself.
-		if err := s.UpdateMap(initial.NodeID, func(m *api.NetworkMapSnapshot) {
+		if err := s.UpdateMap(initial.NodeId, func(m *api.NetworkMapSnapshot) {
 			m.Network.IPv6CIDR = "fd94::/64"
 			m.Node.AssignedIPv6 = "fd94::1"
 		}); err != nil {
 			t.Fatal(err)
 		}
-		initial = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == initial.NodeID && v.OverlayIPv6 == "fd94::1" && v.CachedMapValid
+		initial = n.AwaitNativeStatus(func(v *native.Status) bool {
+			return v.NodeId == initial.NodeId && v.ActiveProfileId == initial.ActiveProfileId && nativeOverlayAddress(v, true).String() == "fd94::1" && v.GetStoredState().GetCachedMapValid()
 		})
 	}
-	m, err := s.Snapshot(initial.NodeID)
+	m, err := s.Snapshot(initial.NodeId)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clientIP := netip.MustParseAddr(initial.OverlayIP)
+	clientIP := nativeOverlayAddress(initial, false)
 	if ipv6 {
-		clientIP = netip.MustParseAddr(initial.OverlayIPv6)
+		clientIP = nativeOverlayAddress(initial, true)
 	}
-	underlay := nativePeerUnderlay(t, netip.MustParseAddr(initial.OverlayIP), peerIP)
+	underlay := nativePeerUnderlay(t, nativeOverlayAddress(initial, false), peerIP)
 	var reference testwireguard.Peer
 	if protocol == "tcp" {
 		reference = testwireguard.NewTCP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
@@ -139,27 +140,32 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	firstClientListenPort, clientListenPort := 0, 0
 	apply := func(desired api.Peer) {
 		t.Helper()
-		if err := s.UpdatePeers(initial.NodeID, []api.Peer{desired}); err != nil {
+		if err := s.UpdatePeers(initial.NodeId, []api.Peer{desired}); err != nil {
 			t.Fatal(err)
 		}
-		current, err := s.Snapshot(initial.NodeID)
+		current, err := s.Snapshot(initial.NodeId)
 		if err != nil {
 			t.Fatal(err)
 		}
-		applied := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.MapRevision >= current.Revision.Network && v.PeerCount == 1 && v.Agent != nil && v.Agent.StatePresent && v.Agent.SnapshotState == ipc.AgentSnapshotCurrent && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" && v.WireGuard != nil && v.WireGuard.OK
+		applied := awaitNativePeerMap(t, n, initial, current.Revision.Network, 1)
+		awaitNativePeerTunnel(t, n, applied, func(tunnel *native.TunnelInspection) bool {
+			return len(tunnel.Peers) == 1 && tunnel.Peers[0].GetPeerId() == peer.ID && tunnel.Peers[0].GetEndpoint() == reference.Endpoint
 		})
-		if len(applied.WireGuard.Peers) != 1 || applied.WireGuard.Peers[0].Endpoint != reference.Endpoint {
-			t.Fatal("client did not select the fixture's signed direct endpoint")
-		}
-		if applied.WireGuard.ListenPort <= 0 || applied.WireGuard.ListenPort > 65535 {
-			t.Fatal("client did not publish a usable WireGuard listen port")
-		}
-		clientListenPort = applied.WireGuard.ListenPort
+		clientListenPort = int(nativeTunnelPort(t, n, applied))
 		if firstClientListenPort == 0 {
 			firstClientListenPort = clientListenPort
 		}
-		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(applied.WireGuard.ListenPort)))
+		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(clientListenPort)))
+	}
+	inspect := func() (*native.Diagnostics, error) {
+		response := &native.GetDiagnosticsResponse{}
+		if err := n.NativeService("diagnostics", response, "--profile-id", initial.ActiveProfileId, "--timeout", "1s"); err != nil {
+			return nil, err
+		}
+		if response.GetDiagnostics().GetStatus().GetActiveProfileId() != initial.ActiveProfileId {
+			return nil, errors.New("native traffic diagnostics profile mismatch")
+		}
+		return response.Diagnostics, nil
 	}
 	address := func(port string) string { return net.JoinHostPort(peerIP.String(), port) }
 	flowObservationStarted := false
@@ -191,17 +197,15 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		err := testclient.Await(ctx, func() bool { return fresh(port) })
 		cancel()
 		if err != nil {
-			v, _ := n.Status()
+			d, _ := inspect()
 			var handshake bool
 			var rx, tx uint64
 			var selected bool
-			if v.WireGuard != nil {
-				for _, p := range v.WireGuard.Peers {
-					handshake = handshake || p.LatestHandshakeUnix > 0
-					rx += p.TransferRXBytes
-					tx += p.TransferTXBytes
-					selected = selected || p.Endpoint == reference.Endpoint
-				}
+			for _, p := range d.GetTunnel().GetPeers() {
+				handshake = handshake || nativeTunnelHandshakeUnix(p) > 0
+				rx += p.GetReceivedBytes()
+				tx += p.GetTransmittedBytes()
+				selected = selected || p.GetEndpoint() == reference.Endpoint
 			}
 			received, echoed := reference.PacketCounts()
 			initiations, responses, other := reference.HandshakeCounts()
@@ -236,7 +240,8 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			// Client; a later subtest cannot distinguish loss during traffic
 			// from changes made during cleanup.
 			logNativeInterfaceState(t)
-			status, err := n.Status()
+			d, err := inspect()
+			status, tunnel := d.GetStatus(), d.GetTunnel()
 			received, echoed := reference.PacketCounts()
 			initiations, responses, other := reference.HandshakeCounts()
 			responseAttempts, responseErrors := reference.HandshakeResponseCounts()
@@ -245,30 +250,28 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			var rx, tx uint64
 			latestHandshake := int64(0)
 			currentListenPort := 0
-			if status.WireGuard != nil {
-				wgOK = status.WireGuard.OK
-				inspectionError = status.WireGuard.Error != ""
-				peerCount = len(status.WireGuard.Peers)
-				currentListenPort = status.WireGuard.ListenPort
-				for _, p := range status.WireGuard.Peers {
-					handshake = handshake || p.LatestHandshakeUnix > 0
-					latestHandshake = max(latestHandshake, p.LatestHandshakeUnix)
-					rx += p.TransferRXBytes
-					tx += p.TransferTXBytes
+			if tunnel != nil {
+				wgOK = tunnel.Ok
+				inspectionError = tunnel.Failure != nil
+				peerCount = len(tunnel.Peers)
+				currentListenPort = int(tunnel.ListenPort)
+				for _, p := range tunnel.Peers {
+					handshake = handshake || nativeTunnelHandshakeUnix(p) > 0
+					latestHandshake = max(latestHandshake, nativeTunnelHandshakeUnix(p))
+					rx += p.GetReceivedBytes()
+					tx += p.GetTransmittedBytes()
 				}
 			}
-			if status.Agent != nil {
-				agentError = status.Agent.LastError != ""
-			}
+			agentError = status.GetAgent().GetLastFailure() != nil
 			// test2json runs on the completed text log in native CI, so its
 			// event timestamps cannot date the original traffic failure.
 			if latestHandshake > 0 {
 				t.Logf("flow handshake age at failure inspection: %s", time.Since(time.Unix(latestHandshake, 0)).Round(time.Millisecond))
 			}
-			t.Logf("flow failure: protocol=%s ipv6=%t status_available=%t cached_map_valid=%t disconnected=%t wireguard_ok=%t handshake=%t agent_error_present=%t rx=%d tx=%d reference_received=%d reference_echoed=%d initiations=%d response_attempts=%d responses=%d response_errors=%d other=%d", protocol, ipv6, err == nil, status.CachedMapValid, status.UserDisconnected, wgOK, handshake, agentError, rx, tx, received, echoed, initiations, responseAttempts, responses, responseErrors, other)
-			t.Logf("flow inspection: wireguard_present=%t inspection_error_present=%t peers=%d agent_present=%t first_client_listen_port=%d configured_client_listen_port=%d current_client_listen_port=%d latest_handshake_unix=%d", status.WireGuard != nil, inspectionError, peerCount, status.Agent != nil, firstClientListenPort, clientListenPort, currentListenPort, latestHandshake)
+			t.Logf("flow failure: protocol=%s ipv6=%t status_available=%t cached_map_valid=%t disconnected=%t wireguard_ok=%t handshake=%t agent_error_present=%t rx=%d tx=%d reference_received=%d reference_echoed=%d initiations=%d response_attempts=%d responses=%d response_errors=%d other=%d", protocol, ipv6, err == nil, status.GetStoredState().GetCachedMapValid(), status.GetUserDisconnected(), wgOK, handshake, agentError, rx, tx, received, echoed, initiations, responseAttempts, responses, responseErrors, other)
+			t.Logf("flow inspection: wireguard_present=%t inspection_error_present=%t peers=%d agent_present=%t first_client_listen_port=%d configured_client_listen_port=%d current_client_listen_port=%d latest_handshake_unix=%d", tunnel != nil, inspectionError, peerCount, status.GetAgent() != nil, firstClientListenPort, clientListenPort, currentListenPort, latestHandshake)
 		}()
-		checkNativeFlowConsent(t, s, initial.NodeID, protocol, clientIP, peerIP, fresh)
+		checkNativeFlowConsent(t, s, initial.NodeId, protocol, clientIP, peerIP, fresh)
 		return
 	}
 	first := startApplicationSession(t, binary, "", protocol, address("24001"))
@@ -286,17 +289,17 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		got, exitCode, pingOutput := nativePing(t, peerIP)
 		_, _, afterProbe := reference.HandshakeCounts()
 		if got != want {
-			status, _ := n.Status()
+			d, _ := inspect()
 			// Ping uses a fixed numeric fixture IP; this output contains no Client state.
 			t.Logf("ICMP process: exit=%d output=%q", exitCode, pingOutput)
-			t.Logf("ICMP diagnostic: phase=%s reference_transport_packets=%d wireguard_status_present=%t", phase, afterProbe-beforeProbe, status.WireGuard != nil)
+			t.Logf("ICMP diagnostic: phase=%s reference_transport_packets=%d wireguard_status_present=%t", phase, afterProbe-beforeProbe, d.GetTunnel() != nil)
 			t.Fatalf("native ICMP reachability: phase=%s got=%t want=%t", phase, got, want)
 		}
 	}
 	assertICMP("initial", true)
 	if cleanup != "" {
 		baseline := n.AwaitNativeStatus(func(v *native.Status) bool {
-			return v.NodeId == initial.NodeID && v.ActiveProfileId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
+			return v.NodeId == initial.NodeId && v.ActiveProfileId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 		})
 		wantDeleted := 1
 		var completed *native.Operation
@@ -399,8 +402,8 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	// traffic under its still-valid signed map. IPC status alone is not proof
 	// that either new or established application connections remain usable.
 	s.SetUnavailable(true)
-	outage := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.State == ipc.StateDegraded && v.NodeID == initial.NodeID && v.NodeCredentialPresent && v.CachedMapValid && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
+	outage := n.AwaitNativeStatus(func(v *native.Status) bool {
+		return nativeCurrentAgentFailure(v) && v.NodeId == initial.NodeId && v.ActiveProfileId == initial.ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() && !v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_CONNECTED
 	})
 	for range 3 {
 		first("ok")
@@ -412,8 +415,8 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	assertICMP("control-unavailable", true)
 	s.SetUnavailable(false)
 	apply(peer)
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == initial.NodeID && v.MapRevision > outage.MapRevision && v.CachedMapValid && v.NodeCredentialPresent && v.State != ipc.StateDegraded
+	n.AwaitNativeStatus(func(v *native.Status) bool {
+		return nativePeerMapApplied(v, initial, outage.MapRevision+1, 1) && v.GetStoredState().GetNodeCredentialPresent()
 	})
 	first("ok")
 	second("ok")
@@ -501,7 +504,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	}
 	runNativeControlMutation(t, n, "disconnect", "5c110000-0000-4000-8000-000000000001")
 	trustBaseline := n.AwaitNativeStatus(func(v *native.Status) bool {
-		return v.NodeId == initial.NodeID && v.ActiveProfileId != "" && v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED
+		return v.NodeId == initial.NodeId && v.ActiveProfileId != "" && v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED
 	})
 	if fresh("24001") || fresh("24002") {
 		t.Fatal("disconnected client still delivered overlay traffic")
@@ -521,7 +524,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		t.Helper()
 		announced := identity()
 		current := n.AwaitNativeStatus(func(v *native.Status) bool {
-			return v.NodeId == initial.NodeID && v.ActiveProfileId == trustBaseline.ActiveProfileId
+			return v.NodeId == initial.NodeId && v.ActiveProfileId == trustBaseline.ActiveProfileId
 		})
 		args := append(testclient.NativeMutationArguments(requestID, current), "--confirmed-control-origin", announced.ControlOrigin,
 			"--confirmed-key-id", key, "--confirmed-announcement-id", announced.AnnouncementId)
@@ -538,7 +541,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 	}
 	statusResponse := &native.GetStatusResponse{}
-	if n.NativeService("status", statusResponse) != nil || statusResponse.GetStatus().GetNodeId() != initial.NodeID || statusResponse.GetStatus().GetActiveProfileId() != trustBaseline.ActiveProfileId ||
+	if n.NativeService("status", statusResponse) != nil || statusResponse.GetStatus().GetNodeId() != initial.NodeId || statusResponse.GetStatus().GetActiveProfileId() != trustBaseline.ActiveProfileId ||
 		!statusResponse.GetStatus().GetUserDisconnected() || statusResponse.GetStatus().GetIntent().GetDesiredState() != native.DesiredState_DESIRED_STATE_DISCONNECTED {
 		t.Fatal("native trust confirmation lost disconnected identity or intent")
 	}
@@ -549,7 +552,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		t.Fatal("native trust confirmation tunnel inspection unavailable")
 	}
 	inspected := diagnostics.GetDiagnostics().GetStatus()
-	if inspected.GetNodeId() != initial.NodeID || inspected.GetActiveProfileId() != trustBaseline.ActiveProfileId || inspected.GetMapRevision() < statusResponse.GetStatus().GetMapRevision() {
+	if inspected.GetNodeId() != initial.NodeId || inspected.GetActiveProfileId() != trustBaseline.ActiveProfileId || inspected.GetMapRevision() < statusResponse.GetStatus().GetMapRevision() {
 		t.Fatal("native trust confirmation inspection was not bound to the current profile/map")
 	}
 	if port := diagnostics.GetDiagnostics().GetTunnel().GetListenPort(); port > 0 && port <= 65535 {
@@ -575,8 +578,8 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	t.Log("native lifecycle: restart while disconnected")
 	n.Stop()
 	n.Start()
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.State == ipc.StateDisconnected && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected && v.NodeID == initial.NodeID && v.NodeCredentialPresent && v.CachedMapValid
+	n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.ConnectionPhase == native.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED && v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED && v.NodeId == initial.NodeId && v.ActiveProfileId == initial.ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 	})
 	if fresh("24001") || fresh("24002") {
 		t.Fatal("agent restart ignored disconnected intent")
@@ -587,12 +590,13 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	}
 	assertConnected := func() {
 		t.Helper()
-		v := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == initial.NodeID && v.OverlayIP == initial.OverlayIP && v.OverlayIPv6 == initial.OverlayIPv6 && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.NodeCredentialPresent && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.ListenPort > 0 && v.WireGuard.ListenPort <= 65535
+		v := n.AwaitNativeStatus(func(v *native.Status) bool {
+			return nativePeerMapApplied(v, initial, initial.MapRevision, 1) && nativeOverlayAddress(v, false) == nativeOverlayAddress(initial, false) && nativeOverlayAddress(v, true) == nativeOverlayAddress(initial, true) &&
+				!v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_CONNECTED && v.GetStoredState().GetNodeCredentialPresent()
 		})
 		// The Client may choose a new UDP port when its native device restarts.
 		// Only the fixture's return endpoint changes; its peer identity/map do not.
-		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(v.WireGuard.ListenPort)))
+		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, nativeTunnelPort(t, n, v)))
 		for _, port := range []string{"24001", "24002"} {
 			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 			err := testclient.Await(ctx, func() bool { return fresh(port) })
@@ -610,7 +614,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			if event.Kind == "registered" {
 				created++
 			}
-			if (event.Kind == "registered" || event.Kind == "registration-refreshed") && event.NodeID != initial.NodeID {
+			if (event.Kind == "registered" || event.Kind == "registration-refreshed") && event.NodeID != initial.NodeId {
 				t.Fatal("connection intent recovery changed the registered identity")
 			}
 		}
@@ -655,7 +659,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	retiredSession := startApplicationSession(t, binary, "", protocol, address("24001"))
 	retiredSession("ok")
 	before = registrationRequests()
-	if err := s.Revoke(initial.NodeID); err != nil {
+	if err := s.Revoke(initial.NodeId); err != nil {
 		t.Fatal(err)
 	}
 	for phase := range 2 {
@@ -664,8 +668,8 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			n.Stop()
 			n.Start()
 		}
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.State == ipc.StateNeedsEnrollment && v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent
+		n.AwaitNativeStatus(func(v *native.Status) bool {
+			return nativeEnrollmentAbsent(v) && v.ActiveProfileId == initial.ActiveProfileId
 		})
 		retiredSession("blocked")
 		assertICMP("retired", false)

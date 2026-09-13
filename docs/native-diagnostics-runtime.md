@@ -98,9 +98,9 @@ connect/disconnect operations with terminal-result waits. Signed-map revision,
 peer withdrawal/rename, exact A/AAAA address sets, UDP/TCP queries, listener teardown
 and OS resolver checks are retained. The record-set helper has local tests for
 ordering, missing/duplicate and obsolete addresses. These process/network scenarios
-remain skipped by short verification and require CI execution. Other unmigrated
-scenarios still use the separate legacy DNS-listener helper; no DTO translation
-or fallback was added to the native scenarios.
+remain skipped by short verification and require CI execution. The other DNS
+consumers have since migrated and the legacy DNS-listener helper was removed;
+no DTO translation or fallback was added to the native scenarios.
 
 The fresh-install stage now checks native runtime protocol/version/digest,
 platform/architecture, status snapshot identity and unenrolled state. It no longer
@@ -280,6 +280,16 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The complete TCP/UDP IPv4/IPv6 traffic fixture now uses native IPC for bootstrap
+observations, applied-map/tunnel checks, diagnostics, local mutations, outage,
+restart and credential retirement. Expected peer identity and signed endpoint
+must match inspected tunnel state; live ports come from native diagnostics.
+Outage and recovery use current agent failure/applied-map observations, not an
+inferred connection state. Diagnostic counters remain bounded and omit arbitrary
+process output. Short tests also reject absent/invalid handshake timestamps.
+This migration preserves ACL/ICMP/flow-consent and lifecycle network assertions
+but does not execute them locally; per-platform native CI evidence remains needed.
+
 The TCP/UDP IPv4/IPv6 dataplane trust lifecycle now uses native connect,
 disconnect and trust-server operations. Trust confirmation includes the observed
 origin/key/announcement and fresh request/CAS metadata, and waits for terminal
@@ -288,7 +298,7 @@ reconnecting; profile/map-bound diagnostics keep the fixture return endpoint
 usable if the device erroneously reopened. A stale rotated-key confirmation must
 fail with `STALE_STATE` without changing pinned trust; correct confirmation must
 complete with changed trust and retain traffic identity across restart. The same
-file still has legacy status/diagnostic observations outside these branches.
+file now uses native status/diagnostic observations throughout.
 Local short tests compile the guarded lifecycle, not execute its network checks.
 
 The TCP/UDP IPv4/IPv6 dataplane cleanup branch now invokes native logout and
@@ -297,8 +307,8 @@ operations. It distinguishes confirmed remote deletion from local-only cleanup,
 checks explicit cleared native state and tests exact operation replay after
 restart with the original request/CAS. Existing sessions and both fresh ports
 must stay blocked; provider event counts must not show duplicate registration or
-remote revocation by local-forget. The enclosing traffic fixture still contains
-legacy bootstrap/status observations and is not fully migrated. Local short
+remote revocation by local-forget. The enclosing traffic fixture also uses
+native bootstrap/status observations throughout. Local short
 tests compile the guarded branch only; real traffic/restart acceptance needs CI.
 
 The exit-provider scenario now uses native status and current applied-map gates
