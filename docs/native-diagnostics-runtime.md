@@ -84,11 +84,19 @@ compiled but skipped by local short verification; CI execution is still required
 The shared test harness now waits for native runtime-info at startup and exposes
 strict protobuf helpers without converting responses to HTTP DTOs.
 Legacy diagnostics DTO removal still requires test conversion in
-tests/control_plane_dns_live_test.go,
 tests/installation_test.go and tests/control_plane_test.go. These references do
 not keep the removed HTTP runtime handlers alive. Standalone headless diagnostic
 output remains separate from service IPC. UI and
-installed-service acceptance; transport unit evidence does not prove these.
+installed-service acceptance remain open; transport unit evidence does not prove these.
+
+The two live DNS scenarios now use native status/diagnostics and explicit
+connect/disconnect operations with terminal-result waits. Signed-map revision,
+peer withdrawal/rename, exact A/AAAA address sets, UDP/TCP queries, listener teardown
+and OS resolver checks are retained. The record-set helper has local tests for
+ordering, missing/duplicate and obsolete addresses. These process/network scenarios
+remain skipped by short verification and require CI execution. Other unmigrated
+scenarios still use the separate legacy DNS-listener helper; no DTO translation
+or fallback was added to the native scenarios.
 
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native

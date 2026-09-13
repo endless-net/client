@@ -13,6 +13,7 @@ import (
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 	wg "github.com/endless-net/client-api/clientapi/wireguard"
+	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	ipc "github.com/endless-net/client/ipc/v2"
@@ -36,8 +37,8 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 	n.Enroll(s, network.Name, join, "--route-table", "auto")
 	n.Start()
 	defer n.Stop()
-	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return nativeDNSMapApplied(v, "", 0) })
-	id := status.NodeID
+	status := n.AwaitNativeStatus(func(v *native.Status) bool { return nativeDNSMapApplied(v, "", 0) })
+	id := status.NodeId
 	key, err := wg.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
@@ -55,16 +56,15 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		status = n.AwaitStatus(func(v ipc.StatusResponse) bool { return nativeDNSMapApplied(v, id, previous) })
+		status = n.AwaitNativeStatus(func(v *native.Status) bool { return nativeDNSMapApplied(v, id, previous) })
 	}
 	setPeer("system-peer-one", "198.18.97.20")
-	assertSystemDNSAddress(t, binary, n.Interface, clientDNSListenerAddress(status), "system-peer-one.scenario.endlessnet", "198.18.97.20")
-	assertSystemDNSNameAbsent(t, binary, clientDNSListenerAddress(status), "absent-one.scenario.endlessnet")
+	assertSystemDNSAddress(t, binary, n.Interface, nativeDNSListenerAddress(status), "system-peer-one.scenario.endlessnet", "198.18.97.20")
+	assertSystemDNSNameAbsent(t, binary, nativeDNSListenerAddress(status), "absent-one.scenario.endlessnet")
 
-	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == id && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+	runNativeDNSMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
+	n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.NodeId == id && v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED
 	})
 	previous := status.MapRevision
 	if err := s.UpdateMap(id, func(m *api.NetworkMapSnapshot) {
@@ -73,13 +73,12 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	var connected ipc.ConnectResponse
-	n.Service("connect", &connected)
-	status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return nativeDNSMapApplied(v, id, previous) && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected
+	runNativeDNSMutation(t, n, "connect", "00000000-0000-4000-8000-000000000002")
+	status = n.AwaitNativeStatus(func(v *native.Status) bool {
+		return nativeDNSMapApplied(v, id, previous) && !v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_CONNECTED
 	})
-	assertSystemDNSAddress(t, binary, n.Interface, clientDNSListenerAddress(status), "system-peer-two.scenario.endlessnet", "198.18.97.21")
-	assertSystemDNSNameAbsent(t, binary, clientDNSListenerAddress(status), "absent-two.scenario.endlessnet")
+	assertSystemDNSAddress(t, binary, n.Interface, nativeDNSListenerAddress(status), "system-peer-two.scenario.endlessnet", "198.18.97.21")
+	assertSystemDNSNameAbsent(t, binary, nativeDNSListenerAddress(status), "absent-two.scenario.endlessnet")
 }
 
 // HC-025: the running native agent applies DNS changes from signed maps.
@@ -95,10 +94,10 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 	n.Enroll(s, network.Name, join, "--route-table", "auto")
 	n.Start()
 	defer n.Stop()
-	status := n.AwaitStatus(func(v ipc.StatusResponse) bool {
+	status := n.AwaitNativeStatus(func(v *native.Status) bool {
 		return nativeDNSMapApplied(v, "", 0)
 	})
-	id := status.NodeID
+	id := status.NodeId
 	key, err := wg.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
@@ -132,25 +131,25 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 			t.Fatal(err)
 		}
 		previous := status.MapRevision
-		status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
+		status = n.AwaitNativeStatus(func(v *native.Status) bool {
 			return nativeDNSMapApplied(v, id, previous) && v.MapRevision >= desired.Revision.Network
 		})
-		var diagnostic ipc.DiagnosticsResponse
-		n.Service("diagnostics", &diagnostic)
+		diagnostic := &native.GetDiagnosticsResponse{}
+		if err := n.NativeService("diagnostics", diagnostic, "--profile-id", status.ActiveProfileId); err != nil {
+			t.Fatal(err)
+		}
 		d := diagnostic.Diagnostics
-		if d.Status.NodeID != id || d.Status.MapRevision < desired.Revision.Network || !d.Status.CachedMapValid ||
-			d.DNSSummary == nil || !d.DNSSummary.ConfigPresent || !d.DNSSummary.MagicDNSEnabled ||
-			d.DNSSummary.SearchDomain != "scenario.endlessnet" || d.DNSSummary.RecordCount != len(d.DNSSummary.Records) {
-			t.Fatalf("public DNS diagnostics did not describe the applied signed map: wanted_revision=%d status_revision=%d diagnostic_revision=%d identity_matches=%t cache_valid=%t dns_summary_present=%t", desired.Revision.Network, status.MapRevision, d.Status.MapRevision, d.Status.NodeID == id, d.Status.CachedMapValid, d.DNSSummary != nil)
+		if d == nil || d.GetStatus().GetNodeId() != id || d.Status.MapRevision < desired.Revision.Network || !d.Status.GetStoredState().GetCachedMapValid() || d.Dns == nil || d.Dns.SearchDomain != "scenario.endlessnet" {
+			t.Fatal("public DNS diagnostics did not describe the applied signed map")
 		}
 		peerRecords := 0
-		for _, record := range d.DNSSummary.Records {
-			if record.NodeID != "live-dns-peer" {
+		for _, record := range d.Dns.Records {
+			if record.NodeId != "live-dns-peer" {
 				continue
 			}
 			peerRecords++
-			if record.Hostname != phase.hostname || record.IPv4 != phase.ipv4 || record.IPv6 != phase.ipv6 ||
-				strings.TrimSuffix(record.FQDN, ".") != phase.hostname+".scenario.endlessnet" {
+			if record.Hostname != phase.hostname || !nativeDNSRecordAddressesMatch(record.Addresses, phase.ipv4, phase.ipv6) ||
+				strings.TrimSuffix(record.Fqdn, ".") != phase.hostname+".scenario.endlessnet" {
 				t.Fatal("public DNS diagnostics retained an obsolete peer name or address")
 			}
 		}
@@ -161,7 +160,7 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 		if peerRecords != wantPeerRecords {
 			t.Fatal("public DNS diagnostics omitted, duplicated or retained a withdrawn peer")
 		}
-		listener := clientDNSListenerAddress(status)
+		listener := nativeDNSListenerAddress(status)
 		for _, transport := range []string{"udp", "tcp"} {
 			for _, hostname := range []string{"live-peer", "renamed-peer"} {
 				code, ipv4, ipv6 := dnsmessage.RCodeNameError, "", ""
@@ -174,22 +173,20 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 			}
 		}
 	}
-	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == id && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+	runNativeDNSMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
+	n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.NodeId == id && v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED
 	})
 	for _, transport := range []string{"udp", "tcp"} {
-		assertDNSListenerUnavailable(t, transport, clientDNSListenerAddress(status))
+		assertDNSListenerUnavailable(t, transport, nativeDNSListenerAddress(status))
 	}
-	var connected ipc.ConnectResponse
-	n.Service("connect", &connected)
-	status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return nativeDNSMapApplied(v, id, 0) && v.NodeCredentialPresent &&
-			!v.UserDisconnected && v.DesiredState == ipc.DesiredConnected &&
-			v.State != ipc.StateDegraded
+	runNativeDNSMutation(t, n, "connect", "00000000-0000-4000-8000-000000000002")
+	status = n.AwaitNativeStatus(func(v *native.Status) bool {
+		return nativeDNSMapApplied(v, id, 0) && v.GetStoredState().GetNodeCredentialPresent() &&
+			!v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_CONNECTED &&
+			v.ControlState != native.ControlState_CONTROL_STATE_DEGRADED
 	})
-	listener := clientDNSListenerAddress(status)
+	listener := nativeDNSListenerAddress(status)
 	for _, transport := range []string{"udp", "tcp"} {
 		assertDNSWire(t, transport, listener, "live-peer.scenario.endlessnet.", dnsmessage.RCodeSuccess, "198.18.96.20")
 		assertDNSWireType(t, transport, listener, "live-peer.scenario.endlessnet.", dnsmessage.TypeAAAA, dnsmessage.RCodeSuccess, "fd96::20")
@@ -361,11 +358,10 @@ func assertSystemDNSNameAbsent(t *testing.T, binary, listener, name string) {
 	}
 }
 
-func nativeDNSMapApplied(status ipc.StatusResponse, nodeID string, afterRevision uint64) bool {
-	return (nodeID == "" || status.NodeID == nodeID) && status.NodeID != "" &&
-		status.CachedMapValid && status.MapRevision > afterRevision &&
-		status.Agent != nil && status.Agent.StatePresent &&
-		status.Agent.SnapshotState == ipc.AgentSnapshotCurrent &&
-		status.Agent.MapRevision == status.MapRevision &&
-		status.WireGuard != nil && status.WireGuard.OK && status.State != ipc.StateDegraded
+func nativeDNSMapApplied(status *native.Status, nodeID string, afterRevision uint64) bool {
+	return status != nil && (nodeID == "" || status.NodeId == nodeID) && status.NodeId != "" &&
+		status.GetStoredState().GetCachedMapValid() && status.MapRevision > afterRevision &&
+		status.Agent != nil && status.Agent.SnapshotState == native.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT &&
+		status.Agent.MapRevision == status.MapRevision && status.ConnectionPhase == native.ConnectionPhase_CONNECTION_PHASE_CONNECTED &&
+		status.ControlState != native.ControlState_CONTROL_STATE_DEGRADED
 }
