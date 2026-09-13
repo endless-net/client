@@ -175,6 +175,16 @@ Short driver tests cover ordering, rejection, timeout, cancellation, teardown
 failure and unchanged configuration. The process-kill scenario remains guarded
 for isolated CI and has not been executed locally.
 
+The standalone DNS wire-recovery scenario now uses native Disconnect/GetOperation
+and confirms retained enrollment/cache plus disconnected intent before starting
+its separate DNS proxy. Its split-DNS isolation, response binding, A/AAAA changes
+and UDP/TCP fallback checks are unchanged. Live DNS map readiness now requires
+READY control state instead of accepting every state other than DEGRADED. Short
+predicate tests reject absent/foreign identity, old revisions, missing cache or
+agent, previous/mismatched agent snapshots, disconnected phase and ERROR or
+unspecified control state. These checks do not prove OS resolver application;
+the DNS process/wire scenarios still require isolated CI execution.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP

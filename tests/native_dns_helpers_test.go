@@ -75,6 +75,44 @@ func runNativeControlMutation(t *testing.T, n *testclient.Node, command, id stri
 	}
 }
 
+func TestNativeDNSMapRequiresCurrentConnectedObservation(t *testing.T) {
+	for _, mode := range []string{"ready", "nil", "missing-node", "foreign-node", "old-revision", "missing-cache", "missing-agent", "previous-agent", "foreign-revision", "disconnected", "control-error", "control-unspecified"} {
+		t.Run(mode, func(t *testing.T) {
+			status := &ipc.Status{NodeId: "node", MapRevision: 2, StoredState: &ipc.StoredStatePresence{CachedMapValid: true},
+				Agent:           &ipc.AgentStatus{SnapshotState: ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT, MapRevision: 2},
+				ConnectionPhase: ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED, ControlState: ipc.ControlState_CONTROL_STATE_READY}
+			switch mode {
+			case "nil":
+				status = nil
+			case "missing-node":
+				status.NodeId = ""
+			case "foreign-node":
+				status.NodeId = "other"
+			case "old-revision":
+				status.MapRevision = 1
+				status.Agent.MapRevision = 1
+			case "missing-cache":
+				status.StoredState = nil
+			case "missing-agent":
+				status.Agent = nil
+			case "previous-agent":
+				status.Agent.SnapshotState = ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS
+			case "foreign-revision":
+				status.Agent.MapRevision = 1
+			case "disconnected":
+				status.ConnectionPhase = ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED
+			case "control-error":
+				status.ControlState = ipc.ControlState_CONTROL_STATE_ERROR
+			case "control-unspecified":
+				status.ControlState = ipc.ControlState_CONTROL_STATE_UNSPECIFIED
+			}
+			if nativeDNSMapApplied(status, "node", 1) != (mode == "ready") {
+				t.Fatal("DNS map readiness accepted an absent, stale or unhealthy observation")
+			}
+		})
+	}
+}
+
 func TestNativeDNSAddressSetComparison(t *testing.T) {
 	for _, test := range []struct {
 		addresses []string

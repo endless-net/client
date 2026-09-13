@@ -15,8 +15,8 @@ import (
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 	wg "github.com/endless-net/client-api/clientapi/wireguard"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
-	ipc "github.com/endless-net/client/ipc/v2"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -39,8 +39,11 @@ func TestControlPlaneDNSWireRecovery(t *testing.T) {
 func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork, listenHost string, truncated bool) {
 	t.Helper()
 	s, n, id := nativeControlScenario(t)
-	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
+	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
+	n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId == id && v.UserDisconnected && v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_DISCONNECTED &&
+			v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
+	})
 	n.Stop()
 	key, err := wg.GeneratePrivateKey()
 	if err != nil {

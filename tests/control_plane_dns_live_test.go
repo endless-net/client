@@ -363,5 +363,5 @@ func nativeDNSMapApplied(status *native.Status, nodeID string, afterRevision uin
 		status.GetStoredState().GetCachedMapValid() && status.MapRevision > afterRevision &&
 		status.Agent != nil && status.Agent.SnapshotState == native.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT &&
 		status.Agent.MapRevision == status.MapRevision && status.ConnectionPhase == native.ConnectionPhase_CONNECTION_PHASE_CONNECTED &&
-		status.ControlState != native.ControlState_CONTROL_STATE_DEGRADED
+		status.ControlState == native.ControlState_CONTROL_STATE_READY
 }
