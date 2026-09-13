@@ -512,8 +512,12 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	identity := func() *native.ServerIdentity {
 		t.Helper()
 		response := &native.GetServerIdentityResponse{}
-		if n.NativeService("server-identity", response, "--profile-id", trustBaseline.ActiveProfileId) != nil || response.Identity == nil || response.Identity.ControlOrigin != s.URL() || len(response.Identity.AnnouncementId) != 64 {
-			t.Fatal("native traffic client did not expose its profile-bound server announcement")
+		err := n.NativeService("server-identity", response, "--profile-id", trustBaseline.ActiveProfileId)
+		if err != nil || response.Identity == nil || response.Identity.ControlOrigin != s.URL() || len(response.Identity.AnnouncementId) != 64 {
+			// NativeService returns fixed/redacted classifications. Only public
+			// shape predicates are logged, never keys, origins or announcements.
+			t.Fatalf("native traffic server announcement failed: identity_present=%t origin_matches=%t announcement_shape_valid=%t error=%v",
+				response.Identity != nil, response.GetIdentity().GetControlOrigin() == s.URL(), len(response.GetIdentity().GetAnnouncementId()) == 64, err)
 		}
 		return response.Identity
 	}
