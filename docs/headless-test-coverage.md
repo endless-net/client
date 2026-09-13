@@ -13,6 +13,17 @@ and [system design / IT specifications](https://github.com/endless-net/architect
 
 ## 2026-09-13: native v0 transport and request-validation cutover
 
+The retired HTTP client (`ipc/v2` request/NDJSON client and local dialers) and
+old Windows HTTP pipe listener were removed with their protocol-specific tests.
+Their final external consumer was the stubbed Windows HTTP E2E test, not the
+running agent. Native replacements are `clientipc/local` transport tests
+(including anonymous-pipe rejection), `clientipc/rpc` guard/protocol tests,
+`TestRPCLocalAcceptanceAndLostResponseRecovery`, enrollment/logout worker tests,
+and `TestControlPlaneIPCNegotiation`. HTTP v2 headers, JSON/NDJSON framing and
+synchronous stub mutation responses are intentionally not preserved. The passing
+nested-module runner evidence below does not establish root runtime acceptance;
+remaining `ipc/v2` DTOs and HTTP handler tests still require migration/removal.
+
 HC-028/HC-030's [native Relay traffic and failover roots](../tests/control_plane_relay_test.go)
 now use v0 status/diagnostics, including the typed relay path, selected relay ID,
 profile/node identity, current applied map and tunnel health. Real IPv4/IPv6
