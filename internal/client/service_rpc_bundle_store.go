@@ -1,0 +1,99 @@
+package client
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
+	"sync"
+	"time"
+
+	"connectrpc.com/connect"
+	"github.com/endless-net/client/clientipc/rpc"
+	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+const rpcBundleStoreMaxBytes = 4 * rpcBundleMaxBytes
+
+type clientRPCBundleRecord struct {
+	owner, profile string
+	data           []byte
+	metadata       *ipc.BundleResult
+}
+
+// Process-local cache primitive. This is not durable artifact storage or an RPC
+// implementation. Runtime integration must revoke on owner/profile/logout changes.
+type clientRPCBundleStore struct {
+	mu    sync.Mutex
+	items map[string]clientRPCBundleRecord
+	bytes int
+	now   func() time.Time
+}
+
+func (s *clientRPCBundleStore) pruneLocked() {
+	for id, item := range s.items {
+		if !s.now().Before(item.metadata.ExpiresAt.AsTime()) {
+			delete(s.items, id)
+			s.bytes -= len(item.data)
+		}
+	}
+}
+
+func (s *clientRPCBundleStore) put(owner, profile string, data []byte) (*ipc.BundleResult, error) {
+	if owner == "" || profile == "" || len(data) == 0 || len(data) > rpcBundleMaxBytes {
+		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pruneLocked()
+	if len(s.items) >= 32 || s.bytes+len(data) > rpcBundleStoreMaxBytes {
+		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+	}
+	id, err := newRPCUUID()
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	digest := sha256.Sum256(data)
+	metadata := &ipc.BundleResult{BundleId: id, CreatedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(15 * time.Minute)), SizeBytes: uint64(len(data)), Sha256: hex.EncodeToString(digest[:])}
+	if s.items == nil {
+		s.items = map[string]clientRPCBundleRecord{}
+	}
+	s.items[id] = clientRPCBundleRecord{owner: owner, profile: profile, data: append([]byte(nil), data...), metadata: metadata}
+	s.bytes += len(data)
+	return proto.Clone(metadata).(*ipc.BundleResult), nil
+}
+
+func (s *clientRPCBundleStore) read(owner, profile string, request *ipc.ReadDiagnosticsBundleRequest) (*ipc.ReadDiagnosticsBundleResponse, error) {
+	if request == nil || !validRPCUUID(request.BundleId) || request.MaxBytes > 256<<10 {
+		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pruneLocked()
+	item, ok := s.items[request.BundleId]
+	if !ok || !strings.EqualFold(item.owner, owner) || item.profile != profile {
+		return nil, rpc.Error(connect.CodeNotFound, ipc.ErrorCode_ERROR_CODE_NOT_FOUND)
+	}
+	if request.Offset > uint64(len(item.data)) {
+		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+	}
+	size := request.MaxBytes
+	if size == 0 {
+		size = 64 << 10
+	}
+	end := min(request.Offset+uint64(size), uint64(len(item.data)))
+	return &ipc.ReadDiagnosticsBundleResponse{Data: append([]byte(nil), item.data[request.Offset:end]...), NextOffset: end, Eof: end == uint64(len(item.data))}, nil
+}
+
+func (s *clientRPCBundleStore) revoke(owner, profile string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, item := range s.items {
+		if strings.EqualFold(item.owner, owner) && item.profile == profile {
+			delete(s.items, id)
+			s.bytes -= len(item.data)
+		}
+	}
+}

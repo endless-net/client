@@ -9,6 +9,15 @@ the archive content, nested/repeated redaction, source immutability and JSON siz
 expansion. This builder is not yet wired to CreateDiagnosticsBundle: durable
 operation execution and owner/profile-bound expiring storage remain unfinished.
 
+A separate process-local bundle cache primitive now owns immutable archive bytes
+and cloned metadata. It binds opaque UUID handles to owner/profile, expires them
+after 15 minutes, supports bounded 64 KiB/default and 256 KiB/maximum reads, and
+limits retention to 32 handles/20 MiB without evicting live handles silently.
+Foreign/expired handles return NOT_FOUND; explicit revocation removes a profile's
+entries. Tests cover binding, expiry, offsets, copy ownership and capacity. This
+cache is not yet connected to RPC or logout hooks and is not restart-persistent;
+durable artifact storage and atomic operation publication are still required.
+
 The retired HTTP Diagnostics route and agent callback are removed. Its old path
 must return 404. The native local transport test verifies owner-only collection,
 current instance metadata, explicit partial/failure state, raw driver error
