@@ -3,8 +3,10 @@ package client
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
@@ -111,7 +113,7 @@ func TestRPCNetworksRevalidatesProviderBoundary(t *testing.T) {
 			code := ipc.ErrorCode_ERROR_CODE_UNAVAILABLE
 			switch mode {
 			case "missing-auth":
-				code = ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT
+				code = ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN
 			case "nil-provider":
 				code = ipc.ErrorCode_ERROR_CODE_UNSUPPORTED
 			case "revision":
@@ -125,6 +127,43 @@ func TestRPCNetworksRevalidatesProviderBoundary(t *testing.T) {
 				return
 			}
 			assertRPCFailure(t, err, code)
+		})
+	}
+}
+
+func TestRPCNetworkCatalogFailureCategories(t *testing.T) {
+	for _, test := range []struct {
+		code     connect.Code
+		expected ipc.ErrorCode
+	}{
+		{connect.CodeUnauthenticated, ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN},
+		{connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED},
+		{connect.CodeNotFound, ipc.ErrorCode_ERROR_CODE_NOT_FOUND},
+		{connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED},
+		{connect.CodeDeadlineExceeded, ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED},
+		{connect.CodeCanceled, ipc.ErrorCode_ERROR_CODE_CANCELLED},
+		{connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE},
+		{connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE},
+	} {
+		t.Run(test.code.String(), func(t *testing.T) {
+			m, peer, profile := rpcConnectFixture(t)
+			if err := m.store.Update(func(cfg *Config) error { cfg.ActiveAccountID = "account"; cfg.Token = "synthetic-session"; return nil }); err != nil {
+				t.Fatal(err)
+			}
+			s := NewClientRPCService(m, nil)
+			calls := 0
+			s.NetworksProvider = func(context.Context, ClientRPCNetworksInput) ([]*ipc.Network, error) {
+				calls++
+				return []*ipc.Network{{Id: "partial", AccountId: "account"}}, connect.NewError(test.code, errors.New("private upstream diagnostic"))
+			}
+			result, err := s.networksAs(t.Context(), peer, &ipc.ListNetworksRequest{Profile: profile})
+			assertRPCFailure(t, err, test.expected)
+			if result != nil || calls != 1 || strings.Contains(err.Error(), "private") {
+				t.Fatal("partial result, retry or diagnostic leak")
+			}
+			if m.store.Read().Token != "synthetic-session" {
+				t.Fatal("read failure erased authorization")
+			}
 		})
 	}
 }

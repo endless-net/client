@@ -50,8 +50,11 @@ func (s *ClientRPCService) networksAs(ctx context.Context, peer local.Peer, requ
 	if profile.ID == cfg.RPCState.ActiveProfileID {
 		selected = cfg
 	}
-	if selected.ActiveAccountID == "" || selected.Token == "" {
+	if selected.ActiveAccountID == "" {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
+	}
+	if selected.Token == "" {
+		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN)
 	}
 	if s.NetworksProvider == nil {
 		return nil, rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
@@ -61,7 +64,7 @@ func (s *ClientRPCService) networksAs(ctx context.Context, peer local.Peer, requ
 		return nil, ctx.Err()
 	}
 	if err != nil {
-		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+		return nil, rpcNetworkCatalogFailure(err)
 	}
 	if len(networks) > 1000 {
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
@@ -103,4 +106,25 @@ func (s *ClientRPCService) networksAs(ctx context.Context, peer local.Peer, requ
 	}
 	return &ipc.ListNetworksResponse{Networks: items[start:end], SelectedNetworkId: selected.NetworkID, Page: &ipc.PageResponse{NextPageToken: next,
 		Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}}}, nil
+}
+
+// Backend user authorization is not local IPC ownership. Preserve the recovery
+// category, but rebuild details so upstream diagnostics never reach the UI.
+func rpcNetworkCatalogFailure(err error) error {
+	switch connect.CodeOf(err) {
+	case connect.CodeUnauthenticated:
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN)
+	case connect.CodePermissionDenied:
+		return rpc.Error(connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED)
+	case connect.CodeNotFound:
+		return rpc.Error(connect.CodeNotFound, ipc.ErrorCode_ERROR_CODE_NOT_FOUND)
+	case connect.CodeResourceExhausted:
+		return rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+	case connect.CodeDeadlineExceeded:
+		return rpc.Error(connect.CodeDeadlineExceeded, ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED)
+	case connect.CodeCanceled:
+		return rpc.Error(connect.CodeCanceled, ipc.ErrorCode_ERROR_CODE_CANCELLED)
+	default:
+		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	}
 }
