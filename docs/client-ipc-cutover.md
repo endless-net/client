@@ -859,3 +859,22 @@ announcements, missing responses and output failures without replay. Local
 go vet, golangci-lint and go test -short pass. UI launch/result handling, request
 correlation after OS elevation (including differing root/user identities), actual
 platform elevation and release acceptance remain separate unfinished work.
+
+## Native update discovery without a configured source (2026-09-13)
+
+GetUpdateInfo now provides an installation-level, owner/administrator-authorized
+read even without enrollment or a profile. It returns the runtime build and a
+copy of the optional caller-reported UI identity. Since no verified distribution
+source is configured, state is SOURCE_UNAVAILABLE, discovery is UNSUPPORTED and
+installed-pair compatibility is UNKNOWN. Matching version strings do not attest
+the UI binary or establish compatibility. No available release, accepted digest,
+update URL or installation action is invented. Read errors remain typed; the
+operation journal, configuration and connection intent are unchanged.
+
+Short tests cover absent/matching/different UI claims, immutable response copies,
+authorization before validation, administrator access without a profile and the
+generated consumer over the native local transport. This does not enable the
+update-discovery capability or complete UF-22/US-13. This repository still owns
+verified release-source integration; client-ui owns discovery rendering and the
+platform updater handoff. Real signed artifacts and installed-pair/platform
+acceptance remain separate evidence.

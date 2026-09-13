@@ -84,6 +84,14 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if m.store.Read().LocalOwnerID == "" {
 		t.Fatal("transport did not propagate OS identity into durable owner")
 	}
+	uiClaim := &ipc.BuildIdentity{Version: "synthetic-ui-claim"}
+	update, err := client.GetUpdateInfo(ctx, connect.NewRequest(&ipc.GetUpdateInfoRequest{ReportedUi: uiClaim}))
+	if err != nil {
+		t.Fatal("native update discovery read failed", err)
+	}
+	if update.Msg.Info.InstalledRuntime.Version != "test" || !proto.Equal(update.Msg.Info.ReportedUi, uiClaim) || update.Msg.Info.State != ipc.UpdateState_UPDATE_STATE_SOURCE_UNAVAILABLE || update.Msg.Info.Available != nil || update.Msg.Info.InstalledPair.State != ipc.CompatibilityState_COMPATIBILITY_STATE_UNKNOWN {
+		t.Fatal("native update read fabricated release or pairing evidence")
+	}
 	if events.Receive() {
 		t.Fatal("ownership claim continued the observer stream")
 	}
