@@ -3,56 +3,109 @@ package tests
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
 	"runtime"
-	"syscall"
 	"testing"
 	"time"
 
-	ipc "github.com/endless-net/client/ipc/v2"
+	"connectrpc.com/connect"
+	"github.com/endless-net/client/clientipc/local"
+	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// HC-052/HC-053: subscriptions expose current state and recover with a new
-// snapshot after EOF, using the published stream-local sequence contract.
+type nativeEventCursor struct {
+	sequence, revision uint64
+	instance           string
+}
+
+func TestNativeEventCursorRejectsBrokenStreams(t *testing.T) {
+	for _, mode := range []string{"valid", "gap", "duplicate", "instance", "revision", "timestamp", "snapshot", "failure", "empty"} {
+		t.Run(mode, func(t *testing.T) {
+			cursor := nativeEventCursor{}
+			first := &ipc.WatchEventsResponse{Sequence: 1, Metadata: &ipc.SnapshotMetadata{InstanceId: "host", Revision: 2, GeneratedAt: timestamppb.Now()},
+				Event: &ipc.WatchEventsResponse_Snapshot{Snapshot: &ipc.SnapshotEvent{Runtime: &ipc.RuntimeInfo{InstanceId: "host"}, Status: &ipc.Status{}}}}
+			if !cursor.accept(first) {
+				t.Fatal("valid opening snapshot rejected")
+			}
+			next := &ipc.WatchEventsResponse{Sequence: 2, Metadata: proto.Clone(first.Metadata).(*ipc.SnapshotMetadata), Event: &ipc.WatchEventsResponse_StatusChanged{StatusChanged: &ipc.Status{}}}
+			switch mode {
+			case "gap":
+				next.Sequence = 3
+			case "duplicate":
+				next.Sequence = 1
+			case "instance":
+				next.Metadata.InstanceId = "other"
+			case "revision":
+				next.Metadata.Revision = 1
+			case "timestamp":
+				next.Metadata.GeneratedAt = nil
+			case "snapshot":
+				next.Event = first.Event
+			case "failure":
+				next.Event = &ipc.WatchEventsResponse_Failure{Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE}}
+			case "empty":
+				next.Event = nil
+			}
+			before := cursor
+			if cursor.accept(next) != (mode == "valid") {
+				t.Fatal("incorrect native event validation")
+			}
+			if mode != "valid" && cursor != before {
+				t.Fatal("rejected event advanced stream cursor")
+			}
+		})
+	}
+}
+
+func (c *nativeEventCursor) accept(event *ipc.WatchEventsResponse) bool {
+	if event == nil || event.Event == nil || event.Sequence != c.sequence+1 || event.GetMetadata().GetInstanceId() == "" ||
+		event.GetMetadata().GetRevision() < c.revision || event.GetMetadata().GetGeneratedAt() == nil || event.Metadata.GeneratedAt.CheckValid() != nil || event.GetFailure() != nil {
+		return false
+	}
+	if c.sequence == 0 {
+		if event.GetSnapshot() == nil || event.GetSnapshot().GetRuntime().GetInstanceId() != event.Metadata.InstanceId || event.GetSnapshot().GetStatus() == nil {
+			return false
+		}
+	} else if event.GetSnapshot() != nil || event.Metadata.InstanceId != c.instance {
+		return false
+	}
+	c.sequence, c.revision, c.instance = event.Sequence, event.Metadata.Revision, event.Metadata.InstanceId
+	return true
+}
+
+// HC-052/HC-053: snapshot-first native streams, independent subscribers,
+// cancellation and fresh stream-local sequence after host restart.
 func TestControlPlaneIPCEvents(t *testing.T) {
 	_, n, id := nativeControlScenario(t)
-	// Exercise the shipping CLI as well as SDK subscriptions. A normal listening
-	// timeout must flush complete NDJSON records and exit successfully without
-	// changing the agent's connection intent.
+	state := func(event *ipc.WatchEventsResponse, disconnected bool) bool {
+		status := event.GetStatusChanged()
+		if snapshot := event.GetSnapshot(); snapshot != nil {
+			status = snapshot.Status
+		}
+		return status != nil && status.NodeId == id && status.GetStoredState().GetCachedMapValid() && status.UserDisconnected == disconnected
+	}
 	cliEvents := func(disconnected bool) {
 		t.Helper()
 		started := time.Now()
 		output, err := n.ServiceCommand("events", "--timeout", "2s")
-		elapsed := time.Since(started)
-		if err != nil || elapsed < 2*time.Second || elapsed > 10*time.Second {
-			t.Fatal("CLI event subscription failed or did not respect its listening timeout with process-startup allowance (output withheld)")
+		if err != nil || time.Since(started) < 2*time.Second || time.Since(started) > 10*time.Second {
+			t.Fatal("native CLI event timeout or output failed (output withheld)")
 		}
-		sequence, sawStatus := 0, false
+		cursor, sawStatus := nativeEventCursor{}, false
 		for _, line := range bytes.Split(bytes.TrimSpace(output), []byte("\n")) {
-			var event ipc.Event
-			if err := json.Unmarshal(line, &event); err != nil {
-				t.Fatal("CLI event subscription emitted an incomplete or invalid JSON record")
+			event := &ipc.WatchEventsResponse{}
+			if protojson.Unmarshal(line, event) != nil || !cursor.accept(event) {
+				t.Fatal("CLI emitted invalid native event sequence or snapshot")
 			}
-			if event.Sequence <= sequence || event.IPCProtocol != ipc.Protocol || event.IPCNegotiatedVersion != ipc.Version || event.EventType == ipc.EventTypeError {
-				t.Fatal("CLI event subscription emitted invalid metadata or an error event")
-			}
-			if sequence == 0 && event.EventType != ipc.EventTypeHello {
-				t.Fatal("CLI event subscription did not begin with hello")
-			}
-			sequence = event.Sequence
-			if event.EventType == ipc.EventTypeStatusChanged && event.Status != nil && event.Status.NodeID == id && event.Status.CachedMapValid && event.Status.UserDisconnected == disconnected {
-				sawStatus = true
-			}
+			sawStatus = sawStatus || state(event, disconnected)
 		}
 		if !sawStatus {
-			t.Fatal("CLI event subscription omitted the current enrolled status")
+			t.Fatal("CLI events omitted current enrolled status")
 		}
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == id && v.CachedMapValid && v.UserDisconnected == disconnected
+		n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == id && v.GetStoredState().GetCachedMapValid() && v.UserDisconnected == disconnected
 		})
 	}
 	cliEvents(false)
@@ -61,159 +114,125 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 		endpoint = n.Pipe
 	}
 	type subscription struct {
-		events       <-chan ipc.Event
-		done         <-chan struct{}
-		cancel       context.CancelFunc
-		lastSequence int
-		termination  <-chan string
+		events <-chan *ipc.WatchEventsResponse
+		done   <-chan struct{}
+		cancel context.CancelFunc
+		cursor nativeEventCursor
 	}
 	subscribe := func() *subscription {
 		t.Helper()
-		local, err := ipc.NewLocalClient(endpoint)
+		consumer, err := local.NewClient(endpoint)
 		if err != nil {
-			t.Fatal("could not open native IPC event transport")
+			t.Fatal(err)
 		}
 		ctx, cancel := context.WithCancel(t.Context())
-		events := make(chan ipc.Event, 32)
-		done := make(chan struct{})
-		termination := make(chan string, 1)
+		events, done := make(chan *ipc.WatchEventsResponse, 32), make(chan struct{})
 		go func() {
 			defer close(done)
-			// Either EOF or a transport error ends a subscription. The caller
-			// verifies when it ends and reconnects through a new public client.
-			err := local.Stream(ctx, http.MethodGet, ipc.PathEvents, nil, func(event ipc.Event) error {
+			defer close(events)
+			defer consumer.Close()
+			stream, err := consumer.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
+			if err != nil {
+				return
+			}
+			defer func() { _ = stream.Close() }()
+			for stream.Receive() {
+				event := proto.Clone(stream.Msg()).(*ipc.WatchEventsResponse)
 				select {
 				case events <- event:
-					return nil
 				case <-ctx.Done():
-					return ctx.Err()
+					return
 				}
-			})
-			category := "transport_or_protocol_error"
-			var errno syscall.Errno
-			switch {
-			case err == nil:
-				category = "clean_end"
-			case errors.Is(err, context.Canceled):
-				category = "cancelled"
-			case errors.Is(err, context.DeadlineExceeded):
-				category = "deadline"
-			case errors.Is(err, io.EOF):
-				category = "eof"
-			case errors.As(err, &errno):
-				category = fmt.Sprintf("os_error_%d", errno)
 			}
-			termination <- category
 		}()
 		t.Cleanup(func() {
 			cancel()
 			select {
 			case <-done:
 			case <-time.After(3 * time.Second):
-				t.Error("cancelled IPC subscription did not terminate")
+				t.Error("cancelled native stream did not terminate")
 			}
-			local.HTTPClient.CloseIdleConnections()
 		})
-		return &subscription{events: events, done: done, cancel: cancel, termination: termination}
+		return &subscription{events: events, done: done, cancel: cancel}
 	}
-	await := func(stream *subscription, match func(ipc.Event) bool) ipc.Event {
+	await := func(sub *subscription, match func(*ipc.WatchEventsResponse) bool) *ipc.WatchEventsResponse {
 		t.Helper()
-		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
-		defer cancel()
+		timer := time.NewTimer(15 * time.Second)
+		defer timer.Stop()
 		for {
 			select {
-			case event := <-stream.events:
-				if event.Sequence <= stream.lastSequence || event.IPCProtocol != ipc.Protocol || event.IPCNegotiatedVersion != ipc.Version {
-					t.Fatal("IPC event sequence or protocol metadata is invalid")
+			case event, ok := <-sub.events:
+				if !ok {
+					t.Fatal("native stream ended before expected event")
 				}
-				if _, err := time.Parse(time.RFC3339Nano, event.GeneratedAt); err != nil {
-					t.Fatal("IPC event has an invalid generation timestamp")
-				}
-				if stream.lastSequence == 0 && event.EventType != ipc.EventTypeHello {
-					t.Fatal("IPC subscription did not begin with hello")
-				}
-				stream.lastSequence = event.Sequence
-				if event.EventType == ipc.EventTypeError {
-					t.Fatal("healthy IPC subscription returned an error event")
+				if !sub.cursor.accept(event) {
+					t.Fatal("native stream violated sequence, timestamp or instance binding")
 				}
 				if match(event) {
 					return event
 				}
-			case <-stream.done:
-				t.Fatalf("IPC subscription ended before the expected event: %s; last_sequence=%d", <-stream.termination, stream.lastSequence)
-			case <-ctx.Done():
-				t.Fatal("IPC subscription did not report the expected state within the deadline")
+			case <-timer.C:
+				t.Fatal("native stream did not report expected event before deadline")
 			}
 		}
 	}
-	state := func(disconnected bool) func(ipc.Event) bool {
-		return func(event ipc.Event) bool {
-			return event.EventType == ipc.EventTypeStatusChanged && event.Status != nil && event.Status.NodeID == id && event.Status.CachedMapValid && event.Status.UserDisconnected == disconnected
+	awaitState := func(sub *subscription, disconnected bool) *ipc.WatchEventsResponse {
+		return await(sub, func(event *ipc.WatchEventsResponse) bool { return state(event, disconnected) })
+	}
+	stop := func(sub *subscription) {
+		t.Helper()
+		sub.cancel()
+		select {
+		case <-sub.done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("independent stream cancellation did not terminate")
 		}
 	}
-	// Open independent connections together so authentication and initial
-	// snapshots are exercised while other subscribers are being accepted.
 	concurrent := make([]*subscription, 8)
 	for i := range concurrent {
 		concurrent[i] = subscribe()
 	}
-	for _, subscriber := range concurrent {
-		await(subscriber, func(event ipc.Event) bool { return event.EventType == ipc.EventTypeHello })
-		await(subscriber, state(false))
+	for _, sub := range concurrent {
+		awaitState(sub, false)
 	}
-	for _, subscriber := range concurrent {
-		subscriber.cancel()
-		select {
-		case <-subscriber.done:
-		case <-time.After(3 * time.Second):
-			t.Fatal("concurrent IPC subscription cancellation did not terminate")
-		}
+	for _, sub := range concurrent {
+		stop(sub)
 	}
-	stream := subscribe()
-	await(stream, func(event ipc.Event) bool { return event.EventType == ipc.EventTypeHello })
-	await(stream, state(false))
-	observer := subscribe()
-	await(observer, func(event ipc.Event) bool { return event.EventType == ipc.EventTypeHello })
-	await(observer, state(false))
-	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
-	event := await(stream, state(true))
-	if event.Status.DesiredState != ipc.DesiredDisconnected {
-		t.Fatal("event stream lost disconnected intent")
+	stream, second := subscribe(), subscribe()
+	awaitState(stream, false)
+	awaitState(second, false)
+	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
+	event := awaitState(stream, true)
+	if event.GetStatusChanged().GetIntent().GetDesiredState() != ipc.DesiredState_DESIRED_STATE_DISCONNECTED {
+		t.Fatal("stream lost disconnected intent")
 	}
-	await(observer, state(true))
-	observer.cancel()
-	select {
-	case <-observer.done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("independent observer cancellation did not terminate")
-	}
-	var connected ipc.ConnectResponse
-	n.Service("connect", &connected)
-	await(stream, state(false))
-	n.Service("disconnect", &disconnected)
-	await(stream, state(true))
+	awaitState(second, true)
+	stop(second)
+	runNativeControlMutation(t, n, "connect", "00000000-0000-4000-8000-000000000002")
+	awaitState(stream, false)
+	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000003")
+	awaitState(stream, true)
+	previousInstance := stream.cursor.instance
 	n.Stop()
 	select {
 	case <-stream.done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("IPC subscription survived agent termination")
+		t.Fatal("native stream survived host termination")
 	}
 	n.Start()
-	n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid && v.UserDisconnected })
+	n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId == id && v.GetStoredState().GetCachedMapValid() && v.UserDisconnected
+	})
 	cliEvents(true)
 	stream = subscribe()
-	await(stream, func(event ipc.Event) bool { return event.EventType == ipc.EventTypeHello })
-	await(stream, state(true))
-	n.Service("connect", &connected)
-	event = await(stream, state(false))
-	if event.Status.DesiredState != ipc.DesiredConnected {
-		t.Fatal("reconnected event stream lost connected intent")
+	first := awaitState(stream, true)
+	if first.Sequence != 1 || stream.cursor.instance == previousInstance {
+		t.Fatal("new host stream did not begin with a fresh snapshot and instance")
 	}
-	stream.cancel()
-	select {
-	case <-stream.done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("explicit subscription cancellation did not terminate")
+	runNativeControlMutation(t, n, "connect", "00000000-0000-4000-8000-000000000004")
+	event = awaitState(stream, false)
+	if event.GetStatusChanged().GetIntent().GetDesiredState() != ipc.DesiredState_DESIRED_STATE_CONNECTED {
+		t.Fatal("reconnected stream lost connected intent")
 	}
+	stop(stream)
 }

@@ -241,6 +241,17 @@ original registration and renewal of the same node. These scenarios are compiled
 not executed, by local short tests; successful rotation remains unverified until
 isolated CI runs them on the required platforms.
 
+The process events scenario now uses native WatchEvents and protobuf-JSON CLI
+records. Opening snapshot, contiguous stream-local sequence, nondecreasing
+revision, valid timestamp and stable instance identity are checked. Eight
+independent subscriptions, cancellation without affecting another subscriber,
+connection-intent events, CLI listening timeout and termination on host shutdown
+remain covered. Reconnection requires sequence one and the new host instance.
+Short cursor tests reject gaps, duplicates, instance/revision changes, missing
+timestamps, repeated snapshots, failure and empty events without advancing the
+cursor. The guarded process test itself still needs isolated CI execution;
+queue overflow and authorization boundaries have separate component tests.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP
