@@ -96,10 +96,7 @@ func TestRPCDisconnectFullJournalIndependentOutcomesAndRetention(t *testing.T) {
 	if stops != 2 || len(m.store.Read().RPCState.Operations) != rpcMaxOperationRecords+2 {
 		t.Fatal("separate outcomes were coalesced or old work was evicted")
 	}
-	store, err := OpenConfigStore(m.store.path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	store := reopenRPCStoreFromDisk(t, m.store)
 	reopened, err := NewClientRPCMutations(store)
 	if err != nil {
 		t.Fatal(err)

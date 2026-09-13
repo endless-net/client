@@ -749,6 +749,13 @@ pagination check rejects the previous instance's cursor while a new query still
 returns all persisted profiles. These separate ephemeral state from durable
 authority without claiming installed service restart or full system acceptance.
 
+Initial-profile adoption, recovery-restricted Connect, interrupted Connect and
+full Disconnect journal-retention checks now recreate stores from disk. Resumed
+Connect verifies the persisted operation/intent before apply and does not apply
+again once complete. The journal test retains separate request identities and
+their individual retention deadlines after reopening. These remain unit-level
+durability checks, not installed runtime acceptance.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

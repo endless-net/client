@@ -43,10 +43,7 @@ func TestRPCInitialProfileAdoptionPreservesState(t *testing.T) {
 		if m.store.Read().RPCState.Revision != state.Revision || m.store.Read().RPCState.ActiveProfileID != state.ActiveProfileID {
 			t.Fatal("adoption not idempotent")
 		}
-		store, err := OpenConfigStore(m.store.path)
-		if err != nil {
-			t.Fatal(err)
-		}
+		store := reopenRPCStoreFromDisk(t, m.store)
 		restarted, err := NewClientRPCMutations(store)
 		if err != nil {
 			t.Fatal(err)

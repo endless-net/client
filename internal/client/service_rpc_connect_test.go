@@ -49,10 +49,7 @@ func TestRPCConnectRejectsDurableRecoveryWithoutChangingIntent(t *testing.T) {
 				if !reflect.DeepEqual(before, after) {
 					t.Fatal("rejected Connect changed recovery, journal, registration or intent")
 				}
-				store, err := OpenConfigStore(m.store.path)
-				if err != nil {
-					t.Fatal(err)
-				}
+				store := reopenRPCStoreFromDisk(t, m.store)
 				m, err = NewClientRPCMutations(store)
 				if err != nil {
 					t.Fatal(err)
@@ -182,13 +179,7 @@ func TestRPCConnectResultSurvivesRestartButCorruptStoreFailsClosed(t *testing.T)
 	if err != nil || completed.GetState() != ipc.OperationState_OPERATION_STATE_SUCCEEDED || completed.GetProfileId() != profile.ProfileId {
 		t.Fatal("Connect lost its terminal operation identity")
 	}
-	// Forget the process cache so reopening actually decodes durable bytes.
-	configStores.Delete(m.store.path)
-	t.Cleanup(func() { configStores.Delete(m.store.path) })
-	store, err := OpenConfigStore(m.store.path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	store := reopenRPCStoreFromDisk(t, m.store)
 	restarted, err := NewClientRPCMutations(store)
 	if err != nil {
 		t.Fatal(err)
@@ -267,21 +258,28 @@ func TestRPCConnectResumesAfterLifecycleCancellation(t *testing.T) {
 	if err := m.ReconcileConnect(ctx, driver); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	store, err := OpenConfigStore(m.store.path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	store := reopenRPCStoreFromDisk(t, m.store)
 	restarted, err := NewClientRPCMutations(store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	driver.Start = func(context.Context, Config) error { return nil }
+	resumedStarts := 0
+	driver.Start = func(_ context.Context, cfg Config) error {
+		resumedStarts++
+		if cfg.RPCState.ConnectOperationID != op.Id || cfg.ConnectionIntent == nil || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredConnected {
+			t.Fatal("resumed apply lost durable operation or connection intent")
+		}
+		return nil
+	}
 	if err := restarted.ReconcileConnect(t.Context(), driver); err != nil {
 		t.Fatal(err)
 	}
 	final, err := restarted.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
 	if err != nil || final.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
 		t.Fatal("connect restart failed", err)
+	}
+	if err := restarted.ReconcileConnect(t.Context(), driver); err != nil || resumedStarts != 1 {
+		t.Fatal("completed resumed Connect applied again")
 	}
 }
 
