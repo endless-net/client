@@ -450,7 +450,10 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 	if state := m.store.Read().RPCState; state != nil && state.ActiveProfileID != previousActive {
 		m.observedStatus = nil
 	}
-	if updated.Kind == ipc.OperationKind_OPERATION_KIND_DISCONNECT || updated.Kind == ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE {
+	if updated.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT && updated.State == ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+		m.observedStatus = nil
+	}
+	if updated.Kind == ipc.OperationKind_OPERATION_KIND_DISCONNECT || updated.Kind == ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE || updated.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT {
 		if m.observedStatus == nil {
 			m.observedStatus = &ipc.Status{}
 		}

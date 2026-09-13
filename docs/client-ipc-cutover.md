@@ -467,3 +467,15 @@ terminal; cancellation of the runtime remains recoverable shutdown. Tests cover
 HTTP 429/5xx versus 4xx, certificate/identity errors, and successful reconciliation
 after an ambiguous response using the same saved request and operation. Actual
 network-loss/approval recovery against deployed control plane remains system work.
+
+Native ForgetLocalEnrollment now requires OS administrator access and explicit
+confirmation for the active profile. It records disconnected intent, waits for
+the profile worker's actual Down result and only then applies the local cleanup
+matrix. A failed Down retains credentials/session; successful cleanup retains
+installation keys, fingerprint, ownership and trust, reports REMOTE_UNCONFIRMED
+and carries an existing recovery correlation ID. Tests check authorization,
+confirmation, ordering, stop failure and installation retention. Enrollment and
+forget mutations invalidate the profile catalog. Active conflicting operations
+still return BUSY: cancellation/draining of an in-flight Enroll, inactive-profile
+cleanup, remote Logout correlation integration and production/system acceptance
+remain required before complete UF-12 acceptance.

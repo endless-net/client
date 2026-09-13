@@ -73,7 +73,7 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 			break
 		}
 	}
-	if current == nil || (current.Kind != ipc.OperationKind_OPERATION_KIND_DISCONNECT && current.Kind != ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE) {
+	if current == nil || (current.Kind != ipc.OperationKind_OPERATION_KIND_DISCONNECT && current.Kind != ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE && current.Kind != ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT) {
 		return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
 	}
 	resuming := current.State == ipc.OperationState_OPERATION_STATE_RUNNING
@@ -104,6 +104,16 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 		op.State = ipc.OperationState_OPERATION_STATE_SUCCEEDED
 		op.Continuity = continuity
 		op.Outcome = &ipc.Operation_Change{Change: &ipc.ChangeResult{Changed: continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE}}
+		if stopErr == nil && op.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT {
+			requestID := ""
+			if cfg.EnrollmentRecovery != nil {
+				requestID = cfg.EnrollmentRecovery.RequestID
+			}
+			if err := ApplyLocalLogoutCleanup(cfg, m.now()); err != nil {
+				return err
+			}
+			op.Outcome = &ipc.Operation_Cleanup{Cleanup: &ipc.CleanupResult{Outcome: ipc.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_UNCONFIRMED, LocalRegistrationRemoved: true, ControlRequestId: requestID}}
+		}
 		if stopErr != nil {
 			failure := rpc.FailureFromError(stopErr)
 			if failure == nil {
