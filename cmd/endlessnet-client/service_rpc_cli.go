@@ -71,6 +71,13 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	switch command {
 	case "runtime-info":
 		message = &ipc.GetRuntimeInfoResponse{Runtime: info}
+	case "events":
+		stream, err := consumer.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
+		if err != nil {
+			return err
+		}
+		defer func() { _ = stream.Close() }()
+		return writeServiceRPCEvents(ctx, stream, info.InstanceId, output)
 	case "status":
 		response, err := consumer.GetStatus(ctx, connect.NewRequest(&ipc.GetStatusRequest{}))
 		if err != nil {

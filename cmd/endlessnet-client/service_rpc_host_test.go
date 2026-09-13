@@ -81,6 +81,16 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 			t.Fatal("CLI response does not follow native protobuf JSON", command, err)
 		}
 	}
+	eventOutput, err := captureStdout(t, func() error {
+		return cmdService([]string{"events", transportFlag, endpoint, "--timeout", "1s"})
+	})
+	if err != nil {
+		t.Fatal("native CLI event subscription failed", err)
+	}
+	event := new(ipc.WatchEventsResponse)
+	if err := protojson.Unmarshal([]byte(eventOutput), event); err != nil || event.Sequence != 1 || event.GetSnapshot() == nil {
+		t.Fatal("native CLI did not emit the opening snapshot", err)
+	}
 	if err := stop(); err != nil {
 		t.Fatal(err)
 	}

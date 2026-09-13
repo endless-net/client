@@ -66,10 +66,8 @@ func cmdService(args []string) error {
 			fmt.Printf("Open this URL to approve the device:\n%s\n", approvalURL)
 		}
 		return nil
-	case "status", "runtime-info", "support-info":
+	case "status", "runtime-info", "support-info", "events":
 		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
-	case "events":
-		return cmdServiceIPCEvents(args[0], args[1:])
 	case "connect":
 		return cmdServiceIPCRequest(args[0], args[1:], http.MethodPost, ipc.PathConnect, ipc.ConnectRequest{}, &ipc.ConnectResponse{})
 	case "server-identity":
@@ -402,45 +400,6 @@ func cmdServiceIPCRequest(command string, args []string, method, path string, re
 		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(response)
-}
-
-func cmdServiceIPCEvents(command string, args []string) error {
-	fs := flag.NewFlagSet("service "+command, flag.ExitOnError)
-	ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)
-	timeoutValue := fs.String("timeout", "30s", "maximum time to listen for service IPC events")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		return fmt.Errorf("service %s does not accept positional arguments", command)
-	}
-	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	encoder := json.NewEncoder(os.Stdout)
-	receivedHello := false
-	err = newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket).Stream(ctx, http.MethodGet, ipc.PathEvents, nil, func(event ipc.Event) error {
-		if !receivedHello && event.EventType != ipc.EventTypeHello {
-			return errors.New("service IPC event stream did not begin with hello")
-		}
-		if err := encoder.Encode(event); err != nil {
-			return err
-		}
-		if event.EventType == ipc.EventTypeHello {
-			receivedHello = true
-		}
-		return nil
-	})
-	if receivedHello && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
-		return nil
-	}
-	if err == nil && !receivedHello {
-		return errors.New("service IPC event stream ended before hello")
-	}
-	return err
 }
 
 func serviceIPCTransportFlags(fs *flag.FlagSet) (*string, *string) {

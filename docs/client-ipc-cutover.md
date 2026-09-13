@@ -598,3 +598,13 @@ The former v2 status case was replaced with real local-host CLI dispatch tests
 which decode replies against the accepted generated messages. Invalid arguments
 and timeouts are covered too. Other CLI mutations/events, helper and UI migration
 and live runtime status observation remain separate unfinished work.
+
+CLI `service events` now uses v0 WatchEvents and emits protobuf NDJSON after a
+verified Bootstrap. It requires the full opening snapshot, contiguous sequence,
+the same runtime instance and nondecreasing nonzero revisions. Unexpected EOF or
+invalid events fail explicitly; only an elapsed/cancelled bounded subscription
+that already emitted a snapshot completes normally. The old hello/HTTP event
+command and its tests were removed. Replacement tests cover native local CLI
+subscription, timeout before/after snapshot, EOF, sequence/metadata corruption
+and output failure. Automatic reconnect is not implied; callers must resubscribe
+for a fresh snapshot after a reported stream failure.
