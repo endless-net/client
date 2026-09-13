@@ -49,6 +49,10 @@ that all listed scenarios are already covered.
 
 ## Client-owned scenario map
 
+The separate [headless per-IT trace](client-headless-requirement-map.md) retains
+all 33 SA integration specifications as client implementation/unit obligations
+and explicit external observations. It is an open audit, not integration results.
+
 This maps all fourteen system-scenario families to the client boundary. It is
 not yet the per-requirement BA/SA completion matrix. All rows remain open until
 each applicable requirement and negative outcome has been individually audited.
