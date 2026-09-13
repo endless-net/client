@@ -21,7 +21,7 @@ func agentRPCPeers(opts agentIPCOptions) client.ClientRPCPeersProvider {
 		if err != nil {
 			return result, err
 		}
-		paths, available := opts.WireGuard.TryPathStatus(networkMap.Network.ID, networkMap.Node.ID, networkMap.Network.Revision)
+		paths, available := opts.WireGuard.TryPathStatus(networkMap.Network.ID, networkMap.Node.ID, networkMap.Network.Revision, networkMap.Revision.Global)
 		if !available {
 			return result, errors.New("current peer paths unavailable")
 		}

@@ -15,21 +15,30 @@ func TestTryPathStatusBindsAppliedMapAndCopiesObservations(t *testing.T) {
 		network, node string
 		revision      uint64
 	}{{"other", "node", 7}, {"network", "other", 7}, {"network", "node", 8}, {"network", "node", 0}} {
-		if paths, ok := engine.TryPathStatus(query.network, query.node, query.revision); ok || paths != nil {
+		if paths, ok := engine.TryPathStatus(query.network, query.node, query.revision, 0); ok || paths != nil {
 			t.Fatal("paths crossed applied map identity")
 		}
 	}
-	paths, ok := engine.TryPathStatus("network", "node", 7)
+	paths, ok := engine.TryPathStatus("network", "node", 7, 0)
 	if !ok || len(paths) != 1 {
 		t.Fatal("matching path observation unavailable")
 	}
 	paths[0].Candidates[0].State = "changed"
-	again, ok := engine.TryPathStatus("network", "node", 7)
+	again, ok := engine.TryPathStatus("network", "node", 7, 0)
 	if !ok || again[0].Candidates[0].State != "reachable" {
 		t.Fatal("path snapshot aliases manager")
 	}
+	// A global-only policy update must not label old direct/relay observations
+	// as belonging to the new map, even when node/network revisions match.
+	engine.pathMap.Revision.Global = 10
+	if paths, ok := engine.TryPathStatus("network", "node", 7, 11); ok || paths != nil {
+		t.Fatal("paths crossed global authorization revision")
+	}
+	if paths, ok := engine.TryPathStatus("network", "node", 7, 10); !ok || len(paths) != 1 {
+		t.Fatal("matching global path snapshot unavailable")
+	}
 	engine.configured = false
-	if _, ok := engine.TryPathStatus("network", "node", 7); ok {
+	if _, ok := engine.TryPathStatus("network", "node", 7, 0); ok {
 		t.Fatal("disconnected engine exposed paths")
 	}
 }
@@ -39,7 +48,7 @@ func TestTryPathStatusDoesNotWaitForBusyEngine(t *testing.T) {
 	engine.mu.Lock()
 	defer engine.mu.Unlock()
 	done := make(chan bool, 1)
-	go func() { _, ok := engine.TryPathStatus("network", "node", 7); done <- ok }()
+	go func() { _, ok := engine.TryPathStatus("network", "node", 7, 0); done <- ok }()
 	select {
 	case available := <-done:
 		if available {

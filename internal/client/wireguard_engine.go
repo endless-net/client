@@ -1061,12 +1061,12 @@ func (e *WireGuardEngine) PathStatus() []PeerPathStatus {
 // TryPathStatus returns observations only for the currently applied map. It
 // never waits behind platform Configure/Down and never labels old paths with a
 // newer verified map. Statuses returns owned copies of nested candidate slices.
-func (e *WireGuardEngine) TryPathStatus(networkID, nodeID string, revision uint64) ([]PeerPathStatus, bool) {
+func (e *WireGuardEngine) TryPathStatus(networkID, nodeID string, revision, globalRevision uint64) ([]PeerPathStatus, bool) {
 	if !e.mu.TryLock() {
 		return nil, false
 	}
 	defer e.mu.Unlock()
-	if !e.configured || e.relayPaths == nil || networkID == "" || nodeID == "" || revision == 0 || e.pathMap.Network.ID != networkID || e.pathMap.Node.ID != nodeID || e.pathMap.Network.Revision != revision {
+	if !e.configured || e.relayPaths == nil || networkID == "" || nodeID == "" || revision == 0 || e.pathMap.Network.ID != networkID || e.pathMap.Node.ID != nodeID || e.pathMap.Network.Revision != revision || e.pathMap.Revision.Global != globalRevision {
 		return nil, false
 	}
 	return e.relayPaths.Statuses(), true

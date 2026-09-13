@@ -16,8 +16,8 @@ type nativePeerTestEngine struct {
 	paths     []client.PeerPathStatus
 }
 
-func (e *nativePeerTestEngine) TryPathStatus(networkID, nodeID string, revision uint64) ([]client.PeerPathStatus, bool) {
-	if networkID != "net-1" || nodeID != "node-1" || revision != 7 {
+func (e *nativePeerTestEngine) TryPathStatus(networkID, nodeID string, revision, globalRevision uint64) ([]client.PeerPathStatus, bool) {
+	if networkID != "net-1" || nodeID != "node-1" || revision != 7 || globalRevision != 0 {
 		panic("peer source requested paths outside verified map")
 	}
 	e.calls++
