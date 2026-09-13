@@ -643,6 +643,13 @@ wait action, and an attempted driver start returns NEEDS_ENROLLMENT without
 Configure or changes to persisted approval state. This provider/driver test does
 not substitute for RPC admission and browser-approval completion coverage.
 
+Browser enrollment now uses the native provider in the migrated approval test:
+the public protobuf action excludes the poll token, persisted polling authority
+retains the request proof, and completion reuses the original hostname/request
+despite a changed resume input. One creation and one completion produce a verified
+registration; only a separate native driver start configures the tunnel. This
+does not constitute browser UI or installed RPC lifecycle acceptance.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,
