@@ -13,6 +13,24 @@ and [system design / IT specifications](https://github.com/endless-net/architect
 
 ## 2026-09-13: hosted execution not established for recent native changes
 
+Follow-up: [Protobuf contract run 34748743095](https://github.com/endless-net/client/actions/runs/34748743095)
+subsequently completed successfully at source
+`9ea9bac0be56fb620b8f89e5c055a94615b40dbc`. Validation and all three
+local-transport jobs succeeded. The logs explicitly contain successful
+`clientipc/local` and `clientipc/testserver` package results from
+`go test -short ./...` in `clientipc`:
+[Windows job](https://github.com/endless-net/client/actions/runs/34748743095/job/103701290272),
+[macOS job](https://github.com/endless-net/client/actions/runs/34748743095/job/103701290475),
+[Linux job](https://github.com/endless-net/client/actions/runs/34748743095/job/103701290933).
+That source contains `TestResponseGatesAndCancellationAreIsolatedAcrossStreams`:
+one cancelled gated stream must not release its blocked event or prevent a
+second stream from receiving its independently released event and completing.
+This is three-platform contract/testserver evidence, not root-runtime,
+installed-service, traffic, mobile or consumer UI acceptance. In particular,
+later signing-identity and approval-driver changes are not qualified by this SHA.
+The queued observation below remains historical, not the current outcome of
+this now-completed run. The separate `startup_failure` run remains unqualified.
+
 Read-only GitHub observation at 09:23 UTC:
 
 - [Protobuf contract run 34749065778](https://github.com/endless-net/client/actions/runs/34749065778),
