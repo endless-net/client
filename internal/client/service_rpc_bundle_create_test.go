@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
@@ -41,7 +42,7 @@ func TestRPCBundleCreateAndRestartRecovery(t *testing.T) {
 				}
 			}
 			// Recreate coordinator and artifact storage: no request wakeup is needed.
-			m, err = NewClientRPCMutations(m.store)
+			m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -71,6 +72,28 @@ func TestRPCBundleCreateAndRestartRecovery(t *testing.T) {
 			chunk, err := s.readDiagnosticsBundleAs(t.Context(), peer, &ipc.ReadDiagnosticsBundleRequest{BundleId: op.Id})
 			if err != nil || len(chunk.GetData()) == 0 || !chunk.Eof {
 				t.Fatal("published archive unavailable", err)
+			}
+			// A second restart must restore the completed journal and artifact,
+			// not merely the previously running operation.
+			m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
+			if err != nil {
+				t.Fatal(err)
+			}
+			s = NewClientRPCService(m, nil)
+			s.bundleStore, err = openClientRPCBundleStore(path, m.now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.DiagnosticsProvider = func(context.Context) (ClientRPCDiagnosticsObservation, error) {
+				t.Error("completed bundle was collected again after restart")
+				return ClientRPCDiagnosticsObservation{}, errors.New("unexpected collection")
+			}
+			if err := s.reconcileBundles(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			restored, err := s.readDiagnosticsBundleAs(t.Context(), peer, &ipc.ReadDiagnosticsBundleRequest{BundleId: op.Id})
+			if err != nil || !restored.GetEof() || !bytes.Equal(chunk.Data, restored.GetData()) {
+				t.Fatal("completed bundle bytes changed after restart")
 			}
 			replay, err := m.createBundleAs(peer, request)
 			if err != nil || !proto.Equal(replay, result) {

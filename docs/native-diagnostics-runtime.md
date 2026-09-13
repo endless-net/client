@@ -735,6 +735,14 @@ The logout test retains monotonic remote confirmation and replacement-session
 rejection. These are durable-state unit checks, not remote revocation or installed
 crash/recovery acceptance.
 
+Bundle startup/recovery tests now reopen the operation store from disk as well
+as the artifact store. After completion they rebuild both stores a second time,
+require identical downloadable bytes and protobuf operation replay, and prohibit
+another diagnostics collection. Worker shutdown recovery is likewise disk-backed.
+These tests cover durable local artifacts and journal coordination in-process;
+installed crash recovery, retention over real downtime and UI export remain
+separate acceptance obligations.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

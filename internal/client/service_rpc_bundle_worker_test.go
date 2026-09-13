@@ -56,7 +56,7 @@ func TestRPCBundleWorkerShutdownAndStartupRecovery(t *testing.T) {
 	if err != nil || result.State != ipc.OperationState_OPERATION_STATE_RUNNING || len(m.store.Read().RPCState.Bundles) != 1 {
 		t.Fatal("shutdown terminalized or lost unfinished plan", err)
 	}
-	m, err = NewClientRPCMutations(m.store)
+	m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 	if err != nil {
 		t.Fatal(err)
 	}
