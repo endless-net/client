@@ -16,6 +16,13 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 		return errors.New("client RPC listener is required")
 	}
 	defer func() { _ = listener.Close() }()
+	if s.bundleStore == nil {
+		store, err := openClientRPCBundleStore(s.mutations.store.path+".bundles", s.mutations.now)
+		if err != nil {
+			return err
+		}
+		s.bundleStore = store
+	}
 	workerCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	profileDone, err := s.StartProfileWorker(workerCtx, driver)

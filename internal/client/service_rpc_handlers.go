@@ -37,6 +37,7 @@ type ClientRPCService struct {
 	enrollmentWorker *clientRPCProfileWorker
 	trustMu          sync.Mutex
 	trustWorker      *clientRPCProfileWorker
+	bundleStore      *clientRPCBundleStore
 }
 
 func NewClientRPCService(mutations *ClientRPCMutations, build *ipc.BuildIdentity) *ClientRPCService {

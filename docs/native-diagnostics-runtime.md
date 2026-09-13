@@ -15,15 +15,25 @@ after 15 minutes, supports bounded 64 KiB/default and 256 KiB/maximum reads, and
 limits retention to 32 handles/20 MiB without evicting live handles silently.
 Foreign/expired handles return NOT_FOUND; explicit revocation removes a profile's
 entries. Tests cover binding, expiry, offsets, copy ownership and capacity. This
-store is not yet connected to RPC or logout hooks. Its optional file-backed mode
+store is opened by the native host alongside its protected configuration. File-backed mode
 atomically persists creation and revocation before publishing changes in memory,
 restores immutable descriptors/bytes after restart, validates hashes, size, TTL,
 identity and capacity, and ignores expired records. Archives stay outside the
 main configuration. Files use mode 0600 and existing machine-DPAPI protection on
 Windows; the integrating runtime must supply a private ACL-protected directory
 and hold its single-writer agent lock. Tests cover restart, durable revocation,
-expiry, malformed storage and failed-write rollback. Runtime wiring and atomic
+expiry, malformed storage and failed-write rollback. Creation-worker wiring and atomic
 operation publication are still required; this is not installed-service evidence.
+
+ReadDiagnosticsBundle now checks current owner admission and the durable successful
+CreateDiagnosticsBundle outcome before copying a chunk. Its descriptor must match
+the stored artifact exactly. Orphaned/unpublished archives, removed profiles and
+handles predating logout/local-forget admission are inaccessible; an unrelated
+profile's cleanup does not revoke the handle. Short tests cover these conditions,
+expiry, cancellation, foreign operation ownership and descriptor mismatch. These
+checks do not replace physical artifact revocation hooks. CreateDiagnosticsBundle
+execution/restart recovery is still missing, so the host cannot yet produce bundles
+and DIAGNOSTICS remains unadvertised.
 
 The retired HTTP Diagnostics route and agent callback are removed. Its old path
 must return 404. The native local transport test verifies owner-only collection,
