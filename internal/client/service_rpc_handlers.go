@@ -26,6 +26,7 @@ type ClientRPCService struct {
 	RecentLogsProvider     ClientRPCRecentLogsProvider
 	NetworksProvider       ClientRPCNetworksProvider
 	DiagnosticsProvider    ClientRPCDiagnosticsProvider
+	PeersProvider          ClientRPCPeersProvider
 	clientipcconnect.UnimplementedClientServiceHandler
 	mutations        *ClientRPCMutations
 	build            *ipc.BuildIdentity
