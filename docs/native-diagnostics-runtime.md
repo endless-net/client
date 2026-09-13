@@ -280,6 +280,16 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The two-client credential-retirement subscenario now captures its own native
+status baseline rather than accepting legacy status DTOs. Terminal cleanup and
+restart must clear native enrollment/cache while preserving the profile. The
+receiver must retain a current applied map and an inspected tunnel peer explicitly
+matching the retired sender. Existing TCP/UDP sockets and fresh overlay exchanges
+must be denied while the same receiver applications remain reachable by underlay;
+no new registration request is allowed. The enclosing Linux namespace peer/policy
+fixture still contains legacy observations and is not fully migrated. Local short
+tests only compile this guarded scenario; real traffic/restart evidence needs CI.
+
 The user-session expiry scenario now uses native status and profile/map-bound
 tunnel diagnostics in both IP families. Backend-observed headless user RPC denial
 must coexist with the same enrolled node, active profile and current applied map;
