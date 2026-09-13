@@ -1715,6 +1715,11 @@ func cacheNetworkMap(cfg *client.Config, response clientapi.RegisterNodeResponse
 		cfg.ApprovalURL = ""
 	}
 	cfg.MapRevision = cached.Network.Revision
+	cfg.MapGlobalRevision = cached.Revision.Global
+	cfg.MapHash = ""
+	if cached.MapSignature != nil {
+		cfg.MapHash = cached.MapSignature.PayloadHash
+	}
 	cfg.CachedMap = &cached
 	now := time.Now().UTC()
 	cfg.CachedMapSavedAt = &now
@@ -1726,6 +1731,9 @@ func cacheNetworkMapChecked(cfg *client.Config, response clientapi.RegisterNodeR
 	}
 	if cfg.MapRevision != 0 && response.Network.Revision < cfg.MapRevision {
 		return fmt.Errorf("stale network map revision %d is older than local map_revision %d", response.Network.Revision, cfg.MapRevision)
+	}
+	if response.Revision.Global < cfg.MapGlobalRevision {
+		return fmt.Errorf("stale global map revision %d is older than local map_global_revision %d", response.Revision.Global, cfg.MapGlobalRevision)
 	}
 	cacheNetworkMap(cfg, response)
 	return nil
@@ -1839,6 +1847,9 @@ func verifiedCachedNetworkMapWithMaxAge(cfg *client.Config, maxAge time.Duration
 	}
 	if cfg.MapRevision != 0 && cached.Network.Revision != cfg.MapRevision {
 		return clientapi.RegisterNodeResponse{}, fmt.Errorf("cached network map revision %d does not match local map_revision %d", cached.Network.Revision, cfg.MapRevision)
+	}
+	if cached.Revision.Global != cfg.MapGlobalRevision {
+		return clientapi.RegisterNodeResponse{}, fmt.Errorf("cached global map revision %d does not match local map_global_revision %d", cached.Revision.Global, cfg.MapGlobalRevision)
 	}
 	if maxAge > 0 {
 		if cfg.CachedMapSavedAt == nil || cfg.CachedMapSavedAt.IsZero() {
