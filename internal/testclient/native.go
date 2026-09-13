@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -25,11 +26,20 @@ func (n *Node) NativeService(operation string, target proto.Message, options ...
 	return decodeNativeService(out, target)
 }
 
-// NativeServiceCommandError recognizes only the complete canonical typed failure line emitted by the CLI.
+var nativeMutationFailureSuffix = regexp.MustCompile(`^; inspect service operation --request-id [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12} using the same endpoint before deciding whether to retry$`)
+
+// NativeServiceCommandError recognizes only the complete canonical typed failure line emitted by the CLI,
+// optionally inside its exact mutation-outcome lookup hint. Never retain the request ID.
 // Never retain subprocess output or infer a code from a substring in diagnostics.
 func NativeServiceCommandError(operation string, output []byte) error {
-	if len(output) <= 256 {
+	if len(output) <= 512 {
 		line := strings.TrimSpace(string(output))
+		if body, wrapped := strings.CutPrefix(line, "service "+operation+": "); wrapped {
+			failure, suffix, found := strings.Cut(body, "; inspect service operation --request-id ")
+			if found && nativeMutationFailureSuffix.MatchString("; inspect service operation --request-id "+suffix) {
+				line = failure
+			}
+		}
 		for code := connect.CodeCanceled; code <= connect.CodeUnauthenticated; code++ {
 			for number := range ipc.ErrorCode_name {
 				failure := ipc.ErrorCode(number)
