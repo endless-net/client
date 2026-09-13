@@ -94,6 +94,16 @@ unsupported platform behavior from policy denial, missing OS permission and
 temporary unavailability. A capability must remain unavailable until its provider
 and platform adapter exist. Missing capability entries mean unsupported.
 
+`IDENTITY_RECOVERY` is advertised only while the trust executor is running with
+both public identity inspection and credential recovery providers and the tunnel
+stop/lock adapter. Startup refusal and cancellation leave it unavailable; late
+shutdown callbacks cannot clear a replacement executor. A readiness transition
+closes existing event streams with `STALE_STATE`, requiring rebootstrap and a
+fresh opening snapshot. This does not bypass caller/profile/confirmation checks
+or establish real backend recovery, mobile bridge or release acceptance. The
+executor lifetime regression and native host bootstrap assertions cover this
+readiness projection; trust transaction tests cover the separate mutation path.
+
 `GetRuntimeInfo` is the bootstrap call. `protocol` is
 `endlessnet-client-ipc`, `ipc_version` is 0 and `contract_sha256` identifies the
 exact published descriptor. All subsequent RPCs require exactly one value for

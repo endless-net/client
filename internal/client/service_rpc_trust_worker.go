@@ -26,10 +26,15 @@ func (s *ClientRPCService) StartTrustWorker(ctx context.Context, driver ClientRP
 	}
 	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	s.trustWorker = w
+	s.mutations.setWorkerCapabilities(w, true, ipc.Capability_CAPABILITY_IDENTITY_RECOVERY)
+	clearReadiness := func() { s.mutations.setWorkerCapabilities(w, false, ipc.Capability_CAPABILITY_IDENTITY_RECOVERY) }
+	stopReadiness := context.AfterFunc(ctx, clearReadiness)
 	done := make(chan error, 1)
 	go func() {
 		var err error
 		defer func() {
+			stopReadiness()
+			clearReadiness()
 			s.trustMu.Lock()
 			s.trustWorker = nil
 			s.trustMu.Unlock()

@@ -79,7 +79,7 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	assertBuild(bootstrapInfo.Build)
 	assertConnectionCapability := func(info *ipc.RuntimeInfo) {
 		t.Helper()
-		want := []ipc.Capability{ipc.Capability_CAPABILITY_ENROLLMENT, ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_PEERS, ipc.Capability_CAPABILITY_DIAGNOSTICS, ipc.Capability_CAPABILITY_LOGOUT, ipc.Capability_CAPABILITY_LOCAL_FORGET, ipc.Capability_CAPABILITY_PROFILES, ipc.Capability_CAPABILITY_SUPPORT_INFO}
+		want := []ipc.Capability{ipc.Capability_CAPABILITY_ENROLLMENT, ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_PEERS, ipc.Capability_CAPABILITY_IDENTITY_RECOVERY, ipc.Capability_CAPABILITY_DIAGNOSTICS, ipc.Capability_CAPABILITY_LOGOUT, ipc.Capability_CAPABILITY_LOCAL_FORGET, ipc.Capability_CAPABILITY_PROFILES, ipc.Capability_CAPABILITY_SUPPORT_INFO}
 		if len(info.Capabilities) != len(want) {
 			t.Fatal("native host advertised incomplete or unwired capability families")
 		}
