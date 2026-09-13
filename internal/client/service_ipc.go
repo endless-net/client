@@ -6,12 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 
 	ipc "github.com/endless-net/client/ipc/v2"
 )
-
-type ServiceIPCAuthorizer func(*http.Request, ServiceIPCEndpoint) error
 
 type ServiceIPCEndpoint struct {
 	Method            string              `json:"method"`
@@ -152,7 +149,6 @@ func supportedServiceIPCTransport(transport string) bool {
 }
 
 type ServiceIPCHandlers struct {
-	Authorize      ServiceIPCAuthorizer
 	Status         func(context.Context, ipc.StatusRequest) (ipc.StatusResponse, error)
 	Enroll         func(context.Context, ipc.EnrollRequest) (ipc.EnrollResponse, error)
 	Connect        func(context.Context, ipc.ConnectRequest) (ipc.ConnectResponse, error)
@@ -161,7 +157,6 @@ type ServiceIPCHandlers struct {
 	Disconnect     func(context.Context, ipc.DisconnectRequest) (ipc.DisconnectResponse, error)
 	Logout         func(context.Context, ipc.LogoutRequest) (ipc.LogoutResponse, error)
 	LocalForget    func(context.Context, ipc.LocalForgetRequest) (ipc.LocalForgetResponse, error)
-	MutationLock   sync.Locker
 }
 
 func serviceIPCEndpoint(method, path, operation string, privilege ServiceIPCPrivilege, mutation bool) ServiceIPCEndpoint {

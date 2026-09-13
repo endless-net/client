@@ -628,14 +628,6 @@ func inspectServerIdentity(configPath string) (ipc.ServerIdentityResponse, clien
 
 func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 	return client.ServiceIPCHandlers{
-		Authorize: func(r *http.Request, endpoint client.ServiceIPCEndpoint) error {
-			configStore, err := agentServiceIPCConfigStore(opts)
-			if err != nil {
-				return serviceIPCConfigError(err)
-			}
-			return client.AuthorizeLocalServiceIPCForConfig(r, endpoint, configStore.Read())
-		},
-		MutationLock: opts.OperationMu,
 		Status: func(ctx context.Context, req ipc.StatusRequest) (ipc.StatusResponse, error) {
 			return agentIPCStatus(ctx, opts)
 		},
