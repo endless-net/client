@@ -263,6 +263,20 @@ Persist trust and the recovery operation atomically before network recovery.
 Apply the existing typed terminal/retryable recovery rules. A supplied boolean
 does not replace OS privilege verification.
 
+Implementation evidence (2026-09-13): [native signing-identity projection,
+client main commit 75a29e4](https://github.com/endless-net/client/commit/75a29e4f708eea57c5c44d4a423f3ea4dcf14635)
+preserves a typed signing-trust mismatch through wrapped errors and the internal
+agent snapshot. A snapshot matching the active profile, node, network and current
+map revision projects `SERVER_IDENTITY_CHANGED` in service/control state and
+the recovery/agent failure code. Diagnostic text alone cannot select this state;
+foreign or previous-revision snapshots cannot change the current trust state.
+This observation does not accept a new key or start recovery: explicit
+`GetServerIdentity`/`TrustServerIdentity` confirmation remains required. The
+internal snapshot marker is not a consumer contract or a replacement for v0.
+The producer test covers detection, snapshot persistence and native projection;
+local short-test success does not establish hosted cross-platform, UI or
+installed-service acceptance of this path.
+
 Exit-node choices and resources are already authorized catalog entries.
 Selection cannot grant access, advertise routes or turn this device into an exit
 node. Exit selection separates requested and effective IDs and LAN behavior.

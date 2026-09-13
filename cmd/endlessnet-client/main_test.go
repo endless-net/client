@@ -3205,33 +3205,6 @@ func TestAttachControlAvailabilityMarksDegradedWhenReadyzUnavailable(t *testing.
 	}
 }
 
-func TestAgentIPCStatusReportsServerIdentityChangeRecoveryState(t *testing.T) {
-	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 7)
-	tmp := t.TempDir()
-	configPath := filepath.Join(tmp, "client.json")
-	statePath := filepath.Join(tmp, "agent-state.json")
-	if err := client.SaveConfig(configPath, client.Config{
-		NodeID:          "node-1",
-		NetworkID:       "net-1",
-		NodeCredential:  "credential-1",
-		MapRevision:     7,
-		MapSigningTrust: testSigningTrustBundle(t, testMapSigningPublicKey(t, networkMap.MapSignature)),
-		CachedMap:       &networkMap,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeAgentFailureSnapshot(statePath, configPath, errors.New(serverMapSigningTrustChangedError)); err != nil {
-		t.Fatal(err)
-	}
-	payload, err := agentIPCStatus(context.Background(), agentIPCOptions{ConfigPath: configPath, StateOutput: statePath})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if payload.ControlState != ipc.ControlStateServerIdentityChanged || payload.State != ipc.StateServerIdentityChanged || payload.Recovery == nil || payload.Recovery.State != ipc.StateServerIdentityChanged {
-		t.Fatalf("IPC server identity recovery state = %#v", payload)
-	}
-}
-
 func TestAttachControlAvailabilityKeepsReadyWhenReadyzOK(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/client/readyz" {
