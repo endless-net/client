@@ -31,6 +31,12 @@ func agentRPCDiagnostics(opts agentIPCOptions) client.ClientRPCDiagnosticsProvid
 		result.DNS = nativeMapDNSDiagnostics(networkMap)
 		result.RouteConflicts = client.OverlayCIDRConflicts(networkMap, result.Interfaces, opts.WGInterface)
 		result.Peers, result.TunnelPeers, result.PeerFailures = nativeDiagnosticPeers(networkMap, inspection)
+		paths, available := opts.WireGuard.TryPathStatus(networkMap.Network.ID, networkMap.Node.ID, networkMap.Network.Revision)
+		if available {
+			result.PeerFailures = append(result.PeerFailures, nativeDiagnosticPaths(result.Peers, paths)...)
+		} else {
+			result.PeerFailures = append(result.PeerFailures, &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "diagnostics_current_paths_unavailable"})
+		}
 		return result, ctx.Err()
 	}
 }

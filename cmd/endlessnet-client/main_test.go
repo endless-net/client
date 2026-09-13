@@ -89,6 +89,10 @@ func testSuccessfulIPCWireGuardApply() *ipc.WireGuardApplyResult {
 
 func (*testAgentWireGuard) PathStatus() []client.PeerPathStatus { return nil }
 
+func (*testAgentWireGuard) TryPathStatus(string, string, uint64) ([]client.PeerPathStatus, bool) {
+	return nil, false
+}
+
 func (*testAgentWireGuard) RelayStatus() (client.RelayDataplaneBridgeStatus, bool, error) {
 	return client.RelayDataplaneBridgeStatus{}, false, nil
 }

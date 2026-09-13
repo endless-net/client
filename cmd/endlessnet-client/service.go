@@ -320,6 +320,7 @@ type agentWireGuard interface {
 	Inspection() client.WireGuardInspection
 	TryInspection() (client.WireGuardInspection, bool)
 	PathStatus() []client.PeerPathStatus
+	TryPathStatus(string, string, uint64) ([]client.PeerPathStatus, bool)
 	RelayStatus() (client.RelayDataplaneBridgeStatus, bool, error)
 }
 

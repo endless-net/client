@@ -35,8 +35,17 @@ provide copied counters, endpoint, allowed IPs and optional handshake timestamp.
 An absent handshake remains absent, not Unix epoch; failed/busy inspections do
 not expose live peer statistics. No handshake implies reachability or path choice.
 
-This is a **partial runtime implementation**. OS route inspection, default route
-presence and peer path-monitor observations are not collected; `truncated=true` and an explicit
+Path-monitor observations are now read with TryPathStatus under a nonblocking
+engine lock and must match the applied network/node/revision. Busy, disconnected
+or mismatched-map observations produce an explicit unavailable-section failure.
+The projection preserves monitor-selected direct/relay path, candidate health,
+RTT and timestamps, but keeps the verified hostname. Invalid peer IDs, enums,
+timestamps, numeric ranges or nonfinite RTTs reject the affected path projection.
+Raw selection/probe errors are replaced by fixed reason keys. Monitor absence
+never triggers a handshake-based or cached-status fallback.
+
+This is a **partial runtime implementation**. OS route inspection and default
+route presence are not collected; `truncated=true` and an explicit
 unsupported-section failure prevent interpreting empty/default fields as a clean
 report. Engine Inspection.Routes describes configured engine targets, not an
 independent OS route-table observation, and is intentionally not relabeled as one.
@@ -52,5 +61,7 @@ inspection, pre-cancelled collection, DNS copy ownership and fixed conflict reas
 Peer tests cover identity joins, duplicate/foreign/unmapped identities, host-prefix
 filtering, absent/invalid handshakes, keepalive bounds, copied counters/addresses,
 and exclusion of unverified or failed-inspection live data.
+Path tests additionally cover applied-map binding, busy/disconnected engine,
+nested-copy ownership, direct selection/RTT conversion and malformed observations.
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.
