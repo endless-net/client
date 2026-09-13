@@ -81,10 +81,16 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 			}
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
-			output, err := exec.CommandContext(ctx, binary, "service", "diagnostics", "--profile-id", initial.ActiveProfileId, "--timeout", "2s").Output()
+			command := exec.CommandContext(ctx, binary, "service", "diagnostics", "--profile-id", initial.ActiveProfileId, "--timeout", "2s")
+			command.WaitDelay = 2 * time.Second
+			output, err := command.CombinedOutput()
 			response := &ipc.GetDiagnosticsResponse{}
-			if err != nil || protojson.Unmarshal(output, response) != nil {
-				t.Log("installed connection diagnostic: native_diagnostics_available=false")
+			if err != nil {
+				t.Logf("installed connection diagnostic: native_diagnostics_available=false deadline=%t error=%v", ctx.Err() != nil, testclient.NativeServiceCommandError("diagnostics", output))
+				return
+			}
+			if protojson.Unmarshal(output, response) != nil {
+				t.Log("installed connection diagnostic: native_diagnostics_available=false invalid_protobuf_json=true (output withheld)")
 				return
 			}
 			d := response.GetDiagnostics()

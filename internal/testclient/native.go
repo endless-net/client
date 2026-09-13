@@ -20,14 +20,14 @@ import (
 func (n *Node) NativeService(operation string, target proto.Message, options ...string) error {
 	out, err := n.ServiceCommand(operation, options...)
 	if err != nil {
-		return nativeServiceCommandError(operation, out)
+		return NativeServiceCommandError(operation, out)
 	}
 	return decodeNativeService(out, target)
 }
 
-// Recognize only the complete canonical typed failure line emitted by the CLI.
+// NativeServiceCommandError recognizes only the complete canonical typed failure line emitted by the CLI.
 // Never retain subprocess output or infer a code from a substring in diagnostics.
-func nativeServiceCommandError(operation string, output []byte) error {
+func NativeServiceCommandError(operation string, output []byte) error {
 	if len(output) <= 256 {
 		line := strings.TrimSpace(string(output))
 		for code := connect.CodeCanceled; code <= connect.CodeUnauthenticated; code++ {
