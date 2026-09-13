@@ -8,10 +8,10 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-030: a previously accepted signature expires during a control outage.
@@ -29,19 +29,23 @@ func TestControlPlaneNativeCachedMapExpiry(t *testing.T) {
 			n.Enroll(s, network.Name, token, "--route-table", "auto")
 			n.Start()
 			defer n.Stop()
-			status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
-			nodeID := status.NodeID
-			clientIP, peerIP := netip.MustParseAddr(status.OverlayIP), netip.MustParseAddr("198.18.95.20")
+			status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
+			})
+			nodeID := status.NodeId
+			clientIP, peerIP := nativeOverlayAddress(status, false), netip.MustParseAddr("198.18.95.20")
 			if family == "ipv6" {
 				if err := s.UpdateMap(nodeID, func(m *api.NetworkMapSnapshot) {
 					m.Network.IPv6CIDR, m.Node.AssignedIPv6 = "fd95::/64", "fd95::1"
 				}); err != nil {
 					t.Fatal(err)
 				}
-				status = n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.OverlayIPv6 == "fd95::1" && v.CachedMapValid })
-				clientIP, peerIP = netip.MustParseAddr(status.OverlayIPv6), netip.MustParseAddr("fd95::20")
+				status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+					return v.NodeId == nodeID && nativeOverlayAddress(v, true).String() == "fd95::1" && v.GetStoredState().GetCachedMapValid()
+				})
+				clientIP, peerIP = nativeOverlayAddress(status, true), netip.MustParseAddr("fd95::20")
 			}
-			underlay := nativePeerUnderlay(t, netip.MustParseAddr(status.OverlayIP), peerIP)
+			underlay := nativePeerUnderlay(t, nativeOverlayAddress(status, false), peerIP)
 			snapshot, err := s.Snapshot(nodeID)
 			if err != nil {
 				t.Fatal(err)
@@ -59,24 +63,32 @@ func TestControlPlaneNativeCachedMapExpiry(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.NodeID == nodeID && v.NodeCredentialPresent && v.CachedMapValid && v.PeerCount == 1 &&
+				status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+					return v.NodeId == nodeID && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() && v.PeerCount == 1 &&
 						v.MapRevision >= current.Revision.Network && v.Agent != nil &&
-						v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" &&
-						v.WireGuard != nil && v.WireGuard.OK
+						v.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.MapRevision == v.MapRevision && v.Agent.LastFailure == nil &&
+						v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 				})
-				reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+				reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, nativeTunnelPort(t, n, status)))
 			}
 			ready()
 			binary := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
 			address := net.JoinHostPort(peerIP.String(), "24001")
 			probe := func(protocol string) bool { return applicationProbe(t, binary, "", protocol, address) }
+			verifiedProbe := func(protocol string) bool {
+				beforeReceived, beforeEchoed := reference.PacketCounts()
+				if !probe(protocol) {
+					return false
+				}
+				received, echoed := reference.PacketCounts()
+				return received > beforeReceived && echoed > beforeEchoed
+			}
 			reachable := func() {
 				t.Helper()
 				ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 				defer cancel()
 				if err := testclient.Await(ctx, func() bool {
-					tcpOK, udpOK := probe("tcp"), probe("udp")
+					tcpOK, udpOK := verifiedProbe("tcp"), verifiedProbe("udp")
 					return tcpOK && udpOK
 				}); err != nil {
 					t.Fatal("valid cached authority did not carry TCP and UDP traffic")
@@ -101,10 +113,12 @@ func TestControlPlaneNativeCachedMapExpiry(t *testing.T) {
 			}
 			assertExpired := func() {
 				t.Helper()
-				n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.NodeID == nodeID && v.NodeCredentialPresent && !v.CachedMapValid && !v.UserDisconnected
+				n.AwaitNativeStatus(func(v *ipc.Status) bool {
+					return v.NodeId == nodeID && v.GetStoredState().GetNodeCredentialPresent() && !v.GetStoredState().GetCachedMapValid() &&
+						!v.UserDisconnected && v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED
 				})
-				if probe("tcp") || probe("udp") {
+				tcpOK, udpOK := probe("tcp"), probe("udp")
+				if tcpOK || udpOK {
 					t.Fatal("expired cached authority still permitted application traffic")
 				}
 			}

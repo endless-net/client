@@ -280,6 +280,15 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The cached-map expiry scenario now uses native status and profile/map-bound
+tunnel diagnostics for both IPv4 and IPv6. Each successful TCP and UDP probe
+must increment reference-peer receive/echo counters. Expiry during an outage
+must invalidate cached authority without removing the node credential or changing
+the connected intent; both protocols must fail before and after agent restart.
+Offline headless sync must reject expired authority, and a fresh signed map must
+restore traffic for the same node. Local short tests compile this guarded process
+scenario; expiry, restart and real traffic evidence remain per-platform CI work.
+
 The ephemeral lifecycle scenario now uses native status and profile/map-bound
 tunnel diagnostics. A current agent snapshot must expose the ephemeral node and
 peer before traffic; a successful TCP probe must increment the reference peer's
