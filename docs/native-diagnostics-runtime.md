@@ -280,6 +280,16 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The IPv4/IPv6 machine-sharing scenario now uses native status, current applied-map
+gates and profile-bound tunnel inspection. Successful original and replacement
+rights must increment reference-peer receive/echo counters. Lease expiry must
+deny an already-open TCP session as well as fresh traffic, and restart must not
+restore the expired grant. A new signed grant restores access; replacement rights
+and final peer/grant withdrawal retain protocol/port denial checks. Initial lease
+timing is 30 seconds to allow setup before observing expiry. Local short tests
+compile the guarded scenario only; per-platform sharing/traffic/restart evidence
+and share-provider/UI acceptance remain separate CI work.
+
 The IPv4/IPv6 logical-service discovery scenario now uses native status,
 applied-map gates and tunnel diagnostics, and the last legacy DNS-listener
 address helper has been removed. Each discovered host must independently echo
