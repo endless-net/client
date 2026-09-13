@@ -16,6 +16,27 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func TestRPCIdleTrustAdoptionDoesNotWaitForTunnel(t *testing.T) {
+	m, _, _ := rpcConnectFixture(t)
+	lock := &sync.Mutex{}
+	lock.Lock()
+	defer lock.Unlock()
+	done := make(chan error, 1)
+	go func() {
+		done <- m.ReconcileTrustAdoption(t.Context(), ClientRPCProfileDriver{Lock: lock, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+			return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, errors.New("idle adoption must not stop the tunnel")
+		}})
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("idle trust worker waited for an unrelated tunnel operation")
+	}
+}
+
 func TestRPCTrustAdoptionDurability(t *testing.T) {
 	for _, scenario := range []string{"enrolled", "unenrolled", "unchanged", "unchanged disconnected", "down failure", "restart during down", "changed authority", "changed trust", "change during down", "not verified"} {
 		t.Run(scenario, func(t *testing.T) {

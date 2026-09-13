@@ -18,6 +18,13 @@ func (m *ClientRPCMutations) ReconcileTrustAdoption(ctx context.Context, driver 
 	if driver.Lock == nil || driver.Stop == nil {
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
+	// An idle trust worker must stay available for a new announcement instead
+	// of waiting behind an unrelated tunnel iteration. Recheck after acquiring
+	// the locks below before acting on any actual plan.
+	initial := m.store.Read()
+	if initial.RPCState == nil || initial.RPCState.Trust == nil || initial.RPCState.Trust.Adopted {
+		return ctx.Err()
+	}
 	m.trustWorker.Lock()
 	defer m.trustWorker.Unlock()
 	m.profileWorker.Lock()
