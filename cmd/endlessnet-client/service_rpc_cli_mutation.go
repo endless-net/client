@@ -33,6 +33,10 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	requestID := fs.String("request-id", "", "required durable mutation UUID; retain for operation lookup")
 	instance := fs.String("expected-instance-id", "", "required runtime instance from a fresh snapshot")
 	revision := fs.Uint64("expected-revision", 0, "required state revision from a fresh snapshot")
+	var networkID string
+	if command == "select-network" {
+		fs.StringVar(&networkID, "network-id", "", "required exact network ID; names are not resolved")
+	}
 	var profile, displayName, controlOrigin string
 	var enrollmentMode, hostname, tokenFile string
 	var browser bool
@@ -64,6 +68,9 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if command == "select-network" && strings.TrimSpace(networkID) == "" {
+		return fmt.Errorf("--network-id is required")
+	}
 	if command == "local-forget" && !confirmed {
 		return fmt.Errorf("local-forget requires --confirm-local-forget")
 	}
@@ -82,7 +89,7 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if command == "create-profile" && strings.TrimSpace(controlOrigin) == "" {
 		return fmt.Errorf("--control-origin is required")
 	}
-	if command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" {
+	if command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" && command != "select-network" && command != "diagnostics-bundle" {
 		return fmt.Errorf("unknown native mutation %q", command)
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
@@ -121,6 +128,18 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	ref := &ipc.ProfileRef{ProfileId: profile}
 	var message proto.Message
 	switch command {
+	case "select-network":
+		response, callErr := consumer.SelectNetwork(ctx, connect.NewRequest(&ipc.SelectNetworkRequest{Mutation: mutation, Profile: ref, NetworkId: networkID}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
+	case "diagnostics-bundle":
+		response, callErr := consumer.CreateDiagnosticsBundle(ctx, connect.NewRequest(&ipc.CreateDiagnosticsBundleRequest{Mutation: mutation, Profile: ref}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
 	case "trust-server":
 		response, callErr := consumer.TrustServerIdentity(ctx, connect.NewRequest(&ipc.TrustServerIdentityRequest{Mutation: mutation, Profile: ref, ConfirmedControlOrigin: confirmedOrigin, ConfirmedKeyId: confirmedKey, ConfirmedAnnouncementId: confirmedAnnouncement}))
 		err = callErr

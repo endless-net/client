@@ -45,13 +45,13 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
 	var operationID, requestID string
 	var profileID string
-	if command == "server-identity" {
+	if command == "server-identity" || command == "networks" || command == "diagnostics" || command == "logs-recent" {
 		fs.StringVar(&profileID, "profile-id", "", "required target profile")
 	}
 	var wait bool
 	var pageSize uint
 	var pageToken string
-	if command == "profiles" {
+	if command == "profiles" || command == "networks" || command == "logs-recent" {
 		fs.UintVar(&pageSize, "page-size", 0, "page size; 0 uses 100, maximum 500")
 		fs.StringVar(&pageToken, "page-token", "", "opaque token from the previous page")
 	}
@@ -66,7 +66,7 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("service %s does not accept positional arguments", command)
 	}
-	if command == "server-identity" && strings.TrimSpace(profileID) == "" {
+	if (command == "server-identity" || command == "networks" || command == "diagnostics" || command == "logs-recent") && strings.TrimSpace(profileID) == "" {
 		return fmt.Errorf("--profile-id is required")
 	}
 	if pageSize > 500 {
@@ -106,6 +106,24 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	var message proto.Message
 	switch command {
+	case "networks":
+		response, err := consumer.ListNetworks(ctx, connect.NewRequest(&ipc.ListNetworksRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}, Page: &ipc.PageRequest{PageSize: uint32(pageSize), PageToken: pageToken}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
+	case "diagnostics":
+		response, err := consumer.GetDiagnostics(ctx, connect.NewRequest(&ipc.GetDiagnosticsRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
+	case "logs-recent":
+		response, err := consumer.ListRecentLogs(ctx, connect.NewRequest(&ipc.ListRecentLogsRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}, Page: &ipc.PageRequest{PageSize: uint32(pageSize), PageToken: pageToken}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
 	case "server-identity":
 		response, err := consumer.GetServerIdentity(ctx, connect.NewRequest(&ipc.GetServerIdentityRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
 		if err != nil {

@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -26,46 +25,10 @@ func cmdService(args []string) error {
 		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, runtime-info, support-info, events, operation, profiles, create-profile, select-profile, rename-profile, remove-profile, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, diagnostics, diagnostics-bundle, or logs-recent")
 	}
 	switch args[0] {
-	case "status", "runtime-info", "support-info", "events", "operation", "profiles", "server-identity":
+	case "status", "runtime-info", "support-info", "events", "operation", "profiles", "server-identity", "networks", "diagnostics", "logs-recent":
 		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
-	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile", "local-forget", "enroll", "trust-server":
+	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile", "local-forget", "enroll", "trust-server", "select-network", "diagnostics-bundle":
 		return cmdServiceRPCMutation(args[0], args[1:], os.Stdout)
-	case "networks":
-		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathNetworks, nil, &ipc.NetworksResponse{})
-	case "select-network":
-		fs := flag.NewFlagSet("service select-network", flag.ExitOnError)
-		ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)
-		timeoutValue := fs.String("timeout", "30s", "maximum time to wait for service IPC")
-		networkID := fs.String("network-id", "", "network ID or name to select")
-		if err := fs.Parse(args[1:]); err != nil {
-			return err
-		}
-		if strings.TrimSpace(*networkID) == "" {
-			remaining := fs.Args()
-			if len(remaining) > 0 {
-				*networkID = remaining[0]
-			}
-		}
-		if strings.TrimSpace(*networkID) == "" {
-			return fmt.Errorf("network-id is required")
-		}
-		timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
-		if err != nil {
-			return err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		var payload ipc.SelectNetworkResponse
-		if err := newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket).Request(ctx, http.MethodPost, ipc.PathSelectNetwork, ipc.SelectNetworkRequest{NetworkID: strings.TrimSpace(*networkID)}, &payload); err != nil {
-			return err
-		}
-		return json.NewEncoder(os.Stdout).Encode(payload)
-	case "diagnostics":
-		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathDiagnostics, nil, &ipc.DiagnosticsResponse{})
-	case "diagnostics-bundle":
-		return cmdServiceIPCRequest(args[0], args[1:], http.MethodPost, ipc.PathDiagnosticsBundle, ipc.DiagnosticsBundleRequest{}, &ipc.DiagnosticsBundleResponse{})
-	case "logs-recent":
-		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathRecentLogs, nil, &ipc.RecentLogsResponse{})
 	case "render-systemd":
 		defaults := client.DefaultSystemdServiceOptions()
 		fs := flag.NewFlagSet("service render-systemd", flag.ExitOnError)
@@ -282,48 +245,10 @@ func cmdService(args []string) error {
 	}
 }
 
-func cmdServiceIPCRequest(command string, args []string, method, path string, request, response any) error {
-	fs := flag.NewFlagSet("service "+command, flag.ExitOnError)
-	ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)
-	timeoutValue := fs.String("timeout", "30s", "maximum time to wait for service IPC")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		return fmt.Errorf("service %s does not accept positional arguments", command)
-	}
-	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	if response == nil {
-		return errors.New("service IPC response DTO is required")
-	}
-	if err := newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket).Request(ctx, method, path, request, response); err != nil {
-		return err
-	}
-	return json.NewEncoder(os.Stdout).Encode(response)
-}
-
 func serviceIPCTransportFlags(fs *flag.FlagSet) (*string, *string) {
 	ipcPipe := fs.String("ipc-pipe", "", "Windows named pipe used for local service IPC")
 	ipcSocket := fs.String("ipc-socket", "", "Unix domain socket used for local service IPC")
 	return ipcPipe, ipcSocket
-}
-
-func newServiceIPCClientForLocalTransport(ipcPipe, ipcSocket string) *ipc.Client {
-	if strings.TrimSpace(ipcSocket) != "" {
-		return newServiceIPCClient(ipcSocket)
-	}
-	if strings.TrimSpace(ipcPipe) != "" {
-		return newServiceIPCClient(ipcPipe)
-	}
-	if runtime.GOOS == "windows" {
-		return newServiceIPCClient(ipc.DefaultWindowsPipe)
-	}
-	return newServiceIPCClient("")
 }
 
 func parsePositiveServiceIPCTimeout(value string) (time.Duration, error) {

@@ -484,7 +484,6 @@ func TestFriendlyCLIExecutable(t *testing.T) {
 	}
 }
 
-
 func TestWaitForBrowserEnrollmentCompletesApprovedSavedRequestWithoutWaiting(t *testing.T) {
 	pollToken := "poll-secret"
 	var statusCalls, completeCalls int
@@ -2534,89 +2533,6 @@ func TestEnrollmentStatusAfterConnectKeepsConnectionResultWhenHealthUnavailable(
 	}
 	if status.NodeID != connected.NodeID || status.NetworkID != connected.NetworkID || status.MapRevision != connected.MapRevision {
 		t.Fatalf("fallback enrollment status lost connection identity: %#v", status)
-	}
-}
-
-
-
-func TestCmdServiceIPCCommandsUseServicePipeFacade(t *testing.T) {
-	var selectedNetwork string
-	server := httptest.NewServer(client.NewServiceIPCHandler(client.ServiceIPCHandlers{
-		Status: func(ctx context.Context, req ipc.StatusRequest) (ipc.StatusResponse, error) {
-			return ipc.StatusResponse{State: ipc.StateConnected}, nil
-		},
-		Connect: func(ctx context.Context, req ipc.ConnectRequest) (ipc.ConnectResponse, error) {
-			return ipc.ConnectResponse{State: ipc.StateConnected}, nil
-		},
-		Disconnect: func(ctx context.Context, req ipc.DisconnectRequest) (ipc.DisconnectResponse, error) {
-			return ipc.DisconnectResponse{State: ipc.StateDisconnected}, nil
-		},
-		Logout: func(ctx context.Context, req ipc.LogoutRequest) (ipc.LogoutResponse, error) {
-			return ipc.LogoutResponse{State: ipc.StateNeedsEnrollment}, nil
-		},
-		Networks: func(ctx context.Context, req ipc.NetworksRequest) (ipc.NetworksResponse, error) {
-			return ipc.NetworksResponse{Networks: []clientapi.Network{{ID: "net-1", Name: "default"}}}, nil
-		},
-		SelectNetwork: func(ctx context.Context, req ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error) {
-			selectedNetwork = req.NetworkID
-			return ipc.SelectNetworkResponse{SelectedNetworkID: selectedNetwork}, nil
-		},
-		Diagnostics: func(ctx context.Context, req ipc.DiagnosticsRequest) (ipc.DiagnosticsResponse, error) {
-			return ipc.DiagnosticsResponse{Diagnostics: ipc.Diagnostics{
-				GeneratedAt:    "2026-07-18T00:00:00Z",
-				LastErrors:     []string{},
-				RecentLogs:     []ipc.LogEntry{},
-				Interfaces:     []ipc.NetworkInterfaceStatus{},
-				RouteConflicts: []ipc.OverlayCIDRConflict{},
-			}}, nil
-		},
-		DiagnosticsBundle: func(ctx context.Context, req ipc.DiagnosticsBundleRequest) (ipc.DiagnosticsBundleResponse, error) {
-			return ipc.DiagnosticsBundleResponse{Path: "diagnostics.json", CreatedAt: "2026-07-18T00:00:00Z", ExpiresAt: "2026-07-25T00:00:00Z", SizeBytes: 128}, nil
-		},
-		RecentLogs: func(ctx context.Context, req ipc.RecentLogsRequest) (ipc.RecentLogsResponse, error) {
-			return ipc.RecentLogsResponse{Logs: []ipc.LogEntry{}}, nil
-		},
-	}))
-	defer server.Close()
-	original := newServiceIPCClient
-	newServiceIPCClient = func(pipe string) *ipc.Client {
-		if pipe != "test-pipe" {
-			t.Fatalf("service IPC pipe = %q, want test-pipe", pipe)
-		}
-		ipc := ipc.NewClient(server.Client())
-		ipc.BaseURL = server.URL
-		return ipc
-	}
-	defer func() { newServiceIPCClient = original }()
-
-	for _, tc := range []struct {
-		name string
-		args []string
-	}{
-		{name: "networks", args: []string{"networks"}},
-		{name: "diagnostics", args: []string{"diagnostics"}},
-		{name: "diagnostics bundle", args: []string{"diagnostics-bundle"}},
-		{name: "logs", args: []string{"logs-recent"}},
-		{name: "select network", args: []string{"select-network", "--network-id", "office"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			args := append([]string{}, tc.args...)
-			args = append(args, "--ipc-pipe", "test-pipe", "--timeout", "5s")
-			out, err := captureStdout(t, func() error { return cmdService(args) })
-			if err != nil {
-				t.Fatalf("cmdService %v failed: %v\n%s", args, err, out)
-			}
-			var payload map[string]any
-			if err := json.Unmarshal([]byte(out), &payload); err != nil {
-				t.Fatalf("decode service IPC command JSON: %v\n%s", err, out)
-			}
-			if payload["ipc_protocol"] != ipc.Protocol {
-				t.Fatalf("service IPC metadata = %#v", payload)
-			}
-		})
-	}
-	if selectedNetwork != "office" {
-		t.Fatalf("selected network = %#v, want office", selectedNetwork)
 	}
 }
 
