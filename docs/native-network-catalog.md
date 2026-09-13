@@ -1,5 +1,13 @@
 # Native account network catalog
 
+The old HTTP networks route and handler field are removed; regression tests
+require 404 rather than an observer-visible legacy catalog. The native local
+transport test in `service_rpc_peers_transport_test.go` also verifies ListNetworks
+owner admission, exact profile account/session input, selected-network metadata,
+unsupported switch projection and revoked access on an existing connection.
+This replaces the former Windows HTTP catalog assertion, not the remaining
+legacy network-selection scenario. The old DTO/spec cleanup is still pending.
+
 The agent configures ListNetworks using typed UserService ListNetworks for the
 requested profile's active account and user session. This is not the retired IPC
 callback that reported only the cached map's current network; that callback is

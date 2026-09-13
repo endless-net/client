@@ -611,7 +611,6 @@ func TestServiceIPCEndpointPrivilegeMatrix(t *testing.T) {
 		{http.MethodPost, ipc.PathDisconnect, ServiceIPCPrivilegeOwner, true},
 		{http.MethodPost, ipc.PathLogout, ServiceIPCPrivilegeOwner, true},
 		{http.MethodPost, ipc.PathLocalForget, ServiceIPCPrivilegeAdministrator, true},
-		{http.MethodGet, ipc.PathNetworks, ServiceIPCPrivilegeObserver, false},
 		{http.MethodPost, ipc.PathSelectNetwork, ServiceIPCPrivilegeOwner, true},
 		{http.MethodGet, ipc.PathDiagnostics, ServiceIPCPrivilegeOwner, false},
 		{http.MethodPost, ipc.PathDiagnosticsBundle, ServiceIPCPrivilegeOwner, false},
@@ -625,12 +624,14 @@ func TestServiceIPCEndpointPrivilegeMatrix(t *testing.T) {
 	}
 }
 
-func TestServiceIPCRetiredRecentLogsRouteIsAbsent(t *testing.T) {
+func TestServiceIPCRetiredCatalogRoutesAreAbsent(t *testing.T) {
 	handler := NewServiceIPCHandler(ServiceIPCHandlers{})
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, newServiceIPCTestRequest(http.MethodGet, ipc.PathRecentLogs, nil))
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("retired recent logs route returned %d, want 404", rec.Code)
+	for _, path := range []string{ipc.PathRecentLogs, ipc.PathNetworks} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, newServiceIPCTestRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("retired route %s returned %d, want 404", path, rec.Code)
+		}
 	}
 }
 

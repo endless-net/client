@@ -74,9 +74,6 @@ func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {
 			Logout: func(ctx context.Context, req ipc.LogoutRequest) (ipc.LogoutResponse, error) {
 				return ipc.LogoutResponse{State: ipc.StateNeedsEnrollment}, nil
 			},
-			Networks: func(ctx context.Context, req ipc.NetworksRequest) (ipc.NetworksResponse, error) {
-				return ipc.NetworksResponse{Networks: []clientapi.Network{{ID: "net_e2e", Name: "E2E"}}}, nil
-			},
 			SelectNetwork: func(ctx context.Context, req ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error) {
 				networkID := strings.TrimSpace(req.NetworkID)
 				if networkID == "" {
@@ -157,14 +154,6 @@ func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {
 	}
 	if disconnect.State != ipc.StateDisconnected {
 		t.Fatalf("disconnect = %#v", disconnect)
-	}
-
-	var networks ipc.NetworksResponse
-	if err := ipcClient.Request(ctx, http.MethodGet, ipc.PathNetworks, nil, &networks); err != nil {
-		t.Fatal(err)
-	}
-	if len(networks.Networks) != 1 || networks.Networks[0].ID != "net_e2e" {
-		t.Fatalf("networks = %#v", networks)
 	}
 
 	var selected ipc.SelectNetworkResponse

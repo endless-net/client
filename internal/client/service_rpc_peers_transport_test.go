@@ -24,6 +24,14 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 	service := NewClientRPCService(m, nil)
 	var calls atomic.Int32
 	var changed atomic.Bool
+	var networkCalls atomic.Int32
+	service.NetworksProvider = func(_ context.Context, input ClientRPCNetworksInput) ([]*ipc.Network, error) {
+		networkCalls.Add(1)
+		if input.AccountID != "account" || input.SessionToken != "synthetic-session" || input.ControlOrigin != "https://control.example.test" {
+			return nil, fmt.Errorf("unexpected profile context")
+		}
+		return []*ipc.Network{{Id: "net", Name: "Network", AccountId: "account"}}, nil
+	}
 	service.PeersProvider = func(context.Context) (ClientRPCPeerObservation, error) {
 		calls.Add(1)
 		name := "Alpha"
@@ -73,6 +81,11 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 	if calls.Load() != 0 {
 		t.Fatal("observer invoked peer source")
 	}
+	_, err = consumer.ListNetworks(ctx, connect.NewRequest(&ipc.ListNetworksRequest{Profile: &ipc.ProfileRef{ProfileId: "private"}}))
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+	if networkCalls.Load() != 0 {
+		t.Fatal("observer invoked account network source")
+	}
 	create := rpcCreateRequest(t, m)
 	create.ControlOrigin = "https://control.example.test"
 	created, err := consumer.CreateProfile(ctx, connect.NewRequest(create))
@@ -82,10 +95,20 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 	profile := &ipc.ProfileRef{ProfileId: created.Msg.Operation.ProfileId}
 	if err := m.store.Update(func(cfg *Config) error {
 		cfg.RPCState.ActiveProfileID = profile.ProfileId
+		cfg.ActiveAccountID = "account"
+		cfg.Token = "synthetic-session"
+		cfg.NetworkID = "net"
 		cfg.CachedMap = &clientapi.RegisterNodeResponse{Network: clientapi.Network{Revision: 7}}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+	networks, err := consumer.ListNetworks(ctx, connect.NewRequest(&ipc.ListNetworksRequest{Profile: profile}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(networks.Msg.Networks) != 1 || networks.Msg.Networks[0].Id != "net" || networks.Msg.Networks[0].AccountId != "account" || networks.Msg.SelectedNetworkId != "net" || networks.Msg.Page.Metadata.InstanceId != m.instanceID || networks.Msg.Networks[0].Selection.Availability != ipc.Availability_AVAILABILITY_UNSUPPORTED {
+		t.Fatal("native account catalog lost profile context or advertised switching")
 	}
 	request := &ipc.ListPeersRequest{Profile: profile, Page: &ipc.PageRequest{PageSize: 1}}
 	first, err := consumer.ListPeers(ctx, connect.NewRequest(request))
@@ -123,5 +146,10 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
 	if calls.Load() != before {
 		t.Fatal("revoked connection retained peer access")
+	}
+	_, err = consumer.ListNetworks(ctx, connect.NewRequest(&ipc.ListNetworksRequest{Profile: profile}))
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+	if networkCalls.Load() != 1 {
+		t.Fatal("revoked connection retained account catalog access")
 	}
 }
