@@ -2813,9 +2813,6 @@ func TestCmdServiceIPCCommandsUseServicePipeFacade(t *testing.T) {
 		name string
 		args []string
 	}{
-		{name: "connect", args: []string{"connect"}},
-		{name: "disconnect", args: []string{"disconnect"}},
-		{name: "logout", args: []string{"logout"}},
 		{name: "networks", args: []string{"networks"}},
 		{name: "diagnostics", args: []string{"diagnostics"}},
 		{name: "diagnostics bundle", args: []string{"diagnostics-bundle"}},

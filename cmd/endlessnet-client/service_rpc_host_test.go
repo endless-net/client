@@ -118,6 +118,44 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	if connect.CodeOf(err) != connect.CodeNotFound || output != "" {
 		t.Fatal("unknown request was not reported as missing", err)
 	}
+	// Establish an active empty profile without creating real device keys/tunnel.
+	if err := store.Update(func(cfg *client.Config) error {
+		cfg.RPCState.ActiveProfileID = accepted.Msg.Operation.ProfileId
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mutationArgs := []string{transportFlag, endpoint, "--timeout", "5s", "--profile-id", accepted.Msg.Operation.ProfileId,
+		"--expected-instance-id", event.Metadata.InstanceId, "--expected-revision", fmt.Sprint(accepted.Msg.Operation.Metadata.Revision)}
+	for _, command := range []string{"connect", "logout"} {
+		args := append([]string{command, "--request-id", "3152ad0b-8ecb-4b42-bd17-e68dcb31fa44"}, mutationArgs...)
+		output, err := captureStdout(t, func() error { return cmdService(args) })
+		if connect.CodeOf(err) != connect.CodeFailedPrecondition || output != "" {
+			t.Fatal("unregistered mutation accepted", command, err)
+		}
+	}
+	disconnectArgs := append([]string{"disconnect", "--request-id", "0b9b9e54-42c5-4fca-a2e7-1d9c3a3d39c0"}, mutationArgs...)
+	staleArgs := append([]string{}, disconnectArgs...)
+	staleArgs[len(staleArgs)-1] = "999999"
+	output, err = captureStdout(t, func() error { return cmdService(staleArgs) })
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || output != "" {
+		t.Fatal("stale disconnect accepted", err)
+	}
+	var original *ipc.Operation
+	for range 2 {
+		output, err := captureStdout(t, func() error { return cmdService(disconnectArgs) })
+		if err != nil {
+			t.Fatal("native CLI disconnect failed", err)
+		}
+		response := new(ipc.DisconnectResponse)
+		if err := protojson.Unmarshal([]byte(output), response); err != nil || response.GetOperation().GetState() != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+			t.Fatal("disconnect did not confirm actual Down", err)
+		}
+		if original != nil && !proto.Equal(original, response.Operation) {
+			t.Fatal("CLI exact retry created a new operation")
+		}
+		original = response.Operation
+	}
 	if err := stop(); err != nil {
 		t.Fatal(err)
 	}

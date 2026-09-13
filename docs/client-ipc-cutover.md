@@ -617,3 +617,15 @@ operation, recover the identical record by both identifiers through CLI dispatch
 and verify NOT_FOUND with no output for an unknown request. This is the recovery
 primitive for upcoming native CLI mutations, not evidence that all mutation
 commands have already migrated.
+
+CLI `service connect`, `disconnect` and `logout` now send typed v0 mutations.
+Each requires explicit `--request-id`, `--expected-instance-id`,
+`--expected-revision` and `--profile-id`, allowing callers to retain the command
+before transmission. Success output is the protobuf response/operation, not a
+claim that every accepted asynchronous operation has finished. Errors after
+dispatch/output include request-ID lookup guidance and never trigger automatic
+replay or CAS refresh. The retired HTTP command cases were removed. Real local
+transport CLI tests cover stale disconnect rejection, confirmed synthetic Down,
+identical retry results, and unregistered Connect/Logout rejection. The engine
+fixture is synthetic; successful live Connect/Logout and OS acceptance remain
+separate gates, as do the other CLI/helper/UI consumers.

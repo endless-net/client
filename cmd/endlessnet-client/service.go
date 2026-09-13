@@ -68,8 +68,8 @@ func cmdService(args []string) error {
 		return nil
 	case "status", "runtime-info", "support-info", "events", "operation":
 		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
-	case "connect":
-		return cmdServiceIPCRequest(args[0], args[1:], http.MethodPost, ipc.PathConnect, ipc.ConnectRequest{}, &ipc.ConnectResponse{})
+	case "connect", "disconnect", "logout":
+		return cmdServiceRPCMutation(args[0], args[1:], os.Stdout)
 	case "server-identity":
 		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathServerIdentity, nil, &ipc.ServerIdentityResponse{})
 	case "trust-server":
@@ -99,10 +99,6 @@ func cmdService(args []string) error {
 			return err
 		}
 		return json.NewEncoder(os.Stdout).Encode(payload)
-	case "disconnect":
-		return cmdServiceIPCRequest(args[0], args[1:], http.MethodPost, ipc.PathDisconnect, ipc.DisconnectRequest{}, &ipc.DisconnectResponse{})
-	case "logout":
-		return cmdServiceIPCRequest(args[0], args[1:], http.MethodPost, ipc.PathLogout, ipc.LogoutRequest{}, &ipc.LogoutResponse{})
 	case "local-forget":
 		fs := flag.NewFlagSet("service local-forget", flag.ExitOnError)
 		ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)
