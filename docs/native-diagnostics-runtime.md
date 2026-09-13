@@ -280,6 +280,16 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The ephemeral lifecycle scenario now uses native status and profile/map-bound
+tunnel diagnostics. A current agent snapshot must expose the ephemeral node and
+peer before traffic; a successful TCP probe must increment the reference peer's
+receive/echo counters. After process death and provider revocation, native status
+must explicitly clear enrollment/cache and ephemeral state, and a new TCP probe
+must fail. The replacement job must receive a distinct ephemeral node credential.
+This tests the client response to an explicit provider cleanup decision, not the
+provider's absence-detection timer. Local short tests compile this guarded network
+scenario; per-platform traffic and process-restart evidence remain CI work.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP
