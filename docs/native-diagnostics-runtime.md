@@ -655,6 +655,14 @@ claim wrappers are removed. Enrollment no longer has that adapter through CLI
 arguments and implicit Connect. Remaining legacy status/helper code is not a
 supported transport and still requires removal to complete the hard cutover.
 
+The retired cached-map Connect helper and its apply-result adapter are removed.
+Native driver tests cover successful cached-map application and reject pending,
+rejected or incomplete local enrollment even with a valid signed cache. Rejection
+must preserve persisted identity and the existing snapshot and must not configure
+the tunnel or wake synchronization. This is in-process driver evidence, not
+installed lifecycle acceptance. The legacy enrollment status fallback still
+requires migration.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

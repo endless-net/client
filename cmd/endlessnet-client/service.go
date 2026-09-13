@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -366,14 +365,6 @@ func serviceIPCMetadata() ipc.Metadata {
 	}
 }
 
-func wireGuardApplyResult(result client.WireGuardApplyResult) ipc.WireGuardApplyResult {
-	return ipc.WireGuardApplyResult{
-		OK: result.OK, Method: result.Method, Interface: result.Interface, Changed: result.Changed,
-		Skipped: result.Skipped, Reason: result.Reason, DownError: result.DownError,
-		UpError: result.UpError, SyncError: result.SyncError, RouteError: result.RouteError,
-	}
-}
-
 func serviceWireGuardInspection(engine agentWireGuard) ipc.WireGuardInspection {
 	inspection, available := engine.TryInspection()
 	if !available {
@@ -446,48 +437,6 @@ func applyAgentConnectionIntentStatus(payload *ipc.StatusResponse, intent client
 	if payload.Agent != nil {
 		payload.Agent.ConnectionPaused = true
 	}
-}
-
-func connectAgentTunnel(ctx context.Context, opts agentIPCOptions) (ipc.ConnectResponse, error) {
-	cfg, err := client.LoadConfig(opts.ConfigPath)
-	if err != nil {
-		return ipc.ConnectResponse{}, serviceIPCConfigError(err)
-	}
-	if strings.EqualFold(strings.TrimSpace(cfg.NodeApprovalState), clientapi.NodeApprovalPending) {
-		return ipc.ConnectResponse{}, ipc.NewError(http.StatusConflict, "approval_required", errors.New("node enrollment is pending approval"))
-	}
-	if strings.EqualFold(strings.TrimSpace(cfg.NodeApprovalState), clientapi.NodeApprovalRejected) {
-		return ipc.ConnectResponse{}, ipc.NewError(http.StatusForbidden, "approval_rejected", errors.New("node enrollment was rejected"))
-	}
-	if strings.TrimSpace(cfg.PrivateKey) == "" || strings.TrimSpace(cfg.NodeID) == "" || strings.TrimSpace(cfg.NodeCredential) == "" {
-		return ipc.ConnectResponse{}, ipc.NewError(http.StatusConflict, "node_identity_missing", errors.New("node identity is missing; enroll this device first"))
-	}
-	if err := client.ValidateConfigCurrentDevice(cfg); err != nil {
-		return ipc.ConnectResponse{}, ipc.NewError(http.StatusConflict, "device_fingerprint_mismatch", err)
-	}
-	if opts.WireGuard == nil {
-		return ipc.ConnectResponse{}, ipc.NewError(http.StatusInternalServerError, "wireguard_unavailable", errors.New("wireguard-go engine is not initialized"))
-	}
-	networkMap, err := verifiedCachedNetworkMap(&cfg)
-	if err != nil {
-		return ipc.ConnectResponse{}, ipc.NewError(http.StatusConflict, cliErrorNetworkMapUnavailable, err)
-	}
-	result, err := opts.WireGuard.Configure(ctx, cfg, networkMap)
-	if err != nil {
-		return ipc.ConnectResponse{}, ipc.NewError(http.StatusInternalServerError, "connect_failed", err)
-	}
-	if !result.OK {
-		return ipc.ConnectResponse{}, ipc.NewError(http.StatusInternalServerError, "connect_failed", errors.New("wireguard-go configuration did not report success"))
-	}
-	return ipc.ConnectResponse{
-		Metadata:     serviceIPCMetadata(),
-		State:        ipc.StateConnected,
-		DesiredState: ipc.DesiredConnected,
-		NodeID:       cfg.NodeID,
-		NetworkID:    cfg.NetworkID,
-		MapRevision:  cfg.MapRevision,
-		WireGuard:    wireGuardApplyResult(result),
-	}, nil
 }
 
 func enrollmentStatusAfterConnect(ctx context.Context, opts agentIPCOptions, connected ipc.ConnectResponse) ipc.StatusResponse {

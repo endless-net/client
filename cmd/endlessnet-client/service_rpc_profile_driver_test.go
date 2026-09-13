@@ -83,6 +83,64 @@ func TestRPCProfileDriverFailsClosed(t *testing.T) {
 	}
 }
 
+func TestRPCProfileStartRejectsRestrictedIdentityDespiteVerifiedCache(t *testing.T) {
+	for _, scenario := range []string{"pending", "rejected", "missing private key", "missing credential"} {
+		t.Run(scenario, func(t *testing.T) {
+			fixture := newRecoveryTestFixture(t, "https://control.example.test")
+			cfg, err := client.LoadConfig(fixture.ConfigPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg.EnrollmentRecovery = nil
+			cfg.MapSigningTrust = testSigningTrustBundle(t, testMapSigningPublicKey(t, cfg.CachedMap.MapSignature))
+			if _, err := verifiedCachedNetworkMap(&cfg); err != nil {
+				t.Fatal("fixture must have a verified cached map")
+			}
+			switch scenario {
+			case "pending":
+				cfg.NodeApprovalState = " PENDING "
+			case "rejected":
+				cfg.NodeApprovalState = api.NodeApprovalRejected
+			case "missing private key":
+				cfg.PrivateKey = " "
+			case "missing credential":
+				cfg.NodeCredential = " "
+			}
+			if err := client.SaveConfig(fixture.ConfigPath, cfg); err != nil {
+				t.Fatal(err)
+			}
+			before, err := client.LoadConfig(fixture.ConfigPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			statePath := filepath.Join(t.TempDir(), "agent-state.json")
+			if err := os.WriteFile(statePath, []byte("{}"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			wg := &testAgentWireGuard{}
+			wake := make(chan struct{}, 1)
+			err = agentRPCProfileDriver(agentIPCOptions{WireGuard: wg, SyncWake: wake, StateOutput: statePath}).Start(t.Context(), before)
+			want := ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT
+			switch scenario {
+			case "pending":
+				want = ipc.ErrorCode_ERROR_CODE_APPROVAL_REQUIRED
+			case "rejected":
+				want = ipc.ErrorCode_ERROR_CODE_APPROVAL_REJECTED
+			}
+			if rpc.FailureFromError(err).GetCode() != want || wg.configureCalls != 0 || len(wake) != 0 {
+				t.Fatal("restricted identity reached native Configure or synchronization")
+			}
+			if _, err := os.Stat(statePath); err != nil {
+				t.Fatal("rejected start invalidated the existing snapshot")
+			}
+			after, err := client.LoadConfig(fixture.ConfigPath)
+			if err != nil || !reflect.DeepEqual(before, after) {
+				t.Fatal("rejected start changed persisted identity")
+			}
+		})
+	}
+}
+
 func TestRPCProfileStopNotifiesOfflineAfterTeardown(t *testing.T) {
 	for _, mode := range []string{"success", "notification", "timeout", "cancelled", "failed-teardown"} {
 		t.Run(mode, func(t *testing.T) {

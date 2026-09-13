@@ -1439,40 +1439,6 @@ func TestUpdatePublishedEndpointRetriesUnconfirmedHTTP200(t *testing.T) {
 	}
 }
 
-func TestConnectAgentTunnelConfiguresCachedMapWithoutRendering(t *testing.T) {
-	tmp := t.TempDir()
-	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 7)
-	cfg := client.Config{
-		ControlPlaneURLs: []string{"https://api.example.test"},
-		PrivateKey:       "private-key",
-		NodeID:           "node-1",
-		NetworkID:        "net-1",
-		NodeCredential:   "node-credential",
-		MapSigningTrust:  testSigningTrustBundle(t, testMapSigningPublicKey(t, networkMap.MapSignature)),
-		MapRevision:      7,
-		CachedMap:        &networkMap,
-	}
-	configPath := filepath.Join(tmp, "client.json")
-	if err := client.SaveConfig(configPath, cfg); err != nil {
-		t.Fatal(err)
-	}
-	wireGuard := &testAgentWireGuard{}
-
-	payload, err := connectAgentTunnel(context.Background(), agentIPCOptions{
-		ConfigPath: configPath,
-		ListenPort: 51820,
-		WireGuard:  wireGuard,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if payload.State != ipc.StateConnected || payload.NodeID != "node-1" {
-		t.Fatalf("connect payload = %#v", payload)
-	}
-	if wireGuard.configureCalls != 1 {
-		t.Fatalf("wireguard-go configure calls = %d, want 1", wireGuard.configureCalls)
-	}
-}
 
 func TestCmdUpPersistsPendingEnrollmentWithoutRenderingWireGuard(t *testing.T) {
 	tmp := t.TempDir()
@@ -1815,31 +1781,6 @@ func TestAgentOnlineNetworkMapActivatesRestrictedEnrollmentAfterApproval(t *test
 	}
 }
 
-func TestConnectAgentTunnelRejectsPendingEnrollmentBeforeApply(t *testing.T) {
-	tmp := t.TempDir()
-	configPath := filepath.Join(tmp, "client.json")
-	if err := client.SaveConfig(configPath, client.Config{
-		NodeID:            "node-pending",
-		NetworkID:         "net-pending",
-		NodeCredential:    "credential-pending",
-		PrivateKey:        "private-key",
-		NodeApprovalState: clientapi.NodeApprovalPending,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	wireGuard := &testAgentWireGuard{}
-	_, err := connectAgentTunnel(context.Background(), agentIPCOptions{
-		ConfigPath: configPath,
-		WireGuard:  wireGuard,
-	})
-	var ipcErr ipc.Error
-	if !errors.As(err, &ipcErr) || ipcErr.Code != "approval_required" {
-		t.Fatalf("pending connect error = %#v, want approval_required", err)
-	}
-	if wireGuard.configureCalls != 0 {
-		t.Fatalf("pending connect configure calls = %d, want 0", wireGuard.configureCalls)
-	}
-}
 
 func TestEnrollmentStatusAfterConnectKeepsConnectionResultWhenHealthUnavailable(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "client.json")
