@@ -17,6 +17,9 @@ import (
 // performing remote cleanup. Retired HTTP/JSON v2 envelope rules do not apply.
 func TestControlPlaneIPCRequestValidation(t *testing.T) {
 	s, n, id := nativeControlScenario(t)
+	// Enrollment alone does not establish durable native connected intent.
+	// Admit it explicitly before asserting that rejected mutations preserve it.
+	runNativeControlMutation(t, n, "connect", "00000000-0000-4000-8000-000000000100")
 	endpoint := n.Socket
 	if runtime.GOOS == "windows" {
 		endpoint = n.Pipe
@@ -42,7 +45,8 @@ func TestControlPlaneIPCRequestValidation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := n.AwaitNativeStatus(func(v *ipc.Status) bool {
-				return v.NodeId == id && v.GetStoredState().GetCachedMapValid() && !v.UserDisconnected
+				return v.NodeId == id && v.GetStoredState().GetCachedMapValid() && !v.UserDisconnected &&
+					v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED
 			})
 			requestID := fmt.Sprintf("00000000-0000-4000-8000-%012d", index+1)
 			request := &ipc.DisconnectRequest{
