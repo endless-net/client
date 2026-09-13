@@ -35,11 +35,13 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 		})
 		endpoint = filepath.Join(dir, "rpc.sock")
 	}
-	store, err := client.OpenConfigStore(filepath.Join(t.TempDir(), "client.json"))
+	configPath := filepath.Join(t.TempDir(), "client.json")
+	store, err := client.OpenConfigStore(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	opts := agentIPCOptions{ConfigStore: store, OperationMu: &sync.Mutex{}, WireGuard: &testAgentWireGuard{}}
+	wireGuard := &testAgentWireGuard{}
+	opts := agentIPCOptions{ConfigStore: store, OperationMu: &sync.Mutex{}, WireGuard: wireGuard}
 	if runtime.GOOS == "windows" {
 		opts.Pipe = endpoint
 	} else {
@@ -243,6 +245,7 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 		t.Fatal("stale disconnect accepted", err)
 	}
 	var original *ipc.Operation
+	downBefore := wireGuard.downCalls
 	for range 2 {
 		output, err := captureStdout(t, func() error { return cmdService(disconnectArgs) })
 		if err != nil {
@@ -256,6 +259,21 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 			t.Fatal("CLI exact retry created a new operation")
 		}
 		original = response.Operation
+	}
+	if wireGuard.downCalls != downBefore+1 {
+		t.Fatal("native disconnect retry repeated tunnel teardown")
+	}
+	disconnected, err := consumer.GetStatus(requestCtx, connect.NewRequest(&ipc.GetStatusRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := disconnected.Msg.Status
+	if state.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED || !state.UserDisconnected || state.GetIntent().GetDesiredState() != ipc.DesiredState_DESIRED_STATE_DISCONNECTED || state.GetStoredState().GetNodeCredentialPresent() {
+		t.Fatal("unenrolled native disconnect lost explicit user intent")
+	}
+	persisted, err := client.LoadConfig(configPath)
+	if err != nil || persisted.ConnectionIntent == nil || persisted.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected || persisted.ConnectionIntent.Reason != "user_disconnect" {
+		t.Fatal("native disconnect intent was not durable", err)
 	}
 	info, err := consumer.Bootstrap(requestCtx)
 	if err != nil {

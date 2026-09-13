@@ -1584,38 +1584,6 @@ func TestAgentIPCDisconnectPublishesOfflineNodeStatus(t *testing.T) {
 	}
 }
 
-func TestAgentIPCDisconnectPersistsUnenrolledConnectionIntent(t *testing.T) {
-	tmp := t.TempDir()
-	configPath := filepath.Join(tmp, "client.json")
-	statePath := filepath.Join(tmp, "agent-state.json")
-	if err := client.SaveConfig(configPath, client.Config{}); err != nil {
-		t.Fatal(err)
-	}
-	opts := agentIPCOptions{ConfigPath: configPath, StateOutput: statePath, WireGuard: &testAgentWireGuard{}}
-	handlers := agentIPCHandlers(opts)
-	before, err := handlers.Status(context.Background(), ipc.StatusRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if before.State != ipc.StateNeedsEnrollment {
-		t.Fatalf("status before disconnect = %#v, want NeedsEnrollment", before)
-	}
-	disconnect, err := handlers.Disconnect(context.Background(), ipc.DisconnectRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if disconnect.State != ipc.StateDisconnected || disconnect.DesiredState != client.ConnectionIntentDesiredDisconnected || !disconnect.UserDisconnected {
-		t.Fatalf("disconnect payload = %#v, want disconnected user intent", disconnect)
-	}
-	after, err := handlers.Status(context.Background(), ipc.StatusRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if after.State != ipc.StateDisconnected || after.ControlState != ipc.ControlStateDisconnected || !after.UserDisconnected {
-		t.Fatalf("status after disconnect = %#v, want persistent Disconnected", after)
-	}
-}
-
 func TestAgentIPCConnectClearsDisconnectedConnectionIntent(t *testing.T) {
 	tmp := t.TempDir()
 	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 7)
