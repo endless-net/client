@@ -280,6 +280,17 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The TCP/UDP IPv4/IPv6 dataplane trust lifecycle now uses native connect,
+disconnect and trust-server operations. Trust confirmation includes the observed
+origin/key/announcement and fresh request/CAS metadata, and waits for terminal
+completion. Reconfirming unchanged trust must return an unchanged result without
+reconnecting; profile/map-bound diagnostics keep the fixture return endpoint
+usable if the device erroneously reopened. A stale rotated-key confirmation must
+fail with `STALE_STATE` without changing pinned trust; correct confirmation must
+complete with changed trust and retain traffic identity across restart. The same
+file still has legacy status/diagnostic observations outside these branches.
+Local short tests compile the guarded lifecycle, not execute its network checks.
+
 The TCP/UDP IPv4/IPv6 dataplane cleanup branch now invokes native logout and
 local-forget with CAS/request metadata and waits for successful terminal cleanup
 operations. It distinguishes confirmed remote deletion from local-only cleanup,
@@ -287,7 +298,7 @@ checks explicit cleared native state and tests exact operation replay after
 restart with the original request/CAS. Existing sessions and both fresh ports
 must stay blocked; provider event counts must not show duplicate registration or
 remote revocation by local-forget. The enclosing traffic fixture still contains
-legacy bootstrap/status/trust observations and is not fully migrated. Local short
+legacy bootstrap/status observations and is not fully migrated. Local short
 tests compile the guarded branch only; real traffic/restart acceptance needs CI.
 
 The exit-provider scenario now uses native status and current applied-map gates

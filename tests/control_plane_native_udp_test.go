@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net"
 	"net/netip"
@@ -500,10 +499,9 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 		assertICMP("all-protocols-restored", true)
 	}
-	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+	runNativeControlMutation(t, n, "disconnect", "5c110000-0000-4000-8000-000000000001")
+	trustBaseline := n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.NodeId == initial.NodeID && v.ActiveProfileId != "" && v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED
 	})
 	if fresh("24001") || fresh("24002") {
 		t.Fatal("disconnected client still delivered overlay traffic")
@@ -511,21 +509,51 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	assertICMP("disconnected", false)
 	// Reaffirming the current trust key is not permission to reconnect.
 	// Exercise the public administrative operation before observing real traffic.
-	for range 2 {
-		output, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", s.Trust().ActiveKeyID)
-		var response ipc.TrustServerResponse
-		if err != nil || json.Unmarshal(output, &response) != nil || response.Outcome != ipc.RecoveryOutcomeAlreadyApplied {
+	identity := func() *native.ServerIdentity {
+		t.Helper()
+		response := &native.GetServerIdentityResponse{}
+		if n.NativeService("server-identity", response, "--profile-id", trustBaseline.ActiveProfileId) != nil || response.Identity == nil || response.Identity.ControlOrigin != s.URL() || len(response.Identity.AnnouncementId) != 64 {
+			t.Fatal("native traffic client did not expose its profile-bound server announcement")
+		}
+		return response.Identity
+	}
+	confirmTrust := func(requestID, key string) *native.Operation {
+		t.Helper()
+		announced := identity()
+		current := n.AwaitNativeStatus(func(v *native.Status) bool {
+			return v.NodeId == initial.NodeID && v.ActiveProfileId == trustBaseline.ActiveProfileId
+		})
+		args := append(testclient.NativeMutationArguments(requestID, current), "--confirmed-control-origin", announced.ControlOrigin,
+			"--confirmed-key-id", key, "--confirmed-announcement-id", announced.AnnouncementId)
+		response := &native.TrustServerIdentityResponse{}
+		if n.NativeService("trust-server", response, args...) != nil || response.GetOperation().GetId() == "" || response.Operation.Kind != native.OperationKind_OPERATION_KIND_TRUST_SERVER_IDENTITY || response.Operation.ProfileId != trustBaseline.ActiveProfileId {
+			t.Fatal("native traffic trust confirmation did not return a profile-bound operation")
+		}
+		return n.AwaitNativeOperation(response.Operation.Id)
+	}
+	for _, requestID := range []string{"5c110000-0000-4000-8000-000000000002", "5c110000-0000-4000-8000-000000000003"} {
+		completed := confirmTrust(requestID, s.Trust().ActiveKeyID)
+		if completed.State != native.OperationState_OPERATION_STATE_SUCCEEDED || completed.GetChange() == nil || completed.GetChange().GetChanged() {
 			t.Fatal("native disconnected trust confirmation failed")
 		}
 	}
-	status, err := n.Status()
-	if err != nil || status.NodeID != initial.NodeID || !status.UserDisconnected || status.DesiredState != ipc.DesiredDisconnected {
+	statusResponse := &native.GetStatusResponse{}
+	if n.NativeService("status", statusResponse) != nil || statusResponse.GetStatus().GetNodeId() != initial.NodeID || statusResponse.GetStatus().GetActiveProfileId() != trustBaseline.ActiveProfileId ||
+		!statusResponse.GetStatus().GetUserDisconnected() || statusResponse.GetStatus().GetIntent().GetDesiredState() != native.DesiredState_DESIRED_STATE_DISCONNECTED {
 		t.Fatal("native trust confirmation lost disconnected identity or intent")
 	}
 	// Keep the return path usable if a defective Client reopened its device;
 	// a stale fixture endpoint must not turn accidental connectivity into denial.
-	if status.WireGuard != nil && status.WireGuard.ListenPort > 0 && status.WireGuard.ListenPort <= 65535 {
-		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+	diagnostics := &native.GetDiagnosticsResponse{}
+	if n.NativeService("diagnostics", diagnostics, "--profile-id", trustBaseline.ActiveProfileId) != nil {
+		t.Fatal("native trust confirmation tunnel inspection unavailable")
+	}
+	inspected := diagnostics.GetDiagnostics().GetStatus()
+	if inspected.GetNodeId() != initial.NodeID || inspected.GetActiveProfileId() != trustBaseline.ActiveProfileId || inspected.GetMapRevision() < statusResponse.GetStatus().GetMapRevision() {
+		t.Fatal("native trust confirmation inspection was not bound to the current profile/map")
+	}
+	if port := diagnostics.GetDiagnostics().GetTunnel().GetListenPort(); port > 0 && port <= 65535 {
+		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(port)))
 	}
 	if fresh("24001") || fresh("24002") {
 		t.Fatal("trust confirmation restored traffic without explicit connect")
@@ -591,10 +619,9 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}
 	}
 	t.Log("native lifecycle: reconnect with retained identity")
-	var connected ipc.ConnectResponse
-	n.Service("connect", &connected)
+	runNativeControlMutation(t, n, "connect", "5c110000-0000-4000-8000-000000000004")
 	assertConnected()
-	n.Service("connect", &connected)
+	runNativeControlMutation(t, n, "connect", "5c110000-0000-4000-8000-000000000005")
 	t.Log("native lifecycle: restart while connected")
 	n.Stop()
 	n.Start()
@@ -607,13 +634,13 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	if err := s.RotateMapSigningKey(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", oldSigner); err == nil {
+	rejected := confirmTrust("5c110000-0000-4000-8000-000000000006", oldSigner)
+	if rejected.State != native.OperationState_OPERATION_STATE_FAILED || rejected.GetFailure().GetCode() != native.ErrorCode_ERROR_CODE_STALE_STATE || identity().TrustedKeyId != oldSigner {
 		t.Fatal("native traffic client accepted stale signing confirmation")
 	}
 	newSigner := s.Trust().ActiveKeyID
-	output, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", newSigner)
-	var trustResponse ipc.TrustServerResponse
-	if err != nil || json.Unmarshal(output, &trustResponse) != nil || trustResponse.Outcome != ipc.RecoveryOutcomeAccepted || trustResponse.TrustedKeyID != newSigner {
+	confirmed := confirmTrust("5c110000-0000-4000-8000-000000000007", newSigner)
+	if confirmed.State != native.OperationState_OPERATION_STATE_SUCCEEDED || !confirmed.GetChange().GetChanged() || identity().TrustedKeyId != newSigner {
 		t.Fatal("native traffic client did not confirm rotated map signer")
 	}
 	assertConnected()
