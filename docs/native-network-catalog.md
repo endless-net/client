@@ -5,8 +5,9 @@ require 404 rather than an observer-visible legacy catalog. The native local
 transport test in `service_rpc_peers_transport_test.go` also verifies ListNetworks
 owner admission, exact profile account/session input, selected-network metadata,
 unsupported switch projection and revoked access on an existing connection.
-This replaces the former Windows HTTP catalog assertion. The old DTO/spec cleanup
-is still pending.
+This replaces the former Windows HTTP catalog assertion. The retired network
+catalog and selection DTOs, path/operation constants and OpenAPI definitions are
+also removed. Regression tests reject their reappearance in the HTTP schema.
 
 The retired agent-side `selectAgentNetwork` callback and its HTTP DTO tests are
 also removed. They accepted case-insensitive names and reconstructed the current
@@ -20,7 +21,7 @@ acceptance or a new runtime revalidation.
 The old HTTP selection route and `ServiceIPCHandlers.SelectNetwork` field are
 removed as well. The retired-route regression requires 404 for both GET and POST;
 the Windows HTTP fixture no longer provides or asserts a v2 selection response.
-The generic legacy contract DTO/spec definitions still need final cleanup with
+Other generic legacy contract DTO/spec definitions still need final cleanup with
 the rest of IPC v2; they are not a supported alternative to native SelectNetwork.
 
 The agent configures ListNetworks using typed UserService ListNetworks for the

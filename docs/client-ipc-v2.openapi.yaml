@@ -246,21 +246,6 @@ paths:
                 $ref: "#/components/schemas/LogoutResponse"
         default:
           $ref: "#/components/responses/IPCError"
-  /networks:
-    parameters: *ipcVersionHeaders
-    get:
-      operationId: networks
-      x-endlessnet-required-privilege: observer
-      summary: List service-visible networks for this enrollment.
-      responses:
-        "200":
-          description: Networks known to the local service.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/NetworksResponse"
-        default:
-          $ref: "#/components/responses/IPCError"
   /diagnostics:
     parameters: *ipcVersionHeaders
     get:
@@ -1001,34 +986,6 @@ components:
           type: string
         idempotency_key:
           type: string
-    NetworkSummary:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        cidr:
-          type: string
-        ipv6_cidr:
-          type: string
-        account_id:
-          type: string
-      additionalProperties: true
-    NetworksResponse:
-      allOf:
-        - $ref: "#/components/schemas/ProtocolEnvelope"
-        - type: object
-          required:
-            - networks
-            - selected_network_id
-          properties:
-            networks:
-              type: array
-              items:
-                $ref: "#/components/schemas/NetworkSummary"
-            selected_network_id:
-              type: string
     DiagnosticsResponse:
       allOf:
         - $ref: "#/components/schemas/ProtocolEnvelope"

@@ -1,7 +1,5 @@
 package v2
 
-import clientapi "github.com/endless-net/client-api/clientapi/v1"
-
 const (
 	Protocol             = "endlessnet-client-ipc"
 	Version              = 2
@@ -25,7 +23,6 @@ const (
 	PathDisconnect        = "/disconnect"
 	PathLogout            = "/logout"
 	PathLocalForget       = "/logout/local"
-	PathNetworks          = "/networks"
 	PathDiagnostics       = "/diagnostics"
 	PathDiagnosticsBundle = "/diagnostics/bundle"
 	PathRecentLogs        = "/logs/recent"
@@ -41,7 +38,6 @@ const (
 	OperationDisconnect        = "disconnect"
 	OperationLogout            = "logout"
 	OperationLocalForget       = "logout.local_forget"
-	OperationNetworks          = "networks"
 	OperationDiagnostics       = "diagnostics"
 	OperationDiagnosticsBundle = "diagnostics.bundle"
 	OperationRecentLogs        = "logs.recent"
@@ -429,14 +425,6 @@ type RecoveryHelperResult struct {
 	Outcome   RecoveryOperationOutcome `json:"outcome"`
 	State     ServiceState             `json:"state"`
 	ErrorCode string                   `json:"error_code,omitempty"`
-}
-
-type NetworksRequest struct{}
-
-type NetworksResponse struct {
-	Metadata
-	Networks          []clientapi.Network `json:"networks"`
-	SelectedNetworkID string              `json:"selected_network_id"`
 }
 
 type RecentLogsRequest struct {

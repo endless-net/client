@@ -12,9 +12,9 @@ import (
 	ipc "github.com/endless-net/client/ipc/v2"
 )
 
-func TestRetiredNetworkSelectionIsAbsentFromHTTPContract(t *testing.T) {
+func TestRetiredNetworksAreAbsentFromHTTPContract(t *testing.T) {
 	spec := readOpenAPISpec(t)
-	for _, retired := range []string{"/network/select:", "operationId: network.select", "SelectNetworkRequest", "SelectNetworkResponse"} {
+	for _, retired := range []string{"/network/select:", "operationId: network.select", "SelectNetworkRequest", "SelectNetworkResponse", "/networks:", "operationId: networks", "NetworksResponse", "NetworkSummary"} {
 		if strings.Contains(spec, retired) {
 			t.Fatalf("retired HTTP selection contract still contains %q", retired)
 		}
@@ -36,7 +36,6 @@ func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
 		ipc.PathDisconnect,
 		ipc.PathLogout,
 		ipc.PathLocalForget,
-		ipc.PathNetworks,
 		ipc.PathDiagnostics,
 		ipc.PathDiagnosticsBundle,
 		ipc.PathRecentLogs,
@@ -54,7 +53,6 @@ func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
 		ipc.OperationDisconnect,
 		ipc.OperationLogout,
 		ipc.OperationLocalForget,
-		ipc.OperationNetworks,
 		ipc.OperationDiagnostics,
 		ipc.OperationDiagnosticsBundle,
 		ipc.OperationRecentLogs,

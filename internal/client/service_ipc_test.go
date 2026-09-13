@@ -624,7 +624,7 @@ func TestServiceIPCEndpointPrivilegeMatrix(t *testing.T) {
 
 func TestServiceIPCRetiredCatalogRoutesAreAbsent(t *testing.T) {
 	handler := NewServiceIPCHandler(ServiceIPCHandlers{})
-	for _, path := range []string{ipc.PathRecentLogs, ipc.PathNetworks, ipc.PathDiagnostics} {
+	for _, path := range []string{ipc.PathRecentLogs, "/networks", ipc.PathDiagnostics} {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, newServiceIPCTestRequest(http.MethodGet, path, nil))
 		if rec.Code != http.StatusNotFound {
