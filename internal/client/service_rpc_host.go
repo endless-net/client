@@ -8,7 +8,7 @@ import (
 	"github.com/endless-net/client/clientipc/local"
 )
 
-// Serve owns listener and both durable workers. A failed worker closes admission
+// Serve owns listener and durable workers. A failed worker closes admission
 // and cancels its sibling; return waits for all accepted work to stop/checkpoint.
 // Callers must supply a local.Listen listener, never a TCP listener.
 func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, driver ClientRPCProfileDriver, enrollment ClientRPCEnrollmentProvider) error {
@@ -28,6 +28,16 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 		<-profileDone
 		return err
 	}
+	var trustDone <-chan error
+	if cfg := s.mutations.store.Read(); s.ServerIdentityProvider != nil || s.TrustRecoveryProvider != nil || (cfg.RPCState != nil && cfg.RPCState.Trust != nil) {
+		trustDone, err = s.StartTrustWorker(workerCtx, driver)
+		if err != nil {
+			cancel()
+			<-profileDone
+			<-enrollmentDone
+			return err
+		}
+	}
 	server := local.NewServer(s.Handler())
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- server.Serve(listener) }()
@@ -38,6 +48,8 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 		profileDone = nil
 	case err = <-enrollmentDone:
 		enrollmentDone = nil
+	case err = <-trustDone:
+		trustDone = nil
 	case err = <-serverDone:
 		serverDone = nil
 	}
@@ -48,6 +60,9 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	}
 	if enrollmentDone != nil {
 		<-enrollmentDone
+	}
+	if trustDone != nil {
+		<-trustDone
 	}
 	if serverDone != nil {
 		<-serverDone

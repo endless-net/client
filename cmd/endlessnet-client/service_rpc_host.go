@@ -39,6 +39,7 @@ func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agent
 	}
 	service := client.NewClientRPCService(mutations, &ipc.BuildIdentity{Version: version})
 	service.ServerIdentityProvider = agentRPCServerIdentity
+	service.TrustRecoveryProvider = agentRPCTrustRecovery
 	hostCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	var hostErr error

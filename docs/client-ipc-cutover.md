@@ -795,3 +795,23 @@ revocation, temporary unavailability, authentication, policy and identity-bindin
 failures. Local validation: go vet, golangci-lint and go test -short. Worker/RPC
 wiring, explicit tunnel resumption semantics and end-to-end acceptance remain
 unfinished; TrustServerIdentity is not yet exposed to callers.
+
+TrustServerIdentity is now wired into the native runtime through a dedicated
+durable worker and the administrator-authorized admission path. The production
+host supplies the typed identity/recovery providers. Startup resumes saved plans;
+announcement, Down/adoption and recovery run in order, with bounded five-second
+retry polling. HTTP request cancellation does not cancel accepted work. Host
+cancellation joins the trust worker alongside profile/enrollment workers, and a
+worker failure stops serving. Partial trust-provider configuration fails startup
+and drains workers already started.
+
+Trust network calls do not hold the profile/tunnel locks. A synthetic worker test
+holds recovery pending while Disconnect completes, cancels the worker, starts a
+new mutations instance and verifies recovery completion without refetching the
+adopted trust or losing disconnected intent. Host tests cover trust-worker drain
+and partial-startup failure. The automatic agent loop resumes its normal work
+only after the native plan clears and remains subject to the durable connection
+intent; successful trust recovery alone does not claim a connected tunnel.
+Local go vet, golangci-lint and go test -short pass. CLI/helper/UI consumers of
+trust still require migration; real tunnel recovery and release/platform
+acceptance have not been established by these tests.

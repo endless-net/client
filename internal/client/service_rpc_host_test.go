@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
 
@@ -37,6 +38,12 @@ func (*rpcHostBlockingListener) Addr() net.Addr { return &net.UnixAddr{Name: "te
 func TestRPCHostDrainsWorkersAfterListenerFailure(t *testing.T) {
 	m := newRPCStoreTest(t)
 	s := NewClientRPCService(m, nil)
+	s.ServerIdentityProvider = func(context.Context, Config) (clientapi.SigningTrustBundle, error) {
+		return clientapi.SigningTrustBundle{}, nil
+	}
+	s.TrustRecoveryProvider = func(context.Context, Config) (ClientRPCTrustRecoveryResult, error) {
+		return ClientRPCTrustRecoveryResult{}, nil
+	}
 	failure := errors.New("synthetic listener failure")
 	l := &rpcHostTestListener{err: failure}
 	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{},
@@ -51,7 +58,7 @@ func TestRPCHostDrainsWorkersAfterListenerFailure(t *testing.T) {
 	if err := s.Serve(t.Context(), l, driver, provider); !errors.Is(err, failure) {
 		t.Fatal("listener failure lost", err)
 	}
-	if !l.closed || s.profileWorker != nil || s.enrollmentWorker != nil {
+	if !l.closed || s.profileWorker != nil || s.enrollmentWorker != nil || s.trustWorker != nil {
 		t.Fatal("host returned before draining workers and closing listener")
 	}
 	// Enrollment startup failure must also drain the already-started profile worker.
@@ -62,6 +69,16 @@ func TestRPCHostDrainsWorkersAfterListenerFailure(t *testing.T) {
 	if !l.closed || s.profileWorker != nil || s.enrollmentWorker != nil {
 		t.Fatal("partial startup leaked listener or worker")
 	}
+	// Trust startup failure must drain both earlier workers before returning.
+	s.TrustRecoveryProvider = nil
+	l = &rpcHostTestListener{err: failure}
+	if err := s.Serve(t.Context(), l, driver, provider); err == nil {
+		t.Fatal("incomplete trust providers accepted")
+	}
+	if !l.closed || s.profileWorker != nil || s.enrollmentWorker != nil || s.trustWorker != nil {
+		t.Fatal("trust startup failure leaked resources")
+	}
+	s.ServerIdentityProvider = nil
 	if err := m.store.Update(func(cfg *Config) error {
 		cfg.RPCState = &ClientRPCState{Enrollment: &clientRPCEnrollment{OperationID: "missing-operation"}}
 		return nil

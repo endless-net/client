@@ -17,12 +17,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// ClientRPCService is the native v0 runtime implementation under construction.
-// Production listener cutover happens after its remaining domain methods and
-// consumers are migrated. It never forwards requests to the HTTP v2 handler.
+// ClientRPCService serves the native v0 runtime. Domain/consumer cutover is
+// ongoing; unimplemented methods never forward to the retired HTTP v2 handler.
 type ClientRPCService struct {
 	// Configure before serving; reads public signing authority only.
 	ServerIdentityProvider ClientRPCServerIdentityProvider
+	TrustRecoveryProvider  ClientRPCTrustRecoveryProvider
 	clientipcconnect.UnimplementedClientServiceHandler
 	mutations        *ClientRPCMutations
 	build            *ipc.BuildIdentity
@@ -31,6 +31,8 @@ type ClientRPCService struct {
 	disconnectGate   chan struct{}
 	enrollmentMu     sync.Mutex
 	enrollmentWorker *clientRPCProfileWorker
+	trustMu          sync.Mutex
+	trustWorker      *clientRPCProfileWorker
 }
 
 func NewClientRPCService(mutations *ClientRPCMutations, build *ipc.BuildIdentity) *ClientRPCService {
