@@ -251,6 +251,19 @@ The diagnostics test now reports fixed numeric operation/failure codes and
 descriptor-validity booleans on that assertion, without IDs or archive contents.
 It retains the success, lifetime and size requirements unchanged.
 
+## Cached-map expiry precondition correction — 2026-09-13
+
+The expiry scenario required durable `DESIRED_STATE_CONNECTED` after expiration,
+but bootstrap enrollment followed by agent startup never issued native `Connect`.
+Initial profile adoption explicitly preserves intent rather than creating one;
+an operating tunnel alone does not prove that durable mutation was accepted.
+The test now accepts and awaits native `Connect` with captured profile/CAS and a
+retained request UUID, then observes connected intent before shortening map
+validity. It still requires that intent and credentials survive expiration while
+both TCP and UDP are denied, including after restart and before signed recovery.
+Local short checks do not execute this privileged expiry test; its fresh hosted
+result is required before claiming expiry or fail-closed acceptance.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
