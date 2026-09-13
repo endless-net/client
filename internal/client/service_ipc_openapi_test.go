@@ -14,7 +14,7 @@ import (
 
 func TestRetiredOperationsAreAbsentFromHTTPContract(t *testing.T) {
 	spec := readOpenAPISpec(t)
-	for _, path := range []string{"/diagnostics:", "/logs/recent:"} {
+	for _, path := range []string{"/diagnostics:", "/logs/recent:", "DiagnosticsResponse:", "Diagnostics:", "DiagnosticsClientInfo:", "DiagnosticsRuntimeInfo:", "DiagnosticsOSInfo:", "DiagnosticsConfig:", "DiagnosticsDNSSummary:", "DiagnosticsDNSRecord:", "DiagnosticsRouteSummary:", "DiagnosticsSubnetRoute:", "NetworkInterfaceStatus:", "RouteConflict:", "LogsRecentResponse:", "LogEntry:"} {
 		if strings.Contains(spec, path) {
 			t.Fatalf("retired HTTP contract still contains %q", path)
 		}
