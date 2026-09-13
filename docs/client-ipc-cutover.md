@@ -760,3 +760,19 @@ stale trust/authority, authority replacement during Down, missing verification,
 cancellation/restart and repeat reconciliation. Validation: go vet, golangci-lint
 and go test -short. Network recovery, worker/RPC integration and release acceptance
 remain unfinished; TrustServerIdentity is still intentionally not exposed.
+
+Credential recovery now has a shared private network/verification workflow that
+returns a verified map or typed terminal/retryable progress without accessing
+the config store or mutating its input. It checks the recovery plan's confirmed
+origin and active trust key before sending credentials, binds all HTTP work to
+the operation context, and verifies map identity/signature, node credential and
+revision before returning success. Cancellation returns no committable outcome.
+The remaining store-based recovery caller now consumes this workflow instead of
+duplicating network verification. Direct tests cover success, terminal and
+retryable errors, mismatched origin/key, cancellation and unchanged durable
+registration; existing recovery retention/idempotency tests also pass.
+
+This prepares the native executor integration but does not complete it: the v0
+executor still needs authority-checked atomic result application, retry/terminal
+operation transitions and worker/RPC wiring. Validation is local go vet,
+golangci-lint and go test -short, not release or cross-platform acceptance.

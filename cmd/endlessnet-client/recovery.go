@@ -62,64 +62,25 @@ func continueEnrollmentRecovery(ctx context.Context, configPath string) (recover
 		return recoveryAttemptResult{Completed: true}, nil
 	}
 	recovery := *cfg.EnrollmentRecovery
-	if err := recovery.Validate(); err != nil {
-		return persistRecoveryFailure(store, recovery, client.RecoveryPhaseBlocked, recoveryErrorLocalValidation, "", false, err)
+	verified, attemptErr := inspectEnrollmentRecovery(ctx, cfg)
+	if ctx.Err() != nil {
+		return recoveryAttemptResult{}, ctx.Err()
 	}
-	req, err := credentialRenewalRequest(cfg, recovery)
-	if err != nil {
-		return persistRecoveryFailure(store, recovery, client.RecoveryPhaseBlocked, recoveryErrorLocalValidation, "", false, err)
-	}
-	control := registerNodeRecovery(ctx, apiFromConfig(cfg), req)
-	if control.PublicError != nil {
-		publicError := *control.PublicError
-		if publicError.ErrorCode.RequiresReEnrollment() {
-			if err := store.Update(func(current *client.Config) error {
-				if err := requireSameRecovery(current, recovery, cfg.NodeCredential); err != nil {
-					return err
-				}
-				return client.ApplyTerminalRecoveryCleanup(current)
-			}); err != nil {
-				return recoveryAttemptResult{}, err
-			}
-			return recoveryAttemptResult{
-				OperationID: recovery.OperationID,
-				ErrorCode:   string(publicError.ErrorCode),
-				RequestID:   publicError.RequestID,
-				Completed:   true,
-				Terminal:    true,
-			}, nil
-		}
-		phase, retryable := recoveryPhaseForPublicError(publicError.ErrorCode)
-		return persistRecoveryFailure(store, recovery, phase, string(publicError.ErrorCode), publicError.RequestID, retryable, nil)
-	}
-	if control.Response == nil {
-		phase := client.RecoveryPhaseBlocked
-		if control.Retryable {
-			phase = client.RecoveryPhaseRecovering
-		}
-		code := strings.TrimSpace(control.FailureCode)
-		if code == "" {
-			code = recoveryErrorProtocol
-		}
-		return persistRecoveryFailure(store, recovery, phase, code, "", control.Retryable, control.Err)
-	}
-
-	response := *control.Response
-	networkMap := response
-	if err := verifyNetworkMap(&cfg, networkMap); err != nil {
-		return persistRecoveryFailure(store, recovery, client.RecoveryPhaseBlocked, recoveryErrorLocalValidation, "", false, fmt.Errorf("verify recovery network map: %w", err))
-	}
-	if err := verifyRegistrationNodeCredential(apiFromConfig(cfg), networkMap, response.NodeCredential); err != nil {
-		return persistRecoveryFailure(store, recovery, client.RecoveryPhaseBlocked, recoveryErrorLocalValidation, "", false, err)
+	progress := verified.Progress
+	if !progress.Completed {
+		return persistRecoveryFailure(store, recovery, progress.Phase, progress.ErrorCode, progress.RequestID, progress.Retryable, attemptErr)
 	}
 	if err := store.Update(func(current *client.Config) error {
 		if err := requireSameRecovery(current, recovery, cfg.NodeCredential); err != nil {
 			return err
 		}
-		if err := cacheNetworkMapChecked(current, networkMap); err != nil {
+		if progress.Terminal {
+			return client.ApplyTerminalRecoveryCleanup(current)
+		}
+		if err := cacheNetworkMapChecked(current, *verified.NetworkMap); err != nil {
 			return err
 		}
-		current.NodeCredential = response.NodeCredential
+		current.NodeCredential = verified.NetworkMap.NodeCredential
 		current.EnrollmentRequestID = ""
 		current.EnrollmentPollToken = ""
 		current.ApprovalURL = ""
@@ -130,7 +91,7 @@ func continueEnrollmentRecovery(ctx context.Context, configPath string) (recover
 	}); err != nil {
 		return recoveryAttemptResult{}, err
 	}
-	return recoveryAttemptResult{OperationID: recovery.OperationID, Completed: true}, nil
+	return progress, nil
 }
 
 func credentialRenewalRequest(cfg client.Config, recovery client.EnrollmentRecovery) (clientapi.RegisterNodeRequest, error) {
