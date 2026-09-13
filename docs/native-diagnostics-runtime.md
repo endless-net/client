@@ -1,5 +1,12 @@
 # Native diagnostics runtime snapshot
 
+The retired HTTP Diagnostics route and agent callback are removed. Its old path
+must return 404. The native local transport test verifies owner-only collection,
+current instance metadata, explicit partial/failure state, raw driver error
+suppression and access revocation on an existing connection. Remaining bundle
+redaction/intent tests call the builder directly. Legacy bundle path/DTO removal
+and native bundle delivery are still pending, not accepted by this change.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP

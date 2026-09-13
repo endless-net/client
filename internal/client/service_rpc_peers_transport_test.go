@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,6 +26,11 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 	var calls atomic.Int32
 	var changed atomic.Bool
 	var networkCalls atomic.Int32
+	var diagnosticCalls atomic.Int32
+	service.DiagnosticsProvider = func(context.Context) (ClientRPCDiagnosticsObservation, error) {
+		diagnosticCalls.Add(1)
+		return ClientRPCDiagnosticsObservation{OSVersion: "test-os", Tunnel: WireGuardInspection{Error: "synthetic-private-driver-error"}}, nil
+	}
 	service.NetworksProvider = func(_ context.Context, input ClientRPCNetworksInput) ([]*ipc.Network, error) {
 		networkCalls.Add(1)
 		if input.AccountID != "account" || input.SessionToken != "synthetic-session" || input.ControlOrigin != "https://control.example.test" {
@@ -86,6 +92,11 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 	if networkCalls.Load() != 0 {
 		t.Fatal("observer invoked account network source")
 	}
+	_, err = consumer.GetDiagnostics(ctx, connect.NewRequest(&ipc.GetDiagnosticsRequest{Profile: &ipc.ProfileRef{ProfileId: "private"}}))
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+	if diagnosticCalls.Load() != 0 {
+		t.Fatal("observer invoked diagnostics source")
+	}
 	create := rpcCreateRequest(t, m)
 	create.ControlOrigin = "https://control.example.test"
 	created, err := consumer.CreateProfile(ctx, connect.NewRequest(create))
@@ -111,6 +122,13 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 		t.Fatal("native account catalog lost profile context or advertised switching")
 	}
 	request := &ipc.ListPeersRequest{Profile: profile, Page: &ipc.PageRequest{PageSize: 1}}
+	diagnostics, err := consumer.GetDiagnostics(ctx, connect.NewRequest(&ipc.GetDiagnosticsRequest{Profile: profile}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !diagnostics.Msg.Diagnostics.Truncated || len(diagnostics.Msg.Diagnostics.Failures) == 0 || diagnostics.Msg.Diagnostics.Metadata.InstanceId != m.instanceID || strings.Contains(diagnostics.Msg.String(), "synthetic-private-driver-error") {
+		t.Fatal("native diagnostics hid partial state or leaked raw driver error")
+	}
 	first, err := consumer.ListPeers(ctx, connect.NewRequest(request))
 	if err != nil {
 		t.Fatal(err)
@@ -151,5 +169,10 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
 	if networkCalls.Load() != 1 {
 		t.Fatal("revoked connection retained account catalog access")
+	}
+	_, err = consumer.GetDiagnostics(ctx, connect.NewRequest(&ipc.GetDiagnosticsRequest{Profile: profile}))
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+	if diagnosticCalls.Load() != 1 {
+		t.Fatal("revoked connection retained diagnostics access")
 	}
 }

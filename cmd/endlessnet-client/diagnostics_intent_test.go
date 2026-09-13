@@ -23,11 +23,11 @@ func TestAgentDiagnosticsPreservesDisconnectedIntent(t *testing.T) {
 	if err := agentConnectionIntentStore(opts).SetDisconnected("test"); err != nil {
 		t.Fatal(err)
 	}
-	response, err := agentIPCHandlers(opts).Diagnostics(context.Background(), ipc.DiagnosticsRequest{})
+	response, err := buildServiceIPCDiagnostics(opts, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	status := response.Diagnostics.Status
+	status := response.Status
 	if status.State != ipc.StateDisconnected || status.DesiredState != ipc.DesiredDisconnected || !status.UserDisconnected {
 		t.Fatalf("diagnostics lost disconnected intent: state=%s desired=%s disconnected=%t", status.State, status.DesiredState, status.UserDisconnected)
 	}

@@ -134,7 +134,7 @@ func TestServiceIPCHandlerStableErrors(t *testing.T) {
 	}{
 		{name: "method", method: http.MethodPost, path: "/status", status: http.StatusMethodNotAllowed, code: ipc.ErrorMethodNotAllowed},
 		{name: "unknown", method: http.MethodGet, path: "/unknown", status: http.StatusNotFound, code: ipc.ErrorNotFound},
-		{name: "missing", method: http.MethodGet, path: "/diagnostics", status: http.StatusNotImplemented, code: ipc.ErrorNotImplemented},
+		{name: "missing", method: http.MethodGet, path: "/status", status: http.StatusNotImplemented, code: ipc.ErrorNotImplemented},
 		{name: "json", method: http.MethodPost, path: "/connect", body: "{", status: http.StatusBadRequest, code: ipc.ErrorInvalidJSON},
 		{name: "unknown_field", method: http.MethodPost, path: "/connect", body: `{"unexpected":true}`, status: http.StatusBadRequest, code: ipc.ErrorInvalidJSON},
 		{name: "trailing_json", method: http.MethodPost, path: "/connect", body: `{} {}`, status: http.StatusBadRequest, code: ipc.ErrorInvalidJSON},
@@ -612,7 +612,6 @@ func TestServiceIPCEndpointPrivilegeMatrix(t *testing.T) {
 		{http.MethodPost, ipc.PathLogout, ServiceIPCPrivilegeOwner, true},
 		{http.MethodPost, ipc.PathLocalForget, ServiceIPCPrivilegeAdministrator, true},
 		{http.MethodPost, ipc.PathSelectNetwork, ServiceIPCPrivilegeOwner, true},
-		{http.MethodGet, ipc.PathDiagnostics, ServiceIPCPrivilegeOwner, false},
 		{http.MethodPost, ipc.PathDiagnosticsBundle, ServiceIPCPrivilegeOwner, false},
 	} {
 		rec := httptest.NewRecorder()
@@ -626,7 +625,7 @@ func TestServiceIPCEndpointPrivilegeMatrix(t *testing.T) {
 
 func TestServiceIPCRetiredCatalogRoutesAreAbsent(t *testing.T) {
 	handler := NewServiceIPCHandler(ServiceIPCHandlers{})
-	for _, path := range []string{ipc.PathRecentLogs, ipc.PathNetworks} {
+	for _, path := range []string{ipc.PathRecentLogs, ipc.PathNetworks, ipc.PathDiagnostics} {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, newServiceIPCTestRequest(http.MethodGet, path, nil))
 		if rec.Code != http.StatusNotFound {

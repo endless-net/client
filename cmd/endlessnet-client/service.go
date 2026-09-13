@@ -943,13 +943,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 		SelectNetwork: func(ctx context.Context, req ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error) {
 			return selectAgentNetwork(ctx, opts, req)
 		},
-		Diagnostics: func(ctx context.Context, req ipc.DiagnosticsRequest) (ipc.DiagnosticsResponse, error) {
-			payload, err := buildServiceIPCDiagnostics(opts, req.LogLimit)
-			if err != nil {
-				return ipc.DiagnosticsResponse{}, err
-			}
-			return ipc.DiagnosticsResponse{Metadata: serviceIPCMetadata(), Diagnostics: payload}, nil
-		},
 		DiagnosticsBundle: func(ctx context.Context, req ipc.DiagnosticsBundleRequest) (ipc.DiagnosticsBundleResponse, error) {
 			payload, err := buildServiceIPCDiagnostics(opts, req.LogLimit)
 			if err != nil {

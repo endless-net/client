@@ -81,18 +81,6 @@ func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {
 				}
 				return ipc.SelectNetworkResponse{SelectedNetworkID: networkID, SelectedNetwork: clientapi.Network{ID: networkID, Name: "E2E"}}, nil
 			},
-			Diagnostics: func(ctx context.Context, req ipc.DiagnosticsRequest) (ipc.DiagnosticsResponse, error) {
-				return ipc.DiagnosticsResponse{Diagnostics: ipc.Diagnostics{
-					GeneratedAt: "2026-07-18T00:00:00Z",
-					Config: ipc.DiagnosticsConfig{
-						NodeCredentialPresent: true,
-					},
-					LastErrors:     []string{},
-					RecentLogs:     []ipc.LogEntry{},
-					Interfaces:     []ipc.NetworkInterfaceStatus{},
-					RouteConflicts: []ipc.OverlayCIDRConflict{},
-				}}, nil
-			},
 			DiagnosticsBundle: func(ctx context.Context, req ipc.DiagnosticsBundleRequest) (ipc.DiagnosticsBundleResponse, error) {
 				return ipc.DiagnosticsBundleResponse{Path: `C:\ProgramData\EndlessNet\Diagnostics\diagnostics-e2e.json`, CreatedAt: "2026-07-18T00:00:00Z", ExpiresAt: "2026-07-25T00:00:00Z", SizeBytes: 128}, nil
 			},
@@ -164,13 +152,6 @@ func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {
 		t.Fatalf("selected = %#v", selected)
 	}
 
-	var diagnostics ipc.DiagnosticsResponse
-	if err := ipcClient.Request(ctx, http.MethodGet, ipc.PathDiagnostics, nil, &diagnostics); err != nil {
-		t.Fatal(err)
-	}
-	if !diagnostics.Diagnostics.Config.NodeCredentialPresent {
-		t.Fatalf("diagnostics = %#v", diagnostics)
-	}
 	var diagnosticsBundle ipc.DiagnosticsBundleResponse
 	if err := ipcClient.Request(ctx, http.MethodPost, ipc.PathDiagnosticsBundle, ipc.DiagnosticsBundleRequest{}, &diagnosticsBundle); err != nil {
 		t.Fatal(err)

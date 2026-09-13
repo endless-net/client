@@ -3401,11 +3401,10 @@ func TestAgentIPCDiagnosticsIncludesRecentRedactedLogs(t *testing.T) {
 		RecentLogs:     logs,
 	}
 	handlers := agentIPCHandlers(opts)
-	payload, err := handlers.Diagnostics(context.Background(), ipc.DiagnosticsRequest{LogLimit: 10})
+	diagnostics, err := buildServiceIPCDiagnostics(opts, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	diagnostics := payload.Diagnostics
 	if diagnostics.Runtime.GOOS != runtime.GOOS || diagnostics.Runtime.GOARCH != runtime.GOARCH || diagnostics.Runtime.OS.Name != runtime.GOOS {
 		t.Fatalf("diagnostics runtime = %#v", diagnostics.Runtime)
 	}
