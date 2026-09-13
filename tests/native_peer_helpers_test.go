@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -54,17 +55,45 @@ func awaitNativePeerTunnel(t *testing.T, node *testclient.Node, baseline *ipc.St
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
+	var last *ipc.Diagnostics
+	attempts, requestFailures := 0, 0
 	if err := testclient.Await(ctx, func() bool {
+		attempts++
 		response := &ipc.GetDiagnosticsResponse{}
 		if node.NativeService("diagnostics", response, "--profile-id", baseline.ActiveProfileId, "--timeout", "1s") != nil {
+			requestFailures++
 			return false
 		}
 		d := response.GetDiagnostics()
+		last = d
 		return d.GetStatus().GetNodeId() == baseline.NodeId && d.GetStatus().GetActiveProfileId() == baseline.ActiveProfileId &&
 			d.GetStatus().GetMapRevision() >= baseline.MapRevision && d.GetTunnel().GetOk() && d.GetTunnel().GetFailure() == nil && predicate(d.Tunnel)
 	}); err != nil {
-		t.Fatal("native diagnostics did not expose the expected profile/map-bound tunnel peers")
+		t.Fatalf("native diagnostics did not expose the expected profile/map-bound tunnel peers: attempts=%d request_failures=%d last={%s}", attempts, requestFailures, nativePeerTunnelSummary(last, baseline))
 	}
+}
+
+// Report only bounded counts, booleans and numeric contract codes. Never dump
+// diagnostics, peer identities, endpoints, public keys or arbitrary failure text.
+func nativePeerTunnelSummary(d *ipc.Diagnostics, baseline *ipc.Status) string {
+	status, tunnel := d.GetStatus(), d.GetTunnel()
+	handshakes, received, transmitted := 0, 0, 0
+	for _, peer := range tunnel.GetPeers() {
+		if nativeTunnelHandshakeUnix(peer) > 0 {
+			handshakes++
+		}
+		if peer.GetReceivedBytes() > 0 {
+			received++
+		}
+		if peer.GetTransmittedBytes() > 0 {
+			transmitted++
+		}
+	}
+	return fmt.Sprintf("response=%t node_bound=%t profile_bound=%t map_current=%t tunnel_ok=%t tunnel_failure=%d diagnostic_failures=%d peers=%d handshakes=%d receiving=%d transmitting=%d",
+		d != nil, baseline.GetNodeId() != "" && status.GetNodeId() == baseline.GetNodeId(),
+		baseline.GetActiveProfileId() != "" && status.GetActiveProfileId() == baseline.GetActiveProfileId(),
+		status != nil && baseline != nil && status.GetMapRevision() >= baseline.GetMapRevision(),
+		tunnel.GetOk(), tunnel.GetFailure().GetCode(), len(d.GetFailures()), len(tunnel.GetPeers()), handshakes, received, transmitted)
 }
 
 func TestNativePeerMapRequiresCurrentAppliedObservation(t *testing.T) {
