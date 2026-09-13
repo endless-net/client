@@ -32,6 +32,13 @@ cancel handlers or replace Verify. The standalone host waits at most five
 seconds after the explicit `verify` command before failing on unfinished calls.
 Unexpected calls,
 request mismatches, unconsumed steps and in-flight calls fail verification.
+An admitted streaming call counts as consumed even when the consumer cancels
+before all responses are sent. This permits intentional cancellation scenarios;
+`Verify` alone is not evidence that every event was delivered or applied.
+Success-path tests must independently assert each required consumer observation.
+The per-response gate test separately checks that cancellation reports CANCELED
+and never delivers the unreleased response; the UI Network scenario separately
+awaits the new Network/revision after release before verifying the script.
 Errors never print request contents. Fixtures should contain synthetic data
 only. Error values supplied by a test remain the test author's responsibility.
 

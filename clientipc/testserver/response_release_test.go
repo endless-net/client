@@ -57,6 +57,12 @@ func TestResponseReleaseStream(t *testing.T) {
 			}
 			if cancelBlocked {
 				cancel()
+				if stream.Receive() {
+					t.Fatal("unreleased event escaped cancellation")
+				}
+				if connect.CodeOf(stream.Err()) != connect.CodeCanceled {
+					t.Fatal("stream did not report caller cancellation", stream.Err())
+				}
 				_ = stream.Close()
 			} else {
 				close(gate)
