@@ -14,7 +14,7 @@ import (
 )
 
 func TestRPCTrustRecoveryTransactions(t *testing.T) {
-	for _, scenario := range []string{"success", "retry", "terminal", "blocked", "cancel", "stale", "invalid result", "provider error"} {
+	for _, scenario := range []string{"success", "retry", "terminal", "blocked", "binding", "cancel", "stale", "invalid result", "provider error"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, peer, profile := rpcConnectFixture(t)
 			peer.Administrator = true
@@ -75,6 +75,8 @@ func TestRPCTrustRecoveryTransactions(t *testing.T) {
 					return ClientRPCTrustRecoveryResult{Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, ReasonKey: "node_revoked", ControlRequestId: "correlation"}, RequiresEnrollment: true}, nil
 				case "blocked":
 					return ClientRPCTrustRecoveryResult{Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED, ReasonKey: "policy"}, Phase: RecoveryPhasePolicyBlocked}, nil
+				case "binding":
+					return ClientRPCTrustRecoveryResult{Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, ReasonKey: "node_identity_binding_mismatch", ControlRequestId: "binding-correlation"}, Phase: RecoveryPhaseBlocked}, nil
 				case "provider error":
 					return ClientRPCTrustRecoveryResult{}, errors.New("private provider details")
 				case "cancel":
@@ -120,6 +122,18 @@ func TestRPCTrustRecoveryTransactions(t *testing.T) {
 			if after.Token != before.Token || after.PrivateKey != before.PrivateKey || !reflect.DeepEqual(after.MapSigningTrust, before.MapSigningTrust) || !reflect.DeepEqual(after.ConnectionIntent, before.ConnectionIntent) {
 				t.Fatal("recovery replaced unrelated authority")
 			}
+			if scenario == "terminal" || scenario == "binding" {
+				code := ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT
+				if scenario == "binding" {
+					code = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED
+				}
+				beforeConnect := m.store.Read()
+				_, connectErr := m.connectAs(peer, &ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
+				assertRPCFailure(t, connectErr, code)
+				if !reflect.DeepEqual(beforeConnect, m.store.Read()) {
+					t.Fatal("Connect changed authoritative recovery outcome")
+				}
+			}
 			switch scenario {
 			case "success":
 				if result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || after.NodeCredential != "synthetic-renewed" || after.EnrollmentRecovery != nil || after.RPCState.Trust != nil || after.RPCState.Profiles[profile.ProfileId].Configuration.NodeCredential != after.NodeCredential {
@@ -140,9 +154,12 @@ func TestRPCTrustRecoveryTransactions(t *testing.T) {
 				if err := m.ReconcileTrustRecovery(t.Context(), provider); err != nil {
 					t.Fatal("restart retry failed", err)
 				}
-			case "blocked", "provider error":
+			case "blocked", "binding", "provider error":
 				if result.State != ipc.OperationState_OPERATION_STATE_FAILED || after.NodeCredential != before.NodeCredential || after.RPCState.Trust != nil || after.EnrollmentRecovery.Retryable {
 					t.Fatal("blocked recovery altered registration")
+				}
+				if scenario == "binding" && (after.EnrollmentRecovery.Phase != RecoveryPhaseBlocked || result.GetFailure().GetControlRequestId() != "binding-correlation") {
+					t.Fatal("binding failure lost recovery restriction or correlation")
 				}
 			default:
 				if result.State != ipc.OperationState_OPERATION_STATE_RUNNING || after.RPCState.Trust == nil || after.EnrollmentRecovery == nil {

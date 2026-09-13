@@ -20,7 +20,6 @@ import (
 	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
-	ipc "github.com/endless-net/client/ipc/v2"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -463,37 +462,6 @@ func TestDurableRecoveryStateOverridesStaleAgentSigningError(t *testing.T) {
 		status.ControlState != native.ControlState_CONTROL_STATE_RECOVERING ||
 		status.GetRecovery().GetOperationId() != recovery.OperationID || status.GetAgent().GetLastFailure() != nil {
 		t.Fatal("stale agent failure replaced durable native recovery state")
-	}
-}
-
-func TestConnectReturnsRecoveryStateInsteadOfTextMatchedCleanup(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		code    clientapi.ErrorCode
-		state   ipc.ServiceState
-		control ipc.ControlState
-	}{
-		{"terminal", clientapi.ErrorCodeNodeCredentialRevoked, ipc.StateNeedsEnrollment, ipc.ControlStateNotRegistered},
-		{"binding", clientapi.ErrorCodeNodeIdentityBindingMismatch, ipc.StateRecoveryBlocked, ipc.ControlStateRecoveryBlocked},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/nodes/register" {
-					writeRecoveryPublicError(t, w, tc.code, "connect-request")
-					return
-				}
-				http.NotFound(w, r)
-			}))
-			defer server.Close()
-			fixture := newRecoveryTestFixture(t, server.URL)
-			response, err := agentIPCHandlers(agentIPCOptions{ConfigPath: fixture.ConfigPath}).Connect(context.Background(), ipc.ConnectRequest{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if response.State != tc.state || response.ControlState != tc.control {
-				t.Fatalf("connect recovery response = %#v", response)
-			}
-		})
 	}
 }
 

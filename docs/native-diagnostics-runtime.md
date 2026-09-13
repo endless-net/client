@@ -579,5 +579,14 @@ The native worker test independently checks, at provider entry and after worker
 restart, that adopted trust and operation-bound renewal identity are already
 committed in both active and profile state before remote recovery begins.
 
+Connect admission now rejects retained recovery restrictions before changing
+intent or accepting an operation: recovering maps to BUSY, identity/recovery
+blocked to APPLY_FAILED, policy blocked to POLICY_BLOCKED, and login required to
+NEEDS_LOGIN. Native tests verify unchanged registration, journal and intent across
+store reopen. Typed provider mapping and recovery-transaction tests distinguish
+revocation cleanup from binding-failure retention; they replace the final legacy
+Connect assertion in the recovery test file. This does not implement automatic
+retry of a terminally blocked recovery or claim installed-service acceptance.
+
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.

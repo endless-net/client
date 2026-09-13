@@ -36,6 +36,22 @@ func (m *ClientRPCMutations) connectAs(peer local.Peer, request *ipc.ConnectRequ
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 			}
 		}
+		if recovery := cfg.EnrollmentRecovery; recovery != nil {
+			code := ipc.ErrorCode_ERROR_CODE_INTERNAL
+			switch recovery.Phase {
+			case RecoveryPhaseRecovering:
+				code = ipc.ErrorCode_ERROR_CODE_BUSY
+			case RecoveryPhaseBlocked:
+				code = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED
+			case RecoveryPhasePolicyBlocked:
+				code = ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED
+			case RecoveryPhaseNeedsLogin:
+				code = ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN
+			}
+			// Only recovery may replace the unrenewed enrollment. Connect must
+			// neither clear the restriction nor apply its retained cached map.
+			return rpc.Error(connect.CodeFailedPrecondition, code)
+		}
 		op.ProfileId = profile.ID
 		cfg.RPCState.ConnectOperationID = op.Id
 		cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected, Reason: "user_connect", UpdatedAt: m.now().UTC().Format(time.RFC3339Nano)}

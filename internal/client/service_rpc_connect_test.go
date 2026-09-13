@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +12,53 @@ import (
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+func TestRPCConnectRejectsDurableRecoveryWithoutChangingIntent(t *testing.T) {
+	for _, tc := range []struct {
+		phase RecoveryPhase
+		code  ipc.ErrorCode
+	}{
+		{RecoveryPhaseRecovering, ipc.ErrorCode_ERROR_CODE_BUSY},
+		{RecoveryPhaseBlocked, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED},
+		{RecoveryPhasePolicyBlocked, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED},
+		{RecoveryPhaseNeedsLogin, ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN},
+	} {
+		t.Run(string(tc.phase), func(t *testing.T) {
+			m, peer, profile := rpcConnectFixture(t)
+			recovery, err := NewEnrollmentRecovery("operation-1", "renewal-1", "https://control.test", "key-1", time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			recovery = recovery.WithFailure(tc.phase, "synthetic-failure", "control-request-1", false, time.Now())
+			if err := m.store.Update(func(cfg *Config) error {
+				cfg.EnrollmentRecovery = &recovery
+				cfg.NodeCredential = "retained-node-credential"
+				cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "user_disconnect", UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			for range 2 {
+				before := m.store.Read()
+				request := &ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}
+				_, err := m.connectAs(peer, request)
+				assertRPCFailure(t, err, tc.code)
+				after := m.store.Read()
+				if !reflect.DeepEqual(before, after) {
+					t.Fatal("rejected Connect changed recovery, journal, registration or intent")
+				}
+				store, err := OpenConfigStore(m.store.path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				m, err = NewClientRPCMutations(store)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}
 
 func rpcConnectFixture(t *testing.T) (*ClientRPCMutations, local.Peer, *ipc.ProfileRef) {
 	t.Helper()
