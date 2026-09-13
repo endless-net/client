@@ -37,8 +37,10 @@ func TestControlPlaneDiagnosticsExport(t *testing.T) {
 		n.AwaitNativeStatus(func(v *ipc.Status) bool {
 			return v.NodeId == id && v.UserDisconnected == disconnected && v.MapRevision > 0
 		})
-		response := &ipc.GetDiagnosticsResponse{}
-		if err := n.NativeService("diagnostics", response, "--profile-id", profile); err != nil {
+		response, err := retryNativeDiagnosticsRead(func(response *ipc.GetDiagnosticsResponse) error {
+			return n.NativeService("diagnostics", response, "--profile-id", profile)
+		})
+		if err != nil {
 			t.Fatal(err)
 		}
 		d := response.Diagnostics
