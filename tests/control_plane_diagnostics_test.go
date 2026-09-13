@@ -75,12 +75,34 @@ func TestControlPlaneDiagnosticsExport(t *testing.T) {
 	n.Start()
 	check(true)
 	status = n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ActiveProfileId == profile })
-	args := testclient.NativeMutationArguments("00000000-0000-4000-8000-000000000002", status)
-	accepted := &ipc.CreateDiagnosticsBundleResponse{}
-	if err := n.NativeService("diagnostics-bundle", accepted, args...); err != nil {
-		t.Fatal(err)
+	var args []string
+	var op *ipc.Operation
+	for _, requestID := range []string{"00000000-0000-4000-8000-000000000002", "a5040000-0000-4000-8000-000000000002", "a5040000-0000-4000-8000-000000000003"} {
+		fresh := &ipc.GetStatusResponse{}
+		if err := n.NativeService("status", fresh); err != nil || fresh.GetStatus().GetNodeId() != id ||
+			fresh.GetStatus().GetActiveProfileId() != profile || !fresh.GetStatus().GetUserDisconnected() ||
+			fresh.GetStatus().GetMetadata().GetInstanceId() != status.GetMetadata().GetInstanceId() {
+			t.Fatal("diagnostics export context changed before collection")
+		}
+		args = testclient.NativeMutationArguments(requestID, fresh.Status)
+		accepted := &ipc.CreateDiagnosticsBundleResponse{}
+		if err := n.NativeService("diagnostics-bundle", accepted, args...); err != nil {
+			t.Fatal(err)
+		}
+		op = n.AwaitNativeOperation(accepted.GetOperation().GetId())
+		if op.GetState() != ipc.OperationState_OPERATION_STATE_FAILED || op.GetFailure().GetCode() != ipc.ErrorCode_ERROR_CODE_STALE_STATE {
+			break
+		}
+		// A changed collection snapshot must remain a terminal failure. A new
+		// explicit collection uses a new UUID, never mutates/retries that result.
+		replay := &ipc.CreateDiagnosticsBundleResponse{}
+		if err := n.NativeService("diagnostics-bundle", replay, args...); err != nil || !proto.Equal(replay.Operation, op) {
+			t.Fatal("stale diagnostics collection did not retain its immutable outcome")
+		}
+		if _, err := n.ServiceCommand("export-diagnostics-bundle", "--operation-id", op.Id, "--profile-id", profile); err == nil {
+			t.Fatal("stale diagnostics collection exposed archive bytes")
+		}
 	}
-	op := n.AwaitNativeOperation(accepted.GetOperation().GetId())
 	bundle := op.GetBundle()
 	if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || bundle == nil || bundle.GetCreatedAt().CheckValid() != nil || bundle.GetExpiresAt().CheckValid() != nil || bundle.ExpiresAt.AsTime().Sub(bundle.CreatedAt.AsTime()) != 15*time.Minute || bundle.SizeBytes == 0 || bundle.SizeBytes > 5<<20 {
 		t.Fatalf("invalid bundle result: operation_state=%d failure_code=%d bundle_present=%t created_valid=%t expires_valid=%t size_bytes=%d",

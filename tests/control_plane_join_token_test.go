@@ -49,6 +49,13 @@ func exerciseJoinTokenRetirement(t *testing.T, family string, expire bool) {
 		return v.NodeId != "" && v.GetStoredState().GetCachedMapValid() && v.GetStoredState().GetNodeCredentialPresent() && nativeOverlayAddress(v, false).IsValid()
 	})
 	nodeID := status.NodeId
+	profileID := status.ActiveProfileId
+	runNativeControlMutation(t, existing, "connect", "a5010000-0000-4000-8000-000000000001")
+	status = existing.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId == nodeID && v.ActiveProfileId == profileID &&
+			v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED &&
+			v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
+	})
 	clientIP, peerIP := nativeOverlayAddress(status, false), netip.MustParseAddr("198.18.89.20")
 	if family == "ipv6" {
 		if err := s.UpdateMap(nodeID, func(m *api.NetworkMapSnapshot) {

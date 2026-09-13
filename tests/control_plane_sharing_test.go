@@ -36,6 +36,12 @@ func TestControlPlaneNativeMachineSharing(t *testing.T) {
 				return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
 			})
 			nodeID, profileID := status.NodeId, status.ActiveProfileId
+			runNativeControlMutation(t, n, "connect", "a5020000-0000-4000-8000-000000000001")
+			status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId == nodeID && v.ActiveProfileId == profileID &&
+					v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED &&
+					v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
+			})
 			clientIP := nativeOverlayAddress(status, false)
 			sharedIP := netip.MustParseAddr("198.18.99.20")
 			if family == "ipv6" {

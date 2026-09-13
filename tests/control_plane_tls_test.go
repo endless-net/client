@@ -97,6 +97,12 @@ func TestControlPlaneTLSTrustBoundary(t *testing.T) {
 	initial := n.AwaitNativeStatus(func(v *ipc.Status) bool {
 		return v.NodeId != "" && v.GetNetwork().GetId() != "" && v.ActiveProfileId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 	})
+	runNativeControlMutation(t, n, "connect", "a5030000-0000-4000-8000-000000000001")
+	n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId == initial.NodeId && v.ActiveProfileId == initial.ActiveProfileId &&
+			v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED &&
+			v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
+	})
 	for _, tc := range []struct {
 		name        string
 		from, until time.Duration
