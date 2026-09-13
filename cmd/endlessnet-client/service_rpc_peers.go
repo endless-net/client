@@ -32,7 +32,7 @@ func agentRPCPeers(opts agentIPCOptions) client.ClientRPCPeersProvider {
 		if failures := nativeDiagnosticPaths(peers, paths); len(failures) != 0 {
 			return result, errors.New("invalid peer observations")
 		}
-		result = client.ClientRPCPeerObservation{ProfileID: cfg.RPCState.ActiveProfileID, MapRevision: networkMap.Network.Revision, Peers: peers}
+		result = client.ClientRPCPeerObservation{ProfileID: cfg.RPCState.ActiveProfileID, MapRevision: networkMap.Network.Revision, MapGlobalRevision: networkMap.Revision.Global, Peers: peers}
 		return result, ctx.Err()
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -20,7 +21,9 @@ import (
 type ClientRPCPeerObservation struct {
 	ProfileID   string
 	MapRevision uint64
-	Peers       []*ipc.Peer
+	// The global axis can change authorization without changing Network.Revision.
+	MapGlobalRevision uint64
+	Peers             []*ipc.Peer
 }
 type ClientRPCPeersProvider func(context.Context) (ClientRPCPeerObservation, error)
 
@@ -60,7 +63,7 @@ func (s *ClientRPCService) peersAs(ctx context.Context, peer local.Peer, request
 	if err != nil {
 		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
-	if observation.ProfileID != profile.ID || observation.MapRevision == 0 || cfg.CachedMap == nil || cfg.CachedMap.Network.Revision != observation.MapRevision {
+	if observation.ProfileID != profile.ID || observation.MapRevision == 0 || cfg.CachedMap == nil || cfg.CachedMap.Network.Revision != observation.MapRevision || cfg.CachedMap.Revision.Global != observation.MapGlobalRevision {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	}
 	if len(observation.Peers) > 4096 {
@@ -99,7 +102,7 @@ func (s *ClientRPCService) peersAs(ctx context.Context, peer local.Peer, request
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	start, end, next, err := s.mutations.pageRange(peer, "ListPeers\x00"+profile.ID+"\x00"+search+"\x00"+hex.EncodeToString(digest[:]), request.GetPage(), cfg, len(items))
+	start, end, next, err := s.mutations.pageRange(peer, "ListPeers\x00"+profile.ID+"\x00"+search+"\x00"+strconv.FormatUint(observation.MapGlobalRevision, 10)+"\x00"+hex.EncodeToString(digest[:]), request.GetPage(), cfg, len(items))
 	if err != nil {
 		return nil, err
 	}
