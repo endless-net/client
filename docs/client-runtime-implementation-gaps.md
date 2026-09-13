@@ -47,7 +47,36 @@ Additional partial implementations must not be mistaken for complete domains:
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
 
-## External dependencies
+## Client-owned scenario map
+
+This maps all fourteen system-scenario families to the client boundary. It is
+not yet the per-requirement BA/SA completion matrix. All rows remain open until
+each applicable requirement and negative outcome has been individually audited.
+Paths in the table are under `internal/client/` unless qualified otherwise.
+
+| Scenario | Runtime / contract implementation | Unit starting point and verified limit | Remaining client work / external dependency |
+| --- | --- | --- | --- |
+| US-01 bootstrap | `service_rpc_host.go`, `service_rpc_capabilities.go`; protected transport in `clientipc/local` | `service_rpc_host_capabilities_test.go`; root short tests do not run the nested `clientipc` module | Audit startup/identity/capability failure variants and separate nested-module unit execution |
+| US-02 enrollment | `service_rpc_enrollment_worker.go`, `service_rpc_enrollment_executor.go` | `TestRPCEnrollmentWorkerRecoveryAndShutdown` | Trace approval, denial, expiry, cancellation and ownership outcomes individually; actual backend approval is external |
+| US-03 connection | `service_rpc_connect.go`, `service_rpc_disconnect.go` | `TestRPCConnectDurabilityAndFailure`, `TestRPCDisconnectPreemptsApplyOnlyAfterAcceptance` | Audit remaining races and recovery boundaries; unit driver results are not OS traffic evidence |
+| US-04 networks/peers | `service_rpc_networks.go`, `service_rpc_select_network.go`, `service_rpc_peers.go` | `TestRPCSelectCurrentNetworkIsDurableNoop`; peer pagination/event suites | Current-network no-op is not cross-network selection; audit real provider switching and stale catalogs |
+| US-05 exit | Eight-method gap inventory above includes all four exit methods | No runtime implementation to qualify; CLI/SDK coverage is insufficient | Verified backend policy consumption, durable selection and family-specific effects |
+| US-06 trust/recovery | `service_rpc_trust_worker.go`, `service_rpc_trust_recovery.go` | `TestRPCTrustWorkerRecoveryAndIndependentDisconnect` | Audit exact authority tuple, replay and privilege outcomes; helper/OS integration remains later evidence |
+| US-07 diagnostics | `service_rpc_diagnostics.go`, bundle worker/store/read handlers | `TestRPCDiagnosticsRejectsChangedContextAndInvalidProvider`, `TestRPCAdministratorBundleScopeAndRestart` | Actual OS route collection missing; inspect redaction, bounds and archive lifecycle coverage separately |
+| US-08 profiles/logout | Profile, logout and forget handlers | `TestRPCProfileRemovalGuards`, `TestRPCForgetCancelsQueuedEnrollmentAfterRestart`, `TestRPCProfilePaginationBindingsAndPrivacy` | Audit all removal/cleanup/replay cases; remote revocation depends on backend result |
+| US-09 session/renewal | Missing `GetSession` and `RenewSession` overrides | No runtime implementation to qualify | Session authority and durable renewal require updated backend contract consumption |
+| US-10 preferences/policy | `service_rpc_uiquit.go`, preference validators | `TestRPCUIQuitRejectsUnsupportedPatchAtomically` rejects mixed UI-quit/DNS patch without changing revision or override | Implement remaining settings; rejection is not DNS/routes/policy functionality |
+| US-11 resources | Missing list/mutation overrides | No runtime implementation to qualify | Implement catalog, policy-aware enablement and actual runtime effects |
+| US-12 lifecycle | `service_rpc_uiquit.go` | `TestRPCUIQuitPreferencesAndExecution` | UI-quit support is not logoff/suspend/resume adapter implementation; audit each specified event |
+| US-13 distribution/help | `service_rpc_update.go`, `service_rpc_handlers.go`; packaging and producer manifest workflows | `TestRPCUpdateInfoDoesNotInferReleaseOrPairing` | Verified update source remains absent; installation/release evidence deferred until implementation phase completes |
+| US-14 presentation/privacy | Typed status/operation/log/diagnostics projections | `TestRPCObserverSnapshotExcludesPrivateState`, diagnostics suites | Audit producer reasons/actions and secret redaction; UI rendering, locale selection and assistive technologies belong outside this task |
+
+The historical [runtime gap audit](native-runtime-gap-audit.md) reported nine
+missing methods at its pinned source. The current count is eight because
+`GetUpdateInfo` now has an explicit unavailable-source implementation. This
+reduces missing overrides, not the remaining update-discovery requirement.
+
+## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. `client`
   currently pins `github.com/endless-net/client-api/clientapi v1.12.0` in `go.mod`.
