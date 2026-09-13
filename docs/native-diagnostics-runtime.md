@@ -682,6 +682,12 @@ status and diagnostics providers remain the service observation path. Headless
 status still uses other retired projection DTOs; removing this dead assembler
 does not establish complete removal of the old contract or system acceptance.
 
+The unreachable legacy control-probe and agent-snapshot assemblers and their
+path/snapshot adapters are also removed, including their text-matched signing
+trust error classification. Native bound-snapshot, control-status and diagnostics
+tests remain the service projection checks. The separately reachable headless
+map-based diagnostics projection has not yet been migrated by this removal.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

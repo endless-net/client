@@ -342,31 +342,6 @@ func agentServiceIPCConfigStore(opts agentIPCOptions) (*client.ConfigStore, erro
 
 
 
-func pathCandidateStatus(status client.PathCandidateStatus) ipc.PathCandidateStatus {
-	return ipc.PathCandidateStatus{
-		Type: status.Type, Tier: status.Tier, Priority: status.Priority, State: status.State,
-		Endpoint: status.Endpoint, RelayID: status.RelayID, Protocol: status.Protocol, RTTMS: status.RTTMS,
-		CheckedAt: status.CheckedAt, LastReachableAt: status.LastReachableAt,
-		ConsecutiveFailures: status.ConsecutiveFailures, Reason: status.Reason,
-	}
-}
-
-func peerPathStatuses(statuses []client.PeerPathStatus) []ipc.PeerPathStatus {
-	out := make([]ipc.PeerPathStatus, 0, len(statuses))
-	for _, status := range statuses {
-		candidates := make([]ipc.PathCandidateStatus, 0, len(status.Candidates))
-		for _, candidate := range status.Candidates {
-			candidates = append(candidates, pathCandidateStatus(candidate))
-		}
-		out = append(out, ipc.PeerPathStatus{
-			PeerID: status.PeerID, Hostname: status.Hostname, Direct: pathCandidateStatus(status.Direct),
-			Candidates: candidates, Relay: pathCandidateStatus(status.Relay), SelectedPath: status.SelectedPath,
-			SelectedEndpoint: status.SelectedEndpoint, LastTransitionAt: status.LastTransitionAt,
-			SelectionReason: status.SelectionReason,
-		})
-	}
-	return out
-}
 
 
 
@@ -392,28 +367,6 @@ func loadAgentSnapshotIfAvailable(path string) *client.AgentSnapshot {
 }
 
 
-func agentSnapshotMatchesStatus(status ipc.StatusResponse, snapshot client.AgentSnapshot) bool {
-	return agentSnapshotIdentityMatchesStatus(status, snapshot) &&
-		snapshot.MapRevision == status.MapRevision
-}
-
-func agentSnapshotStateForStatus(status ipc.StatusResponse, snapshot client.AgentSnapshot) (ipc.AgentSnapshotState, bool) {
-	if agentSnapshotMatchesStatus(status, snapshot) {
-		return ipc.AgentSnapshotCurrent, true
-	}
-	if !agentSnapshotIdentityMatchesStatus(status, snapshot) {
-		return ipc.AgentSnapshotAbsent, false
-	}
-	if snapshot.MapRevision < status.MapRevision {
-		return ipc.AgentSnapshotPrevious, true
-	}
-	return ipc.AgentSnapshotAbsent, false
-}
-
-func agentSnapshotIdentityMatchesStatus(status ipc.StatusResponse, snapshot client.AgentSnapshot) bool {
-	return strings.TrimSpace(snapshot.NodeID) == strings.TrimSpace(status.NodeID) &&
-		strings.TrimSpace(snapshot.NetworkID) == strings.TrimSpace(status.NetworkID)
-}
 
 func serviceStateFromControlState(controlState ipc.ControlState, cachedMapInvalid bool) ipc.ServiceState {
 	if cachedMapInvalid {
