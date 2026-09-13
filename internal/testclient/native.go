@@ -45,6 +45,7 @@ func (n *Node) AwaitNativeStatus(match func(*ipc.Status) bool) *ipc.Status {
 		status = response.Status
 		return status != nil && match(status)
 	}); err != nil {
+		n.logWireGuardStartupStages()
 		n.t.Fatal("native status condition not reached")
 	}
 	return status

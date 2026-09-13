@@ -364,17 +364,13 @@ func (n *Node) awaitStatusWithin(timeout time.Duration, match func(ipc.StatusRes
 func (n *Node) logWireGuardStartupStages() {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	out, err := n.command(ctx, append([]string{"service", "logs-recent", "--timeout", "1s"}, n.ipcArgs()...)...).CombinedOutput()
-	var response ipc.RecentLogsResponse
-	if err != nil || json.Unmarshal(out, &response) != nil {
+	stages, err := nativeStartupStages(ctx, func(ctx context.Context, operation string, options ...string) ([]byte, error) {
+		args := append([]string{"service", operation, "--timeout", "1s"}, n.ipcArgs()...)
+		return n.command(ctx, append(args, options...)...).CombinedOutput()
+	})
+	if err != nil {
 		n.t.Log("public startup-stage log unavailable")
 		return
-	}
-	var stages []string
-	for _, entry := range response.Logs {
-		if stage := wireGuardStartupStage(entry.Message); stage != "" {
-			stages = append(stages, stage)
-		}
 	}
 	n.t.Logf("public WireGuard startup stages: %v", stages)
 }

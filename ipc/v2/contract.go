@@ -425,18 +425,9 @@ type RecoveryHelperResult struct {
 	ErrorCode string                   `json:"error_code,omitempty"`
 }
 
-type RecentLogsRequest struct {
-	Limit int `json:"limit,omitempty"`
-}
-
 type LogEntry struct {
 	Timestamp string `json:"timestamp"`
 	Message   string `json:"message"`
-}
-
-type RecentLogsResponse struct {
-	Metadata
-	Logs []LogEntry `json:"logs"`
 }
 
 type EventsRequest struct{}
