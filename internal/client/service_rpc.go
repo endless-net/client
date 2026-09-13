@@ -414,6 +414,7 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	var updated *ipc.Operation
+	logoutDownStarted := false
 	err := m.store.Update(func(cfg *Config) error {
 		if cfg.RPCState == nil {
 			return rpc.Error(connect.CodeNotFound, ipc.ErrorCode_ERROR_CODE_NOT_FOUND)
@@ -432,6 +433,9 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 			}
 			if !validRPCOperationTransition(previous, updated) {
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			}
+			if updated.Kind == ipc.OperationKind_OPERATION_KIND_LOGOUT && cfg.RPCState.Logout != nil && cfg.RPCState.Logout.OperationID == updated.Id {
+				logoutDownStarted = cfg.RPCState.Logout.DownStarted
 			}
 			if updated.Kind == ipc.OperationKind_OPERATION_KIND_LOGOUT && rpcOperationTerminal(updated.State) && cfg.RPCState.Logout != nil && cfg.RPCState.Logout.OperationID == updated.Id {
 				cfg.RPCState.Logout = nil
@@ -465,7 +469,10 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 	if (updated.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT || updated.Kind == ipc.OperationKind_OPERATION_KIND_LOGOUT) && updated.State == ipc.OperationState_OPERATION_STATE_SUCCEEDED {
 		m.observedStatus = nil
 	}
-	if updated.Kind == ipc.OperationKind_OPERATION_KIND_DISCONNECT || updated.Kind == ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE || updated.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT || updated.Kind == ipc.OperationKind_OPERATION_KIND_LOGOUT {
+	// Remote revocation alone is not a tunnel state transition. Keep the last
+	// observation until Logout actually starts Down, including remote failures.
+	logoutAffectsTunnel := updated.Kind == ipc.OperationKind_OPERATION_KIND_LOGOUT && (logoutDownStarted || updated.State == ipc.OperationState_OPERATION_STATE_SUCCEEDED)
+	if updated.Kind == ipc.OperationKind_OPERATION_KIND_DISCONNECT || updated.Kind == ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE || updated.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT || logoutAffectsTunnel {
 		if m.observedStatus == nil {
 			m.observedStatus = &ipc.Status{}
 		}

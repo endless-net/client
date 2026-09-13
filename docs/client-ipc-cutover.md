@@ -563,3 +563,10 @@ allowed. Regression coverage verifies STALE_STATE, unchanged revision and saved
 preferences after both rejected mutations, and isolation of an accepted active
 profile update. Local vet, lint and short tests pass; other preference providers
 and production IPC activation remain unfinished.
+
+Logout no longer projects DISCONNECTING merely because remote revocation is
+running. The last observed tunnel phase survives that stage and a remote-only
+failure; the persisted Down-start checkpoint triggers DISCONNECTING instead.
+Down failure still invalidates the observation, and confirmed local cleanup
+reports DISCONNECTED. Executor regression tests distinguish remote and Down
+failures. This fixes native status projection, not production runtime activation.

@@ -92,11 +92,18 @@ func TestRPCLogoutExecutorPreservesStateAndRetriesConfirmedSteps(t *testing.T) {
 				t.Fatal(err)
 			}
 			stops := 0
+			m.observedStatus = &ipc.Status{ConnectionPhase: ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED}
 			driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+				if m.observedStatus.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTING {
+					t.Fatal("Logout did not publish Down start")
+				}
 				stops++
 				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, errors.New("synthetic Down failure")
 			}}
 			err = m.ReconcileLogout(t.Context(), driver, func(_ context.Context, _ Config, _ ClientRPCLogoutProgress, checkpoint func(ClientRPCLogoutProgress) error) (string, error) {
+				if m.observedStatus.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED {
+					t.Fatal("remote revocation changed the observed tunnel phase before Down")
+				}
 				if err := checkpoint(ClientRPCLogoutProgress{NodeRevoked: true}); err != nil {
 					return "", err
 				}
@@ -114,6 +121,13 @@ func TestRPCLogoutExecutorPreservesStateAndRetriesConfirmedSteps(t *testing.T) {
 			}
 			if failRemote && (stops != 0 || result.GetFailure().ControlRequestId != "remote-correlation") {
 				t.Fatal("remote failure lost correlation or invoked Down")
+			}
+			wantPhase := ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED
+			if failRemote {
+				wantPhase = ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
+			}
+			if m.observedStatus.ConnectionPhase != wantPhase {
+				t.Fatal("failed Logout reported a tunnel transition without corresponding Down")
 			}
 			_, err = m.connectAs(peer, &ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: enroll.Profile})
 			assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
