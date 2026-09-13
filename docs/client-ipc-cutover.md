@@ -498,3 +498,12 @@ restart without resending registration. Tests cover rejected/unconfirmed command
 not cancelling work, accepted cancellation, a late provider save, drain-before-Down
 ordering and queued enrollment recovery. Other conflicting provider operations
 still return BUSY; real OS/process/network interruption acceptance remains open.
+
+Remote logout confirmation has been extracted from CLI parsing/file cleanup into
+revokeConfiguredClient(ctx, cfg). Both node revocation and session logout are
+bound to the runtime context; this function performs no local config/file cleanup.
+Tests verify revocation-before-session ordering, retention of local state on both
+remote failures and confirmation, typed revocation correlation and cancellation
+of an in-flight session request. The CLI uses the shared function; native Logout
+admission, durable remote-confirmation progress and post-confirmation Down/cleanup
+are still to be connected. This does not establish complete UF-12 acceptance.

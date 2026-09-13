@@ -1447,27 +1447,8 @@ func cmdLogout(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(cfg.ControlURLs()) == 0 || (strings.TrimSpace(cfg.Token) == "" && strings.TrimSpace(cfg.NodeCredential) == "") {
-		return fmt.Errorf("not logged in; run endlessnet-client login first")
-	}
-	if strings.TrimSpace(cfg.NodeID) == "" && strings.TrimSpace(cfg.NodeCredential) != "" {
-		return fmt.Errorf("node_id is required to revoke node credential")
-	}
-	if strings.TrimSpace(cfg.NodeCredential) != "" {
-		if err := client.ValidateConfigCurrentDevice(cfg); err != nil {
-			return err
-		}
-	}
-	api := apiFromConfig(cfg)
-	if strings.TrimSpace(cfg.NodeID) != "" {
-		if err := revokeNode(context.Background(), api, cfg.NodeID); err != nil {
-			return err
-		}
-	}
-	if strings.TrimSpace(cfg.Token) != "" {
-		if err := api.Logout(); err != nil {
-			return remoteCleanupError{cause: err}
-		}
+	if err := revokeConfiguredClient(context.Background(), cfg); err != nil {
+		return err
 	}
 	var stateErr error
 	if strings.TrimSpace(*stateOutput) != "" {
