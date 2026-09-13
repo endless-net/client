@@ -10,11 +10,11 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testrelay"
 	"github.com/endless-net/client/internal/testwireguard"
-	ipc "github.com/endless-net/client/ipc/v2"
 	relay "github.com/endless-net/relay/protocol/v1"
 )
 
@@ -47,23 +47,27 @@ func runNativeRelayTraffic(t *testing.T, failover bool) {
 			n.Enroll(s, network.Name, token, "--route-table", "auto")
 			n.Start()
 			defer n.Stop()
-			initial := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
+			initial := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
+			})
 			peerIP := netip.MustParseAddr("198.18.94.20")
-			clientIP := netip.MustParseAddr(initial.OverlayIP)
+			clientIP := nativeOverlayAddress(initial, false)
 			if ipv6 {
-				if err := s.UpdateMap(initial.NodeID, func(m *api.NetworkMapSnapshot) { m.Network.IPv6CIDR = "fd94::/64"; m.Node.AssignedIPv6 = "fd94::1" }); err != nil {
+				if err := s.UpdateMap(initial.NodeId, func(m *api.NetworkMapSnapshot) { m.Network.IPv6CIDR = "fd94::/64"; m.Node.AssignedIPv6 = "fd94::1" }); err != nil {
 					t.Fatal(err)
 				}
-				n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.OverlayIPv6 == "fd94::1" && v.CachedMapValid })
+				n.AwaitNativeStatus(func(v *ipc.Status) bool {
+					return v.NodeId == initial.NodeId && v.ActiveProfileId == initial.ActiveProfileId && nativeOverlayAddress(v, true).String() == "fd94::1" && v.GetStoredState().GetCachedMapValid()
+				})
 				clientIP, peerIP = netip.MustParseAddr("fd94::1"), netip.MustParseAddr("fd94::20")
 			}
-			underlay := nativePeerUnderlay(t, netip.MustParseAddr(initial.OverlayIP), peerIP)
-			m, err := s.Snapshot(initial.NodeID)
+			underlay := nativePeerUnderlay(t, nativeOverlayAddress(initial, false), peerIP)
+			m, err := s.Snapshot(initial.NodeId)
 			if err != nil {
 				t.Fatal(err)
 			}
 			reference := testwireguard.NewTCP(t, m.Node.PublicKey, clientIP, peerIP, underlay)
-			transport := testrelay.New(t, network.ID, initial.NodeID, "relay-peer", reference.Endpoint, reference.ConfigureClientEndpoint)
+			transport := testrelay.New(t, network.ID, initial.NodeId, "relay-peer", reference.Endpoint, reference.ConfigureClientEndpoint)
 			primary := transport
 			var backup *testrelay.Server
 			endpoints := []relay.Endpoint{primary.Endpoint}
@@ -81,44 +85,57 @@ func runNativeRelayTraffic(t *testing.T, failover bool) {
 			}
 			n.Stop()
 			n.AgentArgs = append(n.AgentArgs, "--relay-ca-cert", caFile)
-			if err := s.UpdateMap(initial.NodeID, func(m *api.NetworkMapSnapshot) {
+			if err := s.UpdateMap(initial.NodeId, func(m *api.NetworkMapSnapshot) {
 				m.Peers = []api.Peer{{ID: "relay-peer", NetworkID: network.ID, Hostname: "relay-peer", PublicKey: reference.PublicKey, AllowedIPs: []string{netip.PrefixFrom(peerIP, peerIP.BitLen()).String()}}}
 				m.Relays = endpoints
 				m.RelayCredential = &transport.Credential
 			}); err != nil {
 				t.Fatal(err)
 			}
+			expectedMap, err := s.Snapshot(initial.NodeId)
+			if err != nil {
+				t.Fatal(err)
+			}
 			n.Start()
 			selected := func() {
 				t.Helper()
-				var last ipc.StatusResponse
+				var last *ipc.Diagnostics
 				defer func() {
 					if !t.Failed() {
 						return
 					}
 					authenticated, sent, received := transport.Counts()
 					var relayOK, selectedRelay, selectedPath bool
-					if last.Agent != nil {
-						relayOK = last.Agent.RelayOK
-						selectedRelay = last.Agent.SelectedRelay.ID == transport.Endpoint.ID
-						for _, peer := range last.Agent.Peers {
-							selectedPath = selectedPath || peer.PeerID == "relay-peer" && peer.SelectedPath == "relay"
+					if agent := last.GetStatus().GetAgent(); agent != nil {
+						relayOK = agent.RelayOk
+						selectedRelay = agent.GetSelectedRelay().GetId() == transport.Endpoint.ID
+						for _, peer := range last.GetPeers() {
+							selectedPath = selectedPath || peer.Id == "relay-peer" && peer.SelectedPath == ipc.PathKind_PATH_KIND_RELAY
 						}
 					}
-					t.Logf("Relay status wait: agent_present=%t relay_ok=%t relay_selected=%t peer_relay_path=%t auth=%d frames_to_peer=%d frames_from_peer=%d", last.Agent != nil, relayOK, selectedRelay, selectedPath, authenticated, sent, received)
+					t.Logf("Relay status wait: agent_present=%t relay_ok=%t relay_selected=%t peer_relay_path=%t auth=%d frames_to_peer=%d frames_from_peer=%d", last.GetStatus().GetAgent() != nil, relayOK, selectedRelay, selectedPath, authenticated, sent, received)
 				}()
-				n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					last = v
-					if v.NodeID != initial.NodeID || !v.CachedMapValid || v.Agent == nil || !v.Agent.RelayOK || v.Agent.SelectedRelay.ID != transport.Endpoint.ID || v.WireGuard == nil || !v.WireGuard.OK {
+				ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+				defer cancel()
+				if err := testclient.Await(ctx, func() bool {
+					response := &ipc.GetDiagnosticsResponse{}
+					if n.NativeService("diagnostics", response, "--profile-id", initial.ActiveProfileId, "--timeout", "1s") != nil {
 						return false
 					}
-					for _, p := range v.Agent.Peers {
-						if p.PeerID == "relay-peer" && p.SelectedPath == "relay" {
+					last = response.Diagnostics
+					v := last.GetStatus()
+					if !nativePeerMapApplied(v, initial, expectedMap.Revision.Network, 1) || !v.Agent.RelayOk || v.Agent.GetSelectedRelay().GetId() != transport.Endpoint.ID || !last.GetTunnel().GetOk() || last.GetTunnel().GetFailure() != nil {
+						return false
+					}
+					for _, p := range last.GetPeers() {
+						if p.Id == "relay-peer" && p.SelectedPath == ipc.PathKind_PATH_KIND_RELAY {
 							return true
 						}
 					}
 					return false
-				})
+				}); err != nil {
+					t.Fatal("native diagnostics did not confirm the selected Relay path")
+				}
 			}
 			address := net.JoinHostPort(peerIP.String(), "24001")
 			probe := func(protocol string) bool { return applicationProbe(t, binary, "", protocol, address) }
@@ -134,14 +151,15 @@ func runNativeRelayTraffic(t *testing.T, failover bool) {
 					authenticated, sent, received := transport.Counts()
 					initiations, responses, other := reference.HandshakeCounts()
 					requests, echoes := reference.PacketCounts()
-					v, statusErr := n.Status()
+					v := &ipc.GetDiagnosticsResponse{}
+					statusErr := n.NativeService("diagnostics", v, "--profile-id", initial.ActiveProfileId, "--timeout", "1s")
 					var handshake, loopback bool
 					var rx, tx uint64
-					if statusErr == nil && v.WireGuard != nil {
-						for _, peer := range v.WireGuard.Peers {
-							handshake = handshake || peer.LatestHandshakeUnix > 0
-							rx += peer.TransferRXBytes
-							tx += peer.TransferTXBytes
+					if statusErr == nil && v.GetDiagnostics().GetTunnel() != nil {
+						for _, peer := range v.Diagnostics.Tunnel.Peers {
+							handshake = handshake || peer.LatestHandshake != nil && peer.LatestHandshake.Seconds > 0
+							rx += peer.ReceivedBytes
+							tx += peer.TransmittedBytes
 							if endpoint, err := netip.ParseAddrPort(peer.Endpoint); err == nil {
 								loopback = loopback || endpoint.Addr().IsLoopback()
 							}
@@ -176,8 +194,8 @@ func runNativeRelayTraffic(t *testing.T, failover bool) {
 			if probe("tcp") || probe("udp") {
 				t.Fatal("application remained reachable without its only Relay path")
 			}
-			n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID == initial.NodeID && v.NodeCredentialPresent && v.CachedMapPresent
+			n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId == initial.NodeId && v.ActiveProfileId == initial.ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapPresent()
 			})
 			primary.SetUnavailable(false)
 			transport = primary

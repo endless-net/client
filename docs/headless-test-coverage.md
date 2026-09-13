@@ -13,6 +13,15 @@ and [system design / IT specifications](https://github.com/endless-net/architect
 
 ## 2026-09-13: native v0 transport and request-validation cutover
 
+HC-028/HC-030's [native Relay traffic and failover roots](../tests/control_plane_relay_test.go)
+now use v0 status/diagnostics, including the typed relay path, selected relay ID,
+profile/node identity, current applied map and tunnel health. Real IPv4/IPv6
+TCP/UDP probes, Relay frame counters, retained connections during failover and
+outage recovery, restart and single-registration assertions are preserved.
+Short tests compile but skip these privileged scenarios. Historical HTTP-based
+passes are not evidence for this migration; fresh runtime runner results remain
+required, separate from contract-testserver or local-transport module results.
+
 HC-036's [`TestControlPlaneNativeExitRoute`](../tests/control_plane_exit_route_test.go)
 now uses v0 status and profile/node/map-bound tunnel diagnostics. Each default
 route grant, withdrawal and restoration must reach the current applied map
