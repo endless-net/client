@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -47,6 +49,70 @@ func TestRPCStatusAgentSnapshotMustMatchVerifiedIdentity(t *testing.T) {
 	attachAgentRPCSnapshot(status, client.AgentSnapshot{ProfileID: "profile", NodeID: "node", NetworkID: "network", MapRevision: 2, LastError: "private diagnostic"})
 	if status.Agent.SnapshotState != ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS || status.Agent.TargetMapRevision != 3 || status.Agent.LastFailure.ReasonKey != "agent_observation_failed" {
 		t.Fatal("previous snapshot or diagnostic projection incorrect")
+	}
+}
+
+func TestRPCStatusLoadsOnlyBoundSnapshotsWithoutReplacingMap(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/client/readyz" {
+			t.Error("unexpected control probe path")
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 7)
+	cfg := client.Config{NodeID: "node-1", NetworkID: "net-1", NodeCredential: "synthetic-credential", MapRevision: 7, CachedMap: &networkMap,
+		MapSigningTrust: testSigningTrustBundle(t, testMapSigningPublicKey(t, networkMap.MapSignature)),
+		RPCState:        &client.ClientRPCState{ActiveProfileID: "profile"}}
+	for _, online := range []bool{false, true} {
+		cfg.ControlPlaneURLs = nil
+		if online {
+			cfg.ControlPlaneURLs = []string{server.URL}
+		}
+		for _, mode := range []string{"previous", "current", "future", "previous-enrollment", "previous-profile"} {
+			snapshot := client.AgentSnapshot{ProfileID: "profile", NodeID: "node-1", NetworkID: "net-1", MapRevision: 6, PeerCount: 2,
+				Paths: []client.PeerPathStatus{{SelectedPath: "direct"}, {SelectedPath: "relay"}}}
+			switch mode {
+			case "current":
+				snapshot.MapRevision = 7
+			case "future":
+				snapshot.MapRevision = 8
+			case "previous-enrollment":
+				snapshot = client.AgentSnapshot{LastError: "synthetic private previous enrollment error"}
+			case "previous-profile":
+				snapshot.ProfileID = "other-profile"
+			}
+			raw, err := json.Marshal(snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "agent-state.json")
+			if err := os.WriteFile(path, raw, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			status := buildAgentRPCStatus(t.Context(), agentIPCOptions{StateOutput: path}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED)
+			if status.MapRevision != 7 || status.PeerCount != uint32(len(networkMap.Peers)) || !status.GetStoredState().GetCachedMapValid() {
+				t.Fatal("snapshot replaced authoritative map projection", mode)
+			}
+			if online && status.ControlState != ipc.ControlState_CONTROL_STATE_READY || !online && status.ServiceState != ipc.ServiceState_SERVICE_STATE_DEGRADED {
+				t.Fatal("snapshot replaced control availability", mode)
+			}
+			if mode != "previous" && mode != "current" {
+				if status.Agent.GetNodeId() != "" || status.Agent.GetLastFailure() != nil {
+					t.Fatal("foreign/future snapshot was exposed", mode)
+				}
+				continue
+			}
+			wantState, wantTarget := ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT, uint64(0)
+			if mode == "previous" {
+				wantState, wantTarget = ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS, 7
+			}
+			if status.Agent.GetSnapshotState() != wantState || status.Agent.MapRevision != snapshot.MapRevision || status.Agent.TargetMapRevision != wantTarget || status.Agent.PeerCount != 2 || status.Agent.DirectPathCount != 1 || status.Agent.RelayPathCount != 1 {
+				t.Fatal("bound snapshot lost revision or typed path counts", mode)
+			}
+		}
 	}
 }
 
