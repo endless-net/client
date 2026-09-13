@@ -13,6 +13,12 @@ and [system design / IT specifications](https://github.com/endless-net/architect
 
 ## 2026-09-13: native v0 transport and request-validation cutover
 
+The old OpenAPI v2 specification and its self-consistency tests have now also
+been removed. Current producer wire documentation is
+[Client Protobuf v0](client-ipc-protobuf.md); historical HTTP evidence below
+links to immutable source history rather than a current contract. This does not
+remove the remaining callback/DTO migration or establish runtime acceptance.
+
 The remaining HTTP v2 handler, endpoint registration, request negotiation,
 JSON/NDJSON codecs and response writer were removed as well. No caller outside
 the retired handler tests used them. Direct component tests for peer context,
@@ -4760,7 +4766,7 @@ cursor. The common inventory is now 32 roots / 768 expected native outcomes;
 this extension awaits hosted evidence. Slow-consumer and malformed-stream
 variants remain separate.
 
-The [published IPC schema](client-ipc-v2.openapi.yaml) declares mutation request
+The [historical IPC schema](https://github.com/endless-net/client/blob/2b52253a6254b2f511943716f1b888000af86a51/docs/client-ipc-v2.openapi.yaml) declares mutation request
 bodies as objects. A component regression reproduced `null` (including padded
 `null`) reaching the disconnect action through Go's struct JSON decoder. The
 reader now rejects non-object bodies with `invalid_json` before dispatch;

@@ -17,9 +17,10 @@
 
 This is the accepted RPC specification for the analyzed functions. Contract
 acceptance is separate from implementation and release acceptance. The runtime
-and native CLI now use v0 over local OS transport; remaining HTTP v2 DTOs,
-callbacks and [old OpenAPI source](client-ipc-v2.openapi.yaml) are migration
-residue, not an active production contract. Protobuf v0 is a separate protocol
+and native CLI now use v0 over local OS transport; remaining HTTP v2 DTOs and
+callbacks are migration residue, not an active production contract. The old
+HTTP client/server, codecs and OpenAPI specification have been removed from the
+current tree. Protobuf v0 is a separate protocol
 identity, with no HTTP fallback or simultaneous production protocol support.
 The [runtime gap audit](native-runtime-gap-audit.md) identifies missing and
 partial implementations. [Runner evidence](headless-test-coverage.md) distinguishes
