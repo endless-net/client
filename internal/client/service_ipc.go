@@ -166,19 +166,18 @@ func supportedServiceIPCTransport(transport string) bool {
 }
 
 type ServiceIPCHandlers struct {
-	Authorize         ServiceIPCAuthorizer
-	Status            func(context.Context, ipc.StatusRequest) (ipc.StatusResponse, error)
-	Events            func(context.Context, ipc.EventsRequest, ServiceIPCEventWriter) error
-	Enroll            func(context.Context, ipc.EnrollRequest) (ipc.EnrollResponse, error)
-	Connect           func(context.Context, ipc.ConnectRequest) (ipc.ConnectResponse, error)
-	ServerIdentity    func(context.Context, ipc.ServerIdentityRequest) (ipc.ServerIdentityResponse, error)
-	TrustServer       func(context.Context, ipc.TrustServerRequest) (ipc.TrustServerResponse, error)
-	Disconnect        func(context.Context, ipc.DisconnectRequest) (ipc.DisconnectResponse, error)
-	Logout            func(context.Context, ipc.LogoutRequest) (ipc.LogoutResponse, error)
-	LocalForget       func(context.Context, ipc.LocalForgetRequest) (ipc.LocalForgetResponse, error)
-	SelectNetwork     func(context.Context, ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error)
-	DiagnosticsBundle func(context.Context, ipc.DiagnosticsBundleRequest) (ipc.DiagnosticsBundleResponse, error)
-	MutationLock      sync.Locker
+	Authorize      ServiceIPCAuthorizer
+	Status         func(context.Context, ipc.StatusRequest) (ipc.StatusResponse, error)
+	Events         func(context.Context, ipc.EventsRequest, ServiceIPCEventWriter) error
+	Enroll         func(context.Context, ipc.EnrollRequest) (ipc.EnrollResponse, error)
+	Connect        func(context.Context, ipc.ConnectRequest) (ipc.ConnectResponse, error)
+	ServerIdentity func(context.Context, ipc.ServerIdentityRequest) (ipc.ServerIdentityResponse, error)
+	TrustServer    func(context.Context, ipc.TrustServerRequest) (ipc.TrustServerResponse, error)
+	Disconnect     func(context.Context, ipc.DisconnectRequest) (ipc.DisconnectResponse, error)
+	Logout         func(context.Context, ipc.LogoutRequest) (ipc.LogoutResponse, error)
+	LocalForget    func(context.Context, ipc.LocalForgetRequest) (ipc.LocalForgetResponse, error)
+	SelectNetwork  func(context.Context, ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error)
+	MutationLock   sync.Locker
 }
 
 func NewServiceIPCHandler(handlers ServiceIPCHandlers) http.Handler {
@@ -193,7 +192,6 @@ func NewServiceIPCHandler(handlers ServiceIPCHandlers) http.Handler {
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathLogout, ipc.OperationLogout, ServiceIPCPrivilegeOwner, true), handlers.Logout, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathLocalForget, ipc.OperationLocalForget, ServiceIPCPrivilegeAdministrator, true), handlers.LocalForget, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathSelectNetwork, ipc.OperationSelectNetwork, ServiceIPCPrivilegeOwner, true), handlers.SelectNetwork, handlers.Authorize, handlers.MutationLock)
-	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathDiagnosticsBundle, ipc.OperationDiagnosticsBundle, ServiceIPCPrivilegeOwner, false), handlers.DiagnosticsBundle, handlers.Authorize, handlers.MutationLock)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		negotiatedRequest, ipcErr := negotiateServiceIPCRequest(r)
 		if ipcErr != nil {

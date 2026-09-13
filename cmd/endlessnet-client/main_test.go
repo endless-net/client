@@ -3400,7 +3400,6 @@ func TestAgentIPCDiagnosticsIncludesRecentRedactedLogs(t *testing.T) {
 		DiagnosticsDir: dir,
 		RecentLogs:     logs,
 	}
-	handlers := agentIPCHandlers(opts)
 	diagnostics, err := buildServiceIPCDiagnostics(opts, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -3424,18 +3423,7 @@ func TestAgentIPCDiagnosticsIncludesRecentRedactedLogs(t *testing.T) {
 	if matches, err := filepath.Glob(filepath.Join(dir, "diagnostics-*.json")); err != nil || len(matches) != 0 {
 		t.Fatalf("GET diagnostics created bundle files: matches=%#v err=%v", matches, err)
 	}
-	bundle, err := handlers.DiagnosticsBundle(context.Background(), ipc.DiagnosticsBundleRequest{LogLimit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.TrimSpace(bundle.Path) == "" || bundle.SizeBytes <= 0 || bundle.CreatedAt == "" || bundle.ExpiresAt == "" {
-		t.Fatalf("diagnostics bundle metadata = %#v", bundle)
-	}
-	bundleRaw, err := os.ReadFile(bundle.Path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(raw) + "\n" + string(bundleRaw)
+	text := string(raw)
 	for _, secret := range []string{"secret-session-token", "secret-private-key", "secret-node-credential", "enr_secret_diagnostics_log", "enr_secret_diagnostics_state"} {
 		if strings.Contains(text, secret) {
 			t.Fatalf("diagnostics recent logs leaked %q: %s", secret, text)

@@ -276,22 +276,21 @@ type agentIterationOptions struct {
 }
 
 type agentIPCOptions struct {
-	Pipe             string
-	UnixSocket       string
-	ConfigPath       string
-	StateOutput      string
-	ConfigStore      *client.ConfigStore
-	OperationMu      *sync.Mutex
-	DiagnosticsDir   string
-	DiagnosticsStore *diagnosticsStore
-	RecentLogs       *recentLogBuffer
-	ListenPort       int
-	WGInterface      string
-	Timeout          time.Duration
-	WireGuard        agentWireGuard
-	SyncForConnect   func() error
-	SyncWake         chan struct{}
-	Now              func() time.Time
+	Pipe           string
+	UnixSocket     string
+	ConfigPath     string
+	StateOutput    string
+	ConfigStore    *client.ConfigStore
+	OperationMu    *sync.Mutex
+	DiagnosticsDir string
+	RecentLogs     *recentLogBuffer
+	ListenPort     int
+	WGInterface    string
+	Timeout        time.Duration
+	WireGuard      agentWireGuard
+	SyncForConnect func() error
+	SyncWake       chan struct{}
+	Now            func() time.Time
 }
 
 func requestAgentSync(opts agentIPCOptions) {
@@ -652,10 +651,6 @@ func inspectServerIdentity(configPath string) (ipc.ServerIdentityResponse, clien
 }
 
 func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
-	store := opts.DiagnosticsStore
-	if store == nil && strings.TrimSpace(opts.DiagnosticsDir) != "" {
-		store = newDiagnosticsStore(opts.DiagnosticsDir)
-	}
 	return client.ServiceIPCHandlers{
 		Authorize: func(r *http.Request, endpoint client.ServiceIPCEndpoint) error {
 			configStore, err := agentServiceIPCConfigStore(opts)
@@ -944,24 +939,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 		},
 		SelectNetwork: func(ctx context.Context, req ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error) {
 			return selectAgentNetwork(ctx, opts, req)
-		},
-		DiagnosticsBundle: func(ctx context.Context, req ipc.DiagnosticsBundleRequest) (ipc.DiagnosticsBundleResponse, error) {
-			payload, err := buildServiceIPCDiagnostics(opts, req.LogLimit)
-			if err != nil {
-				return ipc.DiagnosticsBundleResponse{}, err
-			}
-			if store == nil {
-				return ipc.DiagnosticsBundleResponse{}, ipc.NewError(http.StatusServiceUnavailable, "diagnostics_bundle_unavailable", errors.New("diagnostics bundle directory is not configured"))
-			}
-			bundle, err := store.Write(payload)
-			if err != nil {
-				return ipc.DiagnosticsBundleResponse{}, ipc.NewError(http.StatusInternalServerError, "diagnostics_bundle_failed", err)
-			}
-			return ipc.DiagnosticsBundleResponse{
-				Metadata: serviceIPCMetadata(), Path: bundle.Path,
-				CreatedAt: bundle.CreatedAt.Format(time.RFC3339Nano), ExpiresAt: bundle.ExpiresAt.Format(time.RFC3339Nano),
-				SizeBytes: bundle.SizeBytes, Reused: bundle.Reused,
-			}, nil
 		},
 	}
 }

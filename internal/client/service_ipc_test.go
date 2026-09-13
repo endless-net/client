@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	ipc "github.com/endless-net/client/ipc/v2"
@@ -612,7 +613,6 @@ func TestServiceIPCEndpointPrivilegeMatrix(t *testing.T) {
 		{http.MethodPost, ipc.PathLogout, ServiceIPCPrivilegeOwner, true},
 		{http.MethodPost, ipc.PathLocalForget, ServiceIPCPrivilegeAdministrator, true},
 		{http.MethodPost, ipc.PathSelectNetwork, ServiceIPCPrivilegeOwner, true},
-		{http.MethodPost, ipc.PathDiagnosticsBundle, ServiceIPCPrivilegeOwner, false},
 	} {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, newServiceIPCTestRequest(tc.method, tc.path, bytes.NewBufferString(`{}`)))
@@ -630,6 +630,17 @@ func TestServiceIPCRetiredCatalogRoutesAreAbsent(t *testing.T) {
 		handler.ServeHTTP(rec, newServiceIPCTestRequest(http.MethodGet, path, nil))
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("retired route %s returned %d, want 404", path, rec.Code)
+		}
+	}
+}
+
+func TestServiceIPCRetiredBundleRouteIsAbsent(t *testing.T) {
+	handler := NewServiceIPCHandler(ServiceIPCHandlers{})
+	for _, method := range []string{http.MethodPost, http.MethodGet} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, newServiceIPCTestRequest(method, ipc.PathDiagnosticsBundle, strings.NewReader(`{}`)))
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("retired bundle route returned %d, want 404", rec.Code)
 		}
 	}
 }

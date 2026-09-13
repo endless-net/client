@@ -81,9 +81,6 @@ func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {
 				}
 				return ipc.SelectNetworkResponse{SelectedNetworkID: networkID, SelectedNetwork: clientapi.Network{ID: networkID, Name: "E2E"}}, nil
 			},
-			DiagnosticsBundle: func(ctx context.Context, req ipc.DiagnosticsBundleRequest) (ipc.DiagnosticsBundleResponse, error) {
-				return ipc.DiagnosticsBundleResponse{Path: `C:\ProgramData\EndlessNet\Diagnostics\diagnostics-e2e.json`, CreatedAt: "2026-07-18T00:00:00Z", ExpiresAt: "2026-07-25T00:00:00Z", SizeBytes: 128}, nil
-			},
 		}),
 		ConnContext: client.WindowsServiceIPCConnContext,
 	}
@@ -150,14 +147,6 @@ func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {
 	}
 	if selected.SelectedNetworkID != "net_e2e" {
 		t.Fatalf("selected = %#v", selected)
-	}
-
-	var diagnosticsBundle ipc.DiagnosticsBundleResponse
-	if err := ipcClient.Request(ctx, http.MethodPost, ipc.PathDiagnosticsBundle, ipc.DiagnosticsBundleRequest{}, &diagnosticsBundle); err != nil {
-		t.Fatal(err)
-	}
-	if diagnosticsBundle.Path == "" || diagnosticsBundle.SizeBytes <= 0 {
-		t.Fatalf("diagnostics bundle = %#v", diagnosticsBundle)
 	}
 
 	assertWindowsServiceIPCEventStream(t, ctx, ipcClient)
