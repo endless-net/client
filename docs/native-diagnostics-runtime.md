@@ -566,5 +566,11 @@ Local forget checks rejection for a nonadministrator, or cleanup and installatio
 identity retention for an administrator. The positive branch therefore requires
 an administrator/root test job; an ordinary-user pass does not prove that branch.
 
+Unchanged trust confirmation now replaces the retired disconnected-intent test
+with native operation assertions. Coverage includes persisted disconnected intent,
+credential retention, journal reopen and exact replay across instance change,
+then a fresh successful no-op without tunnel teardown or recovery creation.
+This is domain-level coverage; it does not claim installed-agent restart acceptance.
+
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.

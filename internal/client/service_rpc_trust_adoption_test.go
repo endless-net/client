@@ -9,13 +9,15 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestRPCTrustAdoptionDurability(t *testing.T) {
-	for _, scenario := range []string{"enrolled", "unenrolled", "unchanged", "down failure", "restart during down", "changed authority", "changed trust", "change during down", "not verified"} {
+	for _, scenario := range []string{"enrolled", "unenrolled", "unchanged", "unchanged disconnected", "down failure", "restart during down", "changed authority", "changed trust", "change during down", "not verified"} {
 		t.Run(scenario, func(t *testing.T) {
 			bundle := func() clientapi.SigningTrustBundle {
 				public, _, err := ed25519.GenerateKey(rand.Reader)
@@ -29,7 +31,8 @@ func TestRPCTrustAdoptionDurability(t *testing.T) {
 				return value
 			}
 			trusted, announced := bundle(), bundle()
-			if scenario == "unchanged" {
+			unchanged := scenario == "unchanged" || scenario == "unchanged disconnected"
+			if unchanged {
 				announced = trusted
 			}
 			m, peer, profile := rpcConnectFixture(t)
@@ -40,6 +43,9 @@ func TestRPCTrustAdoptionDurability(t *testing.T) {
 			}
 			if err := m.store.Update(func(cfg *Config) error {
 				cfg.MapSigningTrust, cfg.NodeCredential = &trusted, credential
+				if scenario == "unchanged disconnected" {
+					cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "user_disconnect", UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+				}
 				p := cfg.RPCState.Profiles[profile.ProfileId]
 				p.Configuration.MapSigningTrust, p.Configuration.NodeCredential = &trusted, credential
 				cfg.RPCState.Profiles[p.ID] = p
@@ -52,7 +58,8 @@ func TestRPCTrustAdoptionDurability(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			op, err := m.trustServerIdentityAs(peer, &ipc.TrustServerIdentityRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, ConfirmedControlOrigin: origin, ConfirmedKeyId: announced.ActiveKeyID, ConfirmedAnnouncementId: id})
+			request := &ipc.TrustServerIdentityRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, ConfirmedControlOrigin: origin, ConfirmedKeyId: announced.ActiveKeyID, ConfirmedAnnouncementId: id}
+			op, err := m.trustServerIdentityAs(peer, request)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -132,9 +139,50 @@ func TestRPCTrustAdoptionDurability(t *testing.T) {
 				t.Fatal(err)
 			}
 			success := scenario == "enrolled" || scenario == "unenrolled" || scenario == "restart during down"
-			if scenario == "unchanged" {
+			if unchanged {
 				if calls != 0 || result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || result.GetChange() == nil || result.GetChange().Changed || result.Continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED || disk.RPCState.Trust != nil || disk.EnrollmentRecovery != nil || !reflect.DeepEqual(disk.MapSigningTrust, &trusted) {
 					t.Fatal("unchanged trust disrupted the connection")
+				}
+				if !reflect.DeepEqual(disk.ConnectionIntent, before.ConnectionIntent) || disk.NodeCredential != before.NodeCredential {
+					t.Fatal("unchanged trust changed user intent or enrollment")
+				}
+				// Reopen the persisted journal: exact retry must return the old
+				// result even though its original CAS belongs to the old instance.
+				restartedStore, err := OpenConfigStore(m.store.path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				m, err = NewClientRPCMutations(restartedStore)
+				if err != nil {
+					t.Fatal(err)
+				}
+				replay, err := m.trustServerIdentityAs(peer, request)
+				if err != nil || !proto.Equal(replay, result) {
+					t.Fatal("restarted unchanged trust replay lost its terminal result")
+				}
+				// A new confirmation is a separate successful no-op, not a
+				// request to resume recovery or touch an absent tunnel engine.
+				request.Mutation = rpcCreateRequest(t, m).Mutation
+				next, err := m.trustServerIdentityAs(peer, request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := m.ReconcileTrustAnnouncement(t.Context(), func(context.Context, Config) (clientapi.SigningTrustBundle, error) { return announced, nil }); err != nil {
+					t.Fatal(err)
+				}
+				noEngine := ClientRPCProfileDriver{Lock: new(sync.Mutex), Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+					t.Error("unchanged confirmation attempted to stop an absent engine")
+					return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, errors.New("engine unavailable")
+				}}
+				if err := m.ReconcileTrustAdoption(t.Context(), noEngine); err != nil {
+					t.Fatal(err)
+				}
+				next, err = m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: next.Id}})
+				after := m.store.Read()
+				if err != nil || next.Id == result.Id || next.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED ||
+					next.GetChange() == nil || next.GetChange().Changed || after.EnrollmentRecovery != nil ||
+					!reflect.DeepEqual(after.ConnectionIntent, before.ConnectionIntent) || after.NodeCredential != before.NodeCredential {
+					t.Fatal("fresh unchanged confirmation restarted recovery or lost disconnected intent")
 				}
 				return
 			}
