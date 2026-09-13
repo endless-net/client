@@ -101,6 +101,10 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 		switch response := response.(type) {
 		case *ipc.GetRuntimeInfoResponse:
 			assertBuild(response.GetRuntime().GetBuild())
+			info := response.GetRuntime()
+			if info.GetProtocol() != bootstrapInfo.Protocol || info.GetIpcVersion() != bootstrapInfo.IpcVersion || info.GetContractSha256() != bootstrapInfo.ContractSha256 || info.GetInstanceId() != bootstrapInfo.InstanceId {
+				t.Fatal("native CLI runtime identity differs from verified bootstrap")
+			}
 		case *ipc.GetSupportInfoResponse:
 			assertBuild(response.GetInfo().GetRuntime())
 		}

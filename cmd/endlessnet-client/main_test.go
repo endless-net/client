@@ -3387,7 +3387,6 @@ func TestAttachControlAvailabilityMarksDegradedWhenReadyzUnavailable(t *testing.
 	}
 }
 
-
 func TestAgentIPCStatusReportsServerIdentityChangeRecoveryState(t *testing.T) {
 	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 7)
 	tmp := t.TempDir()
@@ -3412,31 +3411,6 @@ func TestAgentIPCStatusReportsServerIdentityChangeRecoveryState(t *testing.T) {
 	}
 	if payload.ControlState != ipc.ControlStateServerIdentityChanged || payload.State != ipc.StateServerIdentityChanged || payload.Recovery == nil || payload.Recovery.State != ipc.StateServerIdentityChanged {
 		t.Fatalf("IPC server identity recovery state = %#v", payload)
-	}
-}
-
-func TestAgentIPCStatusIncludesVersionedContractMetadata(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "client.json")
-	if err := client.SaveConfig(configPath, client.Config{
-		NodeID:         "node-1",
-		NetworkID:      "net-1",
-		NodeCredential: "credential-1",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	payload, err := agentIPCStatus(context.Background(), agentIPCOptions{ConfigPath: configPath})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if payload.IPCProtocol != ipc.Protocol || payload.IPCVersion != ipc.Version || payload.IPCMinSupported != ipc.MinSupportedVersion {
-		t.Fatalf("IPC metadata = %#v", payload)
-	}
-	if payload.ServiceVersion != version || payload.ServiceCommit != commit || payload.ServiceBuildDate != buildDate {
-		t.Fatalf("service build metadata = %#v", payload)
-	}
-	if payload.DesiredState != client.ConnectionIntentDesiredConnected {
-		t.Fatalf("desired_state = %#v, want connected; payload=%#v", payload.DesiredState, payload)
 	}
 }
 
