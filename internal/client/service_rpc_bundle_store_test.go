@@ -74,3 +74,50 @@ func TestRPCBundleStoreCapacityAndRevocation(t *testing.T) {
 	_, err = store.put("owner", "profile", []byte{1})
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 }
+
+func TestRPCBundleStoreReadBoundsAndRevokedHandles(t *testing.T) {
+	store := &clientRPCBundleStore{}
+	metadata, err := store.put("owner", "profile", bytes.Repeat([]byte{1}, 300<<10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, size := range []uint32{0, 1, 256 << 10} {
+		chunk, err := store.read("owner", "profile", &ipc.ReadDiagnosticsBundleRequest{BundleId: metadata.BundleId, MaxBytes: size})
+		want := int(size)
+		if size == 0 {
+			want = 64 << 10
+		}
+		if err != nil || len(chunk.Data) != want || chunk.NextOffset != uint64(want) || chunk.Eof {
+			t.Fatal("chunk size bound not honored", err)
+		}
+	}
+	end, err := store.read("owner", "profile", &ipc.ReadDiagnosticsBundleRequest{BundleId: metadata.BundleId, Offset: metadata.SizeBytes})
+	if err != nil || len(end.Data) != 0 || !end.Eof || end.NextOffset != metadata.SizeBytes {
+		t.Fatal("exact EOF invalid", err)
+	}
+	for _, request := range []*ipc.ReadDiagnosticsBundleRequest{nil, {BundleId: "../file"}, {BundleId: metadata.BundleId, MaxBytes: 256<<10 + 1}, {BundleId: metadata.BundleId, Offset: ^uint64(0)}} {
+		_, err := store.read("owner", "profile", request)
+		assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+	}
+	other, err := store.put("owner", "other-profile", []byte("other"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.revoke("owner", "profile")
+	_, err = store.read("owner", "profile", &ipc.ReadDiagnosticsBundleRequest{BundleId: metadata.BundleId})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_NOT_FOUND)
+	if _, err := store.read("owner", "other-profile", &ipc.ReadDiagnosticsBundleRequest{BundleId: other.BundleId}); err != nil {
+		t.Fatal("revocation crossed profile boundary", err)
+	}
+}
+
+func TestRPCBundleStoreRejectsUnrepresentableClock(t *testing.T) {
+	for _, now := range []time.Time{time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(9999, 12, 31, 23, 55, 0, 0, time.UTC)} {
+		store := &clientRPCBundleStore{now: func() time.Time { return now }}
+		_, err := store.put("owner", "profile", []byte("data"))
+		assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+		if store.bytes != 0 || len(store.items) != 0 {
+			t.Fatal("invalid timestamp persisted bundle")
+		}
+	}
+}

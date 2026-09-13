@@ -32,12 +32,20 @@ type clientRPCBundleStore struct {
 }
 
 func (s *clientRPCBundleStore) pruneLocked() {
+	now := s.timeNow()
 	for id, item := range s.items {
-		if !s.now().Before(item.metadata.ExpiresAt.AsTime()) {
+		if !now.Before(item.metadata.ExpiresAt.AsTime()) {
 			delete(s.items, id)
 			s.bytes -= len(item.data)
 		}
 	}
+}
+
+func (s *clientRPCBundleStore) timeNow() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
 }
 
 func (s *clientRPCBundleStore) put(owner, profile string, data []byte) (*ipc.BundleResult, error) {
@@ -54,9 +62,12 @@ func (s *clientRPCBundleStore) put(owner, profile string, data []byte) (*ipc.Bun
 	if err != nil {
 		return nil, err
 	}
-	now := s.now()
+	now := s.timeNow()
 	digest := sha256.Sum256(data)
 	metadata := &ipc.BundleResult{BundleId: id, CreatedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(15 * time.Minute)), SizeBytes: uint64(len(data)), Sha256: hex.EncodeToString(digest[:])}
+	if metadata.CreatedAt.CheckValid() != nil || metadata.ExpiresAt.CheckValid() != nil {
+		return nil, rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+	}
 	if s.items == nil {
 		s.items = map[string]clientRPCBundleRecord{}
 	}
