@@ -83,6 +83,13 @@ the durable store. Replay must not change revision or connected intent. A new
 request ID must still schedule disconnect using the new preference. This tests
 local durable admission, not OS suspend/logoff integration or completed Down.
 
+US-07 route-target increment: `WireGuardRouteTargetsForPeers` now includes every
+host address of each peer, rather than only the first address. The unit test
+`TestWireGuardRouteTargetsRetainEveryPeerAddress` covers a dual-stack peer,
+additional host addresses, equivalent textual duplicates, invalid values and
+subnet exclusions. Agent/CLI route-target consumers receive the complete host
+list; this does not close the missing native diagnostics OS-route collector.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. `client`

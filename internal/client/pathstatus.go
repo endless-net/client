@@ -207,31 +207,37 @@ func WireGuardRouteTargetsForPeers(peers []clientapi.Peer) []string {
 	out := make([]string, 0, len(peers))
 	seen := map[string]bool{}
 	for _, peer := range peers {
-		target := PeerRouteTarget(peer)
-		if target == "" || seen[target] {
-			continue
+		for _, allowed := range peer.AllowedIPs {
+			target := peerHostRouteTarget(allowed)
+			if target == "" || seen[target] {
+				continue
+			}
+			seen[target] = true
+			out = append(out, target)
 		}
-		seen[target] = true
-		out = append(out, target)
 	}
 	return out
 }
 
 func PeerRouteTarget(peer clientapi.Peer) string {
 	for _, allowed := range peer.AllowedIPs {
-		allowed = strings.TrimSpace(allowed)
-		if allowed == "" {
-			continue
+		if target := peerHostRouteTarget(allowed); target != "" {
+			return target
 		}
-		if prefix, err := netip.ParsePrefix(allowed); err == nil {
-			if prefix.Bits() == prefix.Addr().BitLen() {
-				return prefix.Addr().String()
-			}
-			continue
+	}
+	return ""
+}
+
+func peerHostRouteTarget(allowed string) string {
+	allowed = strings.TrimSpace(allowed)
+	if prefix, err := netip.ParsePrefix(allowed); err == nil {
+		if prefix.Bits() == prefix.Addr().BitLen() {
+			return prefix.Addr().String()
 		}
-		if addr, err := netip.ParseAddr(allowed); err == nil {
-			return addr.String()
-		}
+		return ""
+	}
+	if addr, err := netip.ParseAddr(allowed); err == nil {
+		return addr.String()
 	}
 	return ""
 }

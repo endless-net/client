@@ -412,3 +412,18 @@ func TestWireGuardRouteTargetsForPeers(t *testing.T) {
 		t.Fatalf("targets = %#v", targets)
 	}
 }
+
+func TestWireGuardRouteTargetsRetainEveryPeerAddress(t *testing.T) {
+	peer := clientapi.Peer{AllowedIPs: []string{
+		"", "invalid", "10.0.0.0/24", "2001:db8::/64",
+		"100.64.0.3/32", " 2001:db8::3/128 ", "100.64.0.4",
+		"2001:0db8:0:0:0:0:0:3", "100.64.0.3",
+	}}
+	targets := WireGuardRouteTargetsForPeers([]clientapi.Peer{peer, peer})
+	if got := strings.Join(targets, ","); got != "100.64.0.3,2001:db8::3,100.64.0.4" {
+		t.Fatalf("lost or duplicated dual-stack host targets: %s", got)
+	}
+	if got := PeerRouteTarget(peer); got != "100.64.0.3" {
+		t.Fatalf("single-target selection changed: %s", got)
+	}
+}
