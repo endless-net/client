@@ -280,6 +280,15 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The TLS trust-boundary process scenario now observes enrolled lifecycle through
+native status. Expired/not-yet-valid server certificates must prevent control HTTP
+admission while preserving node/network/profile, cached authority and connected
+intent. Recovery must consume a newly named signed map and expose a current,
+map-matched, error-free agent snapshot rather than merely leaving a degraded
+state. Untrusted CA and hostname rejection remain headless CLI checks independent
+of map-signing trust. Local short tests compile the guarded scenario; actual TLS
+handshakes, process restart and per-OS trust-store evidence still require CI.
+
 The IPv4/IPv6 routed-resource scenario now uses native status and tunnel
 diagnostics with node/profile/current-map binding and explicit route-table
 observations. Every successful TCP and UDP exchange must advance forwarding

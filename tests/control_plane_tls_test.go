@@ -10,9 +10,9 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-021: real CLI/agent HTTPS verifies OS trust before enrollment. Map-signing
@@ -94,8 +94,8 @@ func TestControlPlaneTLSTrustBoundary(t *testing.T) {
 	n.Enroll(s, network.Name, join)
 	n.Start()
 	defer n.Stop()
-	initial := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID != "" && v.NodeCredentialPresent && v.CachedMapValid
+	initial := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId != "" && v.GetNetwork().GetId() != "" && v.ActiveProfileId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 	})
 	for _, tc := range []struct {
 		name        string
@@ -114,15 +114,15 @@ func TestControlPlaneTLSTrustBoundary(t *testing.T) {
 			}
 			before := len(s.Events())
 			n.Start()
-			degraded := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID == initial.NodeID && v.NetworkID == initial.NetworkID &&
-					v.NodeCredentialPresent && v.CachedMapValid && !v.UserDisconnected &&
-					v.DesiredState == ipc.DesiredConnected && v.State == ipc.StateDegraded
+			degraded := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId == initial.NodeId && v.GetNetwork().GetId() == initial.GetNetwork().GetId() && v.ActiveProfileId == initial.ActiveProfileId &&
+					v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() && !v.UserDisconnected &&
+					v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED && nativeCurrentAgentFailure(v)
 			})
 			if len(s.Events()) != before {
 				t.Fatal("enrolled client reached control HTTP through an invalid TLS lifetime")
 			}
-			if err := s.UpdateMap(initial.NodeID, func(m *api.NetworkMapSnapshot) {}); err != nil {
+			if err := s.UpdateMap(initial.NodeId, func(m *api.NetworkMapSnapshot) { m.Network.Name = tc.name + "-recovered" }); err != nil {
 				t.Fatal(err)
 			}
 			if err := s.SetTLSCertificateValidity(time.Now().Add(-time.Minute), time.Now().Add(time.Hour)); err != nil {
@@ -130,11 +130,13 @@ func TestControlPlaneTLSTrustBoundary(t *testing.T) {
 			}
 			// Recovery must happen in the running agent without a new enrollment
 			// or explicit trust override, and consume the newer signed map.
-			n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID == initial.NodeID && v.NetworkID == initial.NetworkID &&
-					v.NodeCredentialPresent && v.CachedMapValid && !v.UserDisconnected &&
-					v.DesiredState == ipc.DesiredConnected && v.State != ipc.StateDegraded &&
-					v.MapRevision > degraded.MapRevision
+			n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId == initial.NodeId && v.GetNetwork().GetId() == initial.GetNetwork().GetId() && v.ActiveProfileId == initial.ActiveProfileId &&
+					v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() && !v.UserDisconnected &&
+					v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED &&
+					v.MapRevision > degraded.MapRevision && v.GetNetwork().GetName() == tc.name+"-recovered" &&
+					v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.MapRevision == v.MapRevision && v.Agent.LastFailure == nil &&
+					v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 			})
 		})
 		if t.Failed() {
@@ -143,14 +145,14 @@ func TestControlPlaneTLSTrustBoundary(t *testing.T) {
 	}
 	n.Stop()
 	n.Start()
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == initial.NodeID && v.NodeCredentialPresent && v.CachedMapValid
+	n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId == initial.NodeId && v.GetNetwork().GetId() == initial.GetNetwork().GetId() && v.ActiveProfileId == initial.ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 	})
 	registered := 0
 	for _, event := range s.Events() {
 		if event.Kind == "registered" {
 			registered++
-			if event.NodeID != initial.NodeID {
+			if event.NodeID != initial.NodeId {
 				t.Fatal("HTTPS enrollment and agent identities differ")
 			}
 		}
