@@ -23,7 +23,7 @@ func TestControlPlaneMapSigningRotation(t *testing.T) {
 
 func testMapSigningRotation(t *testing.T, disconnected, interrupted bool) {
 	t.Helper()
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	oldKey := s.Trust().ActiveKeyID
 	if disconnected {
 		var response ipc.DisconnectResponse

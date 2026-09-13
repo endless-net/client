@@ -14,7 +14,7 @@ import (
 // HC-021: rejected operator confirmations must not mutate pinned trust
 // or enrollment. This does not qualify successful signing-key rotation.
 func TestControlPlaneTrustConfirmation(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	identity := func(t *testing.T) ipc.ServerIdentityResponse {
 		t.Helper()
 		output, err := n.ServiceCommand("server-identity")

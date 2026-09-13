@@ -19,7 +19,7 @@ import (
 // HC-052/HC-053: subscriptions expose current state and recover with a new
 // snapshot after EOF, using the published stream-local sequence contract.
 func TestControlPlaneIPCEvents(t *testing.T) {
-	_, n, id := controlScenario(t)
+	_, n, id := nativeControlScenario(t)
 	// Exercise the shipping CLI as well as SDK subscriptions. A normal listening
 	// timeout must flush complete NDJSON records and exit successfully without
 	// changing the agent's connection intent.

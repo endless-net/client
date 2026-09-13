@@ -13,7 +13,7 @@ func TestControlPlaneDNSUpstreamResponseBinding(t *testing.T) {
 		for _, mode := range []string{"udp-answer", "tcp-answer", "invalid-truncated-udp"} {
 			fallback := mode != "udp-answer"
 			t.Run(network+"/"+mode, func(t *testing.T) {
-				_, n, _ := controlScenario(t)
+				_, n, _ := nativeControlScenario(t)
 				n.Stop()
 				var fault atomic.Int32
 				var udpQueries, tcpQueries atomic.Int32

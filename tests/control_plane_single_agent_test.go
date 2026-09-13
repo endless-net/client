@@ -21,7 +21,7 @@ import (
 // HC-005: real processes must have exclusive ownership of one configuration.
 // We never inspect the lock file, process-private state or persisted identity.
 func TestControlPlaneSingleAgentOwnership(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	initial := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid })
 	alias := filepath.Join(filepath.Dir(n.Config), "config-alias.json")
 	if err := os.Symlink(n.Config, alias); err != nil {

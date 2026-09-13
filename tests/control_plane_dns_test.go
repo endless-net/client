@@ -38,7 +38,7 @@ func TestControlPlaneDNSWireRecovery(t *testing.T) {
 
 func exerciseDNSWireRecovery(t *testing.T, upstreamNetwork, listenHost string, truncated bool) {
 	t.Helper()
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	var disconnected ipc.DisconnectResponse
 	n.Service("disconnect", &disconnected)
 	n.Stop()

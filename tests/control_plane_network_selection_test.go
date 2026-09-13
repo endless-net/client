@@ -13,7 +13,7 @@ import (
 // HC-020/HC-023: network-scoped enrollment is observable through CLI/IPC.
 // This does not imply support for multiple saved profiles or account switching.
 func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	initial := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid })
 	foreign, _, err := s.AddNetwork("foreign-network", "198.18.99.0/24")
 	if err != nil {

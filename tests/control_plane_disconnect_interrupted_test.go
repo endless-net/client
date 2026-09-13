@@ -10,7 +10,7 @@ import (
 // HC-018: disconnect intent must survive process death while the public offline
 // notification is awaiting its response, before the CLI operation completes.
 func TestControlPlaneInterruptedDisconnect(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	entered, release := s.HoldNextOfflineResponse(id)
 	defer release()
 	done := make(chan error, 1)

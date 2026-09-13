@@ -138,6 +138,18 @@ short tests reject missing projections, retained node/credential/cache and
 inconsistent cache-valid flags. Process-level registration evidence still requires
 isolated CI; short tests only compile those guarded scenarios.
 
+Delta acceptance/rejection/cursor-resync, invalid signed-map rejection and browser
+enrollment recovery now use native status. Delta teardown waits for the native
+Disconnect operation to succeed before stopping the agent. Exact map revisions,
+peer counts, node identity and disconnected intent remain checked; invalid maps
+must leave an offline-verifiable cache, and revocation must clear enrollment.
+The duplicate HTTP-status scenario fixture is removed: all control-plane fixtures
+now bootstrap through native IPC. This does not migrate the remaining legacy
+requests inside other scenarios (events, negotiation, validation, trust, network
+selection, DNS, ownership and interrupted cleanup). Those still require conversion.
+These process scenarios have not been executed locally and are not CI acceptance
+evidence merely because their short-test compilation succeeds.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP

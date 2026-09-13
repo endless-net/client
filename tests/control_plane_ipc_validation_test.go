@@ -16,7 +16,7 @@ import (
 
 // HC-053: invalid local requests must fail before executing a state mutation.
 func TestControlPlaneIPCRequestValidation(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	endpoint := n.Socket
 	if runtime.GOOS == "windows" {
 		endpoint = n.Pipe

@@ -15,7 +15,7 @@ import (
 
 // HC-022: a failed remote cleanup remains retryable after process restart.
 func TestControlPlaneLogoutRetryAfterControlRecovery(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	s.SetUnavailable(true)
 	output, err := n.ServiceCommand("logout")
 	var exit *exec.ExitError
@@ -67,7 +67,7 @@ func TestControlPlaneLogoutRetryAfterControlRecovery(t *testing.T) {
 // HC-022: unconfirmed remote revocation is distinct from explicit local cleanup.
 // Public CLI/IPC and testserver observations are the only sources of evidence.
 func TestControlPlaneLocalForgetAfterUnconfirmedLogout(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	requireExit := func(output []byte, err error, message string) {
 		t.Helper()
 		var exit *exec.ExitError

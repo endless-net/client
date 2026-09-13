@@ -19,7 +19,7 @@ import (
 // HC-053/HC-058: public IPC negotiation must reject incompatible callers before
 // executing mutations. The transport is the real platform socket or named pipe.
 func TestControlPlaneIPCNegotiation(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	expectedCommit := os.Getenv("ENDLESSNET_TEST_COMMIT")
 	if raw, err := hex.DecodeString(expectedCommit); err != nil || len(raw) != 20 {
 		t.Fatal("native build identity requires the exact CI source commit")

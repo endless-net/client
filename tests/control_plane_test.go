@@ -13,7 +13,6 @@ import (
 	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // IT-20 / HC-014, HC-030, HC-063: public errors, not status codes or
@@ -113,21 +112,6 @@ func requireControlScenario(t *testing.T) {
 	if os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" {
 		t.Fatal("requires a disposable GitHub-hosted runner")
 	}
-}
-
-func controlScenario(t *testing.T) (*testcontrol.Server, *testclient.Node, string) {
-	t.Helper()
-	requireControlScenario(t)
-	s := testcontrol.New(t)
-	network, token, err := s.AddNetwork("scenario", "100.90.0.0/24")
-	if err != nil {
-		t.Fatal(err)
-	}
-	n := testclient.New(t, s)
-	n.Enroll(s, network.Name, token)
-	n.Start()
-	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
-	return s, n, status.NodeID
 }
 
 // IT-04/IT-10: even a trusted signature cannot authorize a response for a
@@ -372,9 +356,8 @@ func TestControlPlaneLifecycle(t *testing.T) {
 
 // IT-07/IT-10: delta acceptance, rejection and cursor loss through public CLI/IPC.
 func TestControlPlanePeerDeltaRecovery(t *testing.T) {
-	s, n, id := controlScenario(t)
-	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
+	s, n, id := nativeControlScenario(t)
+	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
 	n.Stop()
 	key, err := wg.GeneratePrivateKey()
 	if err != nil {
@@ -401,8 +384,9 @@ func TestControlPlanePeerDeltaRecovery(t *testing.T) {
 		n.MustRun("sync", "--config", n.Config, "--timeout", "1s")
 		revision++
 		n.Start()
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.UserDisconnected && v.CachedMapValid && v.MapRevision == revision && v.PeerCount == len(peers)
+		n.AwaitNativeStatus(func(v *native.Status) bool {
+			return v.NodeId == id && v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED &&
+				v.GetStoredState().GetCachedMapValid() && v.MapRevision == revision && v.PeerCount == uint32(len(peers))
 		})
 		n.Stop()
 	}
@@ -418,8 +402,8 @@ func TestControlPlanePeerDeltaRecovery(t *testing.T) {
 		}
 		n.MustRun("sync", "--config", n.Config, "--offline")
 		n.Start()
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.UserDisconnected && v.CachedMapValid && v.MapRevision == revision && v.NodeID == id
+		n.AwaitNativeStatus(func(v *native.Status) bool {
+			return v.UserDisconnected && v.GetStoredState().GetCachedMapValid() && v.MapRevision == revision && v.NodeId == id
 		})
 		n.Stop()
 		n.MustRun("sync", "--config", n.Config, "--timeout", "1s")
@@ -437,8 +421,8 @@ func TestControlPlanePeerDeltaRecovery(t *testing.T) {
 	n.MustRun("sync", "--config", n.Config, "--timeout", "1s")
 	revision += 2
 	n.Start()
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.UserDisconnected && v.CachedMapValid && v.MapRevision == revision && v.PeerCount == 1 && v.NodeID == id
+	n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.UserDisconnected && v.GetStoredState().GetCachedMapValid() && v.MapRevision == revision && v.PeerCount == 1 && v.NodeId == id
 	})
 	deltas := 0
 	for _, event := range s.Events() {
@@ -484,7 +468,7 @@ func TestControlPlaneDNSProjection(t *testing.T) {
 	}
 }
 func TestControlPlaneRejectsInvalidMaps(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	n.Stop()
 	for _, fault := range []string{"signature", "unknown-key", "expired"} {
 		t.Run(fault, func(t *testing.T) {
@@ -506,12 +490,10 @@ func TestControlPlaneRejectsInvalidMaps(t *testing.T) {
 	if err := s.Revoke(id); err != nil {
 		t.Fatal(err)
 	}
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.State == ipc.StateNeedsEnrollment && !v.NodeCredentialPresent && v.NodeID == ""
-	})
+	n.AwaitNativeStatus(nativeEnrollmentAbsent)
 }
 func TestControlPlaneBrowserEnrollmentExpiryRecovery(t *testing.T) {
-	s, n, _ := controlScenario(t)
+	s, n, _ := nativeControlScenario(t)
 	n.Stop()
 	other := testclient.New(t, s)
 	up := func(timeout string) ([]byte, error) {
@@ -562,8 +544,8 @@ func TestControlPlaneBrowserEnrollmentExpiryRecovery(t *testing.T) {
 		t.Fatal("approved replacement did not enroll")
 	}
 	other.Start()
-	other.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID != "" && v.NodeCredentialPresent && v.CachedMapPresent
+	other.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.NodeId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 	})
 	if len(requests()) != 2 {
 		t.Fatal("agent created another browser enrollment")
@@ -572,7 +554,7 @@ func TestControlPlaneBrowserEnrollmentExpiryRecovery(t *testing.T) {
 
 func TestControlPlaneBrowserEnrollment(t *testing.T) {
 	// Use the same CI opt-in and isolation requirements as agent scenarios.
-	s, n, _ := controlScenario(t)
+	s, n, _ := nativeControlScenario(t)
 	n.Stop()
 	for _, approve := range []bool{true, false} {
 		t.Run(map[bool]string{true: "approve", false: "reject"}[approve], func(t *testing.T) {
