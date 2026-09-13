@@ -46,6 +46,54 @@ func TestRPCDiagnosticsCollectsNativePartialSnapshot(t *testing.T) {
 	}
 }
 
+func TestRPCDiagnosticsSeparatesObservedRoutesFromDesiredRoutes(t *testing.T) {
+	m, peer, profile := rpcConnectFixture(t)
+	s := NewClientRPCService(m, nil)
+	observation := ClientRPCDiagnosticsObservation{
+		Tunnel: WireGuardInspection{Interface: "wg0", Routes: []WireGuardRouteInspection{{Target: "192.0.2.99", Interface: "wg0", UsesInterface: true}}},
+		OSRoutes: []WireGuardRouteInspection{
+			{Target: "192.0.2.1", Interface: "wg0"},
+			{Target: "2001:db8::1", Interface: "eth0", UsesInterface: true},
+			{Target: "192.0.2.2", Interface: "wg0", UsesInterface: true, Error: "private-command-output"},
+			{Target: "192.0.2.3", UsesInterface: true},
+		},
+	}
+	s.DiagnosticsProvider = func(context.Context) (ClientRPCDiagnosticsObservation, error) { return observation, nil }
+	request := &ipc.GetDiagnosticsRequest{Profile: profile}
+	unverified, err := s.diagnosticsAs(t.Context(), peer, request)
+	if err != nil || len(unverified.GetDiagnostics().GetRoutes()) != 0 {
+		t.Fatal("unverified route observations exposed", err)
+	}
+	observation.VerifiedMap = true
+	response, err := s.diagnosticsAs(t.Context(), peer, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes := response.Diagnostics.Routes
+	if len(routes) != 4 || !routes[0].UsesInterface || routes[1].UsesInterface || routes[1].InterfaceName != "eth0" {
+		t.Fatal("desired routes or provider boolean substituted for observation")
+	}
+	for _, route := range routes[2:] {
+		if route.Failure.GetCode() != ipc.ErrorCode_ERROR_CODE_UNAVAILABLE || route.InterfaceName != "" || route.UsesInterface {
+			t.Fatal("failed observation asserted an effective route")
+		}
+	}
+	wire, err := proto.Marshal(response)
+	if err != nil || strings.Contains(string(wire), "private-command-output") || !response.Diagnostics.Truncated {
+		t.Fatal("raw output leaked or partial routes claimed complete", err)
+	}
+	observation.OSRoutes[0].Interface = "changed"
+	if routes[0].InterfaceName != "wg0" {
+		t.Fatal("response aliases route observations")
+	}
+	observation.OSRoutes[0].Target = "not-an-address"
+	_, err = s.diagnosticsAs(t.Context(), peer, request)
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+	observation.OSRoutes = make([]WireGuardRouteInspection, 4097)
+	_, err = s.diagnosticsAs(t.Context(), peer, request)
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+}
+
 func TestRPCDiagnosticsRejectsChangedContextAndInvalidProvider(t *testing.T) {
 	for _, mode := range []string{"inactive", "nil-provider", "provider-error", "revision", "owner", "cancel", "oversized", "negative-mtu"} {
 		t.Run(mode, func(t *testing.T) {

@@ -90,6 +90,14 @@ additional host addresses, equivalent textual duplicates, invalid values and
 subnet exclusions. Agent/CLI route-target consumers receive the complete host
 list; this does not close the missing native diagnostics OS-route collector.
 
+The diagnostics service now accepts a separate `OSRoutes` observation list and
+projects it only with a verified profile map. Desired `Tunnel.Routes` are never
+used as OS evidence. `TestRPCDiagnosticsSeparatesObservedRoutesFromDesiredRoutes`
+checks this boundary, interface comparison, failed observations, redaction,
+copy isolation, address validation and entry limits. Partial observations retain
+the incomplete marker. The agent still needs a bounded platform collector wired
+to this field; this service-level increment does not establish OS collection.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. `client`

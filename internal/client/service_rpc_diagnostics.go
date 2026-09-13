@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"net/netip"
 	"reflect"
 	"runtime"
 
@@ -25,6 +26,10 @@ type ClientRPCDiagnosticsObservation struct {
 	Peers          []*ipc.Peer
 	TunnelPeers    []*ipc.TunnelPeer
 	PeerFailures   []*ipc.Failure
+	// OSRoutes contains actual route lookups, never Tunnel.Routes (which may
+	// be synthesized from desired router configuration). A partial collection
+	// is permitted and does not establish completeness.
+	OSRoutes []WireGuardRouteInspection
 }
 type ClientRPCDiagnosticsProvider func(context.Context) (ClientRPCDiagnosticsObservation, error)
 
@@ -101,6 +106,31 @@ func (s *ClientRPCService) diagnosticsAs(ctx context.Context, peer local.Peer, r
 	if !observation.VerifiedMap {
 		result.Failures = append(result.Failures, &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "diagnostics_verified_map_unavailable"})
 	} else {
+		if len(observation.OSRoutes) > 4096 {
+			return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+		}
+		for _, route := range observation.OSRoutes {
+			if len(route.Target) > 256 || len(route.Interface) > 256 {
+				return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+			}
+			target, err := netip.ParseAddr(route.Target)
+			if err != nil || target.Zone() != "" {
+				return nil, rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+			}
+			native := &ipc.RouteInspection{Target: target.String()}
+			if route.Error != "" || route.Interface == "" {
+				native.Failure = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "route_inspection_failed"}
+			} else {
+				native.InterfaceName = route.Interface
+				// Derive the comparison from the observed interfaces, not a
+				// provider boolean that could incorrectly assert tunnel use.
+				native.UsesInterface = observation.Tunnel.Interface != "" && route.Interface == observation.Tunnel.Interface
+			}
+			result.Routes = append(result.Routes, native)
+		}
+		if len(result.Routes) > 0 {
+			result.Failures[0] = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "diagnostics_os_routes_incomplete"}
+		}
 		if len(observation.Peers) > 4096 || len(observation.TunnelPeers) > 4096 || len(observation.PeerFailures) > 16 {
 			return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 		}
