@@ -556,3 +556,10 @@ Rejected CAS/input never cancels the remote attempt. The worker test blocks a
 logout provider, accepts Disconnect, verifies durable successful disconnection and
 checks that the session and logout progress remain recoverable. Actual network
 provider cancellation latency and OS Down latency still require system evidence.
+
+SetPreferences and ResetPreferences now enforce the active-profile requirement
+before changing UI_QUIT overrides. Reading inactive-profile preferences remains
+allowed. Regression coverage verifies STALE_STATE, unchanged revision and saved
+preferences after both rejected mutations, and isolation of an accepted active
+profile update. Local vet, lint and short tests pass; other preference providers
+and production IPC activation remain unfinished.

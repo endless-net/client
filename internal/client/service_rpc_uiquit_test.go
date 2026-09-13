@@ -10,6 +10,33 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func TestRPCPreferencesRequireActiveProfileForMutation(t *testing.T) {
+	m, peer, active := rpcConnectFixture(t)
+	create := rpcCreateRequest(t, m)
+	create.ControlOrigin = "https://other.test"
+	created, err := m.createProfileAs(peer, create)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inactive := &ipc.ProfileRef{ProfileId: created.ProfileId}
+	before := m.Metadata().Revision
+	_, err = m.setPreferencesAs(peer, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: inactive, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	_, err = m.resetPreferencesAs(peer, &ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: inactive, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT}})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	cfg := m.store.Read()
+	if m.Metadata().Revision != before || cfg.RPCState.Profiles[inactive.ProfileId].UIQuit != nil || cfg.RPCState.ActiveProfileID != active.ProfileId {
+		t.Fatal("rejected inactive preference mutation changed state")
+	}
+	_, err = m.setPreferencesAs(peer, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: active, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.store.Read().RPCState.Profiles[inactive.ProfileId].UIQuit != nil {
+		t.Fatal("active preference leaked into another profile")
+	}
+}
+
 func TestRPCUIQuitPreferencesAndExecution(t *testing.T) {
 	m, peer, profile := rpcConnectFixture(t)
 	if err := m.store.Update(func(cfg *Config) error {

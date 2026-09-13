@@ -36,6 +36,9 @@ func (m *ClientRPCMutations) setPreferencesAs(peer local.Peer, request *ipc.SetP
 			return err
 		}
 		changed := profile.UIQuit == nil || *profile.UIQuit != value
+		if profile.ID != cfg.RPCState.ActiveProfileID {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
 		profile.UIQuit = &value
 		cfg.RPCState.Profiles[profile.ID] = profile
 		op.ProfileId = profile.ID
@@ -59,6 +62,9 @@ func (m *ClientRPCMutations) resetPreferencesAs(peer local.Peer, request *ipc.Re
 			return err
 		}
 		changed := profile.UIQuit != nil
+		if profile.ID != cfg.RPCState.ActiveProfileID {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
 		profile.UIQuit = nil
 		cfg.RPCState.Profiles[profile.ID] = profile
 		op.ProfileId = profile.ID
