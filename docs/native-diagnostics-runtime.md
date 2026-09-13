@@ -280,6 +280,15 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The route-advertisement input/recovery scenario now observes node identity,
+hostname, profile and stored enrollment through native status. Invalid prefix,
+hostname, endpoint and tag input must still be rejected before provider enrollment;
+corrected input requires approval and must appear in the signed projection.
+Restart must preserve both advertised IP families and hostname without another
+registration. Advertising a prefix alone does not establish approval, effective
+routing, native advertisement actions or UI acceptance. Local short tests compile
+the guarded CLI/process scenario; actual execution remains CI work.
+
 The interrupted and terminal-during-polling headless enrollment scenarios now
 observe approved results through native status. A subsequent agent restart must
 retain the same node/profile and stored credential/cache, and report connected

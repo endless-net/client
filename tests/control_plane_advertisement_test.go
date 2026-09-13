@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-012/HC-034: advertisement input and signed registration projection.
@@ -81,10 +81,10 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 				}
 			}
 			n.Start()
-			status := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID != "" && v.CachedMapValid && v.NodeCredentialPresent
+			status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && v.GetStoredState().GetNodeCredentialPresent() && v.Hostname == "route-node"
 			})
-			projection, err := s.Snapshot(status.NodeID)
+			projection, err := s.Snapshot(status.NodeId)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -130,8 +130,10 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 	prefixes := []string{"192.0.2.0/24", "2001:db8:94::/64"}
 	n.Enroll(s, network.Name, token, "--hostname", "route-node", "--advertise", prefixes[0], "--advertise", prefixes[1])
 	n.Start()
-	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid && v.NodeCredentialPresent })
-	projection, err := s.Snapshot(status.NodeID)
+	status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && v.GetStoredState().GetNodeCredentialPresent() && v.Hostname == "route-node"
+	})
+	projection, err := s.Snapshot(status.NodeId)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,9 +142,14 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 	}
 	n.Stop()
 	n.Start()
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == status.NodeID && v.CachedMapValid && v.NodeCredentialPresent
+	n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId == status.NodeId && v.ActiveProfileId == status.ActiveProfileId && v.Hostname == status.Hostname &&
+			v.GetStoredState().GetCachedMapValid() && v.GetStoredState().GetNodeCredentialPresent() && v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 	})
+	projection, err = s.Snapshot(status.NodeId)
+	if err != nil || projection.Node.Hostname != "route-node" || !slices.Equal(projection.Node.AdvertisedIPs, prefixes) {
+		t.Fatal("agent restart lost the signed hostname or advertised prefixes")
+	}
 	registered := 0
 	for _, event := range s.Events() {
 		if event.Kind == "registered" {
