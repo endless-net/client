@@ -49,6 +49,21 @@ reports numeric codes, and withholds all other subprocess output. The timeout
 and successful tunnel/peer assertions remain unchanged; root cause and the
 required runtime fix remain unconfirmed until a fresh runner observation.
 
+## OS-interface MTU regression — 2026-09-13
+
+A subsequent local regression reproduced a concrete diagnostics rejection:
+an OS interface MTU of 65536 returned `LIMIT_EXCEEDED`. The provider exposes
+all local interfaces, while diagnostics incorrectly imposed a 65535 maximum
+on their MTU. [Linux loopback setup](https://github.com/torvalds/linux/blob/master/drivers/net/loopback.c)
+uses `64 * 1024`; the existing v0 `Interface.mtu` field is `uint32`.
+The runtime now preserves that full representable range for OS interfaces,
+without changing tunnel limits or any contract version. The regression covers
+0, 1500, 65535, 65536, uint32 maximum, negative input and overflow (values beyond
+host `int` are omitted only on 32-bit hosts). Before the fix, 65536 and uint32
+maximum failed; negative/overflow inputs remain rejected rather than wrapped.
+This is a reproduced runtime defect consistent with the runner symptoms above,
+not yet proof that fixing it closes direct-peer, withdrawal or platform acceptance.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,

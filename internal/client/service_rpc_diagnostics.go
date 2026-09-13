@@ -132,7 +132,9 @@ func (s *ClientRPCService) diagnosticsAs(ctx context.Context, peer local.Peer, r
 	// Peer keys/endpoints, routes and DNS require a verified profile map join.
 	// Do not infer identities or absence from a partial engine observation.
 	for _, item := range observation.Interfaces {
-		if item.Index < 0 || uint64(item.Index) > uint64(^uint32(0)) || item.MTU < 0 || item.MTU > 65535 || len(item.Name) > 256 || len(item.Addresses) > 256 || len(item.Prefixes) > 256 || len(item.Flags) > 32 {
+		// OS interface MTU is not a tunnel packet-size limit: Linux loopback
+		// uses 65536. Preserve the full uint32 contract range without wrapping.
+		if item.Index < 0 || uint64(item.Index) > uint64(^uint32(0)) || item.MTU < 0 || uint64(item.MTU) > uint64(^uint32(0)) || len(item.Name) > 256 || len(item.Addresses) > 256 || len(item.Prefixes) > 256 || len(item.Flags) > 32 {
 			return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 		}
 		native := &ipc.Interface{Name: item.Name, Index: uint32(item.Index), Mtu: uint32(item.MTU), Addresses: append([]string(nil), item.Addresses...), Prefixes: append([]string(nil), item.Prefixes...), Flags: append([]string(nil), item.Flags...)}
