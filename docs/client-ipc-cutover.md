@@ -200,6 +200,16 @@ completion to use one reserved slot without aliasing request IDs. Ordinary
 commands have 31 active slots; Disconnect can use slot 32 and is exempt from the
 normal retained-record admission cap. Terminal retention is unchanged.
 
+`service_rpc_disconnect_journal_test.go` exercises the normal 4096-record cap
+using synthetic terminal records in the real ConfigStore. It checks ordinary
+rejection without preparation, Disconnect admission and idempotent lookup above
+the cap, BUSY for a distinct request while its predecessor remains active, and
+separate durable outcomes after serialized completion. Reopening the store and
+advancing an injected clock checks each outcome's independent 24-hour retention
+boundary without evicting records to admit Disconnect. The Stop driver is a
+test callback: this is component journal evidence, not actual tunnel shutdown,
+process-crash durability, local-transport handler scheduling or platform acceptance.
+
 `service_rpc_disconnect_test.go` covers acceptance at capacity, replay, retained
 registration, Disconnect during blocked profile apply, Down failure and lifecycle
 cancellation. The real local-transport test invokes Disconnect with the generated
