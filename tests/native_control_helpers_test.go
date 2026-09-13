@@ -8,6 +8,26 @@ import (
 	"github.com/endless-net/client/internal/testcontrol"
 )
 
+func nativeCurrentAgentFailure(status *ipc.Status) bool {
+	return status != nil && status.Agent != nil && status.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && status.Agent.LastFailure != nil
+}
+
+func TestNativeAgentFailureIsNotInferredFromControlHealth(t *testing.T) {
+	status := &ipc.Status{ControlState: ipc.ControlState_CONTROL_STATE_DEGRADED}
+	if nativeCurrentAgentFailure(status) {
+		t.Fatal("control health invented an agent failure")
+	}
+	status.ControlState = ipc.ControlState_CONTROL_STATE_READY
+	status.Agent = &ipc.AgentStatus{SnapshotState: ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT, LastFailure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE}}
+	if !nativeCurrentAgentFailure(status) {
+		t.Fatal("healthy control probe hid an agent failure")
+	}
+	status.Agent.SnapshotState = ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS
+	if nativeCurrentAgentFailure(status) {
+		t.Fatal("old map failure treated as current")
+	}
+}
+
 func nativeControlScenario(t *testing.T) (*testcontrol.Server, *testclient.Node, string) {
 	t.Helper()
 	requireControlScenario(t)

@@ -110,6 +110,16 @@ diagnostics without a profile must fail explicitly. Other installation stages
 use legacy helpers and require conversion. The fresh-install migration is compiled
 by short tests, not installer acceptance evidence; no local installer was run.
 
+Malformed control-response and temporary-outage scenarios now also use native
+status. Malformed stream responses are observed through a CURRENT Agent.LastFailure,
+not inferred from the separate control health probe. Recovery requires the named
+post-fault map and a current error-free agent snapshot, avoiding acceptance of an
+unrelated revision that already exceeded one. Temporary outage/restart still checks
+retained identity, credential/cache presence and exactly one registration. Predicate
+tests distinguish control health from current/previous agent failure; the process
+scenarios remain unexecuted locally. The typed terminal-error matrix and other
+legacy status consumers still need conversion.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP

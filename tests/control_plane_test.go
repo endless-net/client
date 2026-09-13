@@ -83,20 +83,23 @@ func TestControlPlaneMalformedErrorsPreserveEnrollment(t *testing.T) {
 		{"truncated-json", 401, "application/json", `{"error_code":`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, n, id := controlScenario(t)
+			s, n, id := nativeControlScenario(t)
 			n.Stop()
 			path := "/maps/" + id + "/stream"
 			if err := s.SetResponseFault("GET", path, tc.status, tc.contentType, tc.body); err != nil {
 				t.Fatal(err)
 			}
 			n.Start()
-			v := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.State == ipc.StateDegraded })
-			if v.NodeID != id || !v.NodeCredentialPresent || !v.CachedMapValid {
+			v := n.AwaitNativeStatus(nativeCurrentAgentFailure)
+			if v.NodeId != id || !v.GetStoredState().GetNodeCredentialPresent() || !v.GetStoredState().GetCachedMapValid() {
 				t.Fatal("malformed error cleared enrollment")
 			}
 			s.ClearResponseFault("GET", path)
 			update(t, s, id, func(m *api.NetworkMapSnapshot) { m.Network.Name = "after-malformed" })
-			n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID == id && v.CachedMapValid && v.MapRevision > 1 })
+			n.AwaitNativeStatus(func(v *native.Status) bool {
+				return v.NodeId == id && v.GetStoredState().GetCachedMapValid() && v.GetNetwork().GetName() == "after-malformed" &&
+					v.Agent != nil && v.Agent.SnapshotState == native.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.LastFailure == nil
+			})
 		})
 	}
 }
@@ -245,22 +248,22 @@ func TestControlPlaneRegistrationResponseLoss(t *testing.T) {
 
 // IT-20 / HC-030: a temporary service failure must not destroy enrollment.
 func TestControlPlaneTemporaryFailurePreservesEnrollment(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	s.SetUnavailable(true)
-	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.State == ipc.StateDegraded })
-	if status.NodeID != id || !status.NodeCredentialPresent || !status.CachedMapValid {
+	status := n.AwaitNativeStatus(func(v *native.Status) bool { return v.ControlState == native.ControlState_CONTROL_STATE_DEGRADED })
+	if status.NodeId != id || !status.GetStoredState().GetNodeCredentialPresent() || !status.GetStoredState().GetCachedMapValid() {
 		t.Fatal("temporary failure destroyed verified enrollment")
 	}
 	n.Stop()
 	n.Start()
-	status = n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.State == ipc.StateDegraded })
-	if status.NodeID != id || !status.NodeCredentialPresent {
+	status = n.AwaitNativeStatus(func(v *native.Status) bool { return v.ControlState == native.ControlState_CONTROL_STATE_DEGRADED })
+	if status.NodeId != id || !status.GetStoredState().GetNodeCredentialPresent() {
 		t.Fatal("restart during outage discarded enrollment")
 	}
 	s.SetUnavailable(false)
 	update(t, s, id, func(m *api.NetworkMapSnapshot) { m.Network.Name = "recovered" })
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == id && v.CachedMapValid && v.MapRevision > status.MapRevision
+	n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.NodeId == id && v.GetStoredState().GetCachedMapValid() && v.MapRevision > status.MapRevision
 	})
 	for _, event := range s.Events() {
 		if event.Kind == "registration-request" && event.OperationID == "" {
