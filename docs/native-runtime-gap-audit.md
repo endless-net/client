@@ -5,6 +5,36 @@ Status: incomplete implementation audit, not runtime acceptance. Source:
 This snapshot distinguishes the published contract and consumer/mock coverage
 from real `ClientRPCService` implementation. It does not reduce the agreed scope.
 
+## Follow-up inspection — 2026-09-13, source 53beb3c
+
+Re-inspected [client main at 53beb3c](https://github.com/endless-net/client/tree/53beb3c473a95a66899ec458b613b1671eb33024)
+after the historical snapshot below. The nine missing overrides and UI-quit-only
+preferences/lifecycle boundary still remain. They are not closed by removing IPC v2.
+
+- [b75d57b](https://github.com/endless-net/client/commit/b75d57bc22f1a39595a9ff4aa8bc2345ac7cb071)
+  removed the final `ipc/v2/contract.go`, old status projection and its callers.
+  The import guard now scans all Go files in `cmd`, `internal` and `tests`,
+  including platform-tagged files. The repository boundary test rejects a
+  nonempty retired `ipc/v2` directory. This supersedes the legacy-removal gap
+  in the original snapshot; it does not establish full native feature parity.
+- [53beb3c](https://github.com/endless-net/client/commit/53beb3c473a95a66899ec458b613b1671eb33024)
+  adds native signed-cache metadata coverage: selected/map account projection,
+  dual-stack addresses, peers, STUN/relay endpoints and credential redaction in
+  protobuf JSON. A verified cache is explicitly not live connection evidence.
+  Local `go test -short ./...`, `go vet ./...` and configured golangci-lint passed;
+  privileged traffic and installed-service tests were not executed locally.
+- [Test run 34749887115](https://github.com/endless-net/client/actions/runs/34749887115)
+  for `81272179f889d8892f3d2a816b1ba119ec39db3b` was cancelled with no jobs.
+  It does not qualify the new direct-peer timeout diagnostics. The later
+  [Test run 34750041550](https://github.com/endless-net/client/actions/runs/34750041550)
+  for `53beb3c473a95a66899ec458b613b1671eb33024` was pending at this inspection;
+  no successful runtime/platform claim follows from that state.
+
+The remaining runtime families still require implementation in `client`, UI
+binding and requirement trace evidence in `client-ui`, and exact-source GitHub
+runner validation. Neither these local tests nor legacy removal close US-01–14
+or Android/iOS platform acceptance. The original dated findings follow unchanged.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
