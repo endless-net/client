@@ -10,10 +10,10 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-015: rotating a join credential denies new use of the old token without
@@ -44,27 +44,27 @@ func exerciseJoinTokenRetirement(t *testing.T, family string, expire bool) {
 	existing.Enroll(s, network.Name, token, "--route-table", "auto")
 	existing.Start()
 	defer existing.Stop()
-	status := existing.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID != "" && v.CachedMapValid && v.NodeCredentialPresent
+	status := existing.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId != "" && v.GetStoredState().GetCachedMapValid() && v.GetStoredState().GetNodeCredentialPresent() && nativeOverlayAddress(v, false).IsValid()
 	})
-	nodeID := status.NodeID
-	clientIP, peerIP := netip.MustParseAddr(status.OverlayIP), netip.MustParseAddr("198.18.89.20")
+	nodeID := status.NodeId
+	clientIP, peerIP := nativeOverlayAddress(status, false), netip.MustParseAddr("198.18.89.20")
 	if family == "ipv6" {
 		if err := s.UpdateMap(nodeID, func(m *api.NetworkMapSnapshot) {
 			m.Network.IPv6CIDR, m.Node.AssignedIPv6 = "fd89::/64", "fd89::1"
 		}); err != nil {
 			t.Fatal(err)
 		}
-		status = existing.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == nodeID && v.OverlayIPv6 == "fd89::1" && v.CachedMapValid
+		status = existing.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == nodeID && nativeOverlayAddress(v, true).String() == "fd89::1" && v.GetStoredState().GetCachedMapValid()
 		})
-		clientIP, peerIP = netip.MustParseAddr(status.OverlayIPv6), netip.MustParseAddr("fd89::20")
+		clientIP, peerIP = nativeOverlayAddress(status, true), netip.MustParseAddr("fd89::20")
 	}
 	snapshot, err := s.Snapshot(nodeID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	underlay := nativePeerUnderlay(t, netip.MustParseAddr(status.OverlayIP), peerIP)
+	underlay := nativePeerUnderlay(t, nativeOverlayAddress(status, false), peerIP)
 	reference := testwireguard.NewTCP(t, snapshot.Node.PublicKey, clientIP, peerIP, underlay)
 	peer := api.Peer{
 		ID: "join-rotation-peer", Hostname: "join-rotation-peer", PublicKey: reference.PublicKey,
@@ -80,14 +80,14 @@ func exerciseJoinTokenRetirement(t *testing.T, family string, expire bool) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		status = existing.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == nodeID && v.MapRevision >= current.Revision.Network &&
-				v.PeerCount == 1 && v.NodeCredentialPresent && v.CachedMapValid &&
-				v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotCurrent &&
-				v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" &&
-				v.WireGuard != nil && v.WireGuard.OK
+		status = existing.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == nodeID && v.MapRevision >= current.Revision.Network &&
+				v.PeerCount == 1 && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() &&
+				v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT &&
+				v.Agent.MapRevision == v.MapRevision && v.Agent.LastFailure == nil &&
+				v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 		})
-		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+		reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, nativeTunnelPort(t, existing, status)))
 	}
 	binary := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
 	address := net.JoinHostPort(peerIP.String(), "24001")
@@ -149,7 +149,8 @@ func exerciseJoinTokenRetirement(t *testing.T, family string, expire bool) {
 	}
 	apply()
 	reachable()
-	if current, statusErr := existing.Status(); statusErr != nil || current.NodeID != nodeID || !current.NodeCredentialPresent {
+	current := &ipc.GetStatusResponse{}
+	if statusErr := existing.NativeService("status", current); statusErr != nil || current.GetStatus().GetNodeId() != nodeID || !current.GetStatus().GetStoredState().GetNodeCredentialPresent() {
 		t.Fatal("join-token retirement changed the existing node credential")
 	}
 	// The retired join token must not become a startup dependency when the
@@ -158,12 +159,12 @@ func exerciseJoinTokenRetirement(t *testing.T, family string, expire bool) {
 	defer s.SetUnavailable(false)
 	existing.Stop()
 	existing.Start()
-	status = existing.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == nodeID && v.NodeCredentialPresent && v.CachedMapValid &&
-			!v.UserDisconnected && v.Agent != nil && v.Agent.LastError != "" &&
-			v.WireGuard != nil && v.WireGuard.OK
+	status = existing.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId == nodeID && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() &&
+			!v.UserDisconnected && nativeCurrentAgentFailure(v) &&
+			v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 	})
-	reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+	reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, nativeTunnelPort(t, existing, status)))
 	reachable()
 	s.SetUnavailable(false)
 	apply()

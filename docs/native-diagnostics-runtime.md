@@ -269,6 +269,17 @@ a normal listening deadline. The CLI now also rejects a repeated snapshot after
 opening, with a short regression test proving that invalid record is not emitted.
 The process fixture is compiled locally, not platform-executed acceptance evidence.
 
+Join-token rotation and expiry scenarios now observe native status for IPv4 and
+IPv6, including retention of existing node credentials and cached-map traffic
+across restart during a control outage. The reference peer's client endpoint is
+obtained from GetDiagnostics tunnel inspection, bound to node/profile and at least
+the observed map revision, with valid nonzero uint16 port and no inspection failure.
+Overlay family selection rejects malformed/mapped addresses rather than inventing
+a fallback. Existing wire echo counters, old-token denial and retry of the same
+failed candidate with a replacement token remain checked. Short tests verify
+address selection and compile the scenarios; actual TCP/UDP and restart acceptance
+still require isolated CI on the supported platforms.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP
