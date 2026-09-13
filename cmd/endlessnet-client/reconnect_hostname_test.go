@@ -1,47 +1,55 @@
 package main
 
 import (
-	"path/filepath"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"sync/atomic"
 	"testing"
 
-	"github.com/endless-net/client/internal/testcontrol"
+	api "github.com/endless-net/client-api/clientapi/v1"
+	"github.com/endless-net/client/internal/client"
 )
 
-func TestConnectSyncPreservesEnrolledHostname(t *testing.T) {
-	setInstallationStateDirForTest(t, t.TempDir())
-	s := testcontrol.New(t)
-	network, join, err := s.AddNetwork("reconnect", "100.95.0.0/24")
+func TestNativeConnectPreservesEnrolledHostnameWithoutReregistering(t *testing.T) {
+	var remoteCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		remoteCalls.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	fixture := newRecoveryTestFixture(t, server.URL)
+	store, err := client.OpenConfigStore(fixture.ConfigPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	config := filepath.Join(t.TempDir(), "client.json")
-	if _, err := captureStdout(t, func() error {
-		return cmdUp([]string{"--config", config, "--server", s.URL(), "--network", network.Name, "--join-token", join, "--hostname", "enrolled-custom-hostname"})
+	if err := store.Update(func(cfg *client.Config) error {
+		cfg.EnrollmentRecovery = nil
+		cfg.MapSigningTrust = testSigningTrustBundle(t, testMapSigningPublicKey(t, cfg.CachedMap.MapSignature))
+		return nil
 	}); err != nil {
-		t.Fatalf("initial enrollment failed: %v", err)
+		t.Fatal(err)
 	}
+	before := store.Read()
+	wake := make(chan struct{}, 1)
+	wg := &testAgentWireGuard{configure: func(cfg client.Config, networkMap api.RegisterNodeResponse) (client.WireGuardApplyResult, error) {
+		if networkMap.Node.Hostname != "recovery-node" || networkMap.Node.ID != before.NodeID ||
+			cfg.NodeCredential != before.NodeCredential || networkMap.Network.ID != before.NetworkID {
+			t.Error("native reconnect changed enrolled hostname, identity or credential")
+		}
+		return client.WireGuardApplyResult{OK: true}, nil
+	}}
+	driver := agentRPCProfileDriver(agentIPCOptions{ConfigStore: store, WireGuard: wg, SyncWake: wake})
 	for range 2 {
-		if _, err := captureStdout(t, func() error {
-			return syncAgentForConnect(agentIPCOptions{ConfigPath: config})
-		}); err != nil {
-			t.Fatalf("connect sync failed to preserve the enrolled hostname: %v", err)
+		if err := driver.Start(t.Context(), store.Read()); err != nil {
+			t.Fatal(err)
 		}
-	}
-	var nodeID string
-	registered, refreshed := 0, 0
-	for _, event := range s.Events() {
-		switch event.Kind {
-		case "registered":
-			registered++
-			nodeID = event.NodeID
-		case "registration-refreshed":
-			refreshed++
-			if event.NodeID != nodeID {
-				t.Fatal("connect sync changed node identity")
-			}
+		if len(wake) != 1 {
+			t.Fatal("native reconnect did not schedule separate agent synchronization")
 		}
+		<-wake
 	}
-	if registered != 1 || refreshed != 2 {
-		t.Fatal("connect must renew the existing enrollment")
+	if wg.configureCalls != 2 || remoteCalls.Load() != 0 || !reflect.DeepEqual(before, store.Read()) {
+		t.Fatal("native reconnect registered remotely or changed persisted enrollment")
 	}
 }

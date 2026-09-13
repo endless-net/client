@@ -598,8 +598,8 @@ The unused HTTP-v2 Disconnect handler and DTOs are also removed, together with
 its config-reloading offline notification helper. Native Disconnect uses the
 durable operation coordinator; the native driver sends its bounded best-effort
 offline notification only after teardown and does not adopt the response map.
-Headless down retains its separate command workflow. Enrollment, Connect and
-status legacy adapters still require removal.
+Headless down retains its separate command workflow. Enrollment and status
+legacy adapters still require removal.
 
 The legacy local-forget handler, helper, DTOs and direct-handler test are removed.
 Native cleanup tests preserve installation identity/control origin while clearing
@@ -613,6 +613,14 @@ Native host coverage now includes confirmed node/session logout, registration
 cleanup, preserved owner/keys, stale snapshot removal and exact result replay
 without repeated remote cleanup. Remote refusal retains the snapshot until an
 explicit authorized local teardown. Headless logout remains a separate workflow.
+
+The old Connect handler, sync-before-connect adapter, text-matched signing-error
+check and ConnectRequest DTO are removed. The replacement hostname test applies
+the verified enrolled map twice through the native driver, retains node/network/
+credential identity, makes no remote registration calls, and schedules separate
+agent synchronization. This is driver coverage, not proof of the complete agent
+sync loop. ConnectResponse remains temporarily internal to the legacy enrollment
+adapter and is not exposed as a supported IPC response.
 
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded

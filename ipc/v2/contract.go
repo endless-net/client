@@ -278,8 +278,6 @@ type EnrollResponse struct {
 	WireGuardApply *WireGuardApplyResult `json:"wireguard_apply,omitempty"`
 }
 
-type ConnectRequest struct{}
-
 type ConnectResponse struct {
 	Metadata
 	State            ServiceState         `json:"state"`

@@ -288,7 +288,6 @@ type agentIPCOptions struct {
 	WGInterface    string
 	Timeout        time.Duration
 	WireGuard      agentWireGuard
-	SyncForConnect func() error
 	SyncWake       chan struct{}
 }
 
@@ -547,39 +546,6 @@ func downAgentWireGuard(ctx context.Context, opts agentIPCOptions) (client.WireG
 
 const serverMapSigningTrustChangedError = "server map signing trust changed"
 
-func agentFailureIsServerIdentityChange(statePath string) bool {
-	if strings.TrimSpace(statePath) == "" {
-		return false
-	}
-	snapshot, err := client.LoadAgentSnapshot(statePath)
-	return err == nil && strings.Contains(strings.ToLower(snapshot.LastError), serverMapSigningTrustChangedError)
-}
-
-func syncAgentForConnect(opts agentIPCOptions) error {
-	if opts.SyncForConnect != nil {
-		return opts.SyncForConnect()
-	}
-	if cfg, err := client.LoadConfig(opts.ConfigPath); err != nil {
-		return err
-	} else if cfg.EnrollmentRecovery != nil {
-		if opts.WireGuard != nil {
-			if _, err := downAgentWireGuard(context.Background(), opts); err != nil {
-				return err
-			}
-		}
-		progress, attemptErr := continueEnrollmentRecovery(context.Background(), opts.ConfigPath)
-		if progress.Completed {
-			return nil
-		}
-		if attemptErr != nil {
-			return fmt.Errorf("recovery %s", firstNonEmpty(progress.ErrorCode, recoveryErrorProtocol))
-		}
-		return fmt.Errorf("recovery %s", firstNonEmpty(progress.ErrorCode, recoveryErrorProtocol))
-	}
-	args := []string{"--config", opts.ConfigPath}
-	return cmdUp(args)
-}
-
 func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 	return client.ServiceIPCHandlers{
 		Status: func(ctx context.Context, req ipc.StatusRequest) (ipc.StatusResponse, error) {
@@ -661,36 +627,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 				StatusResponse: payload,
 				WireGuardApply: &apply,
 			}, nil
-		},
-		Connect: func(ctx context.Context, req ipc.ConnectRequest) (ipc.ConnectResponse, error) {
-			if agentFailureIsServerIdentityChange(opts.StateOutput) {
-				return ipc.ConnectResponse{}, ipc.NewError(http.StatusConflict, "server_identity_changed", errors.New("server signing identity changed; inspect and explicitly trust the new server identity before connecting"))
-			}
-			if err := agentConnectionIntentStore(opts).Clear(); err != nil {
-				return ipc.ConnectResponse{}, ipc.NewError(http.StatusInternalServerError, "connection_intent_update_failed", err)
-			}
-			if err := syncAgentForConnect(opts); err != nil {
-				if status, statusErr := agentIPCStatus(ctx, opts); statusErr == nil && status.Recovery != nil {
-					return connectResponseFromStatus(status), nil
-				}
-				return ipc.ConnectResponse{}, ipc.NewError(http.StatusBadGateway, "connect_sync_failed", err)
-			}
-			if cfg, loadErr := client.LoadConfig(opts.ConfigPath); loadErr == nil && strings.TrimSpace(cfg.NodeCredential) == "" {
-				status, statusErr := agentIPCStatus(ctx, opts)
-				if statusErr != nil {
-					return ipc.ConnectResponse{}, statusErr
-				}
-				return connectResponseFromStatus(status), nil
-			}
-			payload, err := connectAgentTunnel(ctx, opts)
-			if err != nil {
-				return ipc.ConnectResponse{}, err
-			}
-			invalidateAgentSnapshot(opts)
-			payload.UserDisconnected = false
-			payload.DesiredState = ipc.DesiredConnected
-			requestAgentSync(opts)
-			return payload, nil
 		},
 	}
 }
@@ -803,19 +739,6 @@ func positiveIntOr(value, fallback int) int {
 		return value
 	}
 	return fallback
-}
-
-func connectResponseFromStatus(status ipc.StatusResponse) ipc.ConnectResponse {
-	return ipc.ConnectResponse{
-		Metadata:         status.Metadata,
-		State:            status.State,
-		ControlState:     status.ControlState,
-		DesiredState:     status.DesiredState,
-		UserDisconnected: status.UserDisconnected,
-		NodeID:           status.NodeID,
-		NetworkID:        status.NetworkID,
-		MapRevision:      status.MapRevision,
-	}
 }
 
 type recentLogEntry struct {
