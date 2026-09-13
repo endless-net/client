@@ -479,3 +479,12 @@ forget mutations invalidate the profile catalog. Active conflicting operations
 still return BUSY: cancellation/draining of an in-flight Enroll, inactive-profile
 cleanup, remote Logout correlation integration and production/system acceptance
 remain required before complete UF-12 acceptance.
+
+Inactive-profile local forget is now an immediate, administrator-confirmed
+transaction and does not require the tunnel worker. The transaction rechecks
+inactivity, rejects profiles participating in a switch/nonterminal operation,
+clears only that profile's registration/session and preserves its preferences,
+origin and device binding. Tests verify the active profile, credentials and
+connected intent remain unchanged, no Down plan is created, and exact retries
+return the original result. Coordinated cancellation of active work and the
+remote Logout path remain unfinished.

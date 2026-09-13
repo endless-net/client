@@ -7,7 +7,50 @@ import (
 	"testing"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/proto"
 )
+
+func TestRPCForgetInactiveProfileDoesNotAffectActiveTunnelContext(t *testing.T) {
+	m, peer, active := enrollmentAdmissionTest(t)
+	create := rpcCreateRequest(t, m)
+	create.ControlOrigin = "https://other.test"
+	created, err := m.createProfileAs(peer, create)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.NodeID, cfg.NodeCredential = "active-node", "synthetic-active-credential"
+		cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected, Reason: "keep-active"}
+		profile := cfg.RPCState.Profiles[created.ProfileId]
+		profile.Configuration = Config{NodeID: "inactive-node", NodeCredential: "synthetic-inactive-credential", Token: "synthetic-inactive-session", DeviceFingerprint: "other-binding", ControlPlaneURLs: []string{create.ControlOrigin}, EnrollmentRecovery: &EnrollmentRecovery{RequestID: "inactive-correlation"}}
+		profile.UIQuit = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()
+		cfg.RPCState.Profiles[profile.ID] = profile
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	peer.Administrator = true
+	request := &ipc.ForgetLocalEnrollmentRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: &ipc.ProfileRef{ProfileId: created.ProfileId}, Confirmed: true}
+	op, err := m.forgetEnrollmentAs(peer, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := m.store.Read()
+	forgotten := cfg.RPCState.Profiles[created.ProfileId]
+	if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.GetCleanup().ControlRequestId != "inactive-correlation" || op.Continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED {
+		t.Fatal("inactive cleanup did not finish atomically")
+	}
+	if cfg.NodeID != "active-node" || cfg.NodeCredential != "synthetic-active-credential" || cfg.ConnectionIntent.Reason != "keep-active" || cfg.RPCState.ActiveProfileID != active.Profile.ProfileId || cfg.RPCState.DisconnectOperationID != "" {
+		t.Fatal("inactive cleanup changed active tunnel context")
+	}
+	if forgotten.Configuration.NodeID != "" || forgotten.Configuration.NodeCredential != "" || forgotten.Configuration.Token != "" || forgotten.Configuration.DeviceFingerprint != "other-binding" || forgotten.UIQuit == nil || forgotten.ControlOrigin != create.ControlOrigin {
+		t.Fatal("inactive cleanup violated retention matrix")
+	}
+	retry, err := m.forgetEnrollmentAs(peer, request)
+	if err != nil || !proto.Equal(op, retry) {
+		t.Fatal("inactive cleanup retry not idempotent")
+	}
+}
 
 func TestRPCForgetEnrollmentStopsBeforeCleanupAndPreservesInstallation(t *testing.T) {
 	for _, failStop := range []bool{false, true} {
