@@ -44,3 +44,9 @@ Identical or rejected status observations emit nothing. Observer streams do not
 receive private profile-scoped invalidations. Independent path-monitor changes
 still require runtime observation/publication before an event can be delivered;
 pagination additionally detects changed data at query time.
+
+Boundary tests also verify that no active profile means no scoped peer
+invalidation, owner revocation prevents draining already queued private events,
+reattachment starts with an observer snapshot at sequence one, and a slow
+subscriber exceeding the bounded queue fails with LIMIT_EXCEEDED rather than
+silently losing an invalidation. These do not establish UI refresh behavior.
