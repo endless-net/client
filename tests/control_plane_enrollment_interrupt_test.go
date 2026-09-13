@@ -17,11 +17,12 @@ import (
 // server-side cancellation/revocation API.
 func TestControlPlaneBrowserEnrollmentInterrupted(t *testing.T) {
 	requireControlScenario(t)
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	if _, _, err := s.AddNetwork("interrupted-enrollment", "100.96.0.0/24"); err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	n.TrustControlTLS(s)
 	args := []string{"up", "--server", s.URL(), "--network", "interrupted-enrollment", "--hostname", "interrupted-node", "--config", n.Config, "--map-signing-trust-file", n.TrustFile, "--approval-timeout", "10s"}
 	processContext, stop := context.WithCancel(t.Context())
 	exited := make(chan struct{})

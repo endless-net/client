@@ -26,11 +26,12 @@ func TestControlPlaneBrowserEnrollmentRejectedDuringPolling(t *testing.T) {
 func runEnrollmentTerminalDuringPolling(t *testing.T, reject bool) {
 	t.Helper()
 	requireControlScenario(t)
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	if _, _, err := s.AddNetwork("poll-expiry", "100.95.0.0/24"); err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	n.TrustControlTLS(s)
 	up := func(timeout string) ([]byte, error) {
 		return n.Run("up", "--server", s.URL(), "--network", "poll-expiry", "--hostname", "poll-expiry-node", "--config", n.Config, "--map-signing-trust-file", n.TrustFile, "--approval-timeout", timeout)
 	}

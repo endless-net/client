@@ -35,12 +35,13 @@ func TestControlPlaneJoinTokenExpiryRecovery(t *testing.T) {
 
 func exerciseJoinTokenRetirement(t *testing.T, family string, expire bool) {
 	t.Helper()
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	network, token, err := s.AddNetwork("join-token-rotation", "198.18.89.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
 	existing := testclient.New(t, s)
+	existing.TrustControlTLS(s)
 	existing.Enroll(s, network.Name, token, "--route-table", "auto")
 	existing.Start()
 	defer existing.Stop()
@@ -129,6 +130,8 @@ func exerciseJoinTokenRetirement(t *testing.T, family string, expire bool) {
 			t.Fatal(err)
 		}
 	}
+	// Reuse this test's OS trust installation; New supplies a separate Linux CA
+	// file for the candidate process without duplicating OS certificate cleanup.
 	candidate := testclient.New(t, s)
 	beforeDeniedAttempt := len(s.Events())
 	_, err = candidate.Run("up", "--config", candidate.Config, "--server", s.URL(), "--network", network.Name, "--join-token", token, "--hostname", "replacement-node", "--map-signing-trust-file", candidate.TrustFile, "--route-table", "off")
