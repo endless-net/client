@@ -13,9 +13,9 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-034: advertising a subnet, approval of that route, and usable forwarding
@@ -72,7 +72,7 @@ func testLinuxSubnetRouter(t *testing.T, snat bool) {
 
 	endpoints := [2]string{"192.0.2.2:51820", "192.0.2.3:51820"}
 	var nodes [2]*testclient.Node
-	var states [2]ipc.StatusResponse
+	var states [2]*ipc.Status
 	for i := range nodes {
 		n := testclient.New(t, s)
 		n.Namespace = namespaces[i]
@@ -86,8 +86,8 @@ func testLinuxSubnetRouter(t *testing.T, snat bool) {
 		}
 		n.Enroll(s, network.Name, token, options...)
 		n.Start()
-		states[i] = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID != "" && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK
+		states[i] = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid() && v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 		})
 		nodes[i] = n
 	}
@@ -95,14 +95,14 @@ func testLinuxSubnetRouter(t *testing.T, snat bool) {
 		// In routed mode, forwarding and the LAN return route are operator
 		// prerequisites. The Client owns the tunnel and signed peer projection.
 		namespaceCommand(t, "netns", "exec", namespaces[1], "sysctl", "-w", "net.ipv4.ip_forward=1")
-		namespaceCommand(t, "-n", resourceNamespace, "route", "add", states[0].OverlayIP+"/32", "via", "198.18.98.1")
+		namespaceCommand(t, "-n", resourceNamespace, "route", "add", nativeOverlayAddress(states[0], false).String()+"/32", "via", "198.18.98.1")
 		// Enforce source preservation at the external resource. A translated
 		// request cannot satisfy this test even if its reply would be routable.
 		namespaceCommand(t, "netns", "exec", resourceNamespace, "iptables", "-A", "INPUT", "-i", "lo", "-j", "ACCEPT")
-		namespaceCommand(t, "netns", "exec", resourceNamespace, "iptables", "-A", "INPUT", "-s", states[0].OverlayIP+"/32", "-j", "ACCEPT")
+		namespaceCommand(t, "netns", "exec", resourceNamespace, "iptables", "-A", "INPUT", "-s", nativeOverlayAddress(states[0], false).String()+"/32", "-j", "ACCEPT")
 		namespaceCommand(t, "netns", "exec", resourceNamespace, "iptables", "-A", "INPUT", "-j", "DROP")
 	}
-	routerMap, err := s.Snapshot(states[1].NodeID)
+	routerMap, err := s.Snapshot(states[1].NodeId)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,24 +111,26 @@ func testLinuxSubnetRouter(t *testing.T, snat bool) {
 	}
 
 	peerFor := func(remote int, allowed ...string) api.Peer {
-		m, err := s.Snapshot(states[remote].NodeID)
+		m, err := s.Snapshot(states[remote].NodeId)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return api.Peer{ID: m.Node.ID, Hostname: m.Node.Hostname, PublicKey: m.Node.PublicKey, Endpoint: endpoints[remote], EndpointCandidates: []string{endpoints[remote]}, AllowedIPs: allowed}
 	}
-	sourceRoute := peerFor(1, states[1].OverlayIP+"/32")
-	routerSource := peerFor(0, states[0].OverlayIP+"/32")
-	if err := s.UpdatePeers(states[0].NodeID, []api.Peer{sourceRoute}); err != nil {
+	sourceRoute := peerFor(1, nativeOverlayAddress(states[1], false).String()+"/32")
+	routerSource := peerFor(0, nativeOverlayAddress(states[0], false).String()+"/32")
+	if err := s.UpdatePeers(states[0].NodeId, []api.Peer{sourceRoute}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdatePeers(states[1].NodeID, []api.Peer{routerSource}); err != nil {
+	if err := s.UpdatePeers(states[1].NodeId, []api.Peer{routerSource}); err != nil {
 		t.Fatal(err)
 	}
-	for _, n := range nodes {
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.PeerCount == 1 && v.WireGuard != nil && v.WireGuard.OK && v.Agent != nil && v.Agent.LastError == ""
-		})
+	for i, n := range nodes {
+		current, err := s.Snapshot(states[i].NodeId)
+		if err != nil {
+			t.Fatal(err)
+		}
+		states[i] = awaitNativePeerMap(t, n, states[i], current.Revision.Network, 1)
 	}
 
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
@@ -150,7 +152,8 @@ func testLinuxSubnetRouter(t *testing.T, snat bool) {
 	assertBlocked := func() {
 		t.Helper()
 		for range 3 {
-			if probe("tcp") || probe("udp") {
+			tcpOK, udpOK := probe("tcp"), probe("udp")
+			if tcpOK || udpOK {
 				t.Fatal("unapproved or withdrawn subnet route passed application traffic")
 			}
 		}
@@ -160,21 +163,25 @@ func testLinuxSubnetRouter(t *testing.T, snat bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err := testclient.Await(ctx, func() bool { return probe("tcp") && probe("udp") }); err != nil {
-			sourceStatus, sourceStatusErr := nodes[0].Status()
-			routerStatus, routerStatusErr := nodes[1].Status()
-			sourceRX, sourceTX, routerRX, routerTX := uint64(0), uint64(0), uint64(0), uint64(0)
-			if sourceStatus.WireGuard != nil {
-				for _, peer := range sourceStatus.WireGuard.Peers {
-					sourceRX += peer.TransferRXBytes
-					sourceTX += peer.TransferTXBytes
+			counters := func(index int) (uint64, uint64, bool) {
+				response := &ipc.GetDiagnosticsResponse{}
+				if nodes[index].NativeService("diagnostics", response, "--profile-id", states[index].ActiveProfileId, "--timeout", "1s") != nil {
+					return 0, 0, false
 				}
-			}
-			if routerStatus.WireGuard != nil {
-				for _, peer := range routerStatus.WireGuard.Peers {
-					routerRX += peer.TransferRXBytes
-					routerTX += peer.TransferTXBytes
+				d := response.GetDiagnostics()
+				if d.GetStatus().GetNodeId() != states[index].NodeId || d.GetStatus().GetActiveProfileId() != states[index].ActiveProfileId ||
+					d.GetStatus().GetMapRevision() < states[index].MapRevision || !d.GetTunnel().GetOk() || d.GetTunnel().GetFailure() != nil {
+					return 0, 0, false
 				}
+				var rx, tx uint64
+				for _, peer := range d.Tunnel.Peers {
+					rx += peer.GetReceivedBytes()
+					tx += peer.GetTransmittedBytes()
+				}
+				return rx, tx, true
 			}
+			sourceRX, sourceTX, sourceOK := counters(0)
+			routerRX, routerTX, routerOK := counters(1)
 			commandOutput := func(args ...string) ([]byte, bool) {
 				commandCtx, commandCancel := context.WithTimeout(context.Background(), 2*time.Second)
 				defer commandCancel()
@@ -187,22 +194,20 @@ func testLinuxSubnetRouter(t *testing.T, snat bool) {
 			forwardRule := commandOK("netns", "exec", namespaces[1], "iptables", "-C", "FORWARD", "-i", nodes[1].Interface, "-o", routerLink, "-s", network.CIDR, "-d", "198.18.98.0/24", "-j", "ACCEPT")
 			returnRule := commandOK("netns", "exec", namespaces[1], "iptables", "-C", "FORWARD", "-i", routerLink, "-o", nodes[1].Interface, "-s", "198.18.98.0/24", "-d", network.CIDR, "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT")
 			natRule := commandOK("netns", "exec", namespaces[1], "iptables", "-t", "nat", "-C", "POSTROUTING", "-s", network.CIDR, "-d", "198.18.98.0/24", "-o", routerLink, "-j", "MASQUERADE")
-			t.Logf("subnet router failure: source_status=%t router_status=%t source_route=%t router_route=%t forwarding=%t forward_rule=%t return_rule=%t nat_rule=%t source_rx=%d source_tx=%d router_rx=%d router_tx=%d", sourceStatusErr == nil, routerStatusErr == nil, commandOK("-n", namespaces[0], "route", "get", "198.18.98.20"), commandOK("-n", namespaces[1], "route", "get", "198.18.98.20"), forwarding, forwardRule, returnRule, natRule, sourceRX, sourceTX, routerRX, routerTX)
+			t.Logf("subnet router failure: source_status=%t router_status=%t source_route=%t router_route=%t forwarding=%t forward_rule=%t return_rule=%t nat_rule=%t source_rx=%d source_tx=%d router_rx=%d router_tx=%d", sourceOK, routerOK, commandOK("-n", namespaces[0], "route", "get", "198.18.98.20"), commandOK("-n", namespaces[1], "route", "get", "198.18.98.20"), forwarding, forwardRule, returnRule, natRule, sourceRX, sourceTX, routerRX, routerTX)
 			t.Fatal("approved subnet route did not pass TCP and UDP through the Client router")
 		}
 	}
 	applySourceRoute := func(peer api.Peer) {
 		t.Helper()
-		if err := s.UpdatePeers(states[0].NodeID, []api.Peer{peer}); err != nil {
+		if err := s.UpdatePeers(states[0].NodeId, []api.Peer{peer}); err != nil {
 			t.Fatal(err)
 		}
-		m, err := s.Snapshot(states[0].NodeID)
+		m, err := s.Snapshot(states[0].NodeId)
 		if err != nil {
 			t.Fatal(err)
 		}
-		nodes[0].AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.MapRevision >= m.Revision.Network && v.PeerCount == 1 && v.WireGuard != nil && v.WireGuard.OK && v.Agent != nil && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == ""
-		})
+		states[0] = awaitNativePeerMap(t, nodes[0], states[0], m.Revision.Network, 1)
 	}
 
 	assertBlocked()
@@ -211,9 +216,9 @@ func testLinuxSubnetRouter(t *testing.T, snat bool) {
 	applySourceRoute(approved)
 	assertReachable()
 	if !snat {
-		namespaceCommand(t, "-n", resourceNamespace, "route", "del", states[0].OverlayIP+"/32", "via", "198.18.98.1")
+		namespaceCommand(t, "-n", resourceNamespace, "route", "del", nativeOverlayAddress(states[0], false).String()+"/32", "via", "198.18.98.1")
 		assertBlocked()
-		namespaceCommand(t, "-n", resourceNamespace, "route", "add", states[0].OverlayIP+"/32", "via", "198.18.98.1")
+		namespaceCommand(t, "-n", resourceNamespace, "route", "add", nativeOverlayAddress(states[0], false).String()+"/32", "via", "198.18.98.1")
 		assertReachable()
 	}
 	applySourceRoute(sourceRoute)
@@ -224,9 +229,7 @@ func testLinuxSubnetRouter(t *testing.T, snat bool) {
 	nodes[1].Stop()
 	assertBlocked()
 	nodes[1].Start()
-	nodes[1].AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == states[1].NodeID && v.PeerCount == 1 && v.WireGuard != nil && v.WireGuard.OK && v.Agent != nil && v.Agent.LastError == ""
-	})
+	states[1] = awaitNativePeerMap(t, nodes[1], states[1], states[1].MapRevision, 1)
 	assertReachable()
 	registrations := 0
 	for _, event := range s.Events() {

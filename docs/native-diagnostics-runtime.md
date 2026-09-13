@@ -280,6 +280,15 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The subnet-router scenario now uses native status and profile/map-bound tunnel
+diagnostics, including failure counters, instead of legacy IPC. Applied peer
+observations must match node/profile and the current signed map before routing
+checks. Linux SNAT and source-preserving routing retain TCP/UDP approval,
+withdrawal, missing-return-route and router-restart assertions. Non-Linux runs
+still verify the explicit unsupported headless SNAT outcome before registration.
+Local short tests compile these guarded process scenarios; they do not execute
+namespace, forwarding, firewall, route or per-platform acceptance checks.
+
 The route-advertisement input/recovery scenario now observes node identity,
 hostname, profile and stored enrollment through native status. Invalid prefix,
 hostname, endpoint and tag input must still be rejected before provider enrollment;
