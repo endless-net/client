@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -56,7 +57,27 @@ func TestRPCTrustWorkerRecoveryAndIndependentDisconnect(t *testing.T) {
 	}
 	s.ServerIdentityProvider = func(context.Context, Config) (clientapi.SigningTrustBundle, error) { return announced, nil }
 	entered := make(chan struct{})
-	s.TrustRecoveryProvider = func(ctx context.Context, _ Config) (ClientRPCTrustRecoveryResult, error) {
+	assertDurableRecovery := func(input Config) {
+		disk, err := loadConfigFile(m.store.path)
+		if err != nil {
+			t.Error("provider cannot read durable trust checkpoint")
+			return
+		}
+		recovery := disk.EnrollmentRecovery
+		if recovery == nil || recovery.OperationID != op.Id || recovery.IdempotencyID != op.Id ||
+			!reflect.DeepEqual(disk.MapSigningTrust, &announced) || !reflect.DeepEqual(input.MapSigningTrust, disk.MapSigningTrust) ||
+			!reflect.DeepEqual(input.EnrollmentRecovery, recovery) || disk.NodeCredential != "synthetic-original" ||
+			disk.RPCState.Trust == nil || !disk.RPCState.Trust.Adopted || disk.RPCState.Trust.OperationID != op.Id {
+			t.Error("recovery provider ran before durable trust and renewal identity were committed")
+			return
+		}
+		profileState := disk.RPCState.Profiles[profile.ProfileId].Configuration
+		if !reflect.DeepEqual(profileState.MapSigningTrust, disk.MapSigningTrust) || !reflect.DeepEqual(profileState.EnrollmentRecovery, recovery) {
+			t.Error("recovery provider observed divergent active and profile trust checkpoints")
+		}
+	}
+	s.TrustRecoveryProvider = func(ctx context.Context, input Config) (ClientRPCTrustRecoveryResult, error) {
+		assertDurableRecovery(input)
 		close(entered)
 		<-ctx.Done()
 		return ClientRPCTrustRecoveryResult{}, ctx.Err()
@@ -114,6 +135,7 @@ func TestRPCTrustWorkerRecoveryAndIndependentDisconnect(t *testing.T) {
 		return announced, nil
 	}
 	s.TrustRecoveryProvider = func(_ context.Context, cfg Config) (ClientRPCTrustRecoveryResult, error) {
+		assertDurableRecovery(cfg)
 		cfg.NodeCredential = "synthetic-renewed"
 		now := time.Now().UTC()
 		cfg.CachedMapSavedAt = &now

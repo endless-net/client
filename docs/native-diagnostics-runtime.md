@@ -572,5 +572,12 @@ credential retention, journal reopen and exact replay across instance change,
 then a fresh successful no-op without tunnel teardown or recovery creation.
 This is domain-level coverage; it does not claim installed-agent restart acceptance.
 
+The legacy trust/renewal retry test is replaced by native provider coverage:
+two requests after reopening persisted input retain the renewal idempotency ID,
+typed retryable failure and server correlation without changing stored authority.
+The native worker test independently checks, at provider entry and after worker
+restart, that adopted trust and operation-bound renewal identity are already
+committed in both active and profile state before remote recovery begins.
+
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.

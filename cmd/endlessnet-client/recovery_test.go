@@ -287,73 +287,63 @@ func TestEnrollmentRecoveryRetriesSameRequestAfterLostResponse(t *testing.T) {
 	}
 }
 
-func TestTrustServerPersistsTrustAndIntentBeforeRenewalAndIsIdempotent(t *testing.T) {
+func TestNativeRecoveryProviderReusesDurableRenewalIdentity(t *testing.T) {
 	var fixture recoveryTestFixture
 	var mu sync.Mutex
-	requestIDs := []string{}
+	var requestIDs []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/server-key":
-			_ = json.NewEncoder(w).Encode(testServerKeyResponseFromBundle(fixture.NewTrust))
-		case "/nodes/register":
-			req, err := clientapi.DecodeRegisterNodeRequest(r.Body)
-			if err != nil {
-				t.Errorf("decode renewal: %v", err)
-				return
-			}
-			persisted, err := client.LoadConfig(fixture.ConfigPath)
-			if err != nil {
-				t.Errorf("load persisted recovery: %v", err)
-				return
-			}
-			if persisted.MapSigningTrust == nil || persisted.MapSigningTrust.ActiveKeyID != fixture.NewTrust.ActiveKeyID || persisted.EnrollmentRecovery == nil || persisted.EnrollmentRecovery.IdempotencyID != req.IdempotencyID {
-				t.Errorf("renewal escaped before atomic trust+intent save: %#v", persisted.EnrollmentRecovery)
-			}
-			mu.Lock()
-			requestIDs = append(requestIDs, req.IdempotencyID)
-			mu.Unlock()
-			writeRecoveryPublicError(t, w, clientapi.ErrorCodeTemporarilyUnavailable, "request-unavailable")
-		case "/client/readyz":
-			_, _ = w.Write([]byte("ok"))
-		default:
+		if r.Method != http.MethodPost || r.URL.Path != "/nodes/register" {
+			t.Error("unexpected native recovery request")
 			http.NotFound(w, r)
+			return
 		}
+		req, err := clientapi.DecodeRegisterNodeRequest(r.Body)
+		if err != nil {
+			t.Error("invalid native renewal request")
+			return
+		}
+		persisted, err := client.LoadConfig(fixture.ConfigPath)
+		if err != nil {
+			t.Error("cannot load persisted recovery")
+			return
+		}
+		if persisted.MapSigningTrust == nil || persisted.MapSigningTrust.ActiveKeyID != fixture.NewTrust.ActiveKeyID ||
+			persisted.EnrollmentRecovery == nil || persisted.EnrollmentRecovery.IdempotencyID != req.IdempotencyID {
+			t.Error("renewal did not use durable confirmed trust and request identity")
+		}
+		mu.Lock()
+		requestIDs = append(requestIDs, req.IdempotencyID)
+		mu.Unlock()
+		writeRecoveryPublicError(t, w, clientapi.ErrorCodeTemporarilyUnavailable, "request-unavailable")
 	}))
 	defer server.Close()
 	fixture = newRecoveryTestFixture(t, server.URL)
-	oldPublic := base64.RawURLEncoding.EncodeToString(fixture.OldSigningKey.Public().(ed25519.PublicKey))
-	oldTrust, err := clientapi.NewSigningTrustBundle(oldPublic)
+	before, err := client.LoadConfig(fixture.ConfigPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := client.OpenConfigStore(fixture.ConfigPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Update(func(cfg *client.Config) error {
-		cfg.MapSigningTrust = &oldTrust
-		cfg.EnrollmentRecovery = nil
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	handler := agentIPCHandlers(agentIPCOptions{ConfigPath: fixture.ConfigPath})
-	request := ipc.TrustServerRequest{ConfirmedControlOrigin: server.URL, ConfirmedKeyID: fixture.NewTrust.ActiveKeyID}
-	first, err := handler.TrustServer(context.Background(), request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := handler.TrustServer(context.Background(), request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.Outcome != ipc.RecoveryOutcomeAccepted || second.Outcome != ipc.RecoveryOutcomeAlreadyApplied || first.OperationID != second.OperationID || first.State != ipc.StateRecovering || second.State != ipc.StateRecovering {
-		t.Fatalf("trust operation was not idempotent: first=%#v second=%#v", first, second)
+	for range 2 {
+		// Reopen persisted input for each attempt, as a replacement worker does.
+		store, err := client.OpenConfigStore(fixture.ConfigPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := agentRPCTrustRecovery(t.Context(), store.Read())
+		if err != nil || result.Configuration != nil || result.RequiresEnrollment ||
+			result.Phase != client.RecoveryPhaseRecovering || result.Failure == nil ||
+			result.Failure.Code != native.ErrorCode_ERROR_CODE_UNAVAILABLE || !result.Failure.Retryable ||
+			result.Failure.ControlRequestId != "request-unavailable" {
+			t.Fatal("native retryable recovery result lost failure classification")
+		}
+		after, err := client.LoadConfig(fixture.ConfigPath)
+		if err != nil || !reflect.DeepEqual(before, after) {
+			t.Fatal("failed provider changed durable enrollment or recovery identity")
+		}
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(requestIDs) != 2 || requestIDs[0] != requestIDs[1] {
-		t.Fatalf("renewal idempotency IDs = %#v", requestIDs)
+	if len(requestIDs) != 2 || requestIDs[0] != before.EnrollmentRecovery.IdempotencyID || requestIDs[1] != requestIDs[0] {
+		t.Fatal("native renewal changed its durable idempotency identity")
 	}
 }
 
