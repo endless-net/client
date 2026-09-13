@@ -26,7 +26,6 @@ const (
 	PathLogout            = "/logout"
 	PathLocalForget       = "/logout/local"
 	PathNetworks          = "/networks"
-	PathSelectNetwork     = "/network/select"
 	PathDiagnostics       = "/diagnostics"
 	PathDiagnosticsBundle = "/diagnostics/bundle"
 	PathRecentLogs        = "/logs/recent"
@@ -43,7 +42,6 @@ const (
 	OperationLogout            = "logout"
 	OperationLocalForget       = "logout.local_forget"
 	OperationNetworks          = "networks"
-	OperationSelectNetwork     = "network.select"
 	OperationDiagnostics       = "diagnostics"
 	OperationDiagnosticsBundle = "diagnostics.bundle"
 	OperationRecentLogs        = "logs.recent"
@@ -439,21 +437,6 @@ type NetworksResponse struct {
 	Metadata
 	Networks          []clientapi.Network `json:"networks"`
 	SelectedNetworkID string              `json:"selected_network_id"`
-}
-
-type SelectNetworkRequest struct {
-	NetworkID   string `json:"network_id,omitempty"`
-	NetworkName string `json:"network_name,omitempty"`
-}
-
-type SelectNetworkResponse struct {
-	Metadata
-	State             ServiceState      `json:"state"`
-	DesiredState      DesiredState      `json:"desired_state"`
-	SelectedNetworkID string            `json:"selected_network_id"`
-	SelectedNetwork   clientapi.Network `json:"selected_network"`
-	NodeID            string            `json:"node_id"`
-	MapRevision       uint64            `json:"map_revision"`
 }
 
 type RecentLogsRequest struct {

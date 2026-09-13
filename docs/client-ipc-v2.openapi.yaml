@@ -261,27 +261,6 @@ paths:
                 $ref: "#/components/schemas/NetworksResponse"
         default:
           $ref: "#/components/responses/IPCError"
-  /network/select:
-    parameters: *ipcVersionHeaders
-    post:
-      operationId: network.select
-      x-endlessnet-required-privilege: owner
-      summary: Select the already-enrolled network.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SelectNetworkRequest"
-      responses:
-        "200":
-          description: Selected network result.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SelectNetworkResponse"
-        default:
-          $ref: "#/components/responses/IPCError"
   /diagnostics:
     parameters: *ipcVersionHeaders
     get:
@@ -899,31 +878,6 @@ components:
               $ref: "#/components/schemas/LogoutOutcome"
             remote_request_id:
               type: string
-    SelectNetworkResponse:
-      allOf:
-        - $ref: "#/components/schemas/ProtocolEnvelope"
-        - type: object
-          required:
-            - state
-            - desired_state
-            - selected_network_id
-            - selected_network
-            - node_id
-            - map_revision
-          properties:
-            state:
-              $ref: "#/components/schemas/ServiceState"
-            desired_state:
-              $ref: "#/components/schemas/DesiredState"
-            selected_network_id:
-              type: string
-            selected_network:
-              $ref: "#/components/schemas/NetworkSummary"
-            node_id:
-              type: string
-            map_revision:
-              type: integer
-              minimum: 0
     WireGuardApplyResult:
       type: object
       required:
@@ -1047,19 +1001,6 @@ components:
           type: string
         idempotency_key:
           type: string
-    SelectNetworkRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        network_id:
-          type: string
-        network_name:
-          type: string
-      anyOf:
-        - required:
-            - network_id
-        - required:
-            - network_name
     NetworkSummary:
       type: object
       properties:

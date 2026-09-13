@@ -635,7 +635,7 @@ func TestServiceIPCRetiredCatalogRoutesAreAbsent(t *testing.T) {
 
 func TestServiceIPCRetiredMutationRoutesAreAbsent(t *testing.T) {
 	handler := NewServiceIPCHandler(ServiceIPCHandlers{})
-	for _, path := range []string{ipc.PathDiagnosticsBundle, ipc.PathSelectNetwork} {
+	for _, path := range []string{ipc.PathDiagnosticsBundle, "/network/select"} {
 		for _, method := range []string{http.MethodPost, http.MethodGet} {
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, newServiceIPCTestRequest(method, path, strings.NewReader(`{}`)))
