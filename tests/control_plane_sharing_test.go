@@ -152,8 +152,15 @@ func TestControlPlaneNativeMachineSharing(t *testing.T) {
 			blocked()
 			n.Stop()
 			n.Start()
-			status = awaitNativePeerMap(t, n, status, status.MapRevision, 1)
-			reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, nativeTunnelPort(t, n, status)))
+			// The pinned producer verifier rejects a signed map whose sharing
+			// lease has expired. Restart must retain identity and desired intent,
+			// but must not bootstrap the tunnel from that invalid cached map.
+			status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId == nodeID && v.ActiveProfileId == profileID &&
+					v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED &&
+					v.ControlState == ipc.ControlState_CONTROL_STATE_CACHE_INVALID &&
+					!v.GetStoredState().GetCachedMapValid()
+			})
 			session("blocked")
 			blocked()
 			apply([]api.Peer{peer}, []api.SharePeerGrant{grant(2, time.Now().Add(time.Minute))})
