@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-008/HC-010: process interruption while approval is pending must preserve
@@ -71,8 +71,14 @@ func TestControlPlaneBrowserEnrollmentInterrupted(t *testing.T) {
 		t.Fatal("explicit CLI restart did not complete approved enrollment (output withheld)")
 	}
 	n.Start()
-	status := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID != "" && v.NodeCredentialPresent && v.CachedMapValid
+	status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
+	})
+	n.Stop()
+	n.Start()
+	n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId == status.NodeId && v.ActiveProfileId == status.ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() &&
+			v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 	})
 	createdCount, registeredCount := 0, 0
 	for _, event := range s.Events() {
@@ -84,7 +90,7 @@ func TestControlPlaneBrowserEnrollmentInterrupted(t *testing.T) {
 			}
 		case "registered":
 			registeredCount++
-			if event.NodeID != status.NodeID {
+			if event.NodeID != status.NodeId {
 				t.Fatal("agent identity differs from resumed enrollment")
 			}
 		}

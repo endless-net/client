@@ -280,6 +280,15 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The interrupted and terminal-during-polling headless enrollment scenarios now
+observe approved results through native status. A subsequent agent restart must
+retain the same node/profile and stored credential/cache, and report connected
+phase without another registration. Provider-observed request identity, approval,
+denial/expiry, and no-completion-after-interruption assertions remain intact. This
+does not validate native browser-login operations, cancellation semantics or UI;
+local short tests compile the guarded scenarios, with real process/approval
+execution and platform acceptance still requiring CI.
+
 The TLS trust-boundary process scenario now observes enrolled lifecycle through
 native status. Expired/not-yet-valid server certificates must prevent control HTTP
 admission while preserving node/network/profile, cached authority and connected

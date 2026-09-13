@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-008: expire a request after the running CLI has started repeated polling,
@@ -132,14 +132,20 @@ func runEnrollmentTerminalDuringPolling(t *testing.T, reject bool) {
 		t.Fatal("approved replacement did not recover enrollment")
 	}
 	n.Start()
-	state := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID != "" && v.NodeCredentialPresent && v.CachedMapValid
+	state := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
+	})
+	n.Stop()
+	n.Start()
+	n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId == state.NodeId && v.ActiveProfileId == state.ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() &&
+			v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 	})
 	registered := 0
 	for _, event := range s.Events() {
 		if event.Kind == "registered" {
 			registered++
-			if event.NodeID != state.NodeID {
+			if event.NodeID != state.NodeId {
 				t.Fatal("agent identity differs from approved enrollment")
 			}
 		}
