@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"strings"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -38,7 +40,13 @@ func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 			if opts.WireGuard == nil {
 				return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 			}
-			if cfg.NodeID == "" || cfg.CachedMap == nil {
+			if err := nativeApprovalFailure(cfg.NodeApprovalState); err != nil {
+				return err
+			}
+			approval := strings.ToLower(strings.TrimSpace(cfg.NodeApprovalState))
+			if approval == api.NodeApprovalPending || approval == api.NodeApprovalRejected ||
+				strings.TrimSpace(cfg.NodeID) == "" || strings.TrimSpace(cfg.PrivateKey) == "" ||
+				strings.TrimSpace(cfg.NodeCredential) == "" || cfg.CachedMap == nil {
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
 			}
 			if err := client.ValidateConfigCurrentDevice(cfg); err != nil {
@@ -48,6 +56,9 @@ func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 			if err != nil {
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
 			}
+			if err := nativeApprovalFailure(networkMap.Node.ApprovalState); err != nil {
+				return err
+			}
 			result, err := opts.WireGuard.Configure(ctx, cfg, networkMap)
 			if err != nil || !result.OK {
 				return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED)
@@ -56,6 +67,17 @@ func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 			requestAgentSync(opts)
 			return nil
 		},
+	}
+}
+
+func nativeApprovalFailure(state string) error {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case api.NodeApprovalPending:
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_APPROVAL_REQUIRED)
+	case api.NodeApprovalRejected:
+		return rpc.Error(connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_APPROVAL_REJECTED)
+	default:
+		return nil
 	}
 }
 

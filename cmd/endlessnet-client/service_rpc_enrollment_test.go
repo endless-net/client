@@ -78,7 +78,7 @@ func TestAgentRPCEnrollUsesTypedWorkflowAndPendingAction(t *testing.T) {
 	}
 	engine := &testAgentWireGuard{}
 	err = agentRPCProfileDriver(agentIPCOptions{WireGuard: engine}).Start(t.Context(), saved)
-	if rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT || engine.configureCalls != 0 {
+	if rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_APPROVAL_REQUIRED || engine.configureCalls != 0 {
 		t.Fatal("pending enrollment reached tunnel configuration")
 	}
 	after, err := client.LoadConfig(configPath)
