@@ -30,12 +30,21 @@ func testMapSigningRotation(t *testing.T, disconnected, interrupted bool) {
 	oldKey := s.Trust().ActiveKeyID
 	if disconnected {
 		runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
+	} else {
+		runNativeControlMutation(t, n, "connect", "00000000-0000-4000-8000-000000000001")
 	}
 	baseline := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.NodeId == id && v.UserDisconnected == disconnected })
 	identity := func() *ipc.ServerIdentity {
 		t.Helper()
 		response := &ipc.GetServerIdentityResponse{}
-		if err := n.NativeService("server-identity", response, "--profile-id", baseline.ActiveProfileId); err != nil {
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			err = n.NativeService("server-identity", response, "--profile-id", baseline.ActiveProfileId)
+			if !testclient.IsNativeStaleState(err) {
+				break
+			}
+		}
+		if err != nil {
 			t.Fatal(err)
 		}
 		if response.Identity == nil {
@@ -54,10 +63,27 @@ func testMapSigningRotation(t *testing.T, disconnected, interrupted bool) {
 	attempt := func(requestID, key string) (*ipc.Operation, []string) {
 		t.Helper()
 		status := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.NodeId == id && v.ActiveProfileId == baseline.ActiveProfileId })
-		args := append(testclient.NativeMutationArguments(requestID, status), "--confirmed-control-origin", announced.ControlOrigin,
-			"--confirmed-key-id", key, "--confirmed-announcement-id", announced.AnnouncementId)
 		response := &ipc.TrustServerIdentityResponse{}
-		if err := n.NativeService("trust-server", response, args...); err != nil {
+		var args []string
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			args = append(testclient.NativeMutationArguments(requestID, status), "--confirmed-control-origin", announced.ControlOrigin,
+				"--confirmed-key-id", key, "--confirmed-announcement-id", announced.AnnouncementId)
+			err = n.NativeService("trust-server", response, args...)
+			if !testclient.IsNativeStaleState(err) || attempt == 2 {
+				break
+			}
+			// An admission rejection is distinct from the accepted stale-key
+			// failure asserted below. Never retry that terminal operation or
+			// change the request ID, key, origin or announcement being tested.
+			observed := identity()
+			refreshed := &ipc.GetStatusResponse{}
+			if n.NativeService("status", refreshed) != nil || !nativeTrustRetryContextMatches(status, refreshed.Status, announced, observed) {
+				t.Fatal("native signing rotation context changed after CAS rejection")
+			}
+			status = refreshed.Status
+		}
+		if err != nil {
 			t.Fatal(err)
 		}
 		if response.GetOperation().GetId() == "" || response.Operation.Kind != ipc.OperationKind_OPERATION_KIND_TRUST_SERVER_IDENTITY || response.Operation.ProfileId != baseline.ActiveProfileId {
