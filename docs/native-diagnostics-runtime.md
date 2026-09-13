@@ -622,6 +622,12 @@ agent synchronization. This is driver coverage, not proof of the complete agent
 sync loop. ConnectResponse remains temporarily internal to the legacy enrollment
 adapter and is not exposed as a supported IPC response.
 
+Lifecycle status assertions now use native Status instead of the retired DTO:
+pending approval retains its request/action, unenrolled state rejects an unbound
+agent error, and ephemeral registration is projected only from a verified map.
+A post-signature map mutation must not supply ephemeral state. These are status
+projection tests, not installed-agent or UI acceptance evidence.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

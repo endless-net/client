@@ -2057,48 +2057,6 @@ func TestConnectAgentTunnelRejectsPendingEnrollmentBeforeApply(t *testing.T) {
 	}
 }
 
-func TestPendingApprovalStatusIsNotOverriddenByExpectedPollingError(t *testing.T) {
-	payload := serviceIPCStatusForConfig(client.Config{
-		NodeID:            "node-pending",
-		NetworkID:         "net-pending",
-		NodeCredential:    "credential-pending",
-		NodeApprovalState: clientapi.NodeApprovalPending,
-	})
-	attachServiceIPCAgentStatus(&payload, client.AgentSnapshot{
-		NodeID:    "node-pending",
-		NetworkID: "net-pending",
-		LastError: "GET /maps/node-pending/stream failed: node is pending",
-	})
-	if payload.ControlState != ipc.ControlStatePendingApproval {
-		t.Fatalf("pending control state after poll error = %#v", payload)
-	}
-	if got := payload.State; got != ipc.StateNeedsApproval {
-		t.Fatalf("pending service state = %q, want %q", got, ipc.StateNeedsApproval)
-	}
-}
-
-func TestServiceIPCStatusExposesEphemeralEnrollment(t *testing.T) {
-	key := testMapSigningKey(t)
-	networkMap := testNetworkMapWithRevision(t, key, "net-ephemeral", "node-ephemeral", 3)
-	networkMap.Node.Ephemeral = true
-	signature, err := clientapi.SignNetworkMap(key, networkMap)
-	if err != nil {
-		t.Fatal(err)
-	}
-	networkMap.MapSignature = signature
-	status := serviceIPCStatusForConfig(client.Config{
-		NodeID:          networkMap.Node.ID,
-		NetworkID:       networkMap.Network.ID,
-		NodeCredential:  "credential",
-		MapRevision:     networkMap.Revision.Network,
-		MapSigningTrust: testSigningTrustBundle(t, testMapSigningPublicKey(t, networkMap.MapSignature)),
-		CachedMap:       &networkMap,
-	})
-	if !status.Ephemeral || status.NodeID != networkMap.Node.ID || !status.CachedMapValid {
-		t.Fatalf("ephemeral status = %#v", status)
-	}
-}
-
 func TestAgentIPCEnrollConnectsTunnel(t *testing.T) {
 	tmp := t.TempDir()
 	setInstallationStateDirForTest(t, filepath.Join(tmp, "installation-state"))
@@ -3526,23 +3484,6 @@ func TestStatusPayloadIncludesAgentStateWithoutSecrets(t *testing.T) {
 		if strings.Contains(out, secret) {
 			t.Fatalf("status payload leaked %q: %s", secret, out)
 		}
-	}
-}
-
-func TestAttachAgentStatusKeepsUnenrolledSnapshotAsNeedsEnrollment(t *testing.T) {
-	status := serviceIPCStatusForConfig(client.Config{})
-	attachServiceIPCAgentStatus(&status, client.AgentSnapshot{
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
-		LastError:   "server URL is required; run up or login first",
-	})
-	if status.ControlState != ipc.ControlStateNotRegistered {
-		t.Fatalf("control_state = %q, want not_registered; status=%#v", status.ControlState, status)
-	}
-	if got := status.State; got != ipc.StateNeedsEnrollment {
-		t.Fatalf("service state = %q, want NeedsEnrollment; status=%#v", got, status)
-	}
-	if status.Agent == nil || !strings.Contains(status.Agent.LastError, "server URL is required") {
-		t.Fatalf("agent status missing last_error: %#v", status)
 	}
 }
 

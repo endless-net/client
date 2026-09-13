@@ -38,6 +38,63 @@ func TestRPCStatusRejectsUnverifiedCache(t *testing.T) {
 	}
 }
 
+func TestRPCStatusEphemeralEnrollmentRequiresVerifiedMap(t *testing.T) {
+	for _, tampered := range []bool{false, true} {
+		t.Run(map[bool]string{false: "verified", true: "tampered"}[tampered], func(t *testing.T) {
+			key := testMapSigningKey(t)
+			networkMap := testNetworkMapWithRevision(t, key, "net-ephemeral", "node-ephemeral", 3)
+			networkMap.Node.Ephemeral = true
+			signature, err := clientapi.SignNetworkMap(key, networkMap)
+			if err != nil {
+				t.Fatal(err)
+			}
+			networkMap.MapSignature = signature
+			if tampered {
+				networkMap.Node.Hostname = "unverified-hostname"
+			}
+			status := buildAgentRPCStatus(t.Context(), agentIPCOptions{}, client.Config{
+				NodeID: networkMap.Node.ID, NetworkID: networkMap.Network.ID, NodeCredential: "synthetic-credential",
+				MapRevision:     networkMap.Revision.Network,
+				MapSigningTrust: testSigningTrustBundle(t, testMapSigningPublicKey(t, signature)), CachedMap: &networkMap,
+			}, ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED)
+			if tampered {
+				if status.Ephemeral || status.GetStoredState().GetCachedMapValid() || status.ControlState != ipc.ControlState_CONTROL_STATE_CACHE_INVALID {
+					t.Fatal("unverified map supplied ephemeral enrollment state")
+				}
+			} else if !status.Ephemeral || status.NodeId != networkMap.Node.ID || !status.GetStoredState().GetCachedMapValid() ||
+				status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED {
+				t.Fatal("native status lost verified ephemeral enrollment or inferred connectivity")
+			}
+		})
+	}
+}
+
+func TestRPCStatusEnrollmentLifecycleRejectsStaleAgentError(t *testing.T) {
+	for _, pending := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unenrolled", true: "pending approval"}[pending], func(t *testing.T) {
+			cfg := client.Config{}
+			serviceState := ipc.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT
+			controlState := ipc.ControlState_CONTROL_STATE_NOT_REGISTERED
+			if pending {
+				cfg.NodeID, cfg.NetworkID, cfg.NodeCredential = "node-pending", "net-pending", "synthetic-credential"
+				cfg.NodeApprovalState, cfg.EnrollmentRequestID = clientapi.NodeApprovalPending, "approval-request"
+				serviceState, controlState = ipc.ServiceState_SERVICE_STATE_NEEDS_APPROVAL, ipc.ControlState_CONTROL_STATE_PENDING_APPROVAL
+			}
+			status := buildAgentRPCStatus(t.Context(), agentIPCOptions{}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED)
+			attachAgentRPCSnapshot(status, client.AgentSnapshot{
+				NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, LastError: "synthetic private polling failure",
+			})
+			if status.ServiceState != serviceState || status.ControlState != controlState || status.GetAgent().GetLastFailure() != nil ||
+				status.GetAgent().GetSnapshotState() != ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_ABSENT {
+				t.Fatal("unbound agent error replaced authoritative enrollment state")
+			}
+			if pending && (status.EnrollmentRequestId != "approval-request" || status.GetPendingAction().GetKind() != ipc.UserAction_KIND_WAIT_FOR_APPROVAL) {
+				t.Fatal("pending native status lost its approval action")
+			}
+		})
+	}
+}
+
 func TestRPCStatusAgentSnapshotMustMatchVerifiedIdentity(t *testing.T) {
 	status := &ipc.Status{ActiveProfileId: "profile", NodeId: "node", Network: &ipc.Network{Id: "network"}, MapRevision: 3, Agent: &ipc.AgentStatus{}}
 	for _, snapshot := range []client.AgentSnapshot{{ProfileID: "profile", NodeID: "other", NetworkID: "network", MapRevision: 3}, {ProfileID: "profile", NodeID: "node", NetworkID: "other", MapRevision: 3}, {ProfileID: "profile", NodeID: "node", NetworkID: "network", MapRevision: 4}, {ProfileID: "previous-profile", NodeID: "node", NetworkID: "network", MapRevision: 3}, {NodeID: "node", NetworkID: "network", MapRevision: 3}} {
