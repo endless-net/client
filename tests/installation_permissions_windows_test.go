@@ -14,6 +14,7 @@ import (
 	"time"
 	"unsafe"
 
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"golang.org/x/sys/windows"
 )
 
@@ -70,15 +71,18 @@ func assertInstalledPeerDenied(t *testing.T, binary string) {
 	if err != nil || !strings.HasPrefix(version, "endlessnet-client ") {
 		t.Fatal("restricted token could not execute the installed CLI")
 	}
-	stdout, stderr, err := runRestricted("service", "local-forget", "--confirm-local-forget", "--timeout", "2s")
+	status := waitInstalledNativeCondition(t, binary, func(v *ipc.Status) bool {
+		return v.ActiveProfileId != "" && v.GetMetadata().GetInstanceId() != "" && v.GetMetadata().GetRevision() != 0
+	})
+	stdout, stderr, err := runRestricted(installedPermissionProbeArguments("local-forget", status)...)
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 1 || stdout != "" {
 		t.Fatal("restricted Windows peer did not reject administrator-only local-forget (output withheld)")
 	}
-	switch {
-	case strings.Contains(stderr, "requires an administrator/root local peer"):
+	switch installedWindowsPermissionOutcome(stderr) {
+	case "application":
 		t.Log("restricted Windows peer: administrator operation rejected by IPC authorization")
-	case strings.Contains(strings.ToLower(stderr), "access is denied"):
+	case "transport":
 		t.Log("restricted Windows peer: access rejected by named-pipe transport; application-role access not established")
 	default:
 		t.Fatal("restricted Windows peer failed for an unclassified reason (output withheld)")

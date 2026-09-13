@@ -2,11 +2,37 @@ package tests
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 )
+
+func installedWindowsPermissionOutcome(stderr string) string {
+	if strings.Contains(stderr, ipc.ErrorCode_ERROR_CODE_ADMINISTRATOR_REQUIRED.String()) {
+		return "application"
+	}
+	if strings.Contains(strings.ToLower(stderr), "access is denied") {
+		return "transport"
+	}
+	return ""
+}
+
+func TestInstalledWindowsPermissionOutcomeRejectsLegacyAndArgumentFailures(t *testing.T) {
+	for _, tc := range []struct{ text, want string }{
+		{"permission_denied: ERROR_CODE_ADMINISTRATOR_REQUIRED", "application"},
+		{"Access is denied.", "transport"},
+		{"requires an administrator/root local peer", ""},
+		{"requires --request-id UUID, --expected-instance-id and --expected-revision", ""},
+		{"deadline_exceeded: ERROR_CODE_DEADLINE_EXCEEDED", ""},
+		{"permission_denied: ERROR_CODE_OWNER_REQUIRED", ""},
+	} {
+		if installedWindowsPermissionOutcome(tc.text) != tc.want {
+			t.Fatal("permission probe confused admission, transport or invalid arguments")
+		}
+	}
+}
 
 // A denied transport probe must still be a well-formed native CLI invocation.
 // Otherwise invalid arguments can prevent it from ever testing OS socket access.
