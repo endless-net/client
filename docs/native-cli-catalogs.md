@@ -1,5 +1,16 @@
 # Native CLI catalogs and diagnostics
 
+`service session --profile-id <id>` reads GetSession without inferring expiry
+from token presence. `service renew-session` sends RenewSession with an explicit
+profile, retained request UUID and instance/revision CAS. Acceptance is only an
+operation; use `service operation` for its actual outcome. No implicit enrollment,
+browser callback, credential replacement or retry is performed. The strict local
+fixture verifies exact requests and typed responses; missing profile/CAS fails
+before connection. These commands do not imply a live renewal provider: the
+current runtime still lacks authoritative backend session expiry/renewal input
+and returns an unimplemented failure. Provider integration belongs to client and
+the upstream session API owner; expiry must not be guessed from node credentials.
+
 The retired HTTP recent-logs route and agent callback are removed. A regression
 test requires 404 on that old path. Buffer redaction tests now exercise the buffer
 directly; native log transport and profile isolation tests own RPC evidence. The

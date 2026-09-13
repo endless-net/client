@@ -45,7 +45,7 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
 	var operationID, requestID string
 	var profileID string
-	if command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent" {
+	if command == "session" || command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent" {
 		fs.StringVar(&profileID, "profile-id", "", "required target profile")
 	}
 	var wait bool
@@ -70,7 +70,7 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("service %s does not accept positional arguments", command)
 	}
-	if (command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent") && strings.TrimSpace(profileID) == "" {
+	if (command == "session" || command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent") && strings.TrimSpace(profileID) == "" {
 		return fmt.Errorf("--profile-id is required")
 	}
 	if pageSize > 500 {
@@ -110,6 +110,12 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	var message proto.Message
 	switch command {
+	case "session":
+		response, err := consumer.GetSession(ctx, connect.NewRequest(&ipc.GetSessionRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
 	case "peers":
 		response, err := consumer.ListPeers(ctx, connect.NewRequest(&ipc.ListPeersRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}, Search: search, Page: &ipc.PageRequest{PageSize: uint32(pageSize), PageToken: pageToken}}))
 		if err != nil {

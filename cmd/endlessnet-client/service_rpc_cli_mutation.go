@@ -89,7 +89,7 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if command == "create-profile" && strings.TrimSpace(controlOrigin) == "" {
 		return fmt.Errorf("--control-origin is required")
 	}
-	if command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" && command != "select-network" && command != "diagnostics-bundle" {
+	if command != "renew-session" && command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" && command != "select-network" && command != "diagnostics-bundle" {
 		return fmt.Errorf("unknown native mutation %q", command)
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
@@ -128,6 +128,12 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	ref := &ipc.ProfileRef{ProfileId: profile}
 	var message proto.Message
 	switch command {
+	case "renew-session":
+		response, callErr := consumer.RenewSession(ctx, connect.NewRequest(&ipc.RenewSessionRequest{Mutation: mutation, Profile: ref}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
 	case "select-network":
 		response, callErr := consumer.SelectNetwork(ctx, connect.NewRequest(&ipc.SelectNetworkRequest{Mutation: mutation, Profile: ref, NetworkId: networkID}))
 		err = callErr

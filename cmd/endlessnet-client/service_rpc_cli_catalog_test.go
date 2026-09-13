@@ -51,6 +51,8 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		request, response proto.Message
 	}{
 		{"peers", "ListPeers", []string{"--page-size", "2", "--page-token", "opaque-page", "--search", " HOST "}, &ipc.ListPeersRequest{Profile: ref, Page: page, Search: " HOST "}, &ipc.ListPeersResponse{Peers: []*ipc.Peer{{Id: "peer-a", Hostname: "host-a"}}, SnapshotState: ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT, MapRevision: 7, TargetMapRevision: 7, Page: &ipc.PageResponse{NextPageToken: "next"}}},
+		{"session", "GetSession", nil, &ipc.GetSessionRequest{Profile: ref}, &ipc.GetSessionResponse{Session: &ipc.Session{State: ipc.SessionState_SESSION_STATE_ACTIVE}}},
+		{"renew-session", "RenewSession", nil, &ipc.RenewSessionRequest{Mutation: mutation, Profile: ref}, &ipc.RenewSessionResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_RENEW_SESSION)}},
 		{"networks", "ListNetworks", []string{"--page-size", "2", "--page-token", "opaque-page"}, &ipc.ListNetworksRequest{Profile: ref, Page: page}, &ipc.ListNetworksResponse{}},
 		{"diagnostics", "GetDiagnostics", nil, &ipc.GetDiagnosticsRequest{Profile: ref}, &ipc.GetDiagnosticsResponse{}},
 		{"logs-recent", "ListRecentLogs", []string{"--page-size", "2", "--page-token", "opaque-page"}, &ipc.ListRecentLogsRequest{Profile: ref, Page: page}, &ipc.ListRecentLogsResponse{}},
@@ -101,7 +103,7 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 	}()
 	for _, tc := range cases {
 		args := append([]string{tc.command, transportFlag, endpoint, "--profile-id", "profile-a", "--timeout", "5s"}, tc.args...)
-		if tc.command == "select-network" || tc.command == "diagnostics-bundle" {
+		if tc.command == "renew-session" || tc.command == "select-network" || tc.command == "diagnostics-bundle" {
 			args = append(args, "--request-id", mutation.RequestId, "--expected-instance-id", "instance", "--expected-revision", "7")
 		}
 		output, err := captureStdout(t, func() error { return cmdService(args) })
@@ -124,7 +126,7 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 }
 
 func TestNativeCatalogCLIRejectsMissingContext(t *testing.T) {
-	for _, command := range []string{"networks", "peers", "diagnostics", "logs-recent"} {
+	for _, command := range []string{"session", "networks", "peers", "diagnostics", "logs-recent"} {
 		var output bytes.Buffer
 		if err := cmdServiceRPCQuery(command, nil, &output); err == nil || output.Len() != 0 {
 			t.Fatal("missing profile accepted", command)
@@ -136,7 +138,7 @@ func TestNativeCatalogCLIRejectsMissingContext(t *testing.T) {
 			t.Fatal("unbounded page accepted")
 		}
 	}
-	for _, command := range []string{"select-network", "diagnostics-bundle"} {
+	for _, command := range []string{"renew-session", "select-network", "diagnostics-bundle"} {
 		var output bytes.Buffer
 		if err := cmdServiceRPCMutation(command, []string{"--profile-id", "profile-a"}, &output); err == nil || output.Len() != 0 {
 			t.Fatal("missing durable CAS accepted", command)
