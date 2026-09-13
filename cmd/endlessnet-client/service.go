@@ -23,7 +23,7 @@ import (
 
 func cmdService(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, runtime-info, support-info, events, operation, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, diagnostics, diagnostics-bundle, or logs-recent")
+		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, runtime-info, support-info, events, operation, profiles, create-profile, select-profile, rename-profile, remove-profile, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, diagnostics, diagnostics-bundle, or logs-recent")
 	}
 	switch args[0] {
 	case "enroll":
@@ -66,9 +66,9 @@ func cmdService(args []string) error {
 			fmt.Printf("Open this URL to approve the device:\n%s\n", approvalURL)
 		}
 		return nil
-	case "status", "runtime-info", "support-info", "events", "operation":
+	case "status", "runtime-info", "support-info", "events", "operation", "profiles":
 		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
-	case "connect", "disconnect", "logout":
+	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile":
 		return cmdServiceRPCMutation(args[0], args[1:], os.Stdout)
 	case "server-identity":
 		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathServerIdentity, nil, &ipc.ServerIdentityResponse{})

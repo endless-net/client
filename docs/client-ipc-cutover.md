@@ -629,3 +629,14 @@ transport CLI tests cover stale disconnect rejection, confirmed synthetic Down,
 identical retry results, and unregistered Connect/Logout rejection. The engine
 fixture is synthetic; successful live Connect/Logout and OS acceptance remain
 separate gates, as do the other CLI/helper/UI consumers.
+
+Native CLI profile management is available through `profiles`, `create-profile`,
+`select-profile`, `rename-profile` and `remove-profile`. Mutations retain the same
+explicit request-ID/CAS contract; create takes `--display-name` and
+`--control-origin` without a target profile, rename takes a target and display
+name. `profiles` accepts `--page-size` and opaque `--page-token` and returns the
+page metadata needed for subsequent CAS. Local-host tests now select through CLI
+instead of directly changing active-profile state, create/rename/remove an empty
+inactive profile and traverse both catalog pages. Real platform handover,
+enrollment CLI and remaining providers/consumers still require migration or
+system evidence.

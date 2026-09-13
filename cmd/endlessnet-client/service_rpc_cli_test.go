@@ -30,7 +30,7 @@ func TestNativeServiceOperationRequiresOneLookup(t *testing.T) {
 }
 
 func TestNativeMutationRequiresDurableIdentityAndCAS(t *testing.T) {
-	for _, command := range []string{"connect", "disconnect", "logout"} {
+	for _, command := range []string{"connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile"} {
 		for _, args := range [][]string{nil, {"--request-id", "bad"}, {"--request-id", "00000000-0000-0000-0000-000000000000"}, {"--expected-revision", "-1"}} {
 			var output bytes.Buffer
 			if err := cmdServiceRPCMutation(command, args, &output); err == nil || output.Len() != 0 {

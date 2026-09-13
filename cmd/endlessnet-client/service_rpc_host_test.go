@@ -118,15 +118,81 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	if connect.CodeOf(err) != connect.CodeNotFound || output != "" {
 		t.Fatal("unknown request was not reported as missing", err)
 	}
-	// Establish an active empty profile without creating real device keys/tunnel.
-	if err := store.Update(func(cfg *client.Config) error {
-		cfg.RPCState.ActiveProfileID = accepted.Msg.Operation.ProfileId
-		return nil
-	}); err != nil {
+	profileCommandCounter := 0
+	profileCommand := func(command string, extra ...string) *ipc.Operation {
+		t.Helper()
+		listed, err := captureStdout(t, func() error { return cmdService([]string{"profiles", transportFlag, endpoint, "--timeout", "5s"}) })
+		if err != nil {
+			t.Fatal(err)
+		}
+		catalog := new(ipc.ListProfilesResponse)
+		if err := protojson.Unmarshal([]byte(listed), catalog); err != nil {
+			t.Fatal(err)
+		}
+		profileCommandCounter++
+		args := []string{command, transportFlag, endpoint, "--timeout", "5s", "--request-id", fmt.Sprintf("0fa35b42-a172-4866-8089-%012x", profileCommandCounter),
+			"--expected-instance-id", catalog.Page.Metadata.InstanceId, "--expected-revision", fmt.Sprint(catalog.Page.Metadata.Revision)}
+		args = append(args, extra...)
+		result, err := captureStdout(t, func() error { return cmdService(args) })
+		if err != nil {
+			t.Fatal(command, err)
+		}
+		decoded := new(ipc.GetOperationResponse)
+		if err := protojson.Unmarshal([]byte(result), decoded); err != nil {
+			t.Fatal(err)
+		}
+		return decoded.Operation
+	}
+	selected := profileCommand("select-profile", "--profile-id", accepted.Msg.Operation.ProfileId)
+	for selected.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+		if selected.State == ipc.OperationState_OPERATION_STATE_FAILED {
+			t.Fatal("CLI profile selection failed", selected.GetFailure().Code)
+		}
+		select {
+		case <-requestCtx.Done():
+			t.Fatal(requestCtx.Err())
+		case <-time.After(10 * time.Millisecond):
+		}
+		polled, err := consumer.GetOperation(requestCtx, connect.NewRequest(&ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: selected.Id}}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		selected = polled.Msg.Operation
+	}
+	created := profileCommand("create-profile", "--display-name", "temporary", "--control-origin", "https://other.example.test")
+	renamed := profileCommand("rename-profile", "--profile-id", created.ProfileId, "--display-name", "renamed")
+	if renamed.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+		t.Fatal("CLI rename failed")
+	}
+	listed, err := captureStdout(t, func() error {
+		return cmdService([]string{"profiles", transportFlag, endpoint, "--page-size", "1", "--timeout", "5s"})
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
+	catalog := new(ipc.ListProfilesResponse)
+	if err := protojson.Unmarshal([]byte(listed), catalog); err != nil || len(catalog.Profiles) != 1 || catalog.Page.NextPageToken == "" {
+		t.Fatal("CLI pagination failed", err)
+	}
+	secondPage, err := captureStdout(t, func() error {
+		return cmdService([]string{"profiles", transportFlag, endpoint, "--page-size", "1", "--page-token", catalog.Page.NextPageToken, "--timeout", "5s"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := new(ipc.ListProfilesResponse)
+	if err := protojson.Unmarshal([]byte(secondPage), next); err != nil || len(next.Profiles) != 1 || next.Page.NextPageToken != "" || proto.Equal(next.Profiles[0], catalog.Profiles[0]) {
+		t.Fatal("CLI next page failed", err)
+	}
+	if next.Profiles[0].DisplayName != "renamed" && catalog.Profiles[0].DisplayName != "renamed" {
+		t.Fatal("CLI rename not reflected in catalog")
+	}
+	removed := profileCommand("remove-profile", "--profile-id", created.ProfileId)
+	if removed.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+		t.Fatal("CLI remove failed")
+	}
 	mutationArgs := []string{transportFlag, endpoint, "--timeout", "5s", "--profile-id", accepted.Msg.Operation.ProfileId,
-		"--expected-instance-id", event.Metadata.InstanceId, "--expected-revision", fmt.Sprint(accepted.Msg.Operation.Metadata.Revision)}
+		"--expected-instance-id", event.Metadata.InstanceId, "--expected-revision", fmt.Sprint(removed.Metadata.Revision)}
 	for _, command := range []string{"connect", "logout"} {
 		args := append([]string{command, "--request-id", "3152ad0b-8ecb-4b42-bd17-e68dcb31fa44"}, mutationArgs...)
 		output, err := captureStdout(t, func() error { return cmdService(args) })

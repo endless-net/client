@@ -33,14 +33,29 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	requestID := fs.String("request-id", "", "required durable mutation UUID; retain for operation lookup")
 	instance := fs.String("expected-instance-id", "", "required runtime instance from a fresh snapshot")
 	revision := fs.Uint64("expected-revision", 0, "required state revision from a fresh snapshot")
-	profile := fs.String("profile-id", "", "required target profile UUID")
+	var profile, displayName, controlOrigin string
+	if command != "create-profile" {
+		fs.StringVar(&profile, "profile-id", "", "required target profile UUID")
+	}
+	if command == "create-profile" || command == "rename-profile" {
+		fs.StringVar(&displayName, "display-name", "", "required profile display name")
+	}
+	if command == "create-profile" {
+		fs.StringVar(&controlOrigin, "control-origin", "", "required HTTPS control origin")
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 0 || !nativeRequestUUID(*requestID) || strings.TrimSpace(*instance) == "" || *revision == 0 || strings.TrimSpace(*profile) == "" {
-		return fmt.Errorf("service %s requires --request-id UUID, --expected-instance-id, --expected-revision and --profile-id, with no positional arguments", command)
+	if fs.NArg() != 0 || !nativeRequestUUID(*requestID) || strings.TrimSpace(*instance) == "" || *revision == 0 || (command != "create-profile" && strings.TrimSpace(profile) == "") {
+		return fmt.Errorf("service %s requires --request-id UUID, --expected-instance-id and --expected-revision; non-create commands also require --profile-id; no positional arguments are allowed", command)
 	}
-	if command != "connect" && command != "disconnect" && command != "logout" {
+	if (command == "create-profile" || command == "rename-profile") && strings.TrimSpace(displayName) == "" {
+		return fmt.Errorf("--display-name is required")
+	}
+	if command == "create-profile" && strings.TrimSpace(controlOrigin) == "" {
+		return fmt.Errorf("--control-origin is required")
+	}
+	if command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" {
 		return fmt.Errorf("unknown native mutation %q", command)
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
@@ -62,9 +77,33 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 		return err
 	}
 	mutation := &ipc.MutationContext{RequestId: *requestID, ExpectedInstanceId: *instance, ExpectedRevision: *revision}
-	ref := &ipc.ProfileRef{ProfileId: *profile}
+	ref := &ipc.ProfileRef{ProfileId: profile}
 	var message proto.Message
 	switch command {
+	case "create-profile":
+		response, callErr := consumer.CreateProfile(ctx, connect.NewRequest(&ipc.CreateProfileRequest{Mutation: mutation, DisplayName: displayName, ControlOrigin: controlOrigin}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
+	case "select-profile":
+		response, callErr := consumer.SelectProfile(ctx, connect.NewRequest(&ipc.SelectProfileRequest{Mutation: mutation, Profile: ref}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
+	case "rename-profile":
+		response, callErr := consumer.RenameProfile(ctx, connect.NewRequest(&ipc.RenameProfileRequest{Mutation: mutation, Profile: ref, DisplayName: displayName}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
+	case "remove-profile":
+		response, callErr := consumer.RemoveProfile(ctx, connect.NewRequest(&ipc.RemoveProfileRequest{Mutation: mutation, Profile: ref}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
 	case "connect":
 		response, callErr := consumer.Connect(ctx, connect.NewRequest(&ipc.ConnectRequest{Mutation: mutation, Profile: ref}))
 		err = callErr

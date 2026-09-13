@@ -43,6 +43,12 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	pipe, socket := serviceIPCTransportFlags(fs)
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
 	var operationID, requestID string
+	var pageSize uint
+	var pageToken string
+	if command == "profiles" {
+		fs.UintVar(&pageSize, "page-size", 0, "page size; 0 uses 100, maximum 500")
+		fs.StringVar(&pageToken, "page-token", "", "opaque token from the previous page")
+	}
 	if command == "operation" {
 		fs.StringVar(&operationID, "operation-id", "", "accepted operation UUID")
 		fs.StringVar(&requestID, "request-id", "", "original mutation request UUID for lost-response recovery")
@@ -52,6 +58,9 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	if fs.NArg() != 0 {
 		return fmt.Errorf("service %s does not accept positional arguments", command)
+	}
+	if pageSize > 500 {
+		return fmt.Errorf("--page-size cannot exceed 500")
 	}
 	var lookup *ipc.GetOperationRequest
 	if command == "operation" {
@@ -87,6 +96,12 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	var message proto.Message
 	switch command {
+	case "profiles":
+		response, err := consumer.ListProfiles(ctx, connect.NewRequest(&ipc.ListProfilesRequest{Page: &ipc.PageRequest{PageSize: uint32(pageSize), PageToken: pageToken}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
 	case "operation":
 		response, err := consumer.GetOperation(ctx, connect.NewRequest(lookup))
 		if err != nil {
