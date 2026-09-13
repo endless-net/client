@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
@@ -72,6 +73,10 @@ func TestNativeCachedStatusUsesMapBoundLiveInspection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	recovery := cfg.EnrollmentRecovery
+	if recovery == nil {
+		t.Fatal("fixture requires an active recovery")
+	}
 	cfg.EnrollmentRecovery = nil
 	cfg.RPCState = &client.ClientRPCState{ActiveProfileID: "profile"}
 	cfg.ConnectionIntent = &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredConnected}
@@ -100,5 +105,31 @@ func TestNativeCachedStatusUsesMapBoundLiveInspection(t *testing.T) {
 	}
 	if engine.calls != 2 {
 		t.Fatal("status did not obtain a fresh observation")
+	}
+	for _, boundary := range []string{"recovery", "trust", "invalid-cache"} {
+		t.Run(boundary, func(t *testing.T) {
+			blocked := cfg
+			switch boundary {
+			case "recovery":
+				blocked.EnrollmentRecovery = recovery
+			case "trust":
+				// Trust journal fields are producer-private; exercise their public
+				// persisted presence without exposing or fabricating any keys.
+				state := &client.ClientRPCState{}
+				if err := json.Unmarshal([]byte(`{"active_profile_id":"profile","trust":{}}`), state); err != nil || state.Trust == nil {
+					t.Fatal("could not construct pending trust fixture")
+				}
+				blocked.RPCState = state
+			case "invalid-cache":
+				cached := *cfg.CachedMap
+				cached.Network.Name = "tampered"
+				blocked.CachedMap = &cached
+			}
+			engine.calls = 0
+			status := buildAgentRPCStatusWithProbe(t.Context(), agentIPCOptions{WireGuard: engine}, blocked, ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED, false)
+			if engine.calls != 0 || status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED {
+				t.Fatal("blocked profile consulted its old dataplane or acquired connected phase")
+			}
+		})
 	}
 }
