@@ -28,10 +28,14 @@ func (s *ClientRPCService) StartEnrollmentWorker(ctx context.Context, provider C
 	}
 	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	s.enrollmentWorker = w
+	s.mutations.setWorkerCapabilities(w, true, ipc.Capability_CAPABILITY_ENROLLMENT)
+	stopReadiness := context.AfterFunc(ctx, func() { s.mutations.setWorkerCapabilities(w, false, ipc.Capability_CAPABILITY_ENROLLMENT) })
 	done := make(chan error, 1)
 	go func() {
 		var err error
 		defer func() {
+			stopReadiness()
+			s.mutations.setWorkerCapabilities(w, false, ipc.Capability_CAPABILITY_ENROLLMENT)
 			s.enrollmentMu.Lock()
 			s.enrollmentWorker = nil
 			s.enrollmentMu.Unlock()

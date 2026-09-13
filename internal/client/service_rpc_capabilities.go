@@ -1,6 +1,8 @@
 package client
 
 import (
+	"sort"
+
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
 	"github.com/endless-net/client/clientipc/rpc"
@@ -14,11 +16,18 @@ func (m *ClientRPCMutations) runtimeInfoLocked(peer local.Peer, build *ipc.Build
 		CallerAccess: rpcCallerAccess(peer, cfg), Protocol: rpc.Protocol,
 		IpcVersion: rpc.Version, ContractSha256: rpc.Digest(),
 	}
-	if worker := m.connectionWorker; worker != nil && worker.ctx.Err() == nil {
-		info.Capabilities = []*ipc.CapabilityStatus{{
-			Capability: ipc.Capability_CAPABILITY_CONNECTION, Platform: build.Platform,
+	keys := make([]int, 0, len(m.capabilityWorkers))
+	for capability, worker := range m.capabilityWorkers {
+		if worker.ctx.Err() == nil {
+			keys = append(keys, int(capability))
+		}
+	}
+	sort.Ints(keys)
+	for _, key := range keys {
+		info.Capabilities = append(info.Capabilities, &ipc.CapabilityStatus{
+			Capability: ipc.Capability(key), Platform: build.Platform,
 			Restriction: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE},
-		}}
+		})
 	}
 	return info
 }
@@ -26,19 +35,32 @@ func (m *ClientRPCMutations) runtimeInfoLocked(peer local.Peer, build *ipc.Build
 // Capabilities are opening-stream context, not persisted intent or a release
 // acceptance claim. Rebootstrap instead of sending a second snapshot or letting
 // old subscribers keep the readiness of a stopped/replaced worker.
-func (m *ClientRPCMutations) setConnectionWorker(worker *clientRPCProfileWorker, ready bool) {
+func (m *ClientRPCMutations) setProfileWorkerReadiness(worker *clientRPCProfileWorker, ready bool) {
+	capabilities := []ipc.Capability{ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_PROFILES}
+	if worker.logout {
+		capabilities = append(capabilities, ipc.Capability_CAPABILITY_LOGOUT)
+	}
+	m.setWorkerCapabilities(worker, ready, capabilities...)
+}
+
+func (m *ClientRPCMutations) setWorkerCapabilities(worker *clientRPCProfileWorker, ready bool, capabilities ...ipc.Capability) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if ready {
-		if m.connectionWorker == worker {
-			return
+	if ready && m.capabilityWorkers == nil {
+		m.capabilityWorkers = make(map[ipc.Capability]*clientRPCProfileWorker)
+	}
+	changed := false
+	for _, capability := range capabilities {
+		if ready && m.capabilityWorkers[capability] != worker {
+			m.capabilityWorkers[capability] = worker
+			changed = true
+		} else if !ready && m.capabilityWorkers[capability] == worker {
+			delete(m.capabilityWorkers, capability)
+			changed = true
 		}
-		m.connectionWorker = worker
-	} else {
-		if m.connectionWorker != worker {
-			return
-		}
-		m.connectionWorker = nil
+	}
+	if !changed {
+		return
 	}
 	for subscriber := range m.subscribers {
 		subscriber.mu.Lock()

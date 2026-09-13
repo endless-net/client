@@ -176,6 +176,24 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if !switchEvents.Receive() {
 		t.Fatal(switchEvents.Err())
 	}
+	rebootstrapEnrollmentEvents := func() {
+		t.Helper()
+		// Capabilities are immutable opening context. Drain the previous
+		// stream's terminal failure, then open a new stream without replaying
+		// any already accepted command.
+		for switchEvents.Receive() {
+		}
+		assertRPCFailure(t, switchEvents.Err(), ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		_ = switchEvents.Close()
+		info, err := client.Bootstrap(ctx)
+		if err != nil || len(info.Capabilities) != 4 {
+			t.Fatal("bootstrap did not expose ready profile and enrollment workers", err)
+		}
+		switchEvents, err = client.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
+		if err != nil || !switchEvents.Receive() || switchEvents.Msg().Sequence != 1 || switchEvents.Msg().GetSnapshot() == nil {
+			t.Fatal("worker transition did not produce a fresh opening snapshot", err)
+		}
+	}
 	requestCtx, cancelRequest := context.WithCancel(ctx)
 	selected, err := client.SelectProfile(requestCtx, connect.NewRequest(selection))
 	cancelRequest()
@@ -224,6 +242,7 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { stopEnrollment(); <-enrollDone }()
+	rebootstrapEnrollmentEvents()
 	enrollRequestCtx, cancelEnrollRequest := context.WithCancel(ctx)
 	enrolled, err := client.Enroll(enrollRequestCtx, connect.NewRequest(enrollment))
 	cancelEnrollRequest()
@@ -265,7 +284,13 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	<-enrollDone
 	resumeCtx, stopResumedEnrollment := context.WithCancel(ctx)
 	defer stopResumedEnrollment()
-	resumedDone, err := service.StartEnrollmentWorker(resumeCtx, func(_ context.Context, cfg Config, _ ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
+	allowEnrollmentCompletion := make(chan struct{})
+	resumedDone, err := service.StartEnrollmentWorker(resumeCtx, func(ctx context.Context, cfg Config, _ ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
+		select {
+		case <-allowEnrollmentCompletion:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 		if cfg.EnrollmentRequestID != "native-approval" {
 			t.Error("approval state not recovered")
 		}
@@ -279,6 +304,8 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { stopResumedEnrollment(); <-resumedDone }()
+	rebootstrapEnrollmentEvents()
+	close(allowEnrollmentCompletion)
 	registrationCompleted := false
 	for switchEvents.Receive() {
 		op := switchEvents.Msg().GetOperationChanged()

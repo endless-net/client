@@ -58,21 +58,21 @@ type clientRPCOperationRecord struct {
 // mutate only the supplied config: no network, device or other external effects
 // may run until acceptance commits. Runtime reconciliation executes those effects.
 type ClientRPCMutations struct {
-	mu               sync.Mutex
-	profileWorker    sync.Mutex
-	disconnectWorker sync.Mutex
-	enrollmentWorker sync.Mutex
-	trustWorker      sync.Mutex
-	store            *ConfigStore
-	instanceID       string
-	now              func() time.Time
-	observedStatus   *ipc.Status
-	cancelApply      context.CancelFunc
-	cancelEnrollment context.CancelFunc
-	cancelLogout     context.CancelFunc
-	subscribers      map[*rpcSubscriber]struct{}
-	recentLogs       []clientRPCScopedLog
-	connectionWorker *clientRPCProfileWorker // Volatile readiness, never persisted.
+	mu                sync.Mutex
+	profileWorker     sync.Mutex
+	disconnectWorker  sync.Mutex
+	enrollmentWorker  sync.Mutex
+	trustWorker       sync.Mutex
+	store             *ConfigStore
+	instanceID        string
+	now               func() time.Time
+	observedStatus    *ipc.Status
+	cancelApply       context.CancelFunc
+	cancelEnrollment  context.CancelFunc
+	cancelLogout      context.CancelFunc
+	subscribers       map[*rpcSubscriber]struct{}
+	recentLogs        []clientRPCScopedLog
+	capabilityWorkers map[ipc.Capability]*clientRPCProfileWorker // Volatile readiness, never persisted.
 }
 
 func NewClientRPCMutations(store *ConfigStore) (*ClientRPCMutations, error) {

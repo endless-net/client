@@ -896,3 +896,18 @@ A late callback from a previous worker cannot withdraw a replacement's readiness
 Tests cover startup refusal, immutable projections, cancellation, replacement,
 fresh-runtime absence and native Bootstrap/CLI/opening-snapshot consistency.
 Actual UI/core pairing and supported-platform connection acceptance remain open.
+
+The same readiness registry now includes PROFILES with the profile worker,
+LOGOUT only when that worker has a logout provider, and ENROLLMENT only while
+the independently configured enrollment worker is alive. Deterministic ordering
+and per-worker ownership prevent one worker's stop callback from withdrawing
+another's capabilities. Stopping enrollment leaves Connection/Profiles/Logout
+available; stopping their worker does not claim completion of accepted work.
+No preference/resource/exit/session/update capability is enabled by this wiring.
+
+Native transport coverage reboots its subscription after worker transitions,
+then observes approval and completion of the original enrollment operation
+without replaying it. Separate tests cover absent enrollment/logout providers,
+independent shutdown and readiness without profile/enrollment side effects.
+These checks make implemented commands reachable by native consumers; they are
+not full BA/SA, installed platform or released-artifact acceptance evidence.

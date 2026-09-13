@@ -23,10 +23,17 @@ func TestRPCConnectionCapabilityTracksWorkerAndRebootstrap(t *testing.T) {
 			t.Fatal(err)
 		}
 		info := snapshot.Runtime
-		if (len(info.Capabilities) == 1) != want || len(info.Capabilities) > 1 {
+		count := 0
+		if want {
+			count = 2
+		}
+		if len(info.Capabilities) != count {
 			t.Fatal("capability does not follow actual worker readiness")
 		}
 		if want {
+			if info.Capabilities[1].Capability != ipc.Capability_CAPABILITY_PROFILES {
+				t.Fatal("profile worker did not advertise profile lifecycle")
+			}
 			capability := info.Capabilities[0]
 			if capability.Capability != ipc.Capability_CAPABILITY_CONNECTION || capability.Platform != s.build.Platform || capability.Restriction.Availability != ipc.Availability_AVAILABILITY_AVAILABLE {
 				t.Fatal("connection readiness advertised another capability or platform")
@@ -75,7 +82,7 @@ func TestRPCConnectionCapabilityTracksWorkerAndRebootstrap(t *testing.T) {
 	}
 	defer m.unsubscribe(fresh)
 	opening, err := fresh.next(waitCtx)
-	if err != nil || opening.Sequence != 1 || len(opening.GetSnapshot().GetRuntime().GetCapabilities()) != 1 {
+	if err != nil || opening.Sequence != 1 || len(opening.GetSnapshot().GetRuntime().GetCapabilities()) != 2 {
 		t.Fatal("new stream did not open with ready capability", err)
 	}
 	cancel()
@@ -93,7 +100,7 @@ func TestRPCConnectionCapabilityTracksWorkerAndRebootstrap(t *testing.T) {
 	}
 	defer func() { cancel2(); <-done2 }()
 	// A delayed shutdown callback must not clear a replacement worker.
-	m.setConnectionWorker(firstWorker, false)
+	m.setProfileWorkerReadiness(firstWorker, false)
 	read(true)
 	restarted, err := NewClientRPCMutations(m.store)
 	if err != nil {
@@ -115,4 +122,78 @@ func TestRPCInvalidDriverDoesNotAdvertiseConnection(t *testing.T) {
 	if err != nil || len(snapshot.Runtime.Capabilities) != 0 {
 		t.Fatal("failed worker startup advertised connection", err)
 	}
+}
+
+func TestRPCEnrollmentAndLogoutReadinessAreIndependent(t *testing.T) {
+	m := newRPCStoreTest(t)
+	s := NewClientRPCService(m, nil)
+	peer := local.Peer{Identity: "observer"}
+	assertCapabilities := func(want ...ipc.Capability) {
+		t.Helper()
+		snapshot, err := m.snapshotAs(peer, s.build)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := snapshot.Runtime.Capabilities
+		if len(got) != len(want) {
+			t.Fatalf("capability count = %d, want %d", len(got), len(want))
+		}
+		for i, capability := range got {
+			if capability.Capability != want[i] || capability.Restriction.Availability != ipc.Availability_AVAILABILITY_AVAILABLE {
+				t.Fatal("unexpected capability family or unstable ordering")
+			}
+		}
+	}
+	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE, nil
+	}, Start: func(context.Context, Config) error { return nil }, Logout: func(context.Context, Config, ClientRPCLogoutProgress, func(ClientRPCLogoutProgress) error) (string, error) {
+		t.Error("capability discovery performed logout")
+		return "", nil
+	}}
+	profileCtx, stopProfile := context.WithCancel(t.Context())
+	profileDone, err := s.StartProfileWorker(profileCtx, driver)
+	if err != nil {
+		stopProfile()
+		t.Fatal(err)
+	}
+	defer func() { stopProfile(); <-profileDone }()
+	base := []ipc.Capability{ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_LOGOUT, ipc.Capability_CAPABILITY_PROFILES}
+	assertCapabilities(base...)
+	if _, err := s.StartEnrollmentWorker(t.Context(), nil); err == nil {
+		t.Fatal("missing enrollment provider accepted")
+	}
+	assertCapabilities(base...)
+	enrollCtx, stopEnrollment := context.WithCancel(t.Context())
+	enrollDone, err := s.StartEnrollmentWorker(enrollCtx, func(context.Context, Config, ClientRPCEnrollmentInput, func(Config) error) (*ipc.UserAction, error) {
+		t.Error("capability discovery performed enrollment")
+		return nil, nil
+	})
+	if err != nil {
+		stopEnrollment()
+		t.Fatal(err)
+	}
+	defer func() { stopEnrollment(); <-enrollDone }()
+	assertCapabilities(append([]ipc.Capability{ipc.Capability_CAPABILITY_ENROLLMENT}, base...)...)
+	sub, err := m.subscribe(peer, s.build, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.unsubscribe(sub)
+	waitCtx, stopWait := context.WithTimeout(t.Context(), 5*time.Second)
+	defer stopWait()
+	if _, err := sub.next(waitCtx); err != nil {
+		t.Fatal(err)
+	}
+	stopEnrollment()
+	if err := <-enrollDone; !errors.Is(err, context.Canceled) {
+		t.Fatal("enrollment worker did not stop", err)
+	}
+	_, err = sub.next(waitCtx)
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	assertCapabilities(base...)
+	stopProfile()
+	if err := <-profileDone; !errors.Is(err, context.Canceled) {
+		t.Fatal("profile worker did not stop", err)
+	}
+	assertCapabilities()
 }
