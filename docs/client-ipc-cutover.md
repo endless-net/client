@@ -429,3 +429,14 @@ cover waiting/resume through a new coordinator, lifecycle cancellation, sanitize
 failure, unsafe URLs and verified pending enrollment through the agent adapter.
 Native service worker scheduling, production listener wiring, real restart and
 same-artifact system acceptance remain outstanding; this is not full UF-03/04.
+
+The native service now exposes Enroll when StartEnrollmentWorker is running.
+Admission and wakeup are serialized with worker shutdown; unavailable workers
+reject new calls without acceptance. The worker reconciles once on startup and
+periodically revisits approval waits. Registration has a separate worker from
+tunnel application so network/approval waits do not hold the Disconnect executor.
+Tests verify unavailable admission, single-worker enforcement, cancellation with
+retained work and startup completion without caller replay. The production agent
+still needs to start this worker with agentRPCEnroll, supervise its completion and
+wire the native listener; full local-transport and real OS/system acceptance are
+not established by the coordinator/provider tests.
