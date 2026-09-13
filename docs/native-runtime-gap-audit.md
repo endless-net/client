@@ -127,6 +127,25 @@ its own qualification and is not implicitly tested by the root-module command.
 At this observation the same-source control-plane and Windows installed-smoke
 jobs were still running, so their results remain unclaimed here.
 
+## Installed HTTPS follow-up — source f299b24
+
+Same-source installed jobs now pass the bootstrap enrollment condition:
+[Windows 2025](https://github.com/endless-net/client/actions/runs/34754603819/job/103716995560),
+[Ubuntu 24.04](https://github.com/endless-net/client/actions/runs/34754603819/job/103716995737),
+and [macOS 15](https://github.com/endless-net/client/actions/runs/34754603819/job/103716995719).
+Windows subsequently fails initial connection with diagnostics unavailable.
+Ubuntu/macOS advance through initial connection, connected upgrade and connected
+reinstall before failing the unprivileged Unix transport probe. These are partial
+scenario observations; all three jobs failed, not full installation acceptance.
+
+The Unix probe supplied no request/profile/CAS arguments to native mutations,
+so CLI validation could reject `connect` before reaching the socket. The fixture
+now obtains a public owner snapshot, supplies distinct request IDs plus the exact
+profile/instance/revision, and keeps explicit local-forget confirmation. It still
+requires exit 1, empty stdout, no timeout and a transport permission-denied error.
+Cross-platform short tests verify argument construction; real denied-peer socket
+execution, remaining reinstall phases and cleanup need a fresh hosted run.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,

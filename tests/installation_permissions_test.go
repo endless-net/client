@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	ipc "github.com/endless-net/client/clientipc/v0"
 )
 
 // This checks installed Unix transport permissions, not IPC application roles.
@@ -26,11 +28,11 @@ func assertInstalledUnixPeerDenied(t *testing.T, binary string) {
 	if !strings.HasPrefix(string(version), "endlessnet-client ") {
 		t.Fatal("unprivileged peer could not execute the installed CLI")
 	}
+	status := waitInstalledNativeCondition(t, binary, func(v *ipc.Status) bool {
+		return v.ActiveProfileId != "" && v.GetMetadata().GetInstanceId() != "" && v.GetMetadata().GetRevision() != 0
+	})
 	for _, operation := range []string{"status", "connect", "disconnect", "local-forget"} {
-		args := []string{"-n", "-u", "nobody", "--", binary, "service", operation, "--timeout", "2s"}
-		if operation == "local-forget" {
-			args = append(args, "--confirm-local-forget")
-		}
+		args := append([]string{"-n", "-u", "nobody", "--", binary}, installedPermissionProbeArguments(operation, status)...)
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		cmd := exec.CommandContext(ctx, "sudo", args...)
 		var stdout, stderr bytes.Buffer
