@@ -295,7 +295,8 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 			if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.Kind != ipc.OperationKind_OPERATION_KIND_CONNECT {
 				t.Fatal("native Connect failed")
 			}
-			_, err := client.SetPreferences(ctx, connect.NewRequest(&ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT.Enum()}}))
+			setRequest := &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT.Enum()}}
+			setAccepted, err := client.SetPreferences(ctx, connect.NewRequest(setRequest))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -307,13 +308,33 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 			if err != nil || len(managed.Msg.Settings) != 1 || managed.Msg.Settings[0].Key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT || managed.Msg.Settings[0].GetLifecycleValue() != preferences.Msg.Preferences.Lifecycle.UiQuit.Effective || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_USER || managed.Msg.Metadata.Revision != preferences.Msg.Preferences.Metadata.Revision {
 				t.Fatal("managed projection disagrees with native preferences", err)
 			}
-			_, err = client.ResetPreferences(ctx, connect.NewRequest(&ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT}}))
+			resetRequest := &ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT}}
+			resetAccepted, err := client.ResetPreferences(ctx, connect.NewRequest(resetRequest))
 			if err != nil {
 				t.Fatal(err)
 			}
 			managed, err = client.ListManagedSettings(ctx, connect.NewRequest(&ipc.ListManagedSettingsRequest{Profile: selection.Profile}))
 			if err != nil || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_DEFAULT {
 				t.Fatal("reset retained managed user source", err)
+			}
+			// A delayed retransmission of an older successful setter must not
+			// undo a newer reset, even though its CAS revision is now old.
+			resetRevision := m.Metadata().Revision
+			setReplay, err := client.SetPreferences(ctx, connect.NewRequest(setRequest))
+			if err != nil || !proto.Equal(setReplay.Msg.Operation, setAccepted.Msg.Operation) {
+				t.Fatal("late setter replay did not recover original operation", err)
+			}
+			resetReplay, err := client.ResetPreferences(ctx, connect.NewRequest(resetRequest))
+			if err != nil || !proto.Equal(resetReplay.Msg.Operation, resetAccepted.Msg.Operation) {
+				t.Fatal("reset replay did not recover original operation", err)
+			}
+			lookup, err := client.GetOperation(ctx, connect.NewRequest(&ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_RequestId{RequestId: setRequest.Mutation.RequestId}}))
+			if err != nil || !proto.Equal(lookup.Msg.Operation, setAccepted.Msg.Operation) {
+				t.Fatal("preference request-ID recovery lost original result", err)
+			}
+			preferences, err = client.GetPreferences(ctx, connect.NewRequest(&ipc.GetPreferencesRequest{Profile: selection.Profile}))
+			if err != nil || preferences.Msg.Preferences.Lifecycle.UiQuit.Requested != nil || preferences.Msg.Preferences.Lifecycle.UiQuit.Control.Source != ipc.SettingSource_SETTING_SOURCE_DEFAULT || m.Metadata().Revision != resetRevision {
+				t.Fatal("late retry reapplied user override or advanced state", err)
 			}
 			quit, err := client.NotifyLifecycle(ctx, connect.NewRequest(&ipc.NotifyLifecycleRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Event: ipc.LifecycleEvent_LIFECYCLE_EVENT_UI_QUIT}))
 			if err != nil || quit.Msg.Operation.Kind != ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE || quit.Msg.Operation.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {

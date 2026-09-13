@@ -17,6 +17,12 @@ assurance that settings were applied. Producer restrictions remain authoritative
 currently only the implemented UI-quit behavior can be changed successfully.
 Exact native transport tests cover false-versus-absent and explicit reset keys.
 
+The real producer local-transport test additionally sets a UI-quit override,
+resets it, then replays both older requests with their original CAS. It requires
+the original operations (also via request-ID lookup), unchanged revision and
+continued absence of the override. This protects against a delayed successful
+setter retry undoing a newer reset; it does not prove other settings are applied.
+
 `service session --profile-id <id>` reads GetSession without inferring expiry
 from token presence. `service renew-session` sends RenewSession with an explicit
 profile, retained request UUID and instance/revision CAS. Acceptance is only an
