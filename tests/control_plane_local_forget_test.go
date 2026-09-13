@@ -23,15 +23,40 @@ func nativeCleanupState(v *ipc.Status) bool {
 func nativeLogoutAttempt(t *testing.T, n *testclient.Node, requestID string) (*ipc.Operation, []string) {
 	t.Helper()
 	status := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ActiveProfileId != "" })
-	args := testclient.NativeMutationArguments(requestID, status)
+	var args []string
 	response := &ipc.LogoutResponse{}
-	if err := n.NativeService("logout", response, args...); err != nil {
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		args = testclient.NativeMutationArguments(requestID, status)
+		err = n.NativeService("logout", response, args...)
+		if !testclient.IsNativeStaleState(err) || attempt == 2 {
+			break
+		}
+		// This fixture explicitly reconfirms cleanup only for the unchanged
+		// registration after a definitive admission rejection. An accepted
+		// operation or uncertain transport outcome never enters this branch.
+		fresh := &ipc.GetStatusResponse{}
+		if n.NativeService("status", fresh) != nil || !nativeLogoutConsentUnchanged(status, fresh.Status) {
+			t.Fatal("logout admission rejected and cleanup consent context changed")
+		}
+		status = fresh.Status
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	if response.Operation == nil || response.Operation.Id == "" || response.Operation.Kind != ipc.OperationKind_OPERATION_KIND_LOGOUT || response.Operation.ProfileId != status.ActiveProfileId {
 		t.Fatal("logout did not return its profile-bound operation")
 	}
 	return n.AwaitNativeOperation(response.Operation.Id), args
+}
+
+func nativeLogoutConsentUnchanged(before, after *ipc.Status) bool {
+	return before != nil && after != nil && before.NodeId != "" && before.NodeId == after.NodeId &&
+		before.ActiveProfileId != "" && before.ActiveProfileId == after.ActiveProfileId && before.AccountId == after.AccountId &&
+		before.GetMetadata().GetInstanceId() != "" && before.GetMetadata().GetInstanceId() == after.GetMetadata().GetInstanceId() &&
+		after.GetMetadata().GetRevision() > before.GetMetadata().GetRevision() &&
+		before.GetStoredState().GetNodeCredentialPresent() && proto.Equal(before.StoredState, after.StoredState) &&
+		before.UserDisconnected == after.UserDisconnected && proto.Equal(before.Intent, after.Intent) && proto.Equal(before.Network, after.Network)
 }
 
 func assertNativeUnconfirmedLogout(t *testing.T, op *ipc.Operation) {
