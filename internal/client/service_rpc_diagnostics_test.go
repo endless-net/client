@@ -112,3 +112,31 @@ func TestRPCDiagnosticsRejectsChangedContextAndInvalidProvider(t *testing.T) {
 		})
 	}
 }
+
+func TestRPCDiagnosticsVerifiedMapProjectionAndBusyTunnel(t *testing.T) {
+	m, peer, profile := rpcConnectFixture(t)
+	s := NewClientRPCService(m, nil)
+	observation := ClientRPCDiagnosticsObservation{TunnelBusy: true, DNS: &ipc.DnsDiagnostics{SearchDomain: "verified.test"},
+		RouteConflicts: []OverlayCIDRConflict{{OverlayCIDR: "100.64.0.0/24", LocalPrefix: "100.64.0.0/16", Interface: "local0", Reason: "synthetic-private-detail"}}}
+	s.DiagnosticsProvider = func(context.Context) (ClientRPCDiagnosticsObservation, error) { return observation, nil }
+	req := &ipc.GetDiagnosticsRequest{Profile: profile}
+	missing, err := s.diagnosticsAs(t.Context(), peer, req)
+	if err != nil || missing.Diagnostics.Dns != nil || len(missing.Diagnostics.RouteConflicts) != 0 {
+		t.Fatal("unverified map data exposed", err)
+	}
+	if missing.Diagnostics.Tunnel.Failure.Code != ipc.ErrorCode_ERROR_CODE_BUSY {
+		t.Fatal("busy inspection became absent tunnel")
+	}
+	observation.VerifiedMap = true
+	result, err := s.diagnosticsAs(t.Context(), peer, req)
+	if err != nil || result.Diagnostics.Dns.SearchDomain != "verified.test" || len(result.Diagnostics.RouteConflicts) != 1 {
+		t.Fatal("verified map projection missing", err)
+	}
+	if result.Diagnostics.RouteConflicts[0].ReasonKey != "overlay_prefix_overlap" || !result.Diagnostics.Truncated {
+		t.Fatal("raw conflict reason or false completeness")
+	}
+	observation.DNS.SearchDomain = "changed"
+	if result.Diagnostics.Dns.SearchDomain != "verified.test" {
+		t.Fatal("DNS response aliased")
+	}
+}

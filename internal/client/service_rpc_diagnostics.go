@@ -15,9 +15,13 @@ import (
 // Observations must contain public interface metadata only, never config or
 // arbitrary process output. Raw inspection error strings are not serialized.
 type ClientRPCDiagnosticsObservation struct {
-	OSVersion  string
-	Tunnel     WireGuardInspection
-	Interfaces []NetworkInterfaceStatus
+	OSVersion      string
+	Tunnel         WireGuardInspection
+	Interfaces     []NetworkInterfaceStatus
+	TunnelBusy     bool
+	VerifiedMap    bool
+	DNS            *ipc.DnsDiagnostics
+	RouteConflicts []OverlayCIDRConflict
 }
 type ClientRPCDiagnosticsProvider func(context.Context) (ClientRPCDiagnosticsObservation, error)
 
@@ -73,7 +77,7 @@ func (s *ClientRPCService) diagnosticsAs(ctx context.Context, peer local.Peer, r
 	}
 	result := &ipc.Diagnostics{Metadata: snapshot.Status.Metadata, Client: proto.Clone(s.build).(*ipc.BuildIdentity),
 		OsName: runtime.GOOS, OsVersion: observation.OSVersion, GoVersion: runtime.Version(), Status: snapshot.Status,
-		Truncated: true, Failures: []*ipc.Failure{{Code: ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, ReasonKey: "diagnostics_routes_dns_peers_not_collected"}},
+		Truncated: true, Failures: []*ipc.Failure{{Code: ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, ReasonKey: "diagnostics_os_routes_peers_not_collected"}},
 		Tunnel: &ipc.TunnelInspection{Ok: observation.Tunnel.OK, InterfaceName: observation.Tunnel.Interface}}
 	if len(observation.OSVersion) > 256 || len(observation.Tunnel.Interface) > 256 || len(observation.Interfaces) > 256 || observation.Tunnel.MTU < 0 || observation.Tunnel.MTU > 65535 || observation.Tunnel.ListenPort < 0 || observation.Tunnel.ListenPort > 65535 {
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
@@ -86,6 +90,23 @@ func (s *ClientRPCService) diagnosticsAs(ctx context.Context, peer local.Peer, r
 	if !observation.Tunnel.OK || observation.Tunnel.Error != "" {
 		result.Tunnel.Ok = false
 		result.Tunnel.Failure = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "tunnel_inspection_failed"}
+	}
+	if observation.TunnelBusy {
+		result.Tunnel.Ok = false
+		result.Tunnel.Failure = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_BUSY, ReasonKey: "tunnel_inspection_busy"}
+	}
+	if !observation.VerifiedMap {
+		result.Failures = append(result.Failures, &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "diagnostics_verified_map_unavailable"})
+	} else {
+		if observation.DNS != nil {
+			result.Dns = proto.Clone(observation.DNS).(*ipc.DnsDiagnostics)
+		}
+		if len(observation.RouteConflicts) > 4096 {
+			return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+		}
+		for _, conflict := range observation.RouteConflicts {
+			result.RouteConflicts = append(result.RouteConflicts, &ipc.RouteConflict{OverlayCidr: conflict.OverlayCIDR, LocalPrefix: conflict.LocalPrefix, InterfaceName: conflict.Interface, ReasonKey: "overlay_prefix_overlap"})
+		}
 	}
 	// Peer keys/endpoints, routes and DNS require a verified profile map join.
 	// Do not infer identities or absence from a partial engine observation.
