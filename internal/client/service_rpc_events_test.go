@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -220,6 +221,51 @@ func TestRPCEventQueueNeverSilentlyDrops(t *testing.T) {
 			t.Fatal("dropped event consumed a sequence")
 		}
 	}
+}
+
+func TestRPCEventSubscriptionLimitsAndRelease(t *testing.T) {
+	m := newRPCStoreTest(t)
+	build := &ipc.BuildIdentity{}
+	revision := m.Metadata().Revision
+	admit := func(identity string) *rpcSubscriber {
+		t.Helper()
+		sub, err := m.subscribe(local.Peer{Identity: identity}, build, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { m.unsubscribe(sub) })
+		event, err := sub.next(t.Context())
+		if err != nil || event.Sequence != 1 || event.GetSnapshot() == nil {
+			t.Fatal("admitted stream did not start with a snapshot", err)
+		}
+		return sub
+	}
+	reject := func(peer local.Peer, failure ipc.ErrorCode) {
+		t.Helper()
+		count := len(m.subscribers)
+		sub, err := m.subscribe(peer, build, nil)
+		assertRPCFailure(t, err, failure)
+		if sub != nil || len(m.subscribers) != count || m.Metadata().Revision != revision {
+			t.Fatal("rejected subscription allocated a slot or mutated state")
+		}
+	}
+	first := admit("uid:1000")
+	for i := 1; i < rpcMaxEventSubscribersPerPeer; i++ {
+		admit("uid:1000")
+	}
+	reject(local.Peer{Identity: "UID:1000"}, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+	m.unsubscribe(first)
+	admit("UID:1000")
+	for i := rpcMaxEventSubscribersPerPeer; i < rpcMaxEventSubscribers; i++ {
+		admit(fmt.Sprintf("uid:%d", 2000+i))
+	}
+	reject(local.Peer{Identity: "uid:9000", Administrator: true}, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+	reject(local.Peer{}, ipc.ErrorCode_ERROR_CODE_UNAUTHENTICATED)
+	for sub := range m.subscribers {
+		m.unsubscribe(sub)
+		break
+	}
+	admit("uid:9000")
 }
 
 func TestRPCUnsubscribeAndCancellation(t *testing.T) {

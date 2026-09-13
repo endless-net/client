@@ -21,6 +21,8 @@ import (
 
 const rpcEventQueueBytes = 8 << 20
 const rpcEventQueueCount = 64
+const rpcMaxEventSubscribers = 16
+const rpcMaxEventSubscribersPerPeer = 4
 
 type rpcSubscriber struct {
 	mu       sync.Mutex
@@ -242,6 +244,18 @@ func (m *ClientRPCMutations) subscribe(peer local.Peer, build *ipc.BuildIdentity
 	defer m.mu.Unlock()
 	if peer.Identity == "" {
 		return nil, rpc.Error(connect.CodeUnauthenticated, ipc.ErrorCode_ERROR_CODE_UNAUTHENTICATED)
+	}
+	if len(m.subscribers) >= rpcMaxEventSubscribers {
+		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+	}
+	peerSubscriptions := 0
+	for subscriber := range m.subscribers {
+		if strings.EqualFold(subscriber.peer.Identity, peer.Identity) {
+			peerSubscriptions++
+		}
+	}
+	if peerSubscriptions >= rpcMaxEventSubscribersPerPeer {
+		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 	}
 	snapshot, err := m.snapshotLocked(peer, build, m.store.Read())
 	if err != nil {

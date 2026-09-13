@@ -152,6 +152,17 @@ and not increment the revision. This is a unit test of observation admission;
 it does not exercise a real profile-switch worker or qualify cross-network
 traffic isolation.
 
+Event resource bounds: `subscribe` admits at most 16 subscriptions per runtime
+and four per OS identity (using the same case-insensitive identity comparison
+as authorization). Admission and removal share the mutation lock. Rejection
+returns typed `LIMIT_EXCEEDED` before allocating a snapshot/queue; administrators
+do not bypass the resource cap. Unsubscription releases the slot. Together with
+the existing 8 MiB queue bound this caps accounted queued event payload at
+128 MiB, not total process/transport memory. `TestRPCEventSubscriptionLimitsAndRelease`
+checks both caps, identity casing, anonymous rejection before capacity errors,
+slot reuse and snapshot-first sequencing. Real slow-consumer load qualification
+remains deferred.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. `client`
