@@ -7,6 +7,7 @@ import (
 	"io"
 	"runtime"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
@@ -43,6 +44,7 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	pipe, socket := serviceIPCTransportFlags(fs)
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
 	var operationID, requestID string
+	var wait bool
 	var pageSize uint
 	var pageToken string
 	if command == "profiles" {
@@ -50,6 +52,7 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 		fs.StringVar(&pageToken, "page-token", "", "opaque token from the previous page")
 	}
 	if command == "operation" {
+		fs.BoolVar(&wait, "wait", false, "emit operation changes until terminal state or timeout; never repeat the mutation")
 		fs.StringVar(&operationID, "operation-id", "", "accepted operation UUID")
 		fs.StringVar(&requestID, "request-id", "", "original mutation request UUID for lost-response recovery")
 	}
@@ -105,6 +108,17 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	case "operation":
 		response, err := consumer.GetOperation(ctx, connect.NewRequest(lookup))
 		if err != nil {
+			return err
+		}
+		if wait {
+			_, err := waitServiceOperation(ctx, consumer, response.Msg.Operation, 250*time.Millisecond, func(op *ipc.Operation) error {
+				encoded, err := protojson.Marshal(&ipc.GetOperationResponse{Operation: op})
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(output, string(encoded))
+				return err
+			})
 			return err
 		}
 		message = response.Msg

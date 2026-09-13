@@ -102,7 +102,7 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	}
 	for flag, id := range map[string]string{"--request-id": requestID, "--operation-id": accepted.Msg.Operation.Id} {
 		output, err := captureStdout(t, func() error {
-			return cmdService([]string{"operation", flag, id, transportFlag, endpoint, "--timeout", "5s"})
+			return cmdService([]string{"operation", flag, id, "--wait", transportFlag, endpoint, "--timeout", "5s"})
 		})
 		if err != nil {
 			t.Fatal("CLI operation lookup failed", flag, err)

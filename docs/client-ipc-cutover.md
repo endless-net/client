@@ -661,3 +661,12 @@ inactive-profile rejection through native CLI dispatch. Successful real-control
 CLI enrollment remains a system gate. The separate managed enrollment entry point
 still uses its old helper and must be migrated; this change does not remove that
 remaining consumer or claim full enrollment cutover.
+
+`service operation --wait` now polls only GetOperation by the accepted operation
+ID, emits changed operation responses as protobuf NDJSON, and completes only on
+SUCCEEDED. FAILED, invalid identity/state, read/output errors and timeout return
+errors; WAITING_FOR_USER remains nonterminal and exposes its action in the output.
+Tests cover waiting/deduplicated progress/success, terminal failure, changed
+identity, cancellation and output/read failures, plus completed-operation waits
+through the local CLI host. This reader is available for replacing managed-up's
+old repeated-Enroll loop; that consumer has not yet been switched.
