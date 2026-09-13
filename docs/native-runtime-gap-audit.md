@@ -163,6 +163,25 @@ printing identities, credentials or arbitrary error details. Status predicates,
 traffic assertions, timeouts and enrollment-count checks remain unchanged.
 Connection-intent restart/outage/recovery acceptance remains open.
 
+## Installed Unix permission follow-up — source 92085ba
+
+[Ubuntu 24.04 job 103717701616](https://github.com/endless-net/client/actions/runs/34754925762/job/103717701616)
+ran source `92085ba8dfaad3cc77f3f8718229692f0330a44b`. It passed the
+restricted Unix IPC attempts with complete native mutation arguments, then
+connected-intent restart and executable-loss repair. The next failure was the
+status wait in `cached traffic after service startup without control`.
+The preceding current-agent failure observation passed; failure diagnostics
+reported the same identity, an OK tunnel, one peer and the expected endpoint.
+The cached-traffic probe itself was not reached, so this is not offline traffic
+acceptance. Investigate native connection-phase publication separately from
+control failure and cached dataplane state; do not relax the connected predicate.
+
+The session recovery, routed-resource and service-catalog scenarios now also use
+the explicit HTTPS control fixture and runner-scoped test certificate trust.
+Their original authorization, signed-map and actual-traffic assertions remain
+unchanged. Short tests do not execute these privileged scenarios; fresh hosted
+results are required before claiming HC-014, HC-032 or HC-051 acceptance.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,

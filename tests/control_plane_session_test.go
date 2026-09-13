@@ -29,12 +29,13 @@ func TestControlPlaneSessionExpiryRecovery(t *testing.T) {
 
 func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 	t.Helper()
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	network, _, err := s.AddNetwork("session-recovery", "198.18.90.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	n.TrustControlTLS(s)
 	login := func(token string) {
 		t.Helper()
 		n.MustRun("login", "--config", n.Config, "--server", s.URL(), "--token", token, "--map-signing-trust-file", n.TrustFile)
