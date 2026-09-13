@@ -105,9 +105,10 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	}
 	var patch *ipc.PreferencesPatch
 	var keys []ipc.PreferenceKey
-	if command == "set-preferences" {
+	switch command {
+	case "set-preferences":
 		patch, err = nativePreferencePatch(patchJSON)
-	} else if command == "reset-preferences" {
+	case "reset-preferences":
 		keys, err = nativePreferenceResetKeys(resetKeys)
 	}
 	if err != nil {
