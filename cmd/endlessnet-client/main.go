@@ -37,14 +37,6 @@ var (
 	buildDate = "unknown"
 )
 
-var newServiceIPCClient = func(endpoint string) *ipc.Client {
-	local, err := ipc.NewLocalClient(endpoint)
-	if err != nil {
-		return nil
-	}
-	return local
-}
-
 var loginDiscoveryHTTPClient = &http.Client{
 	Timeout: 10 * time.Second,
 	CheckRedirect: func(*http.Request, []*http.Request) error {

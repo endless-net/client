@@ -21,3 +21,14 @@ no success output and no replay/fallback. Missing contexts and oversized pages
 fail before connection. This does not prove actual runtime providers, network
 switching or bundle export. Unimplemented runtime capabilities still fail closed;
 remaining legacy core handlers/consumers and ipc/v2 deletion are separate work.
+
+## Native operation wait hardening
+
+Waiting now handles CANCELLED as a terminal unsuccessful operation, rejects a
+missing GetOperation response/message/operation without panicking, and stops
+before reporting/polling an already canceled context. Accepted operations and
+reporter values are cloned so output callbacks cannot rewrite the retained
+lookup identity or the caller's input. Short tests cover these negative outcomes,
+one terminal cancellation lookup and reporter mutation without command replay.
+The now-unused legacy IPC client factory is removed. Other legacy DTO users and
+runtime/test harness migration remain outside this completed CLI wait change.
