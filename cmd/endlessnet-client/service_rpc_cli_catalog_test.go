@@ -50,6 +50,12 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		args              []string
 		request, response proto.Message
 	}{
+		{"resources", "ListResources", []string{"--page-size", "4", "--page-token", "opaque-page", "--search", " HOST ", "--kinds", "host,subnet,service,application"}, &ipc.ListResourcesRequest{Profile: ref, Page: &ipc.PageRequest{PageSize: 4, PageToken: "opaque-page"}, Search: " HOST ", Kinds: []ipc.ResourceKind{ipc.ResourceKind_RESOURCE_KIND_HOST, ipc.ResourceKind_RESOURCE_KIND_SUBNET, ipc.ResourceKind_RESOURCE_KIND_SERVICE, ipc.ResourceKind_RESOURCE_KIND_APPLICATION}}, &ipc.ListResourcesResponse{Resources: []*ipc.Resource{
+			{Id: "host", Kind: ipc.ResourceKind_RESOURCE_KIND_HOST, Target: &ipc.Resource_Host{Host: &ipc.HostTarget{Hostname: "host.test"}}, Enabled: &ipc.BooleanSetting{Requested: proto.Bool(false)}},
+			{Id: "subnet", Kind: ipc.ResourceKind_RESOURCE_KIND_SUBNET, Target: &ipc.Resource_Subnet{Subnet: &ipc.SubnetTarget{Cidr: "192.0.2.0/24"}}},
+			{Id: "service", Kind: ipc.ResourceKind_RESOURCE_KIND_SERVICE, Target: &ipc.Resource_Service{Service: &ipc.ServiceTarget{Hostname: "host.test", Port: 443, Protocol: "tcp"}}},
+			{Id: "application", Kind: ipc.ResourceKind_RESOURCE_KIND_APPLICATION, Target: &ipc.Resource_Application{Application: &ipc.ApplicationTarget{BrowserUrl: "https://app.example.test"}}},
+		}, Page: &ipc.PageResponse{NextPageToken: "next"}}},
 		{"set-resource-enabled", "SetResourceEnabled", []string{"--resource-id", "resource-exact-id", "--enabled=true"}, &ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: "resource-exact-id", Enabled: true}, &ipc.SetResourceEnabledResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SET_RESOURCE_ENABLED)}},
 		{"set-resource-enabled", "SetResourceEnabled", []string{"--resource-id", "resource-exact-id", "--enabled=false"}, &ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: "resource-exact-id", Enabled: false}, &ipc.SetResourceEnabledResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SET_RESOURCE_ENABLED)}},
 		{"select-exit-node", "SelectExitNode", []string{"--exit-node-id", "exit-exact-id", "--family-mode", "ipv4-only", "--lan-access", "allow"}, &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY, LanAccess: ipc.LanAccess_LAN_ACCESS_ALLOW}, &ipc.SelectExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE)}},
@@ -88,6 +94,7 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		code            ipc.ErrorCode
 		transportCode   connect.Code
 	}{
+		{"resources", "ListResources", &ipc.ListResourcesRequest{Profile: ref, Page: &ipc.PageRequest{}}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},
 		{"set-resource-enabled", "SetResourceEnabled", &ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: "resource-exact-id", Enabled: true}, ipc.ErrorCode_ERROR_CODE_RESOURCE_CONFLICT, connect.CodeFailedPrecondition},
 		{"set-resource-enabled", "SetResourceEnabled", &ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: "resource-exact-id", Enabled: true}, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED, connect.CodePermissionDenied},
 		{"select-exit-node", "SelectExitNode", &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK, LanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},

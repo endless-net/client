@@ -45,18 +45,23 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
 	var operationID, requestID string
 	var profileID string
-	requiresProfile := command == "preferences" || command == "managed-settings" || command == "session" || command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent" || command == "exit-nodes" || command == "exit-node"
+	requiresProfile := command == "preferences" || command == "managed-settings" || command == "session" || command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent" || command == "exit-nodes" || command == "exit-node" || command == "resources"
 	if requiresProfile {
 		fs.StringVar(&profileID, "profile-id", "", "required target profile")
 	}
 	var wait bool
 	var pageSize uint
 	var pageToken string
-	if command == "profiles" || command == "networks" || command == "peers" || command == "logs-recent" || command == "exit-nodes" {
+	if command == "profiles" || command == "networks" || command == "peers" || command == "logs-recent" || command == "exit-nodes" || command == "resources" {
 		fs.UintVar(&pageSize, "page-size", 0, "page size; 0 uses 100, maximum 500")
 		fs.StringVar(&pageToken, "page-token", "", "opaque token from the previous page")
 	}
 	var search string
+	var resourceKinds string
+	if command == "resources" {
+		fs.StringVar(&search, "search", "", "resource search passed unchanged to the authorized catalog")
+		fs.StringVar(&resourceKinds, "kinds", "", "optional comma-separated host,subnet,service,application filters")
+	}
 	if command == "peers" {
 		fs.StringVar(&search, "search", "", "filter peers by ID, hostname or overlay address")
 	}
@@ -76,6 +81,10 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	if pageSize > 500 {
 		return fmt.Errorf("--page-size cannot exceed 500")
+	}
+	kinds, err := nativeResourceKinds(resourceKinds)
+	if err != nil {
+		return err
 	}
 	var lookup *ipc.GetOperationRequest
 	if command == "operation" {
@@ -155,6 +164,12 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 		message = response.Msg
 	case "exit-node":
 		response, err := consumer.GetExitNode(ctx, connect.NewRequest(&ipc.GetExitNodeRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
+	case "resources":
+		response, err := consumer.ListResources(ctx, connect.NewRequest(&ipc.ListResourcesRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}, Page: &ipc.PageRequest{PageSize: uint32(pageSize), PageToken: pageToken}, Search: search, Kinds: kinds}))
 		if err != nil {
 			return err
 		}
