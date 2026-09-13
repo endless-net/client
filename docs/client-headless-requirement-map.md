@@ -55,13 +55,69 @@ No integration tests were executed to populate this table.
 | IT-32 | Private diagnostics access, bounded export and resource context | I `service_rpc_bundle_read_test.go`; `service_rpc_bundle_admin_test.go` | Resource search runtime missing; independently audit every bundle bound and authorization case |
 | IT-33 | Contract mismatch and honest update/distribution status | `clientipc/rpc/protocol_test.go`; I `service_rpc_update_test.go` | Verified update source absent; unavailable-path tests do not prove installation or release pairing |
 
-## Next audit work
+## Business requirements and acceptance criteria
+
+Source: [headless BA at the same architecture revision](https://github.com/endless-net/architecture/blob/bdb5ba63c0e5356122c0760f4d63205e84ef507d/docs/ru/headless-client-business-analysis.md).
+All BR-01–20 and AC-01–20 are accounted for below. Links to IT rows inherit their
+runtime/unit review entry points; **no AC is accepted by this inventory**.
+The BA's product-choice and development categories are retained as unresolved
+scope/variant dependencies, not silently promoted to implemented release scope.
+
+| BR | AC | Client responsibility / trace | Open dependency or missing evidence |
+| --- | --- | --- | --- |
+| BR-01 | AC-01 | Packaging, service startup and protected transport; US-01/13, IT-33 | Q-02 supported variants; real reboot without OS login is not a unit assertion |
+| BR-02 | AC-02 | Human enrollment and independent session recovery; IT-01–03, IT-20/29 | IdP/approval producer; session runtime missing |
+| BR-03 | AC-03 | Registration identity, attributes, replay and failures; IT-04–06/24 | Producer registration/revocation semantics; Q-03/04 |
+| BR-04 | AC-04 | Persistent/ephemeral workload and termination behavior; IT-24, US-12 | Q-02/03 workload variants, loss detection and cleanup; userspace mode is not inferred from container tests |
+| BR-05 | AC-05 | Admission before use and explicit trust recovery; IT-01–03/19 | Q-05 independent approval model; backend admission and actual denied traffic |
+| BR-06 | AC-06 | Durable intent and lifecycle settings; IT-22/26/31 | Remaining lifecycle preferences/adapters incomplete |
+| BR-07 | AC-07 | Single active profile and isolated context transitions; IT-22/23/28 | Q-06 variants; real provider/network switching incomplete |
+| BR-08 | AC-08 | Peer projection and allowed versus denied service use; IT-07/12 | Actual application traffic; status alone is insufficient |
+| BR-09 | AC-09 | DNS projection and external resolver preference; IT-16 | Accept-DNS setting incomplete; resolver behavior is platform evidence |
+| BR-10 | AC-10 | Revocation and local restriction intersection; IT-08–10/15/30 | Q-04 revoke bounds; local inbound preference incomplete |
+| BR-11 | AC-11 | Direct/relay recovery, network change and bounded offline authority; IT-11–14/20 | Q-10 recovery bounds and Q-07 role variants; HA is not inferred from basic recovery |
+| BR-12 | AC-12 | Subnet/resource routing and conflicts; IT-16/30 | Q-07 overlap policy; resource API/preferences incomplete; hosting/provider responsibilities remain distinct |
+| BR-13 | AC-13 | Authorized exit selection, LAN and fail-closed behavior; IT-30 | Exit runtime missing; Q-07 and updated backend policy contract |
+| BR-14 | AC-14 | Logical application discovery and lease-bound routing; IT-17 | Q-08 host/discovery semantics; producer report acceptance and real resource access |
+| BR-15 | AC-15 | Remote commands/files/forwarding are product-development scope | Q-01/09 accepted feature variants and producer authority are unresolved; no fabricated client implementation claim |
+| BR-16 | AC-16 | Machine sharing enforcement; IT-18 | Q-09 file-transfer scope unresolved; sharing does not imply whole-network access |
+| BR-17 | AC-17 | Private/public publication remains product-choice scope | Q-01/09 audience, authorization, termination and HTTPS identity; URL presence is not authorization |
+| BR-18 | AC-18 | Typed readiness/failures, logs, diagnostics and bounded automation; IT-25/27/32 | Q-10/11 data and timing requirements; route sampling remains partial |
+| BR-19 | AC-19 | Update/recovery identity and explicit reset; IT-21/23/33 | Verified update source missing; real installation/resource outcomes deferred |
+| BR-20 | AC-20 | Local removal distinguished from server revocation; IT-23/24 | Q-04 lease/revoke bounds; remote lost-device cleanup cannot be proven locally |
+
+## Business-rule obligations
+
+Each rule below remains open for exact assertion review. Existing code/test
+families are identified in the IT table, rather than counted as proof by name.
+
+| Rule | Client invariant and trace | Unit audit / external limit |
+| --- | --- | --- |
+| RULE-01 | Installation privilege does not grant account/network authority; IT-02/04/19 | Audit local administrator versus backend authorization separately |
+| RULE-02 | Context changes cannot union access; IT-22/28 | Delayed response and profile isolation assertions |
+| RULE-03 | Enrollment authority revocation differs from node revocation; IT-06/24 | Backend owns revocation; client must preserve typed distinction |
+| RULE-04 | Separate machines have separate identity; IT-04/05 | Registration replay is not identity cloning; Q-03 replacement semantics |
+| RULE-05 | Pending registration/approval is not permission; IT-01–03/17 | No credential/map/route use before valid completion |
+| RULE-06 | Local settings may only restrict central authority; IT-15/16/30 | Missing preference/resource runtime must enforce policy intersection |
+| RULE-07 | Intent, apply result and actual availability differ; IT-07/27/30 | Snapshot/operation assertions; real traffic remains separate evidence |
+| RULE-08 | Ephemeral access has explicit normal/crash termination; BR-04, IT-24 | Q-03 and backend expiry/cleanup; no inferred perpetual authorization |
+| RULE-09 | Public audience requires explicit authorized choice; BR-17 | Product/provider dependency; never infer publication permission from URL |
+| RULE-10 | Sharing one machine does not share its network; IT-18 | Recipient/direction/identity replacement and unrelated-target denial |
+| RULE-11 | Offline operation cannot extend trust indefinitely; IT-10/11/20/24 | Expiry and replay tests; Q-04/05 bound remaining authority |
+| RULE-12 | Disconnect/logout/stop/reset/uninstall/revoke remain distinct; IT-22–24/31/33 | Audit each durable outcome and failure path independently |
+| RULE-13 | Declared unattended mode works without desktop session; BR-01/04 | Service/OS acceptance deferred; GUI startup is outside this client task |
+| RULE-14 | Diagnostics protect secrets and access scope; IT-25/32 | Redaction, owner binding, expiry and bounds; Q-11 governs transmission/storage |
+| RULE-15 | Unsupported/unverified never becomes success; IT-20/30/33 | Explicit failure and partial-status assertions; does not excuse missing required functionality |
+| RULE-16 | Existing account limits affect results, no invented tariff rules; IT-02/04/17/30 | Producer entitlements and Q-12; do not introduce client-side product policy |
+
+## Remaining assertion audit
 
 - Expand each review entry into exact unit assertions and missing branches; do
   not mark a row implemented from a filename or successful package test.
-- Reconcile BA requirement/rule/acceptance IDs with these IT and the
+- Reconcile the local v0 requirement variants with these BA/IT rows and the
   [client scenario map](client-runtime-implementation-gaps.md#client-owned-scenario-map).
-  This file covers the IT inventory, not all BA/SA numbered requirements.
+  This file inventories headless BR/AC/RULE/IT IDs; it is not yet the complete
+  assertion-level matrix for all applicable local v0 requirements.
 - Implement missing client behavior before the deferred integration phase.
   Keep producer/OS/distribution blockers explicit and do not broaden repository
   write scope to resolve them.
