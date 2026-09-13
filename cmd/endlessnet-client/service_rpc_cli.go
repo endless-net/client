@@ -45,7 +45,8 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
 	var operationID, requestID string
 	var profileID string
-	if command == "session" || command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent" {
+	requiresProfile := command == "preferences" || command == "managed-settings" || command == "session" || command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent"
+	if requiresProfile {
 		fs.StringVar(&profileID, "profile-id", "", "required target profile")
 	}
 	var wait bool
@@ -70,7 +71,7 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("service %s does not accept positional arguments", command)
 	}
-	if (command == "session" || command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent") && strings.TrimSpace(profileID) == "" {
+	if requiresProfile && strings.TrimSpace(profileID) == "" {
 		return fmt.Errorf("--profile-id is required")
 	}
 	if pageSize > 500 {
@@ -110,6 +111,18 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	var message proto.Message
 	switch command {
+	case "preferences":
+		response, err := consumer.GetPreferences(ctx, connect.NewRequest(&ipc.GetPreferencesRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
+	case "managed-settings":
+		response, err := consumer.ListManagedSettings(ctx, connect.NewRequest(&ipc.ListManagedSettingsRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
 	case "session":
 		response, err := consumer.GetSession(ctx, connect.NewRequest(&ipc.GetSessionRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
 		if err != nil {

@@ -21,10 +21,10 @@ import (
 
 func cmdService(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, runtime-info, support-info, events, operation, profiles, create-profile, select-profile, rename-profile, remove-profile, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, peers, session, renew-session, diagnostics, diagnostics-bundle, or logs-recent")
+		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, runtime-info, support-info, events, operation, profiles, create-profile, select-profile, rename-profile, remove-profile, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, peers, preferences, managed-settings, session, renew-session, diagnostics, diagnostics-bundle, or logs-recent")
 	}
 	switch args[0] {
-	case "status", "runtime-info", "support-info", "events", "operation", "profiles", "server-identity", "networks", "peers", "session", "diagnostics", "logs-recent":
+	case "status", "runtime-info", "support-info", "events", "operation", "profiles", "server-identity", "networks", "peers", "preferences", "managed-settings", "session", "diagnostics", "logs-recent":
 		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
 	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile", "local-forget", "enroll", "trust-server", "select-network", "diagnostics-bundle", "renew-session":
 		return cmdServiceRPCMutation(args[0], args[1:], os.Stdout)

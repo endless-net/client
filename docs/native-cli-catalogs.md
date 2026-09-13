@@ -1,5 +1,12 @@
 # Native CLI catalogs and diagnostics
 
+`service preferences` and `service managed-settings` read their native producer
+methods with a required profile ID. Output retains protobuf presence, effective
+values, setting source, locks and mutation restrictions; the CLI does not invent
+defaults or clear policy. Exact request/response local transport fixtures cover
+both commands, and missing profile is rejected before connecting. These read-only
+commands do not implement runtime preference application or policy administration.
+
 `service session --profile-id <id>` reads GetSession without inferring expiry
 from token presence. `service renew-session` sends RenewSession with an explicit
 profile, retained request UUID and instance/revision CAS. Acceptance is only an

@@ -51,6 +51,8 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		request, response proto.Message
 	}{
 		{"peers", "ListPeers", []string{"--page-size", "2", "--page-token", "opaque-page", "--search", " HOST "}, &ipc.ListPeersRequest{Profile: ref, Page: page, Search: " HOST "}, &ipc.ListPeersResponse{Peers: []*ipc.Peer{{Id: "peer-a", Hostname: "host-a"}}, SnapshotState: ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT, MapRevision: 7, TargetMapRevision: 7, Page: &ipc.PageResponse{NextPageToken: "next"}}},
+		{"preferences", "GetPreferences", nil, &ipc.GetPreferencesRequest{Profile: ref}, &ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: ref.ProfileId, AcceptDns: &ipc.BooleanSetting{Effective: true}}}},
+		{"managed-settings", "ListManagedSettings", nil, &ipc.ListManagedSettingsRequest{Profile: ref}, &ipc.ListManagedSettingsResponse{Settings: []*ipc.ManagedSetting{{Key: ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS, Control: &ipc.SettingControl{Locked: true, Source: ipc.SettingSource_SETTING_SOURCE_ACCOUNT_POLICY}}}}},
 		{"session", "GetSession", nil, &ipc.GetSessionRequest{Profile: ref}, &ipc.GetSessionResponse{Session: &ipc.Session{State: ipc.SessionState_SESSION_STATE_ACTIVE}}},
 		{"renew-session", "RenewSession", nil, &ipc.RenewSessionRequest{Mutation: mutation, Profile: ref}, &ipc.RenewSessionResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_RENEW_SESSION)}},
 		{"networks", "ListNetworks", []string{"--page-size", "2", "--page-token", "opaque-page"}, &ipc.ListNetworksRequest{Profile: ref, Page: page}, &ipc.ListNetworksResponse{}},
@@ -137,7 +139,7 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 }
 
 func TestNativeCatalogCLIRejectsMissingContext(t *testing.T) {
-	for _, command := range []string{"session", "networks", "peers", "diagnostics", "logs-recent"} {
+	for _, command := range []string{"preferences", "managed-settings", "session", "networks", "peers", "diagnostics", "logs-recent"} {
 		var output bytes.Buffer
 		if err := cmdServiceRPCQuery(command, nil, &output); err == nil || output.Len() != 0 {
 			t.Fatal("missing profile accepted", command)
