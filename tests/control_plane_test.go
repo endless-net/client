@@ -50,10 +50,7 @@ func TestControlPlaneRecoveryErrorMatrix(t *testing.T) {
 			}
 			n.Start()
 			if tc.terminal {
-				n.AwaitNativeStatus(func(v *native.Status) bool {
-					return v.ServiceState == native.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT && v.NodeId == "" &&
-						v.StoredState != nil && !v.StoredState.NodeCredentialPresent && !v.StoredState.CachedMapPresent
-				})
+				n.AwaitNativeStatus(nativeEnrollmentAbsent)
 			} else {
 				v := n.AwaitNativeStatus(nativeCurrentAgentFailure)
 				if v.NodeId != id || !v.GetStoredState().GetNodeCredentialPresent() || !v.GetStoredState().GetCachedMapValid() {
@@ -133,8 +130,6 @@ func controlScenario(t *testing.T) (*testcontrol.Server, *testclient.Node, strin
 	return s, n, status.NodeID
 }
 
-// IT-05 / HC-010: retry a committed registration after its response was lost.
-// A second CLI process must recover the operation without exposing its store.
 // IT-04/IT-10: even a trusted signature cannot authorize a response for a
 // different request or a credential for a different node/network.
 func TestControlPlaneRejectsRegistrationResponseMismatch(t *testing.T) {
@@ -155,13 +150,13 @@ func TestControlPlaneRejectsRegistrationResponseMismatch(t *testing.T) {
 				t.Fatal("invalid registration response accepted")
 			}
 			n.Start()
-			n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.State == ipc.StateNeedsEnrollment && v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent
-			})
+			n.AwaitNativeStatus(nativeEnrollmentAbsent)
 			n.Stop()
 			n.MustRun(args...)
 			n.Start()
-			status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
+			status := n.AwaitNativeStatus(func(v *native.Status) bool {
+				return v.NodeId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
+			})
 			var first testcontrol.Event
 			attempts, registrations, injected := 0, 0, 0
 			for _, event := range s.Events() {
@@ -175,20 +170,22 @@ func TestControlPlaneRejectsRegistrationResponseMismatch(t *testing.T) {
 					attempts++
 				case "registered":
 					registrations++
-					if event.NodeID != status.NodeID {
+					if event.NodeID != status.NodeId {
 						t.Fatal("recovery selected a different node")
 					}
 				case "registration-response-faulted":
 					injected++
 				}
 			}
-			if attempts != 2 || registrations != 1 || injected != 1 {
+			if attempts != 2 || registrations != 1 || injected != 1 || first.OperationID == "" || first.RequestHash == "" {
 				t.Fatal("mismatch recovery did not reuse the single committed operation")
 			}
 		})
 	}
 }
 
+// IT-05 / HC-010: retry a committed registration after its response was lost.
+// A second CLI process must recover the operation without exposing its store.
 func TestControlPlaneRegistrationResponseLoss(t *testing.T) {
 	requireControlScenario(t)
 	s := testcontrol.New(t)
@@ -226,7 +223,9 @@ func TestControlPlaneRegistrationResponseLoss(t *testing.T) {
 		t.Fatal("registration did not recover after response loss")
 	}
 	n.Start()
-	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
+	status := n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.NodeId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
+	})
 	var first testcontrol.Event
 	attempts, registrations := 0, 0
 	dropped := ""
@@ -245,7 +244,7 @@ func TestControlPlaneRegistrationResponseLoss(t *testing.T) {
 			dropped = event.NodeID
 		}
 	}
-	if attempts < 2 || registrations != 1 || dropped != status.NodeID {
+	if attempts < 2 || registrations != 1 || dropped != status.NodeId || first.OperationID == "" || first.RequestHash == "" {
 		t.Fatal("retry did not recover the original registered node")
 	}
 }

@@ -12,6 +12,34 @@ func nativeCurrentAgentFailure(status *ipc.Status) bool {
 	return status != nil && status.Agent != nil && status.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && status.Agent.LastFailure != nil
 }
 
+func nativeEnrollmentAbsent(status *ipc.Status) bool {
+	return status != nil && status.ServiceState == ipc.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT && status.NodeId == "" &&
+		status.StoredState != nil && !status.StoredState.NodeCredentialPresent && !status.StoredState.CachedMapPresent && !status.StoredState.CachedMapValid
+}
+
+func TestNativeEnrollmentAbsenceRequiresExplicitStoredState(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status *ipc.Status
+		want   bool
+	}{
+		{"missing-status", nil, false},
+		{"missing-state", &ipc.Status{ServiceState: ipc.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT}, false},
+		{"unspecified-service", &ipc.Status{StoredState: &ipc.StoredStatePresence{}}, false},
+		{"retained-node", &ipc.Status{ServiceState: ipc.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT, NodeId: "retained", StoredState: &ipc.StoredStatePresence{}}, false},
+		{"retained-credential", &ipc.Status{ServiceState: ipc.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT, StoredState: &ipc.StoredStatePresence{NodeCredentialPresent: true}}, false},
+		{"retained-cache", &ipc.Status{ServiceState: ipc.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT, StoredState: &ipc.StoredStatePresence{CachedMapPresent: true}}, false},
+		{"inconsistent-cache", &ipc.Status{ServiceState: ipc.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT, StoredState: &ipc.StoredStatePresence{CachedMapValid: true}}, false},
+		{"explicit-absence", &ipc.Status{ServiceState: ipc.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT, StoredState: &ipc.StoredStatePresence{}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := nativeEnrollmentAbsent(tc.status); got != tc.want {
+				t.Fatalf("enrollment absence = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNativeAgentFailureIsNotInferredFromControlHealth(t *testing.T) {
 	status := &ipc.Status{ControlState: ipc.ControlState_CONTROL_STATE_DEGRADED}
 	if nativeCurrentAgentFailure(status) {

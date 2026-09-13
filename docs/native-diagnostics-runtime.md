@@ -127,6 +127,17 @@ terminal map-stream cleanup and the separate enrollment-renewal recovery flow.
 Other legacy status consumers still need conversion; these process scenarios need
 isolated CI execution before they count as acceptance evidence.
 
+Registration response-binding (six faults) and lost-response recovery scenarios
+now observe the agent through native status as well. They still exercise the
+standalone headless `up` command, not native enrollment RPC acceptance. They check
+that retries preserve a nonempty operation ID and signed request hash, commit
+exactly one node, and recover that node with credential presence and a verified
+cache. Changed pending input must not reach the registration endpoint. Rejected
+responses and terminal cleanup use an explicit enrollment-absence predicate;
+short tests reject missing projections, retained node/credential/cache and
+inconsistent cache-valid flags. Process-level registration evidence still requires
+isolated CI; short tests only compile those guarded scenarios.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP
