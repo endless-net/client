@@ -97,6 +97,15 @@ override and snapshot revision are preserved. The same test checks that Set and
 Reset reject the inactive profile without state changes. Managed settings reuse
 this preferences projection; the other preference keys remain unimplemented.
 
+`TestRPCPreferenceReadAuthorizationAndValidation` covers owner/administrator
+reads, anonymous callers (including a claimed administrator with no identity),
+and non-owner reads against existing, missing and malformed profile references.
+Authorization must precede profile lookup so those references do not reveal
+profile existence to observers. Authorized malformed/missing references return
+typed validation/not-found errors. Failed reads expose no response, and every
+case leaves the durable configuration unchanged. These are handler-domain unit
+assertions, not evidence for OS peer authentication or backend policy behavior.
+
 US-07 route-target increment: `WireGuardRouteTargetsForPeers` now includes every
 host address of each peer, rather than only the first address. The unit test
 `TestWireGuardRouteTargetsRetainEveryPeerAddress` covers a dual-stack peer,
