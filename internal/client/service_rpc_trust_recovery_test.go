@@ -147,7 +147,7 @@ func TestRPCTrustRecoveryTransactions(t *testing.T) {
 				if result.State != ipc.OperationState_OPERATION_STATE_RUNNING || !after.EnrollmentRecovery.Retryable || after.RPCState.Trust == nil || after.NodeCredential != before.NodeCredential {
 					t.Fatal("retry lost durable authority")
 				}
-				m, err = NewClientRPCMutations(m.store)
+				m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 				if err != nil {
 					t.Fatal(err)
 				}

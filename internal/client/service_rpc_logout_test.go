@@ -38,7 +38,7 @@ func TestRPCLogoutAdmissionAndMonotonicRemoteProgress(t *testing.T) {
 	if err != nil || disk.RPCState.Logout == nil || !disk.RPCState.Logout.Progress.NodeRevoked || disk.Token != "synthetic-session" || disk.NodeID != "node" {
 		t.Fatal("remote checkpoint lost confirmation or deleted local registration")
 	}
-	restarted, err := NewClientRPCMutations(m.store)
+	restarted, err := NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestRPCLogoutAdmissionAndMonotonicRemoteProgress(t *testing.T) {
 	if err := checkpoint(ClientRPCLogoutProgress{NodeRevoked: true, SessionRevoked: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.store.Update(func(cfg *Config) error { cfg.Token = "synthetic-replacement-session"; return nil }); err != nil {
+	if err := restarted.store.Update(func(cfg *Config) error { cfg.Token = "synthetic-replacement-session"; return nil }); err != nil {
 		t.Fatal(err)
 	}
 	assertRPCFailure(t, checkpoint(ClientRPCLogoutProgress{NodeRevoked: true, SessionRevoked: true}), ipc.ErrorCode_ERROR_CODE_STALE_STATE)

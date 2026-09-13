@@ -121,7 +121,7 @@ func TestRPCTrustAdoptionDurability(t *testing.T) {
 				if cfg := m.store.Read(); cfg.EnrollmentRecovery != nil || cfg.MapSigningTrust.ActiveKeyID != trusted.ActiveKeyID {
 					t.Fatal("canceled Down adopted trust")
 				}
-				m, err = NewClientRPCMutations(m.store)
+				m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -148,10 +148,7 @@ func TestRPCTrustAdoptionDurability(t *testing.T) {
 				}
 				// Reopen the persisted journal: exact retry must return the old
 				// result even though its original CAS belongs to the old instance.
-				restartedStore, err := OpenConfigStore(m.store.path)
-				if err != nil {
-					t.Fatal(err)
-				}
+				restartedStore := reopenRPCStoreFromDisk(t, m.store)
 				m, err = NewClientRPCMutations(restartedStore)
 				if err != nil {
 					t.Fatal(err)

@@ -727,6 +727,14 @@ original operation ID and protected token in resumed provider input. These tests
 retain terminal cleanup and profile-switch continuity assertions; they simulate
 worker loss in-process and do not replace installed process-crash acceptance.
 
+Logout progress, queued local-forget, trust adoption interrupted during teardown,
+unchanged-trust replay and retryable trust recovery tests also rebuild their
+store from disk. Queued forget must leave the original enrollment cancelled,
+its own operation succeeded and no enrollment plan before any provider can run.
+The logout test retains monotonic remote confirmation and replacement-session
+rejection. These are durable-state unit checks, not remote revocation or installed
+crash/recovery acceptance.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

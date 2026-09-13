@@ -84,14 +84,16 @@ func TestRPCForgetCancelsAndDrainsRunningEnrollment(t *testing.T) {
 
 func TestRPCForgetCancelsQueuedEnrollmentAfterRestart(t *testing.T) {
 	m, peer, request := enrollmentAdmissionTest(t)
-	if _, err := m.enrollAs(peer, request); err != nil {
+	enrollment, err := m.enrollAs(peer, request)
+	if err != nil {
 		t.Fatal(err)
 	}
 	peer.Administrator = true
-	if _, err := m.forgetEnrollmentAs(peer, &ipc.ForgetLocalEnrollmentRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: request.Profile, Confirmed: true}); err != nil {
+	forgotten, err := m.forgetEnrollmentAs(peer, &ipc.ForgetLocalEnrollmentRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: request.Profile, Confirmed: true})
+	if err != nil {
 		t.Fatal(err)
 	}
-	restarted, err := NewClientRPCMutations(m.store)
+	restarted, err := NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,6 +107,14 @@ func TestRPCForgetCancelsQueuedEnrollmentAfterRestart(t *testing.T) {
 		return nil, nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+	previous, err := restarted.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: enrollment.Id}})
+	if err != nil || previous.GetState() != ipc.OperationState_OPERATION_STATE_CANCELLED {
+		t.Fatal("disk-backed forget did not cancel queued enrollment")
+	}
+	result, err := restarted.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: forgotten.Id}})
+	if err != nil || result.GetState() != ipc.OperationState_OPERATION_STATE_SUCCEEDED || restarted.store.Read().RPCState.Enrollment != nil {
+		t.Fatal("disk-backed forget did not complete and clear enrollment authority")
 	}
 }
 
