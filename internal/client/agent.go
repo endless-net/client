@@ -48,6 +48,10 @@ type AgentRelaySnapshot struct {
 	Error    string              `json:"error,omitempty"`
 }
 
+type AgentFailureKind string
+
+const AgentFailureServerIdentityChanged AgentFailureKind = "server_identity_changed"
+
 type AgentSnapshot struct {
 	ProfileID   string                `json:"profile_id,omitempty"`
 	GeneratedAt string                `json:"generated_at"`
@@ -63,6 +67,7 @@ type AgentSnapshot struct {
 	WireGuard   *WireGuardInspection  `json:"wireguard,omitempty"`
 	Apply       *WireGuardApplyResult `json:"apply,omitempty"`
 	LastError   string                `json:"last_error,omitempty"`
+	FailureKind AgentFailureKind      `json:"failure_kind,omitempty"`
 	Paths       []PeerPathStatus      `json:"paths"`
 }
 

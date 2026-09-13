@@ -241,5 +241,11 @@ func attachAgentRPCSnapshot(status *ipc.Status, snapshot client.AgentSnapshot) {
 	if snapshot.LastError != "" {
 		agent.LastFailure = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "agent_observation_failed"}
 	}
+	if snapshot.FailureKind == client.AgentFailureServerIdentityChanged && state == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT {
+		agent.LastFailure = &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_SERVER_IDENTITY_CHANGED, ReasonKey: "server_identity_changed"}
+		status.ServiceState = ipc.ServiceState_SERVICE_STATE_SERVER_IDENTITY_CHANGED
+		status.ControlState = ipc.ControlState_CONTROL_STATE_SERVER_IDENTITY_CHANGED
+		status.Recovery = &ipc.Recovery{State: status.ServiceState, Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_SERVER_IDENTITY_CHANGED, ReasonKey: "server_identity_changed"}}
+	}
 	status.Agent = agent
 }

@@ -1501,7 +1501,7 @@ func refreshMapSigningTrust(cfg *client.Config, api *clientapi.API) error {
 	}
 	local, err := trusted.Resolve(serverActive.KeyID, time.Now().UTC())
 	if err != nil || local.PublicKey != serverActive.PublicKey {
-		return errors.New(serverMapSigningTrustChangedError)
+		return errServerMapSigningTrustChanged
 	}
 	return client.SetSigningTrustBundle(cfg, announced)
 }

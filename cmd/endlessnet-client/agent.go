@@ -794,6 +794,9 @@ func writeAgentFailureSnapshot(stateOutput, configPath string, failure error) er
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		LastError:   redactDiagnosticsStringForJSON(failure.Error()),
 	}
+	if errors.Is(failure, errServerMapSigningTrustChanged) {
+		snapshot.FailureKind = client.AgentFailureServerIdentityChanged
+	}
 	if cfg, err := client.LoadConfig(configPath); err == nil {
 		if cfg.RPCState != nil {
 			snapshot.ProfileID = cfg.RPCState.ActiveProfileID
