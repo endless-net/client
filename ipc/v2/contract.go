@@ -6,16 +6,6 @@ const (
 	MinSupportedVersion = 2
 )
 
-const (
-	PathEnroll  = "/enroll"
-	PathConnect = "/connect"
-)
-
-const (
-	OperationEnroll  = "enroll"
-	OperationConnect = "connect"
-)
-
 type ServiceState string
 
 const (
@@ -67,26 +57,6 @@ type Metadata struct {
 	ServiceCommit        string `json:"service_commit,omitempty"`
 	ServiceBuildDate     string `json:"service_build_date,omitempty"`
 }
-
-func (m *Metadata) IPCMetadata() *Metadata { return m }
-
-func NewMetadata(negotiatedVersion int) Metadata {
-	return Metadata{
-		IPCProtocol:          Protocol,
-		IPCVersion:           Version,
-		IPCMinSupported:      MinSupportedVersion,
-		IPCNegotiatedVersion: negotiatedVersion,
-	}
-}
-
-type ErrorResponse struct {
-	Metadata
-	ErrorCode string `json:"error_code"`
-	Error     string `json:"error"`
-	RequestID string `json:"request_id,omitempty"`
-}
-
-type StatusRequest struct{}
 
 type ConnectionIntentStatus struct {
 	DesiredState DesiredState `json:"desired_state"`
@@ -167,19 +137,6 @@ type WireGuardRouteInspection struct {
 	Interface     string `json:"interface,omitempty"`
 	UsesInterface bool   `json:"uses_interface"`
 	Error         string `json:"error,omitempty"`
-}
-
-type WireGuardApplyResult struct {
-	OK         bool   `json:"ok"`
-	Method     string `json:"method"`
-	Interface  string `json:"interface,omitempty"`
-	Changed    bool   `json:"changed"`
-	Skipped    bool   `json:"skipped,omitempty"`
-	Reason     string `json:"reason,omitempty"`
-	DownError  string `json:"down_error,omitempty"`
-	UpError    string `json:"up_error,omitempty"`
-	SyncError  string `json:"sync_error,omitempty"`
-	RouteError string `json:"route_error,omitempty"`
 }
 
 type ControlProbe struct {
