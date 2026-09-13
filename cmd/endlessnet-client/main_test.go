@@ -1455,7 +1455,6 @@ func TestConnectAgentTunnelConfiguresCachedMapWithoutRendering(t *testing.T) {
 	}
 }
 
-
 func TestCmdUpPersistsPendingEnrollmentWithoutRenderingWireGuard(t *testing.T) {
 	tmp := t.TempDir()
 	setInstallationStateDirForTest(t, filepath.Join(tmp, "installation-state"))

@@ -26,6 +26,7 @@ func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 			if err != nil || !result.OK {
 				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED)
 			}
+			invalidateAgentSnapshot(opts)
 			notifyRPCNodeOffline(ctx, opts)
 			continuity := ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN
 			if inspection.OK {

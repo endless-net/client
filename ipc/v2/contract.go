@@ -323,12 +323,6 @@ type LogoutResponse struct {
 	RemoteRequestID string        `json:"remote_request_id,omitempty"`
 }
 
-type LocalForgetRequest struct {
-	Confirmed bool `json:"confirmed"`
-}
-
-type LocalForgetResponse = LogoutResponse
-
 type RecoveryHelperResult struct {
 	Metadata
 	Operation RecoveryOperation        `json:"operation"`

@@ -21,6 +21,37 @@ import (
 	"github.com/endless-net/client/internal/client"
 )
 
+func TestRPCProfileStopInvalidatesSnapshotOnlyAfterSuccessfulTeardown(t *testing.T) {
+	for _, scenario := range []string{"stopped", "driver error", "unsuccessful result"} {
+		t.Run(scenario, func(t *testing.T) {
+			statePath := filepath.Join(t.TempDir(), "agent-state.json")
+			if err := os.WriteFile(statePath, []byte("{}"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			driver := agentRPCProfileDriver(agentIPCOptions{StateOutput: statePath, WireGuard: &testAgentWireGuard{
+				down: func() (client.WireGuardApplyResult, error) {
+					if _, err := os.Stat(statePath); err != nil {
+						t.Error("snapshot removed before tunnel teardown")
+					}
+					if scenario == "driver error" {
+						return client.WireGuardApplyResult{}, errors.New("synthetic failure")
+					}
+					return client.WireGuardApplyResult{OK: scenario == "stopped"}, nil
+				},
+			}})
+			_, stopErr := driver.Stop(t.Context())
+			_, statErr := os.Stat(statePath)
+			if scenario == "stopped" {
+				if stopErr != nil || !os.IsNotExist(statErr) {
+					t.Fatal("successful teardown retained a stale snapshot")
+				}
+			} else if stopErr == nil || statErr != nil {
+				t.Fatal("failed teardown removed snapshot or reported success")
+			}
+		})
+	}
+}
+
 func TestRPCProfileDriverFailsClosed(t *testing.T) {
 	lock := &sync.Mutex{}
 	driver := agentRPCProfileDriver(agentIPCOptions{OperationMu: lock})

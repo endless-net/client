@@ -156,6 +156,8 @@ func TestRPCForgetEnrollmentStopsBeforeCleanupAndPreservesInstallation(t *testin
 			m, peer, enroll := enrollmentAdmissionTest(t)
 			if err := m.store.Update(func(cfg *Config) error {
 				cfg.NodeID, cfg.NodeCredential, cfg.Token = "node", "synthetic-node-credential", "synthetic-session"
+				cfg.NetworkID, cfg.ActiveAccountID = "network", "account"
+				cfg.ControlPlaneURLs = []string{"https://unavailable.example.test"}
 				cfg.PrivateKey, cfg.IdentityPrivateKey, cfg.DeviceFingerprint = "synthetic-wg-key", "synthetic-identity-key", "device-binding"
 				cfg.EnrollmentRecovery = &EnrollmentRecovery{RequestID: "control-correlation"}
 				return nil
@@ -198,14 +200,14 @@ func TestRPCForgetEnrollmentStopsBeforeCleanupAndPreservesInstallation(t *testin
 				t.Fatal(err)
 			}
 			cfg := m.store.Read()
-			if stopCalls != 1 || cfg.LocalOwnerID != peer.Identity || cfg.PrivateKey != "synthetic-wg-key" || cfg.IdentityPrivateKey != "synthetic-identity-key" || cfg.DeviceFingerprint != "device-binding" {
+			if stopCalls != 1 || cfg.LocalOwnerID != peer.Identity || cfg.PrivateKey != "synthetic-wg-key" || cfg.IdentityPrivateKey != "synthetic-identity-key" || cfg.DeviceFingerprint != "device-binding" || len(cfg.ControlPlaneURLs) != 1 || cfg.ControlPlaneURLs[0] != "https://unavailable.example.test" {
 				t.Fatal("cleanup changed installation identity")
 			}
 			if failStop {
 				if result.State != ipc.OperationState_OPERATION_STATE_FAILED || cfg.NodeCredential == "" || cfg.Token == "" {
 					t.Fatal("failed Down removed registration")
 				}
-			} else if result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || result.GetCleanup().Outcome != ipc.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_UNCONFIRMED || result.GetCleanup().ControlRequestId != "control-correlation" || cfg.NodeID != "" || cfg.NodeCredential != "" || cfg.Token != "" || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
+			} else if result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || result.GetCleanup().Outcome != ipc.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_UNCONFIRMED || result.GetCleanup().ControlRequestId != "control-correlation" || cfg.NodeID != "" || cfg.NetworkID != "" || cfg.ActiveAccountID != "" || cfg.NodeCredential != "" || cfg.Token != "" || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
 				t.Fatal("local cleanup matrix not applied")
 			}
 		})

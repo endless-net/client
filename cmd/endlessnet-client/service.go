@@ -290,7 +290,6 @@ type agentIPCOptions struct {
 	WireGuard      agentWireGuard
 	SyncForConnect func() error
 	SyncWake       chan struct{}
-	Now            func() time.Time
 }
 
 func requestAgentSync(opts agentIPCOptions) {
@@ -309,7 +308,7 @@ func invalidateAgentSnapshot(opts agentIPCOptions) {
 		return
 	}
 	if err := os.Remove(statePath); err != nil && !os.IsNotExist(err) {
-		log.Printf("invalidate stale agent state after successful connection: %v", err)
+		log.Print("failed to invalidate stale agent state after tunnel transition")
 	}
 }
 
@@ -581,33 +580,6 @@ func syncAgentForConnect(opts agentIPCOptions) error {
 	return cmdUp(args)
 }
 
-func forgetAgentEnrollmentLocally(ctx context.Context, opts agentIPCOptions) error {
-	if opts.WireGuard != nil {
-		if _, err := downAgentWireGuard(ctx, opts); err != nil {
-			return fmt.Errorf("tear down WireGuard tunnel before local forget: %w", err)
-		}
-	}
-	store, err := agentServiceIPCConfigStore(opts)
-	if err != nil {
-		return err
-	}
-	now := time.Now()
-	if opts.Now != nil {
-		now = opts.Now()
-	}
-	if err := store.Update(func(cfg *client.Config) error {
-		return client.ApplyLocalLogoutCleanup(cfg, now)
-	}); err != nil {
-		return err
-	}
-	if statePath := strings.TrimSpace(opts.StateOutput); statePath != "" {
-		if err := os.Remove(statePath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove stale agent state: %w", err)
-		}
-	}
-	return nil
-}
-
 func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 	return client.ServiceIPCHandlers{
 		Status: func(ctx context.Context, req ipc.StatusRequest) (ipc.StatusResponse, error) {
@@ -740,20 +712,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 				State:        ipc.StateNeedsEnrollment,
 				ControlState: ipc.ControlStateNotRegistered,
 				Outcome:      ipc.LogoutOutcomeRemoteCleanupConfirmed,
-			}, nil
-		},
-		LocalForget: func(ctx context.Context, req ipc.LocalForgetRequest) (ipc.LocalForgetResponse, error) {
-			if !req.Confirmed {
-				return ipc.LocalForgetResponse{}, ipc.NewError(http.StatusBadRequest, ipc.ErrorLocalForgetConfirmationRequired, errors.New("explicit local-forget confirmation is required"))
-			}
-			if err := forgetAgentEnrollmentLocally(ctx, opts); err != nil {
-				return ipc.LocalForgetResponse{}, ipc.NewError(http.StatusInternalServerError, ipc.ErrorLocalForgetFailed, err)
-			}
-			return ipc.LocalForgetResponse{
-				Metadata:     serviceIPCMetadata(),
-				State:        ipc.StateNeedsEnrollment,
-				ControlState: ipc.ControlStateNotRegistered,
-				Outcome:      ipc.LogoutOutcomeRemoteCleanupUnconfirmed,
 			}, nil
 		},
 	}
