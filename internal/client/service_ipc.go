@@ -148,11 +148,6 @@ func supportedServiceIPCTransport(transport string) bool {
 	}
 }
 
-type ServiceIPCHandlers struct {
-	Status func(context.Context, ipc.StatusRequest) (ipc.StatusResponse, error)
-	Enroll func(context.Context, ipc.EnrollRequest) (ipc.EnrollResponse, error)
-}
-
 func serviceIPCEndpoint(method, path, operation string, privilege ServiceIPCPrivilege, mutation bool) ServiceIPCEndpoint {
 	return ServiceIPCEndpoint{
 		Method: method, Path: path, Operation: operation,

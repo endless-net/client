@@ -265,19 +265,6 @@ type StatusResponse struct {
 	WireGuard                 *WireGuardInspection    `json:"wireguard,omitempty"`
 }
 
-type EnrollRequest struct {
-	EnrollToken    string `json:"enroll_token,omitempty"`
-	Server         string `json:"server,omitempty"`
-	Mode           string `json:"mode,omitempty"`
-	Hostname       string `json:"hostname,omitempty"`
-	IdempotencyKey string `json:"idempotency_key,omitempty"`
-}
-
-type EnrollResponse struct {
-	StatusResponse
-	WireGuardApply *WireGuardApplyResult `json:"wireguard_apply,omitempty"`
-}
-
 type ConnectResponse struct {
 	Metadata
 	State            ServiceState         `json:"state"`

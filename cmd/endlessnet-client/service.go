@@ -341,36 +341,6 @@ func agentServiceIPCConfigStore(opts agentIPCOptions) (*client.ConfigStore, erro
 	return client.OpenConfigStore(opts.ConfigPath)
 }
 
-func claimAgentServiceIPCOwner(ctx context.Context, opts agentIPCOptions) (bool, error) {
-	if _, ok := client.ServiceIPCPeerFromContext(ctx); !ok {
-		return false, nil
-	}
-	store, err := agentServiceIPCConfigStore(opts)
-	if err != nil {
-		return false, serviceIPCConfigError(err)
-	}
-	claimed, err := client.ClaimLocalServiceIPCOwner(ctx, store)
-	if err != nil {
-		var ipcErr ipc.Error
-		if errors.As(err, &ipcErr) {
-			return false, ipcErr
-		}
-		return false, ipc.NewError(http.StatusInternalServerError, "local_owner_update_failed", err)
-	}
-	return claimed, nil
-}
-
-func releaseAgentServiceIPCOwnerClaim(ctx context.Context, opts agentIPCOptions) error {
-	store, err := agentServiceIPCConfigStore(opts)
-	if err != nil {
-		return serviceIPCConfigError(err)
-	}
-	if err := client.ReleaseLocalServiceIPCOwnerClaim(ctx, store); err != nil {
-		return ipc.NewError(http.StatusInternalServerError, "local_owner_update_failed", err)
-	}
-	return nil
-}
-
 func agentIPCEnrollmentServer(opts agentIPCOptions, requested string) (string, error) {
 	if requested = strings.TrimSpace(requested); requested != "" {
 		return requested, nil
@@ -545,91 +515,6 @@ func downAgentWireGuard(ctx context.Context, opts agentIPCOptions) (client.WireG
 }
 
 const serverMapSigningTrustChangedError = "server map signing trust changed"
-
-func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
-	return client.ServiceIPCHandlers{
-		Status: func(ctx context.Context, req ipc.StatusRequest) (ipc.StatusResponse, error) {
-			return agentIPCStatus(ctx, opts)
-		},
-		Enroll: func(ctx context.Context, req ipc.EnrollRequest) (ipc.EnrollResponse, error) {
-			ownerClaimed, err := claimAgentServiceIPCOwner(ctx, opts)
-			if err != nil {
-				return ipc.EnrollResponse{}, err
-			}
-			token := strings.TrimSpace(req.EnrollToken)
-			serverURL, serverErr := agentIPCEnrollmentServer(opts, req.Server)
-			if serverErr != nil {
-				return ipc.EnrollResponse{}, serverErr
-			}
-			args := []string{"--config", opts.ConfigPath}
-			if strings.TrimSpace(token) != "" {
-				args = append(args, "--join-token", token)
-			} else {
-				args = append(args, "--approval-timeout", "0")
-			}
-			args = append(args, "--server", serverURL)
-			if mode := strings.TrimSpace(req.Mode); mode != "" {
-				args = append(args, "--tag", "mode:"+mode)
-			}
-			if hostname := strings.TrimSpace(req.Hostname); hostname != "" {
-				args = append(args, "--hostname", hostname)
-			}
-			if idempotencyKey := strings.TrimSpace(req.IdempotencyKey); idempotencyKey != "" {
-				args = append(args, "--idempotency-key", idempotencyKey)
-			}
-			if err := cmdUp(args); err != nil {
-				var approvalRequired enrollmentApprovalRequiredError
-				if strings.TrimSpace(token) == "" && errors.As(err, &approvalRequired) {
-					if intentErr := agentConnectionIntentStore(opts).Clear(); intentErr != nil {
-						return ipc.EnrollResponse{}, ipc.NewError(http.StatusInternalServerError, "connection_intent_update_failed", intentErr)
-					}
-					payload, statusErr := agentIPCStatus(ctx, opts)
-					if statusErr != nil {
-						return ipc.EnrollResponse{}, statusErr
-					}
-					response := ipc.EnrollResponse{StatusResponse: payload}
-					if requestID := strings.TrimSpace(approvalRequired.RequestID); requestID != "" {
-						response.EnrollmentRequestID = requestID
-					}
-					if approvalURL := strings.TrimSpace(approvalRequired.ApprovalURL); approvalURL != "" {
-						response.ApprovalURL = approvalURL
-					}
-					requestAgentSync(opts)
-					return response, nil
-				}
-				if ownerClaimed {
-					if releaseErr := releaseAgentServiceIPCOwnerClaim(ctx, opts); releaseErr != nil {
-						return ipc.EnrollResponse{}, releaseErr
-					}
-				}
-				return ipc.EnrollResponse{}, ipc.NewError(http.StatusBadRequest, "enrollment_failed", err)
-			}
-			if err := agentConnectionIntentStore(opts).Clear(); err != nil {
-				return ipc.EnrollResponse{}, ipc.NewError(http.StatusInternalServerError, "connection_intent_update_failed", err)
-			}
-			if cfg, err := client.LoadConfig(opts.ConfigPath); err == nil && strings.EqualFold(strings.TrimSpace(cfg.NodeApprovalState), clientapi.NodeApprovalPending) {
-				payload, err := agentIPCStatus(ctx, opts)
-				if err != nil {
-					return ipc.EnrollResponse{}, err
-				}
-				requestAgentSync(opts)
-				return ipc.EnrollResponse{StatusResponse: payload}, nil
-			}
-			connectPayload, err := connectAgentTunnel(ctx, opts)
-			if err != nil {
-				return ipc.EnrollResponse{}, err
-			}
-			invalidateAgentSnapshot(opts)
-			payload := enrollmentStatusAfterConnect(ctx, opts, connectPayload)
-			requestAgentSync(opts)
-			apply := connectPayload.WireGuard
-			return ipc.EnrollResponse{
-				StatusResponse: payload,
-				WireGuardApply: &apply,
-			}, nil
-		},
-	}
-}
 
 func agentIPCStatus(ctx context.Context, opts agentIPCOptions) (ipc.StatusResponse, error) {
 	cfg, err := client.LoadConfig(opts.ConfigPath)

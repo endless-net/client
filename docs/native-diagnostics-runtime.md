@@ -619,8 +619,8 @@ check and ConnectRequest DTO are removed. The replacement hostname test applies
 the verified enrolled map twice through the native driver, retains node/network/
 credential identity, makes no remote registration calls, and schedules separate
 agent synchronization. This is driver coverage, not proof of the complete agent
-sync loop. ConnectResponse remains temporarily internal to the legacy enrollment
-adapter and is not exposed as a supported IPC response.
+sync loop. ConnectResponse remains temporarily in retired helper code and its
+tests and is not exposed as a supported IPC response.
 
 Lifecycle status assertions now use native Status instead of the retired DTO:
 pending approval retains its request/action, unenrolled state rejects an unbound
@@ -649,6 +649,11 @@ retains the request proof, and completion reuses the original hostname/request
 despite a changed resume input. One creation and one completion produce a verified
 registration; only a separate native driver start configures the tunnel. This
 does not constitute browser UI or installed RPC lifecycle acceptance.
+
+The unused legacy handler aggregate, Enroll request/response DTOs and its owner
+claim wrappers are removed. Enrollment no longer has that adapter through CLI
+arguments and implicit Connect. Remaining legacy status/helper code is not a
+supported transport and still requires removal to complete the hard cutover.
 
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
