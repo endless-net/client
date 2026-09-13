@@ -1,183 +1,136 @@
 package tests
 
 import (
+	"archive/zip"
 	"bytes"
-	"encoding/json"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
-	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
-	ipc "github.com/endless-net/client/ipc/v2"
+	ipc "github.com/endless-net/client/clientipc/v0"
+	"github.com/endless-net/client/internal/testclient"
+	"github.com/endless-net/client/internal/testcontrol"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
-// HC-053/HC-056/HC-057: inspect the public diagnostic response and exported
-// artifact, never the agent's config, snapshot or credential files.
+// HC-053/056/057: only public native CLI responses and downloaded bytes.
+// No private config reads, server file paths, mtime-based expiry or directory repair.
 func TestControlPlaneDiagnosticsExport(t *testing.T) {
-	s, n, id := controlScenario(t)
-	output, err := n.ServiceCommand("diagnostics-bundle")
-	if err == nil || !strings.Contains(string(output), "diagnostics bundle directory is not configured") {
-		t.Fatal("unconfigured diagnostic export did not report its public error")
+	requireControlScenario(t)
+	s := testcontrol.New(t)
+	network, token, err := s.AddNetwork("diagnostics", "100.90.0.0/24")
+	if err != nil {
+		t.Fatal(err)
 	}
-	n.Stop()
-	directory := filepath.Join(filepath.Dir(n.Config), "diagnostic-export")
-	n.AgentArgs = append(n.AgentArgs, "--diagnostics-dir", directory)
+	n := testclient.New(t, s)
+	n.Enroll(s, network.Name, token)
 	n.Start()
-	check := func(disconnected bool) ipc.Diagnostics {
+	initial := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.NodeId != "" && v.ActiveProfileId != "" && v.MapRevision > 0 })
+	id, profile := initial.NodeId, initial.ActiveProfileId
+	check := func(disconnected bool) *ipc.Diagnostics {
 		t.Helper()
-		before := n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == id && v.CachedMapValid && v.UserDisconnected == disconnected
+		n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == id && v.UserDisconnected == disconnected && v.MapRevision > 0
 		})
-		var response ipc.DiagnosticsResponse
-		n.Service("diagnostics", &response)
+		response := &ipc.GetDiagnosticsResponse{}
+		if err := n.NativeService("diagnostics", response, "--profile-id", profile); err != nil {
+			t.Fatal(err)
+		}
 		d := response.Diagnostics
-		if d.Status.NodeID != id || d.Status.NetworkID != before.NetworkID || d.Status.DesiredState != before.DesiredState || d.Status.UserDisconnected != disconnected || !d.Status.CachedMapValid {
-			t.Fatal("diagnostic status disagreed with public identity or connection intent")
+		if d == nil || d.Status.GetNodeId() != id || d.Status.ActiveProfileId != profile || d.Status.UserDisconnected != disconnected || d.OsName != runtime.GOOS || d.GetClient().GetArchitecture() != runtime.GOARCH {
+			t.Fatal("diagnostics lost identity, intent or platform")
 		}
-		if disconnected && d.Status.State != ipc.StateDisconnected {
-			t.Fatal("diagnostics misreported user disconnection as a failure")
+		if disconnected && d.Status.GetIntent().GetDesiredState() != ipc.DesiredState_DESIRED_STATE_DISCONNECTED {
+			t.Fatal("diagnostics lost disconnected intent")
 		}
-		if d.Runtime.GOOS != runtime.GOOS || d.Runtime.GOARCH != runtime.GOARCH || d.Config.NodeID != id || !d.Config.NodeCredentialPresent || !d.Config.IdentityPrivateKeyPresent || !d.Config.PrivateKeyPresent {
-			t.Fatal("diagnostics omitted platform, identity or credential presence metadata")
+		if d.Truncated && len(d.Failures) == 0 {
+			t.Fatal("partial diagnostics omitted failure markers")
 		}
 		return d
 	}
 	check(false)
 	s.SetUnavailable(true)
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.State == ipc.StateDegraded && v.NodeID == id && v.CachedMapValid && v.NodeCredentialPresent && v.Agent != nil && v.Agent.LastError != ""
-	})
-	var controlFailure ipc.DiagnosticsResponse
-	n.Service("diagnostics", &controlFailure)
-	failed := controlFailure.Diagnostics.Status
-	if failed.State != ipc.StateDegraded || failed.UserDisconnected || failed.NodeID != id || !failed.CachedMapValid || !failed.NodeCredentialPresent || failed.Agent == nil || failed.Agent.LastError == "" {
-		t.Fatal("diagnostics did not isolate a control failure from intent, identity and cached access")
+	n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ControlState == ipc.ControlState_CONTROL_STATE_DEGRADED })
+	failed := check(false)
+	if failed.Status.MapRevision == 0 || failed.Status.NodeId != id {
+		t.Fatal("control outage erased cached identity")
 	}
 	s.SetUnavailable(false)
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.State == ipc.StateConnected && v.NodeID == id && v.CachedMapValid && v.NodeCredentialPresent && v.Agent != nil && v.Agent.LastError == ""
-	})
-	check(false)
-	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
+	n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ControlState == ipc.ControlState_CONTROL_STATE_READY })
+	disconnect := &ipc.DisconnectResponse{}
+	status := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ActiveProfileId == profile })
+	if err := n.NativeService("disconnect", disconnect, testclient.NativeMutationArguments("00000000-0000-4000-8000-000000000001", status)...); err != nil {
+		t.Fatal(err)
+	}
+	if n.AwaitNativeOperation(disconnect.GetOperation().GetId()).State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+		t.Fatal("disconnect failed")
+	}
 	check(true)
 	n.Stop()
 	n.Start()
 	check(true)
-	var bundle ipc.DiagnosticsBundleResponse
-	n.Service("diagnostics-bundle", &bundle)
-	relative, err := filepath.Rel(directory, bundle.Path)
-	if err != nil || !filepath.IsAbs(bundle.Path) || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) || filepath.IsAbs(relative) {
-		t.Fatal("diagnostic export escaped its configured output directory")
+	status = n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ActiveProfileId == profile })
+	args := testclient.NativeMutationArguments("00000000-0000-4000-8000-000000000002", status)
+	accepted := &ipc.CreateDiagnosticsBundleResponse{}
+	if err := n.NativeService("diagnostics-bundle", accepted, args...); err != nil {
+		t.Fatal(err)
 	}
-	created, createdErr := time.Parse(time.RFC3339Nano, bundle.CreatedAt)
-	expires, expiresErr := time.Parse(time.RFC3339Nano, bundle.ExpiresAt)
-	if createdErr != nil || expiresErr != nil || !expires.After(created) || bundle.SizeBytes <= 0 || bundle.Reused {
-		t.Fatal("new diagnostic export has invalid lifecycle metadata")
+	op := n.AwaitNativeOperation(accepted.GetOperation().GetId())
+	bundle := op.GetBundle()
+	if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || bundle == nil || bundle.GetCreatedAt().CheckValid() != nil || bundle.GetExpiresAt().CheckValid() != nil || bundle.ExpiresAt.AsTime().Sub(bundle.CreatedAt.AsTime()) != 15*time.Minute || bundle.SizeBytes == 0 || bundle.SizeBytes > 5<<20 {
+		t.Fatal("invalid bundle result")
 	}
-	data, err := os.ReadFile(bundle.Path)
-	if err != nil || int64(len(data)) != bundle.SizeBytes {
-		t.Fatal("public diagnostic export is missing or has incorrect size")
+	download := func() []byte {
+		t.Helper()
+		data, err := n.ServiceCommand("export-diagnostics-bundle", "--operation-id", op.Id, "--profile-id", profile)
+		if err != nil {
+			t.Fatal("native bundle download failed (output withheld)")
+		}
+		digest := sha256.Sum256(data)
+		if uint64(len(data)) != bundle.SizeBytes || hex.EncodeToString(digest[:]) != bundle.Sha256 {
+			t.Fatal("download differs from descriptor")
+		}
+		return data
 	}
-	// The published diagnostic schema exposes credential presence flags, not
-	// secret fields. Reject additional serialized fields without printing them.
-	var exported ipc.Diagnostics
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&exported); err != nil {
-		t.Fatal("diagnostic export does not match the published schema")
+	data := download()
+	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil || len(archive.File) != 1 || archive.File[0].Name != "diagnostics.json" {
+		t.Fatal("invalid archive")
 	}
-	var trailing any
-	if err := decoder.Decode(&trailing); err != io.EOF {
-		t.Fatal("diagnostic export contains trailing data")
+	file, err := archive.File[0].Open()
+	if err != nil {
+		t.Fatal("cannot open diagnostics entry")
 	}
-	if exported.Status.NodeID != id || !exported.Status.UserDisconnected || exported.Status.DesiredState != ipc.DesiredDisconnected || exported.Status.State != ipc.StateDisconnected {
-		t.Fatal("exported diagnostic status lost disconnected identity or intent")
+	raw, readErr := io.ReadAll(io.LimitReader(file, 5<<20+1))
+	closeErr := file.Close()
+	exported := &ipc.Diagnostics{}
+	if readErr != nil || closeErr != nil || len(raw) > 5<<20 || protojson.Unmarshal(raw, exported) != nil {
+		t.Fatal("export violates native diagnostics schema")
+	}
+	if exported.GetStatus().GetNodeId() != id || !exported.Status.UserDisconnected {
+		t.Fatal("export lost identity or disconnected intent")
 	}
 	n.Crash()
 	n.Start()
 	check(true)
-	var repeated ipc.DiagnosticsBundleResponse
-	n.Service("diagnostics-bundle", &repeated)
-	if !repeated.Reused || repeated.Path != bundle.Path || repeated.CreatedAt != bundle.CreatedAt || repeated.ExpiresAt != bundle.ExpiresAt || repeated.SizeBytes != bundle.SizeBytes {
-		t.Fatal("agent crash recovery did not identify the reusable diagnostic artifact")
+	repeated := &ipc.CreateDiagnosticsBundleResponse{}
+	if err := n.NativeService("diagnostics-bundle", repeated, args...); err != nil || !proto.Equal(repeated.Operation, op) {
+		t.Fatal("exact retry changed operation after crash")
 	}
-	if reusedData, err := os.ReadFile(repeated.Path); err != nil || !bytes.Equal(reusedData, data) {
-		t.Fatal("reused diagnostic artifact changed across agent crash recovery")
+	if !bytes.Equal(download(), data) {
+		t.Fatal("archive changed across restart")
 	}
-	var connected ipc.ConnectResponse
-	n.Service("connect", &connected)
-	check(false)
-	// Age only the public export, using the lifetime advertised by the CLI.
-	// This exercises OS file retention without reading private client state or
-	// advancing a test clock inside the running agent.
-	note := filepath.Join(directory, "operator-note.txt")
-	const noteText = "operator-owned diagnostic note"
-	if err := os.WriteFile(note, []byte(noteText), 0o600); err != nil {
-		t.Fatal("could not create unrelated test note")
+	connected := &ipc.ConnectResponse{}
+	status = n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ActiveProfileId == profile })
+	if err := n.NativeService("connect", connected, testclient.NativeMutationArguments("00000000-0000-4000-8000-000000000003", status)...); err != nil {
+		t.Fatal(err)
 	}
-	aged := time.Now().Add(-expires.Sub(created) - time.Hour)
-	if err := os.Chtimes(bundle.Path, aged, aged); err != nil {
-		t.Fatal("could not age the public diagnostic artifact")
-	}
-	var renewed ipc.DiagnosticsBundleResponse
-	n.Service("diagnostics-bundle", &renewed)
-	if renewed.Reused || renewed.Path == bundle.Path || filepath.Dir(renewed.Path) != directory || renewed.SizeBytes <= 0 {
-		t.Fatal("retention did not produce a new export within the configured directory")
-	}
-	if _, err := os.Stat(bundle.Path); !os.IsNotExist(err) {
-		t.Fatal("expired public diagnostic artifact was retained")
-	}
-	if data, err := os.ReadFile(note); err != nil || string(data) != noteText {
-		t.Fatal("diagnostic retention changed an unrelated operator file")
-	}
-	newData, err := os.ReadFile(renewed.Path)
-	var newExport ipc.Diagnostics
-	if err != nil || int64(len(newData)) != renewed.SizeBytes || json.Unmarshal(newData, &newExport) != nil || newExport.Status.NodeID != id || newExport.Status.UserDisconnected || newExport.Status.DesiredState != ipc.DesiredConnected {
-		t.Fatal("replacement diagnostic export did not capture current connected intent")
-	}
-	// Replace only the public export directory with an operator-owned file.
-	// This is deterministic even on privileged runners where chmod alone
-	// cannot reliably deny writes. Keep all private agent files untouched.
-	heldDirectory := directory + "-held"
-	if err := os.Rename(directory, heldDirectory); err != nil {
-		t.Fatal("could not isolate the public export directory")
-	}
-	restored := false
-	t.Cleanup(func() {
-		if !restored {
-			_ = os.Remove(directory)
-			_ = os.Rename(heldDirectory, directory)
-		}
-	})
-	const obstruction = "operator-owned export path obstruction"
-	if err := os.WriteFile(directory, []byte(obstruction), 0o600); err != nil {
-		t.Fatal("could not obstruct the public export path")
-	}
-	if output, err := n.ServiceCommand("diagnostics-bundle"); err == nil || len(bytes.TrimSpace(output)) == 0 {
-		t.Fatal("unavailable export directory did not return a CLI failure diagnostic")
-	}
-	check(false)
-	if retained, err := os.ReadFile(directory); err != nil || string(retained) != obstruction {
-		t.Fatal("failed export modified the operator-owned obstruction")
-	}
-	if err := os.Remove(directory); err != nil {
-		t.Fatal("could not remove the export path obstruction")
-	}
-	if err := os.Rename(heldDirectory, directory); err != nil {
-		t.Fatal("could not restore the public export directory")
-	}
-	restored = true
-	var recovered ipc.DiagnosticsBundleResponse
-	n.Service("diagnostics-bundle", &recovered)
-	if !recovered.Reused || recovered.Path != renewed.Path || recovered.SizeBytes != renewed.SizeBytes {
-		t.Fatal("export did not recover the retained artifact after directory repair")
-	}
-	if recoveredData, err := os.ReadFile(recovered.Path); err != nil || !bytes.Equal(recoveredData, newData) {
-		t.Fatal("export directory failure or recovery changed the retained artifact")
+	if n.AwaitNativeOperation(connected.GetOperation().GetId()).State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+		t.Fatal("connect failed")
 	}
 	check(false)
 }

@@ -74,8 +74,17 @@ minute-window reuse tests are removed. Native tests own bounded immutable storag
 TTL/replay, redaction, ACL and linked-file/parent rejection. Both open and persistence
 validate path components; only the standard macOS /tmp and /var aliases to /private
 are allowed. Symlink tests skip on hosts that cannot create symlinks.
-Legacy diagnostics DTO removal is still blocked on test conversion in
-tests/control_plane_diagnostics_test.go, tests/control_plane_dns_live_test.go,
+tests/control_plane_diagnostics_test.go now uses native CLI protobuf JSON,
+explicit retained request IDs/CAS, operation completion and handle-based ZIP
+download. It covers control outages, disconnect/restart and exact replay/download
+after process crash. It no longer reads server archive paths, changes mtimes or
+repairs public export directories: those are retired contract semantics. File
+failure and TTL checks remain in native component tests. The process scenario is
+compiled but skipped by local short verification; CI execution is still required.
+The shared test harness now waits for native runtime-info at startup and exposes
+strict protobuf helpers without converting responses to HTTP DTOs.
+Legacy diagnostics DTO removal still requires test conversion in
+tests/control_plane_dns_live_test.go,
 tests/installation_test.go and tests/control_plane_test.go. These references do
 not keep the removed HTTP runtime handlers alive. Standalone headless diagnostic
 output remains separate from service IPC. UI and

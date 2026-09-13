@@ -135,7 +135,7 @@ func (n *Node) Start() {
 	// Match the public service IPC default and installed-service startup wait.
 	// Native driver initialization can outlast the shorter state-transition wait.
 	started := time.Now()
-	n.awaitStatusWithin(30*time.Second, func(s ipc.StatusResponse) bool { return s.IPCVersion == ipc.Version })
+	n.awaitNativeReady()
 	n.t.Logf("agent IPC became ready after %s", time.Since(started).Round(time.Millisecond))
 }
 
