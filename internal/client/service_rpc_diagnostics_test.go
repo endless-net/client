@@ -117,17 +117,20 @@ func TestRPCDiagnosticsVerifiedMapProjectionAndBusyTunnel(t *testing.T) {
 	m, peer, profile := rpcConnectFixture(t)
 	s := NewClientRPCService(m, nil)
 	observation := ClientRPCDiagnosticsObservation{TunnelBusy: true, DNS: &ipc.DnsDiagnostics{SearchDomain: "verified.test"},
+		Peers: []*ipc.Peer{{Id: "verified-peer"}}, TunnelPeers: []*ipc.TunnelPeer{{PeerId: "verified-peer", ReceivedBytes: 42}},
 		RouteConflicts: []OverlayCIDRConflict{{OverlayCIDR: "100.64.0.0/24", LocalPrefix: "100.64.0.0/16", Interface: "local0", Reason: "synthetic-private-detail"}}}
 	s.DiagnosticsProvider = func(context.Context) (ClientRPCDiagnosticsObservation, error) { return observation, nil }
 	req := &ipc.GetDiagnosticsRequest{Profile: profile}
 	missing, err := s.diagnosticsAs(t.Context(), peer, req)
-	if err != nil || missing.Diagnostics.Dns != nil || len(missing.Diagnostics.RouteConflicts) != 0 {
+	if err != nil || missing.Diagnostics.Dns != nil || len(missing.Diagnostics.RouteConflicts) != 0 || len(missing.Diagnostics.Peers) != 0 || len(missing.Diagnostics.Tunnel.Peers) != 0 {
 		t.Fatal("unverified map data exposed", err)
 	}
 	if missing.Diagnostics.Tunnel.Failure.Code != ipc.ErrorCode_ERROR_CODE_BUSY {
 		t.Fatal("busy inspection became absent tunnel")
 	}
 	observation.VerifiedMap = true
+	observation.TunnelBusy = false
+	observation.Tunnel.OK = true
 	result, err := s.diagnosticsAs(t.Context(), peer, req)
 	if err != nil || result.Diagnostics.Dns.SearchDomain != "verified.test" || len(result.Diagnostics.RouteConflicts) != 1 {
 		t.Fatal("verified map projection missing", err)
@@ -136,6 +139,11 @@ func TestRPCDiagnosticsVerifiedMapProjectionAndBusyTunnel(t *testing.T) {
 		t.Fatal("raw conflict reason or false completeness")
 	}
 	observation.DNS.SearchDomain = "changed"
+	observation.Peers[0].Id = "changed"
+	observation.TunnelPeers[0].ReceivedBytes = 100
+	if result.Diagnostics.Peers[0].Id != "verified-peer" || result.Diagnostics.Tunnel.Peers[0].ReceivedBytes != 42 {
+		t.Fatal("peer response aliased")
+	}
 	if result.Diagnostics.Dns.SearchDomain != "verified.test" {
 		t.Fatal("DNS response aliased")
 	}

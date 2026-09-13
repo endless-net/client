@@ -30,6 +30,7 @@ func agentRPCDiagnostics(opts agentIPCOptions) client.ClientRPCDiagnosticsProvid
 		result.VerifiedMap = true
 		result.DNS = nativeMapDNSDiagnostics(networkMap)
 		result.RouteConflicts = client.OverlayCIDRConflicts(networkMap, result.Interfaces, opts.WGInterface)
+		result.Peers, result.TunnelPeers, result.PeerFailures = nativeDiagnosticPeers(networkMap, inspection)
 		return result, ctx.Err()
 	}
 }

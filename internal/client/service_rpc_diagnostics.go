@@ -22,6 +22,9 @@ type ClientRPCDiagnosticsObservation struct {
 	VerifiedMap    bool
 	DNS            *ipc.DnsDiagnostics
 	RouteConflicts []OverlayCIDRConflict
+	Peers          []*ipc.Peer
+	TunnelPeers    []*ipc.TunnelPeer
+	PeerFailures   []*ipc.Failure
 }
 type ClientRPCDiagnosticsProvider func(context.Context) (ClientRPCDiagnosticsObservation, error)
 
@@ -77,7 +80,7 @@ func (s *ClientRPCService) diagnosticsAs(ctx context.Context, peer local.Peer, r
 	}
 	result := &ipc.Diagnostics{Metadata: snapshot.Status.Metadata, Client: proto.Clone(s.build).(*ipc.BuildIdentity),
 		OsName: runtime.GOOS, OsVersion: observation.OSVersion, GoVersion: runtime.Version(), Status: snapshot.Status,
-		Truncated: true, Failures: []*ipc.Failure{{Code: ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, ReasonKey: "diagnostics_os_routes_peers_not_collected"}},
+		Truncated: true, Failures: []*ipc.Failure{{Code: ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, ReasonKey: "diagnostics_os_routes_peer_paths_not_collected"}},
 		Tunnel: &ipc.TunnelInspection{Ok: observation.Tunnel.OK, InterfaceName: observation.Tunnel.Interface}}
 	if len(observation.OSVersion) > 256 || len(observation.Tunnel.Interface) > 256 || len(observation.Interfaces) > 256 || observation.Tunnel.MTU < 0 || observation.Tunnel.MTU > 65535 || observation.Tunnel.ListenPort < 0 || observation.Tunnel.ListenPort > 65535 {
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
@@ -98,6 +101,24 @@ func (s *ClientRPCService) diagnosticsAs(ctx context.Context, peer local.Peer, r
 	if !observation.VerifiedMap {
 		result.Failures = append(result.Failures, &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "diagnostics_verified_map_unavailable"})
 	} else {
+		if len(observation.Peers) > 4096 || len(observation.TunnelPeers) > 4096 || len(observation.PeerFailures) > 16 {
+			return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+		}
+		for _, peer := range observation.Peers {
+			if peer != nil {
+				result.Peers = append(result.Peers, proto.Clone(peer).(*ipc.Peer))
+			}
+		}
+		for _, peer := range observation.TunnelPeers {
+			if peer != nil && !observation.TunnelBusy && observation.Tunnel.OK && observation.Tunnel.Error == "" {
+				result.Tunnel.Peers = append(result.Tunnel.Peers, proto.Clone(peer).(*ipc.TunnelPeer))
+			}
+		}
+		for _, failure := range observation.PeerFailures {
+			if failure != nil {
+				result.Failures = append(result.Failures, proto.Clone(failure).(*ipc.Failure))
+			}
+		}
 		if observation.DNS != nil {
 			result.Dns = proto.Clone(observation.DNS).(*ipc.DnsDiagnostics)
 		}

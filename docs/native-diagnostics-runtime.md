@@ -26,13 +26,21 @@ data. These DNS values describe map configuration, not evidence of OS resolver
 application or successful name resolution. Conflict reasons use a fixed key, not
 arbitrary source error text; DNS output is cloned.
 
+Peer identities/hostnames and overlay host addresses now come from the verified
+map. Subnet routes and host routes outside the map's overlay CIDRs are not reported
+as overlay addresses. Live WireGuard observations join strictly on public key;
+unknown keys, ambiguous map identities and invalid handshake/keepalive values
+produce an explicit failure rather than an invented peer. Successful inspections
+provide copied counters, endpoint, allowed IPs and optional handshake timestamp.
+An absent handshake remains absent, not Unix epoch; failed/busy inspections do
+not expose live peer statistics. No handshake implies reachability or path choice.
+
 This is a **partial runtime implementation**. OS route inspection, default route
-presence and peer-map joins are not collected; `truncated=true` and an explicit
+presence and peer path-monitor observations are not collected; `truncated=true` and an explicit
 unsupported-section failure prevent interpreting empty/default fields as a clean
 report. Engine Inspection.Routes describes configured engine targets, not an
 independent OS route-table observation, and is intentionally not relabeled as one.
-Tunnel peer identities require a verified map join rather than a guess from
-endpoint/key strings. Bundle creation/download and
+Bundle creation/download and
 full OS/runtime diagnostic acceptance remain open. The whole DIAGNOSTICS
 capability remains unadvertised until these required providers are ready.
 
@@ -41,5 +49,8 @@ raw-error suppression, copied interface data, log inclusion, partial status,
 provider failure, cancellation, ownership/revision changes and size/range rejection.
 Additional tests verify signed-versus-tampered map gating, busy nonblocking engine
 inspection, pre-cancelled collection, DNS copy ownership and fixed conflict reasons.
+Peer tests cover identity joins, duplicate/foreign/unmapped identities, host-prefix
+filtering, absent/invalid handshakes, keepalive bounds, copied counters/addresses,
+and exclusion of unverified or failed-inspection live data.
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.
