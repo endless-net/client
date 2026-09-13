@@ -5,10 +5,108 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestRPCForgetCancelsAndDrainsRunningEnrollment(t *testing.T) {
+	m, peer, request := enrollmentAdmissionTest(t)
+	enrollment, err := m.enrollAs(peer, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	entered, exited := make(chan struct{}), make(chan struct{})
+	finished := make(chan error, 1)
+	go func() {
+		finished <- m.ReconcileEnrollment(ctx, func(ctx context.Context, cfg Config, _ ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
+			defer close(exited)
+			close(entered)
+			<-ctx.Done()
+			cfg.NodeID, cfg.NodeCredential = "late-node", "synthetic-late-credential"
+			if err := save(cfg); err == nil {
+				t.Error("late registration accepted after forget")
+			}
+			return nil, ctx.Err()
+		})
+	}()
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("provider not started")
+	}
+	peer.Administrator = true
+	forget := &ipc.ForgetLocalEnrollmentRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: request.Profile}
+	if _, err := m.forgetEnrollmentAs(peer, forget); err == nil {
+		t.Fatal("unconfirmed forget accepted")
+	}
+	select {
+	case <-exited:
+		t.Fatal("rejected forget cancelled registration")
+	default:
+	}
+	forget.Confirmed = true
+	op, err := m.forgetEnrollmentAs(peer, forget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = m.ReconcileDisconnect(ctx, ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+		select {
+		case <-exited:
+		default:
+			t.Error("Down preceded registration drain")
+		}
+		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE, nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-finished:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal("registration did not drain")
+	}
+	previous, err := m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: enrollment.Id}})
+	if err != nil || previous.State != ipc.OperationState_OPERATION_STATE_CANCELLED {
+		t.Fatal("enrollment not cancelled", err)
+	}
+	result, err := m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
+	if err != nil || result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || m.store.Read().NodeID != "" || m.store.Read().RPCState.Enrollment != nil {
+		t.Fatal("late response resurrected registration", err)
+	}
+}
+
+func TestRPCForgetCancelsQueuedEnrollmentAfterRestart(t *testing.T) {
+	m, peer, request := enrollmentAdmissionTest(t)
+	if _, err := m.enrollAs(peer, request); err != nil {
+		t.Fatal(err)
+	}
+	peer.Administrator = true
+	if _, err := m.forgetEnrollmentAs(peer, &ipc.ForgetLocalEnrollmentRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: request.Profile, Confirmed: true}); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := NewClientRPCMutations(m.store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.ReconcileDisconnect(t.Context(), ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE, nil
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.ReconcileEnrollment(t.Context(), func(context.Context, Config, ClientRPCEnrollmentInput, func(Config) error) (*ipc.UserAction, error) {
+		t.Fatal("forgotten enrollment restarted")
+		return nil, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestRPCForgetInactiveProfileDoesNotAffectActiveTunnelContext(t *testing.T) {
 	m, peer, active := enrollmentAdmissionTest(t)

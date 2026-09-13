@@ -488,3 +488,13 @@ origin and device binding. Tests verify the active profile, credentials and
 connected intent remain unchanged, no Down plan is created, and exact retries
 return the original result. Coordinated cancellation of active work and the
 remote Logout path remain unfinished.
+
+Active local forget now supersedes the earlier BUSY limitation for a matching
+Enroll operation. Acceptance durably marks enrollment cancellation before
+signalling its provider context. Enrollment checkpoints reject late writes;
+the Down executor drains the registration provider and persists CANCELLED before
+performing cleanup. A saved cancellation is also reconciled after coordinator
+restart without resending registration. Tests cover rejected/unconfirmed commands
+not cancelling work, accepted cancellation, a late provider save, drain-before-Down
+ordering and queued enrollment recovery. Other conflicting provider operations
+still return BUSY; real OS/process/network interruption acceptance remains open.

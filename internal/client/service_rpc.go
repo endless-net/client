@@ -64,6 +64,7 @@ type ClientRPCMutations struct {
 	now              func() time.Time
 	observedStatus   *ipc.Status
 	cancelApply      context.CancelFunc
+	cancelEnrollment context.CancelFunc
 	subscribers      map[*rpcSubscriber]struct{}
 }
 
@@ -302,6 +303,9 @@ func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, r
 		return nil, false, err
 	}
 	if !reused {
+		if state := m.store.Read().RPCState; accepted.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT && state != nil && state.Enrollment != nil && state.Enrollment.CancelRequested && m.cancelEnrollment != nil {
+			m.cancelEnrollment()
+		}
 		if state := m.store.Read().RPCState; state != nil && state.DisconnectOperationID == accepted.Id && m.cancelApply != nil {
 			m.cancelApply() // Only after durable acceptance, never on rejected input.
 		}

@@ -77,6 +77,16 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 		return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
 	}
 	resuming := current.State == ipc.OperationState_OPERATION_STATE_RUNNING
+	if current.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT {
+		m.enrollmentWorker.Lock()
+		defer m.enrollmentWorker.Unlock()
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := m.cancelEnrollmentForForget(); err != nil {
+			return err
+		}
+	}
 	if current.State == ipc.OperationState_OPERATION_STATE_PENDING {
 		if _, err := m.ReconcileOperation(id, func(_ *Config, op *ipc.Operation) error {
 			op.State = ipc.OperationState_OPERATION_STATE_RUNNING

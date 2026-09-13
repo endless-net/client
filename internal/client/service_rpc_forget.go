@@ -22,14 +22,18 @@ func (m *ClientRPCMutations) forgetEnrollmentAs(peer local.Peer, request *ipc.Fo
 		if !request.Confirmed {
 			return rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 		}
-		// Until cancellation is coordinated across providers, never let a late
-		// response reintroduce registration after local cleanup.
+		// A matching enrollment is cancelled durably and drained before cleanup.
+		// Other providers still require their own explicit cancellation protocol.
 		for _, record := range cfg.RPCState.Operations {
 			pending := new(ipc.Operation)
 			if proto.Unmarshal(record.Operation, pending) != nil {
 				return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
 			}
 			if !rpcOperationTerminal(pending.State) {
+				if pending.Kind == ipc.OperationKind_OPERATION_KIND_ENROLL && pending.ProfileId == request.GetProfile().GetProfileId() && cfg.RPCState.Enrollment != nil && cfg.RPCState.Enrollment.OperationID == pending.Id {
+					cfg.RPCState.Enrollment.CancelRequested = true
+					continue
+				}
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 			}
 		}

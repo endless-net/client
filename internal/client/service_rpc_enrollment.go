@@ -18,11 +18,12 @@ import (
 // enrollment authorization required to resume accepted work after a crash.
 // It must be cleared by terminal reconciliation, never returned or logged.
 type clientRPCEnrollment struct {
-	OperationID string             `json:"operation_id"`
-	Mode        ipc.EnrollmentMode `json:"mode"`
-	Hostname    string             `json:"hostname,omitempty"`
-	Token       string             `json:"token,omitempty"`
-	Browser     bool               `json:"browser,omitempty"`
+	OperationID     string             `json:"operation_id"`
+	Mode            ipc.EnrollmentMode `json:"mode"`
+	Hostname        string             `json:"hostname,omitempty"`
+	Token           string             `json:"token,omitempty"`
+	Browser         bool               `json:"browser,omitempty"`
+	CancelRequested bool               `json:"cancel_requested,omitempty"`
 }
 
 func (m *ClientRPCMutations) enrollAs(peer local.Peer, request *ipc.EnrollRequest) (*ipc.Operation, error) {
@@ -100,6 +101,9 @@ func (m *ClientRPCMutations) EnrollmentSaveCallback(operationID string, initial 
 		defer mu.Unlock()
 		next := clonePersistentConfig(updated)
 		_, err := m.ReconcileOperation(operationID, func(current *Config, op *ipc.Operation) error {
+			if current.RPCState.Enrollment != nil && current.RPCState.Enrollment.OperationID == operationID && current.RPCState.Enrollment.CancelRequested {
+				return rpc.Error(connect.CodeCanceled, ipc.ErrorCode_ERROR_CODE_CANCELLED)
+			}
 			stale := func() error { return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE) }
 			if op.Kind != ipc.OperationKind_OPERATION_KIND_ENROLL || op.State != ipc.OperationState_OPERATION_STATE_RUNNING ||
 				expected.RPCState == nil || op.ProfileId == "" || op.ProfileId != expected.RPCState.ActiveProfileID ||

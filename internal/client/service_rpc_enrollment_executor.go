@@ -51,10 +51,19 @@ func (m *ClientRPCMutations) ReconcileEnrollment(ctx context.Context, provider C
 		return err
 	}
 	cfg = m.store.Read()
+	providerCtx, cancel := context.WithCancel(ctx)
+	m.mu.Lock()
+	m.cancelEnrollment = cancel
+	cancelRequested := m.enrollmentCancellationRequested()
+	m.mu.Unlock()
+	defer func() { m.mu.Lock(); m.cancelEnrollment = nil; m.mu.Unlock(); cancel() }()
+	if cancelRequested {
+		return m.cancelEnrollmentForForget()
+	}
 	var checkpointErr error
 	lastSaved := clonePersistentConfig(cfg)
 	save := m.EnrollmentSaveCallback(plan.OperationID, cfg)
-	action, executeErr := provider(ctx, cfg, ClientRPCEnrollmentInput(plan), func(next Config) error {
+	action, executeErr := provider(providerCtx, cfg, ClientRPCEnrollmentInput{OperationID: plan.OperationID, Mode: plan.Mode, Hostname: plan.Hostname, Token: plan.Token, Browser: plan.Browser}, func(next Config) error {
 		if checkpointErr != nil {
 			return checkpointErr
 		}
@@ -68,6 +77,9 @@ func (m *ClientRPCMutations) ReconcileEnrollment(ctx context.Context, provider C
 	// a restarted worker resumes it without needing a replay from the caller.
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if m.enrollmentCancellationRequested() {
+		return m.cancelEnrollmentForForget()
 	}
 	if checkpointErr != nil {
 		return checkpointErr
@@ -83,6 +95,10 @@ func (m *ClientRPCMutations) ReconcileEnrollment(ctx context.Context, provider C
 	_, err = m.ReconcileOperation(plan.OperationID, func(cfg *Config, op *ipc.Operation) error {
 		if op.ProfileId != cfg.RPCState.ActiveProfileID || cfg.RPCState.Enrollment == nil || cfg.RPCState.Enrollment.OperationID != plan.OperationID {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
+		if cfg.RPCState.Enrollment.CancelRequested {
+			setEnrollmentForgotten(op)
+			return nil
 		}
 		if cfg.LocalOwnerID != lastSaved.LocalOwnerID || cfg.ActiveAccountID != lastSaved.ActiveAccountID ||
 			!reflect.DeepEqual(cfg.ControlPlaneURLs, lastSaved.ControlPlaneURLs) ||
@@ -112,6 +128,30 @@ func (m *ClientRPCMutations) ReconcileEnrollment(ctx context.Context, provider C
 		return nil
 	})
 	return err
+}
+
+func (m *ClientRPCMutations) enrollmentCancellationRequested() bool {
+	cfg := m.store.Read()
+	return cfg.RPCState != nil && cfg.RPCState.Enrollment != nil && cfg.RPCState.Enrollment.CancelRequested
+}
+
+// Caller holds enrollmentWorker: no registration provider can still be writing.
+func (m *ClientRPCMutations) cancelEnrollmentForForget() error {
+	cfg := m.store.Read()
+	if cfg.RPCState == nil || cfg.RPCState.Enrollment == nil {
+		return nil
+	}
+	if !cfg.RPCState.Enrollment.CancelRequested {
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+	}
+	_, err := m.ReconcileOperation(cfg.RPCState.Enrollment.OperationID, func(_ *Config, op *ipc.Operation) error { setEnrollmentForgotten(op); return nil })
+	return err
+}
+
+func setEnrollmentForgotten(op *ipc.Operation) {
+	op.State = ipc.OperationState_OPERATION_STATE_CANCELLED
+	op.UserAction = nil
+	op.Outcome = &ipc.Operation_Failure{Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_CANCELLED, ReasonKey: "enrollment_forgotten"}}
 }
 
 func validEnrollmentAction(action *ipc.UserAction) bool {
