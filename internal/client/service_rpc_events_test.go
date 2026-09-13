@@ -57,9 +57,12 @@ func TestRPCEnrollmentSnapshotActionTracksDurableCallerOperation(t *testing.T) {
 	}
 }
 
-func TestRPCSnapshotFirstAndOwnershipRefresh(t *testing.T) {
+func TestRPCSnapshotFirstAndTypedMutationUpdates(t *testing.T) {
 	m := newRPCStoreTest(t)
 	peer := local.Peer{Identity: "uid:1000"}
+	if err := m.store.Update(func(cfg *Config) error { cfg.LocalOwnerID = peer.Identity; return nil }); err != nil {
+		t.Fatal(err)
+	}
 	build := &ipc.BuildIdentity{Version: "test"}
 	sub, err := m.subscribe(peer, build, nil)
 	if err != nil {
@@ -70,7 +73,7 @@ func TestRPCSnapshotFirstAndOwnershipRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Sequence != 1 || first.GetSnapshot().GetRuntime().GetCallerAccess() != ipc.Access_ACCESS_OBSERVER || first.Metadata.Revision != m.Metadata().Revision {
+	if first.Sequence != 1 || first.GetSnapshot().GetRuntime().GetCallerAccess() != ipc.Access_ACCESS_OWNER || first.Metadata.Revision != m.Metadata().Revision {
 		t.Fatal("invalid initial snapshot")
 	}
 	req := rpcCreateRequest(t, m)
@@ -83,8 +86,8 @@ func TestRPCSnapshotFirstAndOwnershipRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if refresh.Sequence != 2 || refresh.GetSnapshot().GetRuntime().GetCallerAccess() != ipc.Access_ACCESS_OWNER || refresh.Metadata.Revision != op.Metadata.Revision {
-		t.Fatal("claim did not refresh role and revision")
+	if refresh.Sequence != 2 || refresh.GetStatusChanged() == nil || refresh.GetSnapshot() != nil || refresh.Metadata.Revision != op.Metadata.Revision {
+		t.Fatal("mutation did not emit typed status and revision")
 	}
 	changed, err := sub.next(t.Context())
 	if err != nil {

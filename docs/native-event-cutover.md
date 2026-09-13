@@ -8,7 +8,7 @@ ipc/v2 module are still pending removal; this is not whole-client cutover eviden
 
 The old `TestAgentIPCEventsStreamSendsHelloAndStatus` and its capturing HTTP event
 writer are removed. Native replacements in `service_rpc_events_test.go` cover
-snapshot-first sequence/revision, initial owner claim and refreshed role, typed
+snapshot-first sequence/revision, fresh subscription after initial owner claim, typed
 operation and domain invalidation events, fresh sequence on reconnection,
 observer filtering, overflow and cancellation. The authenticated local transport
 test in `service_rpc_transport_test.go` exercises those producer events alongside
@@ -19,7 +19,9 @@ and owner revocation while private events are queued or a send is active. After
 revocation is published, the old stream terminates with typed OWNER_REQUIRED;
 it must not drain old owner-visible events. An active send is aborted via the
 transport cancellation hook. Reattachment begins at sequence 1 with the current
-observer-filtered snapshot. Initial observer-to-owner claims continue normally.
+observer-filtered snapshot. Initial observer-to-owner claims terminate the old
+subscription with STALE_STATE; a new subscription captures the committed owner
+role. Ordinary updates emit status_changed, never another opening snapshot.
 Bytes already delivered before revocation cannot be recalled.
 
 WatchEvents also rechecks current ownership immediately before sending a dequeued

@@ -84,14 +84,17 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if m.store.Read().LocalOwnerID == "" {
 		t.Fatal("transport did not propagate OS identity into durable owner")
 	}
-	if !events.Receive() || events.Msg().Sequence != 2 || events.Msg().Metadata.Revision != accepted.Msg.Operation.Metadata.Revision {
-		t.Fatalf("missing atomic refreshed snapshot: %v", events.Err())
+	if events.Receive() {
+		t.Fatal("ownership claim continued the observer stream")
 	}
-	if !events.Receive() || !proto.Equal(events.Msg().GetOperationChanged(), accepted.Msg.Operation) {
-		t.Fatalf("missing native operation event: %v", events.Err())
+	assertRPCFailure(t, events.Err(), ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	_ = events.Close()
+	events, err = client.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !events.Receive() || events.Msg().GetInvalidated().GetDomain() != ipc.Domain_DOMAIN_PROFILES {
-		t.Fatalf("missing native invalidation: %v", events.Err())
+	if !events.Receive() || events.Msg().Sequence != 1 || events.Msg().GetSnapshot().GetRuntime().GetCallerAccess() != ipc.Access_ACCESS_OWNER || events.Msg().Metadata.Revision != accepted.Msg.Operation.Metadata.Revision {
+		t.Fatalf("missing fresh committed owner snapshot: %v", events.Err())
 	}
 	_ = events.Close()
 	lookup := &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_RequestId{RequestId: request.Mutation.RequestId}}

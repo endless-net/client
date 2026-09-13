@@ -267,6 +267,11 @@ func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation, inv
 			// subscription starts from an observer-filtered snapshot.
 			err = rpc.Error(connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
 		}
+		if err == nil && subscriber.access != snapshot.Runtime.CallerAccess {
+			// Runtime access belongs to the opening snapshot. A role change
+			// requires a new stream, never a second snapshot in this sequence.
+			err = rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
 		if err != nil {
 			subscriber.mu.Lock()
 			if !subscriber.closed {
@@ -282,8 +287,7 @@ func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation, inv
 		}
 		subscriber.access = snapshot.Runtime.CallerAccess
 		metadata := snapshot.Status.Metadata
-		// Snapshot also refreshes role after an initial ownership claim.
-		subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_Snapshot{Snapshot: snapshot}})
+		subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_StatusChanged{StatusChanged: snapshot.Status}})
 		if snapshot.Runtime.CallerAccess == ipc.Access_ACCESS_OBSERVER {
 			continue
 		}

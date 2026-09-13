@@ -67,6 +67,9 @@ func TestUnixServiceSocketRPCContract(t *testing.T) {
 	if _, err := consumer.Bootstrap(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if err := m.store.Update(func(cfg *Config) error { cfg.LocalOwnerID = "uid:" + strconv.Itoa(os.Geteuid()); return nil }); err != nil {
+		t.Fatal(err)
+	}
 	events, err := consumer.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
 	if err != nil {
 		t.Fatal(err)
@@ -84,8 +87,8 @@ func TestUnixServiceSocketRPCContract(t *testing.T) {
 	if got, want := m.store.Read().LocalOwnerID, "uid:"+strconv.Itoa(os.Geteuid()); got != want {
 		t.Fatalf("persisted owner = %q, want authenticated OS identity %q", got, want)
 	}
-	if !events.Receive() || events.Msg().Sequence != 2 || events.Msg().GetSnapshot() == nil || events.Msg().Metadata.Revision != accepted.Msg.Operation.Metadata.Revision {
-		t.Fatalf("missing committed snapshot: %v", events.Err())
+	if !events.Receive() || events.Msg().Sequence != 2 || events.Msg().GetStatusChanged() == nil || events.Msg().GetSnapshot() != nil || events.Msg().Metadata.Revision != accepted.Msg.Operation.Metadata.Revision {
+		t.Fatalf("missing committed status change: %v", events.Err())
 	}
 	if !events.Receive() || events.Msg().Sequence != 3 || !proto.Equal(events.Msg().GetOperationChanged(), accepted.Msg.Operation) {
 		t.Fatalf("missing ordered native operation event: %v", events.Err())

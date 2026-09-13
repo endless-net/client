@@ -30,8 +30,8 @@ func TestRPCStatusInvalidatesOnlyActiveOwnerPeerCatalog(t *testing.T) {
 	}
 	for _, sub := range []*rpcSubscriber{ownerSub, observerSub} {
 		event, err := sub.next(t.Context())
-		if err != nil || event.GetSnapshot() == nil || event.Sequence != 2 {
-			t.Fatal("missing refreshed snapshot", err)
+		if err != nil || event.GetStatusChanged() == nil || event.GetSnapshot() != nil || event.Sequence != 2 {
+			t.Fatal("missing typed status change", err)
 		}
 	}
 	invalidated, err := ownerSub.next(t.Context())
@@ -82,7 +82,7 @@ func TestRPCPeerInvalidationContextBoundaries(t *testing.T) {
 				}
 				publish()
 				event, err := sub.next(t.Context())
-				if err != nil || event.GetSnapshot() == nil || event.GetSnapshot().Status.ActiveProfileId != "" || len(sub.queue) != 0 {
+				if err != nil || event.GetStatusChanged() == nil || event.GetStatusChanged().ActiveProfileId != "" || len(sub.queue) != 0 {
 					t.Fatal("inactive context emitted old profile invalidation", err)
 				}
 			case "revoked-owner":
