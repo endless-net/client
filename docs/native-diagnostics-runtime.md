@@ -559,5 +559,12 @@ failure, reconstruction from serialized progress, session-only retry and replay
 of fully confirmed progress without additional remote effects. This is an
 in-process provider test, not evidence of installed-agent crash recovery.
 
+The retired handler's logout-failure/local-forget test is replaced by a native
+host test over an OS-authenticated pipe/socket. It verifies terminal failure
+correlation, enrollment retention and exact replay without another remote call.
+Local forget checks rejection for a nonadministrator, or cleanup and installation
+identity retention for an administrator. The positive branch therefore requires
+an administrator/root test job; an ordinary-user pass does not prove that branch.
+
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.
