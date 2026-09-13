@@ -95,6 +95,20 @@ trust, not production configuration or disabled certificate verification. Local
 short tests do not execute installation or trust-store mutation; actual hosted
 bootstrap/reinstall/upgrade and certificate cleanup remain unqualified.
 
+## Native application/cache fixture follow-up — 2026-09-13
+
+[Contract job 103707722076](https://github.com/endless-net/client/actions/runs/34750299641/job/103707722076)
+at source `b474b49dc91b60aa36fe9f7d4649ed8ff4c65b2e` failed native readiness in
+both families of `TestControlPlaneNativeApplicationRoute` and
+`TestControlPlaneNativeCachedMapExpiry`. These scenarios also used the HTTP
+fixture incompatible with native profile adoption. They now explicitly use
+`testcontrol.NewTLS` and existing disposable-runner `TrustControlTLS` before
+enrollment. The new fixture short test verifies an actual trusted TLS handshake
+and rejection with an empty root pool. Lower-level HTTP fixtures are unchanged;
+there is no profile-validation bypass or automatic protocol fallback.
+Actual application-route traffic, access withdrawal, cached-map expiry and
+restart assertions are preserved, but still require fresh hosted execution.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,

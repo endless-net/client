@@ -23,12 +23,13 @@ func TestControlPlaneNativeApplicationRoute(t *testing.T) {
 	requireControlScenario(t)
 	for _, family := range []string{"ipv4", "ipv6"} {
 		t.Run(family, func(t *testing.T) {
-			s := testcontrol.New(t)
+			s := testcontrol.NewTLS(t)
 			network, token, err := s.AddNetwork("native-application", "198.18.93.0/24")
 			if err != nil {
 				t.Fatal(err)
 			}
 			n := testclient.New(t, s)
+			n.TrustControlTLS(s)
 			n.Enroll(s, network.Name, token, "--route-table", "auto")
 			n.Start()
 			defer n.Stop()
