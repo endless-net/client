@@ -109,11 +109,15 @@ func (m *ClientRPCMutations) notifyLifecycleAs(peer local.Peer, request *ipc.Not
 
 func (s *ClientRPCService) GetPreferences(ctx context.Context, request *connect.Request[ipc.GetPreferencesRequest]) (*connect.Response[ipc.GetPreferencesResponse], error) {
 	peer, _ := local.PeerFromContext(ctx)
+	return s.preferencesAs(peer, request.Msg)
+}
+
+func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPreferencesRequest) (*connect.Response[ipc.GetPreferencesResponse], error) {
 	cfg := s.mutations.store.Read()
 	if err := authorizeRPCPeer(peer, rpcMethod("/client.v0.ClientService/GetPreferences"), cfg); err != nil {
 		return nil, err
 	}
-	profile, err := rpcFindProfile(&cfg, request.Msg.Profile)
+	profile, err := rpcFindProfile(&cfg, request.Profile)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +131,11 @@ func (s *ClientRPCService) GetPreferences(ctx context.Context, request *connect.
 		source = ipc.SettingSource_SETTING_SOURCE_USER
 		requested = value.Enum()
 	}
-	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: &ipc.LifecycleSetting{Effective: value, Requested: requested, AllowedValues: []ipc.LifecycleBehavior{ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT, ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT}, Control: &ipc.SettingControl{Source: source, Mutation: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE}}}}}}), nil
+	mutation := &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE}
+	if profile.ID != cfg.RPCState.ActiveProfileID {
+		mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_requires_active_profile", ActionOwner: ipc.ActionOwner_ACTION_OWNER_USER}
+	}
+	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: &ipc.LifecycleSetting{Effective: value, Requested: requested, AllowedValues: []ipc.LifecycleBehavior{ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT, ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT}, Control: &ipc.SettingControl{Source: source, Mutation: mutation}}}}}), nil
 }
 
 func (s *ClientRPCService) SetPreferences(ctx context.Context, request *connect.Request[ipc.SetPreferencesRequest]) (*connect.Response[ipc.SetPreferencesResponse], error) {

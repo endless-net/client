@@ -20,6 +20,25 @@ func TestRPCPreferencesRequireActiveProfileForMutation(t *testing.T) {
 	}
 	inactive := &ipc.ProfileRef{ProfileId: created.ProfileId}
 	before := m.Metadata().Revision
+	s := NewClientRPCService(m, nil)
+	for _, ref := range []*ipc.ProfileRef{active, inactive} {
+		response, err := s.preferencesAs(peer, &ipc.GetPreferencesRequest{Profile: ref})
+		if err != nil {
+			t.Fatal(err)
+		}
+		setting := response.Msg.Preferences.Lifecycle.UiQuit
+		restriction := setting.Control.Mutation
+		if ref == active {
+			if restriction.Availability != ipc.Availability_AVAILABILITY_AVAILABLE || restriction.ReasonKey != "" {
+				t.Fatal("active profile preference is not available")
+			}
+		} else if restriction.Availability != ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE || restriction.ReasonKey != "preference_requires_active_profile" || restriction.ActionOwner != ipc.ActionOwner_ACTION_OWNER_USER {
+			t.Fatal("inactive profile preference advertises a forbidden mutation")
+		}
+		if setting.Effective != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT || setting.Requested != nil || setting.Control.Source != ipc.SettingSource_SETTING_SOURCE_DEFAULT || response.Msg.Preferences.Metadata.Revision != before {
+			t.Fatal("mutation restriction changed preference value or snapshot")
+		}
+	}
 	_, err = m.setPreferencesAs(peer, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: inactive, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}})
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	_, err = m.resetPreferencesAs(peer, &ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: inactive, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT}})

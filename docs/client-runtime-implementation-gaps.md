@@ -89,6 +89,14 @@ the durable store. Replay must not change revision or connected intent. A new
 request ID must still schedule disconnect using the new preference. This tests
 local durable admission, not OS suspend/logoff integration or completed Down.
 
+US-10 projection increment: `TestRPCPreferencesRequireActiveProfileForMutation`
+checks that an inactive profile's UI-quit setting reports a temporary mutation
+restriction with the stable `preference_requires_active_profile` reason, while
+the active profile reports availability. The effective default, absence of an
+override and snapshot revision are preserved. The same test checks that Set and
+Reset reject the inactive profile without state changes. Managed settings reuse
+this preferences projection; the other preference keys remain unimplemented.
+
 US-07 route-target increment: `WireGuardRouteTargetsForPeers` now includes every
 host address of each peer, rather than only the first address. The unit test
 `TestWireGuardRouteTargetsRetainEveryPeerAddress` covers a dual-stack peer,
