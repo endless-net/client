@@ -1,38 +1,19 @@
 package v2
 
 const (
-	Protocol             = "endlessnet-client-ipc"
-	Version              = 2
-	MinSupportedVersion  = 2
-	ProtocolHeader       = "X-EndlessNet-IPC-Protocol"
-	VersionHeader        = "X-EndlessNet-IPC-Version"
-	MinVersionHeader     = "X-EndlessNet-IPC-Min-Supported-Version"
-	DefaultLocalEndpoint = "http://endlessnet.local"
-	DefaultWindowsPipe   = `\\.\pipe\endlessnet-service`
-	DefaultUnixSocket    = "/run/endlessnet/client.sock"
-	DefaultDarwinSocket  = "/var/run/endlessnet/client.sock"
+	Protocol            = "endlessnet-client-ipc"
+	Version             = 2
+	MinSupportedVersion = 2
 )
 
 const (
-	PathStatus         = "/status"
-	PathEnroll         = "/enroll"
-	PathConnect        = "/connect"
-	PathServerIdentity = "/server-identity"
-	PathTrustServer    = "/server-identity/trust"
-	PathDisconnect     = "/disconnect"
-	PathLogout         = "/logout"
-	PathLocalForget    = "/logout/local"
+	PathEnroll  = "/enroll"
+	PathConnect = "/connect"
 )
 
 const (
-	OperationStatus         = "status"
-	OperationEnroll         = "enroll"
-	OperationConnect        = "connect"
-	OperationServerIdentity = "server_identity"
-	OperationTrustServer    = "server_identity.trust"
-	OperationDisconnect     = "disconnect"
-	OperationLogout         = "logout"
-	OperationLocalForget    = "logout.local_forget"
+	OperationEnroll  = "enroll"
+	OperationConnect = "connect"
 )
 
 type ServiceState string
