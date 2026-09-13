@@ -1,22 +1,25 @@
 package tests
 
 import (
-	"encoding/json"
 	"net/http"
 	"testing"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
-	ipc "github.com/endless-net/client/ipc/v2"
+	ipc "github.com/endless-net/client/clientipc/v0"
+	"github.com/endless-net/client/internal/testclient"
+	"google.golang.org/protobuf/proto"
 )
 
-// HC-021: explicit map-signing trust recovery preserves enrollment and intent;
-// node credential trust remains an independent published server-key field.
+// HC-021: map trust recovery preserves enrollment and connection intent.
+// Node credential trust remains independent of map-signing trust.
 func TestControlPlaneMapSigningRotation(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		disconnected bool
-		interrupted  bool
-	}{{"connected", false, false}, {"disconnected", true, false}, {"connected-interrupted", false, true}, {"disconnected-interrupted", true, true}} {
+		name                      string
+		disconnected, interrupted bool
+	}{
+		{"connected", false, false}, {"disconnected", true, false},
+		{"connected-interrupted", false, true}, {"disconnected-interrupted", true, true},
+	} {
 		t.Run(tc.name, func(t *testing.T) { testMapSigningRotation(t, tc.disconnected, tc.interrupted) })
 	}
 }
@@ -26,93 +29,114 @@ func testMapSigningRotation(t *testing.T, disconnected, interrupted bool) {
 	s, n, id := nativeControlScenario(t)
 	oldKey := s.Trust().ActiveKeyID
 	if disconnected {
-		var response ipc.DisconnectResponse
-		n.Service("disconnect", &response)
+		runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
+	}
+	baseline := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.NodeId == id && v.UserDisconnected == disconnected })
+	identity := func() *ipc.ServerIdentity {
+		t.Helper()
+		response := &ipc.GetServerIdentityResponse{}
+		if err := n.NativeService("server-identity", response, "--profile-id", baseline.ActiveProfileId); err != nil {
+			t.Fatal(err)
+		}
+		if response.Identity == nil {
+			t.Fatal("missing native server identity")
+		}
+		return response.Identity
 	}
 	if err := s.RotateMapSigningKey(); err != nil {
 		t.Fatal(err)
 	}
 	newKey := s.Trust().ActiveKeyID
-	var identity ipc.ServerIdentityResponse
-	n.Service("server-identity", &identity)
-	if !identity.Changed || identity.TrustedKeyID != oldKey || identity.AnnouncedKeyID != newKey || identity.ControlOrigin != s.URL() {
-		t.Fatal("client did not distinguish pinned and newly announced map identities")
+	announced := identity()
+	if !announced.Changed || announced.TrustedKeyId != oldKey || announced.AnnouncedKeyId != newKey || announced.ControlOrigin != s.URL() || announced.AnnouncementId == "" {
+		t.Fatal("client did not distinguish pinned and announced map identities")
 	}
-	if _, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", oldKey); err == nil {
-		t.Fatal("stale confirmation accepted a newly announced signing key")
+	attempt := func(requestID, key string) (*ipc.Operation, []string) {
+		t.Helper()
+		status := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.NodeId == id && v.ActiveProfileId == baseline.ActiveProfileId })
+		args := append(testclient.NativeMutationArguments(requestID, status), "--confirmed-control-origin", announced.ControlOrigin,
+			"--confirmed-key-id", key, "--confirmed-announcement-id", announced.AnnouncementId)
+		response := &ipc.TrustServerIdentityResponse{}
+		if err := n.NativeService("trust-server", response, args...); err != nil {
+			t.Fatal(err)
+		}
+		if response.GetOperation().GetId() == "" || response.Operation.Kind != ipc.OperationKind_OPERATION_KIND_TRUST_SERVER_IDENTITY || response.Operation.ProfileId != baseline.ActiveProfileId {
+			t.Fatal("missing profile-bound trust operation")
+		}
+		return response.Operation, args
+	}
+	stale, _ := attempt("00000000-0000-4000-8000-000000000002", oldKey)
+	rejected := n.AwaitNativeOperation(stale.Id)
+	if rejected.State != ipc.OperationState_OPERATION_STATE_FAILED || rejected.GetFailure().GetCode() != ipc.ErrorCode_ERROR_CODE_STALE_STATE || identity().TrustedKeyId != oldKey {
+		t.Fatal("stale confirmation changed pinned trust")
 	}
 	if interrupted {
 		if err := s.SetPublicError(http.MethodPost, "/nodes/register", api.ErrorCodeTemporarilyUnavailable); err != nil {
 			t.Fatal(err)
 		}
 	}
-	output, err := n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", newKey)
-	var recovered ipc.TrustServerResponse
-	if err != nil || json.Unmarshal(output, &recovered) != nil || recovered.Outcome != ipc.RecoveryOutcomeAccepted || recovered.TrustedKeyID != newKey || recovered.OperationID == "" {
-		t.Fatal("explicit signing identity recovery failed")
-	}
-	desired := ipc.DesiredConnected
-	if disconnected {
-		desired = ipc.DesiredDisconnected
-	}
+	accepted, args := attempt("00000000-0000-4000-8000-000000000003", newKey)
 	if interrupted {
-		operationID := recovered.OperationID
 		awaitRecovery := func() {
 			t.Helper()
-			n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID == id && v.NodeCredentialPresent && v.Recovery != nil && v.Recovery.OperationID == operationID && v.Recovery.State == ipc.StateRecovering
+			n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId == id && v.GetStoredState().GetNodeCredentialPresent() &&
+					v.GetRecovery().GetOperationId() == accepted.Id && v.GetRecovery().GetState() == ipc.ServiceState_SERVICE_STATE_RECOVERING &&
+					v.GetRecovery().GetFailure().GetRetryable()
 			})
 		}
 		awaitRecovery()
-		n.Stop()
+		n.Crash()
 		n.Start()
 		awaitRecovery()
-		output, err = n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", newKey)
-		if err != nil || json.Unmarshal(output, &recovered) != nil || recovered.OperationID != operationID || recovered.Outcome != ipc.RecoveryOutcomeAlreadyApplied {
-			t.Fatal("interrupted trust recovery did not preserve its public operation identity")
+		pending := &ipc.GetOperationResponse{}
+		if err := n.NativeService("operation", pending, "--request-id", accepted.RequestId); err != nil {
+			t.Fatal(err)
 		}
+		if pending.GetOperation().GetId() != accepted.Id || pending.GetOperation().GetState() != ipc.OperationState_OPERATION_STATE_RUNNING {
+			t.Fatal("interrupted recovery lost its running durable operation")
+		}
+		// The native trust worker retries even when user connection intent is off.
+		// Recovery must not require another mutation or silently connect the tunnel.
 		s.ClearResponseFault(http.MethodPost, "/nodes/register")
-		if disconnected {
-			// Explicit disconnect suppresses background control-plane retries.
-			// An operator may resume the pending trust operation without connecting.
-			output, err = n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", newKey)
-			if err != nil || json.Unmarshal(output, &recovered) != nil || recovered.OperationID != operationID || recovered.Outcome != ipc.RecoveryOutcomeAlreadyApplied {
-				t.Fatal("explicit retry did not resume disconnected trust recovery")
-			}
-		}
+	}
+	completed := n.AwaitNativeOperation(accepted.Id)
+	if completed.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || completed.GetChange() == nil || !completed.GetChange().Changed {
+		t.Fatal("confirmed trust recovery did not complete")
 	}
 	awaitIntent := func() {
 		t.Helper()
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID == id && v.NodeCredentialPresent && v.CachedMapValid && v.UserDisconnected == disconnected && v.DesiredState == desired && (disconnected || (v.WireGuard != nil && v.WireGuard.OK))
+		n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId == id && v.ActiveProfileId == baseline.ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() &&
+				v.GetStoredState().GetCachedMapValid() && v.UserDisconnected == disconnected &&
+				v.GetIntent().GetDesiredState() == baseline.GetIntent().GetDesiredState() && v.Recovery == nil &&
+				(disconnected || v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED)
 		})
-	}
-	awaitIntent()
-	output, err = n.ServiceCommand("trust-server", "--yes", "--confirmed-control-origin", s.URL(), "--confirmed-key-id", newKey)
-	if err != nil || json.Unmarshal(output, &recovered) != nil || recovered.Outcome != ipc.RecoveryOutcomeAlreadyApplied || recovered.TrustedKeyID != newKey {
-		t.Fatal("completed signing recovery was not repeatable")
 	}
 	awaitIntent()
 	n.Stop()
 	n.Start()
 	awaitIntent()
-	n.Service("server-identity", &identity)
-	if identity.Changed || identity.TrustedKeyID != newKey || identity.AnnouncedKeyID != newKey {
-		t.Fatal("confirmed map trust did not survive agent restart")
+	replay := &ipc.TrustServerIdentityResponse{}
+	if err := n.NativeService("trust-server", replay, args...); err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(replay.Operation, completed) {
+		t.Fatal("completed recovery replay changed outcome")
+	}
+	confirmed := identity()
+	if confirmed.Changed || confirmed.TrustedKeyId != newKey || confirmed.AnnouncedKeyId != newKey {
+		t.Fatal("confirmed trust did not survive restart")
 	}
 	if disconnected {
-		var connected ipc.ConnectResponse
-		n.Service("connect", &connected)
+		runNativeControlMutation(t, n, "connect", "00000000-0000-4000-8000-000000000004")
 	}
 	if err := s.UpdateMap(id, func(m *api.NetworkMapSnapshot) { m.Network.Name = "after-map-rotation" }); err != nil {
 		t.Fatal(err)
 	}
-	latest, err := s.Snapshot(id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == id && v.CachedMapValid && !v.UserDisconnected && v.DesiredState == ipc.DesiredConnected && v.MapRevision >= latest.Revision.Network
+	n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId == id && v.GetStoredState().GetCachedMapValid() && !v.UserDisconnected && v.GetNetwork().GetName() == "after-map-rotation" &&
+			v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.LastFailure == nil
 	})
 	created, refreshed := 0, 0
 	for _, event := range s.Events() {

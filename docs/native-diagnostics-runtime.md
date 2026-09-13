@@ -228,6 +228,19 @@ replay after restart and no extra registration. This migrates confirmation
 boundaries, not successful signing-key rotation; those separate scenarios still
 need migration. Short tests compile this guarded test; process acceptance remains CI.
 
+The four map-signing rotation scenarios are now native as well: connected and
+disconnected, each with and without interruption. Stale-key confirmation must
+fail STALE_STATE without adopting trust. Valid confirmation uses the exact
+announcement and a durable operation. Transient registration failure must remain
+retryable; after process kill/restart, request-ID lookup must identify the same
+RUNNING operation. Clearing the fault must allow worker recovery without a new
+mutation even while disconnected. Completion requires Changed=true, retained
+node/profile/intent and a verified map; exact replay after restart is immutable.
+The final named map must reach a current error-free agent snapshot, with one
+original registration and renewal of the same node. These scenarios are compiled,
+not executed, by local short tests; successful rotation remains unverified until
+isolated CI runs them on the required platforms.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP
