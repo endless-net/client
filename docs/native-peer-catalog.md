@@ -25,3 +25,12 @@ producer tests, not installed-agent or cross-platform acceptance. The full peer
 capability is not advertised: peer probe actions and complete UI/system scenario
 validation remain follow-up work in client and client-ui. No proto or version
 change is required for this handler.
+
+`TestRPCPeersLocalTransportOwnershipAndPagination` runs the real producer handler
+and generated consumer over a protected local pipe/socket. It checks observer
+denial before collection, ownership established by native CreateProfile, sorted
+pages and map metadata, stale continuation after source changes, explicit fresh
+search and access revocation on the existing connection. Its map/provider are
+controlled fixtures; map signature verification remains covered separately by
+the source-adapter tests. This is short local transport evidence, not real tunnel
+or installed cross-platform acceptance.
