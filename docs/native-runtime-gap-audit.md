@@ -306,6 +306,22 @@ diagnostic requires a subsequent runner result; container acceptance remains ope
 
 ## Methods without a runtime override
 
+Follow-up at [client main source d6e38bc](https://github.com/endless-net/client/tree/d6e38bc48888c1d18881464c942bc66dea1952c0):
+`GetUpdateInfo` now has an explicit runtime handler in
+[`service_rpc_update.go`](../internal/client/service_rpc_update.go). It projects
+the installed runtime build and a separately labelled caller-reported UI build,
+returns `SOURCE_UNAVAILABLE` with unsupported discovery, and leaves installed-pair
+compatibility unknown. It does not configure a release source or discover,
+verify, download or install an update. The eight session/exit/resource methods
+below still have no runtime overrides in that source. Preserve the original
+nine-method snapshot below as historical evidence, not the current override count.
+
+US-13 remains partial: the new unit and local transport assertions verify truthful
+unavailable-source handling, not successful update discovery, verified UI/core
+pairing, installation or cross-platform acceptance. Those still require producer
+implementation and runner evidence; no platform or consumer acceptance is closed
+by the presence of this handler.
+
 The [service contract](../proto/client/v0/service.proto) declares these methods,
 but `ClientRPCService` has no override in the inspected source. They are inherited
 from the embedded generated `UnimplementedClientServiceHandler` in
