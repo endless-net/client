@@ -45,6 +45,16 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 			return err
 		}
 	}
+	bundleDone, err := s.startBundleWorker(workerCtx)
+	if err != nil {
+		cancel()
+		<-profileDone
+		<-enrollmentDone
+		if trustDone != nil {
+			<-trustDone
+		}
+		return err
+	}
 	server := local.NewServer(s.Handler())
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- server.Serve(listener) }()
@@ -57,6 +67,8 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 		enrollmentDone = nil
 	case err = <-trustDone:
 		trustDone = nil
+	case err = <-bundleDone:
+		bundleDone = nil
 	case err = <-serverDone:
 		serverDone = nil
 	}
@@ -70,6 +82,9 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	}
 	if trustDone != nil {
 		<-trustDone
+	}
+	if bundleDone != nil {
+		<-bundleDone
 	}
 	if serverDone != nil {
 		<-serverDone

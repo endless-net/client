@@ -6,8 +6,13 @@ unknown fields/browser URLs and redacts strings before serialization, then emits
 a single fixed-name diagnostics.json ZIP entry. Source and encoded JSON/archive
 sizes are bounded to 5 MiB; partial/failure markers remain visible. Tests inspect
 the archive content, nested/repeated redaction, source immutability and JSON size
-expansion. This builder is not yet wired to CreateDiagnosticsBundle: durable
-operation execution and storage integration remain unfinished.
+expansion. CreateDiagnosticsBundle now durably accepts a profile-bound plan and
+executes this builder on a dedicated native-host worker, independently of request
+cancellation. Startup scans unfinished plans. Artifact UUID equals operation UUID;
+an artifact saved before a crash is reused without recollection before publishing
+the successful result. Owner/profile/cleanup changes reject stale collection.
+Storage failures preserve the unfinished plan and stop the host; provider and
+capacity failures become typed terminal operation failures.
 
 A separate bundle store primitive now owns immutable archive bytes
 and cloned metadata. It binds opaque UUID handles to owner/profile, expires them
@@ -22,8 +27,11 @@ identity and capacity, and ignores expired records. Archives stay outside the
 main configuration. Files use mode 0600 and existing machine-DPAPI protection on
 Windows; the integrating runtime must supply a private ACL-protected directory
 and hold its single-writer agent lock. Tests cover restart, durable revocation,
-expiry, malformed storage and failed-write rollback. Creation-worker wiring and atomic
-operation publication are still required; this is not installed-service evidence.
+expiry, malformed storage and failed-write rollback. The artifact commits before
+the atomic operation result. Short tests recreate the coordinator and file store
+at pending and artifact-saved boundaries, and cover replay, readback, cancellation,
+capacity, provider failure and owner/profile changes. This is not installed-service
+or process-kill acceptance evidence.
 
 ReadDiagnosticsBundle now checks current owner admission and the durable successful
 CreateDiagnosticsBundle outcome before copying a chunk. Its descriptor must match
@@ -31,9 +39,11 @@ the stored artifact exactly. Orphaned/unpublished archives, removed profiles and
 handles predating logout/local-forget admission are inaccessible; an unrelated
 profile's cleanup does not revoke the handle. Short tests cover these conditions,
 expiry, cancellation, foreign operation ownership and descriptor mismatch. These
-checks do not replace physical artifact revocation hooks. CreateDiagnosticsBundle
-execution/restart recovery is still missing, so the host cannot yet produce bundles
-and DIAGNOSTICS remains unadvertised.
+checks provide immediate logical revocation. The worker also durably sweeps expired,
+revoked and orphaned bytes at startup, after execution and every five seconds;
+unfinished valid plans retain their archives for recovery. Tests verify durable
+orphan removal and expiry even after a read already pruned the in-memory entry.
+DIAGNOSTICS remains unadvertised because OS inspection is still partial.
 
 The retired HTTP Diagnostics route and agent callback are removed. Its old path
 must return 404. The native local transport test verifies owner-only collection,

@@ -38,6 +38,8 @@ type ClientRPCService struct {
 	trustMu          sync.Mutex
 	trustWorker      *clientRPCProfileWorker
 	bundleStore      *clientRPCBundleStore
+	bundleMu         sync.Mutex
+	bundleWorker     *clientRPCProfileWorker
 }
 
 func NewClientRPCService(mutations *ClientRPCMutations, build *ipc.BuildIdentity) *ClientRPCService {

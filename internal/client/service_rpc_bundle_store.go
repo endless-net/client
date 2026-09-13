@@ -30,6 +30,7 @@ type clientRPCBundleStore struct {
 	bytes   int
 	now     func() time.Time
 	persist func(map[string]clientRPCBundleRecord) error
+	dirty   bool
 }
 
 func (s *clientRPCBundleStore) pruneLocked() {
@@ -37,6 +38,7 @@ func (s *clientRPCBundleStore) pruneLocked() {
 	for id, item := range s.items {
 		if !now.Before(item.metadata.ExpiresAt.AsTime()) {
 			delete(s.items, id)
+			s.dirty = true
 			s.bytes -= len(item.data)
 		}
 	}
@@ -50,18 +52,28 @@ func (s *clientRPCBundleStore) timeNow() time.Time {
 }
 
 func (s *clientRPCBundleStore) put(owner, profile string, data []byte) (*ipc.BundleResult, error) {
+	id, err := newRPCUUID()
+	if err != nil {
+		return nil, err
+	}
+	return s.putID(id, owner, profile, data)
+}
+
+func (s *clientRPCBundleStore) putID(id, owner, profile string, data []byte) (*ipc.BundleResult, error) {
+	if !validRPCUUID(id) {
+		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+	}
 	if owner == "" || profile == "" || len(owner) > 4096 || len(profile) > 4096 || len(data) == 0 || len(data) > rpcBundleMaxBytes {
 		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pruneLocked()
+	if _, exists := s.items[id]; exists {
+		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
 	if len(s.items) >= 32 || s.bytes+len(data) > rpcBundleStoreMaxBytes {
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
-	}
-	id, err := newRPCUUID()
-	if err != nil {
-		return nil, err
 	}
 	now := s.timeNow()
 	digest := sha256.Sum256(data)
@@ -80,6 +92,7 @@ func (s *clientRPCBundleStore) put(owner, profile string, data []byte) (*ipc.Bun
 		}
 	}
 	s.bytes += len(data)
+	s.dirty = false
 	return proto.Clone(metadata).(*ipc.BundleResult), nil
 }
 
@@ -122,5 +135,6 @@ func (s *clientRPCBundleStore) revoke(owner, profile string) error {
 		}
 	}
 	s.items, s.bytes = remaining, remainingBytes
+	s.dirty = false
 	return nil
 }

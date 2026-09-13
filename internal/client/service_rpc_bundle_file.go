@@ -127,6 +127,7 @@ func (s *clientRPCBundleStore) restore(raw []byte) error {
 			return invalid
 		}
 		if !s.timeNow().Before(metadata.ExpiresAt.AsTime()) {
+			s.dirty = true
 			continue
 		}
 		s.items[metadata.BundleId] = clientRPCBundleRecord{owner: record.Owner, profile: record.Profile, data: record.Data, metadata: metadata}

@@ -44,6 +44,7 @@ type ClientRPCState struct {
 	Enrollment            *clientRPCEnrollment                `json:"enrollment,omitempty"`
 	Logout                *clientRPCLogout                    `json:"logout,omitempty"`
 	Trust                 *clientRPCTrust                     `json:"trust,omitempty"`
+	Bundles               map[string]clientRPCBundlePlan      `json:"bundles,omitempty"`
 }
 
 type clientRPCOperationRecord struct {
@@ -459,6 +460,7 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 			now := m.now()
 			updated.Metadata = &ipc.SnapshotMetadata{InstanceId: m.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(now)}
 			if rpcOperationTerminal(updated.State) {
+				delete(cfg.RPCState.Bundles, updated.Id)
 				record.CompletedAt = &now
 			}
 			encoded, err := proto.Marshal(updated)
