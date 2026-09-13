@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -248,6 +249,18 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	forgetArgs := []string{"local-forget", transportFlag, endpoint, "--timeout", "5s", "--profile-id", accepted.Msg.Operation.ProfileId,
 		"--expected-instance-id", original.Metadata.InstanceId, "--expected-revision", fmt.Sprint(original.Metadata.Revision),
 		"--request-id", "28ab0d8e-6e10-4292-a273-4a6be96fdc26", "--confirm-local-forget"}
+	trustArgs := []string{"trust-server", transportFlag, endpoint, "--timeout", "5s", "--profile-id", accepted.Msg.Operation.ProfileId,
+		"--expected-instance-id", original.Metadata.InstanceId, "--expected-revision", fmt.Sprint(original.Metadata.Revision),
+		"--request-id", "460956c3-df16-4ff6-b180-2ee5bca50d97", "--confirmed-control-origin", "https://control.example.test",
+		"--confirmed-key-id", "synthetic-key", "--confirmed-announcement-id", strings.Repeat("a", 64)}
+	trustOutput, trustErr := captureStdout(t, func() error { return cmdService(trustArgs) })
+	expectedTrustCode := connect.CodeFailedPrecondition // Empty profile has no installed trust.
+	if info.CallerAccess != ipc.Access_ACCESS_ADMINISTRATOR {
+		expectedTrustCode = connect.CodePermissionDenied
+	}
+	if connect.CodeOf(trustErr) != expectedTrustCode || trustOutput != "" {
+		t.Fatal("native trust CLI bypassed authorization/preconditions", trustErr)
+	}
 	forgottenOutput, forgetErr := captureStdout(t, func() error { return cmdService(forgetArgs) })
 	if info.CallerAccess != ipc.Access_ACCESS_ADMINISTRATOR {
 		if connect.CodeOf(forgetErr) != connect.CodePermissionDenied || forgottenOutput != "" {

@@ -51,6 +51,24 @@ func TestNativeLocalForgetRequiresExplicitConfirmation(t *testing.T) {
 	}
 }
 
+func TestNativeTrustRequiresCompleteAnnouncementConfirmation(t *testing.T) {
+	base := []string{"--request-id", "fc5b2fc0-a24b-402f-98f6-930ed45daf10", "--profile-id", "profile", "--expected-instance-id", "instance", "--expected-revision", "1"}
+	for _, extra := range [][]string{
+		nil,
+		{"--yes"},
+		{"--confirmed-control-origin", "https://control.test", "--confirmed-key-id", "key"},
+		{"--confirmed-key-id", "key", "--confirmed-announcement-id", strings.Repeat("a", 64)},
+		{"--confirmed-control-origin", "https://control.test", "--confirmed-announcement-id", strings.Repeat("a", 64)},
+		{"--confirmed-control-origin", "https://control.test", "--confirmed-key-id", "key", "--confirmed-announcement-id", "bad-hash"},
+	} {
+		var output bytes.Buffer
+		err := cmdServiceRPCMutation("trust-server", append(append([]string{}, base...), extra...), &output)
+		if err == nil || output.Len() != 0 || strings.Contains(err.Error(), "inspect service operation") {
+			t.Fatal("incomplete/retired trust confirmation reached dispatch", err)
+		}
+	}
+}
+
 func TestNativeServiceEndpointUsesPlatformDefaults(t *testing.T) {
 	want := map[string]string{"windows": local.DefaultWindowsPipe, "linux": local.DefaultUnixSocket, "darwin": local.DefaultDarwinSocket}[runtime.GOOS]
 	got, err := nativeServiceEndpoint("", "")

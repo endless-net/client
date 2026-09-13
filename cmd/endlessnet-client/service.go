@@ -28,35 +28,8 @@ func cmdService(args []string) error {
 	switch args[0] {
 	case "status", "runtime-info", "support-info", "events", "operation", "profiles", "server-identity":
 		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
-	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile", "local-forget", "enroll":
+	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile", "local-forget", "enroll", "trust-server":
 		return cmdServiceRPCMutation(args[0], args[1:], os.Stdout)
-	case "trust-server":
-		fs := flag.NewFlagSet("service trust-server", flag.ExitOnError)
-		ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)
-		timeoutValue := fs.String("timeout", "2m", "maximum time to wait for trust recovery and connection")
-		confirmedKeyID := fs.String("confirmed-key-id", "", "server signing key ID confirmed by the operator")
-		confirmedControlOrigin := fs.String("confirmed-control-origin", "", "control-plane origin confirmed by the operator")
-		yes := fs.Bool("yes", false, "confirm replacement of the pinned server signing identity")
-		if err := fs.Parse(args[1:]); err != nil {
-			return err
-		}
-		if !*yes {
-			return errors.New("trust-server requires --yes after verifying the announced key ID")
-		}
-		timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
-		if err != nil {
-			return err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		var payload ipc.TrustServerResponse
-		if err := newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket).Request(ctx, http.MethodPost, ipc.PathTrustServer, ipc.TrustServerRequest{
-			ConfirmedControlOrigin: strings.TrimSpace(*confirmedControlOrigin),
-			ConfirmedKeyID:         strings.TrimSpace(*confirmedKeyID),
-		}, &payload); err != nil {
-			return err
-		}
-		return json.NewEncoder(os.Stdout).Encode(payload)
 	case "networks":
 		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathNetworks, nil, &ipc.NetworksResponse{})
 	case "select-network":

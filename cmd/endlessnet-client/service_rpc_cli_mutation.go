@@ -36,6 +36,12 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	var profile, displayName, controlOrigin string
 	var enrollmentMode, hostname, tokenFile string
 	var browser bool
+	var confirmedOrigin, confirmedKey, confirmedAnnouncement string
+	if command == "trust-server" {
+		fs.StringVar(&confirmedOrigin, "confirmed-control-origin", "", "required exact control origin inspected by the operator")
+		fs.StringVar(&confirmedKey, "confirmed-key-id", "", "required announced signing key ID inspected by the operator")
+		fs.StringVar(&confirmedAnnouncement, "confirmed-announcement-id", "", "required announcement ID returned by server-identity")
+	}
 	if command == "enroll" {
 		fs.StringVar(&enrollmentMode, "mode", "", "required: workstation, server, subnet-router or interactive")
 		fs.StringVar(&hostname, "hostname", "", "hostname; empty lets runtime select the OS hostname")
@@ -61,6 +67,12 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if command == "local-forget" && !confirmed {
 		return fmt.Errorf("local-forget requires --confirm-local-forget")
 	}
+	if command == "trust-server" {
+		announcement, err := hex.DecodeString(confirmedAnnouncement)
+		if strings.TrimSpace(confirmedOrigin) == "" || strings.TrimSpace(confirmedKey) == "" || err != nil || len(announcement) != 32 {
+			return fmt.Errorf("trust-server requires --confirmed-control-origin, --confirmed-key-id and --confirmed-announcement-id (SHA-256 hex) from server-identity")
+		}
+	}
 	if fs.NArg() != 0 || !nativeRequestUUID(*requestID) || strings.TrimSpace(*instance) == "" || *revision == 0 || (command != "create-profile" && strings.TrimSpace(profile) == "") {
 		return fmt.Errorf("service %s requires --request-id UUID, --expected-instance-id and --expected-revision; non-create commands also require --profile-id; no positional arguments are allowed", command)
 	}
@@ -70,7 +82,7 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if command == "create-profile" && strings.TrimSpace(controlOrigin) == "" {
 		return fmt.Errorf("--control-origin is required")
 	}
-	if command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" {
+	if command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" {
 		return fmt.Errorf("unknown native mutation %q", command)
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
@@ -109,6 +121,12 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	ref := &ipc.ProfileRef{ProfileId: profile}
 	var message proto.Message
 	switch command {
+	case "trust-server":
+		response, callErr := consumer.TrustServerIdentity(ctx, connect.NewRequest(&ipc.TrustServerIdentityRequest{Mutation: mutation, Profile: ref, ConfirmedControlOrigin: confirmedOrigin, ConfirmedKeyId: confirmedKey, ConfirmedAnnouncementId: confirmedAnnouncement}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
 	case "enroll":
 		enrollment.Mutation, enrollment.Profile = mutation, ref
 		response, callErr := consumer.Enroll(ctx, connect.NewRequest(enrollment))

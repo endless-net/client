@@ -815,3 +815,20 @@ intent; successful trust recovery alone does not claim a connected tunnel.
 Local go vet, golangci-lint and go test -short pass. CLI/helper/UI consumers of
 trust still require migration; real tunnel recovery and release/platform
 acceptance have not been established by these tests.
+
+`service trust-server` now calls native TrustServerIdentity and prints its
+Protobuf JSON operation response. The old CLI HTTP trust dispatch and `--yes`
+flag are removed. Required inputs are `--profile-id`, `--request-id`,
+`--expected-instance-id`, `--expected-revision`, `--confirmed-control-origin`,
+`--confirmed-key-id` and `--confirmed-announcement-id`. Inspect identity first
+with `service server-identity --profile-id <id>` and retain the exact confirmation
+and request UUID before sending. This command reports acceptance, not completed
+recovery or connectivity; use `service operation --operation-id <id> --wait` to
+follow the operation. Ambiguous dispatch/output errors retain request-ID lookup
+guidance and never trigger an automatic replay or refreshed CAS.
+
+CLI tests reject incomplete/malformed confirmation and the retired boolean flag;
+the real local-transport host test verifies administrator/precondition rejection
+through the native command path. Local go vet, golangci-lint and go test -short
+pass. Privileged helper and UI trust consumers still need their own migration;
+this CLI change is not evidence of full UF-10/release acceptance.
