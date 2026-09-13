@@ -1,5 +1,11 @@
 # Native CLI catalogs and diagnostics
 
+The retired HTTP recent-logs route and agent callback are removed. A regression
+test requires 404 on that old path. Buffer redaction tests now exercise the buffer
+directly; native log transport and profile isolation tests own RPC evidence. The
+remaining old diagnostics DTO/buffer consumers and full ipc/v2 deletion are still
+pending; this removal does not claim their migration.
+
 `service peers --profile-id <id>` calls native ListPeers with optional `--search`,
 `--page-size` and `--page-token`. It preserves the producer's map revision,
 snapshot state and cursor in protobuf JSON; it does not flatten peers into an old

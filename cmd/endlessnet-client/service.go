@@ -968,14 +968,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 				SizeBytes: bundle.SizeBytes, Reused: bundle.Reused,
 			}, nil
 		},
-		RecentLogs: func(ctx context.Context, req ipc.RecentLogsRequest) (ipc.RecentLogsResponse, error) {
-			entries := recentLogEntries(opts.RecentLogs, positiveIntOr(req.Limit, 100))
-			logs := make([]ipc.LogEntry, 0, len(entries))
-			for _, entry := range entries {
-				logs = append(logs, ipc.LogEntry{Timestamp: entry.Timestamp, Message: entry.Message})
-			}
-			return ipc.RecentLogsResponse{Metadata: serviceIPCMetadata(), Logs: logs}, nil
-		},
 	}
 }
 

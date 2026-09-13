@@ -3339,11 +3339,7 @@ func TestRecentLogBufferRedactsAndLimitsServiceLogs(t *testing.T) {
 	_, _ = fmt.Fprintln(logs, `{"node_credential":"secret-node-credential"}`)
 	_, _ = fmt.Fprintln(logs, `powershell -Command install -EnrollToken enr_secret_recent_log`)
 
-	payload, err := agentIPCHandlers(agentIPCOptions{RecentLogs: logs}).RecentLogs(context.Background(), ipc.RecentLogsRequest{Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	entries := payload.Logs
+	entries := recentLogEntries(logs, 10)
 	if len(entries) != 3 {
 		t.Fatalf("recent log count = %d, want bounded 3: %#v", len(entries), entries)
 	}

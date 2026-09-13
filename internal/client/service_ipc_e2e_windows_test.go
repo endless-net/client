@@ -99,9 +99,6 @@ func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {
 			DiagnosticsBundle: func(ctx context.Context, req ipc.DiagnosticsBundleRequest) (ipc.DiagnosticsBundleResponse, error) {
 				return ipc.DiagnosticsBundleResponse{Path: `C:\ProgramData\EndlessNet\Diagnostics\diagnostics-e2e.json`, CreatedAt: "2026-07-18T00:00:00Z", ExpiresAt: "2026-07-25T00:00:00Z", SizeBytes: 128}, nil
 			},
-			RecentLogs: func(ctx context.Context, req ipc.RecentLogsRequest) (ipc.RecentLogsResponse, error) {
-				return ipc.RecentLogsResponse{Logs: []ipc.LogEntry{{Message: "ready"}}}, nil
-			},
 		}),
 		ConnContext: client.WindowsServiceIPCConnContext,
 	}
@@ -191,14 +188,6 @@ func TestWindowsServiceNamedPipeIPCContract(t *testing.T) {
 	}
 	if diagnosticsBundle.Path == "" || diagnosticsBundle.SizeBytes <= 0 {
 		t.Fatalf("diagnostics bundle = %#v", diagnosticsBundle)
-	}
-
-	var logs ipc.RecentLogsResponse
-	if err := ipcClient.Request(ctx, http.MethodGet, ipc.PathRecentLogs, nil, &logs); err != nil {
-		t.Fatal(err)
-	}
-	if len(logs.Logs) != 1 || logs.Logs[0].Message != "ready" {
-		t.Fatalf("logs = %#v", logs)
 	}
 
 	assertWindowsServiceIPCEventStream(t, ctx, ipcClient)

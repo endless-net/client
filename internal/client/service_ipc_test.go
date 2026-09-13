@@ -615,7 +615,6 @@ func TestServiceIPCEndpointPrivilegeMatrix(t *testing.T) {
 		{http.MethodPost, ipc.PathSelectNetwork, ServiceIPCPrivilegeOwner, true},
 		{http.MethodGet, ipc.PathDiagnostics, ServiceIPCPrivilegeOwner, false},
 		{http.MethodPost, ipc.PathDiagnosticsBundle, ServiceIPCPrivilegeOwner, false},
-		{http.MethodGet, ipc.PathRecentLogs, ServiceIPCPrivilegeOwner, false},
 	} {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, newServiceIPCTestRequest(tc.method, tc.path, bytes.NewBufferString(`{}`)))
@@ -623,6 +622,15 @@ func TestServiceIPCEndpointPrivilegeMatrix(t *testing.T) {
 		if !ok || endpoint.RequiredPrivilege != tc.privilege || endpoint.Mutation != tc.mutation {
 			t.Fatalf("endpoint %s = %#v found=%t, want privilege=%s mutation=%t", tc.path, endpoint, ok, tc.privilege, tc.mutation)
 		}
+	}
+}
+
+func TestServiceIPCRetiredRecentLogsRouteIsAbsent(t *testing.T) {
+	handler := NewServiceIPCHandler(ServiceIPCHandlers{})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, newServiceIPCTestRequest(http.MethodGet, ipc.PathRecentLogs, nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("retired recent logs route returned %d, want 404", rec.Code)
 	}
 }
 

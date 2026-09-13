@@ -180,7 +180,6 @@ type ServiceIPCHandlers struct {
 	SelectNetwork     func(context.Context, ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error)
 	Diagnostics       func(context.Context, ipc.DiagnosticsRequest) (ipc.DiagnosticsResponse, error)
 	DiagnosticsBundle func(context.Context, ipc.DiagnosticsBundleRequest) (ipc.DiagnosticsBundleResponse, error)
-	RecentLogs        func(context.Context, ipc.RecentLogsRequest) (ipc.RecentLogsResponse, error)
 	MutationLock      sync.Locker
 }
 
@@ -199,7 +198,6 @@ func NewServiceIPCHandler(handlers ServiceIPCHandlers) http.Handler {
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathSelectNetwork, ipc.OperationSelectNetwork, ServiceIPCPrivilegeOwner, true), handlers.SelectNetwork, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodGet, ipc.PathDiagnostics, ipc.OperationDiagnostics, ServiceIPCPrivilegeOwner, false), handlers.Diagnostics, handlers.Authorize, handlers.MutationLock)
 	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodPost, ipc.PathDiagnosticsBundle, ipc.OperationDiagnosticsBundle, ServiceIPCPrivilegeOwner, false), handlers.DiagnosticsBundle, handlers.Authorize, handlers.MutationLock)
-	registerServiceIPCEndpoint(mux, serviceIPCEndpoint(http.MethodGet, ipc.PathRecentLogs, ipc.OperationRecentLogs, ServiceIPCPrivilegeOwner, false), handlers.RecentLogs, handlers.Authorize, handlers.MutationLock)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		negotiatedRequest, ipcErr := negotiateServiceIPCRequest(r)
 		if ipcErr != nil {
