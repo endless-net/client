@@ -83,7 +83,7 @@ func TestRPCStatusEnrollmentLifecycleRejectsStaleAgentError(t *testing.T) {
 			status := buildAgentRPCStatus(t.Context(), agentIPCOptions{}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED)
 			attachAgentRPCSnapshot(status, client.AgentSnapshot{
 				NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, LastError: "synthetic private polling failure",
-			})
+			}, 0)
 			if status.ServiceState != serviceState || status.ControlState != controlState || status.GetAgent().GetLastFailure() != nil ||
 				status.GetAgent().GetSnapshotState() != ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_ABSENT {
 				t.Fatal("unbound agent error replaced authoritative enrollment state")
@@ -98,12 +98,12 @@ func TestRPCStatusEnrollmentLifecycleRejectsStaleAgentError(t *testing.T) {
 func TestRPCStatusAgentSnapshotMustMatchVerifiedIdentity(t *testing.T) {
 	status := &ipc.Status{ActiveProfileId: "profile", NodeId: "node", Network: &ipc.Network{Id: "network"}, MapRevision: 3, Agent: &ipc.AgentStatus{}}
 	for _, snapshot := range []client.AgentSnapshot{{ProfileID: "profile", NodeID: "other", NetworkID: "network", MapRevision: 3}, {ProfileID: "profile", NodeID: "node", NetworkID: "other", MapRevision: 3}, {ProfileID: "profile", NodeID: "node", NetworkID: "network", MapRevision: 4}, {ProfileID: "previous-profile", NodeID: "node", NetworkID: "network", MapRevision: 3}, {NodeID: "node", NetworkID: "network", MapRevision: 3}} {
-		attachAgentRPCSnapshot(status, snapshot)
+		attachAgentRPCSnapshot(status, snapshot, 0)
 		if status.Agent.NodeId != "" {
 			t.Fatal("foreign or future snapshot was attached")
 		}
 	}
-	attachAgentRPCSnapshot(status, client.AgentSnapshot{ProfileID: "profile", NodeID: "node", NetworkID: "network", MapRevision: 2, LastError: "private diagnostic"})
+	attachAgentRPCSnapshot(status, client.AgentSnapshot{ProfileID: "profile", NodeID: "node", NetworkID: "network", MapRevision: 2, LastError: "private diagnostic"}, 0)
 	if status.Agent.SnapshotState != ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS || status.Agent.TargetMapRevision != 3 || status.Agent.LastFailure.ReasonKey != "agent_observation_failed" {
 		t.Fatal("previous snapshot or diagnostic projection incorrect")
 	}

@@ -64,7 +64,7 @@ func TestSigningIdentityFailureSurvivesSnapshotWithoutTextMatching(t *testing.T)
 				observation.ProfileID = "other"
 			}
 			status := &ipc.Status{ActiveProfileId: "profile", NodeId: cfg.NodeID, Network: &ipc.Network{Id: cfg.NetworkID}, MapRevision: cfg.MapRevision}
-			attachAgentRPCSnapshot(status, observation)
+			attachAgentRPCSnapshot(status, observation, 0)
 			wantChanged := typed && binding == "current"
 			if (status.ServiceState == ipc.ServiceState_SERVICE_STATE_SERVER_IDENTITY_CHANGED) != wantChanged {
 				t.Fatal("identity failure escaped snapshot binding", typed, binding)

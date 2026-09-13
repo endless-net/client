@@ -53,22 +53,23 @@ type AgentFailureKind string
 const AgentFailureServerIdentityChanged AgentFailureKind = "server_identity_changed"
 
 type AgentSnapshot struct {
-	ProfileID   string                `json:"profile_id,omitempty"`
-	GeneratedAt string                `json:"generated_at"`
-	NodeID      string                `json:"node_id"`
-	NetworkID   string                `json:"network_id"`
-	NetworkName string                `json:"network_name"`
-	OverlayIP   string                `json:"overlay_ip"`
-	OverlayIPv6 string                `json:"overlay_ipv6,omitempty"`
-	MapRevision uint64                `json:"map_revision"`
-	PeerCount   int                   `json:"peer_count"`
-	STUN        AgentSTUNSnapshot     `json:"stun"`
-	Relay       AgentRelaySnapshot    `json:"relay"`
-	WireGuard   *WireGuardInspection  `json:"wireguard,omitempty"`
-	Apply       *WireGuardApplyResult `json:"apply,omitempty"`
-	LastError   string                `json:"last_error,omitempty"`
-	FailureKind AgentFailureKind      `json:"failure_kind,omitempty"`
-	Paths       []PeerPathStatus      `json:"paths"`
+	ProfileID         string                `json:"profile_id,omitempty"`
+	GeneratedAt       string                `json:"generated_at"`
+	NodeID            string                `json:"node_id"`
+	NetworkID         string                `json:"network_id"`
+	NetworkName       string                `json:"network_name"`
+	OverlayIP         string                `json:"overlay_ip"`
+	OverlayIPv6       string                `json:"overlay_ipv6,omitempty"`
+	MapRevision       uint64                `json:"map_revision"`
+	MapGlobalRevision uint64                `json:"map_global_revision"`
+	PeerCount         int                   `json:"peer_count"`
+	STUN              AgentSTUNSnapshot     `json:"stun"`
+	Relay             AgentRelaySnapshot    `json:"relay"`
+	WireGuard         *WireGuardInspection  `json:"wireguard,omitempty"`
+	Apply             *WireGuardApplyResult `json:"apply,omitempty"`
+	LastError         string                `json:"last_error,omitempty"`
+	FailureKind       AgentFailureKind      `json:"failure_kind,omitempty"`
+	Paths             []PeerPathStatus      `json:"paths"`
 }
 
 func BuildAgentSnapshot(ctx context.Context, networkMap clientapi.RegisterNodeResponse, opts AgentProbeOptions) AgentSnapshot {
@@ -87,18 +88,19 @@ func BuildAgentSnapshot(ctx context.Context, networkMap clientapi.RegisterNodeRe
 		paths = append([]PeerPathStatus(nil), (*opts.PathSnapshot)...)
 	}
 	return AgentSnapshot{
-		GeneratedAt: generatedAt.UTC().Format(time.RFC3339),
-		NodeID:      networkMap.Node.ID,
-		NetworkID:   networkMap.Network.ID,
-		NetworkName: networkMap.Network.Name,
-		OverlayIP:   networkMap.Node.AssignedIP,
-		OverlayIPv6: networkMap.Node.AssignedIPv6,
-		MapRevision: networkMap.Network.Revision,
-		PeerCount:   len(networkMap.Peers),
-		STUN:        stun,
-		Relay:       relay,
-		WireGuard:   wireGuard,
-		Paths:       paths,
+		GeneratedAt:       generatedAt.UTC().Format(time.RFC3339),
+		NodeID:            networkMap.Node.ID,
+		NetworkID:         networkMap.Network.ID,
+		NetworkName:       networkMap.Network.Name,
+		OverlayIP:         networkMap.Node.AssignedIP,
+		OverlayIPv6:       networkMap.Node.AssignedIPv6,
+		MapRevision:       networkMap.Network.Revision,
+		MapGlobalRevision: networkMap.Revision.Global,
+		PeerCount:         len(networkMap.Peers),
+		STUN:              stun,
+		Relay:             relay,
+		WireGuard:         wireGuard,
+		Paths:             paths,
 	}
 }
 

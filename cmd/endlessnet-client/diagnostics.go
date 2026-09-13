@@ -173,7 +173,7 @@ func cmdStatus(args []string) error {
 			}
 			return err
 		}
-		attachAgentRPCSnapshot(nativeStatus, agentState)
+		attachAgentRPCSnapshot(nativeStatus, agentState, agentSnapshotGlobalRevision(cfg))
 	}
 	if strings.TrimSpace(*wgInterface) != "" {
 		attachLiveWireGuardStatus(status, cfg, *wgInterface, []string(routeTargets), *probeRTT, 5*time.Second, relayResult, relayErr)
@@ -316,7 +316,7 @@ func diagnosticsPayloadWithAgentState(cfg client.Config, agentState *client.Agen
 	}
 	status := buildAgentRPCStatusWithProbe(context.Background(), agentIPCOptions{}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED, false)
 	if agentState != nil {
-		attachAgentRPCSnapshot(status, *agentState)
+		attachAgentRPCSnapshot(status, *agentState, agentSnapshotGlobalRevision(cfg))
 	}
 	statusJSON, err := protojson.Marshal(status)
 	if err != nil {

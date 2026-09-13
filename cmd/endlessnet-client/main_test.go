@@ -2858,7 +2858,7 @@ func TestNativeStatusIncludesBoundAgentStateWithoutSecrets(t *testing.T) {
 			Hostname:     "peer-a",
 			SelectedPath: "relay",
 		}},
-	})
+	}, 0)
 	agent := status.GetAgent()
 	if agent.GetSnapshotState() != nativeipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT || !agent.StunOk || !agent.RelayOk {
 		t.Fatal("native snapshot lost observed STUN/relay state")

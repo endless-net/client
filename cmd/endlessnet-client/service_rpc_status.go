@@ -172,7 +172,7 @@ func buildAgentRPCStatusWithProbe(ctx context.Context, opts agentIPCOptions, cfg
 		}
 	}
 	if snapshot := loadAgentSnapshotIfAvailable(opts.StateOutput); snapshot != nil {
-		attachAgentRPCSnapshot(status, *snapshot)
+		attachAgentRPCSnapshot(status, *snapshot, agentSnapshotGlobalRevision(cfg))
 	}
 	// Session and credential deadlines remain absent until authoritative providers
 	// supply them; neither can be decoded from an unverified bearer token.
@@ -219,7 +219,19 @@ func probeAgentRPCControl(ctx context.Context, origins []string) *ipc.ControlPro
 	return result
 }
 
-func attachAgentRPCSnapshot(status *ipc.Status, snapshot client.AgentSnapshot) {
+func agentSnapshotGlobalRevision(cfg client.Config) uint64 {
+	if cfg.CachedMap == nil {
+		return 0
+	}
+	return cfg.CachedMap.Revision.Global
+}
+
+func attachAgentRPCSnapshot(status *ipc.Status, snapshot client.AgentSnapshot, globalRevision uint64) {
+	// Native Status currently exposes only the network revision. Do not attach
+	// observations from a different global policy as CURRENT or ambiguously PREVIOUS.
+	if snapshot.MapGlobalRevision != globalRevision {
+		return
+	}
 	if status.ActiveProfileId == "" || snapshot.ProfileID != status.ActiveProfileId || status.Network == nil || snapshot.NodeID != status.NodeId || snapshot.NetworkID != status.Network.Id || snapshot.MapRevision > status.MapRevision {
 		return
 	}

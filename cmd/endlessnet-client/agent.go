@@ -804,6 +804,7 @@ func writeAgentFailureSnapshot(stateOutput, configPath string, failure error) er
 		snapshot.NodeID = cfg.NodeID
 		snapshot.NetworkID = cfg.NetworkID
 		snapshot.MapRevision = cfg.MapRevision
+		snapshot.MapGlobalRevision = cfg.MapGlobalRevision
 		if cfg.CachedMap != nil {
 			if cached, verifyErr := verifiedCachedNetworkMap(&cfg); verifyErr == nil {
 				snapshot.NodeID = cached.Node.ID
@@ -812,6 +813,7 @@ func writeAgentFailureSnapshot(stateOutput, configPath string, failure error) er
 				snapshot.OverlayIP = cached.Node.AssignedIP
 				snapshot.OverlayIPv6 = cached.Node.AssignedIPv6
 				snapshot.MapRevision = cached.Network.Revision
+				snapshot.MapGlobalRevision = cached.Revision.Global
 				snapshot.PeerCount = len(cached.Peers)
 			}
 		}
