@@ -79,23 +79,25 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 	defer consumer.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	if _, err := consumer.Bootstrap(ctx); err != nil {
+	info, err := consumer.Bootstrap(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
+	wantMissingProfile := rpcUnownedMissingProfileFailure(t, info)
 	_, err = consumer.ListPeers(ctx, connect.NewRequest(&ipc.ListPeersRequest{Profile: &ipc.ProfileRef{ProfileId: "private"}}))
-	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+	assertRPCFailure(t, err, wantMissingProfile)
 	if calls.Load() != 0 {
-		t.Fatal("observer invoked peer source")
+		t.Fatal("rejected missing-profile request invoked peer source")
 	}
 	_, err = consumer.ListNetworks(ctx, connect.NewRequest(&ipc.ListNetworksRequest{Profile: &ipc.ProfileRef{ProfileId: "private"}}))
-	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+	assertRPCFailure(t, err, wantMissingProfile)
 	if networkCalls.Load() != 0 {
-		t.Fatal("observer invoked account network source")
+		t.Fatal("rejected missing-profile request invoked account network source")
 	}
 	_, err = consumer.GetDiagnostics(ctx, connect.NewRequest(&ipc.GetDiagnosticsRequest{Profile: &ipc.ProfileRef{ProfileId: "private"}}))
-	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+	assertRPCFailure(t, err, wantMissingProfile)
 	if diagnosticCalls.Load() != 0 {
-		t.Fatal("observer invoked diagnostics source")
+		t.Fatal("rejected missing-profile request invoked diagnostics source")
 	}
 	create := rpcCreateRequest(t, m)
 	create.ControlOrigin = "https://control.example.test"
@@ -157,22 +159,27 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 		t.Fatal("explicit fresh search failed")
 	}
 	before := calls.Load()
+	beforeNetworks, beforeDiagnostics := networkCalls.Load(), diagnosticCalls.Load()
+	var wantProviderCalls int32
+	if info.CallerAccess == ipc.Access_ACCESS_ADMINISTRATOR {
+		wantProviderCalls = 1
+	}
 	if err := m.store.Update(func(cfg *Config) error { cfg.LocalOwnerID = "replacement-owner"; return nil }); err != nil {
 		t.Fatal(err)
 	}
 	_, err = consumer.ListPeers(ctx, connect.NewRequest(request))
-	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
-	if calls.Load() != before {
-		t.Fatal("revoked connection retained peer access")
+	assertRPCAccessAfterOwnerReplacement(t, info, err)
+	if calls.Load() != before+wantProviderCalls {
+		t.Fatal("owner replacement produced incorrect peer provider access")
 	}
 	_, err = consumer.ListNetworks(ctx, connect.NewRequest(&ipc.ListNetworksRequest{Profile: profile}))
-	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
-	if networkCalls.Load() != 1 {
-		t.Fatal("revoked connection retained account catalog access")
+	assertRPCAccessAfterOwnerReplacement(t, info, err)
+	if networkCalls.Load() != beforeNetworks+wantProviderCalls {
+		t.Fatal("owner replacement produced incorrect account catalog access")
 	}
 	_, err = consumer.GetDiagnostics(ctx, connect.NewRequest(&ipc.GetDiagnosticsRequest{Profile: profile}))
-	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
-	if diagnosticCalls.Load() != 1 {
-		t.Fatal("revoked connection retained diagnostics access")
+	assertRPCAccessAfterOwnerReplacement(t, info, err)
+	if diagnosticCalls.Load() != beforeDiagnostics+wantProviderCalls {
+		t.Fatal("owner replacement produced incorrect diagnostics access")
 	}
 }
