@@ -280,6 +280,15 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The exit-provider scenario now uses native status and current applied-map gates
+for both clients. Withdrawal of the signed default route must block existing
+TCP/UDP sessions as well as fresh exchanges; provider and LAN-policy restarts
+must preserve the two original registrations. Linux forwarding/SNAT and separate
+LAN reachability remain guarded network assertions, with an explicit unsupported
+SNAT outcome on other platforms. LAN-policy mutation still uses the stopped-agent
+headless CLI, not native exit selection/preferences or UI. Local short tests
+compile this scenario only; real process/network acceptance remains CI work.
+
 The subnet-router scenario now uses native status and profile/map-bound tunnel
 diagnostics, including failure counters, instead of legacy IPC. Applied peer
 observations must match node/profile and the current signed map before routing

@@ -12,9 +12,9 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-038: one real Client advertises and serves as an IPv4 exit provider for
@@ -73,7 +73,7 @@ func testLinuxExitProvider(t *testing.T) {
 
 	endpoints := [2]string{"192.0.2.2:51820", "192.0.2.3:51820"}
 	var nodes [2]*testclient.Node
-	var states [2]ipc.StatusResponse
+	var states [2]*ipc.Status
 	for i := range nodes {
 		n := testclient.New(t, s)
 		n.Namespace = namespaces[i]
@@ -84,12 +84,12 @@ func testLinuxExitProvider(t *testing.T) {
 		}
 		n.Enroll(s, network.Name, token, options...)
 		n.Start()
-		states[i] = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.NodeID != "" && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK
+		states[i] = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+			return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid() && v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 		})
 		nodes[i] = n
 	}
-	providerMap, err := s.Snapshot(states[1].NodeID)
+	providerMap, err := s.Snapshot(states[1].NodeId)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,24 +97,26 @@ func testLinuxExitProvider(t *testing.T) {
 		t.Fatal("provider registration lost its advertised default route")
 	}
 	peerFor := func(remote int, allowed ...string) api.Peer {
-		m, err := s.Snapshot(states[remote].NodeID)
+		m, err := s.Snapshot(states[remote].NodeId)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return api.Peer{ID: m.Node.ID, Hostname: m.Node.Hostname, PublicKey: m.Node.PublicKey, Endpoint: endpoints[remote], EndpointCandidates: []string{endpoints[remote]}, AllowedIPs: allowed}
 	}
-	providerPeer := peerFor(1, states[1].OverlayIP+"/32")
-	sourcePeer := peerFor(0, states[0].OverlayIP+"/32")
-	if err := s.UpdatePeers(states[0].NodeID, []api.Peer{providerPeer}); err != nil {
+	providerPeer := peerFor(1, nativeOverlayAddress(states[1], false).String()+"/32")
+	sourcePeer := peerFor(0, nativeOverlayAddress(states[0], false).String()+"/32")
+	if err := s.UpdatePeers(states[0].NodeId, []api.Peer{providerPeer}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdatePeers(states[1].NodeID, []api.Peer{sourcePeer}); err != nil {
+	if err := s.UpdatePeers(states[1].NodeId, []api.Peer{sourcePeer}); err != nil {
 		t.Fatal(err)
 	}
-	for _, n := range nodes {
-		n.AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.PeerCount == 1 && v.WireGuard != nil && v.WireGuard.OK && v.Agent != nil && v.Agent.LastError == ""
-		})
+	for i, n := range nodes {
+		current, err := s.Snapshot(states[i].NodeId)
+		if err != nil {
+			t.Fatal(err)
+		}
+		states[i] = awaitNativePeerMap(t, n, states[i], current.Revision.Network, 1)
 	}
 
 	binary := os.Getenv("ENDLESSNET_PACKET_PROBE")
@@ -134,7 +136,8 @@ func testLinuxExitProvider(t *testing.T) {
 	}
 	blocked := func() {
 		t.Helper()
-		if probe("tcp") || probe("udp") {
+		tcpOK, udpOK := probe("tcp"), probe("udp")
+		if tcpOK || udpOK {
 			t.Fatal("external target was reachable without an approved default route")
 		}
 	}
@@ -152,31 +155,36 @@ func testLinuxExitProvider(t *testing.T) {
 		if approved {
 			peer.AllowedIPs = append(peer.AllowedIPs, "0.0.0.0/0")
 		}
-		if err := s.UpdatePeers(states[0].NodeID, []api.Peer{peer}); err != nil {
+		if err := s.UpdatePeers(states[0].NodeId, []api.Peer{peer}); err != nil {
 			t.Fatal(err)
 		}
-		m, err := s.Snapshot(states[0].NodeID)
+		m, err := s.Snapshot(states[0].NodeId)
 		if err != nil {
 			t.Fatal(err)
 		}
-		nodes[0].AwaitStatus(func(v ipc.StatusResponse) bool {
-			return v.MapRevision >= m.Revision.Network && v.WireGuard != nil && v.WireGuard.OK && v.Agent != nil && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == ""
-		})
+		states[0] = awaitNativePeerMap(t, nodes[0], states[0], m.Revision.Network, 1)
 	}
 
 	blocked()
 	apply(true)
 	reachable()
+	var sessions []func(string)
+	for _, protocol := range []string{"tcp", "udp"} {
+		session := startApplicationSession(t, binary, namespaces[0], protocol, "203.0.113.20:24001")
+		session("ok")
+		sessions = append(sessions, session)
+	}
 	apply(false)
+	for _, session := range sessions {
+		session("blocked")
+	}
 	blocked()
 	apply(true)
 	reachable()
 	nodes[1].Stop()
 	blocked()
 	nodes[1].Start()
-	nodes[1].AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.NodeID == states[1].NodeID && v.WireGuard != nil && v.WireGuard.OK && v.Agent != nil && v.Agent.LastError == ""
-	})
+	states[1] = awaitNativePeerMap(t, nodes[1], states[1], states[1].MapRevision, 1)
 	reachable()
 	// HC-037: keep the local LAN independent from the external exit target.
 	{
@@ -212,10 +220,7 @@ func testLinuxExitProvider(t *testing.T) {
 				t.Fatal("could not persist exit LAN preference through the CLI")
 			}
 			nodes[0].Start()
-			nodes[0].AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID == states[0].NodeID && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK &&
-					v.Agent != nil && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == ""
-			})
+			states[0] = awaitNativePeerMap(t, nodes[0], states[0], states[0].MapRevision, 1)
 		}
 		lanAccess(true)
 		setPolicy("block")
@@ -230,5 +235,17 @@ func testLinuxExitProvider(t *testing.T) {
 		setPolicy("allow")
 		lanAccess(true)
 		reachable()
+	}
+	registrations := 0
+	for _, event := range s.Events() {
+		if event.Kind == "registered" {
+			registrations++
+			if event.NodeID != states[0].NodeId && event.NodeID != states[1].NodeId {
+				t.Fatal("exit-provider recovery replaced a client identity")
+			}
+		}
+	}
+	if registrations != 2 {
+		t.Fatal("exit-provider or LAN-policy restart created another registration")
 	}
 }
