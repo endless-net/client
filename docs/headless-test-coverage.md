@@ -44,9 +44,13 @@ remove the remaining callback/DTO migration or establish runtime acceptance.
 
 The remaining HTTP v2 handler, endpoint registration, request negotiation,
 JSON/NDJSON codecs and response writer were removed as well. No caller outside
-the retired handler tests used them. Direct component tests for peer context,
-owner claim/release and administrator/owner authorization remain while their
-callbacks are migrated. The old DTOs are still residue,
+the retired handler tests used them. The standalone HTTP peer-context,
+authorization and owner claim/release helpers and their tests were subsequently
+removed after callback migration left no consumers. Native atomic ownership
+tests cover one winner, unauthenticated rejection, rollback of failed admission
+and administrator adoption of existing ownerless enrollment without losing its
+registration. Native protected-transport tests cover OS peer authorization;
+these component checks are not installed-service acceptance. The old DTOs are still residue,
 not an HTTP listener or runtime fallback. Native request-validation, authorization,
 event-stream and operation tests described below are the relevant coverage;
 deleting retired-protocol tests does not supply missing runtime acceptance.

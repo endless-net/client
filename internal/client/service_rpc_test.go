@@ -102,6 +102,14 @@ func TestRPCClaimAuthorizationAndRollback(t *testing.T) {
 	if err := authorizeRPCPeer(peer, rpcMethod("/client.v0.ClientService/Connect"), Config{}); err == nil {
 		t.Fatal("Connect claimed ownership")
 	}
+	peer.Administrator = true
+	if _, _, err := m.acceptAs(peer, rpcCreateProfile, request, rpcPrepareTest); err != nil {
+		t.Fatal("administrator could not adopt existing ownerless enrollment", err)
+	}
+	cfg = m.store.Read()
+	if cfg.LocalOwnerID != peer.Identity || cfg.NodeID != "existing-enrollment" || len(cfg.RPCState.Operations) != 1 {
+		t.Fatal("administrator adoption lost registration or atomic ownership")
+	}
 }
 
 func TestRPCDurableReplayBeforeCAS(t *testing.T) {
