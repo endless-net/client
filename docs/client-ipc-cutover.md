@@ -570,3 +570,12 @@ failure; the persisted Down-start checkpoint triggers DISCONNECTING instead.
 Down failure still invalidates the observation, and confirmed local cleanup
 reports DISCONNECTED. Executor regression tests distinguish remote and Down
 failures. This fixes native status projection, not production runtime activation.
+
+The native service now owns a coordinated host lifecycle through Serve: profile
+and enrollment workers start before serving, listener or worker failure cancels
+the sibling and closes admission, and return waits for both workers and the
+server. Partial startup also closes the supplied local listener and drains any
+started worker. Unit tests cover listener failure, missing enrollment provider
+and a corrupt enrollment plan failing while the listener is blocked in Accept.
+The production agent still calls the old IPC host; replacing that call, wiring
+status observation and migrating consumers remain required cutover work.
