@@ -25,6 +25,9 @@ type Step struct {
 	Responses []proto.Message
 	Err       error
 	Release   <-chan struct{}
+	// ResponseRelease optionally gates individual streaming responses. Nil entries
+	// are immediate; non-nil entries wait for release or caller cancellation.
+	ResponseRelease []<-chan struct{}
 	// HoldOpen keeps a stream active after its scripted responses until cancellation.
 	HoldOpen bool
 }
@@ -52,6 +55,10 @@ func (s *Server) Expect(step Step) error {
 	if step.HoldOpen && (!method.IsStreamingServer() || step.Err != nil) {
 		return errors.New("hold_open requires a stream without a terminal error")
 	}
+	if len(step.ResponseRelease) != 0 && (!method.IsStreamingServer() || len(step.ResponseRelease) != len(step.Responses)) {
+		return errors.New("response release requires one gate per stream response")
+	}
+	step.ResponseRelease = append([]<-chan struct{}(nil), step.ResponseRelease...)
 	if step.Request == nil || !step.Request.ProtoReflect().IsValid() || step.Request.ProtoReflect().Descriptor().FullName() != method.Input().FullName() {
 		return errors.New("script request type does not match method")
 	}

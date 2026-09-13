@@ -32,7 +32,12 @@ func (s *Server) WatchEvents(ctx context.Context, request *connect.Request[pb.Wa
 	if err := wait(ctx, step.Release); err != nil {
 		return err
 	}
-	for _, response := range step.Responses {
+	for i, response := range step.Responses {
+		if len(step.ResponseRelease) != 0 {
+			if err := wait(ctx, step.ResponseRelease[i]); err != nil {
+				return err
+			}
+		}
 		if err := stream.Send(response.(*pb.WatchEventsResponse)); err != nil {
 			return err
 		}

@@ -20,6 +20,12 @@ provide an ordered list of typed events followed by an optional error. Enqueue
 another WatchEvents step to model reconnection with a fresh snapshot. A Release
 channel delays a step without wall-clock sleeps, allowing deterministic late
 responses and cancellation tests. Scripts clone all messages when enqueued.
+`ResponseRelease` optionally supplies one gate for each streaming response;
+nil gates send immediately, while other gates wait for release or cancellation.
+This supports an initial snapshot followed by a controlled later status event
+without blocking unrelated unary calls. The gate slice is copied on enqueue.
+Unary methods and mismatched gate counts are rejected. This is currently an
+in-process Go fixture facility; JSON/stdin control has not yet been added.
 
 Call `Verify` after the scenario and after all RPCs finish. `WaitIdle(ctx)` can
 synchronize handler completion after consumer channels close; it does not
