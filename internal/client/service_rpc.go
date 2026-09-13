@@ -61,6 +61,7 @@ type ClientRPCMutations struct {
 	profileWorker    sync.Mutex
 	disconnectWorker sync.Mutex
 	enrollmentWorker sync.Mutex
+	trustWorker      sync.Mutex
 	store            *ConfigStore
 	instanceID       string
 	now              func() time.Time
@@ -440,6 +441,9 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 			}
 			if updated.Kind == ipc.OperationKind_OPERATION_KIND_LOGOUT && rpcOperationTerminal(updated.State) && cfg.RPCState.Logout != nil && cfg.RPCState.Logout.OperationID == updated.Id {
 				cfg.RPCState.Logout = nil
+			}
+			if updated.Kind == ipc.OperationKind_OPERATION_KIND_TRUST_SERVER_IDENTITY && rpcOperationTerminal(updated.State) && cfg.RPCState.Trust != nil && cfg.RPCState.Trust.OperationID == updated.Id {
+				cfg.RPCState.Trust = nil
 			}
 			if updated.Kind == ipc.OperationKind_OPERATION_KIND_ENROLL && rpcOperationTerminal(updated.State) &&
 				cfg.RPCState.Enrollment != nil && cfg.RPCState.Enrollment.OperationID == updated.Id {

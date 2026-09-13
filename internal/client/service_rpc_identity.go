@@ -64,15 +64,23 @@ func (s *ClientRPCService) serverIdentityAs(ctx context.Context, peer local.Peer
 	if !reflect.DeepEqual(clonePersistentConfig(cfg), clonePersistentConfig(current)) {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	}
-	encoded, err := json.Marshal(struct {
-		Profile, Origin    string
-		Trusted, Announced clientapi.SigningTrustBundle
-	}{profile.ID, profile.ControlOrigin, trusted, announced})
+	announcementID, err := rpcIdentityAnnouncementID(profile.ID, profile.ControlOrigin, trusted, announced)
 	if err != nil {
 		return nil, rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
 	}
-	digest := sha256.Sum256(encoded)
 	return &ipc.GetServerIdentityResponse{Identity: &ipc.ServerIdentity{ProfileId: profile.ID, ControlOrigin: profile.ControlOrigin,
 		TrustedKeyId: trusted.ActiveKeyID, AnnouncedKeyId: announced.ActiveKeyID, Changed: trusted.ActiveKeyID != announced.ActiveKeyID,
-		AnnouncementId: hex.EncodeToString(digest[:])}, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}}, nil
+		AnnouncementId: announcementID}, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}}, nil
+}
+
+func rpcIdentityAnnouncementID(profileID, origin string, trusted, announced clientapi.SigningTrustBundle) (string, error) {
+	encoded, err := json.Marshal(struct {
+		Profile, Origin    string
+		Trusted, Announced clientapi.SigningTrustBundle
+	}{profileID, origin, trusted, announced})
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:]), nil
 }

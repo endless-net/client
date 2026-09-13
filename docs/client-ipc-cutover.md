@@ -732,3 +732,13 @@ announcement validation are still mandatory. Tests cover invalid/admin rejection
 unchanged authority, persistence and exact retry/changed-payload conflict. This
 admission is not yet exposed as TrustServerIdentity: the recovery executor and
 worker integration must be completed before the RPC can accept real requests.
+
+The trust executor's announcement stage now re-fetches public authority, checks
+the exact confirmation hash/key and rechecks the local authority binding before
+checkpointing the validated bundle. It leaves trust, credentials and tunnel
+unchanged. Mismatch/provider failure terminates the operation and clears its plan;
+context cancellation retains RUNNING for restart recovery. Tests cover matching
+and replaced announcements, provider failure, changed local authority, cancellation
+and restart with protected checkpoint persistence. Down, trust adoption and
+credential recovery are still subsequent unfinished stages; TrustServerIdentity
+is intentionally not exposed yet.

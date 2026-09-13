@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
+	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/clientipc/local"
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -14,11 +15,12 @@ import (
 // Admission records confirmation but does not adopt trust or erase credentials.
 // The executor must refetch and match the announcement before any side effect.
 type clientRPCTrust struct {
-	OperationID    string `json:"operation_id"`
-	ControlOrigin  string `json:"control_origin"`
-	KeyID          string `json:"key_id"`
-	AnnouncementID string `json:"announcement_id"`
-	Authority      []byte `json:"authority"`
+	OperationID    string                        `json:"operation_id"`
+	ControlOrigin  string                        `json:"control_origin"`
+	KeyID          string                        `json:"key_id"`
+	AnnouncementID string                        `json:"announcement_id"`
+	Authority      []byte                        `json:"authority"`
+	Announced      *clientapi.SigningTrustBundle `json:"announced,omitempty"`
 }
 
 func (m *ClientRPCMutations) trustServerIdentityAs(peer local.Peer, request *ipc.TrustServerIdentityRequest) (*ipc.Operation, error) {
