@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/json"
@@ -11,6 +12,25 @@ import (
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
 )
+
+func (s *ClientRPCService) Logout(ctx context.Context, request *connect.Request[ipc.LogoutRequest]) (*connect.Response[ipc.LogoutResponse], error) {
+	peer, _ := local.PeerFromContext(ctx)
+	s.profileMu.Lock()
+	defer s.profileMu.Unlock()
+	w := s.profileWorker
+	if w == nil || w.ctx.Err() != nil || !w.logout {
+		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	}
+	op, err := s.mutations.logoutAs(peer, request.Msg)
+	if err != nil {
+		return nil, err
+	}
+	select {
+	case w.wake <- struct{}{}:
+	default:
+	}
+	return connect.NewResponse(&ipc.LogoutResponse{Operation: op}), nil
+}
 
 // ClientRPCLogoutProgress records independently confirmed remote effects.
 // A provider must persist a successful step before proceeding to the next one.

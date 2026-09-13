@@ -22,9 +22,10 @@ type clientRPCProfileSwitch struct {
 // must be idempotent and return only after old routes are removed. Start must
 // enforce current platform/policy restrictions and verify the target map.
 type ClientRPCProfileDriver struct {
-	Lock  sync.Locker
-	Stop  func(context.Context) (ipc.ConnectionContinuity, error)
-	Start func(context.Context, Config) error
+	Lock   sync.Locker
+	Stop   func(context.Context) (ipc.ConnectionContinuity, error)
+	Start  func(context.Context, Config) error
+	Logout ClientRPCLogoutProvider
 }
 
 func (m *ClientRPCMutations) selectProfileAs(peer local.Peer, request *ipc.SelectProfileRequest) (*ipc.Operation, error) {

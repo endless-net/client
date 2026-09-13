@@ -122,6 +122,12 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	workerCtx, stopWorker := context.WithCancel(ctx)
 	allowSwitch := make(chan struct{})
 	workerDone, err := service.StartProfileWorker(workerCtx, ClientRPCProfileDriver{Lock: &sync.Mutex{},
+		Logout: func(_ context.Context, cfg Config, _ ClientRPCLogoutProgress, checkpoint func(ClientRPCLogoutProgress) error) (string, error) {
+			if cfg.NodeID == "" {
+				t.Error("Logout lost registered node")
+			}
+			return "", checkpoint(ClientRPCLogoutProgress{NodeRevoked: true, SessionRevoked: true})
+		},
 		Stop: func(ctx context.Context) (ipc.ConnectionContinuity, error) {
 			select {
 			case <-allowSwitch:
@@ -249,6 +255,7 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 		}
 		cfg.EnrollmentRequestID, cfg.EnrollmentPollToken = "", ""
 		cfg.NodeID = "synthetic-test-node"
+		cfg.NodeCredential = "synthetic-logout-credential"
 		cfg.CachedMap = &clientapi.RegisterNodeResponse{Node: clientapi.Node{ID: cfg.NodeID}}
 		return nil, save(cfg)
 	})
@@ -308,7 +315,22 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 			if err != nil || quit.Msg.Operation.Kind != ipc.OperationKind_OPERATION_KIND_NOTIFY_LIFECYCLE || quit.Msg.Operation.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
 				t.Fatal("native lifecycle notification", err)
 			}
-			return
+			logoutCtx, cancelLogout := context.WithCancel(ctx)
+			logout, err := client.Logout(logoutCtx, connect.NewRequest(&ipc.LogoutRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile}))
+			cancelLogout()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for switchEvents.Receive() {
+				op := switchEvents.Msg().GetOperationChanged()
+				if op.GetId() == logout.Msg.Operation.Id && rpcOperationTerminal(op.State) {
+					if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.GetCleanup().Outcome != ipc.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_CONFIRMED || m.store.Read().NodeCredential != "" {
+						t.Fatal("native Logout did not confirm cleanup")
+					}
+					return
+				}
+			}
+			t.Fatal("Logout completion event missing", switchEvents.Err())
 		}
 	}
 	t.Fatal("Connect terminal event missing", switchEvents.Err())

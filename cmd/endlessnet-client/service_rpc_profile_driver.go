@@ -14,6 +14,7 @@ import (
 // between Stop and target activation.
 func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 	return client.ClientRPCProfileDriver{Lock: opts.OperationMu,
+		Logout: agentRPCLogout,
 		Stop: func(ctx context.Context) (ipc.ConnectionContinuity, error) {
 			if opts.WireGuard == nil {
 				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)

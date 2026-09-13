@@ -530,3 +530,13 @@ claiming uninterrupted continuity after an ambiguous restart. Tests cover remote
 and Down failures, explicit retry, retained steps and removal of credential copies.
 The agent adapter calls the typed remote workflow, but worker/RPC exposure and
 production host integration still remain to wire; this is not full UF-12 evidence.
+
+Logout is now exposed by the native RPC service when its profile worker has a
+remote-logout provider. Startup rejects an unfinished logout if that provider is
+missing; otherwise it resumes saved progress before processing later work. The
+agent profile driver supplies the typed remote adapter. Tests cover shutdown after
+node confirmation and resumed session cleanup, plus Logout acceptance/caller
+cancellation/terminal cleanup over the actual local transport. Logout also
+invalidates the profile catalog. Providers in transport/worker tests are synthetic;
+production agent listener cutover and deployed remote-cleanup acceptance remain
+separate unfinished gates.

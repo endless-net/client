@@ -10,9 +10,10 @@ import (
 )
 
 type clientRPCProfileWorker struct {
-	ctx  context.Context
-	wake chan struct{}
-	done chan struct{}
+	ctx    context.Context
+	wake   chan struct{}
+	done   chan struct{}
+	logout bool
 }
 
 // StartProfileWorker must precede serving the listener. The caller owns ctx and
@@ -34,7 +35,10 @@ func (s *ClientRPCService) StartProfileWorker(ctx context.Context, driver Client
 	if err := s.mutations.AdoptInitialProfile(); err != nil {
 		return nil, err
 	}
-	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{})}
+	if cfg := s.mutations.store.Read(); cfg.RPCState != nil && cfg.RPCState.Logout != nil && driver.Logout == nil {
+		return nil, rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	}
+	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{}), logout: driver.Logout != nil}
 	s.profileWorker = w
 	done := make(chan error, 1)
 	go func() {
@@ -50,6 +54,11 @@ func (s *ClientRPCService) StartProfileWorker(ctx context.Context, driver Client
 		for {
 			if err = s.mutations.ReconcileDisconnect(ctx, driver); err != nil {
 				return
+			}
+			if driver.Logout != nil {
+				if err = s.mutations.ReconcileLogout(ctx, driver, driver.Logout); err != nil {
+					return
+				}
 			}
 			if err = s.mutations.ReconcileConnect(ctx, driver); err != nil {
 				return
