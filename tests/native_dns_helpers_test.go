@@ -43,29 +43,39 @@ func nativeDNSRecordAddressesMatch(addresses []string, ipv4, ipv6 string) bool {
 func runNativeControlMutation(t *testing.T, n *testclient.Node, command, id string) {
 	t.Helper()
 	status := n.AwaitNativeStatus(func(status *ipc.Status) bool { return status.ActiveProfileId != "" })
-	args := testclient.NativeMutationArguments(id, status)
 	var op *ipc.Operation
-	switch command {
-	case "connect":
-		response := &ipc.ConnectResponse{}
-		if err := n.NativeService(command, response, args...); err != nil {
-			t.Fatal(err)
+	err := retryNativeControlAdmission(command, status, func() (*ipc.Status, error) {
+		response := &ipc.GetStatusResponse{}
+		err := n.NativeService("status", response)
+		return response.Status, err
+	}, func(current *ipc.Status) error {
+		args := testclient.NativeMutationArguments(id, current)
+		switch command {
+		case "connect":
+			response := &ipc.ConnectResponse{}
+			if err := n.NativeService(command, response, args...); err != nil {
+				return err
+			}
+			op = response.Operation
+		case "disconnect":
+			response := &ipc.DisconnectResponse{}
+			if err := n.NativeService(command, response, args...); err != nil {
+				return err
+			}
+			op = response.Operation
+		case "logout":
+			response := &ipc.LogoutResponse{}
+			if err := n.NativeService(command, response, args...); err != nil {
+				return err
+			}
+			op = response.Operation
+		default:
+			t.Fatal("unexpected native control mutation")
 		}
-		op = response.Operation
-	case "disconnect":
-		response := &ipc.DisconnectResponse{}
-		if err := n.NativeService(command, response, args...); err != nil {
-			t.Fatal(err)
-		}
-		op = response.Operation
-	case "logout":
-		response := &ipc.LogoutResponse{}
-		if err := n.NativeService(command, response, args...); err != nil {
-			t.Fatal(err)
-		}
-		op = response.Operation
-	default:
-		t.Fatal("unexpected native control mutation")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if op == nil || op.Id == "" {
 		t.Fatal("missing accepted native control mutation")
