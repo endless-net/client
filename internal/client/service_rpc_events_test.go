@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/endless-net/client/clientipc/local"
@@ -266,6 +267,55 @@ func TestRPCEventSubscriptionLimitsAndRelease(t *testing.T) {
 		break
 	}
 	admit("uid:9000")
+}
+
+func TestRPCConcurrentEventSubscriptionAdmission(t *testing.T) {
+	for _, samePeer := range []bool{true, false} {
+		t.Run(fmt.Sprintf("same_peer=%t", samePeer), func(t *testing.T) {
+			m := newRPCStoreTest(t)
+			const attempts = rpcMaxEventSubscribers * 2
+			type result struct {
+				sub *rpcSubscriber
+				err error
+			}
+			results := make(chan result, attempts)
+			start := make(chan struct{})
+			var workers sync.WaitGroup
+			for i := range attempts {
+				workers.Go(func() {
+					identity := "uid:1000"
+					if !samePeer {
+						identity = fmt.Sprintf("uid:%d", 2000+i)
+					}
+					<-start
+					sub, err := m.subscribe(local.Peer{Identity: identity}, &ipc.BuildIdentity{}, nil)
+					results <- result{sub, err}
+				})
+			}
+			close(start)
+			workers.Wait()
+			close(results)
+			accepted := 0
+			for result := range results {
+				if result.err != nil {
+					assertRPCFailure(t, result.err, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+					if result.sub != nil {
+						t.Fatal("rejected admission returned a subscription")
+					}
+					continue
+				}
+				accepted++
+				m.unsubscribe(result.sub)
+			}
+			want := rpcMaxEventSubscribers
+			if samePeer {
+				want = rpcMaxEventSubscribersPerPeer
+			}
+			if accepted != want || len(m.subscribers) != 0 {
+				t.Fatalf("accepted=%d, want=%d, retained=%d", accepted, want, len(m.subscribers))
+			}
+		})
+	}
 }
 
 func TestRPCUnsubscribeAndCancellation(t *testing.T) {

@@ -163,6 +163,13 @@ checks both caps, identity casing, anonymous rejection before capacity errors,
 slot reuse and snapshot-first sequencing. Real slow-consumer load qualification
 remains deferred.
 
+`TestRPCConcurrentEventSubscriptionAdmission` issues 32 concurrent subscription
+attempts, first for one identity and then for distinct identities. It checks
+exactly four or sixteen admissions respectively, typed capacity errors for all
+remaining attempts, and zero retained registrations after unsubscription. No
+subscription is released until every admission attempt has completed. This is
+unit concurrency evidence, not a race-detector or transport-load run.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. `client`
