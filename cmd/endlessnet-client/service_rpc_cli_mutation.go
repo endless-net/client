@@ -34,6 +34,12 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	instance := fs.String("expected-instance-id", "", "required runtime instance from a fresh snapshot")
 	revision := fs.Uint64("expected-revision", 0, "required state revision from a fresh snapshot")
 	var networkID string
+	var resourceID string
+	var resourceEnabled bool
+	if command == "set-resource-enabled" {
+		fs.StringVar(&resourceID, "resource-id", "", "required exact authorized resource ID")
+		fs.BoolVar(&resourceEnabled, "enabled", false, "required explicit --enabled=true or --enabled=false")
+	}
 	var exitID, exitFamily, exitLAN string
 	if command == "select-exit-node" {
 		fs.StringVar(&exitID, "exit-node-id", "", "required exact authorized exit node ID")
@@ -81,6 +87,9 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if command == "set-resource-enabled" && (strings.TrimSpace(resourceID) == "" || !flagWasSet(fs, "enabled")) {
+		return fmt.Errorf("set-resource-enabled requires --resource-id and explicit --enabled=true or --enabled=false")
+	}
 	family := map[string]ipc.ExitFamilyMode{"ipv4-only": ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY, "ipv6-only": ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV6_ONLY, "dual-stack": ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK}[exitFamily]
 	lan := map[string]ipc.LanAccess{"allow": ipc.LanAccess_LAN_ACCESS_ALLOW, "block": ipc.LanAccess_LAN_ACCESS_BLOCK}[exitLAN]
 	if command == "select-exit-node" && (strings.TrimSpace(exitID) == "" || family == ipc.ExitFamilyMode_EXIT_FAMILY_MODE_UNSPECIFIED || lan == ipc.LanAccess_LAN_ACCESS_UNSPECIFIED) {
@@ -107,7 +116,7 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if command == "create-profile" && strings.TrimSpace(controlOrigin) == "" {
 		return fmt.Errorf("--control-origin is required")
 	}
-	if command != "set-preferences" && command != "reset-preferences" && command != "renew-session" && command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" && command != "select-network" && command != "diagnostics-bundle" && command != "select-exit-node" && command != "clear-exit-node" {
+	if command != "set-preferences" && command != "reset-preferences" && command != "renew-session" && command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" && command != "select-network" && command != "diagnostics-bundle" && command != "select-exit-node" && command != "clear-exit-node" && command != "set-resource-enabled" {
 		return fmt.Errorf("unknown native mutation %q", command)
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
@@ -171,6 +180,12 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 		}
 	case "renew-session":
 		response, callErr := consumer.RenewSession(ctx, connect.NewRequest(&ipc.RenewSessionRequest{Mutation: mutation, Profile: ref}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
+	case "set-resource-enabled":
+		response, callErr := consumer.SetResourceEnabled(ctx, connect.NewRequest(&ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: resourceID, Enabled: resourceEnabled}))
 		err = callErr
 		if err == nil {
 			message = response.Msg

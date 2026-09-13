@@ -50,6 +50,8 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		args              []string
 		request, response proto.Message
 	}{
+		{"set-resource-enabled", "SetResourceEnabled", []string{"--resource-id", "resource-exact-id", "--enabled=true"}, &ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: "resource-exact-id", Enabled: true}, &ipc.SetResourceEnabledResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SET_RESOURCE_ENABLED)}},
+		{"set-resource-enabled", "SetResourceEnabled", []string{"--resource-id", "resource-exact-id", "--enabled=false"}, &ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: "resource-exact-id", Enabled: false}, &ipc.SetResourceEnabledResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SET_RESOURCE_ENABLED)}},
 		{"select-exit-node", "SelectExitNode", []string{"--exit-node-id", "exit-exact-id", "--family-mode", "ipv4-only", "--lan-access", "allow"}, &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY, LanAccess: ipc.LanAccess_LAN_ACCESS_ALLOW}, &ipc.SelectExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE)}},
 		{"select-exit-node", "SelectExitNode", []string{"--exit-node-id", "exit-exact-id", "--family-mode", "ipv4-only", "--lan-access", "block"}, &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY, LanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK}, &ipc.SelectExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE)}},
 		{"select-exit-node", "SelectExitNode", []string{"--exit-node-id", "exit-exact-id", "--family-mode", "ipv6-only", "--lan-access", "allow"}, &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV6_ONLY, LanAccess: ipc.LanAccess_LAN_ACCESS_ALLOW}, &ipc.SelectExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE)}},
@@ -86,6 +88,8 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		code            ipc.ErrorCode
 		transportCode   connect.Code
 	}{
+		{"set-resource-enabled", "SetResourceEnabled", &ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: "resource-exact-id", Enabled: true}, ipc.ErrorCode_ERROR_CODE_RESOURCE_CONFLICT, connect.CodeFailedPrecondition},
+		{"set-resource-enabled", "SetResourceEnabled", &ipc.SetResourceEnabledRequest{Mutation: mutation, Profile: ref, ResourceId: "resource-exact-id", Enabled: true}, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED, connect.CodePermissionDenied},
 		{"select-exit-node", "SelectExitNode", &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK, LanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},
 		{"select-exit-node", "SelectExitNode", &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK, LanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK}, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED, connect.CodePermissionDenied},
 		{"clear-exit-node", "ClearExitNode", &ipc.ClearExitNodeRequest{Mutation: mutation, Profile: ref}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},
@@ -129,7 +133,7 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 	}()
 	for _, tc := range cases {
 		args := append([]string{tc.command, transportFlag, endpoint, "--profile-id", "profile-a", "--timeout", "5s"}, tc.args...)
-		if tc.command == "set-preferences" || tc.command == "reset-preferences" || tc.command == "renew-session" || tc.command == "select-network" || tc.command == "diagnostics-bundle" || tc.command == "select-exit-node" || tc.command == "clear-exit-node" {
+		if tc.command == "set-preferences" || tc.command == "reset-preferences" || tc.command == "renew-session" || tc.command == "select-network" || tc.command == "diagnostics-bundle" || tc.command == "select-exit-node" || tc.command == "clear-exit-node" || tc.command == "set-resource-enabled" {
 			args = append(args, "--request-id", mutation.RequestId, "--expected-instance-id", "instance", "--expected-revision", "7")
 		}
 		output, err := captureStdout(t, func() error { return cmdService(args) })
@@ -143,11 +147,14 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 	}
 	for _, tc := range failures {
 		args := []string{tc.command, transportFlag, endpoint, "--profile-id", ref.ProfileId, "--timeout", "5s"}
-		if tc.command == "renew-session" || tc.command == "clear-exit-node" || tc.command == "select-exit-node" {
+		if tc.command == "renew-session" || tc.command == "clear-exit-node" || tc.command == "select-exit-node" || tc.command == "set-resource-enabled" {
 			args = append(args, "--request-id", mutation.RequestId, "--expected-instance-id", "instance", "--expected-revision", "7")
 		}
 		if tc.command == "select-exit-node" {
 			args = append(args, "--exit-node-id", "exit-exact-id", "--family-mode", "dual-stack", "--lan-access", "block")
+		}
+		if tc.command == "set-resource-enabled" {
+			args = append(args, "--resource-id", "resource-exact-id", "--enabled=true")
 		}
 		output, err := captureStdout(t, func() error {
 			return cmdService(args)
