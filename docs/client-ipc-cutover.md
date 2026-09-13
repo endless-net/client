@@ -704,3 +704,11 @@ a different profile with coincident node/network IDs is not attached; a prior ma
 revision of the same profile remains explicitly PREVIOUS. Tests cover rejection
 of foreign/unbound snapshots and persistence of the failure snapshot binding.
 This local runtime artifact change does not change the v0 protobuf schema/version.
+
+Server identity inspection now has a typed context-bound workflow independent of
+v2 DTOs. It validates both trust bundles, never adopts the announcement and uses
+a credential-free public-key request. Cancellation reaches an in-flight provider
+request and returns the caller's cancellation. Tests cover changed/invalid trust,
+preserved local authority, absent Authorization and in-flight cancellation. The
+old response adapter currently delegates to it; native GetServerIdentity exposure,
+announcement binding and TrustServerIdentity execution still remain to implement.

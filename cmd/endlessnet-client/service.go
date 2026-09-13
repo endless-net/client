@@ -761,20 +761,9 @@ func inspectServerIdentity(configPath string) (ipc.ServerIdentityResponse, clien
 	if err != nil {
 		return ipc.ServerIdentityResponse{}, clientapi.SigningTrustBundle{}, err
 	}
-	if err := validateMapSigningEnrollmentURLs(cfg); err != nil {
-		return ipc.ServerIdentityResponse{}, clientapi.SigningTrustBundle{}, err
-	}
-	trusted, err := client.SigningTrustBundle(cfg)
+	trusted, announced, err := inspectConfiguredServerIdentity(context.Background(), cfg)
 	if err != nil {
 		return ipc.ServerIdentityResponse{}, clientapi.SigningTrustBundle{}, err
-	}
-	serverKey, err := apiFromConfig(cfg).ServerKey()
-	if err != nil {
-		return ipc.ServerIdentityResponse{}, clientapi.SigningTrustBundle{}, fmt.Errorf("fetch server signing trust bundle: %w", err)
-	}
-	announced := serverKey.TrustBundle
-	if err := announced.Validate(); err != nil {
-		return ipc.ServerIdentityResponse{}, clientapi.SigningTrustBundle{}, fmt.Errorf("invalid server signing trust bundle: %w", err)
 	}
 	return ipc.ServerIdentityResponse{
 		Metadata:       serviceIPCMetadata(),
