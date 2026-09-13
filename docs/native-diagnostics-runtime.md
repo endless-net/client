@@ -1,5 +1,14 @@
 # Native diagnostics runtime snapshot
 
+The native bundle archive builder is now implemented independently of the retired
+DTO builder. It takes only a native Diagnostics projection, clones it, strips
+unknown fields/browser URLs and redacts strings before serialization, then emits
+a single fixed-name diagnostics.json ZIP entry. Source and encoded JSON/archive
+sizes are bounded to 5 MiB; partial/failure markers remain visible. Tests inspect
+the archive content, nested/repeated redaction, source immutability and JSON size
+expansion. This builder is not yet wired to CreateDiagnosticsBundle: durable
+operation execution and owner/profile-bound expiring storage remain unfinished.
+
 The retired HTTP Diagnostics route and agent callback are removed. Its old path
 must return 404. The native local transport test verifies owner-only collection,
 current instance metadata, explicit partial/failure state, raw driver error
