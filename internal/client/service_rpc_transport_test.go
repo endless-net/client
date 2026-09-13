@@ -77,6 +77,10 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if !events.Receive() || events.Msg().Sequence != 1 || events.Msg().GetSnapshot() == nil {
 		t.Fatalf("missing first native snapshot: %v", events.Err())
 	}
+	initialAccess := events.Msg().GetSnapshot().GetRuntime().GetCallerAccess()
+	if initialAccess != info.CallerAccess {
+		t.Fatal("opening snapshot disagrees with authenticated bootstrap access")
+	}
 	accepted, err := client.CreateProfile(ctx, connect.NewRequest(request))
 	if err != nil {
 		t.Fatal(err)
@@ -92,16 +96,35 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if update.Msg.Info.InstalledRuntime.Version != "test" || !proto.Equal(update.Msg.Info.ReportedUi, uiClaim) || update.Msg.Info.State != ipc.UpdateState_UPDATE_STATE_SOURCE_UNAVAILABLE || update.Msg.Info.Available != nil || update.Msg.Info.InstalledPair.State != ipc.CompatibilityState_COMPATIBILITY_STATE_UNKNOWN {
 		t.Fatal("native update read fabricated release or pairing evidence")
 	}
-	if events.Receive() {
-		t.Fatal("ownership claim continued the observer stream")
+	wantAccess := ipc.Access_ACCESS_OWNER
+	switch initialAccess {
+	case ipc.Access_ACCESS_OBSERVER:
+		if events.Receive() {
+			t.Fatal("ownership claim continued the observer stream")
+		}
+		assertRPCFailure(t, events.Err(), ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	case ipc.Access_ACCESS_ADMINISTRATOR:
+		// An elevated runner remains administrator after claiming ownership.
+		// Unchanged access must keep delivering typed changes, not force a reset.
+		wantAccess = ipc.Access_ACCESS_ADMINISTRATOR
+		if !events.Receive() || events.Msg().Sequence != 2 || events.Msg().GetStatusChanged() == nil || events.Msg().Metadata.Revision != accepted.Msg.Operation.Metadata.Revision {
+			t.Fatalf("administrator lost typed status update: %v", events.Err())
+		}
+		if !events.Receive() || events.Msg().Sequence != 3 || !proto.Equal(events.Msg().GetOperationChanged(), accepted.Msg.Operation) {
+			t.Fatalf("administrator lost operation update: %v", events.Err())
+		}
+		if !events.Receive() || events.Msg().Sequence != 4 || events.Msg().GetInvalidated().GetDomain() != ipc.Domain_DOMAIN_PROFILES {
+			t.Fatalf("administrator lost profile invalidation: %v", events.Err())
+		}
+	default:
+		t.Fatal("unexpected access for an unowned installation")
 	}
-	assertRPCFailure(t, events.Err(), ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	_ = events.Close()
 	events, err = client.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !events.Receive() || events.Msg().Sequence != 1 || events.Msg().GetSnapshot().GetRuntime().GetCallerAccess() != ipc.Access_ACCESS_OWNER || events.Msg().Metadata.Revision != accepted.Msg.Operation.Metadata.Revision {
+	if !events.Receive() || events.Msg().Sequence != 1 || events.Msg().GetSnapshot().GetRuntime().GetCallerAccess() != wantAccess || events.Msg().Metadata.Revision != accepted.Msg.Operation.Metadata.Revision {
 		t.Fatalf("missing fresh committed owner snapshot: %v", events.Err())
 	}
 	_ = events.Close()
