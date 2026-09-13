@@ -540,3 +540,11 @@ cancellation/terminal cleanup over the actual local transport. Logout also
 invalidates the profile catalog. Providers in transport/worker tests are synthetic;
 production agent listener cutover and deployed remote-cleanup acceptance remain
 separate unfinished gates.
+
+Failed remote Logout now retains its correlation ID with the profile's
+authority-bound confirmation state, independently of the terminal journal's
+retention window. Active and inactive ForgetLocalEnrollment copy that ID into
+CleanupResult before deleting registration. A changed session/authority cannot
+inherit an old cleanup correlation. Tests prune the terminal logout record,
+exercise actual profile handover, and verify both preservation and rejection of
+stale correlation. This is local contract evidence, not deployed revocation proof.

@@ -48,6 +48,27 @@ type clientRPCLogout struct {
 type clientRPCLogoutConfirmation struct {
 	Authority []byte                  `json:"authority"`
 	Progress  ClientRPCLogoutProgress `json:"progress"`
+	RequestID string                  `json:"request_id,omitempty"`
+}
+
+// Correlation is retained with the profile, independently of journal retention,
+// and is only reused for the exact authority that produced the failed cleanup.
+func rpcLocalCleanupRequestID(cfg Config, profileID string) string {
+	profile := cfg.RPCState.Profiles[profileID]
+	registration := cfg
+	if profileID != cfg.RPCState.ActiveProfileID {
+		registration = profile.Configuration
+		registration.LocalOwnerID = cfg.LocalOwnerID
+		registration.PrivateKey, registration.IdentityPrivateKey = cfg.PrivateKey, cfg.IdentityPrivateKey
+		registration.RPCState = &ClientRPCState{ActiveProfileID: profileID, DigestKey: cfg.RPCState.DigestKey}
+	}
+	if confirmed := profile.LogoutConfirmation; confirmed != nil && hmac.Equal(confirmed.Authority, logoutAuthority(registration)) {
+		return confirmed.RequestID
+	}
+	if registration.EnrollmentRecovery != nil {
+		return registration.EnrollmentRecovery.RequestID
+	}
+	return ""
 }
 
 func logoutAuthority(cfg Config) []byte {

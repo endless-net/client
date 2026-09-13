@@ -10,6 +10,68 @@ import (
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
 
+func TestRPCForgetRetainsLogoutCorrelationBeyondJournalRetention(t *testing.T) {
+	for _, scenario := range []string{"active", "inactive", "changed authority"} {
+		t.Run(scenario, func(t *testing.T) {
+			m, peer, enroll := enrollmentAdmissionTest(t)
+			if err := m.store.Update(func(cfg *Config) error { cfg.Token = "synthetic-session"; return nil }); err != nil {
+				t.Fatal(err)
+			}
+			logout, err := m.logoutAs(peer, &ipc.LogoutRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: enroll.Profile})
+			if err != nil {
+				t.Fatal(err)
+			}
+			driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE, nil
+			}, Start: func(context.Context, Config) error { return nil }}
+			if err := m.ReconcileLogout(t.Context(), driver, func(context.Context, Config, ClientRPCLogoutProgress, func(ClientRPCLogoutProgress) error) (string, error) {
+				return "cleanup-request-123", errors.New("synthetic refusal")
+			}); err != nil {
+				t.Fatal(err)
+			}
+			// Simulate pruning the expired terminal record, leaving protected profile state.
+			if err := m.store.Update(func(cfg *Config) error { delete(cfg.RPCState.Operations, logout.RequestId); return nil }); err != nil {
+				t.Fatal(err)
+			}
+			if scenario == "inactive" {
+				create := rpcCreateRequest(t, m)
+				create.ControlOrigin = "https://other.test"
+				created, err := m.createProfileAs(peer, create)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := m.selectProfileAs(peer, &ipc.SelectProfileRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: &ipc.ProfileRef{ProfileId: created.ProfileId}}); err != nil {
+					t.Fatal(err)
+				}
+				if err := m.ReconcileProfileSwitch(t.Context(), driver); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if scenario == "changed authority" {
+				if err := m.store.Update(func(cfg *Config) error { cfg.Token = "synthetic-new-session"; return nil }); err != nil {
+					t.Fatal(err)
+				}
+			}
+			peer.Administrator = true
+			forgotten, err := m.forgetEnrollmentAs(peer, &ipc.ForgetLocalEnrollmentRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: enroll.Profile, Confirmed: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := m.ReconcileDisconnect(t.Context(), driver); err != nil {
+				t.Fatal(err)
+			}
+			result, err := m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: forgotten.Id}})
+			want := "cleanup-request-123"
+			if scenario == "changed authority" {
+				want = ""
+			}
+			if err != nil || result.GetCleanup().ControlRequestId != want {
+				t.Fatal("cleanup correlation not bound to retained authority", err)
+			}
+		})
+	}
+}
+
 func TestRPCLogoutExecutorPreservesStateAndRetriesConfirmedSteps(t *testing.T) {
 	for _, failRemote := range []bool{false, true} {
 		t.Run(map[bool]string{false: "Down failure", true: "remote failure"}[failRemote], func(t *testing.T) {

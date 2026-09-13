@@ -66,10 +66,7 @@ func (m *ClientRPCMutations) forgetInactiveEnrollmentAs(peer local.Peer, request
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 			}
 		}
-		requestID := ""
-		if profile.Configuration.EnrollmentRecovery != nil {
-			requestID = profile.Configuration.EnrollmentRecovery.RequestID
-		}
+		requestID := rpcLocalCleanupRequestID(*cfg, profile.ID)
 		if err := ApplyLocalLogoutCleanup(&profile.Configuration, m.now()); err != nil {
 			return err
 		}

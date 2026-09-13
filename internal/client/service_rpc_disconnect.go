@@ -115,10 +115,7 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 		op.Continuity = continuity
 		op.Outcome = &ipc.Operation_Change{Change: &ipc.ChangeResult{Changed: continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE}}
 		if stopErr == nil && op.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT {
-			requestID := ""
-			if cfg.EnrollmentRecovery != nil {
-				requestID = cfg.EnrollmentRecovery.RequestID
-			}
+			requestID := rpcLocalCleanupRequestID(*cfg, op.ProfileId)
 			if err := ApplyLocalLogoutCleanup(cfg, m.now()); err != nil {
 				return err
 			}

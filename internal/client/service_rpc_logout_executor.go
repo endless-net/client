@@ -81,6 +81,11 @@ func (m *ClientRPCMutations) ReconcileLogout(ctx context.Context, driver ClientR
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		if remoteErr != nil || stopErr != nil {
+			if remoteErr != nil {
+				profile := current.RPCState.Profiles[op.ProfileId]
+				profile.LogoutConfirmation = &clientRPCLogoutConfirmation{Authority: logoutAuthority(*current), Progress: current.RPCState.Logout.Progress, RequestID: requestID}
+				current.RPCState.Profiles[profile.ID] = profile
+			}
 			failure := &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_REMOTE_CLEANUP_REQUIRED, ReasonKey: "remote_cleanup_unconfirmed", ControlRequestId: requestID}
 			if stopErr != nil {
 				failure.Code, failure.ReasonKey = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, "logout_down_failed"
