@@ -1,5 +1,16 @@
 # Native CLI catalogs and diagnostics
 
+`service export-diagnostics-bundle --operation-id <uuid> --profile-id <id>`
+reads a successful CreateDiagnosticsBundle operation, then its caller-bound
+handle. It accepts no filesystem path or caller-supplied digest. Before writing
+archive bytes to stdout it verifies the complete bounded artifact: size <=5 MiB,
+valid lifetime <=15 minutes, nonexpired metadata, contiguous <=64 KiB chunks,
+exact EOF and SHA-256. Failure/cancellation/expiry returns no partial archive.
+The CLI never uploads or auto-creates a replacement bundle. A final stdout I/O
+failure may still leave a partial external output; it is reported as failure.
+Unit readers cover chunk/metadata corruption and cancellation, not an installed
+producer bundle provider. Native bundle creation/storage remains unfinished.
+
 `service preferences` and `service managed-settings` read their native producer
 methods with a required profile ID. Output retains protobuf presence, effective
 values, setting source, locks and mutation restrictions; the CLI does not invent
