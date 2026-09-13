@@ -13,6 +13,15 @@ and [system design / IT specifications](https://github.com/endless-net/architect
 
 ## 2026-09-13: native v0 transport and request-validation cutover
 
+HC-019's [`TestControlPlaneNativeMTUPreference`](../tests/control_plane_mtu_test.go)
+now observes generated v0 status and diagnostics instead of HTTP v2 DTOs.
+It requires the expected peer-map revision to be applied, binds tunnel inspection
+to the active profile/node, and checks native MTU against the real OS interface.
+IPv4/IPv6 TCP and UDP traffic, restart persistence, rejected MTU 1279 preserving
+1400, and MTU 0 restoring 1420 remain required. Local short tests compile but skip
+this privileged scenario; the historical MTU passes below do not establish a
+pass for this migrated implementation. Fresh GitHub runtime evidence is pending.
+
 The current HC-053 request-validation implementation is
 [`control_plane_rpc_validation_test.go`](../tests/control_plane_rpc_validation_test.go),
 migrated in [client main commit `3b86339`](https://github.com/endless-net/client/commit/3b86339845bb7c212584d1426983aec7eab763a4).

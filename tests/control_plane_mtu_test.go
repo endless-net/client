@@ -9,10 +9,10 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // HC-019: public CLI preferences persist independently of the agent process.
@@ -30,19 +30,23 @@ func TestControlPlaneNativeMTUPreference(t *testing.T) {
 			n.Enroll(s, network.Name, token, "--route-table", "auto", "--mtu", "1280")
 			n.Start()
 			defer n.Stop()
-			status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.NodeID != "" && v.CachedMapValid })
-			nodeID := status.NodeID
-			clientIP, peerIP := netip.MustParseAddr(status.OverlayIP), netip.MustParseAddr("198.18.94.20")
+			status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+				return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
+			})
+			nodeID := status.NodeId
+			clientIP, peerIP := nativeOverlayAddress(status, false), netip.MustParseAddr("198.18.94.20")
 			if family == "ipv6" {
 				if err := s.UpdateMap(nodeID, func(m *api.NetworkMapSnapshot) {
 					m.Network.IPv6CIDR, m.Node.AssignedIPv6 = "fd94::/64", "fd94::1"
 				}); err != nil {
 					t.Fatal(err)
 				}
-				status = n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.OverlayIPv6 == "fd94::1" && v.CachedMapValid })
-				clientIP, peerIP = netip.MustParseAddr(status.OverlayIPv6), netip.MustParseAddr("fd94::20")
+				status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
+					return v.NodeId == nodeID && nativeOverlayAddress(v, true).String() == "fd94::1" && v.GetStoredState().GetCachedMapValid()
+				})
+				clientIP, peerIP = nativeOverlayAddress(status, true), netip.MustParseAddr("fd94::20")
 			}
-			underlay := nativePeerUnderlay(t, netip.MustParseAddr(status.OverlayIP), peerIP)
+			underlay := nativePeerUnderlay(t, nativeOverlayAddress(status, false), peerIP)
 			snapshot, err := s.Snapshot(nodeID)
 			if err != nil {
 				t.Fatal(err)
@@ -54,18 +58,26 @@ func TestControlPlaneNativeMTUPreference(t *testing.T) {
 				t.Fatal(err)
 			}
 			binary := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
+			expectedMap, err := s.Snapshot(nodeID)
+			if err != nil {
+				t.Fatal(err)
+			}
 			check := func(mtu int) {
 				t.Helper()
-				status = n.AwaitStatus(func(v ipc.StatusResponse) bool {
-					return v.NodeID == nodeID && v.CachedMapValid && v.PeerCount == 1 &&
-						v.Agent != nil && v.Agent.MapRevision == v.MapRevision && v.Agent.LastError == "" &&
-						v.WireGuard != nil && v.WireGuard.OK && v.WireGuard.MTU == mtu
+				status = awaitNativePeerMap(t, n, status, expectedMap.Revision.Network, 1)
+				var tunnel *ipc.TunnelInspection
+				awaitNativePeerTunnel(t, n, status, func(v *ipc.TunnelInspection) bool {
+					if v.Mtu != uint32(mtu) || v.InterfaceName == "" || v.ListenPort == 0 || v.ListenPort > 65535 {
+						return false
+					}
+					tunnel = v
+					return true
 				})
-				iface, err := net.InterfaceByName(status.WireGuard.Interface)
+				iface, err := net.InterfaceByName(tunnel.InterfaceName)
 				if err != nil || iface.MTU != mtu {
 					t.Fatal("OS interface MTU does not match the persisted CLI preference")
 				}
-				reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(status.WireGuard.ListenPort)))
+				reference.SetClientEndpoint(t, netip.AddrPortFrom(underlay, uint16(tunnel.ListenPort)))
 				ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 				defer cancel()
 				if err := testclient.Await(ctx, func() bool {
