@@ -416,3 +416,16 @@ registration, ensuring Unix private-file permission checks also apply before
 root enrollment and to credentials stored in inactive profiles/runtime plans.
 Windows continues to use the existing protected-state loader; persistence tests
 read through that loader rather than treating protected bytes as plaintext JSON.
+
+The enrollment executor now consumes the accepted plan through a typed provider:
+RUNNING checkpoints, WAITING_FOR_USER approval actions and successful
+EnrollmentResult use the same journal. Lifecycle cancellation/checkpoint failure
+retain recoverable work; terminal failures remove the plan and do not expose raw
+provider diagnostics. Browser actions require HTTPS without embedded credentials.
+The agent provider calls the shared registration workflow directly, supplies the
+operation ID as registration idempotency key and projects restricted approval as
+WAIT_FOR_APPROVAL rather than a connected/successful registration claim. Tests
+cover waiting/resume through a new coordinator, lifecycle cancellation, sanitized
+failure, unsafe URLs and verified pending enrollment through the agent adapter.
+Native service worker scheduling, production listener wiring, real restart and
+same-artifact system acceptance remain outstanding; this is not full UF-03/04.
