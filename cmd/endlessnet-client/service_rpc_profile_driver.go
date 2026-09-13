@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"strings"
-	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -43,9 +42,7 @@ func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 			if err := nativeApprovalFailure(cfg.NodeApprovalState); err != nil {
 				return err
 			}
-			approval := strings.ToLower(strings.TrimSpace(cfg.NodeApprovalState))
-			if approval == api.NodeApprovalPending || approval == api.NodeApprovalRejected ||
-				strings.TrimSpace(cfg.NodeID) == "" || strings.TrimSpace(cfg.PrivateKey) == "" ||
+			if strings.TrimSpace(cfg.NodeID) == "" || strings.TrimSpace(cfg.PrivateKey) == "" ||
 				strings.TrimSpace(cfg.NodeCredential) == "" || cfg.CachedMap == nil {
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
 			}
