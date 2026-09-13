@@ -786,3 +786,20 @@ threshold, automatic-renewal capability or an authoritative revocation check.
 Short regressions cover persisted enrollment/recovery trust and safe projections
 for valid, missing, foreign, forged and expired credentials. Provider deployment
 and complete US-09 session/renewal acceptance remain separate.
+
+## Stream identity and replay boundary
+
+Every effective stream projection is checked against the local enrolled node,
+network and configured device binding before cache mutation. A producer signature
+does not authorize moving the client into another enrollment. Repeated deltas and
+checkpoints must also pass current signature/trust validity; equal revision/hash
+does not make an expired or modified cache trustworthy. Verification uses the
+same observation time as stream application. Response/snapshot conversion retains
+the complete revision vector.
+
+`TestStreamRejectsSignedForeignIdentityBeforeCacheMutation` proves that otherwise
+valid signed snapshots/deltas cannot substitute another node/network.
+`TestStreamReplayRevalidatesCachedProjection` covers valid, expired, modified and
+foreign-node cached state through delta replay and heartbeat, including no mutation
+on rejection. These are local component tests, not deployed producer, installed
+platform or release-pair acceptance evidence.

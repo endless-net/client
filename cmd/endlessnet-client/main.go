@@ -1623,6 +1623,10 @@ func verifyRegistrationNodeCredential(api *clientapi.API, response clientapi.Reg
 }
 
 func verifyNetworkMap(cfg *client.Config, response clientapi.RegisterNodeResponse) error {
+	return verifyNetworkMapAt(cfg, response, time.Now().UTC())
+}
+
+func verifyNetworkMapAt(cfg *client.Config, response clientapi.RegisterNodeResponse, observedAt time.Time) error {
 	if err := validateNetworkMapBoundary(response); err != nil {
 		return err
 	}
@@ -1652,7 +1656,11 @@ func verifyNetworkMap(cfg *client.Config, response clientapi.RegisterNodeRespons
 	if err != nil {
 		return err
 	}
-	return clientapi.VerifyNetworkMapSignatureWithTrustBundle(response, trust)
+	key, err := trust.Resolve(response.MapSignature.KeyID, observedAt.UTC())
+	if err != nil {
+		return err
+	}
+	return clientapi.VerifyNetworkMapSignatureAt(response, key.PublicKey, observedAt.UTC())
 }
 
 func updatePublishedEndpointFromConfig(cfg *client.Config, api *clientapi.API, endpoint string) (clientapi.RegisterNodeResponse, bool, error) {
@@ -1756,7 +1764,8 @@ func cacheNetworkMapFromEventAt(cfg *client.Config, event clientapi.MapStreamEve
 		return clientapi.RegisterNodeResponse{}, "", err
 	}
 	next, err := clientapi.ApplyMapStreamEvent(current, event, trust, observedAt)
-	if errors.Is(err, clientapi.ErrMapStreamEventAlreadyApplied) {
+	unchanged := errors.Is(err, clientapi.ErrMapStreamEventAlreadyApplied)
+	if unchanged {
 		// AlreadyApplied is an error sentinel, not an effective-map result.
 		// A full replay can also carry a fresh, non-persisted Relay credential;
 		// validate it from an empty base before returning it to the runtime.
@@ -1765,14 +1774,22 @@ func cacheNetworkMapFromEventAt(cfg *client.Config, event clientapi.MapStreamEve
 			if err != nil {
 				return clientapi.RegisterNodeResponse{}, "", err
 			}
-			return networkMapResponseFromSnapshot(next), "unchanged", nil
+		} else {
+			next, err = current, nil
 		}
-		return networkMapResponseFromSnapshot(current), "unchanged", nil
 	}
 	if err != nil {
 		return clientapi.RegisterNodeResponse{}, "", err
 	}
 	response := networkMapResponseFromSnapshot(next)
+	// Signature validity alone does not bind a projection to this enrolled
+	// identity. Replays/checkpoints also require a currently valid cached map.
+	if err := verifyNetworkMapAt(cfg, response, observedAt); err != nil {
+		return clientapi.RegisterNodeResponse{}, "", err
+	}
+	if unchanged {
+		return response, "unchanged", nil
+	}
 	if err := cacheNetworkMapChecked(cfg, response); err != nil {
 		return clientapi.RegisterNodeResponse{}, "", err
 	}
@@ -1802,7 +1819,7 @@ func mapStreamCursor(cfg client.Config, networkRevision uint64) clientapi.MapCur
 }
 
 func networkMapSnapshotFromResponse(response clientapi.RegisterNodeResponse) clientapi.NetworkMapSnapshot {
-	return clientapi.NetworkMapSnapshot{Revision: clientapi.MapRevision{Network: response.Network.Revision}, Network: response.Network, Node: response.Node, Peers: append([]clientapi.Peer(nil), response.Peers...), RegistrationBinding: response.RegistrationBinding, STUNEndpoints: append([]clientapi.STUNEndpoint(nil), response.STUNEndpoints...), Relays: append([]relayauth.Endpoint(nil), response.Relays...), RelayCredential: response.RelayCredential, MapSignature: response.MapSignature}
+	return clientapi.NetworkMapSnapshot{Revision: response.Revision, Network: response.Network, Node: response.Node, Peers: append([]clientapi.Peer(nil), response.Peers...), RegistrationBinding: response.RegistrationBinding, STUNEndpoints: append([]clientapi.STUNEndpoint(nil), response.STUNEndpoints...), Relays: append([]relayauth.Endpoint(nil), response.Relays...), RelayCredential: response.RelayCredential, MapSignature: response.MapSignature}
 }
 
 func networkMapResponseFromSnapshot(snapshot clientapi.NetworkMapSnapshot) clientapi.RegisterNodeResponse {

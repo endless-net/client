@@ -3277,7 +3277,7 @@ func setTestMapStreamResponseHeaders(w http.ResponseWriter) {
 func testMapStreamSnapshotEvent(t *testing.T, response clientapi.RegisterNodeResponse) clientapi.MapStreamEvent {
 	t.Helper()
 	snapshot := networkMapSnapshotFromResponse(response)
-	snapshot.Revision = clientapi.MapRevision{Network: response.Network.Revision}
+	snapshot.Revision = clientapi.MapRevision{Network: response.Network.Revision, Global: response.Revision.Global}
 	privateKey, ok := testMapSigningPrivateKeyRegistry.Load(response.MapSignature.KeyID)
 	if !ok {
 		t.Fatalf("map signing fixture key %q is not registered", response.MapSignature.KeyID)
@@ -3299,7 +3299,7 @@ func testMapStreamSnapshotEvent(t *testing.T, response clientapi.RegisterNodeRes
 
 func testMapStreamSnapshotEventWithSignature(response clientapi.RegisterNodeResponse, signature *clientapi.MapSignature) clientapi.MapStreamEvent {
 	snapshot := networkMapSnapshotFromResponse(response)
-	snapshot.Revision = clientapi.MapRevision{Network: response.Network.Revision}
+	snapshot.Revision = clientapi.MapRevision{Network: response.Network.Revision, Global: response.Revision.Global}
 	return clientapi.MapStreamEvent{
 		Type:            "snapshot",
 		ProtocolVersion: clientapi.MapStreamProtocolVersion,
