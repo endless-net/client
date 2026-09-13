@@ -71,10 +71,25 @@ secret, script, shell, or arbitrary command argument.
 | Linux | `/usr/libexec/endlessnet/endlessnet-client-recovery-helper` | polkit action `ru.endlessnet.client.recovery`, or a direct `sudo`/root invocation |
 | macOS | `/Library/PrivilegedHelperTools/ru.endlessnet.client.recovery-helper` | Authorization Services/XPC service `ru.endlessnet.client.recovery`, running as root |
 
-Fixed arguments:
+Both operations require `--profile-id <id> --request-id <uuid>
+--expected-instance-id <instance> --expected-revision <revision>` from the
+caller's retained v0 snapshot/request context. Bootstrap validates the contract;
+it never refreshes CAS or automatically replays a mutation.
 
-- Trust: `--operation trust-server-identity --confirmed-control-origin <origin> --confirmed-key-id <key-id>`
+Additional fixed arguments:
+
+- Trust: `--operation trust-server-identity --confirmed-control-origin <origin> --confirmed-key-id <key-id> --confirmed-announcement-id <sha256>`
 - Local forget: `--operation forget-local-enrollment --confirmed-local-forget`
+
+The helper uses only native client.v0 on the fixed platform-local endpoint.
+Exit code zero emits an `Operation` in Protobuf JSON; it reports acceptance and
+does not imply completed recovery. A request/bootstrap failure exits nonzero and
+emits a native `Failure` without raw transport diagnostics. Invalid arguments or
+output failure may produce no result. The launcher must retain the request UUID
+before elevation and must not replay a command merely because output is missing.
+The retired HTTP v2 helper result envelope is not supported. UI launcher/result
+consumers and platform-specific operation-follow-up authorization still require
+cutover validation; helper unit tests do not prove OS elevation acceptance.
 
 The Windows release manifest is
 `endlessnet-client_windows_amd64.manifest.json` with `schema_version: 2`.

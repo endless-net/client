@@ -832,3 +832,20 @@ the real local-transport host test verifies administrator/precondition rejection
 through the native command path. Local go vet, golangci-lint and go test -short
 pass. Privileged helper and UI trust consumers still need their own migration;
 this CLI change is not evidence of full UF-10/release acceptance.
+
+The privileged recovery helper no longer imports HTTP IPC v2. It uses the fixed
+native platform endpoint, validates the runtime contract through Bootstrap, then
+dispatches exactly one typed trust or local-forget request with caller-retained
+profile/request/CAS and complete confirmation. Stdout is native Protobuf JSON:
+Operation on acceptance or Failure on request/bootstrap error, distinguished by
+exit status. Argument/output errors can leave no result; no implicit replay or
+CAS refresh is attempted. Closed arguments still reject paths, alternate IPC
+endpoints, credentials and arbitrary commands. The helper checks returned
+operation kind/request/profile identity and sanitizes untyped transport errors.
+
+Rewritten tests cover both native operations, bootstrap failure preventing
+dispatch, typed administrator errors, invalid/retired arguments, malformed
+announcements, missing responses and output failures without replay. Local
+go vet, golangci-lint and go test -short pass. UI launch/result handling, request
+correlation after OS elevation (including differing root/user identities), actual
+platform elevation and release acceptance remain separate unfinished work.
