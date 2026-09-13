@@ -54,6 +54,8 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		{"preferences", "GetPreferences", nil, &ipc.GetPreferencesRequest{Profile: ref}, &ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: ref.ProfileId, AcceptDns: &ipc.BooleanSetting{Effective: true}}}},
 		{"managed-settings", "ListManagedSettings", nil, &ipc.ListManagedSettingsRequest{Profile: ref}, &ipc.ListManagedSettingsResponse{Settings: []*ipc.ManagedSetting{{Key: ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS, Control: &ipc.SettingControl{Locked: true, Source: ipc.SettingSource_SETTING_SOURCE_ACCOUNT_POLICY}}}}},
 		{"session", "GetSession", nil, &ipc.GetSessionRequest{Profile: ref}, &ipc.GetSessionResponse{Session: &ipc.Session{State: ipc.SessionState_SESSION_STATE_ACTIVE}}},
+		{"set-preferences", "SetPreferences", []string{"--patch", `{"acceptDns":false,"uiQuit":"LIFECYCLE_BEHAVIOR_DISCONNECT"}`}, &ipc.SetPreferencesRequest{Mutation: mutation, Profile: ref, Patch: &ipc.PreferencesPatch{AcceptDns: proto.Bool(false), UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}}, &ipc.SetPreferencesResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SET_PREFERENCES)}},
+		{"reset-preferences", "ResetPreferences", []string{"--keys", "accept-dns,ui-quit"}, &ipc.ResetPreferencesRequest{Mutation: mutation, Profile: ref, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS, ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT}}, &ipc.ResetPreferencesResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_RESET_PREFERENCES)}},
 		{"renew-session", "RenewSession", nil, &ipc.RenewSessionRequest{Mutation: mutation, Profile: ref}, &ipc.RenewSessionResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_RENEW_SESSION)}},
 		{"networks", "ListNetworks", []string{"--page-size", "2", "--page-token", "opaque-page"}, &ipc.ListNetworksRequest{Profile: ref, Page: page}, &ipc.ListNetworksResponse{}},
 		{"diagnostics", "GetDiagnostics", nil, &ipc.GetDiagnosticsRequest{Profile: ref}, &ipc.GetDiagnosticsResponse{}},
@@ -112,7 +114,7 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 	}()
 	for _, tc := range cases {
 		args := append([]string{tc.command, transportFlag, endpoint, "--profile-id", "profile-a", "--timeout", "5s"}, tc.args...)
-		if tc.command == "renew-session" || tc.command == "select-network" || tc.command == "diagnostics-bundle" {
+		if tc.command == "set-preferences" || tc.command == "reset-preferences" || tc.command == "renew-session" || tc.command == "select-network" || tc.command == "diagnostics-bundle" {
 			args = append(args, "--request-id", mutation.RequestId, "--expected-instance-id", "instance", "--expected-revision", "7")
 		}
 		output, err := captureStdout(t, func() error { return cmdService(args) })
@@ -151,7 +153,7 @@ func TestNativeCatalogCLIRejectsMissingContext(t *testing.T) {
 			t.Fatal("unbounded page accepted")
 		}
 	}
-	for _, command := range []string{"renew-session", "select-network", "diagnostics-bundle"} {
+	for _, command := range []string{"set-preferences", "reset-preferences", "renew-session", "select-network", "diagnostics-bundle"} {
 		var output bytes.Buffer
 		if err := cmdServiceRPCMutation(command, []string{"--profile-id", "profile-a"}, &output); err == nil || output.Len() != 0 {
 			t.Fatal("missing durable CAS accepted", command)

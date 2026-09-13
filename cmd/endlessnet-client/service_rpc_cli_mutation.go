@@ -34,6 +34,13 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	instance := fs.String("expected-instance-id", "", "required runtime instance from a fresh snapshot")
 	revision := fs.Uint64("expected-revision", 0, "required state revision from a fresh snapshot")
 	var networkID string
+	var patchJSON, resetKeys string
+	if command == "set-preferences" {
+		fs.StringVar(&patchJSON, "patch", "", "required protobuf JSON patch; omitted fields remain unchanged")
+	}
+	if command == "reset-preferences" {
+		fs.StringVar(&resetKeys, "keys", "", "required comma-separated preference names whose user overrides are removed")
+	}
 	if command == "select-network" {
 		fs.StringVar(&networkID, "network-id", "", "required exact network ID; names are not resolved")
 	}
@@ -89,10 +96,20 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if command == "create-profile" && strings.TrimSpace(controlOrigin) == "" {
 		return fmt.Errorf("--control-origin is required")
 	}
-	if command != "renew-session" && command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" && command != "select-network" && command != "diagnostics-bundle" {
+	if command != "set-preferences" && command != "reset-preferences" && command != "renew-session" && command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" && command != "select-network" && command != "diagnostics-bundle" {
 		return fmt.Errorf("unknown native mutation %q", command)
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
+	if err != nil {
+		return err
+	}
+	var patch *ipc.PreferencesPatch
+	var keys []ipc.PreferenceKey
+	if command == "set-preferences" {
+		patch, err = nativePreferencePatch(patchJSON)
+	} else if command == "reset-preferences" {
+		keys, err = nativePreferenceResetKeys(resetKeys)
+	}
 	if err != nil {
 		return err
 	}
@@ -128,6 +145,18 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	ref := &ipc.ProfileRef{ProfileId: profile}
 	var message proto.Message
 	switch command {
+	case "set-preferences":
+		response, callErr := consumer.SetPreferences(ctx, connect.NewRequest(&ipc.SetPreferencesRequest{Mutation: mutation, Profile: ref, Patch: patch}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
+	case "reset-preferences":
+		response, callErr := consumer.ResetPreferences(ctx, connect.NewRequest(&ipc.ResetPreferencesRequest{Mutation: mutation, Profile: ref, Keys: keys}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
 	case "renew-session":
 		response, callErr := consumer.RenewSession(ctx, connect.NewRequest(&ipc.RenewSessionRequest{Mutation: mutation, Profile: ref}))
 		err = callErr

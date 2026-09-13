@@ -7,6 +7,16 @@ defaults or clear policy. Exact request/response local transport fixtures cover
 both commands, and missing profile is rejected before connecting. These read-only
 commands do not implement runtime preference application or policy administration.
 
+`service set-preferences --patch '<protobuf JSON>'` preserves optional field
+presence, including explicit false; absent fields remain untouched. The parser
+rejects empty/unknown/duplicate/invalid fields and unknown lifecycle values.
+`service reset-preferences --keys accept-dns,ui-quit` removes only those explicit
+user overrides; empty, unknown or duplicate keys fail. Both commands require the
+normal profile/request UUID/instance/revision CAS and return an operation, not an
+assurance that settings were applied. Producer restrictions remain authoritative:
+currently only the implemented UI-quit behavior can be changed successfully.
+Exact native transport tests cover false-versus-absent and explicit reset keys.
+
 `service session --profile-id <id>` reads GetSession without inferring expiry
 from token presence. `service renew-session` sends RenewSession with an explicit
 profile, retained request UUID and instance/revision CAS. Acceptance is only an
