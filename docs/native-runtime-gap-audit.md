@@ -264,6 +264,26 @@ both TCP and UDP are denied, including after restart and before signed recovery.
 Local short checks do not execute this privileged expiry test; its fresh hosted
 result is required before claiming expiry or fail-closed acceptance.
 
+## Native outage runner progress — source 2661d75
+
+[Control-plane job 103727524903](https://github.com/endless-net/client/actions/runs/34756879165/job/103727524903)
+tested `2661d753991a178b2f33e275bc7a9768da13f67b` and passed all three
+`TestClientDataplaneDirectPeerTrafficAndWithdrawal` repetitions. This includes
+the scenario's unchanged traffic, withdrawal, restart, outage and recovery
+assertions; it is not a complete platform-matrix acceptance claim.
+
+[Ubuntu 24.04 installed job 103727525058](https://github.com/endless-net/client/actions/runs/34756879165/job/103727525058)
+on the same source passed cached TCP traffic after service startup without
+control. Its next failure was the native status wait for control recovery.
+Thus cached startup traffic now has installed Linux evidence, while complete
+recovery/reinstall acceptance remains open.
+
+[Windows 2025 installed job 103727525031](https://github.com/endless-net/client/actions/runs/34756879165/job/103727525031)
+still failed initial connection. The new bounded diagnostic classified its
+failure as Connect resource-exhausted / `ERROR_CODE_LIMIT_EXCEEDED`, not a
+deadline or malformed JSON. The precise exceeded field is not established.
+Later global-revision inspection changes are not covered by these source results.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
