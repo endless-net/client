@@ -342,3 +342,42 @@ func TestRPCObservationRejectsConcurrentConfigChange(t *testing.T) {
 	})
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 }
+
+func TestRPCRejectedObservationPreservesLastAcceptedStatus(t *testing.T) {
+	for _, scenario := range []struct {
+		name   string
+		change func(*Config)
+	}{
+		{"profile", func(cfg *Config) { cfg.RPCState.ActiveProfileID = "next-profile" }},
+		{"node", func(cfg *Config) { cfg.NodeID = "next-node" }},
+		{"network", func(cfg *Config) { cfg.NetworkID = "next-network" }},
+		{"owner", func(cfg *Config) { cfg.LocalOwnerID = "uid:2000" }},
+		{"intent", func(cfg *Config) {
+			cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected}
+		}},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			m, _, _ := rpcConnectFixture(t)
+			if err := m.ObserveStatus(func(Config) (*ipc.Status, error) {
+				return &ipc.Status{NodeId: "last-accepted-node"}, nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			accepted := proto.Clone(m.observedStatus)
+			revision := m.Metadata().Revision
+			err := m.ObserveStatus(func(Config) (*ipc.Status, error) {
+				if err := m.store.Update(func(cfg *Config) error {
+					scenario.change(cfg)
+					return nil
+				}); err != nil {
+					t.Fatal(err)
+				}
+				return &ipc.Status{NodeId: "late-observation-node"}, nil
+			})
+			assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			if !proto.Equal(m.observedStatus, accepted) || m.Metadata().Revision != revision {
+				t.Fatal("rejected observation replaced accepted status or advanced revision")
+			}
+		})
+	}
+}

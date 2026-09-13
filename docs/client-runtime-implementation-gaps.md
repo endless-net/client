@@ -144,6 +144,14 @@ reappearing through a stale observation. The regression
 and observer snapshots. This proves projection precedence, not actual tunnel
 shutdown or backend session revocation.
 
+`TestRPCRejectedObservationPreservesLastAcceptedStatus` exercises five config
+changes during a probe without an RPC revision change: active profile, node,
+network, owner and connection intent. The full-config fingerprint must reject
+the late observation with `STALE_STATE`, retain the last accepted observation
+and not increment the revision. This is a unit test of observation admission;
+it does not exercise a real profile-switch worker or qualify cross-network
+traffic isolation.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. `client`
