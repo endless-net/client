@@ -3,7 +3,6 @@ package tests
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"os/exec"
@@ -12,10 +11,26 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
+	"github.com/endless-net/client/clientipc/rpc"
+	ipc "github.com/endless-net/client/clientipc/v0"
+	"github.com/endless-net/client/clientipc/v0/clientipcconnect"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
+	"google.golang.org/protobuf/encoding/protojson"
 )
+
+type nativeUnaryTimeoutService struct {
+	clientipcconnect.UnimplementedClientServiceHandler
+}
+
+func (nativeUnaryTimeoutService) GetRuntimeInfo(context.Context, *connect.Request[ipc.GetRuntimeInfoRequest]) (*connect.Response[ipc.GetRuntimeInfoResponse], error) {
+	return connect.NewResponse(&ipc.GetRuntimeInfoResponse{Runtime: &ipc.RuntimeInfo{InstanceId: "timeout-host", Protocol: rpc.Protocol, IpcVersion: rpc.Version, ContractSha256: rpc.Digest()}}), nil
+}
+
+func (nativeUnaryTimeoutService) GetStatus(context.Context, *connect.Request[ipc.GetStatusRequest]) (*connect.Response[ipc.GetStatusResponse], error) {
+	return connect.NewResponse(&ipc.GetStatusResponse{Status: &ipc.Status{NodeId: "ipc-timeout-recovered", ServiceState: ipc.ServiceState_SERVICE_STATE_CONNECTED}}), nil
+}
 
 // HC-052/053: unary CLI requests must bound both header and body waits on
 // native IPC, and recover at the same endpoint after the stalled response.
@@ -34,19 +49,27 @@ func TestControlPlaneCLIIPCUnaryTimeout(t *testing.T) {
 			}
 			observed := make(chan requestObservation, 2)
 			var recovered atomic.Bool
-			server := &http.Server{ReadHeaderTimeout: 3 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, healthy := clientipcconnect.NewClientServiceHandler(nativeUnaryTimeoutService{})
+			protocols := new(http.Protocols)
+			protocols.SetUnencryptedHTTP2(true)
+			server := &http.Server{Protocols: protocols, ReadHeaderTimeout: 3 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == clientipcconnect.ClientServiceGetRuntimeInfoProcedure {
+					healthy.ServeHTTP(w, r)
+					return
+				}
 				select {
-				case observed <- requestObservation{r.Method == http.MethodGet && r.URL.Path == ipc.PathStatus, time.Now()}:
+				case observed <- requestObservation{r.Method == http.MethodPost && r.URL.Path == clientipcconnect.ClientServiceGetStatusProcedure &&
+					r.Header.Get(rpc.ProtocolHeader) == rpc.Protocol && r.Header.Get(rpc.VersionHeader) == "0" && r.Header.Get(rpc.DigestHeader) == rpc.Digest(), time.Now()}:
 				default:
 				}
 				if recovered.Load() {
-					w.Header().Set("Content-Type", "application/json")
-					_ = json.NewEncoder(w).Encode(ipc.StatusResponse{Metadata: ipc.NewMetadata(ipc.Version), NodeID: "ipc-timeout-recovered", State: ipc.StateConnected})
+					healthy.ServeHTTP(w, r)
 					return
 				}
 				if mode == "partial-body" {
-					w.Header().Set("Content-Type", "application/json")
-					_, _ = w.Write([]byte(`{"state":`))
+					w.Header().Set("Content-Type", "application/grpc")
+					// Uncompressed frame promises ten bytes but supplies only one.
+					_, _ = w.Write([]byte{0, 0, 0, 0, 10, 1})
 					w.(http.Flusher).Flush()
 				}
 				<-r.Context().Done()
@@ -74,10 +97,9 @@ func TestControlPlaneCLIIPCUnaryTimeout(t *testing.T) {
 					t.Fatal("unary IPC request exceeded the outer process deadline")
 				}
 				if success {
-					var response ipc.StatusResponse
-					if err != nil || stderr.Len() != 0 || json.Unmarshal(stdout.Bytes(), &response) != nil ||
-						response.NodeID != "ipc-timeout-recovered" || response.State != ipc.StateConnected ||
-						response.IPCProtocol != ipc.Protocol || response.IPCNegotiatedVersion != ipc.Version {
+					response := &ipc.GetStatusResponse{}
+					if err != nil || stderr.Len() != 0 || protojson.Unmarshal(stdout.Bytes(), response) != nil ||
+						response.GetStatus().GetNodeId() != "ipc-timeout-recovered" || response.GetStatus().GetServiceState() != ipc.ServiceState_SERVICE_STATE_CONNECTED {
 						t.Fatal("unary IPC did not recover the published response at the same endpoint")
 					}
 				} else {

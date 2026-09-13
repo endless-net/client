@@ -252,6 +252,15 @@ timestamps, repeated snapshots, failure and empty events without advancing the
 cursor. The guarded process test itself still needs isolated CI execution;
 queue overflow and authorization boundaries have separate component tests.
 
+The unary CLI timeout process scenario now serves native bootstrap and generated
+GetStatus over local HTTP/2 gRPC. Faults delay status response headers or send an
+incomplete length-prefixed protobuf frame; neither can be mistaken for a complete
+result. It checks the native request method/path and protocol/version/digest,
+deadline failure with empty stdout, and successful protobuf-JSON status at the
+same endpoint once the fault is cleared. The old HTTP JSON fixture is removed.
+Short tests compile this guarded scenario; actual process deadlines and socket/
+named-pipe recovery still require isolated CI execution.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP
