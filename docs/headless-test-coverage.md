@@ -6,6 +6,43 @@ Scope: [HC-001–HC-065, architecture main](https://github.com/endless-net/archi
 [business requirements](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-business-analysis.md),
 and [system design / IT specifications](https://github.com/endless-net/architecture/blob/main/docs/ru/headless-client-system-design.md).
 
+## 2026-09-13: native v0 transport and request-validation cutover
+
+The current HC-053 request-validation implementation is
+[`control_plane_rpc_validation_test.go`](../tests/control_plane_rpc_validation_test.go),
+migrated in [client main commit `3b86339`](https://github.com/endless-net/client/commit/3b86339845bb7c212584d1426983aec7eab763a4).
+Its unchanged root name, `TestControlPlaneIPCRequestValidation`, is selected by
+the workflow's `^TestControlPlane` inventory and all 24 desktop repetitions.
+It exercises the real client through generated v0 RPC over a local socket/pipe:
+missing mutation, missing/invalid UUID, missing instance/revision, wrong instance,
+unreachable future revision, and unconfirmed local forget. Rejections must
+preserve identity, credentials, cached map and connection intent, must not
+create a recoverable operation, and must not trigger remote delete/logout.
+Valid disconnect/connect operations must still complete afterward.
+
+Historical HTTP IPC v2 method, JSON-envelope and body-size assertions below
+describe the retired protocol, not this v0 implementation. Their historical
+passes do not qualify the new root. Malformed native wire frames, message-size
+limits and hostile local-user authorization remain separately tracked concerns.
+The local short suite compiles but skips this isolated runtime scenario; vet and
+lint passed on the subsequently observed working tree. Runtime execution for
+this migration is not yet confirmed: [Test run 34744476184](https://github.com/endless-net/client/actions/runs/34744476184)
+was pending behind an active older-source matrix when inspected. No v0 runtime
+pass or full platform acceptance is claimed.
+
+The Unix component test now uses the actual v0 service, including OS UID owner
+claim, ordered events, owner-only catalog access with an open stream, mode 0660,
+busy-endpoint preservation and listener cleanup:
+[`service_rpc_unix_test.go`](../internal/client/service_rpc_unix_test.go).
+Its filename permits both Linux and macOS, unlike the retired Linux-suffixed
+HTTP test. Unused old Unix transport implementations were removed; service
+artifact defaults now reference `clientipc/local`, with
+[`service_rpc_defaults_test.go`](../internal/client/service_rpc_defaults_test.go)
+checking all three desktop targets on every host. These component assertions
+do not prove installed-service behavior or real application traffic. The new
+Unix test still needs Linux/macOS runner results; remaining HTTP IPC v2 handlers
+and consumers elsewhere in this repository are not declared migrated.
+
 ## Active goal: Client only
 
 The user narrowed the working goal on 2026-09-11. This scope supersedes the
@@ -129,7 +166,7 @@ product scope are different conditions; neither is a successful skip.
 | HC-050 | C signed cross-network machine grant with exact TCP scope, expiry, renewal, live TCP/UDP rights replacement and withdrawal passed all 24 repetitions at `90f8a28`; U two-engine direct/Relay direction and key-rotation tests | New recipient identity and real source-Client variants |
 | HC-051 | C signed two-host service DNS, actual host traffic, target isolation, host-set removal, approval loss and recovery passed all 24 repetitions at `92983ae`; U service discovery/runtime | Health, load distribution and connection-draining semantics require product decisions |
 | HC-052 | L/C bounded IPC waits; independent event subscriptions/cancellation/restart and real CLI listening-timeout exit passed all 24 repetitions at qualified `38050bc`; unary timeout before headers/with partial body and same-endpoint recovery passed all 24 at `f71587a`; installed absent-service failure passed all eight runners | Remaining public readiness conditions and slow consumers |
-| HC-053 | L/C structured IPC; request validation, non-object rejection, body-size boundaries, subscribers and real CLI NDJSON events passed all 24 repetitions at qualified `38050bc`; D RPC authorization | Remaining machine output/errors and local-user authorization variants |
+| HC-053 | Historical HTTP IPC v2 request validation, JSON boundaries and NDJSON events passed 24 repetitions at `38050bc`; not v0 evidence. Native mutation-validation root migrated at `3b86339`, runtime results pending; D RPC authorization | Native wire validation, remaining machine output/errors, local-user authorization variants and exact-source v0 runner evidence |
 | HC-054 | L/C Ubuntu container persistent state restart with native IPv4/IPv6 TCP/UDP and ephemeral retirement/recreation with IPv4 TCP passed at `169b09c` | Host/sidecar split, reduced capabilities, container network modes and orchestration lifecycle |
 | HC-055 | No C/R evidence audited | Userspace/no-TUN product scope and application proxy behavior |
 | HC-056 | C public diagnostics export with control-outage isolation and recovery passed all 24 repetitions at `92983ae`; U path diagnostics | Distinguish peer path, DNS and application failures through public commands |
