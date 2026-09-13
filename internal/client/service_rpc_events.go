@@ -221,6 +221,7 @@ func (m *ClientRPCMutations) subscribe(peer local.Peer, build *ipc.BuildIdentity
 
 func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation) {
 	cfg := m.store.Read()
+	m.recordDiagnosticTransitionLocked(cfg, operation)
 	for subscriber := range m.subscribers {
 		snapshot, err := m.snapshotLocked(subscriber.peer, subscriber.build, cfg)
 		if err != nil {

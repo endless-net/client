@@ -48,7 +48,7 @@ and invalid plans. Invalid enrollment never dispatches Connect and neither
 mutation is replayed. These consumer tests do not validate signed node material
 or real tunnel continuity; those remain producer/system acceptance work.
 
-## Native recent-log query boundary (provider foundation)
+## Native recent-log query and transition source
 
 The runtime service now implements ListRecentLogs through an explicitly
 profile-scoped `ClientRPCRecentLogsProvider`. It authorizes before collection and
@@ -69,10 +69,31 @@ ownership/revision changes during collection, snapshot ownership, empty/final
 pages, changed callers/page sizes/buffers, redaction and malformed/oversized data.
 This is handler-level evidence, not installed-agent or cross-platform acceptance.
 
-**Still incomplete:** the agent does not configure this provider and therefore
-still returns typed UNSUPPORTED. Its retired shared recent-log buffer cannot be
-attached as a profile-specific source: it has no reliable profile attribution.
-The owning `client` repository must implement that source and native host tests;
+The default native service now uses a process-local diagnostic transition source,
+so the agent's ListRecentLogs no longer returns UNSUPPORTED. Committed operations
+and accepted status observations create profile-attributed records even when no
+UI is subscribed. Replayed/rejected mutations and unchanged/rejected observations
+do not produce duplicate successful-transition records. Only enum type/state,
+continuity and failure code are formatted; names, request payloads, browser URLs,
+identity material and arbitrary error strings never enter this source.
+
+Retention is the most recent 500 records across all profiles for this process,
+filtered by the requested profile and ordered oldest-first. Deleted profiles are
+purged on publication. Restart clears this diagnostic window; durable operation
+recovery remains GetOperation, not log parsing. Clock rollback preserves append
+order with nondecreasing timestamps. The agent no longer captures the shared
+global logger into the retired unscoped IPC buffer. Normal process/debug logging
+is unchanged and is not exposed as profile-scoped native records.
+
+Short source tests verify committed creation, replay/rejection, profile isolation
+and deletion, status changes, cancellation, clone ownership, bounded retention,
+restart and clock rollback. The existing authenticated local transport test also
+reads the real default log provider after creation and replay (no scripted log
+response). These are local tests, not installed-service or distribution evidence.
+
+**Still incomplete:** this source covers native transitions, not all network,
+tunnel, DNS or OS diagnostics. The owning `client` repository must supply those
+additional profile-scoped records and GetDiagnostics/bundle providers;
 `client-ui` must verify refresh after stale cursors against the real provider.
-Capabilities remain unadvertised. GetDiagnostics/bundle providers, raw-log
-redaction completeness and runtime/system acceptance remain separate open work.
+The whole diagnostics capability remains unadvertised until its family is ready.
+Raw debug-log redaction and full runtime/system acceptance remain open work.

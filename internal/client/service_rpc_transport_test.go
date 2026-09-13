@@ -110,6 +110,10 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if !proto.Equal(replayed.Msg.Operation, recovered.Msg.Operation) || len(m.store.Read().RPCState.Profiles) != 1 {
 		t.Fatal("transport retry ran the mutation twice")
 	}
+	logs, err := client.ListRecentLogs(ctx, connect.NewRequest(&ipc.ListRecentLogsRequest{Profile: &ipc.ProfileRef{ProfileId: accepted.Msg.Operation.ProfileId}}))
+	if err != nil || len(logs.Msg.Logs) != 1 || !strings.Contains(logs.Msg.Logs[0].Message, "OPERATION_KIND_CREATE_PROFILE state=OPERATION_STATE_SUCCEEDED") || logs.Msg.Page.Metadata.InstanceId != m.instanceID {
+		t.Fatal("native log source missing or replay duplicated committed creation", err)
+	}
 	request.DisplayName = "different payload"
 	_, err = client.CreateProfile(ctx, connect.NewRequest(request))
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)

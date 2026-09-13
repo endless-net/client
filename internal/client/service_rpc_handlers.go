@@ -47,7 +47,7 @@ func NewClientRPCService(mutations *ClientRPCMutations, build *ipc.BuildIdentity
 	if build.Architecture == "" {
 		build.Architecture = runtime.GOARCH
 	}
-	return &ClientRPCService{mutations: mutations, build: proto.Clone(build).(*ipc.BuildIdentity), disconnectGate: make(chan struct{}, 1)}
+	return &ClientRPCService{mutations: mutations, build: proto.Clone(build).(*ipc.BuildIdentity), disconnectGate: make(chan struct{}, 1), RecentLogsProvider: mutations.recentLogsSnapshot}
 }
 
 // Support metadata is observer-safe and does not require enrollment or a live

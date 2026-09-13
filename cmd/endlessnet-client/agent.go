@@ -8,7 +8,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -355,13 +354,6 @@ func cmdAgent(args []string) error {
 	if *windowsService && strings.TrimSpace(*ipcPipe) == "" {
 		*ipcPipe = local.DefaultWindowsPipe
 	}
-	var recentLogs *recentLogBuffer
-	if strings.TrimSpace(*ipcPipe) != "" || strings.TrimSpace(*ipcSocket) != "" {
-		recentLogs = newRecentLogBuffer(200)
-		previousLogOutput := log.Writer()
-		log.SetOutput(io.MultiWriter(previousLogOutput, recentLogs))
-		defer log.SetOutput(previousLogOutput)
-	}
 	if *probeRTT && strings.TrimSpace(*wgInterface) == "" {
 		return fmt.Errorf("wg-interface is required when probe-rtt is set")
 	}
@@ -455,7 +447,6 @@ func cmdAgent(args []string) error {
 			ConfigStore:    configStore,
 			OperationMu:    operationMu,
 			DiagnosticsDir: *diagnosticsDir,
-			RecentLogs:     recentLogs,
 			ListenPort:     *listenPort,
 			WGInterface:    firstNonEmpty(*wgInterface, "endlessnet"),
 			Timeout:        timeout,

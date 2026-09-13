@@ -70,6 +70,7 @@ type ClientRPCMutations struct {
 	cancelEnrollment context.CancelFunc
 	cancelLogout     context.CancelFunc
 	subscribers      map[*rpcSubscriber]struct{}
+	recentLogs       []clientRPCScopedLog
 }
 
 func NewClientRPCMutations(store *ConfigStore) (*ClientRPCMutations, error) {
