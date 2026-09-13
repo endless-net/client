@@ -449,3 +449,11 @@ restart and the terminal EnrollmentResult before Connect. The control provider i
 synthetic; this tests the actual local RPC/worker/journal composition, not a real
 control-plane approval or production process restart. The test is shared by the
 Windows/Linux/macOS build targets; this local run proves only the current host.
+
+GetStatus and initial/refreshed snapshots now derive enrollment actions from the
+current caller's durable waiting operation, not a potentially stale provider
+observation. The request ID comes from current config; terminal operations cannot
+resurrect old browser links. Other callers (including another administrator) do
+not receive the initiating caller's browser action. Unit tests cover ownership
+and stale observations; local-transport tests compare GetStatus with recovered
+GetOperation during approval and check action removal after completion.

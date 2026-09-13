@@ -137,6 +137,16 @@ func (m *ClientRPCMutations) snapshotLocked(peer local.Peer, build *ipc.BuildIde
 	}
 	status.Metadata = metadata
 	status.CurrentOperations = nil
+	// Enrollment actions come from durable state, never a delayed observation.
+	// In particular, a completed operation must not leave its browser URL in
+	// GetStatus or a freshly attached stream's initial snapshot.
+	if status.PendingAction.GetKind() == ipc.UserAction_KIND_OPEN_BROWSER || status.PendingAction.GetKind() == ipc.UserAction_KIND_WAIT_FOR_APPROVAL {
+		status.PendingAction = nil
+	}
+	status.EnrollmentRequestId = cfg.EnrollmentRequestID
+	if cfg.NodeID != "" && strings.EqualFold(cfg.NodeApprovalState, "pending") && (cfg.RPCState == nil || cfg.RPCState.Enrollment == nil) {
+		status.PendingAction = &ipc.UserAction{Kind: ipc.UserAction_KIND_WAIT_FOR_APPROVAL, ReasonKey: "node_approval_pending"}
+	}
 	// Intent is durable command state, not a delayed provider observation.
 	if intent := cfg.ConnectionIntent; intent != nil {
 		status.Intent = &ipc.ConnectionIntent{}
@@ -167,6 +177,9 @@ func (m *ClientRPCMutations) snapshotLocked(peer local.Peer, build *ipc.BuildIde
 			}
 			if !rpcOperationTerminal(op.State) {
 				status.CurrentOperations = append(status.CurrentOperations, op)
+				if op.Kind == ipc.OperationKind_OPERATION_KIND_ENROLL && op.ProfileId == cfg.RPCState.ActiveProfileID && op.State == ipc.OperationState_OPERATION_STATE_WAITING_FOR_USER {
+					status.PendingAction = proto.Clone(op.UserAction).(*ipc.UserAction)
+				}
 			}
 		}
 		sort.Slice(status.CurrentOperations, func(i, j int) bool { return status.CurrentOperations[i].Id < status.CurrentOperations[j].Id })

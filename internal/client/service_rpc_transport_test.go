@@ -234,6 +234,10 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	if err != nil || tracked.Msg.Operation.Id != enrolled.Msg.Operation.Id || tracked.Msg.Operation.State != ipc.OperationState_OPERATION_STATE_WAITING_FOR_USER {
 		t.Fatal("reattachment lost approval operation", err)
 	}
+	approvalStatus, err := reattached.GetStatus(ctx, connect.NewRequest(&ipc.GetStatusRequest{}))
+	if err != nil || !proto.Equal(approvalStatus.Msg.Status.PendingAction, tracked.Msg.Operation.UserAction) || approvalStatus.Msg.Status.EnrollmentRequestId != "native-approval" {
+		t.Fatal("GetStatus disagrees with recovered approval operation", err)
+	}
 	// Restart the executor while retaining the listener/journal and consumer.
 	stopEnrollment()
 	<-enrollDone
@@ -265,6 +269,10 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	}
 	if !registrationCompleted {
 		t.Fatal("native enrollment completion event missing", switchEvents.Err())
+	}
+	completedStatus, err := reattached.GetStatus(ctx, connect.NewRequest(&ipc.GetStatusRequest{}))
+	if err != nil || completedStatus.Msg.Status.PendingAction != nil || completedStatus.Msg.Status.EnrollmentRequestId != "" {
+		t.Fatal("completed enrollment retained approval action", err)
 	}
 	connected, err := client.Connect(ctx, connect.NewRequest(&ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile}))
 	if err != nil {

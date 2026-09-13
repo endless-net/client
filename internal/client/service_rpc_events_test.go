@@ -10,6 +10,53 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func TestRPCEnrollmentSnapshotActionTracksDurableCallerOperation(t *testing.T) {
+	m, peer, req := enrollmentAdmissionTest(t)
+	op, err := m.enrollAs(peer, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	action := &ipc.UserAction{Kind: ipc.UserAction_KIND_OPEN_BROWSER, BrowserUrl: "https://control.test/approve"}
+	err = m.ReconcileEnrollment(t.Context(), func(_ context.Context, cfg Config, _ ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
+		cfg.EnrollmentRequestID = "pending-request"
+		return action, save(cfg)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := m.snapshotAs(peer, nil)
+	if err != nil || !proto.Equal(owner.Status.PendingAction, action) || owner.Status.EnrollmentRequestId != "pending-request" {
+		t.Fatal("snapshot lost durable approval action", err)
+	}
+	for _, other := range []local.Peer{{Identity: "uid:2000"}, {Identity: "uid:2000", Administrator: true}} {
+		snapshot, err := m.snapshotAs(other, nil)
+		if err != nil || snapshot.Status.PendingAction != nil {
+			t.Fatal("caller-bound browser action exposed to another caller", err)
+		}
+	}
+	// Delayed observations cannot resurrect a terminal operation's URL.
+	m.observedStatus = &ipc.Status{PendingAction: proto.Clone(action).(*ipc.UserAction), EnrollmentRequestId: "stale-request"}
+	_, err = m.ReconcileOperation(op.Id, func(cfg *Config, op *ipc.Operation) error {
+		cfg.EnrollmentRequestID = ""
+		op.State = ipc.OperationState_OPERATION_STATE_CANCELLED
+		op.UserAction = nil
+		op.Outcome = &ipc.Operation_Failure{Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_CANCELLED}}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub, err := m.subscribe(peer, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.unsubscribe(sub)
+	first, err := sub.next(t.Context())
+	if err != nil || first.GetSnapshot().Status.PendingAction != nil || first.GetSnapshot().Status.EnrollmentRequestId != "" {
+		t.Fatal("reattachment retained stale approval action", err)
+	}
+}
+
 func TestRPCSnapshotFirstAndOwnershipRefresh(t *testing.T) {
 	m := newRPCStoreTest(t)
 	peer := local.Peer{Identity: "uid:1000"}
