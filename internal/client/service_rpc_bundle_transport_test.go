@@ -93,11 +93,12 @@ func TestRPCBundleNativeTransportLifecycle(t *testing.T) {
 	defer consumer.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	if _, err := consumer.Bootstrap(ctx); err != nil {
+	info, err := consumer.Bootstrap(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = consumer.ReadDiagnosticsBundle(ctx, connect.NewRequest(&ipc.ReadDiagnosticsBundleRequest{BundleId: "00000000-0000-4000-8000-000000000000"}))
-	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+	assertRPCFailure(t, err, rpcUnownedMissingResourceFailure(t, info))
 	create := rpcCreateRequest(t, m)
 	create.ControlOrigin = "https://control.example.test"
 	created, err := consumer.CreateProfile(ctx, connect.NewRequest(create))
@@ -188,10 +189,12 @@ func TestRPCBundleNativeTransportLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = consumer.ReadDiagnosticsBundle(ctx, connect.NewRequest(&ipc.ReadDiagnosticsBundleRequest{BundleId: metadata.BundleId}))
-	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+	assertRPCAccessAfterOwnerReplacement(t, info, err)
 	if err := s.purgeBundles(); err != nil {
 		t.Fatal(err)
 	}
+	_, err = consumer.ReadDiagnosticsBundle(ctx, connect.NewRequest(&ipc.ReadDiagnosticsBundleRequest{BundleId: metadata.BundleId}))
+	assertRPCFailure(t, err, rpcUnownedMissingResourceFailure(t, info))
 	restored, err := openClientRPCBundleStore(m.store.path+".bundles", m.now)
 	if err != nil || len(restored.items) != 0 {
 		t.Fatal("revoked artifact remained durable", err)

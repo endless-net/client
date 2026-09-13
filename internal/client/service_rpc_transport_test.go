@@ -68,7 +68,7 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 		t.Fatal("observer support metadata missing", err)
 	}
 	_, err = client.ListManagedSettings(ctx, connect.NewRequest(&ipc.ListManagedSettingsRequest{Profile: &ipc.ProfileRef{ProfileId: "not-observer-visible"}}))
-	assertRPCFailure(t, err, rpcUnownedMissingProfileFailure(t, info))
+	assertRPCFailure(t, err, rpcUnownedMissingResourceFailure(t, info))
 	events, err := client.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
 	if err != nil {
 		t.Fatal(err)

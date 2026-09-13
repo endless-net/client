@@ -9,9 +9,9 @@ import (
 )
 
 // A real OS channel cannot assume the test runner is an ordinary user.
-// Administrators are authorized before profile lookup; ordinary unowned callers
+// Administrators are authorized before resource lookup; ordinary unowned callers
 // must be rejected before lookup. Never accept either error interchangeably.
-func rpcUnownedMissingProfileFailure(t *testing.T, info *ipc.RuntimeInfo) ipc.ErrorCode {
+func rpcUnownedMissingResourceFailure(t *testing.T, info *ipc.RuntimeInfo) ipc.ErrorCode {
 	t.Helper()
 	switch info.GetCallerAccess() {
 	case ipc.Access_ACCESS_OBSERVER:

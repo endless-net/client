@@ -83,7 +83,7 @@ func TestRPCPeersLocalTransportOwnershipAndPagination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantMissingProfile := rpcUnownedMissingProfileFailure(t, info)
+	wantMissingProfile := rpcUnownedMissingResourceFailure(t, info)
 	_, err = consumer.ListPeers(ctx, connect.NewRequest(&ipc.ListPeersRequest{Profile: &ipc.ProfileRef{ProfileId: "private"}}))
 	assertRPCFailure(t, err, wantMissingProfile)
 	if calls.Load() != 0 {
