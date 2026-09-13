@@ -205,6 +205,18 @@ must still complete without another registration. The retired HTTP range and
 overlap probes are removed. Short tests compile this guarded process scenario;
 platform execution and installed-artifact pairing remain CI work.
 
+Logout retry and explicit local-forget process scenarios now use native operations
+and status. Unavailable control must produce FAILED/REMOTE_CLEANUP_REQUIRED while
+retaining enrollment. Exact replay after restart/control recovery must retain that
+failed outcome; a fresh request ID retries and confirms remote/local cleanup with
+one original registration and one deletion. Explicit local-forget still requires
+CLI confirmation, reports SUCCEEDED/REMOTE_UNCONFIRMED with local removal, retains
+signing trust, and replays the identical result after restart. Clean-state checks
+require explicit StoredState, no node/network/credential/token/cache/peers, and
+disconnected intent. No automatic reenrollment is allowed in the bounded observation
+window. These replace the legacy cleanup scenarios; local short tests compile
+them, while process/restart and remote-effect acceptance remain isolated CI work.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP
