@@ -166,7 +166,7 @@ func (s *ClientRPCService) WatchEvents(ctx context.Context, _ *connect.Request[i
 		if err != nil {
 			return err
 		}
-		if err := subscriber.send(stream, event); err != nil {
+		if err := s.mutations.sendEvent(ctx, subscriber, event, stream.Send); err != nil {
 			return err
 		}
 	}

@@ -96,21 +96,44 @@ func (s *rpcSubscriber) next(ctx context.Context) (*ipc.WatchEventsResponse, err
 	}
 }
 
-func (s *rpcSubscriber) send(stream *connect.ServerStream[ipc.WatchEventsResponse], event *ipc.WatchEventsResponse) error {
+// sendEvent rechecks the current owner even if the ConfigStore changed without
+// publishing a native event. Never hold the mutation lock across transport I/O:
+// a slow subscriber must not block Disconnect or ownership revocation.
+func (m *ClientRPCMutations) sendEvent(ctx context.Context, s *rpcSubscriber, event *ipc.WatchEventsResponse, send func(*ipc.WatchEventsResponse) error) error {
+	m.mu.Lock()
 	s.mu.Lock()
 	if s.closed {
 		err := s.err
 		s.mu.Unlock()
+		m.mu.Unlock()
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		s.mu.Unlock()
+		m.mu.Unlock()
+		return err
+	}
+	if s.access != ipc.Access_ACCESS_OBSERVER && rpcCallerAccess(s.peer, m.store.Read()) == ipc.Access_ACCESS_OBSERVER {
+		s.closed = true
+		s.err = rpc.Error(connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED)
+		close(s.done)
+		err := s.err
+		s.mu.Unlock()
+		m.mu.Unlock()
 		return err
 	}
 	s.sending = true
 	s.mu.Unlock()
-	err := stream.Send(event)
+	m.mu.Unlock()
+	err := send(event)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sending = false
 	if s.closed {
 		return s.err
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 	return err
 }

@@ -22,6 +22,16 @@ transport cancellation hook. Reattachment begins at sequence 1 with the current
 observer-filtered snapshot. Initial observer-to-owner claims continue normally.
 Bytes already delivered before revocation cannot be recalled.
 
+WatchEvents also rechecks current ownership immediately before sending a dequeued
+event, including ConfigStore changes without native publication. A revoked stream
+cannot resume if ownership later changes back. Cancellation before send suppresses
+the write; cancellation during send prevents a successful handler result. Mutation
+and subscriber locks are released across transport I/O. Send-boundary tests verify
+those properties and that in-flight native revocation aborts the sender and takes
+precedence over its resulting transport error. This check does not recall bytes
+already handed to the transport or make unrelated direct ConfigStore writes an
+atomic transport operation.
+
 These are short local tests. Installed-service lifecycle, OS transport behavior
 on each supported platform, and release/system acceptance remain separate work.
 `client-ui` owns verification of journal retention and fresh observer bootstrap
