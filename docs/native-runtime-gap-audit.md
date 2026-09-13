@@ -109,6 +109,24 @@ there is no profile-validation bypass or automatic protocol fallback.
 Actual application-route traffic, access withdrawal, cached-map expiry and
 restart assertions are preserved, but still require fresh hosted execution.
 
+## Hosted Windows source verification — 2026-09-13
+
+[Verify (Windows), job 103716995694](https://github.com/endless-net/client/actions/runs/34754603819/job/103716995694)
+completed successfully for exact source
+`f299b247613ce713f82d1d818fd08df28fdb2e36`. The job ran `go vet ./...`,
+`go test -short ./...` and the client build. Logs confirm successful root-module
+tests including `cmd/endlessnet-client`, `internal/client`, `internal/testclient`
+and `internal/testcontrol`. This source includes the OS-interface MTU regression,
+native exit/resource CLI contract cases, strict CLI failure classification and
+the explicit HTTPS fixture handshake tests.
+
+This is hosted Windows source/short-test/build evidence only. Privileged
+installed-service, routing, expiry and machine-trust cleanup paths skip under
+`-short`; they are not accepted by this job. The nested `clientipc` module has
+its own qualification and is not implicitly tested by the root-module command.
+At this observation the same-source control-plane and Windows installed-smoke
+jobs were still running, so their results remain unclaimed here.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
