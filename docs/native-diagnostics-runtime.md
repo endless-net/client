@@ -162,6 +162,19 @@ legacy requests mentioned above; interrupted cleanup and the other listed consum
 remain pending. Local short tests compile this guarded scenario, not execute its
 process races, symlink handling or per-platform restart acceptance.
 
+Interrupted Disconnect now uses native mutation metadata, observes its RUNNING
+operation by request ID at the held offline-response boundary, kills the process,
+and requires the same operation to finish after restart. Exact replay retains the
+original request/CAS tuple and must return the identical durable outcome. Connect
+also waits for its native operation. Inspection exposed a missing runtime action:
+the native Stop driver previously never notified control that the node went offline.
+It now attempts that notification only after successful local tunnel teardown,
+with a two-second request lifetime, without adopting the response map or writing
+configuration. Remote rejection/timeout cannot undo successful local teardown.
+Short driver tests cover ordering, rejection, timeout, cancellation, teardown
+failure and unchanged configuration. The process-kill scenario remains guarded
+for isolated CI and has not been executed locally.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP

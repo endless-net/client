@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"connectrpc.com/connect"
+	api "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
@@ -24,6 +26,7 @@ func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 			if err != nil || !result.OK {
 				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED)
 			}
+			notifyRPCNodeOffline(ctx, opts)
 			continuity := ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN
 			if inspection.OK {
 				continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED
@@ -51,4 +54,23 @@ func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 			return nil
 		},
 	}
+}
+
+// Local teardown is complete before this best-effort notification. Never let an
+// unreachable control plane prevent Disconnect, and never persist the response's
+// map over concurrently accepted mutations. The next sync verifies a fresh map.
+func notifyRPCNodeOffline(ctx context.Context, opts agentIPCOptions) {
+	if ctx.Err() != nil || opts.ConfigStore == nil {
+		return
+	}
+	cfg := opts.ConfigStore.Read()
+	if cfg.NodeID == "" || cfg.NodeCredential == "" || len(cfg.ControlURLs()) == 0 || client.ValidateConfigCurrentDevice(cfg) != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	control := apiFromConfig(cfg)
+	control.HTTPClient.Transport = enrollmentContextTransport{lifetime: ctx, base: control.HTTPClient.Transport}
+	// The response is deliberately not adopted: this is notification, not sync.
+	_, _ = control.UpdateNodeEndpointState(cfg.NodeID, api.UpdateNodeEndpointRequest{Status: api.NodeStatusOffline, ClientVersion: version})
 }
