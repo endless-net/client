@@ -11,18 +11,11 @@ on:
       - "packages/client_api/**"
       - "contracts/proto-baseline/**"
       - ".github/workflows/protobuf-contract.yml"
-  push:
-    branches: [main]
-    paths:
-      - "docs/client-ipc-protobuf.md"
-      - "proto/**"
-      - "buf.yaml"
-      - "buf.gen.yaml"
-      - "clientipc/**"
-      - "packages/client_api/**"
-      - "contracts/proto-baseline/**"
-      - ".github/workflows/protobuf-contract.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

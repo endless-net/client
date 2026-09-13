@@ -1,12 +1,21 @@
 # Client IPC v0 hard cutover
 
 - Status: in progress.
-- Owner: client, with client-ui and system-tests.
+- Owner of this implementation task: client. Other repositories are external dependencies.
 - Authorized: 2026-09-13. Replace HTTP IPC v2 completely; no fallback, dual
   production protocol or preserved obsolete tests. Minor v0 schema corrections
   are allowed; version increases and infrastructure changes are not authorized.
 
 ## Completion gates
+
+The current task is limited to this repository and its producer contracts.
+Implement the required runtime behavior and unit tests first, and audit the
+requirement-to-implementation-to-unit-test matrix before beginning integration,
+system or platform acceptance. Existing CI evidence below is historical evidence,
+not permission to skip this implementation phase. External dependencies remain
+open requirements, not accepted unsupported behavior. See the
+[runtime implementation gaps](client-runtime-implementation-gaps.md) for the
+initial source audit; that audit is not yet a complete BA/SA matrix.
 
 | Gate | Required result | Current state |
 | --- | --- | --- |

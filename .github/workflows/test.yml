@@ -28,7 +28,20 @@ permissions:
   contents: read
 
 jobs:
+  unit:
+    name: Unit tests
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: go test -short ./...
+
   verify-linux:
+    if: ${{ github.event_name != 'push' }}
     name: Verify (Linux)
     runs-on: ubuntu-latest
 
@@ -71,6 +84,7 @@ jobs:
             "$RUNNER_TEMP/acl-kernel.test" -test.run '^TestACLKernelEstablishedRevocation$' -test.v -test.timeout 30s
 
   verify-windows:
+    if: ${{ github.event_name != 'push' }}
     name: Verify (Windows)
     runs-on: windows-2025
 
@@ -92,6 +106,7 @@ jobs:
         run: go build ./cmd/endlessnet-client ./cmd/endlessnet-client-recovery-helper
 
   verify-macos:
+    if: ${{ github.event_name != 'push' }}
     name: Verify (macOS)
     runs-on: macos-15
 
@@ -116,6 +131,7 @@ jobs:
         run: go build ./cmd/endlessnet-client ./cmd/endlessnet-client-recovery-helper
 
   installation:
+    if: ${{ github.event_name != 'push' }}
     name: Install and smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -213,6 +229,7 @@ jobs:
           if-no-files-found: warn
 
   control-plane-platforms:
+    if: ${{ github.event_name != 'push' }}
     name: Client contracts (${{ matrix.os }}, repeat ${{ matrix.repetition }})
     runs-on: ${{ matrix.os }}
     # Four real-time flow-consent lifecycles and eight cleanup traffic variants
@@ -319,6 +336,7 @@ jobs:
           if-no-files-found: error
 
   control-plane:
+    if: ${{ github.event_name != 'push' }}
     name: Client control-plane scenarios
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -349,6 +367,7 @@ jobs:
             ' bash "$RUNNER_TEMP/control-tests"
 
   container-client:
+    if: ${{ github.event_name != 'push' }}
     name: Container client lifecycle
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -392,7 +411,7 @@ jobs:
       contents: read
       actions: read
     needs: [verify-linux, verify-windows, verify-macos, installation, control-plane, control-plane-platforms, container-client]
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && github.event_name != 'push' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
