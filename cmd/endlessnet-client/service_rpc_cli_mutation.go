@@ -34,6 +34,12 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	instance := fs.String("expected-instance-id", "", "required runtime instance from a fresh snapshot")
 	revision := fs.Uint64("expected-revision", 0, "required state revision from a fresh snapshot")
 	var networkID string
+	var exitID, exitFamily, exitLAN string
+	if command == "select-exit-node" {
+		fs.StringVar(&exitID, "exit-node-id", "", "required exact authorized exit node ID")
+		fs.StringVar(&exitFamily, "family-mode", "", "required: ipv4-only, ipv6-only or dual-stack; runtime checks catalog permission")
+		fs.StringVar(&exitLAN, "lan-access", "", "required: allow or block; runtime checks policy")
+	}
 	var patchJSON, resetKeys string
 	if command == "set-preferences" {
 		fs.StringVar(&patchJSON, "patch", "", "required protobuf JSON patch; omitted fields remain unchanged")
@@ -75,6 +81,11 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	family := map[string]ipc.ExitFamilyMode{"ipv4-only": ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY, "ipv6-only": ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV6_ONLY, "dual-stack": ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK}[exitFamily]
+	lan := map[string]ipc.LanAccess{"allow": ipc.LanAccess_LAN_ACCESS_ALLOW, "block": ipc.LanAccess_LAN_ACCESS_BLOCK}[exitLAN]
+	if command == "select-exit-node" && (strings.TrimSpace(exitID) == "" || family == ipc.ExitFamilyMode_EXIT_FAMILY_MODE_UNSPECIFIED || lan == ipc.LanAccess_LAN_ACCESS_UNSPECIFIED) {
+		return fmt.Errorf("select-exit-node requires --exit-node-id, --family-mode (ipv4-only, ipv6-only or dual-stack) and --lan-access (allow or block)")
+	}
 	if command == "select-network" && strings.TrimSpace(networkID) == "" {
 		return fmt.Errorf("--network-id is required")
 	}
@@ -96,7 +107,7 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if command == "create-profile" && strings.TrimSpace(controlOrigin) == "" {
 		return fmt.Errorf("--control-origin is required")
 	}
-	if command != "set-preferences" && command != "reset-preferences" && command != "renew-session" && command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" && command != "select-network" && command != "diagnostics-bundle" {
+	if command != "set-preferences" && command != "reset-preferences" && command != "renew-session" && command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" && command != "trust-server" && command != "select-network" && command != "diagnostics-bundle" && command != "select-exit-node" && command != "clear-exit-node" {
 		return fmt.Errorf("unknown native mutation %q", command)
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
@@ -166,6 +177,18 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 		}
 	case "select-network":
 		response, callErr := consumer.SelectNetwork(ctx, connect.NewRequest(&ipc.SelectNetworkRequest{Mutation: mutation, Profile: ref, NetworkId: networkID}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
+	case "select-exit-node":
+		response, callErr := consumer.SelectExitNode(ctx, connect.NewRequest(&ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: exitID, FamilyMode: family, LanAccess: lan}))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
+	case "clear-exit-node":
+		response, callErr := consumer.ClearExitNode(ctx, connect.NewRequest(&ipc.ClearExitNodeRequest{Mutation: mutation, Profile: ref}))
 		err = callErr
 		if err == nil {
 			message = response.Msg

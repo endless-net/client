@@ -50,6 +50,13 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		args              []string
 		request, response proto.Message
 	}{
+		{"select-exit-node", "SelectExitNode", []string{"--exit-node-id", "exit-exact-id", "--family-mode", "ipv4-only", "--lan-access", "allow"}, &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY, LanAccess: ipc.LanAccess_LAN_ACCESS_ALLOW}, &ipc.SelectExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE)}},
+		{"select-exit-node", "SelectExitNode", []string{"--exit-node-id", "exit-exact-id", "--family-mode", "ipv4-only", "--lan-access", "block"}, &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY, LanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK}, &ipc.SelectExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE)}},
+		{"select-exit-node", "SelectExitNode", []string{"--exit-node-id", "exit-exact-id", "--family-mode", "ipv6-only", "--lan-access", "allow"}, &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV6_ONLY, LanAccess: ipc.LanAccess_LAN_ACCESS_ALLOW}, &ipc.SelectExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE)}},
+		{"select-exit-node", "SelectExitNode", []string{"--exit-node-id", "exit-exact-id", "--family-mode", "ipv6-only", "--lan-access", "block"}, &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV6_ONLY, LanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK}, &ipc.SelectExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE)}},
+		{"select-exit-node", "SelectExitNode", []string{"--exit-node-id", "exit-exact-id", "--family-mode", "dual-stack", "--lan-access", "allow"}, &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK, LanAccess: ipc.LanAccess_LAN_ACCESS_ALLOW}, &ipc.SelectExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE)}},
+		{"select-exit-node", "SelectExitNode", []string{"--exit-node-id", "exit-exact-id", "--family-mode", "dual-stack", "--lan-access", "block"}, &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK, LanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK}, &ipc.SelectExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE)}},
+		{"clear-exit-node", "ClearExitNode", nil, &ipc.ClearExitNodeRequest{Mutation: mutation, Profile: ref}, &ipc.ClearExitNodeResponse{Operation: accepted(ipc.OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE)}},
 		{"exit-nodes", "ListExitNodes", []string{"--page-size", "2", "--page-token", "opaque-page"}, &ipc.ListExitNodesRequest{Profile: ref, Page: page}, &ipc.ListExitNodesResponse{ExitNodes: []*ipc.ExitNode{{Id: "exit-a", AllowedFamilyModes: []ipc.ExitFamilyMode{ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY}}}, Page: &ipc.PageResponse{NextPageToken: "next"}}},
 		{"exit-node", "GetExitNode", nil, &ipc.GetExitNodeRequest{Profile: ref}, &ipc.GetExitNodeResponse{Status: &ipc.ExitNodeStatus{ProfileId: ref.ProfileId, RequestedExitNodeId: proto.String("exit-a"), RequestedFamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK, ApplyState: ipc.ApplyState_APPLY_STATE_FAILED, Ipv4: &ipc.ExitFamilyStatus{RequestedExitNodeId: proto.String("exit-a"), EffectiveExitNodeId: proto.String("exit-a"), ApplyState: ipc.ApplyState_APPLY_STATE_APPLIED, FailClosed: true}, Ipv6: &ipc.ExitFamilyStatus{RequestedExitNodeId: proto.String("exit-a"), ApplyState: ipc.ApplyState_APPLY_STATE_FAILED, Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE}}}}},
 		{"peers", "ListPeers", []string{"--page-size", "2", "--page-token", "opaque-page", "--search", " HOST "}, &ipc.ListPeersRequest{Profile: ref, Page: page, Search: " HOST "}, &ipc.ListPeersResponse{Peers: []*ipc.Peer{{Id: "peer-a", Hostname: "host-a"}}, SnapshotState: ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT, MapRevision: 7, TargetMapRevision: 7, Page: &ipc.PageResponse{NextPageToken: "next"}}},
@@ -79,6 +86,10 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		code            ipc.ErrorCode
 		transportCode   connect.Code
 	}{
+		{"select-exit-node", "SelectExitNode", &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK, LanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},
+		{"select-exit-node", "SelectExitNode", &ipc.SelectExitNodeRequest{Mutation: mutation, Profile: ref, ExitNodeId: "exit-exact-id", FamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK, LanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK}, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED, connect.CodePermissionDenied},
+		{"clear-exit-node", "ClearExitNode", &ipc.ClearExitNodeRequest{Mutation: mutation, Profile: ref}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},
+		{"clear-exit-node", "ClearExitNode", &ipc.ClearExitNodeRequest{Mutation: mutation, Profile: ref}, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED, connect.CodePermissionDenied},
 		{"exit-nodes", "ListExitNodes", &ipc.ListExitNodesRequest{Profile: ref, Page: &ipc.PageRequest{}}, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, connect.CodeUnimplemented},
 		{"exit-node", "GetExitNode", &ipc.GetExitNodeRequest{Profile: ref}, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED, connect.CodePermissionDenied},
 		{"diagnostics", "GetDiagnostics", &ipc.GetDiagnosticsRequest{Profile: ref}, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, connect.CodeUnavailable},
@@ -118,7 +129,7 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 	}()
 	for _, tc := range cases {
 		args := append([]string{tc.command, transportFlag, endpoint, "--profile-id", "profile-a", "--timeout", "5s"}, tc.args...)
-		if tc.command == "set-preferences" || tc.command == "reset-preferences" || tc.command == "renew-session" || tc.command == "select-network" || tc.command == "diagnostics-bundle" {
+		if tc.command == "set-preferences" || tc.command == "reset-preferences" || tc.command == "renew-session" || tc.command == "select-network" || tc.command == "diagnostics-bundle" || tc.command == "select-exit-node" || tc.command == "clear-exit-node" {
 			args = append(args, "--request-id", mutation.RequestId, "--expected-instance-id", "instance", "--expected-revision", "7")
 		}
 		output, err := captureStdout(t, func() error { return cmdService(args) })
@@ -132,8 +143,11 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 	}
 	for _, tc := range failures {
 		args := []string{tc.command, transportFlag, endpoint, "--profile-id", ref.ProfileId, "--timeout", "5s"}
-		if tc.command == "renew-session" {
+		if tc.command == "renew-session" || tc.command == "clear-exit-node" || tc.command == "select-exit-node" {
 			args = append(args, "--request-id", mutation.RequestId, "--expected-instance-id", "instance", "--expected-revision", "7")
+		}
+		if tc.command == "select-exit-node" {
+			args = append(args, "--exit-node-id", "exit-exact-id", "--family-mode", "dual-stack", "--lan-access", "block")
 		}
 		output, err := captureStdout(t, func() error {
 			return cmdService(args)
