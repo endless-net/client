@@ -13,12 +13,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func awaitInstalledNative(t *testing.T, binary, operation string, target proto.Message, ready func() bool) {
+func awaitInstalledNative(t *testing.T, binary, operation string, target proto.Message, ready func() bool, options ...string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	err := testclient.Await(ctx, func() bool {
-		command := exec.CommandContext(ctx, binary, "service", operation, "--timeout", "2s")
+		args := append([]string{"service", operation, "--timeout", "2s"}, options...)
+		command := exec.CommandContext(ctx, binary, args...)
 		command.WaitDelay = 2 * time.Second
 		output, err := command.CombinedOutput()
 		if err != nil {
@@ -32,6 +33,13 @@ func awaitInstalledNative(t *testing.T, binary, operation string, target proto.M
 	if err != nil {
 		t.Fatal("installed native service condition was not reached")
 	}
+}
+
+func waitInstalledNativeCondition(t *testing.T, binary string, predicate func(*ipc.Status) bool) *ipc.Status {
+	t.Helper()
+	response := &ipc.GetStatusResponse{}
+	awaitInstalledNative(t, binary, "status", response, func() bool { return response.Status != nil && predicate(response.Status) })
+	return response.Status
 }
 
 func waitInstalledNativeRuntime(t *testing.T, binary string) *ipc.RuntimeInfo {

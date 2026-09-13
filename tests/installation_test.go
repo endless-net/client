@@ -3,18 +3,19 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 // TestInstalledClient uses real service managers on disposable CI machines only.
@@ -164,16 +165,19 @@ func TestInstalledClient(t *testing.T) {
 	}) {
 		t.FailNow()
 	}
-	if !t.Run("disconnect-survives-service-restart", func(t *testing.T) {
-		var response ipc.DisconnectResponse
-		request(t, binary, "disconnect", &response)
-		if response.DesiredState != ipc.DesiredDisconnected || !response.UserDisconnected {
-			t.Fatal("disconnect did not acknowledge the user's intent")
+	if !t.Run("profile-less-disconnect-rejected", func(t *testing.T) {
+		before := waitInstalledNativeUnenrolled(t, binary)
+		output, err := run(binary, "service", "disconnect", "--timeout", "2s", "--request-id", "1f510000-0000-4000-8000-000000000001",
+			"--expected-instance-id", before.GetMetadata().GetInstanceId(), "--expected-revision", strconv.FormatUint(before.GetMetadata().GetRevision(), 10))
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(output), "--profile-id") {
+			t.Fatal("profile-less disconnect did not report its required profile (output withheld)")
 		}
 		restart(t)
-		status := waitStatus(t, binary)
-		if status.DesiredState != ipc.DesiredDisconnected || !status.UserDisconnected || status.NodeCredentialPresent {
-			t.Fatal("service restart lost the disconnected intent or acquired credentials")
+		status := waitInstalledNativeUnenrolled(t, binary)
+		if status.ActiveProfileId != "" || status.NodeId != "" || status.GetStoredState().GetNodeCredentialPresent() || status.GetStoredState().GetCachedMapPresent() ||
+			status.GetIntent().GetDesiredState() != before.GetIntent().GetDesiredState() || status.UserDisconnected != before.UserDisconnected {
+			t.Fatal("rejected profile-less mutation or restart created enrollment or changed intent")
 		}
 	}) {
 		t.FailNow()
@@ -199,11 +203,14 @@ func TestInstalledClient(t *testing.T) {
 		t.FailNow()
 	}
 	t.Run("uninstall", func(t *testing.T) {
-		status := waitStatus(t, binary)
-		if status.WireGuard == nil || strings.TrimSpace(status.WireGuard.Interface) == "" {
-			t.Fatal("connected installed service did not publish its network interface")
-		}
-		interfaceName := status.WireGuard.Interface
+		status := waitInstalledNativeCondition(t, binary, func(v *native.Status) bool { return v.NodeId != "" && v.ActiveProfileId != "" })
+		diagnostics := &native.GetDiagnosticsResponse{}
+		awaitInstalledNative(t, binary, "diagnostics", diagnostics, func() bool {
+			d := diagnostics.GetDiagnostics()
+			return d.GetStatus().GetNodeId() == status.NodeId && d.GetStatus().GetActiveProfileId() == status.ActiveProfileId && d.GetStatus().GetMapRevision() >= status.MapRevision &&
+				d.GetTunnel().GetOk() && d.GetTunnel().GetFailure() == nil && strings.TrimSpace(d.GetTunnel().GetInterfaceName()) != ""
+		}, "--profile-id", status.ActiveProfileId)
+		interfaceName := diagnostics.Diagnostics.Tunnel.InterfaceName
 		uninstall(t)
 		deadline := time.Now().Add(30 * time.Second)
 		for !removed() || interfaceExists(interfaceName) {
@@ -232,8 +239,8 @@ func TestInstalledClient(t *testing.T) {
 		if runtime.GOOS == "linux" {
 			start(t)
 		}
-		fresh := waitStatus(t, binary)
-		if fresh.State != ipc.StateNeedsEnrollment || fresh.NodeID != "" || fresh.NodeCredentialPresent || fresh.CachedMapPresent {
+		fresh := waitInstalledNativeUnenrolled(t, binary)
+		if fresh.ActiveProfileId != "" || !nativeEnrollmentAbsent(fresh) {
 			t.Fatal("reinstalled client retained identity after explicit state removal")
 		}
 		replacementNetwork, replacementJoin, err := s.AddNetwork("reset-client", "198.18.96.0/24")
@@ -258,10 +265,10 @@ func TestInstalledClient(t *testing.T) {
 			t.Fatal("reenrollment after explicit state removal failed (output withheld)")
 		}
 		start(t)
-		replacement := waitInstalledCondition(t, binary, "identity reset reenrollment", func(v ipc.StatusResponse) bool {
-			return v.NodeID != "" && v.NetworkID == replacementNetwork.ID && v.NodeCredentialPresent && v.CachedMapValid && v.WireGuard != nil && v.WireGuard.OK
+		replacement := waitInstalledNativeCondition(t, binary, func(v *native.Status) bool {
+			return v.NodeId != "" && v.ActiveProfileId != "" && v.GetNetwork().GetId() == replacementNetwork.ID && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() && v.ConnectionPhase == native.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 		})
-		if replacement.NodeID == status.NodeID {
+		if replacement.NodeId == status.NodeId {
 			t.Fatal("identity reset reused the removed local node identity")
 		}
 	})
@@ -342,27 +349,5 @@ func request(t *testing.T, binary, operation string, target any) {
 	output := command(t, binary, "service", operation, "--timeout", timeout)
 	if err := json.Unmarshal(output, target); err != nil {
 		t.Fatalf("%s returned invalid JSON: %v", operation, err)
-	}
-}
-
-func waitStatus(t *testing.T, binary string) ipc.StatusResponse {
-	t.Helper()
-	deadline := time.Now().Add(45 * time.Second)
-	for {
-		output, err := run(binary, "service", "status", "--timeout", "2s")
-		if err == nil {
-			var status ipc.StatusResponse
-			if err := json.Unmarshal(output, &status); err != nil {
-				t.Fatalf("status returned invalid JSON: %v", err)
-			}
-			if status.IPCVersion != ipc.Version {
-				t.Fatal("installed service returned an unexpected IPC version")
-			}
-			return status
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("installed service did not become reachable over local IPC within 45s")
-		}
-		time.Sleep(time.Second)
 	}
 }

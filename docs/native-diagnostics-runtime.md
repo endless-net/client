@@ -280,6 +280,16 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The installer lifecycle outside enrolled reinstall/upgrade now uses native
+status and profile/map-bound tunnel diagnostics for uninstall interface discovery
+and explicit state-removal/reenrollment checks. Fresh installation no longer
+accepts profile-less disconnect: the CLI must reject the otherwise complete
+mutation metadata for a missing profile, and restart must preserve unenrolled
+state without creating credentials or intent. The enrolled reinstall scenario
+retains its separate disconnected-intent coverage and still needs migration.
+Local short tests compile these guarded installer scenarios; no installer,
+service-manager or OS interface deletion acceptance was executed locally.
+
 The complete TCP/UDP IPv4/IPv6 traffic fixture now uses native IPC for bootstrap
 observations, applied-map/tunnel checks, diagnostics, local mutations, outage,
 restart and credential retirement. Expected peer identity and signed endpoint
