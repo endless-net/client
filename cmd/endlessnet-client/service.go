@@ -359,7 +359,6 @@ func loadAgentSnapshotIfAvailable(path string) *client.AgentSnapshot {
 	return &loaded
 }
 
-
 func positiveIntOr(value, fallback int) int {
 	if value > 0 {
 		return value

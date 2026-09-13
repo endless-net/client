@@ -2167,7 +2167,6 @@ func TestLoginRejectsInlineSessionTokenForRemoteServer(t *testing.T) {
 	}
 }
 
-
 func TestCacheNetworkMapRedactsNodeCredential(t *testing.T) {
 	cfg := client.Config{}
 	response := clientapi.RegisterNodeResponse{
@@ -2816,7 +2815,6 @@ func TestNativeStatusReportsCachedMapWithoutSecrets(t *testing.T) {
 		}
 	}
 }
-
 
 func TestNativeStatusIncludesBoundAgentStateWithoutSecrets(t *testing.T) {
 	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 9)

@@ -2702,7 +2702,6 @@ func freshNodeNetworkMapFromRevision(configPath string, timeout time.Duration, f
 	return cfg, networkMap, nil
 }
 
-
 func attachLocalRouteConflicts(payload map[string]any, cfg client.Config, includeInterfaces bool, ignoredInterfaces ...string) []client.OverlayCIDRConflict {
 	interfaces := client.LocalInterfaceStatuses()
 	if includeInterfaces {
@@ -2730,8 +2729,6 @@ func routeConflictError(conflicts []client.OverlayCIDRConflict) error {
 func routeConflictErrorForMap(networkMap clientapi.RegisterNodeResponse, ignoredInterfaces ...string) error {
 	return routeConflictError(client.OverlayCIDRConflicts(networkMap, client.LocalInterfaceStatuses(), ignoredInterfaces...))
 }
-
-
 
 func attachLiveWireGuardStatus(payload map[string]any, cfg client.Config, wgInterface string, routeTargets []string, probeRTT bool, timeout time.Duration, relayResult client.RelayDialResult, relayErr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
