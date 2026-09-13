@@ -588,5 +588,11 @@ revocation cleanup from binding-failure retention; they replace the final legacy
 Connect assertion in the recovery test file. This does not implement automatic
 retry of a terminally blocked recovery or claim installed-service acceptance.
 
+The unused HTTP-v2 ServerIdentity/TrustServer handlers, their adapter and DTOs
+have been removed after recovery-test migration. Native identity announcement,
+administrator admission, durable adoption and recovery remain the supported IPC
+path. The import guard now includes the migrated recovery test file. Other v2
+DTOs and handlers remain pending cutover; this removal is not a full-runtime claim.
+
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.

@@ -54,8 +54,7 @@ const (
 type RecoveryOperation string
 
 const (
-	RecoveryOperationTrustServerIdentity RecoveryOperation = "trust_server_identity"
-	RecoveryOperationForgetEnrollment    RecoveryOperation = "forget_local_enrollment"
+	RecoveryOperationForgetEnrollment RecoveryOperation = "forget_local_enrollment"
 )
 
 type RecoveryOperationOutcome string
@@ -312,31 +311,6 @@ type ConnectResponse struct {
 	NetworkID        string               `json:"network_id,omitempty"`
 	MapRevision      uint64               `json:"map_revision,omitempty"`
 	WireGuard        WireGuardApplyResult `json:"wireguard"`
-}
-
-type ServerIdentityRequest struct{}
-
-type ServerIdentityResponse struct {
-	Metadata
-	ControlOrigin  string `json:"control_origin"`
-	TrustedKeyID   string `json:"trusted_key_id"`
-	AnnouncedKeyID string `json:"announced_key_id"`
-	Changed        bool   `json:"changed"`
-}
-
-type TrustServerRequest struct {
-	ConfirmedControlOrigin string `json:"confirmed_control_origin"`
-	ConfirmedKeyID         string `json:"confirmed_key_id"`
-}
-
-type TrustServerResponse struct {
-	Metadata
-	OperationID  string                   `json:"operation_id"`
-	Operation    RecoveryOperation        `json:"operation"`
-	Outcome      RecoveryOperationOutcome `json:"outcome"`
-	State        ServiceState             `json:"state"`
-	ControlState ControlState             `json:"control_state"`
-	TrustedKeyID string                   `json:"trusted_key_id"`
 }
 
 type DisconnectRequest struct{}

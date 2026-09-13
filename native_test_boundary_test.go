@@ -10,10 +10,10 @@ import (
 	"testing"
 )
 
-// Runtime cutover is tracked separately. Migrated system scenarios and their
-// harness must never regain a dependency on the retired HTTP IPC DTO package.
+// Runtime cutover is tracked separately. Migrated system/recovery scenarios and
+// their harness must never regain a dependency on the retired HTTP IPC DTO package.
 func TestSystemScenariosAndHarnessRejectRetiredIPCImports(t *testing.T) {
-	for _, root := range []string{"tests", "internal/testclient"} {
+	for _, root := range []string{"tests", "internal/testclient", "cmd/endlessnet-client/recovery_test.go"} {
 		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
