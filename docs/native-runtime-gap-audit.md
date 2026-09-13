@@ -64,6 +64,26 @@ maximum failed; negative/overflow inputs remain rejected rather than wrapped.
 This is a reproduced runtime defect consistent with the runner symptoms above,
 not yet proof that fixing it closes direct-peer, withdrawal or platform acceptance.
 
+## Installed bootstrap fixture mismatch — 2026-09-13
+
+[Windows 2025 installed-service job 103707722069](https://github.com/endless-net/client/actions/runs/34750299641/job/103707722069)
+at `b474b49dc91b60aa36fe9f7d4649ed8ff4c65b2e` timed out in the bootstrap
+enrollment condition of `TestInstalledClient/enrolled-reinstall`. Current source
+still creates that control peer with `testcontrol.New(t)`, whose nil-listener
+mode is HTTP, and passes its origin to the stopped-service CLI bootstrap.
+`AdoptInitialProfile` validates that stored origin using `rpcProfileOrigin`,
+which requires HTTPS. Thus the fixture does not meet native profile admission;
+loosening origin validation or reintroducing HTTP fallback is not a fix.
+
+The producer-owned installation test needs the existing TLS listener fixture
+with ephemeral public-CA trust available to both bootstrap CLI and installed
+service. `testclient.TrustControlTLS` already supplies machine trust on disposable
+Windows/macOS runners, but its Linux path relies on per-process `SSL_CERT_FILE`;
+that is not evidence of trust in a separately launched systemd service. Preserve
+certificate verification, exact trust cleanup and the disposable-runner guard.
+This inspection identifies a concrete fixture incompatibility, not a successful
+reinstall/upgrade run or proof that no other installation defects remain.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
