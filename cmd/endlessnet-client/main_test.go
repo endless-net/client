@@ -1455,58 +1455,6 @@ func TestConnectAgentTunnelConfiguresCachedMapWithoutRendering(t *testing.T) {
 	}
 }
 
-func TestAgentIPCDisconnectPersistsConnectionIntent(t *testing.T) {
-	tmp := t.TempDir()
-	configPath := filepath.Join(tmp, "client.json")
-	statePath := filepath.Join(tmp, "agent-state.json")
-	if err := client.SaveConfig(configPath, client.Config{
-		NodeID:         "node-1",
-		NetworkID:      "net-1",
-		NodeCredential: "credential-1",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	wireGuard := &testAgentWireGuard{}
-	opts := agentIPCOptions{
-		ConfigPath:     configPath,
-		StateOutput:    statePath,
-		WireGuard:      wireGuard,
-		SyncForConnect: func() error { return nil },
-	}
-	handlers := agentIPCHandlers(opts)
-	before, err := handlers.Status(context.Background(), ipc.StatusRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if before.State != ipc.StateConnected {
-		t.Fatalf("status before disconnect = %#v, want Connected", before)
-	}
-	disconnect, err := handlers.Disconnect(context.Background(), ipc.DisconnectRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if disconnect.State != ipc.StateDisconnected || !disconnect.UserDisconnected {
-		t.Fatalf("disconnect payload = %#v, want disconnected user intent", disconnect)
-	}
-	if wireGuard.downCalls != 1 {
-		t.Fatalf("wireguard-go down calls = %d, want 1", wireGuard.downCalls)
-	}
-	intent, disconnected, err := agentConnectionIntentStore(opts).Disconnected()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !disconnected || intent.DesiredState != client.ConnectionIntentDesiredDisconnected || intent.Reason != "user_disconnect" {
-		t.Fatalf("connection intent = %#v disconnected=%v, want user disconnect", intent, disconnected)
-	}
-	after, err := handlers.Status(context.Background(), ipc.StatusRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if after.State != ipc.StateDisconnected || after.ControlState != ipc.ControlStateDisconnected || !after.UserDisconnected {
-		t.Fatalf("status after disconnect = %#v, want persistent Disconnected", after)
-	}
-}
-
 func TestAgentIPCConnectClearsDisconnectedConnectionIntent(t *testing.T) {
 	tmp := t.TempDir()
 	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 7)

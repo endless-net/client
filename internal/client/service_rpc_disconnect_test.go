@@ -23,6 +23,10 @@ func TestRPCDisconnectReservedCapacityAndRegistration(t *testing.T) {
 	if err := m.store.Update(func(cfg *Config) error {
 		cfg.RPCState.ActiveProfileID = profile.ProfileId
 		cfg.NodeID = "retained-node"
+		cfg.NetworkID = "retained-network"
+		cfg.NodeCredential = "synthetic-retained-credential"
+		cfg.IdentityPrivateKey = "synthetic-retained-identity"
+		cfg.PrivateKey = "synthetic-retained-wireguard-key"
 		cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
 		return nil
 	}); err != nil {
@@ -48,6 +52,10 @@ func TestRPCDisconnectReservedCapacityAndRegistration(t *testing.T) {
 	stops := 0
 	if err := m.ReconcileDisconnect(t.Context(), ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
 		stops++
+		persisted, err := loadConfigFile(m.store.path)
+		if err != nil || persisted.ConnectionIntent == nil || persisted.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected || persisted.ConnectionIntent.Reason != "user_disconnect" {
+			t.Fatal("disconnect effect preceded durable user intent", err)
+		}
 		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED, nil
 	}}); err != nil {
 		t.Fatal(err)
@@ -56,8 +64,18 @@ func TestRPCDisconnectReservedCapacityAndRegistration(t *testing.T) {
 	if err != nil || final.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || stops != 1 || m.store.Read().NodeID != "retained-node" {
 		t.Fatal("disconnect completion lost registration", err)
 	}
+	persisted, err := loadConfigFile(m.store.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted.NodeID != "retained-node" || persisted.NetworkID != "retained-network" || persisted.NodeCredential != "synthetic-retained-credential" ||
+		persisted.IdentityPrivateKey != "synthetic-retained-identity" || persisted.PrivateKey != "synthetic-retained-wireguard-key" ||
+		persisted.RPCState.ActiveProfileID != profile.ProfileId || persisted.ConnectionIntent == nil ||
+		persisted.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected || persisted.ConnectionIntent.Reason != "user_disconnect" {
+		t.Fatal("completed disconnect lost durable registration, identity or user intent")
+	}
 	snapshot, err := m.snapshotAs(peer, nil)
-	if err != nil || snapshot.Status.GetIntent().DesiredState != ipc.DesiredState_DESIRED_STATE_DISCONNECTED || snapshot.Status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED {
+	if err != nil || snapshot.Status.GetIntent().DesiredState != ipc.DesiredState_DESIRED_STATE_DISCONNECTED || snapshot.Status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED || !snapshot.Status.UserDisconnected {
 		t.Fatal("disconnect snapshot has stale intent/phase", err)
 	}
 }
