@@ -526,8 +526,12 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		args := append(testclient.NativeMutationArguments(requestID, current), "--confirmed-control-origin", announced.ControlOrigin,
 			"--confirmed-key-id", key, "--confirmed-announcement-id", announced.AnnouncementId)
 		response := &native.TrustServerIdentityResponse{}
-		if n.NativeService("trust-server", response, args...) != nil || response.GetOperation().GetId() == "" || response.Operation.Kind != native.OperationKind_OPERATION_KIND_TRUST_SERVER_IDENTITY || response.Operation.ProfileId != trustBaseline.ActiveProfileId {
-			t.Fatal("native traffic trust confirmation did not return a profile-bound operation")
+		err := n.NativeService("trust-server", response, args...)
+		if err != nil || response.GetOperation().GetId() == "" || response.Operation.Kind != native.OperationKind_OPERATION_KIND_TRUST_SERVER_IDENTITY || response.Operation.ProfileId != trustBaseline.ActiveProfileId {
+			// NativeService errors contain only canonical numeric failure codes
+			// or fixed classification text; never log announcement or identity data.
+			t.Fatalf("native traffic trust confirmation failed: operation_present=%t kind=%d profile_matches=%t error=%v",
+				response.GetOperation().GetId() != "", response.GetOperation().GetKind(), response.GetOperation().GetProfileId() == trustBaseline.ActiveProfileId, err)
 		}
 		return n.AwaitNativeOperation(response.Operation.Id)
 	}
