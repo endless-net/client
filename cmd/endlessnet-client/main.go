@@ -993,9 +993,11 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 	if registrationCredential == "" {
 		registrationCredential = firstNonEmpty(req.NodeCredential, cfg.NodeCredential)
 	}
-	if err := verifyRegistrationNodeCredential(api, response, registrationCredential); err != nil {
+	credentialTrust, err := verifyRegistrationNodeCredential(api, response, registrationCredential)
+	if err != nil {
 		return err
 	}
+	cfg.NodeCredentialSigningTrust = credentialTrust
 	cfg.PendingDirectRegistration = nil
 	approvalState := strings.ToLower(strings.TrimSpace(response.Node.ApprovalState))
 	if approvalState == clientapi.NodeApprovalPending || approvalState == clientapi.NodeApprovalRejected {
@@ -1594,30 +1596,30 @@ func validateNodeIdentityBinding(node clientapi.Node, publicKey, identityPublicK
 	return nil
 }
 
-func verifyRegistrationNodeCredential(api *clientapi.API, response clientapi.RegisterNodeResponse, credential string) error {
+func verifyRegistrationNodeCredential(api *clientapi.API, response clientapi.RegisterNodeResponse, credential string) (*clientapi.SigningTrustBundle, error) {
 	credential = strings.TrimSpace(credential)
 	if credential == "" {
-		return errors.New("registration response is missing node credential")
+		return nil, errors.New("registration response is missing node credential")
 	}
 	serverKey, err := api.ServerKey()
 	if err != nil {
-		return fmt.Errorf("fetch node credential signing trust bundle: %w", err)
+		return nil, fmt.Errorf("fetch node credential signing trust bundle: %w", err)
 	}
 	trust, err := serverKey.NodeCredentialSigningTrustBundle()
 	if err != nil {
-		return fmt.Errorf("invalid node credential signing trust bundle: %w", err)
+		return nil, fmt.Errorf("invalid node credential signing trust bundle: %w", err)
 	}
 	claims, err := clientapi.VerifyNodeCredentialWithTrustBundle(credential, trust, "node:map", time.Now().UTC())
 	if err != nil {
-		return fmt.Errorf("invalid registration node credential: %w", err)
+		return nil, fmt.Errorf("invalid registration node credential: %w", err)
 	}
 	if claims.NodeID != strings.TrimSpace(response.Node.ID) {
-		return fmt.Errorf("registration node credential node_id %q does not match response node_id %q", claims.NodeID, response.Node.ID)
+		return nil, fmt.Errorf("registration node credential node_id %q does not match response node_id %q", claims.NodeID, response.Node.ID)
 	}
 	if claims.NetworkID != strings.TrimSpace(response.Network.ID) {
-		return fmt.Errorf("registration node credential network_id %q does not match response network_id %q", claims.NetworkID, response.Network.ID)
+		return nil, fmt.Errorf("registration node credential network_id %q does not match response network_id %q", claims.NetworkID, response.Network.ID)
 	}
-	return nil
+	return &trust, nil
 }
 
 func verifyNetworkMap(cfg *client.Config, response clientapi.RegisterNodeResponse) error {

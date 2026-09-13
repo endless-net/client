@@ -21,8 +21,11 @@ func TestRPCStatusDoesNotInferConnectionOrDeadlines(t *testing.T) {
 	if status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTING || status.ServiceState == ipc.ServiceState_SERVICE_STATE_CONNECTED {
 		t.Fatal("enrollment/intent inferred live connection")
 	}
-	if status.Session != nil || status.Credential != nil {
+	if status.Session != nil || status.GetCredential().GetExpiresAt() != nil || status.GetCredential().GetWarningAt() != nil {
 		t.Fatal("inferred provider deadlines")
+	}
+	if status.GetCredential().GetState() != ipc.CredentialState_CREDENTIAL_STATE_ABSENT {
+		t.Fatal("missing credential was not distinguished from an unknown deadline")
 	}
 	status = buildAgentRPCStatus(t.Context(), agentIPCOptions{}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED)
 	if status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED || status.ServiceState != ipc.ServiceState_SERVICE_STATE_DEGRADED {

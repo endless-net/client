@@ -81,6 +81,7 @@ func continueEnrollmentRecovery(ctx context.Context, configPath string) (recover
 			return err
 		}
 		current.NodeCredential = verified.NetworkMap.NodeCredential
+		current.NodeCredentialSigningTrust = verified.CredentialTrust
 		current.EnrollmentRequestID = ""
 		current.EnrollmentPollToken = ""
 		current.ApprovalURL = ""

@@ -78,6 +78,7 @@ func buildAgentRPCStatusWithProbe(ctx context.Context, opts agentIPCOptions, cfg
 		status.Failures = []*ipc.Failure{{Code: ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED, ReasonKey: "local_device_identity_invalid"}}
 		return status
 	}
+	status.Credential = agentRPCCredentialStatus(cfg, time.Now().UTC())
 	if recovery := cfg.EnrollmentRecovery; recovery != nil {
 		status.ServiceState = ipc.ServiceState_SERVICE_STATE_RECOVERING
 		status.ControlState = ipc.ControlState_CONTROL_STATE_RECOVERING
@@ -174,8 +175,8 @@ func buildAgentRPCStatusWithProbe(ctx context.Context, opts agentIPCOptions, cfg
 	if snapshot := loadAgentSnapshotIfAvailable(opts.StateOutput); snapshot != nil {
 		attachAgentRPCSnapshot(status, *snapshot, agentSnapshotGlobalRevision(cfg))
 	}
-	// Session and credential deadlines remain absent until authoritative providers
-	// supply them; neither can be decoded from an unverified bearer token.
+	// User session deadlines require their own provider; node credential expiry
+	// above comes only from verification against its separately persisted trust.
 	return status
 }
 

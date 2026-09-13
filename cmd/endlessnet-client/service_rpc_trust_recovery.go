@@ -18,6 +18,7 @@ func agentRPCTrustRecovery(ctx context.Context, cfg client.Config) (client.Clien
 			return client.ClientRPCTrustRecoveryResult{}, err
 		}
 		cfg.NodeCredential = verified.NetworkMap.NodeCredential
+		cfg.NodeCredentialSigningTrust = verified.CredentialTrust
 		return client.ClientRPCTrustRecoveryResult{Configuration: &cfg}, nil
 	}
 	code := ipc.ErrorCode_ERROR_CODE_APPLY_FAILED

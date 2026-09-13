@@ -12,8 +12,9 @@ import (
 // verifiedEnrollmentRecovery is a private provider result, not an IPC payload.
 // Only the operation executor may commit it after rechecking local authority.
 type verifiedEnrollmentRecovery struct {
-	Progress   recoveryAttemptResult
-	NetworkMap *clientapi.RegisterNodeResponse
+	Progress        recoveryAttemptResult
+	NetworkMap      *clientapi.RegisterNodeResponse
+	CredentialTrust *clientapi.SigningTrustBundle
 }
 
 // inspectEnrollmentRecovery performs typed network recovery and cryptographic
@@ -83,7 +84,8 @@ func inspectEnrollmentRecovery(ctx context.Context, cfg client.Config) (verified
 	if err := verifyNetworkMap(&cfg, response); err != nil {
 		return localFailure(err)
 	}
-	if err := verifyRegistrationNodeCredential(api, response, response.NodeCredential); err != nil {
+	credentialTrust, err := verifyRegistrationNodeCredential(api, response, response.NodeCredential)
+	if err != nil {
 		if ctx.Err() != nil {
 			return verifiedEnrollmentRecovery{}, ctx.Err()
 		}
@@ -95,5 +97,5 @@ func inspectEnrollmentRecovery(ctx context.Context, cfg client.Config) (verified
 	if cfg.MapRevision != 0 && response.Network.Revision < cfg.MapRevision {
 		return localFailure(errors.New("recovery network map is stale"))
 	}
-	return verifiedEnrollmentRecovery{Progress: recoveryAttemptResult{OperationID: recovery.OperationID, Completed: true}, NetworkMap: &response}, nil
+	return verifiedEnrollmentRecovery{Progress: recoveryAttemptResult{OperationID: recovery.OperationID, Completed: true}, NetworkMap: &response, CredentialTrust: credentialTrust}, nil
 }

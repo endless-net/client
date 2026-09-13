@@ -773,3 +773,16 @@ it does not guarantee a free pair under arbitrary OS port exclusions.
 
 They do not prove installed-service or per-OS inspection behavior. `client-ui`
 owns combined real-host rendering and bundle/export tests after capability readiness.
+
+## Verified node credential clock
+
+Registration and credential recovery now persist the separately verified node
+credential signing trust with the credential. Native status can therefore expose
+its authenticated expiry offline after node/network/scope and validity checks.
+Map signing trust is never substituted. Missing credential trust leaves the clock
+unknown; failed verification exposes no parsed deadline. Terminal cleanup removes
+the credential trust. This does not provide user-session expiry, a renewal warning
+threshold, automatic-renewal capability or an authoritative revocation check.
+Short regressions cover persisted enrollment/recovery trust and safe projections
+for valid, missing, foreign, forged and expired credentials. Provider deployment
+and complete US-09 session/renewal acceptance remain separate.

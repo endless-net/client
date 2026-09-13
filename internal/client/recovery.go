@@ -103,6 +103,7 @@ func clearNodeBoundState(cfg *Config) {
 	cfg.NodeID = ""
 	cfg.NetworkID = ""
 	cfg.NodeCredential = ""
+	cfg.NodeCredentialSigningTrust = nil
 	cfg.NodeApprovalState = ""
 	cfg.EnrollmentRequestID = ""
 	cfg.EnrollmentPollToken = ""

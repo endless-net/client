@@ -166,6 +166,9 @@ func TestNativeBrowserEnrollmentApprovalPersistenceAndCompletion(t *testing.T) {
 		requestCalls != 1 || completeCalls != 1 {
 		t.Fatal("browser completion lost identity, repeated request creation or retained polling authority")
 	}
+	if cfg.NodeCredentialSigningTrust == nil {
+		t.Fatal("verified credential trust was not persisted by enrollment")
+	}
 	engine := &testAgentWireGuard{}
 	wake := make(chan struct{}, 1)
 	if err := agentRPCProfileDriver(agentIPCOptions{WireGuard: engine, SyncWake: wake}).Start(t.Context(), cfg); err != nil {

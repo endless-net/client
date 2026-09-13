@@ -284,6 +284,9 @@ func TestEnrollmentRecoveryRetriesSameRequestAfterLostResponse(t *testing.T) {
 	if after.EnrollmentRecovery != nil || after.NodeCredential == fixture.OldCredential || after.CachedMap == nil || after.MapRevision != 8 {
 		t.Fatalf("validated durable result was not atomically committed: %#v", after.EnrollmentRecovery)
 	}
+	if after.NodeCredentialSigningTrust == nil {
+		t.Fatal("renewed credential trust was not persisted")
+	}
 }
 
 func TestNativeRecoveryProviderReusesDurableRenewalIdentity(t *testing.T) {
