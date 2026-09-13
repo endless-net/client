@@ -280,6 +280,16 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The IPv4/IPv6 routed-resource scenario now uses native status and tunnel
+diagnostics with node/profile/current-map binding and explicit route-table
+observations. Every successful TCP and UDP exchange must advance forwarding
+counters; old nonzero totals cannot establish restored routing. Disabling routes,
+restart durability, established-flow withdrawal and restoration retain their
+traffic assertions without another registration. Route-table changes here still
+use the supported headless offline CLI with the agent stopped, not native
+preferences operations. Local short tests compile the guarded scenario only;
+real OS routing and traffic acceptance remains per-platform CI work.
+
 The IPv4/IPv6 machine-sharing scenario now uses native status, current applied-map
 gates and profile-bound tunnel inspection. Successful original and replacement
 rights must increment reference-peer receive/echo counters. Lease expiry must
