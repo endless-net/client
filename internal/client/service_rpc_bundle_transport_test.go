@@ -189,7 +189,9 @@ func TestRPCBundleNativeTransportLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = consumer.ReadDiagnosticsBundle(ctx, connect.NewRequest(&ipc.ReadDiagnosticsBundleRequest{BundleId: metadata.BundleId}))
-	assertRPCAccessAfterOwnerReplacement(t, info, err)
+	// Administrator authorization does not restore a revoked archive handle.
+	// Logical revocation must apply before the asynchronous physical purge.
+	assertRPCFailure(t, err, rpcUnownedMissingResourceFailure(t, info))
 	if err := s.purgeBundles(); err != nil {
 		t.Fatal(err)
 	}
