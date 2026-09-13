@@ -74,9 +74,26 @@ func TestControlPlaneTrustConfirmation(t *testing.T) {
 			case "wrong-announcement":
 				request.ConfirmedAnnouncementId = strings.Repeat("0", 64)
 			}
-			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-			response, err := consumer.TrustServerIdentity(ctx, connect.NewRequest(request))
-			cancel()
+			var response *connect.Response[ipc.TrustServerIdentityResponse]
+			var err error
+			for attempt := 0; attempt < 3; attempt++ {
+				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+				response, err = consumer.TrustServerIdentity(ctx, connect.NewRequest(request))
+				cancel()
+				if connect.CodeOf(err) != connect.CodeFailedPrecondition || rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_STALE_STATE || attempt == 2 {
+					break
+				}
+				// Retry only a definitive CAS rejection, never a worker outcome.
+				// Keep the exact negative-test tuple and request UUID unchanged.
+				observed := identity()
+				fresh := &ipc.GetStatusResponse{}
+				if n.NativeService("status", fresh) != nil || !nativeTrustRetryContextMatches(before, fresh.Status, initial, observed) {
+					t.Fatal("negative trust context changed after CAS rejection")
+				}
+				before = fresh.Status
+				request.Mutation.ExpectedInstanceId = before.GetMetadata().GetInstanceId()
+				request.Mutation.ExpectedRevision = before.GetMetadata().GetRevision()
+			}
 			if mode == "wrong-key" || mode == "wrong-announcement" {
 				if err != nil || response.Msg.GetOperation().GetId() == "" {
 					t.Fatal("well-formed confirmation did not reach verification worker")
@@ -87,7 +104,7 @@ func TestControlPlaneTrustConfirmation(t *testing.T) {
 				}
 			} else {
 				if rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
-					t.Fatal("malformed confirmation was not rejected at admission")
+					t.Fatalf("malformed confirmation was not rejected at admission: transport=%d failure=%d", connect.CodeOf(err), rpc.FailureFromError(err).GetCode())
 				}
 				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 				_, err := consumer.GetOperation(ctx, connect.NewRequest(&ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_RequestId{RequestId: requestID}}))
