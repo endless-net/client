@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	ipc "github.com/endless-net/client/ipc/v2"
+	"github.com/endless-net/client/clientipc/local"
 )
 
 type WindowsServiceOptions struct {
@@ -49,7 +49,7 @@ func DefaultWindowsServiceOptions() WindowsServiceOptions {
 		ConfigPath:        `C:\ProgramData\EndlessNet\client.json`,
 		StatePath:         `C:\ProgramData\EndlessNet\agent-state.json`,
 		DiagnosticsDir:    `C:\ProgramData\EndlessNet\Diagnostics`,
-		IPCPipe:           ipc.DefaultWindowsPipe,
+		IPCPipe:           local.DefaultWindowsPipe,
 		EventLogSource:    DefaultWindowsEventLogSource,
 		Interval:          30 * time.Second,
 		Timeout:           10 * time.Second,

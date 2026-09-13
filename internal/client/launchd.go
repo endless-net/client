@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	ipc "github.com/endless-net/client/ipc/v2"
+	"github.com/endless-net/client/clientipc/local"
 )
 
 type LaunchdServiceOptions struct {
@@ -51,7 +51,7 @@ func DefaultLaunchdServiceOptions() LaunchdServiceOptions {
 		BinaryPath:        "/Library/EndlessNet/endlessnet-client",
 		ConfigPath:        "/Library/Application Support/EndlessNet/client.json",
 		StatePath:         "/var/run/endlessnet/agent-state.json",
-		IPCSocketPath:     ipc.DefaultDarwinSocket,
+		IPCSocketPath:     local.DefaultDarwinSocket,
 		DiagnosticsDir:    "/Library/Logs/EndlessNet/Diagnostics",
 		Interval:          30 * time.Second,
 		Timeout:           10 * time.Second,

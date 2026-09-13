@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	ipc "github.com/endless-net/client/ipc/v2"
+	"github.com/endless-net/client/clientipc/local"
 )
 
 type SystemdServiceOptions struct {
@@ -47,7 +47,7 @@ func DefaultSystemdServiceOptions() SystemdServiceOptions {
 		BinaryPath:        "/opt/endlessnet/bin/endlessnet-client",
 		ConfigPath:        DefaultLinuxServiceConfigPath,
 		StatePath:         "/run/endlessnet/agent-state.json",
-		IPCSocketPath:     ipc.DefaultUnixSocket,
+		IPCSocketPath:     local.DefaultUnixSocket,
 		Interval:          30 * time.Second,
 		Timeout:           10 * time.Second,
 		STUNTimeout:       2 * time.Second,
