@@ -65,6 +65,19 @@ do not prove installed-service behavior or real application traffic. The new
 Unix test still needs Linux/macOS runner results; remaining HTTP IPC v2 handlers
 and consumers elsewhere in this repository are not declared migrated.
 
+The **nested `clientipc` module**, separately from that root runtime test,
+passed [contract run 34745274389](https://github.com/endless-net/client/actions/runs/34745274389)
+at immutable source `baf6f652ef72a18f36d70a9dadb0c8e04712e11b` on 2026-09-13:
+[Linux](https://github.com/endless-net/client/actions/runs/34745274389/job/103691949338),
+[macOS](https://github.com/endless-net/client/actions/runs/34745274389/job/103691949232),
+and [Windows](https://github.com/endless-net/client/actions/runs/34745274389/job/103691949291).
+Each transport job ran `go test -short ./...` inside `clientipc`; `local` passed
+in 0.019s, 0.030s and 0.098s respectively. This includes Unix refusal to replace
+an existing file, symlink or stale socket and Windows anonymous-pipe rejection
+before RPC dispatch. The validation job also completed successfully. These
+results do not execute `internal/client/service_rpc_unix_test.go`, privileged
+control-plane scenarios, installed services, mobile runtimes or real traffic.
+
 ## Active goal: Client only
 
 The user narrowed the working goal on 2026-09-11. This scope supersedes the
