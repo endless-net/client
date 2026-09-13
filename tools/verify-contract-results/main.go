@@ -1,4 +1,4 @@
-// Command verify-contract-results requires three isolated reports per platform.
+// Command verify-contract-results requires the selected isolated reports per platform.
 package main
 
 import (
@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -30,16 +31,17 @@ type outcome struct {
 }
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: verify-contract-results REPORT_DIRECTORY SOURCE_SHA")
+	if len(os.Args) != 4 {
+		fmt.Fprintln(os.Stderr, "usage: verify-contract-results REPORT_DIRECTORY SOURCE_SHA REPETITIONS(1|3)")
 		os.Exit(1)
 	}
-	n, err := verifyReports(os.Args[1], os.Args[2])
+	repetitions, _ := strconv.Atoi(os.Args[3])
+	n, err := verifyReports(os.Args[1], os.Args[2], repetitions)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("Verified %d common scenarios x 3 repetitions x %d platforms: %d PASS outcomes, no skips.\n", n, len(platforms), n*3*len(platforms))
+	fmt.Printf("Verified %d common scenarios x %d repetitions x %d platforms: %d PASS outcomes, no skips.\n", n, repetitions, len(platforms), n*repetitions*len(platforms))
 }
 
 func declaredTests(data []byte) ([]string, error) {
@@ -56,14 +58,17 @@ func declaredTests(data []byte) ([]string, error) {
 	return names, nil
 }
 
-func verifyReports(dir, sha string) (int, error) {
+func verifyReports(dir, sha string, repetitions int) (int, error) {
+	if repetitions != 1 && repetitions != 3 {
+		return 0, errors.New("repetitions must be 1 or 3")
+	}
 	if !commitSHA.MatchString(sha) {
 		return 0, errors.New("expected source must be a full commit SHA")
 	}
 	var common []string
 	var failures []error
 	for _, platformName := range platforms {
-		for repetition := 1; repetition <= 3; repetition++ {
+		for repetition := 1; repetition <= repetitions; repetition++ {
 			platform := fmt.Sprintf("%s-%d", platformName, repetition)
 			names, err := verifyPlatformReport(dir, platformName, platform, sha)
 			if err != nil {

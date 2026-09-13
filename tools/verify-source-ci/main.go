@@ -73,7 +73,7 @@ func (g githubAPI) verify(ctx context.Context, sha string) (workflowRun, error) 
 	}
 	// Select the newest matching run, including pending/failed runs. An older
 	// success must never conceal a newer failed or still-running verification.
-	query := url.Values{"head_sha": {sha}, "branch": {"main"}, "event": {"push"}, "per_page": {"100"}}
+	query := url.Values{"head_sha": {sha}, "branch": {"main"}, "event": {"workflow_dispatch"}, "per_page": {"100"}}
 	if err := g.get(ctx, "/actions/workflows/test.yml/runs?"+query.Encode(), &list); err != nil {
 		return workflowRun{}, err
 	}
@@ -84,10 +84,10 @@ func (g githubAPI) verify(ctx context.Context, sha string) (workflowRun, error) 
 		}
 	}
 	valid := func(r workflowRun) bool {
-		return r.ID > 0 && r.Attempt > 0 && r.SHA == sha && r.Branch == "main" && r.Event == "push" && r.Path == ".github/workflows/test.yml" && r.Status == "completed" && r.Conclusion == "success"
+		return r.ID > 0 && r.Attempt > 0 && r.SHA == sha && r.Branch == "main" && r.Event == "workflow_dispatch" && r.Path == ".github/workflows/test.yml" && r.Status == "completed" && r.Conclusion == "success"
 	}
 	if !valid(selected) {
-		return workflowRun{}, errors.New("exact source commit has no completed successful main push Test run")
+		return workflowRun{}, errors.New("exact source commit requires a successful main Test dispatch with contract_repetitions=3 before publication")
 	}
 	seen := map[string]bool{}
 	for page := 1; ; page++ {

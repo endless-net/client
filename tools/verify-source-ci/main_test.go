@@ -11,7 +11,7 @@ import (
 
 func TestPublicationGate(t *testing.T) {
 	const sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	good := workflowRun{ID: 42, Attempt: 2, SHA: sha, Branch: "main", Event: "push", Path: ".github/workflows/test.yml", Status: "completed", Conclusion: "success"}
+	good := workflowRun{ID: 42, Attempt: 2, SHA: sha, Branch: "main", Event: "workflow_dispatch", Path: ".github/workflows/test.yml", Status: "completed", Conclusion: "success"}
 	type job struct{ Name, Status, Conclusion string }
 	type fixture struct {
 		runs       []workflowRun
@@ -26,6 +26,7 @@ func TestPublicationGate(t *testing.T) {
 		wantOK bool
 	}{
 		{"verified", func(*fixture) {}, true},
+		{"routine-push-is-not-release-evidence", func(f *fixture) { f.runs[0].Event = "push" }, false},
 		{"no-run", func(f *fixture) { f.runs = nil }, false},
 		{"different-sha", func(f *fixture) { f.runs[0].SHA = strings.Repeat("b", 40) }, false},
 		{"pull-request", func(f *fixture) { f.runs[0].Event = "pull_request" }, false},
@@ -106,7 +107,7 @@ func TestPublicationGate(t *testing.T) {
 				var result any
 				switch r.URL.Path {
 				case "/repos/endless-net/client/actions/workflows/test.yml/runs":
-					if r.URL.Query().Get("head_sha") != sha || r.URL.Query().Get("event") != "push" || r.URL.Query().Get("branch") != "main" {
+					if r.URL.Query().Get("head_sha") != sha || r.URL.Query().Get("event") != "workflow_dispatch" || r.URL.Query().Get("branch") != "main" {
 						t.Error("source query is not scoped")
 					}
 					result = map[string]any{"workflow_runs": f.runs}

@@ -23,6 +23,35 @@ func TestRecordedTest2JSONSubtests(t *testing.T) {
 	}
 }
 
+func TestSinglePassReportsDoNotSatisfyReleaseRepetitions(t *testing.T) {
+	dir := t.TempDir()
+	sha := strings.Repeat("a", 40)
+	for _, platform := range platforms {
+		shard := platform + "-1"
+		root := filepath.Join(dir, "client-contracts-"+shard)
+		if err := os.MkdirAll(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+		for name, data := range map[string][]byte{
+			"source.txt": []byte(sha), "shard.txt": []byte(shard),
+			"expected-tests.txt": []byte("TestControlPlaneAlpha\n"),
+			"results.jsonl":      goodReport([]string{"TestControlPlaneAlpha"}, 1),
+		} {
+			if err := os.WriteFile(filepath.Join(root, name), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if n, err := verifyReports(dir, sha, 1); err != nil || n != 1 {
+		t.Fatalf("single-pass matrix rejected: %d %v", n, err)
+	}
+	for _, repetitions := range []int{0, 2, 3, 4} {
+		if _, err := verifyReports(dir, sha, repetitions); err == nil {
+			t.Fatalf("incomplete or invalid repetition count accepted: %d", repetitions)
+		}
+	}
+}
+
 func goodReport(names []string, repetitions int) []byte {
 	var out bytes.Buffer
 	encoder := json.NewEncoder(&out)
@@ -233,7 +262,7 @@ func TestRequireThreeIsolatedReportsOnEightPlatforms(t *testing.T) {
 					}
 				}
 			}
-			n, err := verifyReports(dir, sha)
+			n, err := verifyReports(dir, sha, 3)
 			if mutation == "none" {
 				if err != nil || n != 1 {
 					t.Fatalf("valid reports: count=%d err=%v", n, err)
