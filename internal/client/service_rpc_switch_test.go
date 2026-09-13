@@ -164,10 +164,7 @@ func TestRPCProfileSwitchRestart(t *testing.T) {
 						return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED, nil
 					}, Start: func(context.Context, Config) error { panic(crash) }})
 			}()
-			store, err := OpenConfigStore(m.store.path)
-			if err != nil {
-				t.Fatal(err)
-			}
+			store := reopenRPCStoreFromDisk(t, m.store)
 			restarted, err := NewClientRPCMutations(store)
 			if err != nil {
 				t.Fatal(err)

@@ -719,6 +719,14 @@ last `ipc/v2/contract.go` file. Boundary tests reject retired imports across all
 `cmd`, `internal` and `tests` Go sources. This proves source-level removal, not
 complete UF runtime, UI, installed lifecycle or release acceptance.
 
+Enrollment approval resume, cancelled Disconnect recovery and profile-switch
+side-effect interruption tests now evict only their stopped worker's store from
+the process registry before rebuilding the coordinator. They decode persisted
+state rather than reuse cached configuration. Enrollment additionally checks the
+original operation ID and protected token in resumed provider input. These tests
+retain terminal cleanup and profile-switch continuity assertions; they simulate
+worker loss in-process and do not replace installed process-crash acceptance.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

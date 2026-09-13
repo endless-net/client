@@ -79,13 +79,13 @@ func TestRPCEnrollmentExecutorWaitThenResume(t *testing.T) {
 	if err != nil || waiting.State != ipc.OperationState_OPERATION_STATE_WAITING_FOR_USER {
 		t.Fatal("approval did not persist waiting state")
 	}
-	// A fresh coordinator instance resumes the protected plan, not a caller replay.
-	m, err = NewClientRPCMutations(m.store)
+	// A disk-backed coordinator resumes the protected plan, not a caller replay.
+	m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = m.ReconcileEnrollment(t.Context(), func(_ context.Context, cfg Config, _ ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
-		if cfg.EnrollmentRequestID != "approval-request" {
+	err = m.ReconcileEnrollment(t.Context(), func(_ context.Context, cfg Config, input ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
+		if cfg.EnrollmentRequestID != "approval-request" || input.OperationID != op.Id || input.Token != request.GetEnrollmentToken() {
 			t.Fatal("pending approval lost")
 		}
 		cfg.NodeID = "verified-node"

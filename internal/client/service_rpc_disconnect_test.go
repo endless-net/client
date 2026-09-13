@@ -178,10 +178,7 @@ func TestRPCDisconnectFailureAndCancellation(t *testing.T) {
 			if final.State != ipc.OperationState_OPERATION_STATE_RUNNING || m.store.Read().RPCState.DisconnectOperationID == "" {
 				t.Fatal("shutdown lost pending disconnect")
 			}
-			store, err := OpenConfigStore(m.store.path)
-			if err != nil {
-				t.Fatal(err)
-			}
+			store := reopenRPCStoreFromDisk(t, m.store)
 			restarted, err := NewClientRPCMutations(store)
 			if err != nil {
 				t.Fatal(err)
