@@ -33,8 +33,9 @@ func publishAgentRPCObservation(ctx context.Context, mutations *client.ClientRPC
 	}
 }
 
-// The connection coordinator supplies its actual phase. Stored enrollment,
-// cached-map presence and connected intent do not establish tunnel connectivity.
+// The connection coordinator supplies its actual phase. During control failure,
+// a fresh map-bound engine inspection can establish continuing connectivity;
+// stored enrollment, cached-map presence and intent alone cannot establish it.
 func observeAgentRPCStatus(ctx context.Context, mutations *client.ClientRPCMutations, opts agentIPCOptions, phase ipc.ConnectionPhase) error {
 	return mutations.ObserveStatus(func(cfg client.Config) (*ipc.Status, error) {
 		return buildAgentRPCStatus(ctx, opts, cfg, phase), nil
@@ -141,6 +142,11 @@ func buildAgentRPCStatusWithProbe(ctx context.Context, opts agentIPCOptions, cfg
 			status.RelayEndpoints = append(status.RelayEndpoints, &ipc.Endpoint{Id: endpoint.ID, Address: endpoint.Addr, Protocol: endpoint.Protocol, Priority: uint32(max(0, endpoint.Priority))})
 		}
 		status.ControlState = ipc.ControlState_CONTROL_STATE_OFFLINE_CACHE // A verified cache is not a live probe.
+		if opts.WireGuard != nil && cfg.RPCState != nil && cfg.RPCState.Trust == nil {
+			inspection, available := opts.WireGuard.TryMapInspection(networkMap.Network.ID, networkMap.Node.ID, networkMap.Network.Revision)
+			phase = agentRPCObservedDataplanePhase(status, inspection, available)
+			status.ConnectionPhase = phase
+		}
 	}
 	if status.NodeId != "" {
 		if probeControl {

@@ -316,6 +316,7 @@ type agentWireGuard interface {
 	STUNSnapshot(context.Context, clientapi.RegisterNodeResponse, time.Duration) client.AgentSTUNSnapshot
 	Inspection() client.WireGuardInspection
 	TryInspection() (client.WireGuardInspection, bool)
+	TryMapInspection(string, string, uint64) (client.WireGuardInspection, bool)
 	PathStatus() []client.PeerPathStatus
 	TryPathStatus(string, string, uint64) ([]client.PeerPathStatus, bool)
 	RelayStatus() (client.RelayDataplaneBridgeStatus, bool, error)

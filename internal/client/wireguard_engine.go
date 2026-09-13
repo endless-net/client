@@ -999,6 +999,19 @@ func (e *WireGuardEngine) TryInspection() (WireGuardInspection, bool) {
 	return e.inspectionLocked(), true
 }
 
+// TryMapInspection observes only the successfully applied map. A cached map or
+// an unrelated running interface must not establish connectivity for a profile.
+func (e *WireGuardEngine) TryMapInspection(networkID, nodeID string, revision uint64) (WireGuardInspection, bool) {
+	if !e.mu.TryLock() {
+		return WireGuardInspection{}, false
+	}
+	defer e.mu.Unlock()
+	if !e.configured || networkID == "" || nodeID == "" || revision == 0 || e.pathMap.Network.ID != networkID || e.pathMap.Node.ID != nodeID || e.pathMap.Network.Revision != revision {
+		return WireGuardInspection{}, false
+	}
+	return e.inspectionLocked(), true
+}
+
 func (e *WireGuardEngine) inspectionLocked() WireGuardInspection {
 	inspection := WireGuardInspection{Interface: e.interface_, Peers: []WireGuardPeerInspection{}, Routes: []WireGuardRouteInspection{}}
 	if e.device == nil {

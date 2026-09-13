@@ -182,6 +182,28 @@ Their original authorization, signed-map and actual-traffic assertions remain
 unchanged. Short tests do not execute these privileged scenarios; fresh hosted
 results are required before claiming HC-014, HC-032 or HC-051 acceptance.
 
+## Native offline connection-phase correction — 2026-09-13
+
+The source path behind job `103717701616` discards the iteration snapshot when
+online map retrieval fails. `agentRPCIterationPhase` consequently supplies
+`UNSPECIFIED`, including after a successful cached bootstrap. This conflates
+control synchronization failure with loss of the independently running dataplane.
+
+Native status now supplements an unspecified phase with a fresh, nonblocking
+engine inspection bound to the verified network ID, node ID and map revision.
+It requires a successfully configured engine, an active profile, connected
+intent and valid cache, and does not override explicit transition/disconnected
+phases or run through native trust recovery. Control failure remains independent:
+the connected offline dataplane is reported as degraded, not control-ready.
+No old snapshot, mere cache presence or requested intent establishes connectivity.
+
+Short tests cover current/foreign/stale/absent map identities, busy and stopped
+engines, missing profile, disconnected intent, invalid cache and failed inspection.
+An integrated status projection test verifies the exact map binding and preserves
+offline control state. Root short tests, vet and lint pass locally. These are not
+installed or actual-traffic acceptance: the original hosted offline/recovery
+assertions remain unchanged and still need a fresh source run.
+
 ## Methods without a runtime override
 
 The [service contract](../proto/client/v0/service.proto) declares these methods,
