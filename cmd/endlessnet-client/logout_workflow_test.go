@@ -13,6 +13,40 @@ import (
 	"github.com/endless-net/client/internal/client"
 )
 
+func TestTypedRemoteLogoutResumesConfirmedNodeAndStopsOnCheckpointFailure(t *testing.T) {
+	for _, resumed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "checkpoint failure", true: "resume session"}[resumed], func(t *testing.T) {
+			var calls []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls = append(calls, r.URL.Path)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"status":"ok"}`))
+			}))
+			defer server.Close()
+			failure := errors.New("checkpoint rejected")
+			err := revokeConfiguredClient(t.Context(), client.Config{ControlPlaneURLs: []string{server.URL}, NodeID: "node-1", Token: "synthetic-session"}, client.ClientRPCLogoutProgress{NodeRevoked: resumed}, func(progress client.ClientRPCLogoutProgress) error {
+				if !resumed {
+					return failure
+				}
+				if !progress.NodeRevoked || !progress.SessionRevoked {
+					t.Fatal("resume checkpoint incomplete")
+				}
+				return nil
+			})
+			if !resumed && !errors.Is(err, failure) || resumed && err != nil {
+				t.Fatal("unexpected checkpoint result", err)
+			}
+			want := "/nodes/node-1"
+			if resumed {
+				want = "/auth/logout"
+			}
+			if len(calls) != 1 || calls[0] != want {
+				t.Fatal("confirmed or unpersisted step was repeated/advanced")
+			}
+		})
+	}
+}
+
 func TestTypedRemoteLogoutPreservesLocalStateUntilCallerCommit(t *testing.T) {
 	for _, stage := range []string{"node failure", "session failure", "confirmed"} {
 		t.Run(stage, func(t *testing.T) {
@@ -44,7 +78,7 @@ func TestTypedRemoteLogoutPreservesLocalStateUntilCallerCommit(t *testing.T) {
 			if err := client.SaveConfig(path, cfg); err != nil {
 				t.Fatal(err)
 			}
-			err := revokeConfiguredClient(t.Context(), cfg)
+			err := revokeConfiguredClient(t.Context(), cfg, client.ClientRPCLogoutProgress{}, func(client.ClientRPCLogoutProgress) error { return nil })
 			if (err == nil) != (stage == "confirmed") {
 				t.Fatalf("unexpected cleanup result: %v", err)
 			}
@@ -72,7 +106,7 @@ func TestTypedRemoteLogoutCancelsInflightSessionRequest(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- revokeConfiguredClient(ctx, client.Config{ControlPlaneURLs: []string{server.URL}, Token: "synthetic-session"})
+		done <- revokeConfiguredClient(ctx, client.Config{ControlPlaneURLs: []string{server.URL}, Token: "synthetic-session"}, client.ClientRPCLogoutProgress{}, func(client.ClientRPCLogoutProgress) error { return nil })
 	}()
 	select {
 	case <-entered:

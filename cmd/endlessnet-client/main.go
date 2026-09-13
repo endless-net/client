@@ -1447,7 +1447,7 @@ func cmdLogout(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := revokeConfiguredClient(context.Background(), cfg); err != nil {
+	if err := revokeConfiguredClient(context.Background(), cfg, client.ClientRPCLogoutProgress{}, func(client.ClientRPCLogoutProgress) error { return nil }); err != nil {
 		return err
 	}
 	var stateErr error

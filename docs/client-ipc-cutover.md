@@ -507,3 +507,13 @@ remote failures and confirmation, typed revocation correlation and cancellation
 of an in-flight session request. The CLI uses the shared function; native Logout
 admission, durable remote-confirmation progress and post-confirmation Down/cleanup
 are still to be connected. This does not establish complete UF-12 acceptance.
+
+Native Logout admission now persists a profile-bound plan alongside its operation.
+Remote confirmation progress has separate monotonic node/session checkpoints,
+guarded by the current registration context; credentials and intent are not
+removed or changed by these checkpoints. The shared remote workflow accepts saved
+progress and a checkpoint callback, skips confirmed steps and stops on checkpoint
+failure. Tests cover exact acceptance replay, disk persistence, a new coordinator,
+stale credentials, no progress rollback and session-only continuation. The CLI
+still runs without durable operation progress until its native RPC migration;
+the native Logout executor, terminal outcomes and service exposure remain open.
