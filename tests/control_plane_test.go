@@ -120,12 +120,13 @@ func TestControlPlaneRejectsRegistrationResponseMismatch(t *testing.T) {
 	for _, fault := range []string{"operation", "binding", "fingerprint", "credential-node", "credential-network", "map-signature"} {
 		t.Run(fault, func(t *testing.T) {
 			requireControlScenario(t)
-			s := testcontrol.New(t)
+			s := testcontrol.NewTLS(t)
 			network, token, err := s.AddNetwork("response-binding", "100.92.0.0/24")
 			if err != nil {
 				t.Fatal(err)
 			}
 			n := testclient.New(t, s)
+			n.TrustControlTLS(s)
 			if err := s.FaultNextRegistrationResponse(fault); err != nil {
 				t.Fatal(err)
 			}
@@ -172,12 +173,13 @@ func TestControlPlaneRejectsRegistrationResponseMismatch(t *testing.T) {
 // A second CLI process must recover the operation without exposing its store.
 func TestControlPlaneRegistrationResponseLoss(t *testing.T) {
 	requireControlScenario(t)
-	s := testcontrol.New(t)
+	s := testcontrol.NewTLS(t)
 	network, token, err := s.AddNetwork("retry", "100.91.0.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
 	n := testclient.New(t, s)
+	n.TrustControlTLS(s)
 	s.SetRegistrationResponsesDropped(true)
 	args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network.Name, "--join-token", token, "--hostname", "retry-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off"}
 	// Even automatic SDK retries lose their responses, so the negative branch
