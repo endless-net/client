@@ -743,6 +743,12 @@ These tests cover durable local artifacts and journal coordination in-process;
 installed crash recovery, retention over real downtime and UI export remain
 separate acceptance obligations.
 
+Trust-announcement cancellation, trust-worker recovery, volatile-log reset and
+profile pagination restart checks now reopen the configuration from disk. The
+pagination check rejects the previous instance's cursor while a new query still
+returns all persisted profiles. These separate ephemeral state from durable
+authority without claiming installed service restart or full system acceptance.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

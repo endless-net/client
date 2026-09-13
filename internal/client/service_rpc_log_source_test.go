@@ -58,7 +58,7 @@ func TestRPCNativeLogSourceCommittedOperationsAndProfiles(t *testing.T) {
 	}
 	_, err = s.recentLogsAs(t.Context(), peer, &ipc.ListRecentLogsRequest{Profile: &ipc.ProfileRef{ProfileId: created.ProfileId}})
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_NOT_FOUND)
-	restarted, err := NewClientRPCMutations(m.store)
+	restarted, err := NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 	if err != nil {
 		t.Fatal(err)
 	}

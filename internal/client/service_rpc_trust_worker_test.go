@@ -125,7 +125,7 @@ func TestRPCTrustWorkerRecoveryAndIndependentDisconnect(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("trust worker did not stop")
 	}
-	m, err = NewClientRPCMutations(m.store)
+	m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 	if err != nil {
 		t.Fatal(err)
 	}

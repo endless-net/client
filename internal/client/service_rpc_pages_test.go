@@ -70,13 +70,17 @@ func TestRPCProfilePaginationBindingsAndPrivacy(t *testing.T) {
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	_, _, _, err = m.pageRange(peer, "different-method", &ipc.PageRequest{PageSize: 1, PageToken: token}, m.store.Read(), 3)
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
-	restarted, err := NewClientRPCMutations(m.store)
+	restarted, err := NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 	if err != nil {
 		t.Fatal(err)
 	}
 	restarted.now = m.now
 	_, err = restarted.listProfilesAs(peer, &ipc.ListProfilesRequest{Page: &ipc.PageRequest{PageSize: 1, PageToken: token}})
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	fresh, err := restarted.listProfilesAs(peer, &ipc.ListProfilesRequest{Page: &ipc.PageRequest{PageSize: 500}})
+	if err != nil || len(fresh.GetProfiles()) != 3 {
+		t.Fatal("restart discarded persisted profiles instead of only expiring the cursor")
+	}
 	now = now.Add(5 * time.Minute)
 	_, err = m.listProfilesAs(peer, &ipc.ListProfilesRequest{Page: &ipc.PageRequest{PageSize: 1, PageToken: token}})
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)

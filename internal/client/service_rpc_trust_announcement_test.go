@@ -73,7 +73,7 @@ func TestRPCTrustAnnouncementCheckpointAndRejections(t *testing.T) {
 				t.Fatal(err)
 			}
 			if scenario == "cancel" {
-				m, err = NewClientRPCMutations(m.store)
+				m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 				if err != nil {
 					t.Fatal(err)
 				}
