@@ -1455,66 +1455,6 @@ func TestConnectAgentTunnelConfiguresCachedMapWithoutRendering(t *testing.T) {
 	}
 }
 
-func TestAgentIPCConnectClearsDisconnectedConnectionIntent(t *testing.T) {
-	tmp := t.TempDir()
-	networkMap := signedTestNetworkMap(t, "net-1", "node-1", 7)
-	configPath := filepath.Join(tmp, "client.json")
-	statePath := filepath.Join(tmp, "agent-state.json")
-	if err := client.SaveConfig(configPath, client.Config{
-		ControlPlaneURLs: []string{"https://api.example.test"},
-		PrivateKey:       "private-key",
-		NodeID:           "node-1",
-		NetworkID:        "net-1",
-		NodeCredential:   "node-credential",
-		MapSigningTrust:  testSigningTrustBundle(t, testMapSigningPublicKey(t, networkMap.MapSignature)),
-		MapRevision:      7,
-		CachedMap:        &networkMap,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	wireGuard := &testAgentWireGuard{}
-	syncWake := make(chan struct{}, 1)
-	opts := agentIPCOptions{
-		ConfigPath:     configPath,
-		StateOutput:    statePath,
-		ListenPort:     51820,
-		WireGuard:      wireGuard,
-		SyncForConnect: func() error { return nil },
-		SyncWake:       syncWake,
-	}
-	if err := agentConnectionIntentStore(opts).SetDisconnected("test"); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeAgentFailureSnapshot(statePath, configPath, errors.New("previous control-plane failure")); err != nil {
-		t.Fatal(err)
-	}
-	payload, err := agentIPCHandlers(opts).Connect(context.Background(), ipc.ConnectRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if payload.State != ipc.StateConnected || payload.UserDisconnected {
-		t.Fatalf("connect payload = %#v, want Connected and user_disconnected=false", payload)
-	}
-	if wireGuard.configureCalls != 1 {
-		t.Fatalf("wireguard-go configure calls = %d, want 1", wireGuard.configureCalls)
-	}
-	stored, err := client.LoadConfig(configPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.ConnectionIntent != nil {
-		t.Fatalf("connection intent = %#v, want cleared", stored.ConnectionIntent)
-	}
-	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
-		t.Fatalf("stale agent snapshot stat error = %v, want absent", err)
-	}
-	select {
-	case <-syncWake:
-	default:
-		t.Fatal("successful connect did not wake the background agent")
-	}
-}
-
 func TestAgentIPCLocalForgetCompletesWithoutRemoteCleanup(t *testing.T) {
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "client.json")

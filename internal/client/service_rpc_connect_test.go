@@ -86,6 +86,12 @@ func rpcConnectFixture(t *testing.T) (*ClientRPCMutations, local.Peer, *ipc.Prof
 func TestRPCConnectDurabilityAndFailure(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		m, peer, profile := rpcConnectFixture(t)
+		if err := m.store.Update(func(cfg *Config) error {
+			cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "user_disconnect"}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
 		r := &ipc.ConnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}
 		op, err := m.connectAs(peer, r)
 		if err != nil {
@@ -94,6 +100,10 @@ func TestRPCConnectDurabilityAndFailure(t *testing.T) {
 		if op.State != ipc.OperationState_OPERATION_STATE_PENDING || m.store.Read().ConnectionIntent.DesiredState != ConnectionIntentDesiredConnected {
 			t.Fatal("acceptance did not persist connected intent")
 		}
+		snapshot, err := m.snapshotAs(peer, nil)
+		if err != nil || snapshot.Status.UserDisconnected || snapshot.Status.GetIntent().GetDesiredState() != ipc.DesiredState_DESIRED_STATE_CONNECTED || snapshot.Status.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED {
+			t.Fatal("pending connect retained disconnect intent or claimed applied connection", err)
+		}
 		retry, err := m.connectAs(peer, r)
 		if err != nil || retry.Id != op.Id {
 			t.Fatal("connect retry was not idempotent", err)
@@ -101,6 +111,10 @@ func TestRPCConnectDurabilityAndFailure(t *testing.T) {
 		starts, stops := 0, 0
 		driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Start: func(context.Context, Config) error {
 			starts++
+			persisted, err := loadConfigFile(m.store.path)
+			if err != nil || persisted.ConnectionIntent == nil || persisted.ConnectionIntent.DesiredState != ConnectionIntentDesiredConnected || persisted.ConnectionIntent.Reason != "user_connect" {
+				t.Fatal("native start preceded durable connect intent", err)
+			}
 			if fail {
 				return errors.New("private apply failure")
 			}
@@ -125,6 +139,17 @@ func TestRPCConnectDurabilityAndFailure(t *testing.T) {
 			}
 		} else if stops != 0 || final.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
 			t.Fatal("successful connect outcome")
+		}
+		persisted, err := loadConfigFile(m.store.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantIntent, wantReason := ConnectionIntentDesiredConnected, "user_connect"
+		if fail {
+			wantIntent, wantReason = ConnectionIntentDesiredDisconnected, "connect_failed"
+		}
+		if persisted.ConnectionIntent == nil || persisted.ConnectionIntent.DesiredState != wantIntent || persisted.ConnectionIntent.Reason != wantReason {
+			t.Fatal("native connect outcome lost durable intent")
 		}
 		if err := m.ReconcileConnect(t.Context(), driver); err != nil || starts != 1 {
 			t.Fatal("completed connect repeated side effects", err)
