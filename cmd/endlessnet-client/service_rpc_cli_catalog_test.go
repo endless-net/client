@@ -50,6 +50,7 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 		args              []string
 		request, response proto.Message
 	}{
+		{"peers", "ListPeers", []string{"--page-size", "2", "--page-token", "opaque-page", "--search", " HOST "}, &ipc.ListPeersRequest{Profile: ref, Page: page, Search: " HOST "}, &ipc.ListPeersResponse{Peers: []*ipc.Peer{{Id: "peer-a", Hostname: "host-a"}}, SnapshotState: ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT, MapRevision: 7, TargetMapRevision: 7, Page: &ipc.PageResponse{NextPageToken: "next"}}},
 		{"networks", "ListNetworks", []string{"--page-size", "2", "--page-token", "opaque-page"}, &ipc.ListNetworksRequest{Profile: ref, Page: page}, &ipc.ListNetworksResponse{}},
 		{"diagnostics", "GetDiagnostics", nil, &ipc.GetDiagnosticsRequest{Profile: ref}, &ipc.GetDiagnosticsResponse{}},
 		{"logs-recent", "ListRecentLogs", []string{"--page-size", "2", "--page-token", "opaque-page"}, &ipc.ListRecentLogsRequest{Profile: ref, Page: page}, &ipc.ListRecentLogsResponse{}},
@@ -64,11 +65,20 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := fixture.Expect(testserver.Step{Method: "GetRuntimeInfo", Request: &ipc.GetRuntimeInfoRequest{}, Responses: []proto.Message{&ipc.GetRuntimeInfoResponse{Runtime: &ipc.RuntimeInfo{Protocol: rpc.Protocol, ContractSha256: rpc.Digest(), InstanceId: "instance"}}}}); err != nil {
-		t.Fatal(err)
+	failures := []struct {
+		command, method string
+		request         proto.Message
+	}{
+		{"diagnostics", "GetDiagnostics", &ipc.GetDiagnosticsRequest{Profile: ref}},
+		{"peers", "ListPeers", &ipc.ListPeersRequest{Profile: ref, Page: &ipc.PageRequest{}}},
 	}
-	if err := fixture.Expect(testserver.Step{Method: "GetDiagnostics", Request: &ipc.GetDiagnosticsRequest{Profile: ref}, Err: rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)}); err != nil {
-		t.Fatal(err)
+	for _, tc := range failures {
+		if err := fixture.Expect(testserver.Step{Method: "GetRuntimeInfo", Request: &ipc.GetRuntimeInfoRequest{}, Responses: []proto.Message{&ipc.GetRuntimeInfoResponse{Runtime: &ipc.RuntimeInfo{Protocol: rpc.Protocol, ContractSha256: rpc.Digest(), InstanceId: "instance"}}}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := fixture.Expect(testserver.Step{Method: tc.method, Request: tc.request, Err: rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	listener, err := local.Listen(endpoint)
 	if err != nil {
@@ -103,22 +113,24 @@ func TestNativeServiceCatalogCommandsUseExactProtobufRequests(t *testing.T) {
 			t.Fatal("incorrect typed response", tc.command, err)
 		}
 	}
-	output, err := captureStdout(t, func() error {
-		return cmdService([]string{"diagnostics", transportFlag, endpoint, "--profile-id", ref.ProfileId, "--timeout", "5s"})
-	})
-	if err == nil || output != "" || rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_UNAVAILABLE {
-		t.Fatal("native failure must be returned without fallback or success output", err)
+	for _, tc := range failures {
+		output, err := captureStdout(t, func() error {
+			return cmdService([]string{tc.command, transportFlag, endpoint, "--profile-id", ref.ProfileId, "--timeout", "5s"})
+		})
+		if err == nil || output != "" || rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_UNAVAILABLE {
+			t.Fatal("native failure must be returned without fallback or success output", tc.command, err)
+		}
 	}
 }
 
 func TestNativeCatalogCLIRejectsMissingContext(t *testing.T) {
-	for _, command := range []string{"networks", "diagnostics", "logs-recent"} {
+	for _, command := range []string{"networks", "peers", "diagnostics", "logs-recent"} {
 		var output bytes.Buffer
 		if err := cmdServiceRPCQuery(command, nil, &output); err == nil || output.Len() != 0 {
 			t.Fatal("missing profile accepted", command)
 		}
 	}
-	for _, command := range []string{"networks", "logs-recent"} {
+	for _, command := range []string{"networks", "peers", "logs-recent"} {
 		var output bytes.Buffer
 		if err := cmdServiceRPCQuery(command, []string{"--profile-id", "profile-a", "--page-size", "501"}, &output); err == nil {
 			t.Fatal("unbounded page accepted")

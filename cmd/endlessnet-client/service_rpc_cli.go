@@ -45,15 +45,19 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	timeoutValue := fs.String("timeout", "30s", "maximum time for native service RPC")
 	var operationID, requestID string
 	var profileID string
-	if command == "server-identity" || command == "networks" || command == "diagnostics" || command == "logs-recent" {
+	if command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent" {
 		fs.StringVar(&profileID, "profile-id", "", "required target profile")
 	}
 	var wait bool
 	var pageSize uint
 	var pageToken string
-	if command == "profiles" || command == "networks" || command == "logs-recent" {
+	if command == "profiles" || command == "networks" || command == "peers" || command == "logs-recent" {
 		fs.UintVar(&pageSize, "page-size", 0, "page size; 0 uses 100, maximum 500")
 		fs.StringVar(&pageToken, "page-token", "", "opaque token from the previous page")
+	}
+	var search string
+	if command == "peers" {
+		fs.StringVar(&search, "search", "", "filter peers by ID, hostname or overlay address")
 	}
 	if command == "operation" {
 		fs.BoolVar(&wait, "wait", false, "emit operation changes until terminal state or timeout; never repeat the mutation")
@@ -66,7 +70,7 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("service %s does not accept positional arguments", command)
 	}
-	if (command == "server-identity" || command == "networks" || command == "diagnostics" || command == "logs-recent") && strings.TrimSpace(profileID) == "" {
+	if (command == "server-identity" || command == "networks" || command == "peers" || command == "diagnostics" || command == "logs-recent") && strings.TrimSpace(profileID) == "" {
 		return fmt.Errorf("--profile-id is required")
 	}
 	if pageSize > 500 {
@@ -106,6 +110,12 @@ func cmdServiceRPCQuery(command string, args []string, output io.Writer) error {
 	}
 	var message proto.Message
 	switch command {
+	case "peers":
+		response, err := consumer.ListPeers(ctx, connect.NewRequest(&ipc.ListPeersRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}, Search: search, Page: &ipc.PageRequest{PageSize: uint32(pageSize), PageToken: pageToken}}))
+		if err != nil {
+			return err
+		}
+		message = response.Msg
 	case "networks":
 		response, err := consumer.ListNetworks(ctx, connect.NewRequest(&ipc.ListNetworksRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}, Page: &ipc.PageRequest{PageSize: uint32(pageSize), PageToken: pageToken}}))
 		if err != nil {

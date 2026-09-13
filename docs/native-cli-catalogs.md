@@ -1,5 +1,13 @@
 # Native CLI catalogs and diagnostics
 
+`service peers --profile-id <id>` calls native ListPeers with optional `--search`,
+`--page-size` and `--page-token`. It preserves the producer's map revision,
+snapshot state and cursor in protobuf JSON; it does not flatten peers into an old
+status envelope or automatically merge pages. The strict local transport fixture
+checks the exact profile/search/page request and a nonempty typed peer response.
+Real provider boundaries and pending acceptance are described in
+[Native peer catalog](native-peer-catalog.md).
+
 `service networks`, `diagnostics` and `logs-recent` now call ListNetworks,
 GetDiagnostics and ListRecentLogs through native bootstrap and local RPC. Each
 requires `--profile-id`; networks/logs accept `--page-size` (maximum 500) and an
