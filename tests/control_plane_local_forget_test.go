@@ -68,7 +68,13 @@ func TestControlPlaneLogoutRetryAfterControlRecovery(t *testing.T) {
 	if !proto.Equal(replay.Operation, failed) {
 		t.Fatal("exact logout replay retried or changed its failed outcome")
 	}
-	n.AwaitNativeStatus(retained)
+	// Restoring the fixture's HTTP availability is not yet a published client
+	// recovery observation. Submit the fresh user attempt only after that
+	// transition, while retaining the original enrollment. Do not retry logout
+	// admission automatically or reuse the terminal failed request as new work.
+	n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return retained(v) && v.ControlState == ipc.ControlState_CONTROL_STATE_READY
+	})
 	completed, _ := nativeLogoutAttempt(t, n, "00000000-0000-4000-8000-000000000002")
 	if completed.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || completed.GetCleanup().GetOutcome() != ipc.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_CONFIRMED || !completed.GetCleanup().GetLocalRegistrationRemoved() {
 		t.Fatal("new logout attempt did not confirm remote and local cleanup")
