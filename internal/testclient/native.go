@@ -92,14 +92,20 @@ func (n *Node) AwaitNativeOperation(id string) *ipc.Operation {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var op *ipc.Operation
+	var lastErr error
 	if err := Await(ctx, func() bool {
 		response := &ipc.GetOperationResponse{}
-		if n.NativeService("operation", response, "--operation-id", id, "--timeout", "1s") != nil {
+		lastErr = n.NativeService("operation", response, "--operation-id", id, "--timeout", "1s")
+		if lastErr != nil {
 			return false
 		}
 		op = response.Operation
 		return op != nil && (op.State == ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.State == ipc.OperationState_OPERATION_STATE_FAILED || op.State == ipc.OperationState_OPERATION_STATE_CANCELLED)
 	}); err != nil {
+		// Last successful observation may be stale if the final read failed.
+		// Never include operation/profile IDs or free-form failure details.
+		n.t.Logf("native operation last observation: present=%t kind=%d state=%d failure=%d last_read_error=%v",
+			op != nil, op.GetKind(), op.GetState(), op.GetFailure().GetCode(), lastErr)
 		n.t.Fatal("native operation did not finish")
 	}
 	return op
