@@ -83,9 +83,13 @@ failure and TTL checks remain in native component tests. The process scenario is
 compiled but skipped by local short verification; CI execution is still required.
 The shared test harness now waits for native runtime-info at startup and exposes
 strict protobuf helpers without converting responses to HTTP DTOs.
-Legacy diagnostics DTO removal still requires test conversion in
-tests/control_plane_test.go. These references do
-not keep the removed HTTP runtime handlers alive. Standalone headless diagnostic
+The remaining control-plane lifecycle and cached-DNS projection scenarios now use
+native diagnostics/status and terminal operation waits. Stream cursor recovery,
+map changes, outage retry without re-enrollment, disconnect/restart and logout
+cleanup checks are retained. Legacy diagnostics and bundle Go DTOs are removed
+from ipc/v2/contract.go; the rest of the retired IPC package/specification still
+requires cutover. These process scenarios are compiled, not run by local short
+verification. Standalone headless diagnostic
 output remains separate from service IPC. UI and
 installed-service acceptance remain open; transport unit evidence does not prove these.
 

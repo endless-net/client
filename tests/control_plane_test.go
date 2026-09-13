@@ -10,6 +10,7 @@ import (
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 	wg "github.com/endless-net/client-api/clientapi/wireguard"
+	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	ipc "github.com/endless-net/client/ipc/v2"
@@ -283,7 +284,7 @@ func update(t *testing.T, s *testcontrol.Server, id string, edit func(*api.Netwo
 	}
 }
 func TestControlPlaneLifecycle(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	private, err := wg.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
@@ -295,11 +296,13 @@ func TestControlPlaneLifecycle(t *testing.T) {
 	update(t, s, id, func(m *api.NetworkMapSnapshot) {
 		m.Peers = []api.Peer{{ID: "test-peer", Hostname: "peer", PublicKey: public, AllowedIPs: []string{"100.90.0.20/32"}, ACLRestricted: true, ACLGrants: []api.ACLGrant{{DestinationCIDRs: []string{"100.90.0.20/32"}, AllowedPorts: []api.ACLPort{{Protocol: "tcp", Port: 443}}}}}}
 	})
-	status := n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.PeerCount == 1 && v.MapRevision >= 2 })
-	var diagnostics ipc.DiagnosticsResponse
-	n.Service("diagnostics", &diagnostics)
-	if diagnostics.Diagnostics.RouteSummary == nil || diagnostics.Diagnostics.RouteSummary.PeerCount != 1 {
-		t.Fatal("route projection did not reach IPC diagnostics")
+	status := n.AwaitNativeStatus(func(v *native.Status) bool { return v.PeerCount == 1 && v.MapRevision >= 2 })
+	diagnostics := &native.GetDiagnosticsResponse{}
+	if err := n.NativeService("diagnostics", diagnostics, "--profile-id", status.ActiveProfileId); err != nil {
+		t.Fatal(err)
+	}
+	if diagnostics.Diagnostics == nil || len(diagnostics.Diagnostics.Peers) != 1 || diagnostics.Diagnostics.Peers[0].Id != "test-peer" {
+		t.Fatal("verified peer projection did not reach native diagnostics")
 	}
 	before := len(s.Events())
 	s.BreakStreams()
@@ -313,14 +316,13 @@ func TestControlPlaneLifecycle(t *testing.T) {
 		}
 		return false
 	}); err != nil {
-		n.Service("diagnostics", &diagnostics)
-		t.Fatalf("client did not reconnect with a saved cursor: errors=%v requests=%d", diagnostics.Diagnostics.LastErrors, len(s.Events())-before)
+		t.Fatalf("client did not reconnect with a saved cursor: requests=%d", len(s.Events())-before)
 	}
 	update(t, s, id, func(m *api.NetworkMapSnapshot) {
 		m.Peers[0].Hostname = "renamed"
 		m.Peers[0].ACLGrants[0].AllowedPorts[0].Port = 8443
 	})
-	n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.MapRevision > status.MapRevision })
+	n.AwaitNativeStatus(func(v *native.Status) bool { return v.MapRevision > status.MapRevision })
 	found := false
 	for _, e := range s.Events()[before:] {
 		if e.Kind == "stream" && e.Cursor.Revision.Network >= status.MapRevision {
@@ -331,7 +333,7 @@ func TestControlPlaneLifecycle(t *testing.T) {
 		t.Fatal("client did not resume with a saved cursor")
 	}
 	s.SetUnavailable(true)
-	n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.State == ipc.StateDegraded })
+	n.AwaitNativeStatus(func(v *native.Status) bool { return v.ControlState == native.ControlState_CONTROL_STATE_DEGRADED })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	requests := len(s.Events())
@@ -340,7 +342,7 @@ func TestControlPlaneLifecycle(t *testing.T) {
 	}
 	s.SetUnavailable(false)
 	update(t, s, id, func(m *api.NetworkMapSnapshot) { m.Peers = nil })
-	n.AwaitStatus(func(v ipc.StatusResponse) bool { return v.PeerCount == 0 && v.MapRevision > status.MapRevision })
+	n.AwaitNativeStatus(func(v *native.Status) bool { return v.PeerCount == 0 && v.MapRevision > status.MapRevision })
 	registrations := 0
 	for _, e := range s.Events() {
 		if e.Kind == "registered" {
@@ -350,17 +352,15 @@ func TestControlPlaneLifecycle(t *testing.T) {
 	if registrations != 1 {
 		t.Fatal("transport recovery repeated enrollment")
 	}
-	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
+	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
 	n.Stop()
 	n.Start()
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+	n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED
 	})
-	var logout ipc.LogoutResponse
-	n.Service("logout", &logout)
-	n.AwaitStatus(func(v ipc.StatusResponse) bool {
-		return !v.NodeCredentialPresent && !v.CachedMapPresent && v.NodeID == ""
+	runNativeControlMutation(t, n, "logout", "00000000-0000-4000-8000-000000000002")
+	n.AwaitNativeStatus(func(v *native.Status) bool {
+		return !v.GetStoredState().GetNodeCredentialPresent() && !v.GetStoredState().GetCachedMapPresent() && v.NodeId == ""
 	})
 }
 
@@ -455,21 +455,25 @@ func TestControlPlanePeerDeltaRecovery(t *testing.T) {
 }
 
 func TestControlPlaneDNSProjection(t *testing.T) {
-	s, n, id := controlScenario(t)
+	s, n, id := nativeControlScenario(t)
 	// Keep system DNS outside this acceptance test. The normal sync command
 	// verifies and caches the map; a disconnected agent exposes its projection.
-	var disconnected ipc.DisconnectResponse
-	n.Service("disconnect", &disconnected)
+	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
 	n.Stop()
 	update(t, s, id, func(m *api.NetworkMapSnapshot) {
 		m.Network.DNS = []string{"1.1.1.1"}
 	})
 	n.MustRun("sync", "--config", n.Config, "--timeout", "1s")
 	n.Start()
-	var diagnostics ipc.DiagnosticsResponse
-	n.Service("diagnostics", &diagnostics)
-	dns := diagnostics.Diagnostics.DNSSummary
-	if dns == nil || len(dns.NetworkDNSServers) != 1 || dns.NetworkDNSServers[0] != "1.1.1.1" {
+	status := n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.NodeId == id && v.UserDisconnected && v.GetStoredState().GetCachedMapValid()
+	})
+	diagnostics := &native.GetDiagnosticsResponse{}
+	if err := n.NativeService("diagnostics", diagnostics, "--profile-id", status.ActiveProfileId); err != nil {
+		t.Fatal(err)
+	}
+	dns := diagnostics.GetDiagnostics().GetDns()
+	if dns == nil || len(dns.Servers) != 1 || dns.Servers[0] != "1.1.1.1" {
 		t.Fatal("DNS projection did not reach IPC diagnostics")
 	}
 }

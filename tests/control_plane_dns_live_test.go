@@ -62,7 +62,7 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 	assertSystemDNSAddress(t, binary, n.Interface, nativeDNSListenerAddress(status), "system-peer-one.scenario.endlessnet", "198.18.97.20")
 	assertSystemDNSNameAbsent(t, binary, nativeDNSListenerAddress(status), "absent-one.scenario.endlessnet")
 
-	runNativeDNSMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
+	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
 	n.AwaitNativeStatus(func(v *native.Status) bool {
 		return v.NodeId == id && v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED
 	})
@@ -73,7 +73,7 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	runNativeDNSMutation(t, n, "connect", "00000000-0000-4000-8000-000000000002")
+	runNativeControlMutation(t, n, "connect", "00000000-0000-4000-8000-000000000002")
 	status = n.AwaitNativeStatus(func(v *native.Status) bool {
 		return nativeDNSMapApplied(v, id, previous) && !v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_CONNECTED
 	})
@@ -173,14 +173,14 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 			}
 		}
 	}
-	runNativeDNSMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
+	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
 	n.AwaitNativeStatus(func(v *native.Status) bool {
 		return v.NodeId == id && v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_DISCONNECTED
 	})
 	for _, transport := range []string{"udp", "tcp"} {
 		assertDNSListenerUnavailable(t, transport, nativeDNSListenerAddress(status))
 	}
-	runNativeDNSMutation(t, n, "connect", "00000000-0000-4000-8000-000000000002")
+	runNativeControlMutation(t, n, "connect", "00000000-0000-4000-8000-000000000002")
 	status = n.AwaitNativeStatus(func(v *native.Status) bool {
 		return nativeDNSMapApplied(v, id, 0) && v.GetStoredState().GetNodeCredentialPresent() &&
 			!v.UserDisconnected && v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_CONNECTED &&
