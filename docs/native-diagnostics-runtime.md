@@ -280,6 +280,16 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The TCP/UDP IPv4/IPv6 dataplane cleanup branch now invokes native logout and
+local-forget with CAS/request metadata and waits for successful terminal cleanup
+operations. It distinguishes confirmed remote deletion from local-only cleanup,
+checks explicit cleared native state and tests exact operation replay after
+restart with the original request/CAS. Existing sessions and both fresh ports
+must stay blocked; provider event counts must not show duplicate registration or
+remote revocation by local-forget. The enclosing traffic fixture still contains
+legacy bootstrap/status/trust observations and is not fully migrated. Local short
+tests compile the guarded branch only; real traffic/restart acceptance needs CI.
+
 The exit-provider scenario now uses native status and current applied-map gates
 for both clients. Withdrawal of the signed default route must block existing
 TCP/UDP sessions as well as fresh exchanges; provider and LAN-policy restarts

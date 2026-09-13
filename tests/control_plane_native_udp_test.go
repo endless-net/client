@@ -14,10 +14,12 @@ import (
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	native "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/testclient"
 	"github.com/endless-net/client/internal/testcontrol"
 	"github.com/endless-net/client/internal/testwireguard"
 	ipc "github.com/endless-net/client/ipc/v2"
+	"google.golang.org/protobuf/proto"
 )
 
 // HC-024/HC-027: the real OS routes application packets into the real Client.
@@ -294,15 +296,20 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	}
 	assertICMP("initial", true)
 	if cleanup != "" {
+		baseline := n.AwaitNativeStatus(func(v *native.Status) bool {
+			return v.NodeId == initial.NodeID && v.ActiveProfileId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
+		})
 		wantDeleted := 1
+		var completed *native.Operation
+		var args []string
 		if cleanup == "local-forget" {
 			output, err := n.ServiceCommand("local-forget")
 			var exit *exec.ExitError
 			if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(output), "local-forget requires --confirm-local-forget") {
 				t.Fatal("unconfirmed local-forget did not fail with the required confirmation diagnostic (output withheld)")
 			}
-			n.AwaitStatus(func(v ipc.StatusResponse) bool {
-				return v.NodeID == initial.NodeID && v.NodeCredentialPresent && v.CachedMapValid && !v.UserDisconnected
+			n.AwaitNativeStatus(func(v *native.Status) bool {
+				return v.NodeId == baseline.NodeId && v.ActiveProfileId == baseline.ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() && !v.UserDisconnected
 			})
 			first("ok")
 			second("ok")
@@ -311,27 +318,36 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			}
 			assertICMP("local-forget-confirmation-required", true)
 			s.SetUnavailable(true)
-			output, err = n.ServiceCommand("local-forget", "--confirm-local-forget")
-			var response ipc.LocalForgetResponse
-			if err != nil || json.Unmarshal(output, &response) != nil || response.Outcome != ipc.LogoutOutcomeRemoteCleanupUnconfirmed {
-				t.Fatal("native local cleanup failed or claimed confirmed remote cleanup (output withheld)")
+			defer s.SetUnavailable(false)
+			current := n.AwaitNativeStatus(func(v *native.Status) bool {
+				return v.NodeId == baseline.NodeId && v.ActiveProfileId == baseline.ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent()
+			})
+			args = append(testclient.NativeMutationArguments("4f110000-0000-4000-8000-000000000001", current), "--confirm-local-forget")
+			response := &native.ForgetLocalEnrollmentResponse{}
+			if n.NativeService("local-forget", response, args...) != nil || response.Operation == nil || response.Operation.Id == "" ||
+				response.Operation.Kind != native.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT || response.Operation.ProfileId != baseline.ActiveProfileId {
+				t.Fatal("native local cleanup did not return its profile-bound operation")
+			}
+			completed = n.AwaitNativeOperation(response.Operation.Id)
+			if completed.State != native.OperationState_OPERATION_STATE_SUCCEEDED || completed.GetCleanup().GetOutcome() != native.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_UNCONFIRMED || !completed.GetCleanup().GetLocalRegistrationRemoved() {
+				t.Fatal("native local cleanup failed or claimed confirmed remote cleanup")
 			}
 			wantDeleted = 0
 		} else {
-			var response ipc.LogoutResponse
-			n.Service("logout", &response)
-			if response.Outcome != ipc.LogoutOutcomeRemoteCleanupConfirmed {
+			completed, args = nativeLogoutAttempt(t, n, "4f110000-0000-4000-8000-000000000002")
+			if completed.State != native.OperationState_OPERATION_STATE_SUCCEEDED || completed.GetCleanup().GetOutcome() != native.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_CONFIRMED || !completed.GetCleanup().GetLocalRegistrationRemoved() {
 				t.Fatal("native logout did not confirm remote cleanup")
 			}
 		}
-		clean := func(v ipc.StatusResponse) bool {
-			return v.NodeID == "" && !v.NodeCredentialPresent && !v.CachedMapPresent && v.PeerCount == 0 && v.UserDisconnected && v.DesiredState == ipc.DesiredDisconnected
+		clean := func(v *native.Status) bool {
+			return nativeCleanupState(v) && v.ActiveProfileId == baseline.ActiveProfileId
 		}
-		n.AwaitStatus(clean)
+		n.AwaitNativeStatus(clean)
 		for range 3 {
 			first("blocked")
 			second("blocked")
-			if fresh("24001") || fresh("24002") {
+			firstOK, secondOK := fresh("24001"), fresh("24002")
+			if firstOK || secondOK {
 				t.Fatal("cleanup retained fresh application access")
 			}
 		}
@@ -339,9 +355,28 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		n.Stop()
 		s.SetUnavailable(false)
 		n.Start()
-		n.AwaitStatus(clean)
-		if fresh("24001") || fresh("24002") {
-			t.Fatal("agent restart restored application access after logout")
+		n.AwaitNativeStatus(clean)
+		var replayed *native.Operation
+		if cleanup == "local-forget" {
+			response := &native.ForgetLocalEnrollmentResponse{}
+			if n.NativeService("local-forget", response, args...) != nil {
+				t.Fatal("native local cleanup replay failed after restart")
+			}
+			replayed = response.Operation
+		} else {
+			response := &native.LogoutResponse{}
+			if n.NativeService("logout", response, args...) != nil {
+				t.Fatal("native logout replay failed after restart")
+			}
+			replayed = response.Operation
+		}
+		if !proto.Equal(completed, replayed) {
+			t.Fatal("native cleanup replay changed the completed operation")
+		}
+		n.AwaitNativeStatus(clean)
+		firstOK, secondOK := fresh("24001"), fresh("24002")
+		if firstOK || secondOK {
+			t.Fatal("agent restart or cleanup replay restored application access")
 		}
 		assertICMP("logout-restart", false)
 		deleted, registered := 0, 0
@@ -349,7 +384,7 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 			if cleanup == "local-forget" && (event.Kind == "deleted" || event.Kind == "logout") {
 				t.Fatal("local cleanup unexpectedly performed remote revocation")
 			}
-			if event.Kind == "deleted" && event.NodeID == initial.NodeID {
+			if event.Kind == "deleted" && event.NodeID == baseline.NodeId {
 				deleted++
 			}
 			if event.Kind == "registered" {
