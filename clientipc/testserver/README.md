@@ -47,6 +47,25 @@ can exercise defensive consumers. Request/response message types are checked
 against the producer descriptor. Undeclared calls return typed UNSUPPORTED;
 there is no default successful mutation.
 
+### Event and access-transition scenarios
+
+For a valid subscription, script exactly one opening `SnapshotEvent` at sequence
+1, then `status_changed`, `operation_changed`, or domain invalidation events with
+increasing sequence numbers and nondecreasing metadata revisions. A repeated
+snapshot belongs in a negative consumer test, not a successful update scenario.
+
+The actual runtime terminates an observer subscription after an ownership claim
+with typed `STALE_STATE`; owner revocation terminates it with `OWNER_REQUIRED`.
+Model these as the first WatchEvents step's terminal error, then enqueue a second
+WatchEvents step beginning at sequence 1 with the new role's snapshot. The consumer
+must explicitly establish a fresh subscription; do not model a role change by
+injecting a second snapshot into the old stream. Assert that revoked private data
+is cleared and that the fresh snapshot is applied before verifying the script.
+
+These scripts test consumer handling of simulated authorization transitions.
+Actual OS identity, runtime ownership enforcement and installed-platform behavior
+remain separate acceptance evidence; the fixture does not implement that policy.
+
 ## Standalone scenario host
 
 Build `./cmd/client-testserver` from the `clientipc` module. Start it with
