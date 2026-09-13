@@ -722,3 +722,13 @@ access, provider input isolation, stable/changed announcements, stale reads,
 sanitized provider failure and empty-profile CLI rejection. TrustServerIdentity
 confirmation/execution and release acceptance remain unfinished; this read does
 not assert that identity recovery is available end to end.
+
+Native trust admission now has a durable private plan holding the confirmed
+origin/key/announcement ID and a keyed binding to the current registration.
+Administrator authorization, active profile, exact origin, complete confirmation,
+valid existing trust and exclusive operation checks precede admission. Acceptance
+does not replace trust or erase credentials; executor-side refetch and exact
+announcement validation are still mandatory. Tests cover invalid/admin rejection,
+unchanged authority, persistence and exact retry/changed-payload conflict. This
+admission is not yet exposed as TrustServerIdentity: the recovery executor and
+worker integration must be completed before the RPC can accept real requests.

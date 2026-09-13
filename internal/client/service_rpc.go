@@ -43,6 +43,7 @@ type ClientRPCState struct {
 	ConnectOperationID    string                              `json:"connect_operation_id,omitempty"`
 	Enrollment            *clientRPCEnrollment                `json:"enrollment,omitempty"`
 	Logout                *clientRPCLogout                    `json:"logout,omitempty"`
+	Trust                 *clientRPCTrust                     `json:"trust,omitempty"`
 }
 
 type clientRPCOperationRecord struct {
