@@ -688,6 +688,14 @@ trust error classification. Native bound-snapshot, control-status and diagnostic
 tests remain the service projection checks. The separately reachable headless
 map-based diagnostics projection has not yet been migrated by this removal.
 
+The diagnostics report's `status` section now uses protobuf JSON for `client.v0.Status`
+instead of the retired status DTO. Report construction uses the native stored-state
+projection without control probes, leaves live connection phase unspecified and
+does not accept snapshots lacking profile binding. Tests decode the emitted JSON
+with the generated message and check offline cache, zero control requests and
+typed encoding failure. The report envelope and raw diagnostic attachments remain
+headless artifacts; the interactive headless `status` command still needs migration.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,

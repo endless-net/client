@@ -60,7 +60,6 @@ func clientConfigErrorCode(err error) string {
 	return cliErrorConfigUnavailable
 }
 
-
 const (
 	cliErrorInvalidTimeout         = "invalid_timeout"
 	cliErrorInvalidRelayTimeout    = "invalid_relay_timeout"
@@ -2895,7 +2894,6 @@ func attachControlAvailability(ctx context.Context, payload map[string]any, serv
 	markControlDegraded(payload)
 }
 
-
 func probeControlReadyz(ctx context.Context, serverURL string) map[string]any {
 	readyURL := strings.TrimRight(strings.TrimSpace(serverURL), "/") + "/client/readyz"
 	control := map[string]any{
@@ -2991,7 +2989,6 @@ func attachAgentStatus(payload map[string]any, snapshot client.AgentSnapshot) {
 	}
 	payload["agent"] = agent
 }
-
 
 func attachLiveWireGuardStatus(payload map[string]any, cfg client.Config, wgInterface string, routeTargets []string, probeRTT bool, timeout time.Duration, relayResult client.RelayDialResult, relayErr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

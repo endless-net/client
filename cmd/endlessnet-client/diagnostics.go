@@ -15,7 +15,9 @@ import (
 	"strings"
 	"time"
 
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
@@ -323,9 +325,14 @@ func diagnosticsPayloadWithAgentState(cfg client.Config, agentState *client.Agen
 		cached.RelayCredential = nil
 		cachedMap = &cached
 	}
-	status := statusPayload(cfg)
+	status := buildAgentRPCStatusWithProbe(context.Background(), agentIPCOptions{}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED, false)
 	if agentState != nil {
-		attachAgentStatus(status, *agentState)
+		attachAgentRPCSnapshot(status, *agentState)
+	}
+	statusJSON, err := protojson.Marshal(status)
+	if err != nil {
+		status = &ipc.Status{Failures: []*ipc.Failure{{Code: ipc.ErrorCode_ERROR_CODE_INTERNAL, ReasonKey: "diagnostic_status_encoding_failed"}}}
+		statusJSON = []byte(`{"failures":[{"code":"ERROR_CODE_INTERNAL","reasonKey":"diagnostic_status_encoding_failed"}]}`)
 	}
 	payload := map[string]any{
 		"generated_at": time.Now().UTC().Format(time.RFC3339),
@@ -338,7 +345,7 @@ func diagnosticsPayloadWithAgentState(cfg client.Config, agentState *client.Agen
 			"target_arch": runtime.GOARCH,
 		},
 		"runtime":     diagnosticsRuntimeInfo(),
-		"status":      status,
+		"status":      json.RawMessage(statusJSON),
 		"last_errors": diagnosticsLastErrors(status, agentState),
 		"config": map[string]any{
 			"control_plane_urls":           append([]string(nil), cfg.ControlPlaneURLs...),
@@ -374,7 +381,7 @@ func diagnosticsRuntimeInfo() map[string]any {
 	}
 }
 
-func diagnosticsLastErrors(status map[string]any, agentState *client.AgentSnapshot) []string {
+func diagnosticsLastErrors(status *ipc.Status, agentState *client.AgentSnapshot) []string {
 	errors := []string{}
 	appendError := func(value string) {
 		value = strings.TrimSpace(value)
@@ -382,16 +389,10 @@ func diagnosticsLastErrors(status map[string]any, agentState *client.AgentSnapsh
 			errors = append(errors, value)
 		}
 	}
-	appendMapError := func(values map[string]any, key string) {
-		if value, ok := values[key]; ok {
-			appendError(fmt.Sprint(value))
-		}
+	for _, failure := range status.GetFailures() {
+		appendError(failure.GetReasonKey())
 	}
-	appendMapError(status, "local_state_error")
-	appendMapError(status, "cached_map_error")
-	if controlStatus, ok := status["control"].(map[string]any); ok {
-		appendMapError(controlStatus, "error")
-	}
+	appendError(status.GetControl().GetFailure().GetReasonKey())
 	if agentState != nil {
 		appendError(agentState.LastError)
 		appendError(agentState.STUN.Error)

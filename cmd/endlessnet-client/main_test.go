@@ -1439,7 +1439,6 @@ func TestUpdatePublishedEndpointRetriesUnconfirmedHTTP200(t *testing.T) {
 	}
 }
 
-
 func TestCmdUpPersistsPendingEnrollmentWithoutRenderingWireGuard(t *testing.T) {
 	tmp := t.TempDir()
 	setInstallationStateDirForTest(t, filepath.Join(tmp, "installation-state"))
@@ -1654,7 +1653,6 @@ func TestCmdUpBindsExplicitDirectEnrollmentNetwork(t *testing.T) {
 	}
 }
 
-
 func TestAgentOnlineNetworkMapActivatesRestrictedEnrollmentAfterApproval(t *testing.T) {
 	for _, initial := range []string{clientapi.NodeApprovalPending, clientapi.NodeApprovalRejected} {
 		t.Run(initial, func(t *testing.T) {
@@ -1742,8 +1740,6 @@ func TestAgentOnlineNetworkMapActivatesRestrictedEnrollmentAfterApproval(t *test
 		})
 	}
 }
-
-
 
 func TestCmdServiceRenderSystemdWritesArtifacts(t *testing.T) {
 	outputDir := t.TempDir()
@@ -2537,8 +2533,8 @@ func TestDiagnosticsPayloadRedactsSecrets(t *testing.T) {
 	if !ok || strings.TrimSpace(fmt.Sprint(osInfo["name"])) == "" {
 		t.Fatalf("diagnostics OS metadata = %#v", runtimeInfo["os"])
 	}
-	status, ok := payload["status"].(map[string]any)
-	if !ok || status["node_id"] != "node-1" || status["map_revision"] != float64(3) {
+	status := decodeNativeDiagnosticStatus(t, payload)
+	if status.NodeId != "node-1" || status.MapRevision != 3 {
 		t.Fatalf("diagnostics status summary = %#v", payload["status"])
 	}
 	raw, err := json.Marshal(payload)
@@ -2612,8 +2608,8 @@ func TestDiagnosticsPayloadIncludesSupportSummaries(t *testing.T) {
 	if routeSummary["wireguard_route_table"] != "51820" || routeSummary["overlay_ipv6_cidr"] != "fd7a:115c:a1e0::/64" {
 		t.Fatalf("diagnostics route metadata = %#v", routeSummary)
 	}
-	status, ok := payload["status"].(map[string]any)
-	if !ok || status["control_state"] != "ready" || status["map_revision"] != float64(9) {
+	status := decodeNativeDiagnosticStatus(t, payload)
+	if status.ControlState != nativeipc.ControlState_CONTROL_STATE_OFFLINE_CACHE || status.MapRevision != 9 {
 		t.Fatalf("diagnostics status summary = %#v", payload["status"])
 	}
 	if lastErrors, ok := payload["last_errors"].([]string); !ok || len(lastErrors) != 0 {

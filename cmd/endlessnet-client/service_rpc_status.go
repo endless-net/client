@@ -42,6 +42,10 @@ func observeAgentRPCStatus(ctx context.Context, mutations *client.ClientRPCMutat
 }
 
 func buildAgentRPCStatus(ctx context.Context, opts agentIPCOptions, cfg client.Config, phase ipc.ConnectionPhase) *ipc.Status {
+	return buildAgentRPCStatusWithProbe(ctx, opts, cfg, phase, true)
+}
+
+func buildAgentRPCStatusWithProbe(ctx context.Context, opts agentIPCOptions, cfg client.Config, phase ipc.ConnectionPhase, probeControl bool) *ipc.Status {
 	status := &ipc.Status{ServiceState: ipc.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT, ControlState: ipc.ControlState_CONTROL_STATE_NOT_REGISTERED,
 		ConnectionPhase: phase, AccountId: cfg.ActiveAccountID, NodeId: cfg.NodeID, MapRevision: cfg.MapRevision, RouteTable: cfg.WireGuardRouteTable,
 		Agent: &ipc.AgentStatus{SnapshotState: ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_ABSENT},
@@ -139,9 +143,11 @@ func buildAgentRPCStatus(ctx context.Context, opts agentIPCOptions, cfg client.C
 		status.ControlState = ipc.ControlState_CONTROL_STATE_OFFLINE_CACHE // A verified cache is not a live probe.
 	}
 	if status.NodeId != "" {
-		probeCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
-		status.Control = probeAgentRPCControl(probeCtx, cfg.ControlURLs())
-		cancel()
+		if probeControl {
+			probeCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
+			status.Control = probeAgentRPCControl(probeCtx, cfg.ControlURLs())
+			cancel()
+		}
 		if status.Control != nil {
 			if status.Control.Ok && status.StoredState.CachedMapValid {
 				status.ControlState = ipc.ControlState_CONTROL_STATE_READY

@@ -340,11 +340,6 @@ func agentServiceIPCConfigStore(opts agentIPCOptions) (*client.ConfigStore, erro
 	return client.OpenConfigStore(opts.ConfigPath)
 }
 
-
-
-
-
-
 func downAgentWireGuard(ctx context.Context, opts agentIPCOptions) (client.WireGuardApplyResult, error) {
 	if opts.WireGuard == nil {
 		return client.WireGuardApplyResult{Method: "wireguard-go"}, errors.New("wireguard-go engine is not initialized")
@@ -353,7 +348,6 @@ func downAgentWireGuard(ctx context.Context, opts agentIPCOptions) (client.WireG
 }
 
 const serverMapSigningTrustChangedError = "server map signing trust changed"
-
 
 func loadAgentSnapshotIfAvailable(path string) *client.AgentSnapshot {
 	if strings.TrimSpace(path) == "" {
@@ -365,8 +359,6 @@ func loadAgentSnapshotIfAvailable(path string) *client.AgentSnapshot {
 	}
 	return &loaded
 }
-
-
 
 func serviceStateFromControlState(controlState ipc.ControlState, cachedMapInvalid bool) ipc.ServiceState {
 	if cachedMapInvalid {
