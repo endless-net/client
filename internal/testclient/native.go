@@ -28,6 +28,23 @@ func (n *Node) NativeService(operation string, target proto.Message, options ...
 
 var nativeMutationFailureSuffix = regexp.MustCompile(`^; inspect service operation --request-id [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12} using the same endpoint before deciding whether to retry$`)
 
+type nativeServiceFailure struct {
+	operation string
+	transport connect.Code
+	failure   ipc.ErrorCode
+}
+
+func (e *nativeServiceFailure) Error() string {
+	return fmt.Sprintf("native service %s failed (transport=%d failure=%d; output withheld)", e.operation, e.transport, e.failure)
+}
+
+// IsNativeStaleState recognizes only a canonical, classified CAS rejection,
+// never an arbitrary subprocess message or an uncertain transport failure.
+func IsNativeStaleState(err error) bool {
+	var failure *nativeServiceFailure
+	return errors.As(err, &failure) && failure.transport == connect.CodeFailedPrecondition && failure.failure == ipc.ErrorCode_ERROR_CODE_STALE_STATE
+}
+
 // NativeServiceCommandError recognizes only the complete canonical typed failure line emitted by the CLI,
 // optionally inside its exact mutation-outcome lookup hint. Never retain the request ID.
 // Never retain subprocess output or infer a code from a substring in diagnostics.
@@ -44,7 +61,7 @@ func NativeServiceCommandError(operation string, output []byte) error {
 			for number := range ipc.ErrorCode_name {
 				failure := ipc.ErrorCode(number)
 				if number != 0 && line == rpc.Error(code, failure).Error() {
-					return fmt.Errorf("native service %s failed (transport=%d failure=%d; output withheld)", operation, code, failure)
+					return &nativeServiceFailure{operation: operation, transport: code, failure: failure}
 				}
 			}
 		}

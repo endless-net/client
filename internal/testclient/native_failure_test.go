@@ -49,3 +49,19 @@ func TestNativeMutationFailureEnvelopeIsExactAndRedacted(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeStaleStateRequiresCanonicalClassifiedRejection(t *testing.T) {
+	stale := NativeServiceCommandError("trust-server", []byte(rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE).Error()))
+	if !IsNativeStaleState(stale) || !IsNativeStaleState(fmt.Errorf("wrapped: %w", stale)) {
+		t.Fatal("classified stale state was lost")
+	}
+	for _, err := range []error{nil, fmt.Errorf("%s", stale),
+		NativeServiceCommandError("trust-server", []byte(rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_STALE_STATE).Error())),
+		NativeServiceCommandError("trust-server", []byte(rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY).Error())),
+		NativeServiceCommandError("trust-server", []byte("private "+rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE).Error())),
+	} {
+		if IsNativeStaleState(err) {
+			t.Fatal("uncertain or non-CAS failure was treated as a stale rejection")
+		}
+	}
+}

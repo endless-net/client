@@ -512,7 +512,13 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	identity := func() *native.ServerIdentity {
 		t.Helper()
 		response := &native.GetServerIdentityResponse{}
-		err := n.NativeService("server-identity", response, "--profile-id", trustBaseline.ActiveProfileId)
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			err = n.NativeService("server-identity", response, "--profile-id", trustBaseline.ActiveProfileId)
+			if !testclient.IsNativeStaleState(err) {
+				break
+			}
+		}
 		if err != nil || response.Identity == nil || response.Identity.ControlOrigin != s.URL() || len(response.Identity.AnnouncementId) != 64 {
 			// NativeService returns fixed/redacted classifications. Only public
 			// shape predicates are logged, never keys, origins or announcements.
@@ -527,10 +533,24 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		current := n.AwaitNativeStatus(func(v *native.Status) bool {
 			return v.NodeId == initial.NodeId && v.ActiveProfileId == trustBaseline.ActiveProfileId
 		})
-		args := append(testclient.NativeMutationArguments(requestID, current), "--confirmed-control-origin", announced.ControlOrigin,
-			"--confirmed-key-id", key, "--confirmed-announcement-id", announced.AnnouncementId)
 		response := &native.TrustServerIdentityResponse{}
-		err := n.NativeService("trust-server", response, args...)
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			args := append(testclient.NativeMutationArguments(requestID, current), "--confirmed-control-origin", announced.ControlOrigin,
+				"--confirmed-key-id", key, "--confirmed-announcement-id", announced.AnnouncementId)
+			err = n.NativeService("trust-server", response, args...)
+			if !testclient.IsNativeStaleState(err) || attempt == 2 {
+				break
+			}
+			// A definitive CAS rejection accepted no operation. Refresh only
+			// its precondition, never the request ID or confirmed trust tuple.
+			refreshedIdentity := identity()
+			refreshed := &native.GetStatusResponse{}
+			if n.NativeService("status", refreshed) != nil || !nativeTrustRetryContextMatches(current, refreshed.Status, announced, refreshedIdentity) {
+				t.Fatal("native trust confirmation context changed after CAS rejection")
+			}
+			current = refreshed.Status
+		}
 		if err != nil || response.GetOperation().GetId() == "" || response.Operation.Kind != native.OperationKind_OPERATION_KIND_TRUST_SERVER_IDENTITY || response.Operation.ProfileId != trustBaseline.ActiveProfileId {
 			// NativeService errors contain only canonical numeric failure codes
 			// or fixed classification text; never log announcement or identity data.
