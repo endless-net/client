@@ -87,6 +87,14 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	initial := n.AwaitNativeStatus(func(v *native.Status) bool {
 		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
 	})
+	// Enrollment/bootstrap traffic does not establish durable native intent.
+	// Outage and restart acceptance below require an explicit successful Connect.
+	runNativeControlMutation(t, n, "connect", "5c110000-0000-4000-8000-000000000010")
+	n.AwaitNativeStatus(func(v *native.Status) bool {
+		return v.NodeId == initial.NodeId && v.ActiveProfileId == initial.ActiveProfileId &&
+			v.ConnectionPhase == native.ConnectionPhase_CONNECTION_PHASE_CONNECTED && !v.UserDisconnected &&
+			v.GetIntent().GetDesiredState() == native.DesiredState_DESIRED_STATE_CONNECTED
+	})
 	if ipv6 {
 		// Supply the dual-stack projection through the signed public contract.
 		// The Client must configure its real OS IPv6 address and route itself.
