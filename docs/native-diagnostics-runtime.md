@@ -185,6 +185,15 @@ agent, previous/mismatched agent snapshots, disconnected phase and ERROR or
 unspecified control state. These checks do not prove OS resolver application;
 the DNS process/wire scenarios still require isolated CI execution.
 
+The native host now includes the executable's commit and build date alongside its
+version in BuildIdentity. Previously these fields were lost at host construction.
+The local-host short test checks version/commit/date/platform/architecture through
+Bootstrap, CLI runtime-info and CLI support-info. The process negotiation scenario's
+build check now reads native runtime-info and checks the CI source commit, native
+target and exact protocol/version/descriptor digest. Its old range-negotiation
+probes are still pending replacement; this partial migration is not successful
+execution of that guarded scenario or installed-artifact pairing evidence.
+
 The agent now configures GetDiagnostics from engine Inspection and local interface
 inspection. The native handler combines those observations with the current native
 status, build/runtime metadata and profile-scoped transition log window. No HTTP

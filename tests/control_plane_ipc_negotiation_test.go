@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/endless-net/client/clientipc/rpc"
+	native "github.com/endless-net/client/clientipc/v0"
 	ipc "github.com/endless-net/client/ipc/v2"
 )
 
@@ -30,9 +32,17 @@ func TestControlPlaneIPCNegotiation(t *testing.T) {
 	}
 	assertBuildIdentity := func() {
 		t.Helper()
-		status, err := n.Status()
-		if err != nil || status.ServiceCommit != expectedCommit {
+		response := &native.GetRuntimeInfoResponse{}
+		if err := n.NativeService("runtime-info", response); err != nil {
+			t.Fatal(err)
+		}
+		info := response.GetRuntime()
+		platform := map[string]native.Platform{"windows": native.Platform_PLATFORM_WINDOWS, "darwin": native.Platform_PLATFORM_MACOS, "linux": native.Platform_PLATFORM_LINUX}[runtime.GOOS]
+		if info.GetBuild().GetCommit() != expectedCommit || info.GetBuild().GetArchitecture() != runtime.GOARCH || info.GetBuild().GetPlatform() != platform {
 			t.Fatal("running agent IPC build identity does not match the CI source")
+		}
+		if info.GetInstanceId() == "" || info.GetProtocol() != rpc.Protocol || info.GetIpcVersion() != rpc.Version || info.GetContractSha256() != rpc.Digest() {
+			t.Fatal("running agent exposed a mismatched native contract")
 		}
 	}
 	assertBuildIdentity()

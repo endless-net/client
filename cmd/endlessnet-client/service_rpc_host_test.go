@@ -63,9 +63,18 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	defer consumer.Close()
 	requestCtx, cancelRequest := context.WithTimeout(ctx, 5*time.Second)
 	defer cancelRequest()
-	if _, err := consumer.Bootstrap(requestCtx); err != nil {
+	bootstrapInfo, err := consumer.Bootstrap(requestCtx)
+	if err != nil {
 		t.Fatal("agent did not expose native bootstrap", err)
 	}
+	assertBuild := func(build *ipc.BuildIdentity) {
+		t.Helper()
+		platform := map[string]ipc.Platform{"windows": ipc.Platform_PLATFORM_WINDOWS, "linux": ipc.Platform_PLATFORM_LINUX, "darwin": ipc.Platform_PLATFORM_MACOS}[runtime.GOOS]
+		if build == nil || build.Version != version || build.Commit != commit || build.BuildDate != buildDate || build.Architecture != runtime.GOARCH || build.Platform != platform {
+			t.Fatal("native host lost the executable build identity")
+		}
+	}
+	assertBuild(bootstrapInfo.Build)
 	publishAgentRPCObservation(requestCtx, mutations, opts, ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED)
 	observed, err := consumer.GetStatus(requestCtx, connect.NewRequest(&ipc.GetStatusRequest{}))
 	if err != nil || observed.Msg.Status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED {
@@ -86,6 +95,12 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 		}
 		if err := protojson.Unmarshal([]byte(output), response); err != nil {
 			t.Fatal("CLI response does not follow native protobuf JSON", command, err)
+		}
+		switch response := response.(type) {
+		case *ipc.GetRuntimeInfoResponse:
+			assertBuild(response.GetRuntime().GetBuild())
+		case *ipc.GetSupportInfoResponse:
+			assertBuild(response.GetInfo().GetRuntime())
 		}
 	}
 	eventOutput, err := captureStdout(t, func() error {

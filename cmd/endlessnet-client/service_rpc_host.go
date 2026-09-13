@@ -37,7 +37,7 @@ func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agent
 	if err != nil {
 		return nil, nil, err
 	}
-	service := client.NewClientRPCService(mutations, &ipc.BuildIdentity{Version: version})
+	service := client.NewClientRPCService(mutations, &ipc.BuildIdentity{Version: version, Commit: commit, BuildDate: buildDate})
 	service.ServerIdentityProvider = agentRPCServerIdentity
 	service.TrustRecoveryProvider = agentRPCTrustRecovery
 	service.NetworksProvider = agentRPCNetworks
