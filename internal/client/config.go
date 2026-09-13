@@ -163,6 +163,10 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 }
 
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	return writeFileAtomicSecured(path, data, perm, nil)
+}
+
+func writeFileAtomicSecured(path string, data []byte, perm os.FileMode, secure func(string) error) error {
 	dir := filepath.Dir(path)
 	name := filepath.Base(path)
 	cleanupStaleAtomicTempFiles(dir, name, atomicTempFileMaxAge)
@@ -180,6 +184,12 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 			_ = os.Remove(tmpPath)
 		}
 	}()
+	if secure != nil {
+		if err := secure(tmpPath); err != nil {
+			_ = file.Close()
+			return err
+		}
+	}
 	if _, err := file.Write(data); err != nil {
 		_ = file.Close()
 		return err

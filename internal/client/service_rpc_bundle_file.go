@@ -8,7 +8,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"runtime"
 	"sort"
 	"time"
 
@@ -40,7 +39,7 @@ func openClientRPCBundleStore(path string, now func() time.Time) (*clientRPCBund
 	}
 	if err == nil {
 		if !info.Mode().IsRegular() || info.Size() > rpcBundleFileMaxBytes ||
-			(runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
+			!diagnosticsFilePermissionsSecure(path, info) {
 			return nil, errors.New("unsafe bundle state file")
 		}
 		file, openErr := os.Open(path)
@@ -82,7 +81,7 @@ func openClientRPCBundleStore(path string, now func() time.Time) (*clientRPCBund
 		if len(raw) > rpcBundleFileMaxBytes {
 			return errors.New("bundle state exceeds storage limit")
 		}
-		return WriteFileAtomic(path, raw, 0o600)
+		return writeFileAtomicSecured(path, raw, 0o600, secureDiagnosticsBundleFile)
 	}
 	return s, nil
 }

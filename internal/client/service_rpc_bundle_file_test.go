@@ -85,7 +85,7 @@ func TestRPCBundleFileRejectsCorruption(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := WriteFileAtomic(path, protected, 0o600); err != nil {
+		if err := writeFileAtomicSecured(path, protected, 0o600, secureDiagnosticsBundleFile); err != nil {
 			t.Fatal(err)
 		}
 		store, err := openClientRPCBundleStore(path, nil)
@@ -136,7 +136,7 @@ func TestRPCBundleFileRejectsInvalidRecords(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(t.TempDir(), "bundles.state")
-			if err := WriteFileAtomic(path, raw, 0o600); err != nil {
+			if err := writeFileAtomicSecured(path, raw, 0o600, secureDiagnosticsBundleFile); err != nil {
 				t.Fatal(err)
 			}
 			if store, err := openClientRPCBundleStore(path, s.now); err == nil || store != nil {

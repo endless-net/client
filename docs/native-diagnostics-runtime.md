@@ -25,7 +25,12 @@ atomically persists creation and revocation before publishing changes in memory,
 restores immutable descriptors/bytes after restart, validates hashes, size, TTL,
 identity and capacity, and ignores expired records. Archives stay outside the
 main configuration. Files use mode 0600 and existing machine-DPAPI protection on
-Windows; the integrating runtime must supply a private ACL-protected directory
+Windows. The atomic writer installs a protected Windows DACL for the process user,
+SYSTEM and Administrators on the empty temporary file before writing any payload.
+Restoration rejects unprotected/public ACLs, untrusted owners and reparse points.
+Tests check Everyone-read rejection and protection failure before data write,
+including temporary-file cleanup and preservation of the previous file.
+The integrating runtime must still supply a private ACL-protected directory
 and hold its single-writer agent lock. Tests cover restart, durable revocation,
 expiry, malformed storage and failed-write rollback. The artifact commits before
 the atomic operation result. Short tests recreate the coordinator and file store
