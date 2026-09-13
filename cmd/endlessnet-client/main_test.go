@@ -2722,42 +2722,6 @@ func TestServiceEnrollViaIPCSendsEnrollmentRequest(t *testing.T) {
 	}
 }
 
-func TestCmdServiceEnrollAllowsNoTokenBeforeIPC(t *testing.T) {
-	var got ipc.EnrollRequest
-	server := httptest.NewServer(client.NewServiceIPCHandler(client.ServiceIPCHandlers{
-		Enroll: func(ctx context.Context, req ipc.EnrollRequest) (ipc.EnrollResponse, error) {
-			got = req
-			return ipc.EnrollResponse{StatusResponse: ipc.StatusResponse{State: ipc.StateNeedsEnrollment}}, nil
-		},
-	}))
-	defer server.Close()
-	original := newServiceIPCClient
-	newServiceIPCClient = func(pipe string) *ipc.Client {
-		if pipe != "test-pipe" {
-			t.Fatalf("service IPC pipe = %q, want test-pipe", pipe)
-		}
-		ipc := ipc.NewClient(server.Client())
-		ipc.BaseURL = server.URL
-		return ipc
-	}
-	defer func() { newServiceIPCClient = original }()
-
-	out, err := captureStdout(t, func() error {
-		return cmdService([]string{"enroll", "--ipc-pipe", "test-pipe", "--server", "https://api.example.test/", "--timeout", "5s"})
-	})
-	if err != nil {
-		t.Fatalf("cmdService enroll failed: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "service enrollment state: NeedsEnrollment") {
-		t.Fatalf("cmdService enroll output = %q", out)
-	}
-	if got.EnrollToken != "" {
-		t.Fatalf("cmdService enroll no-token request sent enroll_token: %#v", got)
-	}
-	if got.Server != "https://api.example.test/" {
-		t.Fatalf("cmdService enroll request server = %#v; request=%#v", got.Server, got)
-	}
-}
 
 func TestCmdServiceIPCCommandsUseServicePipeFacade(t *testing.T) {
 	var selectedNetwork string

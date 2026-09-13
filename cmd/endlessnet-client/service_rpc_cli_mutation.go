@@ -34,6 +34,14 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	instance := fs.String("expected-instance-id", "", "required runtime instance from a fresh snapshot")
 	revision := fs.Uint64("expected-revision", 0, "required state revision from a fresh snapshot")
 	var profile, displayName, controlOrigin string
+	var enrollmentMode, hostname, tokenFile string
+	var browser bool
+	if command == "enroll" {
+		fs.StringVar(&enrollmentMode, "mode", "", "required: workstation, server, subnet-router or interactive")
+		fs.StringVar(&hostname, "hostname", "", "hostname; empty lets runtime select the OS hostname")
+		fs.StringVar(&tokenFile, "enrollment-token-file", "", "read enrollment token from file, or '-' for stdin")
+		fs.BoolVar(&browser, "browser-login", false, "request browser approval")
+	}
 	var confirmed bool
 	if command == "local-forget" {
 		fs.BoolVar(&confirmed, "confirm-local-forget", false, "confirm local cleanup without confirmed remote revocation")
@@ -62,7 +70,7 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	if command == "create-profile" && strings.TrimSpace(controlOrigin) == "" {
 		return fmt.Errorf("--control-origin is required")
 	}
-	if command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" {
+	if command != "connect" && command != "disconnect" && command != "logout" && command != "create-profile" && command != "select-profile" && command != "rename-profile" && command != "remove-profile" && command != "local-forget" && command != "enroll" {
 		return fmt.Errorf("unknown native mutation %q", command)
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)
@@ -72,6 +80,20 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	endpoint, err := nativeServiceEndpoint(*pipe, *socket)
 	if err != nil {
 		return err
+	}
+	var enrollment *ipc.EnrollRequest
+	if command == "enroll" {
+		if browser && tokenFile != "" {
+			return fmt.Errorf("--browser-login and --enrollment-token-file are mutually exclusive")
+		}
+		token, err := secretFlagValue("enrollment-token", "", tokenFile)
+		if err != nil {
+			return err
+		}
+		enrollment, err = nativeCLIEnrollment(enrollmentMode, hostname, token, browser)
+		if err != nil {
+			return err
+		}
 	}
 	consumer, err := local.NewClient(endpoint)
 	if err != nil {
@@ -87,6 +109,13 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 	ref := &ipc.ProfileRef{ProfileId: profile}
 	var message proto.Message
 	switch command {
+	case "enroll":
+		enrollment.Mutation, enrollment.Profile = mutation, ref
+		response, callErr := consumer.Enroll(ctx, connect.NewRequest(enrollment))
+		err = callErr
+		if err == nil {
+			message = response.Msg
+		}
 	case "local-forget":
 		response, callErr := consumer.ForgetLocalEnrollment(ctx, connect.NewRequest(&ipc.ForgetLocalEnrollmentRequest{Mutation: mutation, Profile: ref, Confirmed: confirmed}))
 		err = callErr

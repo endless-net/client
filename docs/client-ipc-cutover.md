@@ -649,3 +649,15 @@ non-administrator must receive PERMISSION_DENIED; an administrator must recover
 terminal cleanup reporting REMOTE_UNCONFIRMED, never confirmed remote revocation.
 Only the host's actual role branch runs locally; privileged cross-platform and
 enrolled-device cleanup acceptance remain separate system-test obligations.
+
+`service enroll` now uses native Enroll with explicit request-ID/CAS/profile,
+`--mode`, optional `--hostname`, and exactly one of `--browser-login` or
+`--enrollment-token-file` (including `-` for stdin). Origin belongs to the profile;
+retired `--server`, `--idempotency-key`, inline token and HTTP-output flags are not
+accepted by this command. Responses expose the operation, not token-bearing
+request data, and no automatic mutation retry is performed. Tests cover all four
+mode encodings, auth oneof round trips, ambiguous auth before file I/O, and
+inactive-profile rejection through native CLI dispatch. Successful real-control
+CLI enrollment remains a system gate. The separate managed enrollment entry point
+still uses its old helper and must be migrated; this change does not remove that
+remaining consumer or claim full enrollment cutover.

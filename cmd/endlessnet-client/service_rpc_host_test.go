@@ -160,6 +160,14 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 		selected = polled.Msg.Operation
 	}
 	created := profileCommand("create-profile", "--display-name", "temporary", "--control-origin", "https://other.example.test")
+	inactiveEnrollment, err := captureStdout(t, func() error {
+		return cmdService([]string{"enroll", transportFlag, endpoint, "--timeout", "5s", "--profile-id", created.ProfileId,
+			"--expected-instance-id", created.Metadata.InstanceId, "--expected-revision", fmt.Sprint(created.Metadata.Revision),
+			"--request-id", "d3e5a9e6-6af0-4f19-b290-e1775b38f095", "--mode", "interactive", "--browser-login"})
+	})
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || inactiveEnrollment != "" {
+		t.Fatal("CLI enrollment bypassed active-profile requirement", err)
+	}
 	renamed := profileCommand("rename-profile", "--profile-id", created.ProfileId, "--display-name", "renamed")
 	if renamed.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
 		t.Fatal("CLI rename failed")

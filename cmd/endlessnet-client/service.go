@@ -26,49 +26,9 @@ func cmdService(args []string) error {
 		return fmt.Errorf("service command requires render-systemd, render-macos, render-windows, enroll, status, runtime-info, support-info, events, operation, profiles, create-profile, select-profile, rename-profile, remove-profile, connect, server-identity, trust-server, disconnect, logout, local-forget, networks, select-network, diagnostics, diagnostics-bundle, or logs-recent")
 	}
 	switch args[0] {
-	case "enroll":
-		fs := flag.NewFlagSet("service enroll", flag.ExitOnError)
-		ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)
-		serverURL := fs.String("server", "", "EndlessNet server URL")
-		joinToken := fs.String("join-token", "", "one-time node join token")
-		joinTokenFile := fs.String("join-token-file", "", "read one-time node join token from this file, or '-' for stdin")
-		mode := fs.String("mode", "", "Windows enrollment mode: workstation, server, or subnet-router")
-		hostname := fs.String("hostname", "", "hostname to register for this device; defaults to the OS hostname")
-		idempotencyKey := fs.String("idempotency-key", "", "registration retry idempotency key")
-		timeoutValue := fs.String("timeout", "2m", "maximum time to wait for service enrollment")
-		jsonOutput := fs.Bool("json", false, "write service enrollment response as JSON")
-		if err := fs.Parse(args[1:]); err != nil {
-			return err
-		}
-		timeout, err := time.ParseDuration(strings.TrimSpace(*timeoutValue))
-		if err != nil || timeout <= 0 {
-			return fmt.Errorf("timeout must be a positive duration")
-		}
-		effectiveJoinToken, err := secretFlagValue("join-token", *joinToken, *joinTokenFile)
-		if err != nil {
-			return err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		payload, err := serviceEnrollViaIPCWithRetry(ctx, newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket), effectiveJoinToken, *serverURL, *mode, *hostname, *idempotencyKey)
-		if err != nil {
-			return err
-		}
-		if *jsonOutput {
-			return json.NewEncoder(os.Stdout).Encode(payload)
-		}
-		state := strings.TrimSpace(string(payload.State))
-		if state == "" || state == "<nil>" {
-			state = "unknown"
-		}
-		fmt.Printf("service enrollment state: %s\n", state)
-		if approvalURL := strings.TrimSpace(payload.ApprovalURL); approvalURL != "" {
-			fmt.Printf("Open this URL to approve the device:\n%s\n", approvalURL)
-		}
-		return nil
 	case "status", "runtime-info", "support-info", "events", "operation", "profiles":
 		return cmdServiceRPCQuery(args[0], args[1:], os.Stdout)
-	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile", "local-forget":
+	case "connect", "disconnect", "logout", "create-profile", "select-profile", "rename-profile", "remove-profile", "local-forget", "enroll":
 		return cmdServiceRPCMutation(args[0], args[1:], os.Stdout)
 	case "server-identity":
 		return cmdServiceIPCRequest(args[0], args[1:], http.MethodGet, ipc.PathServerIdentity, nil, &ipc.ServerIdentityResponse{})
