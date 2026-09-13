@@ -13,6 +13,15 @@ and [system design / IT specifications](https://github.com/endless-net/architect
 
 ## 2026-09-13: native v0 transport and request-validation cutover
 
+The remaining HTTP v2 handler, endpoint registration, request negotiation,
+JSON/NDJSON codecs and response writer were removed as well. No caller outside
+the retired handler tests used them. Direct component tests for peer context,
+owner claim/release and administrator/owner authorization remain while their
+callbacks are migrated. The old DTOs and OpenAPI description are still residue,
+not an HTTP listener or runtime fallback. Native request-validation, authorization,
+event-stream and operation tests described below are the relevant coverage;
+deleting retired-protocol tests does not supply missing runtime acceptance.
+
 The retired HTTP client (`ipc/v2` request/NDJSON client and local dialers) and
 old Windows HTTP pipe listener were removed with their protocol-specific tests.
 Their final external consumer was the stubbed Windows HTTP E2E test, not the
