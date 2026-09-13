@@ -598,7 +598,7 @@ The unused HTTP-v2 Disconnect handler and DTOs are also removed, together with
 its config-reloading offline notification helper. Native Disconnect uses the
 durable operation coordinator; the native driver sends its bounded best-effort
 offline notification only after teardown and does not adopt the response map.
-Headless down retains its separate command workflow. Logout, enrollment and
+Headless down retains its separate command workflow. Enrollment, Connect and
 status legacy adapters still require removal.
 
 The legacy local-forget handler, helper, DTOs and direct-handler test are removed.
@@ -607,6 +607,12 @@ account/network/session registration. The native driver invalidates the old agen
 snapshot only after successful teardown; driver error or an unsuccessful result
 retains it. Snapshot invalidation failures remain best-effort and emit a fixed,
 non-sensitive diagnostic. Installed cleanup evidence remains separate.
+
+The retired Logout handler/DTO and unused recovery-helper result DTO are removed.
+Native host coverage now includes confirmed node/session logout, registration
+cleanup, preserved owner/keys, stale snapshot removal and exact result replay
+without repeated remote cleanup. Remote refusal retains the snapshot until an
+explicit authorized local teardown. Headless logout remains a separate workflow.
 
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded

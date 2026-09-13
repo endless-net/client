@@ -51,27 +51,6 @@ const (
 	ControlStateNeedsLogin            ControlState = "needs_login"
 )
 
-type RecoveryOperation string
-
-const (
-	RecoveryOperationForgetEnrollment RecoveryOperation = "forget_local_enrollment"
-)
-
-type RecoveryOperationOutcome string
-
-const (
-	RecoveryOutcomeAccepted       RecoveryOperationOutcome = "accepted"
-	RecoveryOutcomeAlreadyApplied RecoveryOperationOutcome = "already_applied"
-	RecoveryOutcomeCompleted      RecoveryOperationOutcome = "completed"
-)
-
-type LogoutOutcome string
-
-const (
-	LogoutOutcomeRemoteCleanupConfirmed   LogoutOutcome = "remote_cleanup_confirmed"
-	LogoutOutcomeRemoteCleanupUnconfirmed LogoutOutcome = "remote_cleanup_unconfirmed"
-)
-
 type DesiredState string
 
 const (
@@ -311,22 +290,4 @@ type ConnectResponse struct {
 	NetworkID        string               `json:"network_id,omitempty"`
 	MapRevision      uint64               `json:"map_revision,omitempty"`
 	WireGuard        WireGuardApplyResult `json:"wireguard"`
-}
-
-type LogoutRequest struct{}
-
-type LogoutResponse struct {
-	Metadata
-	State           ServiceState  `json:"state"`
-	ControlState    ControlState  `json:"control_state"`
-	Outcome         LogoutOutcome `json:"outcome"`
-	RemoteRequestID string        `json:"remote_request_id,omitempty"`
-}
-
-type RecoveryHelperResult struct {
-	Metadata
-	Operation RecoveryOperation        `json:"operation"`
-	Outcome   RecoveryOperationOutcome `json:"outcome"`
-	State     ServiceState             `json:"state"`
-	ErrorCode string                   `json:"error_code,omitempty"`
 }

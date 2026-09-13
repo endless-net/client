@@ -23,13 +23,34 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestNativeLogoutFailureThenExplicitLocalForget(t *testing.T) {
+func TestNativeLogoutLifecycle(t *testing.T) {
+	for _, mode := range []string{"confirmed", "remote failure"} {
+		t.Run(mode, func(t *testing.T) { testNativeLogoutLifecycle(t, mode) })
+	}
+}
+
+func testNativeLogoutLifecycle(t *testing.T, mode string) {
+	t.Helper()
 	var remoteCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch && r.URL.Path == "/nodes/node-1/endpoint" {
+			// Teardown may notify a node whose revocation was already confirmed.
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
 		remoteCalls.Add(1)
+		if mode == "confirmed" && r.Method == http.MethodPost && r.URL.Path == "/auth/logout" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			return
+		}
 		if r.Method != http.MethodDelete || r.URL.Path != "/nodes/node-1" {
 			t.Error("unexpected remote cleanup request")
 			http.NotFound(w, r)
+			return
+		}
+		if mode == "confirmed" {
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		writeRecoveryPublicError(t, w, clientapi.ErrorCodeTemporarilyUnavailable, "remote-request-123")
@@ -52,7 +73,8 @@ func TestNativeLogoutFailureThenExplicitLocalForget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opts := agentIPCOptions{ConfigStore: store, OperationMu: &sync.Mutex{}, WireGuard: &testAgentWireGuard{}}
+	statePath := filepath.Join(t.TempDir(), "agent-state.json")
+	opts := agentIPCOptions{ConfigStore: store, StateOutput: statePath, OperationMu: &sync.Mutex{}, WireGuard: &testAgentWireGuard{}}
 	if runtime.GOOS == "windows" {
 		opts.Pipe = endpoint
 	} else {
@@ -107,6 +129,9 @@ func TestNativeLogoutFailureThenExplicitLocalForget(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := store.Read()
+	if err := os.WriteFile(statePath, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	await := func(id string) *ipc.Operation {
 		t.Helper()
 		ticker := time.NewTicker(10 * time.Millisecond)
@@ -134,6 +159,30 @@ func TestNativeLogoutFailureThenExplicitLocalForget(t *testing.T) {
 		t.Fatal(err)
 	}
 	failed := await(accepted.Msg.Operation.Id)
+	if mode == "confirmed" {
+		if failed.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || failed.Kind != ipc.OperationKind_OPERATION_KIND_LOGOUT ||
+			failed.ProfileId != profile.ProfileId || failed.GetCleanup().GetOutcome() != ipc.CleanupOutcome_CLEANUP_OUTCOME_REMOTE_CONFIRMED ||
+			!failed.GetCleanup().GetLocalRegistrationRemoved() {
+			t.Fatal("native logout did not commit confirmed cleanup")
+		}
+		after := store.Read()
+		if after.NodeID != "" || after.NodeCredential != "" || after.Token != "" || after.ActiveAccountID != "" ||
+			after.LocalOwnerID != before.LocalOwnerID || after.PrivateKey != before.PrivateKey || after.IdentityPrivateKey != before.IdentityPrivateKey ||
+			after.ConnectionIntent == nil || after.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected {
+			t.Fatal("confirmed native logout violated cleanup or identity retention")
+		}
+		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+			t.Fatal("confirmed logout retained stale agent snapshot")
+		}
+		replayed, err := consumer.Logout(ctx, connect.NewRequest(request))
+		if err != nil || !proto.Equal(replayed.Msg.GetOperation(), failed) || remoteCalls.Load() != 2 {
+			t.Fatal("confirmed logout replay repeated remote effects or changed result")
+		}
+		return
+	}
+	if _, err := os.Stat(statePath); err != nil {
+		t.Fatal("remote refusal removed agent snapshot before teardown")
+	}
 	if failed.State != ipc.OperationState_OPERATION_STATE_FAILED || failed.Kind != ipc.OperationKind_OPERATION_KIND_LOGOUT ||
 		failed.ProfileId != profile.ProfileId || failed.GetFailure().GetCode() != ipc.ErrorCode_ERROR_CODE_REMOTE_CLEANUP_REQUIRED ||
 		failed.GetFailure().GetControlRequestId() != "remote-request-123" {

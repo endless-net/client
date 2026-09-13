@@ -692,28 +692,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 			requestAgentSync(opts)
 			return payload, nil
 		},
-		Logout: func(ctx context.Context, req ipc.LogoutRequest) (ipc.LogoutResponse, error) {
-			if _, err := downAgentWireGuard(ctx, opts); err != nil {
-				return ipc.LogoutResponse{}, ipc.NewError(http.StatusInternalServerError, "logout_failed", err)
-			}
-			args := []string{"--config", opts.ConfigPath}
-			if strings.TrimSpace(opts.StateOutput) != "" {
-				args = append(args, "--state-output", opts.StateOutput)
-			}
-			if err := cmdLogout(args); err != nil {
-				var remoteErr remoteCleanupError
-				if errors.As(err, &remoteErr) {
-					return ipc.LogoutResponse{}, ipc.NewErrorWithRequestID(http.StatusConflict, ipc.ErrorRemoteCleanupRequired, remoteErr.RequestID, err)
-				}
-				return ipc.LogoutResponse{}, ipc.NewError(http.StatusInternalServerError, "logout_failed", err)
-			}
-			return ipc.LogoutResponse{
-				Metadata:     serviceIPCMetadata(),
-				State:        ipc.StateNeedsEnrollment,
-				ControlState: ipc.ControlStateNotRegistered,
-				Outcome:      ipc.LogoutOutcomeRemoteCleanupConfirmed,
-			}, nil
-		},
 	}
 }
 

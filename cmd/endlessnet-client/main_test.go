@@ -2528,67 +2528,6 @@ func TestCmdLogoutRevokesSessionThroughClientAPI(t *testing.T) {
 	}
 }
 
-func TestAgentIPCLogoutRemovesAgentState(t *testing.T) {
-	tmp := t.TempDir()
-	deleted := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete && r.URL.Path == "/nodes/node-1" {
-			deleted = true
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
-		http.NotFound(w, r)
-	}))
-	defer server.Close()
-
-	configPath := filepath.Join(tmp, "client.json")
-	statePath := filepath.Join(tmp, "agent-state.json")
-	if err := client.SaveConfig(configPath, client.Config{
-		LocalOwnerID:     "uid:1000",
-		ControlPlaneURLs: []string{server.URL},
-		NodeID:           "node-1",
-		NodeCredential:   "credential-1",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(statePath, []byte(`{"node_id":"node-1","network_id":"net-1"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	opts := agentIPCOptions{
-		ConfigPath:  configPath,
-		StateOutput: statePath,
-		WireGuard:   &testAgentWireGuard{},
-	}
-	if err := agentConnectionIntentStore(opts).SetDisconnected("test"); err != nil {
-		t.Fatal(err)
-	}
-
-	payload, err := agentIPCHandlers(opts).Logout(context.Background(), ipc.LogoutRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !deleted {
-		t.Fatal("IPC logout did not delete the server node")
-	}
-	if state := payload.State; state != ipc.StateNeedsEnrollment {
-		t.Fatalf("IPC logout state = %#v, want NeedsEnrollment", state)
-	}
-	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
-		t.Fatalf("agent state stat err = %v, want not exist", err)
-	}
-	stored, err := client.LoadConfig(configPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.ConnectionIntent == nil || stored.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected || stored.ConnectionIntent.Reason != "local_logout" {
-		t.Fatalf("connection intent = %#v, want disconnected local_logout", stored.ConnectionIntent)
-	}
-	if stored.LocalOwnerID != "uid:1000" {
-		t.Fatalf("IPC logout local owner = %q, want preserved", stored.LocalOwnerID)
-	}
-}
-
 func TestSecretFlagValueReadsFileAndRejectsMixedSources(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "join-token.txt")
 	if err := os.WriteFile(path, []byte("  enr_test_secret  \n"), 0o600); err != nil {

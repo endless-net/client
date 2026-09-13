@@ -7,22 +7,20 @@ import (
 )
 
 const (
-	ErrorInvalidJSON              = "invalid_json"
-	ErrorMethodNotAllowed         = "method_not_allowed"
-	ErrorNotImplemented           = "not_implemented"
-	ErrorNotFound                 = "not_found"
-	ErrorRequestTooLarge          = "request_too_large"
-	ErrorRequestFailed            = "request_failed"
-	ErrorResponseTooLarge         = "response_too_large"
-	ErrorUnauthorized             = "unauthorized"
-	ErrorOwnerRequired            = "owner_required"
-	ErrorAdministratorRequired    = "administrator_required"
-	ErrorVersionRequired          = "ipc_version_required"
-	ErrorProtocolUnsupported      = "ipc_protocol_unsupported"
-	ErrorVersionUnsupported       = "ipc_version_unsupported"
-	ErrorInvalidVersionRange      = "invalid_ipc_version_range"
-	ErrorRemoteCleanupRequired    = "remote_cleanup_required"
-	ErrorRecoveryOperationInvalid = "recovery_operation_invalid"
+	ErrorInvalidJSON           = "invalid_json"
+	ErrorMethodNotAllowed      = "method_not_allowed"
+	ErrorNotImplemented        = "not_implemented"
+	ErrorNotFound              = "not_found"
+	ErrorRequestTooLarge       = "request_too_large"
+	ErrorRequestFailed         = "request_failed"
+	ErrorResponseTooLarge      = "response_too_large"
+	ErrorUnauthorized          = "unauthorized"
+	ErrorOwnerRequired         = "owner_required"
+	ErrorAdministratorRequired = "administrator_required"
+	ErrorVersionRequired       = "ipc_version_required"
+	ErrorProtocolUnsupported   = "ipc_protocol_unsupported"
+	ErrorVersionUnsupported    = "ipc_version_unsupported"
+	ErrorInvalidVersionRange   = "invalid_ipc_version_range"
 )
 
 type Error struct {
@@ -30,12 +28,6 @@ type Error struct {
 	Err       error
 	Status    int
 	RequestID string
-}
-
-func NewErrorWithRequestID(status int, code, requestID string, err error) Error {
-	ipcErr := NewError(status, code, err)
-	ipcErr.RequestID = strings.TrimSpace(requestID)
-	return ipcErr
 }
 
 func (e Error) Error() string {
