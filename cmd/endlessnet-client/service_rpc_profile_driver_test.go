@@ -51,30 +51,50 @@ func TestRPCProfileDriverFailsClosed(t *testing.T) {
 }
 
 func TestRPCProfileStopNotifiesOfflineAfterTeardown(t *testing.T) {
-	for _, mode := range []string{"notification", "timeout", "cancelled", "failed-teardown"} {
+	for _, mode := range []string{"success", "notification", "timeout", "cancelled", "failed-teardown"} {
 		t.Run(mode, func(t *testing.T) {
 			var stopped atomic.Bool
 			var requests atomic.Int32
+			var before client.Config
+			var fixture recoveryTestFixture
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests.Add(1)
 				var request api.UpdateNodeEndpointRequest
-				if !stopped.Load() || r.Method != http.MethodPatch || json.NewDecoder(r.Body).Decode(&request) != nil || request.Status != api.NodeStatusOffline {
+				if !stopped.Load() || r.Method != http.MethodPatch || r.URL.Path != "/nodes/"+before.NodeID+"/endpoint" ||
+					r.Header.Get("X-EndlessNet-Node-Credential") != before.NodeCredential ||
+					json.NewDecoder(r.Body).Decode(&request) != nil || request.Status != api.NodeStatusOffline || request.ClientVersion != version {
 					t.Error("offline notification preceded teardown or used an invalid request")
 				}
 				if mode == "timeout" {
 					<-r.Context().Done()
 					return
 				}
+				if mode == "success" {
+					offlineMap := *before.CachedMap
+					offlineMap.Node.Status = api.NodeStatusOffline
+					signature, err := api.SignNetworkMap(fixture.OldSigningKey, offlineMap)
+					if err != nil {
+						t.Error("cannot sign synthetic offline reply")
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
+					offlineMap.MapSignature = signature
+					w.Header().Set("Content-Type", "application/json")
+					if err := json.NewEncoder(w).Encode(offlineMap); err != nil {
+						t.Error("cannot encode synthetic offline reply")
+					}
+					return
+				}
 				// A rejected remote notification must not undo local disconnection.
 				w.WriteHeader(http.StatusForbidden)
 			}))
 			defer server.Close()
-			fixture := newRecoveryTestFixture(t, server.URL)
+			fixture = newRecoveryTestFixture(t, server.URL)
 			store, err := client.OpenConfigStore(fixture.ConfigPath)
 			if err != nil {
 				t.Fatal(err)
 			}
-			before := store.Read()
+			before = store.Read()
 			wg := &testAgentWireGuard{down: func() (client.WireGuardApplyResult, error) {
 				if mode == "failed-teardown" {
 					return client.WireGuardApplyResult{}, errors.New("synthetic teardown failure")
@@ -96,7 +116,11 @@ func TestRPCProfileStopNotifiesOfflineAfterTeardown(t *testing.T) {
 			if (err != nil) != (mode == "failed-teardown") {
 				t.Fatal("remote notification changed local teardown outcome")
 			}
-			if (requests.Load() > 0) != (mode == "notification" || mode == "timeout") {
+			var wantRequests int32
+			if mode == "success" || mode == "notification" || mode == "timeout" {
+				wantRequests = 1
+			}
+			if requests.Load() != wantRequests {
 				t.Fatal("unexpected offline notification admission")
 			}
 			if !reflect.DeepEqual(before, store.Read()) {
