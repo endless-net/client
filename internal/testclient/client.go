@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,7 +16,6 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/testcontrol"
-	ipc "github.com/endless-net/client/ipc/v2"
 )
 
 type Node struct {
@@ -223,140 +221,11 @@ func (n *Node) ServiceCommand(operation string, options ...string) ([]byte, erro
 	return n.runWithin(35*time.Second, append(args, n.ipcArgs()...)...)
 }
 
-func (n *Node) Service(operation string, target any) {
-	n.t.Helper()
-	// Exercise the CLI's published default (30s), rather than imposing a 3s
-	// mutation SLO that was never specified for native OS teardown operations.
-	started := time.Now()
-	out, err := n.ServiceCommand(operation)
-	if err != nil {
-		operationElapsed := time.Since(started).Round(time.Millisecond)
-		category := "unclassified"
-		for _, known := range []string{"context deadline exceeded", "connection refused", "Access is denied", "The pipe is being closed"} {
-			if strings.Contains(string(out), known) {
-				category = known
-				break
-			}
-		}
-		// Preserve the original failure while observing only public IPC. This
-		// distinguishes a still-responsive service from a blocked status path;
-		// neither outcome diagnoses an internal teardown stage by itself.
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		status, statusCategory, statusErr := n.statusWithin(ctx)
-		cancel()
-		if statusErr == nil {
-			n.t.Logf("public status after failed %s: disconnected=%t desired_disconnected=%t credential_present=%t cache_valid=%t wireguard_present=%t wireguard_ok=%t", operation, status.UserDisconnected, status.DesiredState == ipc.DesiredDisconnected, status.NodeCredentialPresent, status.CachedMapValid, status.WireGuard != nil, status.WireGuard != nil && status.WireGuard.OK)
-		} else {
-			n.t.Logf("public status after failed %s unavailable: %s", operation, statusCategory)
-		}
-		// Never print arbitrary CLI output, errors, credentials or file content.
-		n.t.Fatalf("client service %s failed after %s: %s (output withheld)", operation, operationElapsed, category)
-	}
-	if elapsed := time.Since(started); elapsed >= 3*time.Second {
-		n.t.Logf("client service %s completed after %s using the default CLI timeout", operation, elapsed.Round(time.Millisecond))
-	}
-	if err := json.Unmarshal(out, target); err != nil {
-		n.t.Fatalf("invalid %s IPC JSON: %v", operation, err)
-	}
-}
-func (n *Node) Status() (ipc.StatusResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	status, _, err := n.statusWithin(ctx)
-	return status, err
-}
-
-// Only fixed error categories may leave the harness; arbitrary CLI output can
-// contain configuration or credentials and must never be logged.
-func (n *Node) statusWithin(ctx context.Context) (ipc.StatusResponse, string, error) {
-	out, err := n.command(ctx, append([]string{"service", "status", "--timeout", "1s"}, n.ipcArgs()...)...).CombinedOutput()
-	if err != nil {
-		if ctx.Err() != nil {
-			return ipc.StatusResponse{}, "harness context ended", err
-		}
-		category := "unclassified"
-		for _, known := range []string{"context deadline exceeded", "connection refused", "Access is denied", "The pipe is being closed", "The system cannot find the file specified"} {
-			if strings.Contains(string(out), known) {
-				category = known
-				break
-			}
-		}
-		return ipc.StatusResponse{}, category, err
-	}
-	var status ipc.StatusResponse
-	err = json.Unmarshal(out, &status)
-	if err != nil {
-		return status, "invalid public JSON", err
-	}
-	return status, "", nil
-}
-
 func (n *Node) ipcArgs() []string {
 	if runtime.GOOS == "windows" {
 		return []string{"--ipc-pipe", n.Pipe}
 	}
 	return []string{"--ipc-socket", n.Socket}
-}
-func (n *Node) AwaitStatus(match func(ipc.StatusResponse) bool) ipc.StatusResponse {
-	n.t.Helper()
-	return n.awaitStatusWithin(15*time.Second, match)
-}
-
-func (n *Node) awaitStatusWithin(timeout time.Duration, match func(ipc.StatusResponse) bool) ipc.StatusResponse {
-	n.t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	var last ipc.StatusResponse
-	responses, failures := 0, 0
-	lastCategory := "none"
-	errorCategories := make(map[string]int)
-	wireGuardStates := make(map[string]int)
-	err := Await(ctx, func() bool {
-		status, category, err := n.statusWithin(ctx)
-		if err == nil {
-			responses++
-			last = status
-			wireGuardStates[wireGuardInspectionState(status.WireGuard)]++
-			return match(status)
-		}
-		failures++
-		lastCategory = category
-		errorCategories[category]++
-		return false
-	})
-	if err != nil {
-		n.t.Logf("WireGuard inspection states during wait: %v", wireGuardStates)
-		n.logWireGuardStartupStages()
-		exited, exitCode := false, -1
-		select {
-		case processErr := <-n.done:
-			exited = true
-			if processErr == nil {
-				exitCode = 0
-			} else {
-				var exit *exec.ExitError
-				if errors.As(processErr, &exit) {
-					exitCode = exit.ExitCode()
-				}
-			}
-			n.done <- processErr // Preserve the process result for cleanup.
-		default:
-		}
-		wgPresent, wgOK, wgError := last.WireGuard != nil, false, false
-		wgPort, wgPeers := 0, 0
-		if last.WireGuard != nil {
-			wgOK, wgError = last.WireGuard.OK, last.WireGuard.Error != ""
-			wgPort, wgPeers = last.WireGuard.ListenPort, len(last.WireGuard.Peers)
-		}
-		agentPresent, agentError := last.Agent != nil && last.Agent.StatePresent, false
-		agentRevision := uint64(0)
-		if last.Agent != nil {
-			agentError = last.Agent.LastError != ""
-			agentRevision = last.Agent.MapRevision
-		}
-		n.t.Fatalf("client state deadline: responses=%d failures=%d last_ipc_error=%q ipc_error_counts=%v agent_exited=%t exit_code=%d state=%s control=%s desired=%s user_disconnected=%t credential=%t cached_map=%t revision=%d peers=%d overlay_ipv4=%t overlay_ipv6=%t wg_present=%t wg_ok=%t wg_error=%t wg_port=%d wg_peers=%d agent_present=%t agent_error=%t agent_revision=%d", responses, failures, lastCategory, errorCategories, exited, exitCode, last.State, last.ControlState, last.DesiredState, last.UserDisconnected, last.NodeCredentialPresent, last.CachedMapValid, last.MapRevision, last.PeerCount, last.OverlayIP != "", last.OverlayIPv6 != "", wgPresent, wgOK, wgError, wgPort, wgPeers, agentPresent, agentError, agentRevision)
-	}
-	return last
 }
 
 // Collect only fixed public log messages after a failed wait. This separate
@@ -383,27 +252,6 @@ func wireGuardStartupStage(message string) string {
 		return strings.TrimPrefix(message, "WireGuard engine: ")
 	default:
 		return ""
-	}
-}
-
-// Only exact, known public IPC messages become diagnostic labels. Arbitrary
-// error text may contain sensitive context and must not enter test artifacts.
-func wireGuardInspectionState(inspection *ipc.WireGuardInspection) string {
-	if inspection == nil {
-		return "absent"
-	}
-	if inspection.OK {
-		return "ready"
-	}
-	switch inspection.Error {
-	case "wireguard-go is not running":
-		return "not-running"
-	case "wireguard-go operation in progress; inspection unavailable":
-		return "operation-in-progress"
-	case "":
-		return "not-ready"
-	default:
-		return "other-error-withheld"
 	}
 }
 

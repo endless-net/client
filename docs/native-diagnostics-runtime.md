@@ -280,6 +280,14 @@ failed candidate with a replacement token remain checked. Short tests verify
 address selection and compile the scenarios; actual TCP/UDP and restart acceptance
 still require isolated CI on the supported platforms.
 
+The system-test harness no longer exposes legacy `Service`, `Status` or
+`AwaitStatus` helpers, legacy JSON status decoding, or HTTP WireGuard error-string
+classification. Native startup-stage diagnostics and their context-redaction tests
+remain. A local import-boundary test rejects retired `client/ipc` imports in
+`tests` and `internal/testclient`; this guards the migrated consumers, not runtime
+completion. Other runtime/CLI legacy producers and full system acceptance still
+need their own removal/verification evidence.
+
 The enrolled installer upgrade/reinstall/repair scenario now uses native status,
 profile/map-bound tunnel diagnostics and typed connect/disconnect operations with
 request/CAS metadata and terminal-result checks. RuntimeInfo must match the expected
