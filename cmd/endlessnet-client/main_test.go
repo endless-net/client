@@ -1669,44 +1669,6 @@ func TestCmdUpBindsExplicitDirectEnrollmentNetwork(t *testing.T) {
 	}
 }
 
-func TestAgentIPCEnrollPendingReturnsNeedsApprovalWithoutApply(t *testing.T) {
-	tmp := t.TempDir()
-	setInstallationStateDirForTest(t, filepath.Join(tmp, "installation-state"))
-	configPath := filepath.Join(tmp, "client.json")
-	outputPath := filepath.Join(tmp, "endlessnet.conf")
-	mapKey := testMapSigningKey(t)
-	server, _ := testPendingEnrollmentServer(t, mapKey, "enr_pending")
-	defer server.Close()
-
-	wireGuard := &testAgentWireGuard{configure: func(client.Config, clientapi.RegisterNodeResponse) (client.WireGuardApplyResult, error) {
-		return client.WireGuardApplyResult{}, errors.New("wireguard-go configure must not run")
-	}}
-	payloadRaw, err := agentIPCHandlers(agentIPCOptions{
-		ConfigPath: configPath,
-		WireGuard:  wireGuard,
-	}).Enroll(context.Background(), ipc.EnrollRequest{
-		EnrollToken: "enr_pending",
-		Server:      server.URL,
-		Hostname:    "pending-ipc",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payload := payloadRaw
-	if payload.State != ipc.StateNeedsApproval || payload.ControlState != ipc.ControlStatePendingApproval {
-		t.Fatalf("pending IPC enrollment payload = %#v", payload)
-	}
-	if payload.WireGuardApply != nil {
-		t.Fatalf("pending IPC enrollment unexpectedly returned apply result: %#v", payload.WireGuardApply)
-	}
-	if wireGuard.configureCalls != 0 {
-		t.Fatalf("pending IPC enrollment configure calls = %d, want 0", wireGuard.configureCalls)
-	}
-	if _, err := os.Stat(outputPath); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("pending IPC output stat = %v, want absent", err)
-	}
-}
-
 func TestAgentIPCEnrollmentServerPriority(t *testing.T) {
 	t.Run("request", func(t *testing.T) {
 		got, err := agentIPCEnrollmentServer(agentIPCOptions{}, "  https://request.example.test/  ")

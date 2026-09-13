@@ -637,6 +637,12 @@ status retains the actual connected phase separately from degraded control.
 This is in-process provider/driver coverage, not full RPC or installed lifecycle
 acceptance and not permission to combine Enroll and Connect into one operation.
 
+The pending-enrollment direct-handler test is also replaced: native enrollment
+persists verified pending registration to disk, exposes NEEDS_APPROVAL and the
+wait action, and an attempted driver start returns NEEDS_ENROLLMENT without
+Configure or changes to persisted approval state. This provider/driver test does
+not substitute for RPC admission and browser-approval completion coverage.
+
 DNS ephemeral TCP/UDP pair selection retains rejected reservations until the
 bounded search finishes, preventing immediate reuse of the same port excluded
 by the other transport. Deterministic tests cover allocator reuse, exhaustion,
