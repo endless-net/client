@@ -233,25 +233,6 @@ type WireGuardApplyResult struct {
 	RouteError string `json:"route_error,omitempty"`
 }
 
-type NetworkInterfaceStatus struct {
-	Name         string   `json:"name"`
-	Index        int      `json:"index"`
-	MTU          int      `json:"mtu"`
-	Flags        []string `json:"flags,omitempty"`
-	AddressCount int      `json:"address_count"`
-	Addresses    []string `json:"addresses,omitempty"`
-	Prefixes     []string `json:"prefixes,omitempty"`
-	Error        string   `json:"error,omitempty"`
-}
-
-type OverlayCIDRConflict struct {
-	OverlayCIDR   string `json:"overlay_cidr"`
-	LocalPrefix   string `json:"local_prefix"`
-	Interface     string `json:"interface"`
-	AddressFamily string `json:"address_family"`
-	Reason        string `json:"reason"`
-}
-
 type ControlProbe struct {
 	OK         bool           `json:"ok"`
 	URL        string         `json:"url,omitempty"`
@@ -419,11 +400,6 @@ type RecoveryHelperResult struct {
 	Outcome   RecoveryOperationOutcome `json:"outcome"`
 	State     ServiceState             `json:"state"`
 	ErrorCode string                   `json:"error_code,omitempty"`
-}
-
-type LogEntry struct {
-	Timestamp string `json:"timestamp"`
-	Message   string `json:"message"`
 }
 
 type EventsRequest struct{}
