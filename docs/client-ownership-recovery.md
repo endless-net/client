@@ -4,12 +4,19 @@ This repository implements the client side of the recovery protocol defined by
 architecture decision `6cf37091846920e238bef631ef8951d395c084a1`. The public
 control-plane contract now lives in
 `github.com/endless-net/client-api/clientapi/v1`; the local service
-contract is [client IPC v2](client-ipc-v2.openapi.yaml). Neither boundary has a
-legacy text or status-code compatibility path.
+contract is [Client Protobuf v0](client-ipc-protobuf.md). The remaining v2
+callbacks and DTOs are migration residue; they do not define the served native
+wire format or a fallback. See the [runtime gap audit](native-runtime-gap-audit.md)
+and [runner evidence](headless-test-coverage.md) for current implementation limits.
 
 ## Recovery state machine
 
-The service exposes these stable state pairs:
+The following pairs describe internal/retired status vocabulary used by the
+recovery implementation, not v0 response fields. Native consumers use typed
+connection/recovery state, failure and operation messages from
+[runtime.proto](../proto/client/v0/runtime.proto) and
+[common.proto](../proto/client/v0/common.proto); they must not parse these string
+pairs or infer completion from command admission:
 
 | Service state | Control state | Meaning |
 | --- | --- | --- |

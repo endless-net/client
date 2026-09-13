@@ -30,15 +30,19 @@ persistence across restart, and service removal.
 [Control-plane scenario tests](docs/testing-control-plane.md) run the real client
 against an isolated, stateful test server using the pinned Client API contract.
 
-The versioned local service and ownership-recovery contracts are documented in
-[`docs/client-ipc-v2.openapi.yaml`](docs/client-ipc-v2.openapi.yaml) and
-[`docs/client-ownership-recovery.md`](docs/client-ownership-recovery.md).
+The local service contract is Client Protobuf v0. Ownership-recovery behavior is
+described in [`docs/client-ownership-recovery.md`](docs/client-ownership-recovery.md);
+the remaining HTTP v2 sources are migration residue, not a production endpoint.
 
 The accepted Protobuf contract is version **v0**:
 [`proto/client/v0/service.proto`](proto/client/v0/service.proto).
 Its [contract guide and UF-01–UF-23 coverage](docs/client-ipc-protobuf.md)
 define commands, events, ownership, platform applicability and adoption gates.
-The contract is not yet served by the runtime or published as a released IPC artifact.
+The runtime and native CLI serve/consume v0 over local OS transport. This does not
+mean every specified method is implemented: see the
+[runtime gap audit](docs/native-runtime-gap-audit.md) and
+[scoped runner evidence](docs/headless-test-coverage.md). A compatible released
+core artifact and full installed-service/platform acceptance remain unproven.
 Generated bindings are committed in the [Go module](clientipc/README.md) and
 [Dart/Flutter package](packages/client_api/README.md); `buf generate` rebuilds both.
 

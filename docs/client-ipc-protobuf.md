@@ -16,11 +16,17 @@
   read on 2026-09-12.
 
 This is the accepted RPC specification for the analyzed functions. Contract
-acceptance is separate from implementation and release acceptance. Existing HTTP IPC is still defined
-by [the active OpenAPI v2 contract](client-ipc-v2.openapi.yaml). Protobuf v0 is a
-new protocol identity, not a lower compatible revision of that HTTP protocol.
-No fallback or simultaneous production protocol support is specified.
-The runtime, CLI, privileged helper and UI have not been migrated.
+acceptance is separate from implementation and release acceptance. The runtime
+and native CLI now use v0 over local OS transport; remaining HTTP v2 DTOs,
+callbacks and [old OpenAPI source](client-ipc-v2.openapi.yaml) are migration
+residue, not an active production contract. Protobuf v0 is a separate protocol
+identity, with no HTTP fallback or simultaneous production protocol support.
+The [runtime gap audit](native-runtime-gap-audit.md) identifies missing and
+partial implementations. [Runner evidence](headless-test-coverage.md) distinguishes
+contract-module checks from runtime and installed-service acceptance. The
+[UI cutover, client-ui main](https://github.com/endless-net/client-ui/blob/main/docs/native-desktop-cutover.md)
+likewise does not establish complete product behavior, native mobile bridges,
+privileged-helper/release pairing or full platform acceptance.
 
 ## Ownership and structure
 
