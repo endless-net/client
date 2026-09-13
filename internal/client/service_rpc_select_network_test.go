@@ -65,13 +65,25 @@ func TestRPCSelectCurrentNetworkIsDurableNoop(t *testing.T) {
 			if !reflect.DeepEqual(clonePersistentConfig(before), clonePersistentConfig(after)) {
 				t.Fatal("current selection altered registration or intent")
 			}
-			restarted, err := NewClientRPCMutations(m.store)
+			// Recreate the process-local store rather than reusing cached state.
+			configStores.Delete(m.store.path)
+			t.Cleanup(func() { configStores.Delete(m.store.path) })
+			store, err := OpenConfigStore(m.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			restarted, err := NewClientRPCMutations(store)
 			if err != nil {
 				t.Fatal(err)
 			}
 			replay, err := restarted.selectNetworkAs(owner, request)
 			if err != nil || !proto.Equal(op, replay) {
 				t.Fatal("selection replay after coordinator restart changed outcome")
+			}
+			persisted := store.Read()
+			persisted.RPCState = nil
+			if !reflect.DeepEqual(clonePersistentConfig(after), clonePersistentConfig(persisted)) {
+				t.Fatal("disk-backed selection replay changed registration or intent")
 			}
 		})
 	}

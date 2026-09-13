@@ -85,3 +85,9 @@ UserService client and handler over a local HTTP test server: exact account,
 bearer authorization (never node credentials), opaque next-page token, successful
 collection and second-page login/permission/temporary failure. This verifies the
 typed backend adapter transport, not public gateway TLS or actual membership.
+
+The current-network no-op unit test now evicts its own process-local store entry
+before reopening durable state. Replay must return the original protobuf operation
+and preserve registration and connected/disconnected intent read from disk. This
+is stronger than reconstructing the mutation coordinator around a cached store;
+it remains an in-process persistence test, not cross-network switch acceptance.
