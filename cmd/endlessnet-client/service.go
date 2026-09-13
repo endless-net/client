@@ -363,44 +363,6 @@ func parsePositiveServiceIPCTimeout(value string) (time.Duration, error) {
 	return timeout, nil
 }
 
-func serviceEnrollViaIPC(ctx context.Context, ipcClient *ipc.Client, token, serverURL, mode, hostname, idempotencyKey string) (ipc.EnrollResponse, error) {
-	req := ipc.EnrollRequest{
-		EnrollToken:    strings.TrimSpace(token),
-		Server:         strings.TrimSpace(serverURL),
-		Mode:           strings.TrimSpace(mode),
-		Hostname:       strings.TrimSpace(hostname),
-		IdempotencyKey: strings.TrimSpace(idempotencyKey),
-	}
-	var payload ipc.EnrollResponse
-	if err := ipcClient.Request(ctx, http.MethodPost, ipc.PathEnroll, req, &payload); err != nil {
-		return ipc.EnrollResponse{}, err
-	}
-	return payload, nil
-}
-
-func serviceEnrollViaIPCWithRetry(ctx context.Context, ipcClient *ipc.Client, token, serverURL, mode, hostname, idempotencyKey string) (ipc.EnrollResponse, error) {
-	var lastErr error
-	for {
-		payload, err := serviceEnrollViaIPC(ctx, ipcClient, token, serverURL, mode, hostname, idempotencyKey)
-		if err == nil {
-			return payload, nil
-		}
-		var ipcErr ipc.Error
-		if errors.As(err, &ipcErr) {
-			return ipc.EnrollResponse{}, err
-		}
-		lastErr = err
-		select {
-		case <-ctx.Done():
-			if lastErr != nil {
-				return ipc.EnrollResponse{}, fmt.Errorf("service enrollment IPC unavailable before timeout: %w", lastErr)
-			}
-			return ipc.EnrollResponse{}, ctx.Err()
-		case <-time.After(500 * time.Millisecond):
-		}
-	}
-}
-
 type agentIterationOptions struct {
 	ConfigPath     string
 	StateOutput    string

@@ -56,8 +56,6 @@ const (
 	defaultNetworkName                = "default"
 	defaultPublicServerURL            = "https://api.endlessnet.ru"
 	nodeEnrollmentPollDefaultInterval = 5 * time.Second
-	managedEnrollmentPollInterval     = 2 * time.Second
-	managedServiceIPCStartupTimeout   = 10 * time.Second
 )
 
 func clientConfigErrorCode(err error) string {

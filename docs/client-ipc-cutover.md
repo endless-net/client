@@ -670,3 +670,17 @@ Tests cover waiting/deduplicated progress/success, terminal failure, changed
 identity, cancellation and output/read failures, plus completed-operation waits
 through the local CLI host. This reader is available for replacing managed-up's
 old repeated-Enroll loop; that consumer has not yet been switched.
+
+Managed `up` now uses native v0 too. It requires an existing active `--profile-id`,
+snapshot CAS and `--connect-request-id`; optional `--enroll-request-id` enables an
+Enroll-then-Connect workflow with explicit mode and browser/token-file auth.
+Registration is dispatched once, approval is observed through GetOperation, and
+Connect uses the successful enrollment operation's revision. Separate UUIDs allow
+either stage to be recovered; dispatch/read failures never auto-replay mutations.
+Output is changed operation responses, not an inferred claim of tunnel health.
+The old managed HTTP loop, retry helpers and their obsolete tests were removed.
+Replacement workflow tests cover waiting approval, one enrollment/connection,
+rejected approval, output failure, connect-only mode and preserved caller CAS.
+These providers are synthetic; deployed approval, live tunnel health and CLI
+system acceptance remain required. Old `up --server/--join-token/--approval-timeout`
+arguments are not retained as compatibility behavior.

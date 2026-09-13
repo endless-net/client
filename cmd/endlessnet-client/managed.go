@@ -3,133 +3,15 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/endless-net/client/internal/client"
-	ipc "github.com/endless-net/client/ipc/v2"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
-
-func cmdManagedUp(args []string) error {
-	fs := flag.NewFlagSet("up", flag.ContinueOnError)
-	ipcPipe, ipcSocket := serviceIPCTransportFlags(fs)
-	serverURL := fs.String("server", defaultPublicServerURL, "EndlessNet server URL")
-	joinToken := fs.String("join-token", "", "one-time node join token")
-	joinTokenFile := fs.String("join-token-file", "", "read one-time node join token from this file, or '-' for stdin")
-	mode := fs.String("mode", "server", "device mode: workstation, server, or subnet-router")
-	hostname := fs.String("hostname", mustHostname(), "hostname to register for this device")
-	idempotencyKey := fs.String("idempotency-key", "", "registration retry idempotency key")
-	approvalTimeoutValue := fs.String("approval-timeout", "10m", "maximum time to wait for browser approval; 0 saves the request without waiting")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	approvalTimeout, err := parseOptionalDuration("approval-timeout", *approvalTimeoutValue)
-	if err != nil {
-		return err
-	}
-	effectiveJoinToken, err := secretFlagValue("join-token", *joinToken, *joinTokenFile)
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-	cancel := func() {}
-	if approvalTimeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, approvalTimeout)
-	}
-	defer cancel()
-	return runManagedUp(
-		ctx,
-		newServiceIPCClientForLocalTransport(*ipcPipe, *ipcSocket),
-		effectiveJoinToken,
-		*serverURL,
-		*mode,
-		*hostname,
-		*idempotencyKey,
-		approvalTimeout > 0,
-		managedEnrollmentPollInterval,
-	)
-}
-
-func runManagedUp(ctx context.Context, ipcClient *ipc.Client, token, serverURL, mode, hostname, idempotencyKey string, waitForApproval bool, pollInterval time.Duration) error {
-	if pollInterval <= 0 {
-		pollInterval = managedEnrollmentPollInterval
-	}
-	printedApprovalURL := ""
-	for {
-		requestCtx, cancel := context.WithTimeout(ctx, managedServiceIPCStartupTimeout)
-		payload, err := serviceEnrollViaIPCWithRetry(requestCtx, ipcClient, token, serverURL, mode, hostname, idempotencyKey)
-		cancel()
-		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return managedEnrollmentContextError(ctxErr, printedApprovalURL)
-			}
-			return fmt.Errorf("contact EndlessNet system service: %w", err)
-		}
-
-		state := payload.State
-		if state == ipc.StateNeedsApproval || payload.ControlState == ipc.ControlStatePendingApproval {
-			approvalURL := strings.TrimSpace(payload.ApprovalURL)
-			if approvalURL != "" && approvalURL != printedApprovalURL {
-				fmt.Printf("Open this URL to approve the device:\n%s\n", approvalURL)
-				printedApprovalURL = approvalURL
-			}
-			if !waitForApproval {
-				fmt.Println("Enrollment request saved; run endlessnet up after approving the device.")
-				return nil
-			}
-			select {
-			case <-ctx.Done():
-				return managedEnrollmentContextError(ctx.Err(), printedApprovalURL)
-			case <-time.After(pollInterval):
-				continue
-			}
-		}
-
-		if payload.WireGuardApply == nil {
-			if state == "" {
-				state = ipc.ServiceState("unknown")
-			}
-			return fmt.Errorf("EndlessNet system service returned state %s without a WireGuard apply result", state)
-		}
-		if !payload.WireGuardApply.OK {
-			return errors.New("EndlessNet system service returned an unsuccessful WireGuard apply result")
-		}
-		fmt.Println("EndlessNet connected.")
-		if overlayIP := strings.TrimSpace(payload.OverlayIP); overlayIP != "" {
-			fmt.Printf("IP: %s\n", overlayIP)
-		}
-		printManagedUpHealthWarning(payload.ControlState)
-		return nil
-	}
-}
-
-func printManagedUpHealthWarning(controlState ipc.ControlState) {
-	switch controlState {
-	case ipc.ControlStateReady, ipc.ControlStateRegistered:
-		return
-	}
-	state := strings.TrimSpace(string(controlState))
-	if state == "" {
-		state = "unknown"
-	}
-	fmt.Printf("Warning: the EndlessNet tunnel is running, but service/control health is %s.\n", state)
-}
-
-func managedEnrollmentContextError(err error, approvalURL string) error {
-	if errors.Is(err, context.DeadlineExceeded) {
-		if strings.TrimSpace(approvalURL) != "" {
-			return fmt.Errorf("device approval timed out; open %s and run endlessnet up again", approvalURL)
-		}
-		return errors.New("timed out waiting for the EndlessNet system service")
-	}
-	return err
-}
 
 type enrollmentApprovalRequiredError struct {
 	RequestID   string
