@@ -939,24 +939,6 @@ func agentIPCHandlers(opts agentIPCOptions) client.ServiceIPCHandlers {
 				Outcome:      ipc.LogoutOutcomeRemoteCleanupUnconfirmed,
 			}, nil
 		},
-		Networks: func(ctx context.Context, req ipc.NetworksRequest) (ipc.NetworksResponse, error) {
-			cfg, err := client.LoadConfig(opts.ConfigPath)
-			if err != nil {
-				return ipc.NetworksResponse{}, serviceIPCConfigError(err)
-			}
-			if cfg.CachedMap == nil {
-				return ipc.NetworksResponse{Metadata: serviceIPCMetadata(), Networks: []clientapi.Network{}}, nil
-			}
-			networkMap, err := verifiedCachedNetworkMap(&cfg)
-			if err != nil {
-				return ipc.NetworksResponse{}, ipc.NewError(http.StatusInternalServerError, cliErrorNetworkMapUnavailable, err)
-			}
-			return ipc.NetworksResponse{
-				Metadata:          serviceIPCMetadata(),
-				Networks:          []clientapi.Network{networkMap.Network},
-				SelectedNetworkID: networkMap.Network.ID,
-			}, nil
-		},
 		SelectNetwork: func(ctx context.Context, req ipc.SelectNetworkRequest) (ipc.SelectNetworkResponse, error) {
 			return selectAgentNetwork(ctx, opts, req)
 		},

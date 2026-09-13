@@ -24,6 +24,7 @@ type ClientRPCService struct {
 	ServerIdentityProvider ClientRPCServerIdentityProvider
 	TrustRecoveryProvider  ClientRPCTrustRecoveryProvider
 	RecentLogsProvider     ClientRPCRecentLogsProvider
+	NetworksProvider       ClientRPCNetworksProvider
 	clientipcconnect.UnimplementedClientServiceHandler
 	mutations        *ClientRPCMutations
 	build            *ipc.BuildIdentity
