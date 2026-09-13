@@ -5,8 +5,8 @@ require 404 rather than an observer-visible legacy catalog. The native local
 transport test in `service_rpc_peers_transport_test.go` also verifies ListNetworks
 owner admission, exact profile account/session input, selected-network metadata,
 unsupported switch projection and revoked access on an existing connection.
-This replaces the former Windows HTTP catalog assertion, not the remaining
-legacy network-selection scenario. The old DTO/spec cleanup is still pending.
+This replaces the former Windows HTTP catalog assertion. The old DTO/spec cleanup
+is still pending.
 
 The agent configures ListNetworks using typed UserService ListNetworks for the
 requested profile's active account and user session. This is not the retired IPC
@@ -37,7 +37,18 @@ with NEEDS_ENROLLMENT, and another network remains UNSUPPORTED. Short tests cove
 connected/disconnected intent retention, failure without mutation and exact replay
 after coordinator restart. This is not network-switch implementation or acceptance.
 Actual SelectNetwork switching/rollback, per-network details and installed-agent
-acceptance remain open; the legacy process selection scenario still needs replacement.
+acceptance remain open.
+
+The process network-selection boundary scenario now uses native CLI/SDK calls.
+It checks exact current-ID selection, retained profile/node/network/intent/cache,
+and byte-equivalent protobuf operation replay after restart in connected and
+disconnected modes. Name aliases, case-folded names and foreign/absent IDs cannot
+invoke the unimplemented switch path; rejected requests must have no operation
+in the journal and must not reenroll. Join-token-only registration must not yield
+a cached account catalog: missing account/session context remains an explicit
+NEEDS_ENROLLMENT/NEEDS_LOGIN result. These are boundary checks, not successful
+account catalog or cross-network switch/rollback acceptance. The guarded process
+scenario is compiled by short tests but still requires isolated CI execution.
 
 Short tests cover request authorization/account/page binding, deterministic native
 pagination and changed-catalog rejection, immutable response ownership, missing
