@@ -261,32 +261,6 @@ paths:
                 $ref: "#/components/schemas/DiagnosticsResponse"
         default:
           $ref: "#/components/responses/IPCError"
-  /diagnostics/bundle:
-    parameters: *ipcVersionHeaders
-    post:
-      operationId: diagnostics.bundle
-      x-endlessnet-required-privilege: owner
-      summary: Create or reuse a bounded redacted diagnostics bundle.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              properties:
-                log_limit:
-                  type: integer
-                  minimum: 1
-                  maximum: 1000
-      responses:
-        "200":
-          description: Diagnostics bundle metadata.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DiagnosticsBundleResponse"
-        default:
-          $ref: "#/components/responses/IPCError"
   /logs/recent:
     parameters: *ipcVersionHeaders
     get:
@@ -995,31 +969,6 @@ components:
           properties:
             diagnostics:
               $ref: "#/components/schemas/Diagnostics"
-    DiagnosticsBundleResponse:
-      allOf:
-        - $ref: "#/components/schemas/ProtocolEnvelope"
-        - type: object
-          required:
-            - path
-            - created_at
-            - expires_at
-            - size_bytes
-            - reused
-          properties:
-            path:
-              type: string
-            created_at:
-              type: string
-              format: date-time
-            expires_at:
-              type: string
-              format: date-time
-            size_bytes:
-              type: integer
-              minimum: 1
-              maximum: 5242880
-            reused:
-              type: boolean
     Diagnostics:
       type: object
       additionalProperties: false

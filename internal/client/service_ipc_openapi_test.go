@@ -12,11 +12,11 @@ import (
 	ipc "github.com/endless-net/client/ipc/v2"
 )
 
-func TestRetiredNetworksAreAbsentFromHTTPContract(t *testing.T) {
+func TestRetiredOperationsAreAbsentFromHTTPContract(t *testing.T) {
 	spec := readOpenAPISpec(t)
-	for _, retired := range []string{"/network/select:", "operationId: network.select", "SelectNetworkRequest", "SelectNetworkResponse", "/networks:", "operationId: networks", "NetworksResponse", "NetworkSummary"} {
+	for _, retired := range []string{"/network/select:", "operationId: network.select", "SelectNetworkRequest", "SelectNetworkResponse", "/networks:", "operationId: networks", "NetworksResponse", "NetworkSummary", "/diagnostics/bundle:", "operationId: diagnostics.bundle", "DiagnosticsBundleResponse"} {
 		if strings.Contains(spec, retired) {
-			t.Fatalf("retired HTTP selection contract still contains %q", retired)
+			t.Fatalf("retired HTTP contract still contains %q", retired)
 		}
 	}
 }
@@ -37,7 +37,6 @@ func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
 		ipc.PathLogout,
 		ipc.PathLocalForget,
 		ipc.PathDiagnostics,
-		ipc.PathDiagnosticsBundle,
 		ipc.PathRecentLogs,
 	} {
 		requireOpenAPIPath(t, spec, path)
@@ -54,7 +53,6 @@ func TestClientIPCOpenAPICoversGoContractConstants(t *testing.T) {
 		ipc.OperationLogout,
 		ipc.OperationLocalForget,
 		ipc.OperationDiagnostics,
-		ipc.OperationDiagnosticsBundle,
 		ipc.OperationRecentLogs,
 	} {
 		requireOpenAPILine(t, spec, "operationId: "+operation)
