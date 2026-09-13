@@ -300,10 +300,10 @@ func TestClientCoreReleasePublishesCurrentIPCContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(workflow)
-	if !strings.Contains(text, `contract_name="client-ipc-v2.openapi.yaml"`) ||
-		!strings.Contains(text, `cp docs/client-ipc-v2.openapi.yaml "$output_dir/$contract_name"`) ||
-		!strings.Contains(text, `"ipc_version": "v2"`) {
-		t.Fatalf("client-core release workflow does not publish the IPC v2 contract")
+	if !strings.Contains(text, `contract_name="client-v0.binpb"`) ||
+		!strings.Contains(text, `cp clientipc/rpc/client.binpb "$output_dir/$contract_name"`) ||
+		!strings.Contains(text, `"ipc_version": "v0"`) {
+		t.Fatalf("client-core release workflow does not publish the IPC v0 descriptor")
 	}
 	if strings.Contains(text, "client-ipc-v1.openapi.yaml") {
 		t.Fatalf("client-core release workflow still references the superseded IPC v1 contract")
