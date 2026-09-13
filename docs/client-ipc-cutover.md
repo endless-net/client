@@ -388,3 +388,13 @@ is sent), and verified result (before success reporting). Installation identity
 binding still uses the installation-state subsystem; this change does not claim
 that all enrollment effects are already part of one RPC transaction. Native
 profile guards, operation recovery and browser event wiring remain to implement.
+
+The native mutation coordinator now provides an enrollment config-save adapter
+for a RUNNING ENROLL operation. Each checkpoint commits enrollment fields and
+operation revision together. It rejects a changed active profile, control origin,
+owner, account, installation identity or registration state, a pending profile
+switch, and writes after a terminal outcome. An explicit field allowlist preserves
+concurrent Disconnect intent, preferences and the current journal. Tests exercise
+successive checkpoints, concurrent intent/settings, stale contexts and late
+responses. This adapter is not yet wired to a native Enroll handler/worker;
+acceptance, secret-safe restart recovery and browser action events remain open.
