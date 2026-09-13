@@ -1,11 +1,8 @@
 package clientrepo_test
 
 import (
-	"go/parser"
-	"go/token"
 	"io/fs"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -13,7 +10,7 @@ import (
 // Runtime cutover is tracked separately. Migrated system/recovery scenarios and
 // their harness must never regain a dependency on the retired HTTP IPC DTO package.
 func TestSystemScenariosAndHarnessRejectRetiredIPCImports(t *testing.T) {
-	for _, root := range []string{"tests", "internal/testclient", "cmd/endlessnet-client/recovery_test.go"} {
+	for _, root := range []string{"tests", "internal/testclient", "cmd/endlessnet-client"} {
 		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -21,19 +18,17 @@ func TestSystemScenariosAndHarnessRejectRetiredIPCImports(t *testing.T) {
 			if entry.IsDir() || filepath.Ext(path) != ".go" {
 				return nil
 			}
-			file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+			// Other command files still contain migration residue. Protect every
+			// native adapter (including future files), plus migrated recovery tests.
+			if root == "cmd/endlessnet-client" && !strings.HasPrefix(entry.Name(), "service_rpc") && entry.Name() != "recovery_test.go" {
+				return nil
+			}
+			retired, err := importsRetiredIPC(path, nil)
 			if err != nil {
 				return err
 			}
-			for _, declaration := range file.Imports {
-				importPath, err := strconv.Unquote(declaration.Path.Value)
-				if err != nil {
-					return err
-				}
-				const retired = "github.com/endless-net/client/ipc"
-				if importPath == retired || strings.HasPrefix(importPath, retired+"/") {
-					t.Errorf("%s imports retired HTTP IPC; use the native clientipc contract directly", path)
-				}
+			if retired {
+				t.Errorf("%s imports retired HTTP IPC; use the native clientipc contract directly", path)
 			}
 			return nil
 		})

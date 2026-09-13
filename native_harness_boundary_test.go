@@ -3,39 +3,10 @@ package clientrepo_test
 import (
 	"go/parser"
 	"go/token"
-	"io/fs"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 )
-
-// Parse imports on every platform, including OS-tagged installer/traffic tests.
-// This guards the migrated harness only; legacy component DTOs elsewhere still
-// need removal and this source boundary is not runtime acceptance evidence.
-func TestRuntimeHarnessDoesNotImportRetiredIPC(t *testing.T) {
-	for _, root := range []string{"tests", "internal/testclient"} {
-		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if entry.IsDir() || filepath.Ext(path) != ".go" {
-				return nil
-			}
-			retired, err := importsRetiredIPC(path, nil)
-			if err != nil {
-				return err
-			}
-			if retired {
-				t.Errorf("%s imports retired IPC instead of the native contract", filepath.ToSlash(path))
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-}
 
 func importsRetiredIPC(name string, source any) (bool, error) {
 	file, err := parser.ParseFile(token.NewFileSet(), name, source, parser.ImportsOnly)
@@ -47,7 +18,7 @@ func importsRetiredIPC(name string, source any) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		if path == "github.com/endless-net/client/ipc/v2" || strings.HasPrefix(path, "github.com/endless-net/client/ipc/v2/") {
+		if path == "github.com/endless-net/client/ipc" || strings.HasPrefix(path, "github.com/endless-net/client/ipc/") {
 			return true, nil
 		}
 	}
@@ -56,12 +27,14 @@ func importsRetiredIPC(name string, source any) (bool, error) {
 
 func TestRetiredIPCImportDetectionIncludesAliasesAndBuildTags(t *testing.T) {
 	for name, source := range map[string]string{
-		"ordinary":    "package fixture\nimport \"github.com/endless-net/client/ipc/v2\"",
-		"aliased":     "package fixture\nimport old \"github.com/endless-net/client/ipc/v2\"",
-		"blank":       "package fixture\nimport _ \"github.com/endless-net/client/ipc/v2\"",
-		"dot":         "package fixture\nimport . \"github.com/endless-net/client/ipc/v2\"",
-		"windows":     "//go:build windows\n\npackage fixture\nimport \"github.com/endless-net/client/ipc/v2\"",
-		"sub-package": "package fixture\nimport \"github.com/endless-net/client/ipc/v2/compat\"",
+		"retired-root":          "package fixture\nimport \"github.com/endless-net/client/ipc\"",
+		"other-retired-package": "package fixture\nimport \"github.com/endless-net/client/ipc/compat\"",
+		"ordinary":              "package fixture\nimport \"github.com/endless-net/client/ipc/v2\"",
+		"aliased":               "package fixture\nimport old \"github.com/endless-net/client/ipc/v2\"",
+		"blank":                 "package fixture\nimport _ \"github.com/endless-net/client/ipc/v2\"",
+		"dot":                   "package fixture\nimport . \"github.com/endless-net/client/ipc/v2\"",
+		"windows":               "//go:build windows\n\npackage fixture\nimport \"github.com/endless-net/client/ipc/v2\"",
+		"sub-package":           "package fixture\nimport \"github.com/endless-net/client/ipc/v2/compat\"",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if retired, err := importsRetiredIPC("fixture.go", source); err != nil || !retired {
