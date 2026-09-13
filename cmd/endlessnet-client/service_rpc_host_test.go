@@ -77,6 +77,13 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 		}
 	}
 	assertBuild(bootstrapInfo.Build)
+	assertConnectionCapability := func(info *ipc.RuntimeInfo) {
+		t.Helper()
+		if len(info.Capabilities) != 1 || info.Capabilities[0].Capability != ipc.Capability_CAPABILITY_CONNECTION || info.Capabilities[0].Restriction.Availability != ipc.Availability_AVAILABILITY_AVAILABLE || info.Capabilities[0].Platform != info.Build.Platform {
+			t.Fatal("native host did not advertise its running connection worker")
+		}
+	}
+	assertConnectionCapability(bootstrapInfo)
 	publishAgentRPCObservation(requestCtx, mutations, opts, ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED)
 	observed, err := consumer.GetStatus(requestCtx, connect.NewRequest(&ipc.GetStatusRequest{}))
 	if err != nil || observed.Msg.Status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED {
@@ -102,6 +109,7 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 		case *ipc.GetRuntimeInfoResponse:
 			assertBuild(response.GetRuntime().GetBuild())
 			info := response.GetRuntime()
+			assertConnectionCapability(info)
 			if info.GetProtocol() != bootstrapInfo.Protocol || info.GetIpcVersion() != bootstrapInfo.IpcVersion || info.GetContractSha256() != bootstrapInfo.ContractSha256 || info.GetInstanceId() != bootstrapInfo.InstanceId {
 				t.Fatal("native CLI runtime identity differs from verified bootstrap")
 			}
@@ -119,6 +127,7 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	if err := protojson.Unmarshal([]byte(eventOutput), event); err != nil || event.Sequence != 1 || event.GetSnapshot() == nil {
 		t.Fatal("native CLI did not emit the opening snapshot", err)
 	}
+	assertConnectionCapability(event.GetSnapshot().GetRuntime())
 	requestID := "c96bfe40-876a-4bc8-95da-4fdd494ab48d"
 	accepted, err := consumer.CreateProfile(requestCtx, connect.NewRequest(&ipc.CreateProfileRequest{
 		Mutation:    &ipc.MutationContext{RequestId: requestID, ExpectedInstanceId: event.Metadata.InstanceId, ExpectedRevision: event.Metadata.Revision},

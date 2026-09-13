@@ -223,8 +223,7 @@ func (m *ClientRPCMutations) snapshotLocked(peer local.Peer, build *ipc.BuildIde
 			return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 		}
 	}
-	return &ipc.SnapshotEvent{Runtime: &ipc.RuntimeInfo{Build: proto.Clone(build).(*ipc.BuildIdentity), InstanceId: m.instanceID,
-		CallerAccess: access, Protocol: rpc.Protocol, IpcVersion: rpc.Version, ContractSha256: rpc.Digest()}, Status: status}, nil
+	return &ipc.SnapshotEvent{Runtime: m.runtimeInfoLocked(peer, build, cfg), Status: status}, nil
 }
 
 func (m *ClientRPCMutations) snapshotAs(peer local.Peer, build *ipc.BuildIdentity) (*ipc.SnapshotEvent, error) {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -129,17 +128,9 @@ func (s *ClientRPCService) GetRuntimeInfo(ctx context.Context, _ *connect.Reques
 	if !ok {
 		return nil, rpc.Error(connect.CodeUnauthenticated, ipc.ErrorCode_ERROR_CODE_UNAUTHENTICATED)
 	}
-	access := ipc.Access_ACCESS_OBSERVER
-	if peer.Administrator {
-		access = ipc.Access_ACCESS_ADMINISTRATOR
-	} else if cfg := s.mutations.store.Read(); cfg.LocalOwnerID != "" && strings.EqualFold(cfg.LocalOwnerID, peer.Identity) {
-		access = ipc.Access_ACCESS_OWNER
-	}
-	return connect.NewResponse(&ipc.GetRuntimeInfoResponse{Runtime: &ipc.RuntimeInfo{
-		Build: proto.Clone(s.build).(*ipc.BuildIdentity), InstanceId: s.mutations.instanceID,
-		CallerAccess: access, Protocol: rpc.Protocol, IpcVersion: rpc.Version, ContractSha256: rpc.Digest(),
-		// Capabilities remain absent until the complete provider family is ready.
-	}}), nil
+	s.mutations.mu.Lock()
+	defer s.mutations.mu.Unlock()
+	return connect.NewResponse(&ipc.GetRuntimeInfoResponse{Runtime: s.mutations.runtimeInfoLocked(peer, s.build, s.mutations.store.Read())}), nil
 }
 
 func (s *ClientRPCService) GetOperation(ctx context.Context, request *connect.Request[ipc.GetOperationRequest]) (*connect.Response[ipc.GetOperationResponse], error) {

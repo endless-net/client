@@ -878,3 +878,21 @@ update-discovery capability or complete UF-22/US-13. This repository still owns
 verified release-source integration; client-ui owns discovery rendering and the
 platform updater handoff. Real signed artifacts and installed-pair/platform
 acceptance remain separate evidence.
+
+## Connection capability readiness (2026-09-13)
+
+A successfully started profile worker with validated Lock/Stop/Start callbacks
+now advertises CAPABILITY_CONNECTION through both GetRuntimeInfo and the opening
+WatchEvents snapshot. This enables the native UI's existing Connect gate on a
+runtime with connection execution wired. Capability means runtime applicability,
+not approval, enrollment, a connected tunnel or platform/release acceptance.
+Caller authorization, current status and durable mutation admission still apply.
+Other incomplete capability families are not enabled by this change.
+
+Readiness is volatile and disappears on cancellation or worker exit. Starting,
+stopping or replacing a worker closes existing streams with STALE_STATE so the
+consumer explicitly obtains a new opening context; no second snapshot is sent.
+A late callback from a previous worker cannot withdraw a replacement's readiness.
+Tests cover startup refusal, immutable projections, cancellation, replacement,
+fresh-runtime absence and native Bootstrap/CLI/opening-snapshot consistency.
+Actual UI/core pairing and supported-platform connection acceptance remain open.

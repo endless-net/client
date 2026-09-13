@@ -72,6 +72,7 @@ type ClientRPCMutations struct {
 	cancelLogout     context.CancelFunc
 	subscribers      map[*rpcSubscriber]struct{}
 	recentLogs       []clientRPCScopedLog
+	connectionWorker *clientRPCProfileWorker // Volatile readiness, never persisted.
 }
 
 func NewClientRPCMutations(store *ConfigStore) (*ClientRPCMutations, error) {

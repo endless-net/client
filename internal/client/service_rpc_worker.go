@@ -40,10 +40,14 @@ func (s *ClientRPCService) StartProfileWorker(ctx context.Context, driver Client
 	}
 	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{}), logout: driver.Logout != nil}
 	s.profileWorker = w
+	s.mutations.setConnectionWorker(w, true)
+	stopReadiness := context.AfterFunc(ctx, func() { s.mutations.setConnectionWorker(w, false) })
 	done := make(chan error, 1)
 	go func() {
 		var err error
 		defer func() {
+			stopReadiness()
+			s.mutations.setConnectionWorker(w, false)
 			s.profileMu.Lock()
 			s.profileWorker = nil
 			s.profileMu.Unlock()
