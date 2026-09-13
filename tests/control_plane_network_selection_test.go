@@ -38,6 +38,11 @@ func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
 	defer consumer.Close()
 	serial := 100
 	nextID := func() string { serial++; return fmt.Sprintf("00000000-0000-4000-8000-%012d", serial) }
+	readStatus := func() (*ipc.Status, error) {
+		response := &ipc.GetStatusResponse{}
+		err := n.NativeService("status", response)
+		return response.Status, err
+	}
 	retained := func(before *ipc.Status) *ipc.Status {
 		t.Helper()
 		return n.AwaitNativeStatus(func(v *ipc.Status) bool {
@@ -69,9 +74,13 @@ func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
 		}
 		before := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.NodeId == id && v.UserDisconnected == disconnected })
 		catalogDenied(before)
-		args := append(testclient.NativeMutationArguments(nextID(), before), "--network-id", initial.Network.Id)
+		requestID := nextID()
+		var args []string
 		selected := &ipc.SelectNetworkResponse{}
-		if err := n.NativeService("select-network", selected, args...); err != nil {
+		if err := retryNativeControlAdmission("select-network", before, readStatus, func(current *ipc.Status) error {
+			args = append(testclient.NativeMutationArguments(requestID, current), "--network-id", initial.Network.Id)
+			return n.NativeService("select-network", selected, args...)
+		}); err != nil {
 			t.Fatal(err)
 		}
 		op := selected.Operation
@@ -85,8 +94,11 @@ func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
 			status := retained(before)
 			requestID := nextID()
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-			_, err := consumer.SelectNetwork(ctx, connect.NewRequest(&ipc.SelectNetworkRequest{Profile: &ipc.ProfileRef{ProfileId: status.ActiveProfileId},
-				Mutation: &ipc.MutationContext{RequestId: requestID, ExpectedInstanceId: status.GetMetadata().GetInstanceId(), ExpectedRevision: status.GetMetadata().GetRevision()}, NetworkId: ref}))
+			err := retryNativeControlAdmission("select-network", status, readStatus, func(current *ipc.Status) error {
+				_, err := consumer.SelectNetwork(ctx, connect.NewRequest(&ipc.SelectNetworkRequest{Profile: &ipc.ProfileRef{ProfileId: current.ActiveProfileId},
+					Mutation: &ipc.MutationContext{RequestId: requestID, ExpectedInstanceId: current.GetMetadata().GetInstanceId(), ExpectedRevision: current.GetMetadata().GetRevision()}, NetworkId: ref}))
+				return err
+			})
 			if rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_UNSUPPORTED {
 				cancel()
 				t.Fatal("unsupported selection did not fail closed")

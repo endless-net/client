@@ -11,14 +11,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Only explicit Connect/Disconnect admission rejection can refresh CAS. Keep
+// Only explicit Connect/Disconnect/SelectNetwork admission rejection can refresh CAS. Keep
 // the caller's request ID and semantic payload unchanged; never retry an
 // accepted operation, uncertain transport outcome, logout, or changed intent.
 func retryNativeControlAdmission(command string, initial *ipc.Status, read func() (*ipc.Status, error), submit func(*ipc.Status) error) error {
 	current := initial
 	for attempt := 0; ; attempt++ {
 		err := submit(current)
-		if err == nil || attempt == 2 || (command != "connect" && command != "disconnect") || !testclient.IsNativeStaleState(err) {
+		stale := testclient.IsNativeStaleState(err) || (connect.CodeOf(err) == connect.CodeFailedPrecondition && rpc.FailureFromError(err).GetCode() == ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		if err == nil || attempt == 2 || (command != "connect" && command != "disconnect" && command != "select-network") || !stale {
 			return err
 		}
 		next, readErr := read()
@@ -33,6 +34,42 @@ func retryNativeControlAdmission(command string, initial *ipc.Status, read func(
 			return err
 		}
 		current = next
+	}
+}
+
+func TestNativeSelectionAdmissionRetryKeepsDomainFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		transport connect.Code
+		code      ipc.ErrorCode
+		calls     int
+	}{
+		{"stale", connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE, 3},
+		{"unsupported", connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, 1},
+		{"denied", connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_OWNER_REQUIRED, 1},
+		{"busy", connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY, 1},
+		{"unavailable-stale", connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_STALE_STATE, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status := &ipc.Status{NodeId: "node", ActiveProfileId: "profile", Metadata: &ipc.SnapshotMetadata{InstanceId: "instance", Revision: 1}}
+			failure := rpc.Error(tc.transport, tc.code)
+			calls, reads := 0, 0
+			err := retryNativeControlAdmission("select-network", status, func() (*ipc.Status, error) {
+				reads++
+				next := proto.Clone(status).(*ipc.Status)
+				next.Metadata.Revision += uint64(reads)
+				return next, nil
+			}, func(current *ipc.Status) error {
+				calls++
+				if current.Metadata.Revision != uint64(calls) {
+					t.Fatal("lost refreshed revision")
+				}
+				return failure
+			})
+			if err != failure || calls != tc.calls || reads != tc.calls-1 {
+				t.Fatalf("domain rejection changed: calls=%d reads=%d", calls, reads)
+			}
+		})
 	}
 }
 
