@@ -28,8 +28,10 @@ const rpcMaxNonterminalOperations = 32
 var errRPCNoChange = errors.New("RPC durable state unchanged")
 
 // ClientRPCState is part of the protected atomic ConfigStore, never UI-readable.
-// Request payloads are not retained: a keyed digest prevents token disclosure
-// and offline guessing from an unkeyed enrollment-request hash.
+// Operation records retain only a keyed request digest, preventing disclosure
+// and offline guessing from an unkeyed enrollment-request hash. Runtime plans
+// may retain protected authorization needed to resume accepted work; these are
+// never included in an operation, snapshot, event or RPC response.
 type ClientRPCState struct {
 	Revision              uint64                              `json:"revision"`
 	DigestKey             []byte                              `json:"digest_key"`
@@ -39,6 +41,7 @@ type ClientRPCState struct {
 	ProfileSwitch         *clientRPCProfileSwitch             `json:"profile_switch,omitempty"`
 	DisconnectOperationID string                              `json:"disconnect_operation_id,omitempty"`
 	ConnectOperationID    string                              `json:"connect_operation_id,omitempty"`
+	Enrollment            *clientRPCEnrollment                `json:"enrollment,omitempty"`
 }
 
 type clientRPCOperationRecord struct {
@@ -419,6 +422,10 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 			}
 			if !validRPCOperationTransition(previous, updated) {
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			}
+			if updated.Kind == ipc.OperationKind_OPERATION_KIND_ENROLL && rpcOperationTerminal(updated.State) &&
+				cfg.RPCState.Enrollment != nil && cfg.RPCState.Enrollment.OperationID == updated.Id {
+				cfg.RPCState.Enrollment = nil
 			}
 			cfg.RPCState.Revision++
 			now := m.now()

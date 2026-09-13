@@ -255,7 +255,9 @@ func validateConfigFilePermissions(path string, cfg Config) error {
 }
 
 func configContainsSecrets(cfg Config) bool {
-	return strings.TrimSpace(cfg.Token) != "" ||
+	// RPC state includes a private digest key, inactive profile credentials and
+	// resumable enrollment authorization even before root enrollment exists.
+	return cfg.RPCState != nil || cfg.PendingDirectRegistration != nil || strings.TrimSpace(cfg.Token) != "" ||
 		strings.TrimSpace(cfg.IdentityPrivateKey) != "" ||
 		strings.TrimSpace(cfg.PrivateKey) != "" ||
 		strings.TrimSpace(cfg.NodeCredential) != "" ||

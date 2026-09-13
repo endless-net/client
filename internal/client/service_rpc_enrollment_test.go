@@ -1,11 +1,103 @@
 package client
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/proto"
 )
+
+func TestRPCStateRequiresPrivateConfigPermissionsBeforeEnrollment(t *testing.T) {
+	if !configContainsSecrets(Config{RPCState: &ClientRPCState{Enrollment: &clientRPCEnrollment{Token: "synthetic-token"}}}) ||
+		!configContainsSecrets(Config{RPCState: &ClientRPCState{}}) ||
+		!configContainsSecrets(Config{PendingDirectRegistration: &PendingDirectRegistration{}}) {
+		t.Fatal("protected runtime state classified as public config")
+	}
+}
+
+func enrollmentAdmissionTest(t *testing.T) (*ClientRPCMutations, local.Peer, *ipc.EnrollRequest) {
+	t.Helper()
+	m := newRPCStoreTest(t)
+	peer := local.Peer{Identity: "uid:1000"}
+	create := rpcCreateRequest(t, m)
+	create.ControlOrigin = "https://control.test"
+	created, err := m.createProfileAs(peer, create)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.RPCState.ActiveProfileID = created.ProfileId
+		cfg.ControlPlaneURLs = []string{create.ControlOrigin}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return m, peer, &ipc.EnrollRequest{Mutation: rpcCreateRequest(t, m).Mutation,
+		Profile: &ipc.ProfileRef{ProfileId: created.ProfileId}, Mode: ipc.EnrollmentMode_ENROLLMENT_MODE_WORKSTATION,
+		Authentication: &ipc.EnrollRequest_EnrollmentToken{EnrollmentToken: "synthetic-enrollment-secret"}}
+}
+
+func TestRPCEnrollmentAdmissionDurableReplayAndSecretCleanup(t *testing.T) {
+	m, peer, req := enrollmentAdmissionTest(t)
+	op, err := m.enrollAs(peer, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan := m.store.Read().RPCState.Enrollment; plan == nil || plan.OperationID != op.Id || plan.Token != req.GetEnrollmentToken() {
+		t.Fatal("accepted enrollment plan not persisted")
+	}
+	disk, err := loadConfigFile(m.store.path)
+	if err != nil || disk.RPCState == nil || disk.RPCState.Enrollment == nil || disk.RPCState.Enrollment.OperationID != op.Id {
+		t.Fatal("accepted enrollment plan missing from disk")
+	}
+	encoded, err := proto.Marshal(op)
+	if err != nil || bytes.Contains(encoded, []byte(req.GetEnrollmentToken())) {
+		t.Fatal("operation exposed enrollment authorization")
+	}
+	retry, err := m.enrollAs(peer, req)
+	if err != nil || !proto.Equal(op, retry) {
+		t.Fatal("retry did not return the original acceptance")
+	}
+	changed := proto.Clone(req).(*ipc.EnrollRequest)
+	changed.Hostname = "different-input"
+	if _, err := m.enrollAs(peer, changed); err == nil {
+		t.Fatal("accepted changed input under the same request ID")
+	}
+	_, err = m.ReconcileOperation(op.Id, func(_ *Config, op *ipc.Operation) error {
+		op.State = ipc.OperationState_OPERATION_STATE_CANCELLED
+		op.Outcome = &ipc.Operation_Failure{Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_CANCELLED}}
+		return nil
+	})
+	if err != nil || m.store.Read().RPCState.Enrollment != nil {
+		t.Fatal("terminal operation retained enrollment plan")
+	}
+}
+
+func TestRPCEnrollmentAdmissionRejectsInvalidInputWithoutMutation(t *testing.T) {
+	cases := map[string]func(*ipc.EnrollRequest){
+		"mode":          func(req *ipc.EnrollRequest) { req.Mode = ipc.EnrollmentMode_ENROLLMENT_MODE_UNSPECIFIED },
+		"hostname":      func(req *ipc.EnrollRequest) { req.Hostname = "bad\nname" },
+		"no auth":       func(req *ipc.EnrollRequest) { req.Authentication = nil },
+		"false browser": func(req *ipc.EnrollRequest) { req.Authentication = &ipc.EnrollRequest_BrowserLogin{} },
+		"blank token": func(req *ipc.EnrollRequest) {
+			req.Authentication = &ipc.EnrollRequest_EnrollmentToken{EnrollmentToken: " "}
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			m, peer, req := enrollmentAdmissionTest(t)
+			before := m.Metadata().Revision
+			mutate(req)
+			_, err := m.enrollAs(peer, req)
+			assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+			if m.store.Read().RPCState.Enrollment != nil || m.Metadata().Revision != before {
+				t.Fatal("invalid request mutated runtime")
+			}
+		})
+	}
+}
 
 func enrollmentCheckpointTest(t *testing.T) (*ClientRPCMutations, *ipc.Operation, Config) {
 	t.Helper()

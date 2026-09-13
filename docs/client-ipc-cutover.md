@@ -398,3 +398,21 @@ concurrent Disconnect intent, preferences and the current journal. Tests exercis
 successive checkpoints, concurrent intent/settings, stale contexts and late
 responses. This adapter is not yet wired to a native Enroll handler/worker;
 acceptance, secret-safe restart recovery and browser action events remain open.
+
+Native Enroll admission now validates mode, hostname, explicit token/browser
+authentication and the selected empty profile's immutable origin. It rejects
+conflicting operations and existing registration/session state. Acceptance stores
+a protected runtime plan together with the PENDING operation; only the keyed
+request digest and safe operation envelope are observable. Terminal reconciliation
+removes the plan atomically. Tests cover disk persistence, exact replay, changed
+input rejection, invalid-input rollback and token absence from the operation.
+The plan's authorization is protected config data, not a log or public journal
+field. Enroll is not exposed by the native service until its executor can consume
+and recover this plan; mode-specific runtime policy and end-to-end enrollment
+remain outstanding. No proto or state format version is increased.
+
+Config secret classification now includes any RPC state and pending direct
+registration, ensuring Unix private-file permission checks also apply before
+root enrollment and to credentials stored in inactive profiles/runtime plans.
+Windows continues to use the existing protected-state loader; persistence tests
+read through that loader rather than treating protected bytes as plaintext JSON.

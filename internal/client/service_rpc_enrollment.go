@@ -2,12 +2,91 @@ package client
 
 import (
 	"reflect"
+	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"connectrpc.com/connect"
+	"github.com/endless-net/client/clientipc/local"
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/proto"
 )
+
+// The protected runtime plan, unlike the observable operation, retains the
+// enrollment authorization required to resume accepted work after a crash.
+// It must be cleared by terminal reconciliation, never returned or logged.
+type clientRPCEnrollment struct {
+	OperationID string             `json:"operation_id"`
+	Mode        ipc.EnrollmentMode `json:"mode"`
+	Hostname    string             `json:"hostname,omitempty"`
+	Token       string             `json:"token,omitempty"`
+	Browser     bool               `json:"browser,omitempty"`
+}
+
+func (m *ClientRPCMutations) enrollAs(peer local.Peer, request *ipc.EnrollRequest) (*ipc.Operation, error) {
+	op, _, err := m.acceptAs(peer, "/client.v0.ClientService/Enroll", request, func(cfg *Config, op *ipc.Operation) error {
+		invalid := func() error { return rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT) }
+		if request.Mode < ipc.EnrollmentMode_ENROLLMENT_MODE_WORKSTATION || request.Mode > ipc.EnrollmentMode_ENROLLMENT_MODE_INTERACTIVE ||
+			!utf8.ValidString(request.Hostname) || len(request.Hostname) > 253 || strings.TrimSpace(request.Hostname) != request.Hostname ||
+			strings.IndexFunc(request.Hostname, unicode.IsControl) >= 0 {
+			return invalid()
+		}
+		plan := &clientRPCEnrollment{OperationID: op.Id, Mode: request.Mode, Hostname: request.Hostname}
+		switch auth := request.Authentication.(type) {
+		case *ipc.EnrollRequest_EnrollmentToken:
+			if auth == nil || strings.TrimSpace(auth.EnrollmentToken) == "" || len(auth.EnrollmentToken) > 16384 ||
+				strings.IndexFunc(auth.EnrollmentToken, unicode.IsSpace) >= 0 || strings.IndexFunc(auth.EnrollmentToken, unicode.IsControl) >= 0 {
+				return invalid()
+			}
+			plan.Token = auth.EnrollmentToken
+		case *ipc.EnrollRequest_BrowserLogin:
+			if auth == nil || !auth.BrowserLogin {
+				return invalid()
+			}
+			plan.Browser = true
+		default:
+			return invalid()
+		}
+		profile, err := rpcFindProfile(cfg, request.Profile)
+		if err != nil {
+			return err
+		}
+		if profile.ID != cfg.RPCState.ActiveProfileID {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
+		if cfg.RPCState.Enrollment != nil || cfg.RPCState.ProfileSwitch != nil {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+		}
+		for _, record := range cfg.RPCState.Operations {
+			pending := new(ipc.Operation)
+			if proto.Unmarshal(record.Operation, pending) != nil {
+				return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+			}
+			if !rpcOperationTerminal(pending.State) {
+				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+			}
+		}
+		if rpcConfigHasEnrollment(*cfg) {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_REMOTE_CLEANUP_REQUIRED)
+		}
+		urls := cfg.ControlURLs()
+		if len(urls) == 0 {
+			return invalid()
+		}
+		for _, address := range urls {
+			origin, err := rpcProfileOrigin(address)
+			if err != nil || origin != profile.ControlOrigin {
+				return invalid()
+			}
+		}
+		op.ProfileId = profile.ID
+		cfg.RPCState.Enrollment = plan
+		return nil
+	})
+	return op, err
+}
 
 // EnrollmentSaveCallback is a runtime-only persistence adapter for a running
 // Enroll workflow. Every checkpoint updates the operation and enrollment fields
