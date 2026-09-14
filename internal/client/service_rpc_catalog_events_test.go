@@ -1,6 +1,9 @@
 package client
 
 import (
+	"context"
+	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -8,6 +11,87 @@ import (
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+func TestRPCCatalogClockExpiresWithoutObservation(t *testing.T) {
+	m, owner, profile := rpcPreferenceFixture(t)
+	now := time.Now()
+	m.now = func() time.Time { return now }
+	if err := m.publishCatalogClock(); err != nil {
+		t.Fatal(err)
+	}
+	sub, err := m.subscribe(owner, &ipc.BuildIdentity{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.unsubscribe(sub)
+	if _, err := sub.next(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	before := m.store.Read()
+	now = before.CachedMap.MapSignature.ExpiresAt
+	if err := m.publishCatalogClock(); err != nil {
+		t.Fatal(err)
+	}
+	after := m.store.Read()
+	if after.RPCState.Revision != before.RPCState.Revision+1 {
+		t.Fatal("expiry did not invalidate snapshot")
+	}
+	after.RPCState.Revision = before.RPCState.Revision
+	if !reflect.DeepEqual(clonePersistentConfig(before), clonePersistentConfig(after)) {
+		t.Fatal("clock changed intent, policy, credentials or operations")
+	}
+	for i := 0; i < 7; i++ {
+		event, err := sub.next(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			if event.GetStatusChanged() == nil {
+				t.Fatal("clock lost status event")
+			}
+		} else if event.GetInvalidated().GetProfileId() != profile.ProfileId {
+			t.Fatal("clock lost active scope")
+		}
+	}
+	if err := m.publishCatalogClock(); err != nil {
+		t.Fatal(err)
+	}
+	if len(sub.queue) != 0 {
+		t.Fatal("expired map repeatedly invalidated")
+	}
+	// Restart has a new snapshot; merely capturing its baseline must not pretend
+	// that it performed any new operation or changed persisted state.
+	m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.now = func() time.Time { return now }
+	before = m.store.Read()
+	if err := m.publishCatalogClock(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, m.store.Read()) {
+		t.Fatal("restart clock changed durable state")
+	}
+}
+
+func TestRPCCatalogClockCapturesBaselineAndStops(t *testing.T) {
+	m, _, _ := rpcPreferenceFixture(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := m.startCatalogClock(ctx)
+	if m.observedCatalog == nil {
+		t.Fatal("host admission could precede clock baseline")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal("clock did not report cancellation", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("catalog clock leaked after host cancellation")
+	}
+}
 
 func TestRPCCatalogChangesInvalidateDespiteIdenticalStatus(t *testing.T) {
 	for _, change := range []string{"policy", "tamper", "trust", "removed", "map_expiry", "exit_expiry", "application_expiry", "owner"} {

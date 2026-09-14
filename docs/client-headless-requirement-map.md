@@ -127,8 +127,19 @@ do not advance revision or emit events. `TestRPCCatalogRacePreservesLastAccepted
 checks that a rejected in-flight probe does not consume the pending source
 change, and the next current probe publishes it. Root short, vet, configured
 lint and goimports passed locally on Windows on 2026-09-14. This establishes
-invalidation on observation; an independent host deadline clock is still needed
-when there is no network observation. It does not establish route/resource effects.
+invalidation on observation. It does not establish route/resource effects.
+
+`TestRPCCatalogClockExpiresWithoutObservation` additionally verifies independent
+map expiry, one revision transition, scoped invalidations, unchanged persistent
+intent/policy/credentials/operations, duplicate suppression and a restart baseline
+without new effects. `TestRPCCatalogClockCapturesBaselineAndStops` covers startup
+baseline and cancellation. The RPC host owns the one-second clock and waits for
+its shutdown; the clock and status publisher share the last-source fingerprint.
+This is an active-profile catalog clock, not an OS lifecycle adapter or traffic
+acceptance. Inactive-profile invalidation still needs separate audit.
+Root short, vet, configured lint and goimports passed locally on Windows on
+2026-09-14 for the host clock increment as well. The persistent-state assertion
+excludes ConfigStore's per-read bookkeeping and the expected RPC revision change.
 
 US-10/12, RULE-06, UI-AC-19/21: `TestRPCUIQuitManagedBaselineLockAndReset`
 covers account/device provenance, unlocked override, conflicting lock rejection

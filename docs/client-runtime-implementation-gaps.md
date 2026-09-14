@@ -58,9 +58,15 @@ override and rejects a conflicting new override. Provenance and the responsible
 administrator are projected. Invalid/expired/context-mismatched maps do not
 silently supply a default; accepted request replay precedes current-policy
 validation. Managed CONNECT still requires lifecycle connect execution and is
-explicitly unsupported. Other lifecycle keys, network preferences, policy-map
-change/expiry invalidation events and full OS lifecycle implementation remain
-open. This increment does not close US-10/12.
+explicitly unsupported. Other lifecycle keys, network preferences and full OS
+lifecycle implementation remain open. This increment does not close US-10/12.
+
+Active map/policy catalog invalidation now runs both on accepted runtime status
+observations and independently in the RPC host's one-second catalog clock.
+Source changes and map/exit/application expiry invalidate owner-visible peers,
+networks, exit, preferences, managed settings and resources even when Status is
+unchanged. This does not implement resource effects or OS lifecycle events;
+inactive-profile and complete cross-domain invalidation audit remains open.
 
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.

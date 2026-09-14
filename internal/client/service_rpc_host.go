@@ -72,6 +72,7 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	stopReadCapabilities := s.startReadCapabilities(workerCtx)
 	defer stopReadCapabilities()
 	sessionClockDone := s.mutations.startSessionClock(workerCtx)
+	catalogClockDone := s.mutations.startCatalogClock(workerCtx)
 	server := local.NewServer(s.Handler())
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- server.Serve(listener) }()
@@ -88,6 +89,8 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 		bundleDone = nil
 	case err = <-sessionClockDone:
 		sessionClockDone = nil
+	case err = <-catalogClockDone:
+		catalogClockDone = nil
 	case err = <-sessionDone:
 		sessionDone = nil
 	case err = <-serverDone:
@@ -109,6 +112,9 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	}
 	if sessionClockDone != nil {
 		<-sessionClockDone
+	}
+	if catalogClockDone != nil {
+		<-catalogClockDone
 	}
 	if sessionDone != nil {
 		<-sessionDone
