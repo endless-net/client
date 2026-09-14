@@ -1,8 +1,6 @@
 package client
 
 import (
-	"strings"
-
 	"connectrpc.com/connect"
 	api "github.com/endless-net/client-api/clientapi/v1"
 	backend "github.com/endless-net/client-api/clientapi/v1/clientrpc"
@@ -18,16 +16,7 @@ func (m *ClientRPCMutations) completeSessionRenewal(id string, result *backend.S
 	return m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
 		stale := func() error { return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE) }
 		plan := cfg.RPCState.SessionRenewal
-		if plan == nil || plan.Request == nil || plan.OperationID != id || op.Kind != ipc.OperationKind_OPERATION_KIND_RENEW_SESSION || op.State != ipc.OperationState_OPERATION_STATE_RUNNING ||
-			plan.ProfileID != op.ProfileId || plan.ProfileID != cfg.RPCState.ActiveProfileID || !strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) ||
-			plan.TokenBinding != sessionTokenBinding(cfg.Token) || plan.ControlOrigin != cfg.RPCState.Profiles[plan.ProfileID].ControlOrigin {
-			return stale()
-		}
-		stored := cfg.UserSession
-		if stored == nil || api.ValidateSessionResponse(stored.Response) != nil || api.ValidateSessionResponse(stored.RenewalGrant) != nil ||
-			!proto.Equal(stored.RenewalGrant.RenewalAuthorization, plan.Authorization) ||
-			stored.Response.Session.State == backend.UserSessionState_USER_SESSION_STATE_REVOKED || stored.Response.Session.SessionId != plan.Request.ExpectedSessionId ||
-			stored.Response.Session.UserId != plan.UserID {
+		if !sessionRenewalBound(cfg, plan) || plan.OperationID != id || op.Kind != ipc.OperationKind_OPERATION_KIND_RENEW_SESSION || op.State != ipc.OperationState_OPERATION_STATE_RUNNING || plan.ProfileID != op.ProfileId {
 			return stale()
 		}
 		if api.ValidateSessionRenewal(result, plan.Request, []string{plan.ControlOrigin}) != nil || result.State != backend.SessionRenewalState_SESSION_RENEWAL_STATE_SUCCEEDED ||

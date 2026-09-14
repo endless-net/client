@@ -64,6 +64,7 @@ type ClientRPCMutations struct {
 	disconnectWorker  sync.Mutex
 	enrollmentWorker  sync.Mutex
 	trustWorker       sync.Mutex
+	sessionWorker     sync.Mutex
 	store             *ConfigStore
 	instanceID        string
 	now               func() time.Time

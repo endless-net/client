@@ -256,6 +256,17 @@ checkpoint restart/privacy and these negative cases. The network polling worker,
 additional approved authentication origins and public RPC admission remain open;
 this internal checkpoint is not browser-flow acceptance.
 
+`ReconcileSessionRenewal` now executes a single durable renewal/poll step using
+producer DTOs and separate renewal/poll authorities. RUNNING and retry scheduling
+are committed before dispatch; an ambiguous transport failure retains the same
+request ID across restart. Server polling delays and replay deadlines are enforced.
+Rejected, expired, malformed or stale-context outcomes clear private execution
+authority with a durable typed failure; success rotates the token atomically.
+`TestRPCSessionRenewalExecutorRestartPollingAndFailure` covers these paths,
+cancellation before dispatch and token replacement during polling. The background
+host worker, actual backend transport and public RPC/capability wiring remain open;
+these unit checks do not establish end-to-end session renewal acceptance.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On
