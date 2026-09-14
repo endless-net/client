@@ -294,6 +294,21 @@ valid signed replacement maps and an injected executor. Clear remains possible
 without a map. This does not supply the missing OS exit adapter or qualify
 fail-closed behavior on a platform.
 
+The Linux OS protection component `exit_guard_nft.go` now submits interface-scoped
+nftables batches through the native executable. Output containment covers both
+IP families, exempting only loopback and marked UDP underlay; forwarding is
+blocked. Opening permits output through the TUN. Rule replacement and repeatable explicit
+release use single transactions, without global ruleset changes or automatic
+cleanup after ambiguous errors. `TestLinuxExitGuardAtomicContainmentAndRelease`
+and `TestLinuxExitGuardRejectsUnsafeIdentityAndCancellation` check command-boundary
+ordering, scope, restart, rejection and cancellation. They do not execute Linux
+netfilter. Transaction semantics follow the upstream [nftables documentation](https://wiki.iptables.org/wiki-nftables/index.php/Atomic_rule_replacement).
+This component is not wired into the native exit worker and adds no capability.
+Integration still needs engine/route serialization, durable startup containment,
+underlay control/relay/DNS and IPv6 neighbor discovery requirements, family/LAN
+modes, kernel observations, packaging dependency checks and privileged CI.
+Windows and Darwin outside-TUN protection also remain open.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,
