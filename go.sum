@@ -4,6 +4,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/endless-net/client-api/clientapi v1.12.0 h1:WCzHRGCozB6pt4qzavluzUBnChvFtP9vFMHgKFHKr6w=
 github.com/endless-net/client-api/clientapi v1.12.0/go.mod h1:8rTVG/hfC5vTyLju9zfQM26cyY8y9FNtJiBk8AuHhQQ=
+github.com/endless-net/client-api/clientapi v1.12.1-0.20260913120316-e4fb0a95d2af h1:MLxIBnd3sz86AO78mOlO9w/5Dc1TlI200AuEypTaV1M=
+github.com/endless-net/client-api/clientapi v1.12.1-0.20260913120316-e4fb0a95d2af/go.mod h1:8rTVG/hfC5vTyLju9zfQM26cyY8y9FNtJiBk8AuHhQQ=
 github.com/endless-net/relay v1.2.0 h1:vI38d54ywoF4GJMCsd+rL332VrgfXNKlM8Y6/9wDkEA=
 github.com/endless-net/relay v1.2.0/go.mod h1:y9fLHJ2cNiRSMHZfzJ8A/2I8bZggkN9BmFsPF6wfDos=
 github.com/google/btree v1.0.1 h1:gK4Kx5IaGY9CD5sPJ36FHiBJ6ZXl0kilRiiCj+jdYp4=

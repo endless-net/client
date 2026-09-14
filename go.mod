@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	connectrpc.com/connect v1.19.1
 	github.com/Microsoft/go-winio v0.6.2
-	github.com/endless-net/client-api/clientapi v1.12.0
+	github.com/endless-net/client-api/clientapi v1.12.1-0.20260913120316-e4fb0a95d2af
 	github.com/endless-net/client/clientipc v0.0.0
 	github.com/endless-net/relay v1.2.0
 	github.com/tailscale/wireguard-go v0.0.0-20260622164646-ae172d45f0f7

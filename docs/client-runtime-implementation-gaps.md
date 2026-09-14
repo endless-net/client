@@ -172,12 +172,15 @@ unit concurrency evidence, not a race-detector or transport-load run.
 
 ## External dependencies and approvals
 
-- `clientapi` owns backend DTOs, policy validation and session transport. `client`
-  currently pins `github.com/endless-net/client-api/clientapi v1.12.0` in `go.mod`.
-  The previously inspected producer revision
-  `e4fb0a95d2af577cda7425abec064a4ed49a3eae` adds session and policy contracts.
-  Consuming an updated dependency requires explicit version-change approval;
-  do not copy its DTOs, use a local replacement or rewrite a published version.
+- `clientapi` owns backend DTOs, policy validation and session transport. On
+  2026-09-14 the user explicitly approved consuming producer revision
+  `e4fb0a95d2af577cda7425abec064a4ed49a3eae`. `client` now pins its resolved
+  Go pseudo-version `v1.12.1-0.20260913120316-e4fb0a95d2af` in `go.mod`.
+  This removes the dependency-update approval blocker for session and policy
+  contract consumption; the missing runtime handlers listed above remain open.
+  No other dependency version or producer repository is changed. Further
+  version increases still require explicit approval. Do not copy backend DTOs,
+  use a local replacement or rewrite a published version.
 - Backend owners must implement the corresponding producer behavior. The
   existence of a producer contract is not evidence of deployed behavior.
 - Distribution source selection and external platform/provider capabilities
