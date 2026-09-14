@@ -20,12 +20,26 @@ func TestControlPlaneInterruptedDisconnect(t *testing.T) {
 	defer release()
 	done := make(chan error, 1)
 	go func() {
-		_, err := n.ServiceCommand("disconnect", args...)
+		err := retryNativeControlAdmission("disconnect", initial, func() (*ipc.Status, error) {
+			response := &ipc.GetStatusResponse{}
+			err := n.NativeService("status", response)
+			return response.Status, err
+		}, func(current *ipc.Status) error {
+			args = testclient.NativeMutationArguments(requestID, current)
+			output, err := n.ServiceCommand("disconnect", args...)
+			if err != nil {
+				return testclient.NativeServiceCommandError("disconnect", output)
+			}
+			return nil
+		})
 		done <- err
 	}()
 	select {
 	case <-entered:
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatal("disconnect failed before the offline response boundary", err)
+		}
 		t.Fatal("disconnect completed before the offline response boundary")
 	case <-time.After(10 * time.Second):
 		t.Fatal("disconnect did not reach the public offline request boundary")

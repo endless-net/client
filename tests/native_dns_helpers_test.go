@@ -42,7 +42,7 @@ func nativeDNSRecordAddressesMatch(addresses []string, ipv4, ipv6 string) bool {
 
 func runNativeControlMutation(t *testing.T, n *testclient.Node, command, id string) {
 	t.Helper()
-	status := n.AwaitNativeStatus(func(status *ipc.Status) bool { return status.ActiveProfileId != "" })
+	status := n.AwaitNativeStatus(nativeControlSnapshotReady)
 	var op *ipc.Operation
 	err := retryNativeControlAdmission(command, status, func() (*ipc.Status, error) {
 		response := &ipc.GetStatusResponse{}
@@ -82,6 +82,36 @@ func runNativeControlMutation(t *testing.T, n *testclient.Node, command, id stri
 	}
 	if n.AwaitNativeOperation(op.Id).State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
 		t.Fatal("native control mutation failed")
+	}
+}
+
+// A durable profile can be exposed before the first runtime observation. Wait
+// for that observation before binding a scenario command to its node/network;
+// the admission retry must still reject an actual identity or intent change.
+func nativeControlSnapshotReady(status *ipc.Status) bool {
+	return status.GetActiveProfileId() != "" && status.GetServiceState() != ipc.ServiceState_SERVICE_STATE_UNSPECIFIED &&
+		status.GetMetadata().GetInstanceId() != "" && status.GetMetadata().GetRevision() != 0
+}
+
+func TestNativeControlSnapshotWaitsForRuntimeObservation(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status *ipc.Status
+		ready  bool
+	}{
+		{"absent", nil, false},
+		{"profile_before_observation", &ipc.Status{ActiveProfileId: "profile", Metadata: &ipc.SnapshotMetadata{InstanceId: "instance", Revision: 1}}, false},
+		{"missing_profile", &ipc.Status{ServiceState: ipc.ServiceState_SERVICE_STATE_DISCONNECTED, Metadata: &ipc.SnapshotMetadata{InstanceId: "instance", Revision: 1}}, false},
+		{"missing_instance", &ipc.Status{ActiveProfileId: "profile", ServiceState: ipc.ServiceState_SERVICE_STATE_DISCONNECTED, Metadata: &ipc.SnapshotMetadata{Revision: 1}}, false},
+		{"missing_revision", &ipc.Status{ActiveProfileId: "profile", ServiceState: ipc.ServiceState_SERVICE_STATE_DISCONNECTED, Metadata: &ipc.SnapshotMetadata{InstanceId: "instance"}}, false},
+		{"disconnected", &ipc.Status{ActiveProfileId: "profile", ServiceState: ipc.ServiceState_SERVICE_STATE_DISCONNECTED, Metadata: &ipc.SnapshotMetadata{InstanceId: "instance", Revision: 1}}, true},
+		{"unenrolled", &ipc.Status{ActiveProfileId: "profile", ServiceState: ipc.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT, Metadata: &ipc.SnapshotMetadata{InstanceId: "instance", Revision: 1}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if nativeControlSnapshotReady(tc.status) != tc.ready {
+				t.Fatal("control scenario readiness confused a durable profile with a runtime observation")
+			}
+		})
 	}
 }
 
