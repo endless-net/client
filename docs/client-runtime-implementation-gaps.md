@@ -29,12 +29,11 @@ or manual integration run is created merely to bypass the implementation phase.
 The generated handler interface is in
 `clientipc/v0/clientipcconnect/service.connect.go`. `ClientRPCService` embeds its
 unimplemented handler in `internal/client/service_rpc_handlers.go`. At this audit,
-the seven methods below have no runtime overrides; generated SDK methods and CLI
+the six methods below have no runtime overrides; generated SDK methods and CLI
 commands must not be counted as their runtime implementations.
 
 | Requirement area | Missing runtime methods | Required implementation and unit evidence |
 | --- | --- | --- |
-| US-09 session/renewal | `RenewSession` | `GetSession` reads the backend session; protected renewal authority, durable request binding, browser/poll outcomes and lost-response recovery remain unimplemented |
 | US-05 exit | `ListExitNodes`, `GetExitNode`, `SelectExitNode`, `ClearExitNode` | Verified catalog and policy; family/LAN constraints; requested/effective distinction; durable selection; partial apply/clear and fail-closed path loss |
 | US-11 resources | `ListResources`, `SetResourceEnabled` | Verified resource identity and policy; search/pagination snapshot binding; local intent; hidden-resource denial, stale context and conflicts |
 
@@ -70,7 +69,7 @@ Paths in the table are under `internal/client/` unless qualified otherwise.
 | US-06 trust/recovery | `service_rpc_trust_worker.go`, `service_rpc_trust_recovery.go` | `TestRPCTrustWorkerRecoveryAndIndependentDisconnect` | Audit exact authority tuple, replay and privilege outcomes; helper/OS integration remains later evidence |
 | US-07 diagnostics | `service_rpc_diagnostics.go`, bundle worker/store/read handlers, `route_observations.go` | `TestRPCDiagnosticsRejectsChangedContextAndInvalidProvider`, `TestRPCAdministratorBundleScopeAndRestart`, injected route collector tests | Route sampling implemented but platform execution unqualified; inspect redaction, bounds and archive lifecycle coverage separately |
 | US-08 profiles/logout | Profile, logout and forget handlers | `TestRPCProfileRemovalGuards`, `TestRPCForgetCancelsQueuedEnrollmentAfterRestart`, `TestRPCProfilePaginationBindingsAndPrivacy` | Audit all removal/cleanup/replay cases; remote revocation depends on backend result |
-| US-09 session/renewal | `GetSession` persists protected responses; snapshot uses bound session; host emits session-clock transitions; `RenewSession` remains missing | Session read, snapshot, clock and persistence/cleanup unit suites | Durable renewal execution/recovery and platform/backend qualification remain open |
+| US-09 session/renewal | Session reads, durable renewal/poll executor, dedicated host worker, public `RenewSession`, bound snapshot identity and generated backend transport | Session read/clock/store suites; `service_rpc_session_worker_test.go`, `service_rpc_session_executor_test.go`; C `service_rpc_session_transport_test.go` | Full concurrency/cleanup audit, additional approved browser origins and platform/backend qualification remain open; no seamless-renewal acceptance claim |
 | US-10 preferences/policy | `service_rpc_uiquit.go`, preference validators | `TestRPCUIQuitRejectsUnsupportedPatchAtomically` rejects mixed UI-quit/DNS patch without changing revision or override | Implement remaining settings; rejection is not DNS/routes/policy functionality |
 | US-11 resources | Missing list/mutation overrides | No runtime implementation to qualify | Implement catalog, policy-aware enablement and actual runtime effects |
 | US-12 lifecycle | `service_rpc_uiquit.go` | `TestRPCUIQuitPreferencesAndExecution` | UI-quit support is not logoff/suspend/resume adapter implementation; audit each specified event |
@@ -78,9 +77,10 @@ Paths in the table are under `internal/client/` unless qualified otherwise.
 | US-14 presentation/privacy | Typed status/operation/log/diagnostics projections | `TestRPCObserverSnapshotExcludesPrivateState`, diagnostics suites | Audit producer reasons/actions and secret redaction; UI rendering, locale selection and assistive technologies belong outside this task |
 
 The historical [runtime gap audit](native-runtime-gap-audit.md) reported nine
-missing methods at its pinned source. The current count is seven: `GetUpdateInfo`
+missing methods at its pinned source. The current count is six: `GetUpdateInfo`
 has an explicit unavailable-source implementation and `GetSession` now performs
-a backend read. This does not complete update discovery or session renewal.
+a backend read, and `RenewSession` now has a runtime worker and transport.
+This does not complete update discovery or session renewal acceptance.
 
 US-12 unit increment: `TestRPCUIQuitReplayDoesNotApplyChangedPreference` checks
 that an acknowledged keep-intent notification replays the original operation
@@ -217,7 +217,7 @@ backend `RenewSessionRequest`, its renewal authorization, user/profile/origin
 binding and local operation ID into protected RPC state before any network
 effect. It uses producer request validation and permits an expired access
 session only while its separate renewal grant remains valid. Public
-`RenewSession` remains unimplemented until the execution/recovery worker exists;
+At this earlier increment, `RenewSession` remained unimplemented until the execution/recovery worker existed;
 no public caller can enqueue this unfinished workflow. The unit test
 `TestRPCSessionRenewalAdmissionAndDurableReplay` checks owner denial without
 mutation, pending-operation privacy, exact disk-backed replay and rejection of
@@ -266,6 +266,18 @@ authority with a durable typed failure; success rotates the token atomically.
 cancellation before dispatch and token replacement during polling. The background
 host worker, actual backend transport and public RPC/capability wiring remain open;
 these unit checks do not establish end-to-end session renewal acceptance.
+
+The session worker and public `RenewSession` are now wired into the native host;
+the agent uses the generated producer client with separate renewal and polling
+Authorization headers, HTTPS-only origins and bounded messages/timeouts. Capability
+readiness follows worker lifetime. Session reads/snapshots expose a bound active
+renewal operation ID and availability based on the current grant and worker.
+`TestRPCSessionWorkerAdmissionReadinessAndShutdown` checks owner admission,
+observer rejection, replay, duplicate-worker exclusion and cancellation/join.
+`TestAgentSessionRenewalTransportUsesDedicatedAuthority` exercises generated
+serialization against an in-memory handler (no external backend or socket).
+Full cleanup/concurrency coverage, approved cross-origin browser approval and
+real provider/platform acceptance remain open; seamless renewal is not claimed.
 
 ## External dependencies and approvals
 

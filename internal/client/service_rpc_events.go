@@ -221,6 +221,7 @@ func (m *ClientRPCMutations) snapshotLocked(peer local.Peer, build *ipc.BuildIde
 				return nil, err
 			}
 		}
+		m.projectSessionRenewalLocked(status.Session, cfg, cfg.RPCState.ActiveProfileID)
 		for _, record := range cfg.RPCState.Operations {
 			if !strings.EqualFold(record.Owner, peer.Identity) {
 				continue

@@ -103,7 +103,7 @@ func TestRPCSessionReadProjectionAndContext(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if result.Session.State != want || result.Session.SeamlessRenewalSupported || result.Session.Renewal.Availability != ipc.Availability_AVAILABILITY_UNSUPPORTED {
+				if result.Session.State != want || result.Session.SeamlessRenewalSupported || result.Session.Renewal.Availability != ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE {
 					t.Fatal("incorrect session projection")
 				}
 				wire, err := proto.Marshal(result)

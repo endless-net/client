@@ -27,6 +27,7 @@ type ClientRPCService struct {
 	DiagnosticsProvider    ClientRPCDiagnosticsProvider
 	PeersProvider          ClientRPCPeersProvider
 	SessionProvider        ClientRPCSessionProvider
+	SessionRenewalProvider ClientRPCSessionRenewalProvider
 	clientipcconnect.UnimplementedClientServiceHandler
 	mutations        *ClientRPCMutations
 	build            *ipc.BuildIdentity
@@ -40,6 +41,8 @@ type ClientRPCService struct {
 	bundleStore      *clientRPCBundleStore
 	bundleMu         sync.Mutex
 	bundleWorker     *clientRPCProfileWorker
+	sessionMu        sync.Mutex
+	sessionWorker    *clientRPCProfileWorker
 }
 
 func NewClientRPCService(mutations *ClientRPCMutations, build *ipc.BuildIdentity) *ClientRPCService {

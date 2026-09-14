@@ -42,6 +42,7 @@ func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agent
 	service.TrustRecoveryProvider = agentRPCTrustRecovery
 	service.NetworksProvider = agentRPCNetworks
 	service.SessionProvider = agentRPCSession
+	service.SessionRenewalProvider = agentRPCSessionRenewal()
 	service.DiagnosticsProvider = agentRPCDiagnostics(opts)
 	service.PeersProvider = agentRPCPeers(opts)
 	hostCtx, cancel := context.WithCancel(ctx)

@@ -46,7 +46,7 @@ func (s *ClientRPCService) sessionAs(ctx context.Context, peer local.Peer, reque
 		selected = cfg
 	}
 	session := &ipc.Session{State: ipc.SessionState_SESSION_STATE_NOT_AUTHENTICATED,
-		Renewal: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_UNSUPPORTED, ReasonKey: "session_renewal_not_implemented"}}
+		Renewal: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "session_renewal_worker_unavailable"}}
 	var stored *StoredUserSession
 	if selected.Token != "" {
 		if s.SessionProvider == nil {
@@ -109,6 +109,7 @@ func (s *ClientRPCService) sessionAs(ctx context.Context, peer local.Peer, reque
 		cfg = s.mutations.store.Read()
 		s.mutations.publishMutationLocked(nil, ipc.Domain_DOMAIN_SESSION)
 	}
+	s.mutations.projectSessionRenewalLocked(session, cfg, profile.ID)
 	return &ipc.GetSessionResponse{Session: session, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}}, nil
 }
 
@@ -117,7 +118,7 @@ func rpcProjectSession(response *backend.GetSessionResponse, now time.Time) (*ip
 		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
 	observed := response.Session
-	session := &ipc.Session{Renewal: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_UNSUPPORTED, ReasonKey: "session_renewal_not_implemented"}}
+	session := &ipc.Session{Renewal: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "session_renewal_worker_unavailable"}}
 	switch observed.State {
 	case backend.UserSessionState_USER_SESSION_STATE_ACTIVE:
 		session.State = ipc.SessionState_SESSION_STATE_ACTIVE

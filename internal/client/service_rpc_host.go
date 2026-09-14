@@ -55,6 +55,20 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 		}
 		return err
 	}
+	var sessionDone <-chan error
+	if cfg := s.mutations.store.Read(); s.SessionRenewalProvider.Renew != nil || s.SessionRenewalProvider.Poll != nil || (cfg.RPCState != nil && cfg.RPCState.SessionRenewal != nil) {
+		sessionDone, err = s.StartSessionWorker(workerCtx)
+		if err != nil {
+			cancel()
+			<-profileDone
+			<-enrollmentDone
+			if trustDone != nil {
+				<-trustDone
+			}
+			<-bundleDone
+			return err
+		}
+	}
 	stopReadCapabilities := s.startReadCapabilities(workerCtx)
 	defer stopReadCapabilities()
 	sessionClockDone := s.mutations.startSessionClock(workerCtx)
@@ -74,6 +88,8 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 		bundleDone = nil
 	case err = <-sessionClockDone:
 		sessionClockDone = nil
+	case err = <-sessionDone:
+		sessionDone = nil
 	case err = <-serverDone:
 		serverDone = nil
 	}
@@ -93,6 +109,9 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	}
 	if sessionClockDone != nil {
 		<-sessionClockDone
+	}
+	if sessionDone != nil {
+		<-sessionDone
 	}
 	if serverDone != nil {
 		<-serverDone
