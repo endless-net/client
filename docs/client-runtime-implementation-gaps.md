@@ -49,8 +49,12 @@ authority is unusable, it fetches a full map over the producer stream, verifies
 trust/signature and adopts only map fields if identity, intent, profile/recovery
 state and prior authority are unchanged. It runs before engine creation and never
 applies routes. A local HTTP fixture covers signed success, tampering, cancellation
-and Disconnect during fetch. Persistent retry after an offline startup and durable
-preservation of the original KEEP_INTENT across that failure remain open.
+and Disconnect during fetch. A private checkpoint in the blocked intent now keeps
+the original KEEP_INTENT across an offline failure and restart. Recovery binds
+profile, owner, identity, credentials and local startup choice, then applies the
+fresh signed policy to the original intent. Tests cover restoration, explicit
+Disconnect, identity/credential changes and a new managed DISCONNECT. Periodic
+retry within the same running agent after an offline startup remains open.
 Missing-map reads now preserve requested intent but report unknown
 effective value/source and temporary unavailability; set/reset reject the whole
 patch without modifying durable settings. The context regression checks this

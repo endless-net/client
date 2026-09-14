@@ -13,9 +13,10 @@ const (
 )
 
 type ConnectionIntent struct {
-	DesiredState string `json:"desired_state"`
-	Reason       string `json:"reason,omitempty"`
-	UpdatedAt    string `json:"updated_at"`
+	DesiredState    string                      `json:"desired_state"`
+	Reason          string                      `json:"reason,omitempty"`
+	UpdatedAt       string                      `json:"updated_at"`
+	StartupRecovery *clientRuntimeStartRecovery `json:"startup_recovery,omitempty"`
 }
 
 type ConnectionIntentStore struct {
@@ -42,7 +43,7 @@ func (s ConnectionIntentStore) InitializeRuntimeIntent() error {
 				return errors.New("unsupported saved runtime connection intent")
 			}
 		}
-		cfg.ConnectionIntent = runtimeStartIntent(*cfg, s.now())
+		cfg.ConnectionIntent = runtimeStartWithRecovery(*cfg, s.now())
 		return nil
 	})
 }
