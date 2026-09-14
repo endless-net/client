@@ -801,6 +801,7 @@ type clientEnrollmentOptions struct {
 	Hostname         string
 	HostnameExplicit bool
 	Network          string
+	NetworkID        string
 	Endpoint         string
 	AdvertisedIPs    []string
 	Tags             []string
@@ -815,6 +816,14 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 	}
 	if options.Save == nil {
 		return errors.New("enrollment persistence is required")
+	}
+	// A runtime-selected network is an exact authorized ID, never a CLI name
+	// heuristic. It requires account session authorization and a clean target.
+	if options.NetworkID != "" && (strings.TrimSpace(options.NetworkID) != options.NetworkID || len(options.NetworkID) > 256 ||
+		options.Network != "" || options.JoinToken != "" || cfg.Token == "" || cfg.ActiveAccountID == "" ||
+		cfg.NodeID != "" || cfg.NodeCredential != "" || cfg.CachedMap != nil ||
+		(cfg.NetworkID != "" && cfg.NetworkID != options.NetworkID)) {
+		return errors.New("exact network enrollment requires an isolated account-authorized target")
 	}
 	idempotencyKey := &options.IdempotencyKey
 	hostname, network, endpoint := &options.Hostname, &options.Network, &options.Endpoint
@@ -919,9 +928,14 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 		browserEnrollment = true
 	} else {
 		req.SessionTokenBinding = clientapi.RegistrationSessionTokenBinding(cfg.Token)
+		req.AccountID = cfg.ActiveAccountID
 	}
 	if strings.TrimSpace(req.NodeCredential) == "" {
-		setNetworkRef(&req, resolveNetworkFlag(*network))
+		if options.NetworkID != "" {
+			req.NetworkID = options.NetworkID
+		} else {
+			setNetworkRef(&req, resolveNetworkFlag(*network))
+		}
 	}
 	identitySignature, err := client.SignIdentity(cfg.IdentityPrivateKey, clientapi.RegistrationIdentityProofPayload(req))
 	if err != nil {
