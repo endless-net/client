@@ -23,6 +23,18 @@ type resourcePacketFilter struct {
 	applying, closed, active bool
 }
 
+func (f *resourcePacketFilter) differs(rules []resourceDenyRule) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return !f.active || f.closed || !slices.Equal(f.current, rules)
+}
+
+func (f *resourcePacketFilter) hasAuthority() bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.active
+}
+
 func (f *resourcePacketFilter) suspend(rules []resourceDenyRule, expires time.Time) error {
 	if len(rules) > 8192 || expires.IsZero() {
 		return errors.New("invalid resource filter bounds or expiry")
@@ -59,7 +71,9 @@ func (f *resourcePacketFilter) withdraw() {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.closed = true
+	if f.active {
+		f.closed = true
+	}
 }
 
 func (f *resourcePacketFilter) allows(raw []byte, inbound bool, now time.Time) bool {

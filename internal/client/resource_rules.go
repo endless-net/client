@@ -12,6 +12,19 @@ import (
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
 
+func resourceDenialsForMap(cfg Config, source api.RegisterNodeResponse, now time.Time) ([]resourceDenyRule, time.Time, error) {
+	if source.MapSignature == nil && len(cfg.ResourcePreferences) == 0 && (source.Network.ClientPolicy == nil || len(source.Network.ClientPolicy.Resources) == 0) {
+		return nil, time.Time{}, nil
+	}
+	cfg.CachedMap = &source
+	cfg.MapRevision, cfg.MapGlobalRevision = source.Network.Revision, source.Revision.Global
+	rules, err := compileResourceDenials(cfg, now)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	return rules, source.MapSignature.ExpiresAt, nil
+}
+
 // Compile only denials; positive local values cannot add a route, peer or ACL.
 // Invalid/stale local identities fail compilation instead of silently reopening
 // traffic. A later reconciliation must explicitly resolve stale local choices.

@@ -18,15 +18,16 @@ const wireGuardACLFirewallChainPrefix = "ENACL-"
 const wireGuardExitLANFirewallChainPrefix = "ENLAN-"
 
 type WireGuardRenderOptions struct {
-	sharingPacketEnforcement bool
-	inboundPacketEnforcement bool
-	ListenPort               int
-	MTU                      int
-	RouteTable               string
-	Interfaces               []NetworkInterfaceStatus
-	PeerEndpointOverrides    map[string]string
-	SubnetRouterSNAT         bool
-	ExitBlockLAN             bool
+	sharingPacketEnforcement  bool
+	inboundPacketEnforcement  bool
+	resourcePacketEnforcement bool
+	ListenPort                int
+	MTU                       int
+	RouteTable                string
+	Interfaces                []NetworkInterfaceStatus
+	PeerEndpointOverrides     map[string]string
+	SubnetRouterSNAT          bool
+	ExitBlockLAN              bool
 }
 
 // RenderWireGuardWithOptionsChecked validates the complete untrusted map
@@ -54,6 +55,13 @@ func RenderWireGuardWithOptionsChecked(cfg Config, response clientapi.RegisterNo
 	}
 	if !acceptance.inbound && !opts.inboundPacketEnforcement {
 		return "", fmt.Errorf("inbound restriction requires the managed WireGuard packet filter; static export is unavailable")
+	}
+	resourceRules, _, err := resourceDenialsForMap(cfg, response, time.Now())
+	if err != nil {
+		return "", err
+	}
+	if len(resourceRules) > 0 && !opts.resourcePacketEnforcement {
+		return "", fmt.Errorf("resource restrictions require the managed WireGuard packet filter; static export is unavailable")
 	}
 	original := response
 	response = cloneRegisterNodeResponse(response)

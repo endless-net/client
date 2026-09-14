@@ -182,7 +182,7 @@ ID. `TestResourcePreferenceServicePolicyCoversPortsAndPreservesLocalChoice`
 checks both ports, locked/unlocked precedence, disk persistence, absence/reset
 and cloned reads. `TestResourcePreferenceFalsePresenceAndAuthenticatedSource`
 checks explicit false across disk reopen and signature rejection. Public
-SetResourceEnabled and packet/route enforcement are still required.
+SetResourceEnabled and complete effect qualification are still required.
 
 Resource packet enforcement preparation: `resource_filter.go` is composed into
 the optional TUN filter chain before inbound response tracking. It applies
@@ -191,9 +191,8 @@ retains old denials while tightening, and relaxes only on commit. Map expiry and
 withdrawal close traffic. `TestResourceFilterDeniesOverlapsAndTransitionsInBothDirections`
 checks port/protocol separation, overlap and staged changes, expiry and withdraw;
 `TestResourceFilterRuleValidationAndOwnership` checks rule shape,
-defensive copying and malformed packets. Resource-filter engine construction,
-durable mutation worker and public SetResourceEnabled are
-still missing; optional TUN composition alone does not activate resource policy.
+defensive copying and malformed packets. The durable resource mutation worker
+and public SetResourceEnabled remain missing; engine integration is described below.
 `resource_rules.go` now authenticates once and compiles local/managed choices
 into bounded, deduplicated prefix/port denials for host, subnet, service and
 source-role application resources. Service host matching includes the current
@@ -202,7 +201,14 @@ excluded. Stale local choices cause a compilation error and still need a
 reconciliation policy. `TestResourceCompilerSubnetOverlapAndApplicationPort`
 checks overlap deny precedence, application port scope and stale choice failure;
 `TestResourceCompilerManagedServiceAndSignature` checks locked service ports and
-tampered-map rejection. Engine/public integration remains open.
+tampered-map rejection. Engine integration now compiles from the supplied signed
+map, stages denials before Configure, commits after success, and withdraws on
+apply failure/Down. The real TUN retains the same filter object across updates;
+resource-only changes are reported even without route changes. Static export
+rejects compiled resource restrictions. `TestResourceEngineAppliesChangesAndRejectsStaticBypass`
+exercises default/disable/enable, Changed reporting, map expiry, shutdown and
+checked-export rejection with a test TUN/router. Public SetResourceEnabled,
+durable resource operations and OS effect qualification remain open.
 
 ## Client-owned scenario map
 
