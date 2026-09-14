@@ -212,6 +212,25 @@ keys (`TestDiagnosticsSessionAuthorityKeysAreSensitive`). Existing state
 protection is reused without a format/version increase. This is not proof of
 renewal success, fresh platform ACL qualification or backend deployment.
 
+Renewal admission foundation: internal `renewSessionAs` writes an immutable
+backend `RenewSessionRequest`, its renewal authorization, user/profile/origin
+binding and local operation ID into protected RPC state before any network
+effect. It uses producer request validation and permits an expired access
+session only while its separate renewal grant remains valid. Public
+`RenewSession` remains unimplemented until the execution/recovery worker exists;
+no public caller can enqueue this unfinished workflow. The unit test
+`TestRPCSessionRenewalAdmissionAndDurableReplay` checks owner denial without
+mutation, pending-operation privacy, exact disk-backed replay and rejection of
+a second operation. Backend dispatch, polling, response authority validation,
+atomic token rotation, cancellation/cleanup and their full negative coverage
+remain required before exposing the RPC or claiming renewal functionality.
+Before exposure, separate the retained renewal grant from the latest session
+observation: the backend forbids issuing renewal authority in an expired/revoked
+session response. A later expired observation must not silently discard a still
+valid grant obtained while active; explicit revocation must not retain usable
+authority. The current admission test uses that earlier active projection with
+an elapsed access deadline, not a new grant issued for an expired session.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On
