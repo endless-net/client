@@ -357,6 +357,17 @@ support. `TestNodeCleanupRemovesBoundExitSelection` checks node/logout cleanup.
 These internal methods are not public RPC overrides: no worker or ready exit
 capability exists yet, and active routing is not changed by admission alone.
 
+Exit completion now requires an exact per-family APPLIED observation, matching
+requested/effective exit and LAN settings, and fail-closed proof for enabled
+families. Disabled/cleared families must have absent selection IDs. The operation,
+profile/owner/origin/node tuple, previous selection and current signed grant are
+rechecked before atomic completion. `TestRPCExitResultRejectsPartialOrStaleApplication`
+covers valid select/offline-clear completion and restart replay, partial/missing
+family evidence, lost protection, wrong LAN, unexpected IPv6, expired grants and
+changed node/selection. These injected observations are not real OS evidence.
+The executor, partial-failure recovery, live effective-status provider and public
+Select/Clear wiring remain open; this helper alone does not implement exit apply.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On

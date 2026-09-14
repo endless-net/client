@@ -16,6 +16,8 @@ type clientRPCExitChange struct {
 	ProfileID     string               `json:"profile_id"`
 	OwnerID       string               `json:"owner_id"`
 	ControlOrigin string               `json:"control_origin"`
+	NodeID        string               `json:"node_id"`
+	NetworkID     string               `json:"network_id"`
 	Requested     *ClientExitSelection `json:"requested,omitempty"`
 	Previous      *ClientExitSelection `json:"previous,omitempty"`
 }
@@ -56,7 +58,7 @@ func (m *ClientRPCMutations) prepareExitChange(cfg *Config, op *ipc.Operation, r
 		}
 	}
 	op.ProfileId = profile.ID
-	return &clientRPCExitChange{OperationID: op.Id, ProfileID: profile.ID, OwnerID: cfg.LocalOwnerID, ControlOrigin: profile.ControlOrigin, Previous: cloneExitSelection(cfg.ExitSelection)}, nil
+	return &clientRPCExitChange{OperationID: op.Id, ProfileID: profile.ID, OwnerID: cfg.LocalOwnerID, ControlOrigin: profile.ControlOrigin, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, Previous: cloneExitSelection(cfg.ExitSelection)}, nil
 }
 
 func (m *ClientRPCMutations) selectExitNodeAs(peer local.Peer, request *ipc.SelectExitNodeRequest, supported []clientRPCExitMode) (*ipc.Operation, error) {
