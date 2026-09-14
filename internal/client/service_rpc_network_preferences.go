@@ -94,17 +94,8 @@ func (m *ClientRPCMutations) prepareNetworkPreferences(cfg *Config, op *ipc.Oper
 	if profile.ID != cfg.RPCState.ActiveProfileID {
 		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	}
-	if cfg.RPCState.NetworkPreferenceChange != nil {
-		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
-	}
-	for _, record := range cfg.RPCState.Operations {
-		pending := new(ipc.Operation)
-		if proto.Unmarshal(record.Operation, pending) != nil {
-			return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
-		}
-		if !rpcOperationTerminal(pending.State) {
-			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
-		}
+	if err := rpcConfigurationChangeConflict(*cfg); err != nil {
+		return err
 	}
 	if cfg.CachedMap == nil || cfg.CachedMap.MapSignature == nil {
 		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
@@ -180,6 +171,27 @@ func (m *ClientRPCMutations) prepareNetworkPreferences(cfg *Config, op *ipc.Oper
 	if cfg.ConnectionIntent != nil {
 		intent := *cfg.ConnectionIntent
 		cfg.RPCState.NetworkPreferenceChange.PreviousIntent = &intent
+	}
+	return nil
+}
+
+// Shared by admission and catalog mutation controls. Every nonterminal
+// operation conflicts, including one without a network-preference plan.
+func rpcConfigurationChangeConflict(cfg Config) error {
+	if cfg.RPCState == nil {
+		return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+	}
+	if cfg.RPCState.NetworkPreferenceChange != nil {
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+	}
+	for _, record := range cfg.RPCState.Operations {
+		pending := new(ipc.Operation)
+		if proto.Unmarshal(record.Operation, pending) != nil {
+			return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+		}
+		if !rpcOperationTerminal(pending.State) {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+		}
 	}
 	return nil
 }

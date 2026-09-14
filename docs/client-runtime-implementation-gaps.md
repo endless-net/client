@@ -560,6 +560,11 @@ maps are unavailable. Enabled now reports authenticated committed policy
 resolution, with pending Requested kept separate. Source, policy ID and locks
 come from the producer policy; local choices retain USER provenance unless
 locked. Worker absence and a pending configuration change disable mutation.
+The catalog and admission share the same conflict check for every nonterminal
+operation, including Disconnect without a preference plan. The check runs once
+per catalog read. `TestResourceMutationControlMatchesDisconnectConflict` checks
+that the catalog restriction matches BUSY admission, and disappears after Down
+completes while worker absence remains a separate restriction.
 `TestResourceCatalogCommittedPendingAndPolicy` checks these distinctions.
 Availability still explicitly reports missing runtime observations; a policy
 value does not prove reachability. Catalog overlap reporting now uses the same

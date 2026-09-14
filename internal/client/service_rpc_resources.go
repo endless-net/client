@@ -137,12 +137,13 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 	if err := projectResourceOverlaps(state, items); err != nil {
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 	}
+	conflicting := rpcConfigurationChangeConflict(cfg) != nil
 	for _, resource := range items {
 		identity, err := resolveResourceInAuthenticatedMap(state, resource.Id)
 		if err != nil {
 			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 		}
-		resource.Enabled = rpcResourceSetting(cfg, resource.Id, identity, ready)
+		resource.Enabled = rpcResourceSetting(cfg, resource.Id, identity, ready, conflicting)
 	}
 	items = slices.DeleteFunc(items, func(resource *ipc.Resource) bool {
 		return (len(kinds) > 0 && !slices.Contains(kinds, resource.Kind)) || !strings.Contains(searchTargets[resource.Id], search)

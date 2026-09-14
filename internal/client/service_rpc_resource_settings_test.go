@@ -1,11 +1,53 @@
 package client
 
 import (
+	"context"
+	"sync"
 	"testing"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+func TestResourceMutationControlMatchesDisconnectConflict(t *testing.T) {
+	m, owner, profile := rpcPreferenceFixture(t)
+	s := NewClientRPCService(m, nil)
+	id := rpcResourceID(ipc.ResourceKind_RESOURCE_KIND_HOST, m.store.Read().CachedMap.Peers[0].ID)
+	if _, err := m.disconnectAs(owner, &ipc.DisconnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}); err != nil {
+		t.Fatal(err)
+	}
+	read := func() *ipc.BooleanSetting {
+		t.Helper()
+		rows, err := s.resourcesAs(t.Context(), owner, &ipc.ListResourcesRequest{Profile: profile})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, row := range rows.Resources {
+			if row.Id == id {
+				return row.Enabled
+			}
+		}
+		t.Fatal("missing host")
+		return nil
+	}
+	value := read()
+	if value.Control.Mutation.ReasonKey != "resource_operation_conflict" || value.Control.Mutation.Availability != ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE {
+		t.Fatal("pending disconnect advertised a mutable resource", value)
+	}
+	_, err := m.setResourceEnabledAs(owner, &ipc.SetResourceEnabledRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, ResourceId: id})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_BUSY)
+	if err := m.ReconcileDisconnect(t.Context(), ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE, nil
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if value := read(); value.Control.Mutation.ReasonKey != "resource_worker_unavailable" {
+		t.Fatal("terminal operation retained conflict", value)
+	}
+	if _, err := m.setResourceEnabledAs(owner, &ipc.SetResourceEnabledRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, ResourceId: id}); err != nil {
+		t.Fatal("terminal disconnect blocked admission", err)
+	}
+}
 
 func TestResourceCatalogCommittedPendingAndPolicy(t *testing.T) {
 	for _, scenario := range []string{"default", "local", "pending", "account", "device_locked"} {

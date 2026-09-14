@@ -8,7 +8,7 @@ import (
 
 // Effective describes the committed policy resolution, not reachability.
 // Availability on Resource carries the separate runtime observation.
-func rpcResourceSetting(cfg Config, id string, identity clientResourceIdentity, ready bool) *ipc.BooleanSetting {
+func rpcResourceSetting(cfg Config, id string, identity clientResourceIdentity, ready, conflicting bool) *ipc.BooleanSetting {
 	resolved := resourcePreferenceForIdentity(cfg, id, identity)
 	control := &ipc.SettingControl{Source: ipc.SettingSource_SETTING_SOURCE_DEFAULT, Mutation: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE}}
 	if resolved.Requested != nil {
@@ -17,6 +17,9 @@ func rpcResourceSetting(cfg Config, id string, identity clientResourceIdentity, 
 	result := &ipc.BooleanSetting{Effective: resolved.Enabled, Requested: resolved.Requested, Control: control}
 	if !ready {
 		control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "resource_worker_unavailable"}
+	}
+	if conflicting {
+		control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "resource_operation_conflict"}
 	}
 	if plan := cfg.RPCState.NetworkPreferenceChange; plan != nil {
 		control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "resource_change_pending"}
