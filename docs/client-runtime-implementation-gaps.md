@@ -556,10 +556,14 @@ tuples and individual service ports. Default routes are excluded from ordinary
 subnets; applications require the local signed source identity. Search intersects
 kind filters; page tokens bind caller/profile, signed payload, canonical query
 and result digest. Expired, tampered, foreign-recipient and revision-mismatched
-maps are unavailable. No reachability or applied enablement is inferred: Enabled
-is absent and availability explicitly reports missing runtime observations.
-Effective policy/enablement and overlap resolution remain implementation gaps,
-not successful default values. No resources capability is advertised by this step.
+maps are unavailable. Enabled now reports authenticated committed policy
+resolution, with pending Requested kept separate. Source, policy ID and locks
+come from the producer policy; local choices retain USER provenance unless
+locked. Worker absence and a pending configuration change disable mutation.
+`TestResourceCatalogCommittedPendingAndPolicy` checks these distinctions.
+Availability still explicitly reports missing runtime observations; a policy
+value does not prove reachability. Overlap reporting and actual-state evidence
+remain gaps. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
 

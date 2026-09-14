@@ -69,8 +69,8 @@ func TestRPCResourcesPreserveExplicitSingleIPSubnet(t *testing.T) {
 			hosts := 0
 			seen := map[string]bool{}
 			for _, resource := range response.Resources {
-				if seen[resource.Id] || resource.Enabled != nil {
-					t.Fatal("duplicate identity or inferred applied policy")
+				if seen[resource.Id] || resource.Enabled == nil {
+					t.Fatal("duplicate identity or missing policy resolution")
 				}
 				seen[resource.Id] = true
 				if host := resource.GetHost(); host != nil {
@@ -140,7 +140,7 @@ func TestRPCResourceServiceTargetsSearchAndIdentity(t *testing.T) {
 			seen := map[string]bool{}
 			for _, resource := range response.Resources {
 				target := resource.GetService()
-				if target == nil || target.Hostname != "db.account.endlessnet" || resource.Id == "" || seen[resource.Id] || resource.Enabled != nil {
+				if target == nil || target.Hostname != "db.account.endlessnet" || resource.Id == "" || seen[resource.Id] || resource.Enabled == nil {
 					t.Fatal("invalid, duplicated or falsely enabled service resource", resource)
 				}
 				seen[resource.Id] = true
@@ -253,7 +253,7 @@ func TestRPCResourcesAuthenticateFilterAndBindPages(t *testing.T) {
 			kinds := map[ipc.ResourceKind]bool{}
 			for {
 				for _, resource := range response.Resources {
-					if resource.Id == "" || seen[resource.Id] || resource.Target == nil || resource.NetworkId != networkMap.Network.ID || resource.Enabled != nil || resource.Availability.Availability != ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE {
+					if resource.Id == "" || seen[resource.Id] || resource.Target == nil || resource.NetworkId != networkMap.Network.ID || resource.Enabled == nil || resource.Availability.Availability != ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE {
 						t.Fatal("resource identity duplicated or unobserved effect claimed")
 					}
 					if resource.GetSubnet().GetCidr() == "0.0.0.0/0" || resource.GetSubnet().GetCidr() == "::/0" {

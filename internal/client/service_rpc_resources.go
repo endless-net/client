@@ -34,6 +34,9 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		return nil, err
 	}
 	m := s.mutations
+	s.profileMu.Lock()
+	ready := s.profileWorker != nil && s.profileWorker.ctx.Err() == nil
+	s.profileMu.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	cfg := m.store.Read()
@@ -69,8 +72,7 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		}
 		resource.Id = rpcResourceID(kind, key)
 		resource.Kind, resource.DisplayName, resource.NetworkId = kind, name, state.Network.ID
-		// Signed disclosure is not observed reachability or applied enablement.
-		// Keep Enabled absent until the runtime supplies an effective setting.
+		// Policy resolution is separate from observed runtime reachability.
 		resource.Availability = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "resource_runtime_observation_unavailable"}
 		items = append(items, resource)
 	}
@@ -133,6 +135,13 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Id < items[j].Id })
+	for _, resource := range items {
+		identity, err := resolveResourceInAuthenticatedMap(state, resource.Id)
+		if err != nil {
+			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+		}
+		resource.Enabled = rpcResourceSetting(cfg, resource.Id, identity, ready)
+	}
 	response := &ipc.ListResourcesResponse{Resources: items}
 	if proto.Size(response) > rpc.MaxResponseBytes-4096 {
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
