@@ -208,8 +208,14 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 		assertRPCFailure(t, switchEvents.Err(), ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		_ = switchEvents.Close()
 		info, err := client.Bootstrap(ctx)
-		if err != nil || len(info.Capabilities) != 5 {
+		wantCapabilities := []ipc.Capability{ipc.Capability_CAPABILITY_ENROLLMENT, ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_LOGOUT, ipc.Capability_CAPABILITY_LOCAL_FORGET, ipc.Capability_CAPABILITY_PROFILES, ipc.Capability_CAPABILITY_PREFERENCES, ipc.Capability_CAPABILITY_RESOURCES}
+		if err != nil || len(info.Capabilities) != len(wantCapabilities) {
 			t.Fatal("bootstrap did not expose ready profile and enrollment workers", err)
+		}
+		for i, capability := range info.Capabilities {
+			if capability.Capability != wantCapabilities[i] || capability.Restriction.GetAvailability() != ipc.Availability_AVAILABILITY_AVAILABLE {
+				t.Fatal("bootstrap exposed unexpected worker capabilities")
+			}
 		}
 		switchEvents, err = client.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
 		if err != nil || !switchEvents.Receive() || switchEvents.Msg().Sequence != 1 || switchEvents.Msg().GetSnapshot() == nil {

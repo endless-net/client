@@ -980,7 +980,11 @@ the independently configured enrollment worker is alive. Deterministic ordering
 and per-worker ownership prevent one worker's stop callback from withdrawing
 another's capabilities. Stopping enrollment leaves Connection/Profiles/Logout
 available; stopping their worker does not claim completion of accepted work.
-No preference/resource/exit/session/update capability is enabled by this wiring.
+The initial wiring did not enable preference/resource/exit/session/update
+capabilities. Preference/resource readiness is now also owned by the profile
+worker, which executes their shared durable apply/containment plan through the
+native driver. Exit and update are not enabled by this profile-worker change;
+session readiness belongs to its independent executor.
 
 Native transport coverage reboots its subscription after worker transitions,
 then observes approval and completion of the original enrollment operation
@@ -1001,7 +1005,7 @@ Provider-combination tests observe capabilities at listener startup and verify
 their removal after listener failure. Missing diagnostics/logs/storage never
 advertise the complete diagnostic family; discovery performs no enrollment,
 logout, peer lookup or diagnostics probe. The native host test compares all
-eight currently wired capabilities through Bootstrap, CLI and opening snapshot.
+the configured capabilities through Bootstrap, CLI and opening snapshot.
 These are local/component checks; complete diagnostics content, approved support
 resources and installed artifact/platform acceptance still require evidence.
 

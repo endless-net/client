@@ -52,7 +52,7 @@ func TestRPCHostCapabilitiesRequireConfiguredProviders(t *testing.T) {
 					return ClientRPCDiagnosticsObservation{}, nil
 				}
 			}
-			want := []ipc.Capability{ipc.Capability_CAPABILITY_ENROLLMENT, ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_LOCAL_FORGET, ipc.Capability_CAPABILITY_PROFILES, ipc.Capability_CAPABILITY_SUPPORT_INFO}
+			want := []ipc.Capability{ipc.Capability_CAPABILITY_ENROLLMENT, ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_LOCAL_FORGET, ipc.Capability_CAPABILITY_PROFILES, ipc.Capability_CAPABILITY_PREFERENCES, ipc.Capability_CAPABILITY_RESOURCES, ipc.Capability_CAPABILITY_SUPPORT_INFO}
 			if scenario.peers {
 				want = append(want, ipc.Capability_CAPABILITY_PEERS)
 			}

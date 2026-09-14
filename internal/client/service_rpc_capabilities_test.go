@@ -25,13 +25,13 @@ func TestRPCConnectionCapabilityTracksWorkerAndRebootstrap(t *testing.T) {
 		info := snapshot.Runtime
 		count := 0
 		if want {
-			count = 3
+			count = 5
 		}
 		if len(info.Capabilities) != count {
 			t.Fatal("capability does not follow actual worker readiness")
 		}
 		if want {
-			if info.Capabilities[1].Capability != ipc.Capability_CAPABILITY_LOCAL_FORGET || info.Capabilities[2].Capability != ipc.Capability_CAPABILITY_PROFILES {
+			if info.Capabilities[1].Capability != ipc.Capability_CAPABILITY_LOCAL_FORGET || info.Capabilities[2].Capability != ipc.Capability_CAPABILITY_PROFILES || info.Capabilities[3].Capability != ipc.Capability_CAPABILITY_PREFERENCES || info.Capabilities[4].Capability != ipc.Capability_CAPABILITY_RESOURCES {
 				t.Fatal("profile worker did not advertise profile lifecycle")
 			}
 			capability := info.Capabilities[0]
@@ -82,7 +82,7 @@ func TestRPCConnectionCapabilityTracksWorkerAndRebootstrap(t *testing.T) {
 	}
 	defer m.unsubscribe(fresh)
 	opening, err := fresh.next(waitCtx)
-	if err != nil || opening.Sequence != 1 || len(opening.GetSnapshot().GetRuntime().GetCapabilities()) != 3 {
+	if err != nil || opening.Sequence != 1 || len(opening.GetSnapshot().GetRuntime().GetCapabilities()) != 5 {
 		t.Fatal("new stream did not open with ready capability", err)
 	}
 	cancel()
@@ -157,7 +157,7 @@ func TestRPCEnrollmentAndLogoutReadinessAreIndependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { stopProfile(); <-profileDone }()
-	base := []ipc.Capability{ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_LOGOUT, ipc.Capability_CAPABILITY_LOCAL_FORGET, ipc.Capability_CAPABILITY_PROFILES}
+	base := []ipc.Capability{ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_LOGOUT, ipc.Capability_CAPABILITY_LOCAL_FORGET, ipc.Capability_CAPABILITY_PROFILES, ipc.Capability_CAPABILITY_PREFERENCES, ipc.Capability_CAPABILITY_RESOURCES}
 	assertCapabilities(base...)
 	if _, err := s.StartEnrollmentWorker(t.Context(), nil); err == nil {
 		t.Fatal("missing enrollment provider accepted")

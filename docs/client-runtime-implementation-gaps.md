@@ -413,6 +413,14 @@ checks pending and terminal replay after disk reopen for all three methods,
 absent and cancelled workers, unauthenticated/foreign callers, changed payload
 under the same request ID and new-work rejection without persistent mutation.
 The rejecting admission callback cannot execute a candidate or create a plan.
+PREFERENCES and RESOURCES capabilities now follow the live profile worker that
+reconciles these operations. Native Start sends candidate configuration through
+WireGuard.Configure, including network acceptance and resource packet filters;
+this readiness is not a reachability or full platform-support assertion.
+Existing capability tests now include both families in Bootstrap/opening snapshot,
+worker cancellation, independent enrollment lifetime, replacement-worker safety
+and host shutdown. Per-setting/resource policy restrictions still apply, and
+full OS effects, recovery and BA/SA acceptance remain separately open.
 `TestNetworkPreferencePublicAdmissionWakesWorkerAndSeparatesPending` exercises
 the readiness/acceptance bridge, worker wakeup and pending-to-committed reads;
 `TestNetworkPreferenceProjectionManagedLockAndReset` covers lock precedence

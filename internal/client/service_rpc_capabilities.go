@@ -37,7 +37,7 @@ func (m *ClientRPCMutations) runtimeInfoLocked(peer local.Peer, build *ipc.Build
 // acceptance claim. Rebootstrap instead of sending a second snapshot or letting
 // old subscribers keep the readiness of a stopped/replaced worker.
 func (m *ClientRPCMutations) setProfileWorkerReadiness(worker *clientRPCProfileWorker, ready bool) {
-	capabilities := []ipc.Capability{ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_PROFILES, ipc.Capability_CAPABILITY_LOCAL_FORGET}
+	capabilities := []ipc.Capability{ipc.Capability_CAPABILITY_CONNECTION, ipc.Capability_CAPABILITY_PROFILES, ipc.Capability_CAPABILITY_LOCAL_FORGET, ipc.Capability_CAPABILITY_PREFERENCES, ipc.Capability_CAPABILITY_RESOURCES}
 	if worker.logout {
 		capabilities = append(capabilities, ipc.Capability_CAPABILITY_LOGOUT)
 	}
