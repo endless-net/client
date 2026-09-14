@@ -29,12 +29,12 @@ or manual integration run is created merely to bypass the implementation phase.
 The generated handler interface is in
 `clientipc/v0/clientipcconnect/service.connect.go`. `ClientRPCService` embeds its
 unimplemented handler in `internal/client/service_rpc_handlers.go`. At this audit,
-the six methods below have no runtime overrides; generated SDK methods and CLI
+the five methods below have no runtime overrides; generated SDK methods and CLI
 commands must not be counted as their runtime implementations.
 
 | Requirement area | Missing runtime methods | Required implementation and unit evidence |
 | --- | --- | --- |
-| US-05 exit | `ListExitNodes`, `GetExitNode`, `SelectExitNode`, `ClearExitNode` | Verified catalog and policy; family/LAN constraints; requested/effective distinction; durable selection; partial apply/clear and fail-closed path loss |
+| US-05 exit | `GetExitNode`, `SelectExitNode`, `ClearExitNode` | Family/LAN constraints; requested/effective distinction; durable selection; partial apply/clear and fail-closed path loss; list-only support does not establish selection |
 | US-11 resources | `ListResources`, `SetResourceEnabled` | Verified resource identity and policy; search/pagination snapshot binding; local intent; hidden-resource denial, stale context and conflicts |
 
 Additional partial implementations must not be mistaken for complete domains:
@@ -65,7 +65,7 @@ Paths in the table are under `internal/client/` unless qualified otherwise.
 | US-02 enrollment | `service_rpc_enrollment_worker.go`, `service_rpc_enrollment_executor.go` | `TestRPCEnrollmentWorkerRecoveryAndShutdown` | Trace approval, denial, expiry, cancellation and ownership outcomes individually; actual backend approval is external |
 | US-03 connection | `service_rpc_connect.go`, `service_rpc_disconnect.go` | `TestRPCConnectDurabilityAndFailure`, `TestRPCDisconnectPreemptsApplyOnlyAfterAcceptance` | Audit remaining races and recovery boundaries; unit driver results are not OS traffic evidence |
 | US-04 networks/peers | `service_rpc_networks.go`, `service_rpc_select_network.go`, `service_rpc_peers.go` | `TestRPCSelectCurrentNetworkIsDurableNoop`; peer pagination/event suites | Current-network no-op is not cross-network selection; audit real provider switching and stale catalogs |
-| US-05 exit | Missing-method inventory above includes all four exit methods | No runtime implementation to qualify; CLI/SDK coverage is insufficient | Verified backend policy consumption, durable selection and family-specific effects |
+| US-05 exit | `service_rpc_exit_catalog.go` lists live grants from the authenticated active-profile map | `TestRPCExitCatalogUsesSignedBoundGrants` checks signature/identity/expiry/privacy/page binding; selection remains unavailable | Durable selection, platform family/LAN support, effective status and fail-closed effects remain unimplemented |
 | US-06 trust/recovery | `service_rpc_trust_worker.go`, `service_rpc_trust_recovery.go` | `TestRPCTrustWorkerRecoveryAndIndependentDisconnect` | Audit exact authority tuple, replay and privilege outcomes; helper/OS integration remains later evidence |
 | US-07 diagnostics | `service_rpc_diagnostics.go`, bundle worker/store/read handlers, `route_observations.go` | `TestRPCDiagnosticsRejectsChangedContextAndInvalidProvider`, `TestRPCAdministratorBundleScopeAndRestart`, injected route collector tests | Route sampling implemented but platform execution unqualified; inspect redaction, bounds and archive lifecycle coverage separately |
 | US-08 profiles/logout | Profile, logout and forget handlers | `TestRPCProfileRemovalGuards`, `TestRPCForgetCancelsQueuedEnrollmentAfterRestart`, `TestRPCProfilePaginationBindingsAndPrivacy` | Audit all removal/cleanup/replay cases; remote revocation depends on backend result |
@@ -77,9 +77,10 @@ Paths in the table are under `internal/client/` unless qualified otherwise.
 | US-14 presentation/privacy | Typed status/operation/log/diagnostics projections | `TestRPCObserverSnapshotExcludesPrivateState`, diagnostics suites | Audit producer reasons/actions and secret redaction; UI rendering, locale selection and assistive technologies belong outside this task |
 
 The historical [runtime gap audit](native-runtime-gap-audit.md) reported nine
-missing methods at its pinned source. The current count is six: `GetUpdateInfo`
+missing methods at its pinned source. The current count is five: `GetUpdateInfo`
 has an explicit unavailable-source implementation and `GetSession` now performs
-a backend read, and `RenewSession` now has a runtime worker and transport.
+a backend read, `RenewSession` now has a runtime worker and transport, and
+`ListExitNodes` reads authenticated live exit grants from the cached map.
 This does not complete update discovery or session renewal acceptance.
 
 US-12 unit increment: `TestRPCUIQuitReplayDoesNotApplyChangedPreference` checks
@@ -297,6 +298,16 @@ projection, not only its state enum. `TestRPCSessionClockPublishesRenewalGrantEx
 verifies that renewal grant expiry withdraws availability while access remains
 ACTIVE, emitting one transition rather than silently leaving stale availability.
 These are unit observations, not real traffic or platform qualification.
+
+Exit catalog uses the pinned producer's signed `ClientPolicy.ExitNodes`, not
+advertised/default-route inference or a nonexistent backend Exit RPC. The entire
+cached map is validated and authenticated, with local node/network/revision
+binding and live map/grant deadlines. Page tokens bind the signed payload and
+visible catalog so grant expiry cannot continue a stale page. The list exposes
+no selectable modes and reports `exit_executor_unavailable` until actual
+platform-aware selection/application is implemented. No exit capability is
+advertised by this read-only increment; Get/Select/Clear and traffic acceptance
+remain open.
 
 ## External dependencies and approvals
 
