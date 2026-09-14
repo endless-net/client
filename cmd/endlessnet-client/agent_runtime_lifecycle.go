@@ -94,7 +94,10 @@ func startAgentRuntimeLifecycle(ctx context.Context, cancel context.CancelCauseF
 			var pending *client.RuntimeLifecycleNotification
 			if err := executor.Handle(event.Event, event.SessionOwner); err != nil && ctx.Err() == nil {
 				log.Print("runtime lifecycle transition pending")
-				pending = &event
+				var effectErr *client.RuntimeLifecycleEffectError
+				if event.Event != client.RuntimeUserLogoff || !errors.As(err, &effectErr) {
+					pending = &event
+				}
 			}
 			if event.Event == client.RuntimeUserLogoff {
 				pendingLogoff = pending

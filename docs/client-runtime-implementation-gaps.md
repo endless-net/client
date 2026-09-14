@@ -171,7 +171,13 @@ local policy becomes available; a replaced owner retains its newer intent.
 An unsuccessful offline policy refresh neither resumes the engine nor wakes
 reconciliation, and a later successful attempt resolves the pending logoff.
 These are consumer-ordering units, not signed-map acquisition or native OS
-execution evidence. The Windows service also retries
+execution evidence. A committed logoff decision is now distinguished from a
+failed teardown/observation: effect failures yield to ordinary reconciliation
+or resume's gated teardown and do not enqueue the original policy decision
+again. `agent_runtime_lifecycle_reconnect_test.go` verifies that a newer Connect
+intent survives resume after logoff's first Down failed. This does not yet
+establish ordering for every unresolved-policy/user-mutation interleaving.
+The Windows service also retries
 one unresolved WTS owner per second, using round-robin selection within the
 bounded registry. Resolved or departed sessions are not queried; an in-flight
 lookup is not duplicated. Every completion checks the original binding before

@@ -12,6 +12,16 @@ type runtimeLifecycleEngine interface {
 	Down(context.Context) (WireGuardApplyResult, error)
 }
 
+// RuntimeLifecycleEffectError reports a logoff whose intent decision already
+// committed. Retry effects through ordinary reconciliation (or resume's gated
+// teardown), never replay that decision over a newer user intent.
+type RuntimeLifecycleEffectError struct {
+	Err error
+}
+
+func (e *RuntimeLifecycleEffectError) Error() string { return e.Err.Error() }
+func (e *RuntimeLifecycleEffectError) Unwrap() error { return e.Err }
+
 // RuntimeLifecycleExecutor serializes trusted OS events with each other and
 // with the agent's ordinary network effects. The lock remains held throughout
 // suspension, including failed teardown and failed resume-policy resolution.
@@ -115,7 +125,10 @@ func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOw
 			e.release()
 			e.wake() // Ordinary disconnected reconciliation retries a failed Down.
 		}
-		return errors.Join(downErr, observationErr)
+		if err := errors.Join(downErr, observationErr); err != nil {
+			return &RuntimeLifecycleEffectError{Err: err}
+		}
+		return nil
 	}
 	return nil
 }
