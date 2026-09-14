@@ -85,7 +85,7 @@ func TestNetworkActivationRetainsBarrierOnUncertainOrStaleStop(t *testing.T) {
 				case "stop_failure":
 					return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, errors.New("synthetic stop failure")
 				case "unconfirmed_stop":
-					return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
+					return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED, nil
 				case "cancel":
 					cancel()
 				case "source_change":

@@ -493,7 +493,7 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 		m.observedStatus = nil
 	}
 	if updated.Kind == ipc.OperationKind_OPERATION_KIND_SELECT_NETWORK {
-		if state := m.store.Read().RPCState; state != nil && state.NetworkSelection != nil && state.NetworkSelection.DownStarted {
+		if state := m.store.Read().RPCState; rpcOperationTerminal(updated.State) || (state != nil && state.NetworkSelection != nil && state.NetworkSelection.DownStarted) {
 			// The old observation belongs to the source identity. Neither a
 			// durable teardown marker nor activation proves a connected target.
 			m.observedStatus = nil

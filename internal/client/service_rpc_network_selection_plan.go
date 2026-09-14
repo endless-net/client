@@ -23,6 +23,8 @@ type clientRPCNetworkSelection struct {
 	RegistrationReady bool             `json:"registration_ready,omitempty"`
 	DownStarted       bool             `json:"down_started,omitempty"`
 	Activated         bool             `json:"activated,omitempty"`
+	ApplyStarted      bool             `json:"apply_started,omitempty"`
+	ApplyFailure      *ipc.Failure     `json:"apply_failure,omitempty"`
 }
 
 func networkSelectionContext(cfg Config) Config {
