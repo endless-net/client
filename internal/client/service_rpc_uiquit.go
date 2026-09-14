@@ -36,6 +36,9 @@ func (m *ClientRPCMutations) setPreferencesAs(peer local.Peer, request *ipc.SetP
 			return err
 		}
 		changed := profile.UIQuit == nil || *profile.UIQuit != value
+		if cfg.RPCState.NetworkPreferenceChange != nil {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+		}
 		if profile.ID != cfg.RPCState.ActiveProfileID {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
@@ -69,6 +72,9 @@ func (m *ClientRPCMutations) resetPreferencesAs(peer local.Peer, request *ipc.Re
 			return err
 		}
 		changed := profile.UIQuit != nil
+		if cfg.RPCState.NetworkPreferenceChange != nil {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+		}
 		if profile.ID != cfg.RPCState.ActiveProfileID {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
@@ -145,8 +151,21 @@ func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPrefer
 	if err != nil {
 		return nil, err
 	}
+	s.profileMu.Lock()
+	ready := s.profileWorker != nil && s.profileWorker.ctx.Err() == nil
+	s.profileMu.Unlock()
+	if !ready {
+		for _, value := range []*ipc.BooleanSetting{dns, routes} {
+			if value != nil && !value.Control.Locked {
+				value.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_worker_unavailable"}
+			}
+		}
+	}
 	if plan := cfg.RPCState.NetworkPreferenceChange; plan != nil && plan.ProfileID == profile.ID {
 		setting.Requested = cloneLifecycleBehavior(plan.RequestedUIQuit)
+		if !setting.Control.Locked {
+			setting.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_patch_pending"}
+		}
 	}
 	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, AcceptDns: dns, AcceptRoutes: routes, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: setting}}}), nil
 }

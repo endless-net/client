@@ -120,6 +120,15 @@ the readiness/acceptance bridge, worker wakeup and pending-to-committed reads;
 and reset baseline restoration. This is not authenticated transport acceptance
 or observed OS effects, both of which still need evidence.
 
+Preference concurrency/readiness correction: UI-quit-only Set/Reset cannot
+mutate a pending network patch; the generic journal still resolves previously
+accepted retries before this conflict check. Pending UI-quit projection disables
+mutation, and unlocked DNS/routes mutation availability follows the serving
+profile worker, including cancellation. `TestUIQuitMutationCannotBypassPendingNetworkPatch`
+checks rejection without persistent changes and accepted replay;
+`TestNetworkPreferenceMutationProjectionTracksWorkerReadiness` checks missing,
+live and cancelled worker states without altering preference values.
+
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
 
