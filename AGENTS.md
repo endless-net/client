@@ -10,9 +10,10 @@
 
 ## Repository boundary
 
-- Work only within this repository.
-- Before reading from or writing to any path outside this repository, request
-  and receive the user's explicit permission.
+- Make changes only within this repository.
+- Reading paths outside this repository does not require additional permission.
+- Before writing to any path outside this repository, request and receive the
+  user's explicit permission.
 
 - Run `git status --short` before reading or changing files and preserve existing user changes.
 - Never read or print environment files, credentials, private keys, client identity keys or node credentials.
