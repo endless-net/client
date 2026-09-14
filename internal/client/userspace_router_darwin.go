@@ -15,11 +15,13 @@ import (
 func platformPrepareDNSProxy(_ *wireGuardEngineRouterConfig) {}
 
 type darwinWireGuardEngineRouter struct {
-	interfaceName string
-	runner        CommandRunner
-	inputRunner   commandInputRunner
-	current       wireGuardEngineRouterConfig
-	configured    bool
+	interfaceName    string
+	runner           CommandRunner
+	inputRunner      commandInputRunner
+	current          wireGuardEngineRouterConfig
+	configured       bool
+	pendingCleanup   *routerCleanupPlan
+	interfacePresent func(string) (bool, error)
 }
 
 func runCommandInput(ctx context.Context, input string, name string, args ...string) ([]byte, error) {
@@ -41,6 +43,11 @@ func newPlatformWireGuardEngineRouter(interfaceName string, runner CommandRunner
 func platformWireGuardEngineFirewallMark(_ []netip.Prefix, _ string) uint32 { return 0 }
 
 func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
+	if r.pendingCleanup != nil {
+		if err := r.Down(ctx); err != nil {
+			return err
+		}
+	}
 	if r.configured {
 		withoutRouteChange := cfg
 		withoutRouteChange.Routes = r.current.Routes
@@ -49,15 +56,17 @@ func (r *darwinWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGua
 		}
 	}
 	if r.configured {
-		_ = r.Down(ctx)
+		if err := r.Down(ctx); err != nil {
+			return err
+		}
 	}
 	// Failed setup owns only routes whose add command succeeded. In
 	// particular, EEXIST does not grant ownership of another interface's route.
 	applied := cfg
 	applied.Routes = nil
 	fail := func(err error) error {
-		_ = r.cleanup(ctx, applied)
-		return err
+		r.current, r.configured = applied, true
+		return errors.Join(err, r.Down(ctx))
 	}
 	if out, err := r.runner(ctx, "ifconfig", cfg.Interface, "mtu", fmt.Sprint(cfg.MTU), "up"); err != nil {
 		return fail(fmt.Errorf("configure darwin TUN: %s", commandError(err, out)))
@@ -169,25 +178,50 @@ func (r *darwinWireGuardEngineRouter) Down(ctx context.Context) error {
 	if !r.configured {
 		return nil
 	}
-	r.cleanup(ctx, r.current)
+	if r.pendingCleanup == nil {
+		r.pendingCleanup = r.cleanupPlan(r.current)
+	}
+	if err := r.pendingCleanup.run(ctx); err != nil {
+		return err
+	}
+	r.pendingCleanup = nil
 	r.configured = false
 	r.current = wireGuardEngineRouterConfig{}
 	return nil
 }
 
-func (r *darwinWireGuardEngineRouter) cleanup(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
+func (r *darwinWireGuardEngineRouter) cleanupPlan(cfg wireGuardEngineRouterConfig) *routerCleanupPlan {
+	plan := &routerCleanupPlan{}
 	if darwinShouldConfigureDNS(cfg) {
-		_, _ = r.inputRunner(ctx, darwinUserspaceDNSRemoveCommands(cfg.Interface), "scutil")
+		plan.pending = append(plan.pending, func(ctx context.Context) error {
+			out, err := r.inputRunner(ctx, darwinUserspaceDNSRemoveCommands(cfg.Interface), "scutil")
+			if err != nil {
+				return fmt.Errorf("remove darwin wireguard-go DNS: %s", commandError(err, out))
+			}
+			return nil
+		})
 	}
 	for _, route := range splitDefaultRoutes(cfg.Routes) {
 		family := "-inet"
 		if route.Addr().Is6() {
 			family = "-inet6"
 		}
-		_, _ = r.runner(ctx, "route", "-n", "delete", family, route.String(), "-interface", cfg.Interface)
+		plan.pending = append(plan.pending, routerInterfaceCleanup(cfg.Interface, r.interfacePresent, func(ctx context.Context) error {
+			out, err := r.runner(ctx, "route", "-n", "delete", family, route.String(), "-interface", cfg.Interface)
+			if err != nil {
+				return fmt.Errorf("remove darwin TUN route: %s", commandError(err, out))
+			}
+			return nil
+		}))
 	}
-	_, _ = r.runner(ctx, "ifconfig", cfg.Interface, "down")
-	return nil
+	plan.pending = append(plan.pending, routerInterfaceCleanup(cfg.Interface, r.interfacePresent, func(ctx context.Context) error {
+		out, err := r.runner(ctx, "ifconfig", cfg.Interface, "down")
+		if err != nil {
+			return fmt.Errorf("stop darwin TUN: %s", commandError(err, out))
+		}
+		return nil
+	}))
+	return plan
 }
 
 func darwinUserspaceDNSKey(interfaceName string) string {

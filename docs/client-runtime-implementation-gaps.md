@@ -47,8 +47,23 @@ units cover these paths, not actual platform cleanup or SCM event delivery.
 The gate is not yet wired to trusted OS events or runtime worker suspension.
 The pinned x/sys SCM host forwards SessionChange EventData after its callback
 returns; the adapter must copy session data during a live native callback rather
-than dereference that forwarded pointer later. Linux/Darwin cleanup error
-propagation and idempotent platform teardown still require implementation.
+than dereference that forwarded pointer later.
+
+Linux/Darwin routers now retain a cleanup plan containing only failed or
+unattempted steps. Down propagates failures; Configure cannot overwrite pending
+cleanup; failed initial setup also retains its cleanup obligation. Successful
+steps are not repeated. A failed interface-bound removal can complete only when
+interface enumeration independently confirms absence; cancellation or failed
+enumeration cannot establish that postcondition. Linux route removal uses
+exact prefix, device and table selectors with
+[ip route flush](https://man7.org/linux/man-pages/man8/ip-route.8.html), allowing
+already absent selected routes without broadening removal to other prefixes.
+`router_cleanup_test.go` covers partial completion, retry, cancellation and
+absence/observation failure on every host. The OS-specific cleanup suites exercise
+DNS, route and interface failures and blocked reconfiguration in Linux/macOS
+short CI; Windows-local checks do not execute those OS-tagged tests. Actual
+platform cleanup, Linux policy-rule absence and external deletion/replacement
+of macOS routes still need qualification and reconciliation evidence.
 
 The user accepted the runtime-start default on 2026-09-14: KEEP_INTENT,
 with DISCONNECT when no explicit intent is saved. The agent now initializes

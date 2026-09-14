@@ -4,6 +4,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
 	"strconv"
@@ -13,10 +14,12 @@ import (
 const defaultWireGuardEngineRouteTable = uint32(51820)
 
 type linuxWireGuardEngineRouter struct {
-	interfaceName string
-	runner        CommandRunner
-	current       wireGuardEngineRouterConfig
-	configured    bool
+	interfaceName    string
+	runner           CommandRunner
+	current          wireGuardEngineRouterConfig
+	configured       bool
+	pendingCleanup   *routerCleanupPlan
+	interfacePresent func(string) (bool, error)
 }
 
 func newPlatformWireGuardEngineRouter(interfaceName string, runner CommandRunner, _ commandInputRunner) (wireGuardEngineRouter, error) {
@@ -59,15 +62,14 @@ func platformPrepareDNSProxy(cfg *wireGuardEngineRouterConfig) {
 
 func (r *linuxWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuardEngineRouterConfig) error {
 	if r.configured {
-		r.cleanup(ctx, r.current)
+		if err := r.Down(ctx); err != nil {
+			return err
+		}
 	}
 	r.current = cfg
 	r.configured = true
 	fail := func(err error) error {
-		r.cleanup(ctx, cfg)
-		r.current = wireGuardEngineRouterConfig{}
-		r.configured = false
-		return err
+		return errors.Join(err, r.Down(ctx))
 	}
 	if err := r.run(ctx, "ip", "link", "set", "dev", cfg.Interface, "mtu", strconv.Itoa(cfg.MTU), "up"); err != nil {
 		return fail(err)
@@ -169,18 +171,32 @@ func (r *linuxWireGuardEngineRouter) Down(ctx context.Context) error {
 	if !r.configured {
 		return nil
 	}
-	r.cleanup(ctx, r.current)
+	if r.pendingCleanup == nil {
+		r.pendingCleanup = r.cleanupPlan(r.current)
+	}
+	if err := r.pendingCleanup.run(ctx); err != nil {
+		return err
+	}
+	r.pendingCleanup = nil
 	r.configured = false
 	r.current = wireGuardEngineRouterConfig{}
 	return nil
 }
 
-func (r *linuxWireGuardEngineRouter) cleanup(ctx context.Context, cfg wireGuardEngineRouterConfig) {
+func (r *linuxWireGuardEngineRouter) cleanupPlan(cfg wireGuardEngineRouterConfig) *routerCleanupPlan {
+	plan := &routerCleanupPlan{}
+	add := func(interfaceBound bool, name string, args ...string) {
+		step := func(ctx context.Context) error { return r.run(ctx, name, args...) }
+		if interfaceBound {
+			step = routerInterfaceCleanup(cfg.Interface, r.interfacePresent, step)
+		}
+		plan.pending = append(plan.pending, step)
+	}
 	for _, command := range cfg.PreDown {
-		_, _ = r.runner(ctx, "sh", "-c", command)
+		plan.pending = append(plan.pending, func(ctx context.Context) error { return r.runHook(ctx, "remove", command) })
 	}
 	if linuxShouldConfigureDNS(cfg) {
-		_, _ = r.runner(ctx, "resolvectl", "revert", cfg.Interface)
+		add(true, "resolvectl", "revert", cfg.Interface)
 	}
 	for _, route := range cfg.Routes {
 		family := "-4"
@@ -189,21 +205,24 @@ func (r *linuxWireGuardEngineRouter) cleanup(ctx context.Context, cfg wireGuardE
 		}
 		if route.Bits() == 0 && cfg.FirewallMark != 0 {
 			table := strconv.FormatUint(uint64(cfg.FirewallMark), 10)
-			_, _ = r.runner(ctx, "ip", family, "rule", "del", "not", "fwmark", table, "table", table)
-			_, _ = r.runner(ctx, "ip", family, "rule", "del", "table", "main", "suppress_prefixlength", "0")
-			_, _ = r.runner(ctx, "ip", family, "route", "del", "default", "dev", cfg.Interface, "table", table)
+			add(false, "ip", family, "rule", "del", "not", "fwmark", table, "table", table)
+			add(false, "ip", family, "rule", "del", "table", "main", "suppress_prefixlength", "0")
+			add(true, "ip", family, "route", "flush", "exact", route.String(), "dev", cfg.Interface, "table", table)
 			continue
 		}
-		args := []string{family, "route", "del", route.String(), "dev", cfg.Interface}
+		// Exact prefix + device + table cannot flush another destination.
+		// Unlike delete, flush is also successful when the selected route is absent.
+		args := []string{family, "route", "flush", "exact", route.String(), "dev", cfg.Interface}
 		if table := linuxUserspaceRouteTable(cfg.RouteTable); table != "" {
 			args = append(args, "table", table)
 		}
-		_, _ = r.runner(ctx, "ip", args...)
+		add(true, "ip", args...)
 	}
 	for _, family := range []string{"-4", "-6"} {
-		_, _ = r.runner(ctx, "ip", family, "addr", "flush", "dev", cfg.Interface, "scope", "global")
+		add(true, "ip", family, "addr", "flush", "dev", cfg.Interface, "scope", "global")
 	}
-	_, _ = r.runner(ctx, "ip", "link", "set", "dev", cfg.Interface, "down")
+	add(true, "ip", "link", "set", "dev", cfg.Interface, "down")
+	return plan
 }
 
 func (r *linuxWireGuardEngineRouter) runHook(ctx context.Context, action, command string) error {
