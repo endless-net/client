@@ -334,6 +334,8 @@ func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation, inv
 				subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_OperationChanged{OperationChanged: operation}})
 			}
 			switch operation.Kind {
+			case ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE, ipc.OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE:
+				subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_Invalidated{Invalidated: &ipc.DomainInvalidated{Domain: ipc.Domain_DOMAIN_EXIT_NODE, ProfileId: operation.ProfileId}}})
 			case ipc.OperationKind_OPERATION_KIND_SET_RESOURCE_ENABLED:
 				subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_Invalidated{Invalidated: &ipc.DomainInvalidated{Domain: ipc.Domain_DOMAIN_RESOURCES, ProfileId: operation.ProfileId}}})
 			case ipc.OperationKind_OPERATION_KIND_SET_PREFERENCES, ipc.OperationKind_OPERATION_KIND_RESET_PREFERENCES:

@@ -581,6 +581,13 @@ acceptance. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
 
+Exit events now invalidate EXIT_NODE on select/clear operation admission and
+state transitions. GetExitNode projects the durable containment cause while
+keeping the aggregate pending and per-family enforcement unknown. The test
+`TestExitEventsAndContainmentReadShareCommittedRevision` checks profile/revision
+binding and the distinction between a recovery reason and observed protection.
+This adds operation events, not live OS path-loss observation or enforcement.
+
 Exit context-loss containment now has a durable phase and a separate executor
 callback. Dispatched operations that lose context enter containment before the
 callback; current matching identity receives disconnected intent without

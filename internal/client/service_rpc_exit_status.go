@@ -71,9 +71,14 @@ func (s *ClientRPCService) exitNodeAs(ctx context.Context, peer local.Peer, requ
 		}
 	}
 	if pending {
+		status.Control.Source = ipc.SettingSource_SETTING_SOURCE_USER
 		status.ApplyState = ipc.ApplyState_APPLY_STATE_PENDING
 		status.Ipv4.ApplyState = ipc.ApplyState_APPLY_STATE_PENDING
 		status.Ipv6.ApplyState = ipc.ApplyState_APPLY_STATE_PENDING
+		if plan := cfg.RPCState.ExitChange; plan.Containing {
+			status.Failure = &ipc.Failure{Code: plan.FailureCode, ReasonKey: plan.FailureReason}
+			status.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "exit_containment_pending"}
+		}
 	}
 	status.Metadata = &ipc.SnapshotMetadata{InstanceId: m.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(m.now())}
 	return status, ctx.Err()
