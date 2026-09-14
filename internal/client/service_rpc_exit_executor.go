@@ -18,8 +18,9 @@ import (
 // errors (including cancellation) must retain protection, never fall back to
 // direct routing. No adapter is advertised until these OS effects exist.
 type clientRPCExitExecutor struct {
-	Modes []clientRPCExitMode
-	Apply func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error)
+	Modes   []clientRPCExitMode
+	Apply   func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error)
+	Contain func(context.Context, clientRPCExitChange) (clientRPCExitContainment, error)
 }
 
 func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) bool {
@@ -44,17 +45,21 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if executor.Apply == nil {
-		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
-	}
 	cfg := m.store.Read()
 	if cfg.RPCState == nil || cfg.RPCState.ExitChange == nil {
 		return nil
 	}
 	id := cfg.RPCState.ExitChange.OperationID
+	if cfg.RPCState.ExitChange.Containing {
+		return m.containExitChange(ctx, id, executor)
+	}
+	if executor.Apply == nil {
+		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	}
 	var input Config
 	var selection *ClientExitSelection
 	ready := false
+	contain := false
 	_, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
 		plan := cfg.RPCState.ExitChange
 		if plan == nil || plan.OperationID != id || rpcOperationTerminal(op.State) {
@@ -76,7 +81,9 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 			// A queued operation has no effects. A previously dispatched one
 			// needs OS containment/recovery before its guard may be released.
 			if op.State != ipc.OperationState_OPERATION_STATE_PENDING {
-				return rpc.Error(connect.CodeFailedPrecondition, code)
+				markExitContainment(cfg, plan, code, m.now())
+				contain = true
+				return nil
 			}
 			cfg.RPCState.ExitChange = nil
 			op.State = ipc.OperationState_OPERATION_STATE_FAILED
@@ -96,6 +103,9 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 	if errors.Is(err, errRPCNoChange) {
 		return nil
 	}
+	if err == nil && contain {
+		return m.containExitChange(ctx, id, executor)
+	}
 	if err != nil || !ready {
 		return err
 	}
@@ -111,5 +121,35 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 		return nil
 	}
 	_, err = m.completeExitChange(id, observed, continuity)
+	if err != nil {
+		if failure := rpc.FailureFromError(err); failure != nil && failure.Code == ipc.ErrorCode_ERROR_CODE_STALE_STATE {
+			_, checkpointErr := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
+				plan := cfg.RPCState.ExitChange
+				if plan == nil || plan.OperationID != id || rpcOperationTerminal(op.State) {
+					return errRPCNoChange
+				}
+				bound := exitChangeBound(cfg, plan, op)
+				if bound && plan.Requested != nil {
+					bound = cfg.CachedMap != nil && cfg.MapRevision == cfg.CachedMap.Network.Revision && cfg.MapGlobalRevision == cfg.CachedMap.Revision.Global
+					if bound {
+						_, validationErr := exitRoutePeers(*cfg, *cfg.CachedMap, plan.Requested, m.now())
+						bound = validationErr == nil
+					}
+				}
+				if bound {
+					return errRPCNoChange
+				}
+				markExitContainment(cfg, plan, ipc.ErrorCode_ERROR_CODE_STALE_STATE, m.now())
+				return nil
+			})
+			if errors.Is(checkpointErr, errRPCNoChange) {
+				return err
+			}
+			if checkpointErr != nil {
+				return checkpointErr
+			}
+			return m.containExitChange(ctx, id, executor)
+		}
+	}
 	return err
 }

@@ -23,6 +23,9 @@ type clientRPCExitChange struct {
 	Previous       *ClientExitSelection `json:"previous,omitempty"`
 	PreviousIntent *ConnectionIntent    `json:"previous_intent,omitempty"`
 	NextAttemptAt  time.Time            `json:"next_attempt_at,omitempty"`
+	Containing     bool                 `json:"containing,omitempty"`
+	FailureCode    ipc.ErrorCode        `json:"failure_code,omitempty"`
+	FailureReason  string               `json:"failure_reason,omitempty"`
 }
 
 // Trusted executor support is a set of exact pairs, never a Cartesian product
