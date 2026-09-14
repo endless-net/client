@@ -11,6 +11,15 @@ Release exception authorized on 2026-09-14: the user explicitly requested
 the release pipeline and its exact-source pre-release checks; it does not close
 the incomplete BA/SA cutover gates below or authorize other version increases.
 
+The first v0.6.0 pre-release run on `247fbae` passed Linux/Windows/macOS
+verification and the separate Protobuf workflow, but failed installation reset
+and ephemeral-container scenarios that still expected enrollment to connect
+implicitly. Those scenarios now require initial disconnected intent followed by
+an explicit native Connect. Installed mutation submission also uses the existing
+bounded CAS-admission retry and safe typed failure reporting. The failed
+[Test run](https://github.com/endless-net/client/actions/runs/34879714349)
+is not release acceptance; the corrected source requires a new complete gate.
+
 ## Completion gates
 
 The current task is limited to this repository and its producer contracts.

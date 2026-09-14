@@ -60,12 +60,30 @@ func waitInstalledNativeCondition(t *testing.T, binary string, predicate func(*i
 func runInstalledNativeMutation(t *testing.T, binary, operation, requestID string) {
 	t.Helper()
 	status := waitInstalledNativeCondition(t, binary, func(v *ipc.Status) bool { return v.ActiveProfileId != "" })
-	args := append([]string{"service", operation, "--timeout", "30s"}, testclient.NativeMutationArguments(requestID, status)...)
 	ctx, cancel := context.WithTimeout(t.Context(), 35*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, binary, args...).Output()
+	var output []byte
+	err := retryNativeControlAdmission(operation, status, func() (*ipc.Status, error) {
+		data, err := exec.CommandContext(ctx, binary, "service", "status", "--timeout", "2s").CombinedOutput()
+		if err != nil {
+			return nil, testclient.NativeServiceCommandError("status", data)
+		}
+		response := &ipc.GetStatusResponse{}
+		if protojson.Unmarshal(data, response) != nil {
+			return nil, fmt.Errorf("installed status returned invalid protobuf JSON (output withheld)")
+		}
+		return response.Status, nil
+	}, func(current *ipc.Status) error {
+		args := append([]string{"service", operation, "--timeout", "30s"}, testclient.NativeMutationArguments(requestID, current)...)
+		var err error
+		output, err = exec.CommandContext(ctx, binary, args...).CombinedOutput()
+		if err != nil {
+			return testclient.NativeServiceCommandError(operation, output)
+		}
+		return nil
+	})
 	if err != nil {
-		t.Fatal("installed native mutation failed (output withheld)")
+		t.Fatal(err)
 	}
 	var accepted *ipc.Operation
 	var kind ipc.OperationKind

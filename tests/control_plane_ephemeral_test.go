@@ -36,6 +36,13 @@ func exerciseEphemeralLifecycle(t *testing.T) {
 	n.TrustControlTLS(s)
 	n.Enroll(s, network.Name, token, "--route-table", "auto")
 	n.Start()
+	enrolled := n.AwaitNativeStatus(func(v *ipc.Status) bool {
+		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid()
+	})
+	if enrolled.GetIntent().GetDesiredState() != ipc.DesiredState_DESIRED_STATE_DISCONNECTED {
+		t.Fatal("ephemeral enrollment connected without explicit intent")
+	}
+	runNativeControlMutation(t, n, "connect", "6b120000-0000-4000-8000-000000000001")
 	status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
 		return v.NodeId != "" && v.Ephemeral && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid() && v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 	})

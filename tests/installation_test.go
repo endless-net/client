@@ -271,6 +271,13 @@ func TestInstalledClient(t *testing.T) {
 			t.Fatal("reenrollment after explicit state removal failed (output withheld)")
 		}
 		start(t)
+		enrolled := waitInstalledNativeCondition(t, binary, func(v *native.Status) bool {
+			return v.NodeId != "" && v.ActiveProfileId != "" && v.GetNetwork().GetId() == replacementNetwork.ID && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
+		})
+		if enrolled.GetIntent().GetDesiredState() != native.DesiredState_DESIRED_STATE_DISCONNECTED {
+			t.Fatal("fresh enrollment connected without explicit intent")
+		}
+		runInstalledNativeMutation(t, binary, "connect", "6b110000-0000-4000-8000-000000000004")
 		replacement := waitInstalledNativeCondition(t, binary, func(v *native.Status) bool {
 			return v.NodeId != "" && v.ActiveProfileId != "" && v.GetNetwork().GetId() == replacementNetwork.ID && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid() && v.ConnectionPhase == native.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 		})
