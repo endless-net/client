@@ -129,6 +129,16 @@ checks rejection without persistent changes and accepted replay;
 `TestNetworkPreferenceMutationProjectionTracksWorkerReadiness` checks missing,
 live and cancelled worker states without altering preference values.
 
+Inbound filter preparation: `inbound_filter.go` implements a bounded volatile
+outbound-flow table for restricting new inbound traffic while preserving matched
+TCP/UDP/ICMP replies. It is not yet wired into the TUN, policy resolver or public
+preference patch. `TestInboundFilterTCPHandshakeExpiryAndPolicyChange` checks
+unsolicited TCP denial, handshake ordering, expiry and policy-change clearing;
+`TestInboundFilterUDPBindingBoundsAndReplyLifetime` checks port binding, fixed
+reply windows, capacity/expiry recovery and malformed packets. ICMP/IPv6,
+TUN-chain interaction and runtime/public integration still need implementation
+evidence; allow_inbound remains incomplete.
+
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
 
