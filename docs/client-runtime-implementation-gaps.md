@@ -222,7 +222,7 @@ no public caller can enqueue this unfinished workflow. The unit test
 `TestRPCSessionRenewalAdmissionAndDurableReplay` checks owner denial without
 mutation, pending-operation privacy, exact disk-backed replay and rejection of
 a second operation. Backend dispatch, polling, response authority validation,
-atomic token rotation, cancellation/cleanup and their full negative coverage
+full token-rotation coverage, cancellation/cleanup and their negative coverage
 remain required before exposing the RPC or claiming renewal functionality.
 The retained renewal grant is now separate from the latest session observation:
 the backend forbids issuing renewal authority in an expired/revoked response.
@@ -233,6 +233,17 @@ Admission validates both the current observation and retained grant. The test
 `TestRPCSessionGrantRetentionAfterExpiryObservation` covers all six cases through
 read, disk reopen and renewal admission. This does not make the public renewal
 RPC or execution worker complete. No legacy grant fallback is introduced.
+
+Internal `completeSessionRenewal` now validates a successful backend result with
+the producer validator and saved request/user/owner/profile/bearer bindings,
+rejects expired replay/results, and atomically rotates the access bearer and
+protected session while committing the public terminal operation and removing
+the execution plan. It requires the operation to be RUNNING; no public RPC
+dispatch is enabled yet. `TestRPCSessionRenewalResultAtomicRotationAndBinding`
+checks successful rotation/restart/replay and six rejected result/context cases,
+including unchanged durable state on rejection and preserved disconnected intent
+and node registration. Network dispatch, polling operation-ID binding, browser
+approval, ambiguous-failure retry and cleanup still require implementation.
 
 ## External dependencies and approvals
 
