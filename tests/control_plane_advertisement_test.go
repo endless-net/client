@@ -132,6 +132,7 @@ func TestControlPlaneRouteAdvertisement(t *testing.T) {
 	prefixes := []string{"192.0.2.0/24", "2001:db8:94::/64"}
 	n.Enroll(s, network.Name, token, "--hostname", "route-node", "--advertise", prefixes[0], "--advertise", prefixes[1])
 	n.Start()
+	runNativeControlMutation(t, n, "connect", "6b130000-0000-4000-8000-000000000001")
 	status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
 		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && v.GetStoredState().GetNodeCredentialPresent() && v.Hostname == "route-node"
 	})

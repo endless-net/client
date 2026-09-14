@@ -89,7 +89,8 @@ func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
 			t.Fatal("current-ID selection did not preserve the selected network and connection")
 		}
 		retained(before)
-		// IDs are exact. Names and case-folded names do not act as aliases.
+		// A node-only join token cannot authorize a different-network selection,
+		// regardless of whether the supplied string is an ID or a network name.
 		for _, ref := range []string{initial.Network.Name, strings.ToUpper(initial.Network.Name), foreign.ID, foreign.Name, "absent-network"} {
 			status := retained(before)
 			requestID := nextID()
@@ -99,9 +100,9 @@ func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
 					Mutation: &ipc.MutationContext{RequestId: requestID, ExpectedInstanceId: current.GetMetadata().GetInstanceId(), ExpectedRevision: current.GetMetadata().GetRevision()}, NetworkId: ref}))
 				return err
 			})
-			if rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_UNSUPPORTED {
+			if rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN {
 				cancel()
-				t.Fatal("unsupported selection did not fail closed")
+				t.Fatal("accountless network selection did not require a user session")
 			}
 			_, err = consumer.GetOperation(ctx, connect.NewRequest(&ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_RequestId{RequestId: requestID}}))
 			cancel()

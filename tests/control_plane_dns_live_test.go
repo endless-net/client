@@ -36,6 +36,7 @@ func TestControlPlaneNativeSystemDNS(t *testing.T) {
 	n.TrustControlTLS(s)
 	n.Enroll(s, network.Name, join, "--route-table", "auto")
 	n.Start()
+	runNativeControlMutation(t, n, "connect", "6b130000-0000-4000-8000-000000000001")
 	defer n.Stop()
 	status := n.AwaitNativeStatus(func(v *native.Status) bool { return nativeDNSMapApplied(v, "", 0) })
 	id := status.NodeId
@@ -94,6 +95,7 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 	n.TrustControlTLS(s)
 	n.Enroll(s, network.Name, join, "--route-table", "auto")
 	n.Start()
+	runNativeControlMutation(t, n, "connect", "6b130000-0000-4000-8000-000000000001")
 	defer n.Stop()
 	status := n.AwaitNativeStatus(func(v *native.Status) bool {
 		return nativeDNSMapApplied(v, "", 0)

@@ -86,6 +86,7 @@ func testLinuxSubnetRouter(t *testing.T, snat bool) {
 		}
 		n.Enroll(s, network.Name, token, options...)
 		n.Start()
+		runNativeControlMutation(t, n, "connect", "6b130000-0000-4000-8000-000000000001")
 		states[i] = n.AwaitNativeStatus(func(v *ipc.Status) bool {
 			return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid() && v.ConnectionPhase == ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 		})

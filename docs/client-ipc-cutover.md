@@ -20,6 +20,17 @@ bounded CAS-admission retry and safe typed failure reporting. The failed
 [Test run](https://github.com/endless-net/client/actions/runs/34879714349)
 is not release acceptance; the corrected source requires a new complete gate.
 
+The next [Test run](https://github.com/endless-net/client/actions/runs/34880659203)
+on `236cfbe` passed the completed installation jobs (Windows 2025 and Linux
+amd64/arm64), container lifecycle, all three OS verification jobs and the separate
+Protobuf workflow. Its control-plane peer-traffic scenario exposed another
+missing explicit Connect. A source review found the same setup omission in the
+initial DNS, MTU, resource, service, relay, advertisement, subnet/exit, diagnostics
+and common control fixtures. These fixtures now submit Connect explicitly;
+their traffic/recovery assertions remain. Accountless SelectNetwork expects
+NEEDS_LOGIN and still requires no accepted operation or additional registration.
+The cancelled run is partial evidence only, not a successful release gate.
+
 ## Completion gates
 
 The current task is limited to this repository and its producer contracts.

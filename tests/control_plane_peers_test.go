@@ -98,6 +98,7 @@ func TestClientDataplaneDirectPeerTrafficAndWithdrawal(t *testing.T) {
 		n.AgentArgs = []string{"--listen-port", "51820", "--endpoint", endpoints[i]}
 		n.Enroll(s, network.Name, token, "--route-table", "auto")
 		n.Start()
+		runNativeControlMutation(t, n, "connect", "6b130000-0000-4000-8000-000000000001")
 		states[i] = n.AwaitNativeStatus(func(v *native.Status) bool {
 			return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()
 		})

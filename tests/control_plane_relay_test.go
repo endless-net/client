@@ -47,6 +47,7 @@ func runNativeRelayTraffic(t *testing.T, failover bool) {
 			n.TrustControlTLS(s)
 			n.Enroll(s, network.Name, token, "--route-table", "auto")
 			n.Start()
+			runNativeControlMutation(t, n, "connect", "6b130000-0000-4000-8000-000000000001")
 			defer n.Stop()
 			initial := n.AwaitNativeStatus(func(v *ipc.Status) bool {
 				return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && nativeOverlayAddress(v, false).IsValid()

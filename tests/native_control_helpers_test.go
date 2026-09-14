@@ -68,6 +68,7 @@ func nativeControlScenario(t *testing.T) (*testcontrol.Server, *testclient.Node,
 	n.TrustControlTLS(s)
 	n.Enroll(s, network.Name, token)
 	n.Start()
+	runNativeControlMutation(t, n, "connect", "6b130000-0000-4000-8000-000000000001")
 	status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
 		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid()
 	})
