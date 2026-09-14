@@ -89,16 +89,8 @@ func ServeDNSProxy(ctx context.Context, opts DNSProxyOptions) error {
 	return err
 }
 
-// TCP and UDP have independent port availability. In particular, Windows can
-// assign either transport an ephemeral port excluded from the other. Alternate
-// the transport choosing the port to avoid walking a range excluded from its
-// partner. Explicit ports never move.
-func listenDNSProxyPair(address string) (net.Listener, net.PacketConn, error) {
-	return listenDNSProxyPairWith(address,
-		func(addr string) (net.Listener, error) { return net.Listen("tcp", addr) },
-		func(addr string) (net.PacketConn, error) { return net.ListenPacket("udp", addr) })
-}
-
+// TCP and UDP have independent port availability. Alternate which transport
+// reserves a candidate first; explicit ports never move.
 func listenDNSProxyPairWith(address string, listenTCP func(string) (net.Listener, error), listenUDP func(string) (net.PacketConn, error)) (net.Listener, net.PacketConn, error) {
 	attempts := 1
 	if _, port, err := net.SplitHostPort(address); err == nil && port == "0" {

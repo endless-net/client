@@ -117,5 +117,5 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionPreparation(ctx context.Co
 func networkSelectionSourceMatches(cfg Config, plan *clientRPCNetworkSelection) bool {
 	return cfg.RPCState != nil && cfg.RPCState.ActiveProfileID == plan.Profile.ID &&
 		reflect.DeepEqual(cfg.RPCState.Profiles[plan.Profile.ID], plan.Profile) &&
-		reflect.DeepEqual(networkSelectionContext(cfg), plan.Source)
+		networkSelectionSourceConfigMatches(cfg, plan.Source)
 }
