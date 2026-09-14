@@ -80,6 +80,36 @@ func compileResourceDenials(cfg Config, now time.Time) ([]resourceDenyRule, erro
 	sort.Strings(keys)
 	rules := []resourceDenyRule{}
 	seen := map[resourceDenyRule]bool{}
+	for _, id := range keys {
+		identity, err := resolveResourceInAuthenticatedMap(source, id)
+		if err != nil {
+			return nil, err
+		}
+		if resourcePreferenceForIdentity(cfg, id, identity).Enabled {
+			continue
+		}
+		footprint, err := resourcePacketFootprint(source, identity)
+		if err != nil {
+			return nil, err
+		}
+		for _, rule := range footprint {
+			if !seen[rule] {
+				if len(rules) >= 8192 {
+					return nil, errors.New("resource packet rule limit exceeded")
+				}
+				seen[rule] = true
+				rules = append(rules, rule)
+			}
+		}
+	}
+	return rules, nil
+}
+
+// Shared packet scope for denial compilation and catalog overlap reporting.
+// A footprint is not a routing or access grant.
+func resourcePacketFootprint(source *api.RegisterNodeResponse, identity clientResourceIdentity) ([]resourceDenyRule, error) {
+	rules := []resourceDenyRule{}
+	seen := map[resourceDenyRule]bool{}
 	add := func(value string, protocol byte, port uint16, hostOnly bool) error {
 		prefix, err := netip.ParsePrefix(value)
 		if err != nil {
@@ -98,65 +128,56 @@ func compileResourceDenials(cfg Config, now time.Time) ([]resourceDenyRule, erro
 		}
 		return nil
 	}
-	for _, id := range keys {
-		identity, err := resolveResourceInAuthenticatedMap(source, id)
-		if err != nil {
-			return nil, err
-		}
-		if resourcePreferenceForIdentity(cfg, id, identity).Enabled {
-			continue
-		}
-		switch identity.Kind {
-		case ipc.ResourceKind_RESOURCE_KIND_HOST:
-			for _, peer := range source.Peers {
-				if peer.ID == identity.ID {
-					for _, value := range peer.AllowedIPs {
-						if err := add(value, 0, 0, true); err != nil {
-							return nil, err
-						}
+	switch identity.Kind {
+	case ipc.ResourceKind_RESOURCE_KIND_HOST:
+		for _, peer := range source.Peers {
+			if peer.ID == identity.ID {
+				for _, value := range peer.AllowedIPs {
+					if err := add(value, 0, 0, true); err != nil {
+						return nil, err
 					}
 				}
 			}
-		case ipc.ResourceKind_RESOURCE_KIND_SUBNET:
-			if err := add(identity.CIDR, 0, 0, false); err != nil {
-				return nil, err
-			}
-		case ipc.ResourceKind_RESOURCE_KIND_SERVICE:
-			protocol := byte(6)
-			if identity.Protocol == "udp" {
-				protocol = 17
-			}
-			for _, service := range source.Network.Services {
-				if service.ID == identity.ID {
-					for _, host := range service.Hosts {
-						for _, peer := range source.Peers {
-							if peer.ID == host.NodeID && peer.PublicKey == host.PublicKey {
-								for _, value := range peer.AllowedIPs {
-									if err := add(value, protocol, uint16(identity.Port), true); err != nil {
-										return nil, err
-									}
+		}
+	case ipc.ResourceKind_RESOURCE_KIND_SUBNET:
+		if err := add(identity.CIDR, 0, 0, false); err != nil {
+			return nil, err
+		}
+	case ipc.ResourceKind_RESOURCE_KIND_SERVICE:
+		protocol := byte(6)
+		if identity.Protocol == "udp" {
+			protocol = 17
+		}
+		for _, service := range source.Network.Services {
+			if service.ID == identity.ID {
+				for _, host := range service.Hosts {
+					for _, peer := range source.Peers {
+						if peer.ID == host.NodeID && peer.PublicKey == host.PublicKey {
+							for _, value := range peer.AllowedIPs {
+								if err := add(value, protocol, uint16(identity.Port), true); err != nil {
+									return nil, err
 								}
 							}
 						}
 					}
 				}
 			}
-		case ipc.ResourceKind_RESOURCE_KIND_APPLICATION:
-			for _, app := range source.Network.Applications {
-				if app.ID == identity.ID {
-					target, err := api.ParseApplicationTarget(app.TargetType, app.Target)
-					if err != nil {
-						return nil, err
-					}
-					protocol := byte(0)
-					if target.TCPPort != 0 {
-						protocol = 6
-					}
-					for _, route := range app.Routes {
-						for _, value := range route.CIDRs {
-							if err := add(value, protocol, target.TCPPort, false); err != nil {
-								return nil, err
-							}
+		}
+	case ipc.ResourceKind_RESOURCE_KIND_APPLICATION:
+		for _, app := range source.Network.Applications {
+			if app.ID == identity.ID {
+				target, err := api.ParseApplicationTarget(app.TargetType, app.Target)
+				if err != nil {
+					return nil, err
+				}
+				protocol := byte(0)
+				if target.TCPPort != 0 {
+					protocol = 6
+				}
+				for _, route := range app.Routes {
+					for _, value := range route.CIDRs {
+						if err := add(value, protocol, target.TCPPort, false); err != nil {
+							return nil, err
 						}
 					}
 				}

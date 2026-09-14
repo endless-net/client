@@ -66,11 +66,10 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 	}
 	search := strings.ToLower(strings.TrimSpace(request.GetSearch()))
 	items := []*ipc.Resource{}
+	searchTargets := map[string]string{}
 	add := func(kind ipc.ResourceKind, key, name, targetText string, resource *ipc.Resource) {
-		if (len(kinds) > 0 && !slices.Contains(kinds, kind)) || !strings.Contains(strings.ToLower(name+"\n"+targetText), search) {
-			return
-		}
 		resource.Id = rpcResourceID(kind, key)
+		searchTargets[resource.Id] = strings.ToLower(name + "\n" + targetText)
 		resource.Kind, resource.DisplayName, resource.NetworkId = kind, name, state.Network.ID
 		// Policy resolution is separate from observed runtime reachability.
 		resource.Availability = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "resource_runtime_observation_unavailable"}
@@ -135,6 +134,9 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Id < items[j].Id })
+	if err := projectResourceOverlaps(state, items); err != nil {
+		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+	}
 	for _, resource := range items {
 		identity, err := resolveResourceInAuthenticatedMap(state, resource.Id)
 		if err != nil {
@@ -142,6 +144,9 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		}
 		resource.Enabled = rpcResourceSetting(cfg, resource.Id, identity, ready)
 	}
+	items = slices.DeleteFunc(items, func(resource *ipc.Resource) bool {
+		return (len(kinds) > 0 && !slices.Contains(kinds, resource.Kind)) || !strings.Contains(searchTargets[resource.Id], search)
+	})
 	response := &ipc.ListResourcesResponse{Resources: items}
 	if proto.Size(response) > rpc.MaxResponseBytes-4096 {
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)

@@ -562,8 +562,17 @@ come from the producer policy; local choices retain USER provenance unless
 locked. Worker absence and a pending configuration change disable mutation.
 `TestResourceCatalogCommittedPendingAndPolicy` checks these distinctions.
 Availability still explicitly reports missing runtime observations; a policy
-value does not prove reachability. Overlap reporting and actual-state evidence
-remain gaps. No resources capability is advertised by this step.
+value does not prove reachability. Catalog overlap reporting now uses the same
+packet scopes as denial compilation: host/subnet addresses, service transport
+and port, and application target routes. Symmetric overlap IDs are computed
+before filtering and pagination; defaults never enter those scopes. Work is
+bounded by 8192 scopes, one million comparisons and 32768 emitted links, with
+LIMIT_EXCEEDED instead of an incomplete overlap claim. Tests
+`TestResourceOverlapProtocolPortAndFamily` and
+`TestResourceCatalogOverlapSurvivesKindFilter` cover transport/family separation
+and a service's overlap with a filtered-out host. Deny precedence remains in
+the packet filter; these links do not establish actual reachability or OS
+acceptance. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
 
