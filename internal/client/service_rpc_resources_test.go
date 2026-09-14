@@ -1,6 +1,7 @@
 package client
 
 import (
+	"net/netip"
 	"reflect"
 	"slices"
 	"strconv"
@@ -11,6 +12,87 @@ import (
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+func TestRPCResourcesPreserveExplicitSingleIPSubnet(t *testing.T) {
+	for _, scenario := range []string{"host_only", "managed", "tampered", "hidden_peer", "undisclosed_prefix"} {
+		t.Run(scenario, func(t *testing.T) {
+			m, owner, profile := rpcConnectFixture(t)
+			opts, key := signedServiceDNSFixture(t)
+			networkMap := opts.NetworkMap
+			networkMap.Peers[0].AllowedIPs = []string{"100.64.0.2/32", "fd00::2/128", "0.0.0.0/0", "::/0"}
+			if scenario != "host_only" {
+				for _, cidr := range networkMap.Peers[0].AllowedIPs {
+					if networkMap.Network.ClientPolicy == nil {
+						networkMap.Network.ClientPolicy = &api.ClientPolicy{}
+					}
+					networkMap.Network.ClientPolicy.Resources = append(networkMap.Network.ClientPolicy.Resources, api.ManagedResourceSetting{
+						Kind: api.ManagedResourceSubnet, ID: networkMap.Peers[0].ID, CIDR: cidr,
+						Source: api.ClientPolicyAccount, PolicyID: "subnet-policy", Locked: true, Enabled: false,
+					})
+				}
+			}
+			resignApplicationMap(t, &networkMap, key)
+			switch scenario {
+			case "tampered":
+				networkMap.Network.ClientPolicy.Resources[0].Enabled = true
+			case "hidden_peer":
+				networkMap.Network.ClientPolicy.Resources[0].ID = "hidden"
+				resignApplicationMap(t, &networkMap, key)
+			case "undisclosed_prefix":
+				networkMap.Network.ClientPolicy.Resources[0].CIDR = "192.0.2.1/32"
+				resignApplicationMap(t, &networkMap, key)
+			}
+			if err := m.store.Update(func(cfg *Config) error {
+				cfg.NodeID, cfg.NetworkID = networkMap.Node.ID, networkMap.Network.ID
+				cfg.MapRevision, cfg.MapGlobalRevision = networkMap.Network.Revision, networkMap.Revision.Global
+				cfg.CachedMap, cfg.MapSigningTrust = &networkMap, opts.SigningTrust
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			before := m.store.Read()
+			s := NewClientRPCService(m, nil)
+			response, err := s.resourcesAs(t.Context(), owner, &ipc.ListResourcesRequest{Profile: profile})
+			if !reflect.DeepEqual(before, m.store.Read()) {
+				t.Fatal("projection changed policy or map")
+			}
+			if scenario != "host_only" && scenario != "managed" {
+				if err == nil || response != nil {
+					t.Fatal("invalid policy disclosed resources")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var subnets []string
+			hosts := 0
+			seen := map[string]bool{}
+			for _, resource := range response.Resources {
+				if seen[resource.Id] || resource.Enabled != nil {
+					t.Fatal("duplicate identity or inferred applied policy")
+				}
+				seen[resource.Id] = true
+				if host := resource.GetHost(); host != nil {
+					hosts++
+					if !slices.Equal(host.Addresses, []string{"100.64.0.2", "fd00::2"}) {
+						t.Fatal("explicit subnet erased host identity", host)
+					}
+				}
+				if subnet := resource.GetSubnet(); subnet != nil {
+					if !netip.MustParsePrefix(subnet.Cidr).IsSingleIP() {
+						t.Fatal("default route leaked through managed subnet policy")
+					}
+					subnets = append(subnets, subnet.Cidr)
+				}
+			}
+			slices.Sort(subnets)
+			if hosts != 1 || (scenario == "host_only" && len(subnets) != 0) || (scenario == "managed" && !slices.Equal(subnets, []string{"100.64.0.2/32", "fd00::2/128"})) {
+				t.Fatal("single-IP resource classification lost", hosts, subnets)
+			}
+		})
+	}
+}
 
 func TestRPCResourceServiceTargetsSearchAndIdentity(t *testing.T) {
 	m, owner, profile := rpcConnectFixture(t)

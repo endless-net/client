@@ -121,10 +121,15 @@ do not claim effective enablement. Local root `go test -short ./...`, `go vet
 ./...`, and configured golangci-lint passed on Windows on 2026-09-14.
 This is catalog evidence only. The pinned producer's `ManagedResourceSetting`
 uses `(kind, id, cidr)` identity and explicitly shares policy across a service's
-ports; mutation must bind every port row to that service policy. Its subnet
-references permit single-IP prefixes, which the current catalog collapses into
-host addresses: correcting that projection and implementing policy/effects
-remain open. Producer behavior and actual resource access require later evidence.
+ports; mutation must bind every port row to that service policy.
+`TestRPCResourcesPreserveExplicitSingleIPSubnet` verifies that signed explicit
+subnet references retain /32 and /128 resources alongside host addresses,
+ordinary addresses remain host-only, and even managed default routes stay out
+of this catalog. Tampered policy, hidden peers and undisclosed prefixes reject
+the entire read without exposing resources or mutating the store. Root short,
+vet and configured lint passed on Windows on 2026-09-14 after this correction.
+Policy application, effects and overlap remain open. Producer behavior and
+actual resource access require later evidence.
 
 IT-26 admission assertions inspected: `TestRPCDurableReplayBeforeCAS` reopens
 the saved config, checks a new instance identity, forbids preparation during

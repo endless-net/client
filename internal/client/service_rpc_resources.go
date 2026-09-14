@@ -75,6 +75,21 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		resource.Availability = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "resource_runtime_observation_unavailable"}
 		items = append(items, resource)
 	}
+	// A producer can explicitly identify a /32 or /128 as a subnet resource.
+	// Preserve that policy target in addition to the peer's host addresses.
+	// Ordinary host addresses without such a declaration remain host-only.
+	managedSubnets := map[string]bool{}
+	if policy := state.Network.ClientPolicy; policy != nil {
+		for _, setting := range policy.Resources {
+			if setting.Kind == api.ManagedResourceSubnet {
+				prefix, err := netip.ParsePrefix(setting.CIDR)
+				if err != nil {
+					return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+				}
+				managedSubnets[setting.ID+"\x00"+prefix.Masked().String()] = true
+			}
+		}
+	}
 	for _, p := range state.Peers {
 		addresses := []string{}
 		seen := map[string]bool{}
@@ -90,7 +105,9 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 			seen[prefix.String()] = true
 			if prefix.IsSingleIP() {
 				addresses = append(addresses, prefix.Addr().String())
-				continue
+				if !managedSubnets[p.ID+"\x00"+prefix.String()] {
+					continue
+				}
 			}
 			add(ipc.ResourceKind_RESOURCE_KIND_SUBNET, p.ID+"\x00"+prefix.String(), p.Hostname, prefix.String(), &ipc.Resource{Target: &ipc.Resource_Subnet{Subnet: &ipc.SubnetTarget{Cidr: prefix.String()}}})
 		}
