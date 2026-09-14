@@ -131,13 +131,20 @@ live and cancelled worker states without altering preference values.
 
 Inbound filter preparation: `inbound_filter.go` implements a bounded volatile
 outbound-flow table for restricting new inbound traffic while preserving matched
-TCP/UDP/ICMP replies. It is not yet wired into the TUN, policy resolver or public
+TCP/UDP/ICMP replies. It is not yet wired into engine construction, policy resolver or public
 preference patch. `TestInboundFilterTCPHandshakeExpiryAndPolicyChange` checks
 unsolicited TCP denial, handshake ordering, expiry and policy-change clearing;
 `TestInboundFilterUDPBindingBoundsAndReplyLifetime` checks port binding, fixed
-reply windows, capacity/expiry recovery and malformed packets. ICMP/IPv6,
-TUN-chain interaction and runtime/public integration still need implementation
-evidence; allow_inbound remains incomplete.
+reply windows, capacity/expiry recovery and malformed packets. Full IPv6
+transport coverage and runtime/public integration still need evidence; allow_inbound
+remains incomplete. The optional filter is now the final conjunction in TUN
+Read/Write, so traffic denied by earlier ACL/application/sharing filters cannot
+seed its flow table. `TestInboundTUNFilteringPreservesBatchesAndCannotSeedDeniedFlows`
+checks the actual wrapper with batch offsets, unsolicited reply denial, matched
+replies and an enabled preference that cannot bypass peer ACL.
+`TestInboundFilterEchoFamiliesAndExtensionRejection` checks IPv4/IPv6 echo
+identity/sequence, reply expiry and fragment rejection. Engine construction,
+identity-bound state reset, producer policy and public preferences remain open.
 
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
