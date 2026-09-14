@@ -330,6 +330,14 @@ packets and withdrawal. This is an additional gate, not a replacement for ACL,
 application or sharing checks. Engine/TUN wiring and OS protection against traffic
 bypassing the TUN remain unimplemented; these units do not prove fail-closed exit.
 
+The `applicationTUN` wrapper now accepts an exit filter and intersects it with
+existing application/sharing checks in both directions and outbound peer ACLs.
+`TestExitTUNEnforcesExpiryInBothDirectionsAndRetainsACL` uses an in-memory batch
+device to verify live traffic, deadline withdrawal, ordinary-route preservation,
+offset/batch compaction and independent ACL denial. The live engine does not yet
+construct or activate this filter: engine lifecycle, durable selection, route
+application and OS fail-closed protections still require implementation.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On
