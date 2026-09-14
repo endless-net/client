@@ -67,6 +67,7 @@ type WireGuardEngine struct {
 	router            wireGuardEngineRouter
 	interface_        string
 	configured        bool
+	runtimeSuspended  bool
 	routerCfg         wireGuardEngineRouterConfig
 	uapi              string
 	discovery         WireGuardEngineEndpointDiscovery
@@ -182,6 +183,16 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	result := WireGuardApplyResult{Method: "wireguard-go", Interface: e.interface_}
+	if e.runtimeSuspended {
+		result.UpError = ErrWireGuardRuntimeSuspended.Error()
+		return result, ErrWireGuardRuntimeSuspended
+	}
+	if e.device == nil && e.router != nil {
+		if _, err := e.downLocked(ctx); err != nil {
+			result.DownError = err.Error()
+			return result, err
+		}
+	}
 	previous := e.snapshotLocked()
 	plan, err := e.preflightLocked(cfg, networkMap)
 	if err != nil {
@@ -960,8 +971,12 @@ func (e *WireGuardEngine) LastEndpointDiscovery() WireGuardEngineEndpointDiscove
 func (e *WireGuardEngine) Down(ctx context.Context) (WireGuardApplyResult, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.downLocked(ctx)
+}
+
+func (e *WireGuardEngine) downLocked(ctx context.Context) (WireGuardApplyResult, error) {
 	result := WireGuardApplyResult{Method: "wireguard-go", Interface: e.interface_}
-	if e.device == nil {
+	if e.device == nil && e.router == nil {
 		result.OK = true
 		result.Skipped = true
 		result.Reason = "wireguard-go is already stopped"
@@ -1017,7 +1032,11 @@ func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
 	e.tun = nil
 	e.device = nil
 	e.bind = nil
-	e.router = nil
+	// Keep failed route cleanup available for another Down. An absent device
+	// alone cannot prove that the platform routes were removed.
+	if routeErr == nil {
+		e.router = nil
+	}
 	e.interface_ = ""
 	e.configured = false
 	e.routerCfg = wireGuardEngineRouterConfig{}

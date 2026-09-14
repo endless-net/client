@@ -35,6 +35,21 @@ and native catalog checks cover these preference semantics. They do not prove
 OS event execution: trusted logoff/suspend/resume adapters and CONNECT execution
 for those events remain unimplemented, and platform qualification remains open.
 
+The engine now provides a mutex-serialized suspend gate: teardown blocks a later
+Configure, failed cleanup keeps the gate closed, and Resume never reapplies the
+old map. Failed route removal retains the router for retry, including when the
+device is already gone; Configure cannot replace that unresolved cleanup.
+Windows router teardown now propagates enumeration/removal errors and retains
+its pending state instead of returning success on a repeated Down. Its native
+script enumerates then filters the owned interface so absent entries can be
+retried without suppressing command failures. Engine and Windows command-runner
+units cover these paths, not actual platform cleanup or SCM event delivery.
+The gate is not yet wired to trusted OS events or runtime worker suspension.
+The pinned x/sys SCM host forwards SessionChange EventData after its callback
+returns; the adapter must copy session data during a live native callback rather
+than dereference that forwarded pointer later. Linux/Darwin cleanup error
+propagation and idempotent platform teardown still require implementation.
+
 The user accepted the runtime-start default on 2026-09-14: KEEP_INTENT,
 with DISCONNECT when no explicit intent is saved. The agent now initializes
 that durable baseline under its lifetime lock before engine creation, RPC workers

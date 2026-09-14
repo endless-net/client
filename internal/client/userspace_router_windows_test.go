@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -30,6 +31,58 @@ func TestWindowsUserspaceRouterUsesNRPTForScopedDNS(t *testing.T) {
 	}
 	if strings.Contains(script, "Set-DnsClientServerAddress -InterfaceAlias $ifName -ServerAddresses") {
 		t.Fatalf("scoped DNS unexpectedly replaced the interface resolver: %s", script)
+	}
+}
+
+func TestWindowsRouterRetainsFailedCleanupForRetry(t *testing.T) {
+	for _, initialConfigure := range []bool{false, true} {
+		t.Run(fmt.Sprint(initialConfigure), func(t *testing.T) {
+			cfg := wireGuardEngineRouterConfig{Interface: "EndlessNet", MTU: 1280}
+			failure := true
+			calls := 0
+			r := &windowsWireGuardEngineRouter{interfaceName: cfg.Interface, configured: !initialConfigure, current: cfg,
+				runner: func(context.Context, string, ...string) ([]byte, error) {
+					calls++
+					if failure {
+						return nil, errors.New("platform command failed")
+					}
+					return nil, nil
+				}}
+			if initialConfigure {
+				if err := r.Configure(t.Context(), cfg); err == nil {
+					t.Fatal("failed apply reported success")
+				}
+			} else if err := r.Down(t.Context()); err == nil {
+				t.Fatal("failed cleanup reported success")
+			}
+			if !r.configured {
+				t.Fatal("failed cleanup discarded pending platform state")
+			}
+			before := calls
+			if err := r.Down(t.Context()); err == nil || calls != before+1 {
+				t.Fatal("cleanup failure became a successful no-op", err)
+			}
+			failure = false
+			if err := r.Down(t.Context()); err != nil || r.configured {
+				t.Fatal("cleanup did not finish on retry", err)
+			}
+			before = calls
+			if err := r.Down(t.Context()); err != nil || calls != before {
+				t.Fatal("completed cleanup was not idempotent", err)
+			}
+		})
+	}
+}
+
+func TestWindowsRouterCleanupDoesNotSuppressNativeFailures(t *testing.T) {
+	script := windowsUserspaceRouterScript(wireGuardEngineRouterConfig{Interface: "EndlessNet"}, true)
+	if strings.Contains(script, "SilentlyContinue") {
+		t.Fatal("cleanup suppresses a native error")
+	}
+	for _, want := range []string{"Get-NetRoute -PolicyStore ActiveStore -ErrorAction Stop", "Remove-NetRoute -Confirm:$false -ErrorAction Stop", "Get-NetIPAddress -PolicyStore ActiveStore -ErrorAction Stop", "Remove-NetIPAddress -Confirm:$false -ErrorAction Stop", "Get-DnsClientNrptRule -ErrorAction Stop", "Remove-DnsClientNrptRule -Force -ErrorAction Stop", "Get-DnsClient -ErrorAction Stop", "Where-Object {$_.InterfaceAlias -eq $ifName", "ResetServerAddresses -ErrorAction Stop"} {
+		if !strings.Contains(script, want) {
+			t.Fatal("cleanup lost failure-aware scoped operation", want)
+		}
 	}
 }
 
