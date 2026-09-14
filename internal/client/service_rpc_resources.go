@@ -101,8 +101,10 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 	}
 	for _, service := range state.Network.Services {
 		for _, port := range service.Ports {
-			key := service.ID + "\x00" + port.Protocol + "\x00" + strconv.Itoa(int(port.Port))
-			add(ipc.ResourceKind_RESOURCE_KIND_SERVICE, key, service.Name, service.DNSName, &ipc.Resource{Target: &ipc.Resource_Service{Service: &ipc.ServiceTarget{Hostname: service.DNSName, Port: port.Port, Protocol: port.Protocol}}})
+			portText := strconv.FormatUint(uint64(port.Port), 10)
+			key := service.ID + "\x00" + port.Protocol + "\x00" + portText
+			targetText := service.DNSName + ":" + portText + " " + port.Protocol
+			add(ipc.ResourceKind_RESOURCE_KIND_SERVICE, key, service.Name, targetText, &ipc.Resource{Target: &ipc.Resource_Service{Service: &ipc.ServiceTarget{Hostname: service.DNSName, Port: port.Port, Protocol: port.Protocol}}})
 		}
 	}
 	for _, app := range state.Network.Applications {

@@ -2,12 +2,97 @@ package client
 
 import (
 	"reflect"
+	"slices"
+	"strconv"
 	"testing"
 	"time"
 
+	api "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+func TestRPCResourceServiceTargetsSearchAndIdentity(t *testing.T) {
+	m, owner, profile := rpcConnectFixture(t)
+	opts, key := signedServiceDNSFixture(t)
+	networkMap := opts.NetworkMap
+	networkMap.Network.Services[0].Ports = []api.ServicePort{
+		{Protocol: "tcp", Port: 5432},
+		{Protocol: "udp", Port: 5432},
+		{Protocol: "tcp", Port: 6432},
+	}
+	install := func() {
+		t.Helper()
+		resignApplicationMap(t, &networkMap, key)
+		if err := m.store.Update(func(cfg *Config) error {
+			cfg.NodeID, cfg.NetworkID = networkMap.Node.ID, networkMap.Network.ID
+			cfg.MapRevision, cfg.MapGlobalRevision = networkMap.Network.Revision, networkMap.Revision.Global
+			cfg.CachedMap, cfg.MapSigningTrust = &networkMap, opts.SigningTrust
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	install()
+	s := NewClientRPCService(m, nil)
+	before := m.store.Read()
+	ids := map[string]string{}
+	for _, tc := range []struct {
+		search string
+		want   []string
+	}{
+		{"", []string{"tcp:5432", "tcp:6432", "udp:5432"}},
+		{"5432", []string{"tcp:5432", "udp:5432"}},
+		{"  TCP  ", []string{"tcp:5432", "tcp:6432"}},
+		{"db.account.endlessnet:6432", []string{"tcp:6432"}},
+		{"UDP", []string{"udp:5432"}},
+		{"db", []string{"tcp:5432", "tcp:6432", "udp:5432"}},
+		{"9999", nil},
+	} {
+		t.Run(tc.search, func(t *testing.T) {
+			response, err := s.resourcesAs(t.Context(), owner, &ipc.ListResourcesRequest{Profile: profile, Search: tc.search, Kinds: []ipc.ResourceKind{ipc.ResourceKind_RESOURCE_KIND_SERVICE}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			seen := map[string]bool{}
+			for _, resource := range response.Resources {
+				target := resource.GetService()
+				if target == nil || target.Hostname != "db.account.endlessnet" || resource.Id == "" || seen[resource.Id] || resource.Enabled != nil {
+					t.Fatal("invalid, duplicated or falsely enabled service resource", resource)
+				}
+				seen[resource.Id] = true
+				name := target.Protocol + ":" + strconv.FormatUint(uint64(target.Port), 10)
+				if previous, ok := ids[name]; ok && previous != resource.Id {
+					t.Fatal("search changed service identity")
+				}
+				ids[name] = resource.Id
+				got = append(got, name)
+			}
+			slices.Sort(got)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("targets = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	if !reflect.DeepEqual(before, m.store.Read()) {
+		t.Fatal("service search changed signed state")
+	}
+	slices.Reverse(networkMap.Network.Services[0].Ports)
+	networkMap.Network.Services[0].Name = "renamed"
+	install()
+	response, err := s.resourcesAs(t.Context(), owner, &ipc.ListResourcesRequest{Profile: profile, Kinds: []ipc.ResourceKind{ipc.ResourceKind_RESOURCE_KIND_SERVICE}})
+	if err != nil || len(response.GetResources()) != 3 {
+		t.Fatal("reordered service catalog unavailable", err)
+	}
+	for _, resource := range response.Resources {
+		target := resource.GetService()
+		name := target.Protocol + ":" + strconv.FormatUint(uint64(target.Port), 10)
+		if resource.Id != ids[name] || resource.DisplayName != "renamed" {
+			t.Fatal("service identity depends on ordering or display name")
+		}
+	}
+}
 
 func TestRPCResourcesAuthenticateFilterAndBindPages(t *testing.T) {
 	for _, scenario := range []string{"valid", "observer", "tampered", "expired", "foreign", "bad_kind", "duplicate_kind", "long_search", "page_query", "page_map"} {

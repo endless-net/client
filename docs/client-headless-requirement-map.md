@@ -52,7 +52,7 @@ No integration tests were executed to populate this table.
 | IT-29 | Independent session and node-credential clocks | I `service_rpc_session_test.go`; `service_rpc_session_snapshot_test.go`; `service_rpc_session_clock_test.go`; `service_rpc_session_worker_test.go`; C `service_rpc_credential_test.go` | GetSession, bound snapshots, renewal worker and clock transitions implemented; full cross-clock assertion audit remains open; platform timing is later evidence |
 | IT-30 | Exit apply/clear, locked settings and resource conflicts | I `service_rpc_preferences_test.go` covers validation only; `service_rpc_exit_catalog_test.go` covers signed grants; `exit_routes_test.go`, `exit_filter_test.go`, `exit_tun_test.go` cover isolated enforcement; `exit_engine_test.go` and `exit_export_test.go` cover no implicit defaults; `service_rpc_exit_change_test.go`, `service_rpc_exit_result_test.go`, `service_rpc_exit_executor_test.go` cover durable admission, result validation and serialized same-ID retry | No-selection projection is wired; explicit exit activation, OS fail-closed, containment after stale in-flight effects, public apply/clear/status, resources and remaining settings are missing; injected tests do not prove OS effects |
 | IT-31 | UI quit versus crash; OS lifecycle and stream recovery | I `service_rpc_uiquit_test.go`; `service_rpc_events_test.go` | Logoff/suspend/resume adapters incomplete; do not add untrusted OS events to UI notification RPC |
-| IT-32 | Private diagnostics access, bounded export and resource context | I `service_rpc_bundle_read_test.go`; `service_rpc_bundle_admin_test.go` | Resource search runtime missing; independently audit every bundle bound and authorization case |
+| IT-32 | Private diagnostics access, bounded export and resource context | I `service_rpc_bundle_read_test.go`; `service_rpc_bundle_admin_test.go`; `service_rpc_resources_test.go` | Signed catalog search includes service hostname, port and protocol; resource enablement/observations and independent audit of every bundle bound and authorization case remain open |
 | IT-33 | Contract mismatch and honest update/distribution status | `clientipc/rpc/protocol_test.go`; I `service_rpc_update_test.go` | Verified update source absent; unavailable-path tests do not prove installation or release pairing |
 
 ## Business requirements and acceptance criteria
@@ -111,6 +111,20 @@ families are identified in the IT table, rather than counted as proof by name.
 | RULE-16 | Existing account limits affect results, no invented tariff rules; IT-02/04/17/30 | Producer entitlements and Q-12; do not introduce client-side product policy |
 
 ## Remaining assertion audit
+
+Resources / US-11 / IT-30/32: `TestRPCResourceServiceTargetsSearchAndIdentity`
+asserts that TCP and UDP on the same port and two TCP ports have distinct IDs,
+correct typed targets, and search by name, hostname:port, port and protocol
+(including case/whitespace normalization and no-match). IDs remain stable across
+filters, port ordering and service rename; reads preserve the signed store and
+do not claim effective enablement. Local root `go test -short ./...`, `go vet
+./...`, and configured golangci-lint passed on Windows on 2026-09-14.
+This is catalog evidence only. The pinned producer's `ManagedResourceSetting`
+uses `(kind, id, cidr)` identity and explicitly shares policy across a service's
+ports; mutation must bind every port row to that service policy. Its subnet
+references permit single-IP prefixes, which the current catalog collapses into
+host addresses: correcting that projection and implementing policy/effects
+remain open. Producer behavior and actual resource access require later evidence.
 
 IT-26 admission assertions inspected: `TestRPCDurableReplayBeforeCAS` reopens
 the saved config, checks a new instance identity, forbids preparation during
