@@ -29,13 +29,13 @@ or manual integration run is created merely to bypass the implementation phase.
 The generated handler interface is in
 `clientipc/v0/clientipcconnect/service.connect.go`. `ClientRPCService` embeds its
 unimplemented handler in `internal/client/service_rpc_handlers.go`. At this audit,
-the five methods below have no runtime overrides; generated SDK methods and CLI
+the four methods below have no runtime overrides; generated SDK methods and CLI
 commands must not be counted as their runtime implementations.
 
 | Requirement area | Missing runtime methods | Required implementation and unit evidence |
 | --- | --- | --- |
 | US-05 exit | `GetExitNode`, `SelectExitNode`, `ClearExitNode` | Family/LAN constraints; requested/effective distinction; durable selection; partial apply/clear and fail-closed path loss; list-only support does not establish selection |
-| US-11 resources | `ListResources`, `SetResourceEnabled` | Verified resource identity and policy; search/pagination snapshot binding; local intent; hidden-resource denial, stale context and conflicts |
+| US-11 resources | `SetResourceEnabled` | Policy-aware local intent and actual effects; hidden-resource denial, stale context and conflicts; the catalog alone does not implement enablement |
 
 Additional partial implementations must not be mistaken for complete domains:
 
@@ -71,16 +71,18 @@ Paths in the table are under `internal/client/` unless qualified otherwise.
 | US-08 profiles/logout | Profile, logout and forget handlers | `TestRPCProfileRemovalGuards`, `TestRPCForgetCancelsQueuedEnrollmentAfterRestart`, `TestRPCProfilePaginationBindingsAndPrivacy` | Audit all removal/cleanup/replay cases; remote revocation depends on backend result |
 | US-09 session/renewal | Session reads, durable renewal/poll executor, dedicated host worker, public `RenewSession`, bound snapshot identity and generated backend transport | Session read/clock/store suites; `service_rpc_session_worker_test.go`, `service_rpc_session_executor_test.go`; C `service_rpc_session_transport_test.go` | Full concurrency/cleanup audit, additional approved browser origins and platform/backend qualification remain open; no seamless-renewal acceptance claim |
 | US-10 preferences/policy | `service_rpc_uiquit.go`, preference validators | `TestRPCUIQuitRejectsUnsupportedPatchAtomically` rejects mixed UI-quit/DNS patch without changing revision or override | Implement remaining settings; rejection is not DNS/routes/policy functionality |
-| US-11 resources | Missing list/mutation overrides | No runtime implementation to qualify | Implement catalog, policy-aware enablement and actual runtime effects |
+| US-11 resources | `service_rpc_resources.go` reads the authenticated active-profile map with bounded search and typed targets | `TestRPCResourcesAuthenticateFilterAndBindPages` covers authentication, privacy, filters, page binding and immutable source | Effective enablement, policy controls, overlap/conflict projection, runtime availability and mutation remain open |
 | US-12 lifecycle | `service_rpc_uiquit.go` | `TestRPCUIQuitPreferencesAndExecution` | UI-quit support is not logoff/suspend/resume adapter implementation; audit each specified event |
 | US-13 distribution/help | `service_rpc_update.go`, `service_rpc_handlers.go`; packaging and producer manifest workflows | `TestRPCUpdateInfoDoesNotInferReleaseOrPairing` | Verified update source remains absent; installation/release evidence deferred until implementation phase completes |
 | US-14 presentation/privacy | Typed status/operation/log/diagnostics projections | `TestRPCObserverSnapshotExcludesPrivateState`, diagnostics suites | Audit producer reasons/actions and secret redaction; UI rendering, locale selection and assistive technologies belong outside this task |
 
 The historical [runtime gap audit](native-runtime-gap-audit.md) reported nine
-missing methods at its pinned source. The current count is five: `GetUpdateInfo`
+missing methods at its pinned source. The current count is four: `GetUpdateInfo`
 has an explicit unavailable-source implementation and `GetSession` now performs
 a backend read, `RenewSession` now has a runtime worker and transport, and
-`ListExitNodes` reads authenticated live exit grants from the cached map.
+`ListExitNodes` reads authenticated live exit grants from the cached map, and
+`ListResources` reads disclosed hosts/subnets/services and source-authorized
+applications from that map.
 This does not complete update discovery or session renewal acceptance.
 
 US-12 unit increment: `TestRPCUIQuitReplayDoesNotApplyChangedPreference` checks
@@ -386,6 +388,16 @@ The adapter is injected in unit tests only. Actual OS protection/application,
 containment after context changes during an attempted apply, public Select/Clear,
 GetExitNode observations and background worker lifecycle remain unimplemented.
 A retained operation guard is concurrency protection, not an OS fail-closed rule.
+
+Resource catalog increment: stable opaque IDs distinguish kinds, peer/subnet
+tuples and individual service ports. Default routes are excluded from ordinary
+subnets; applications require the local signed source identity. Search intersects
+kind filters; page tokens bind caller/profile, signed payload, canonical query
+and result digest. Expired, tampered, foreign-recipient and revision-mismatched
+maps are unavailable. No reachability or applied enablement is inferred: Enabled
+is absent and availability explicitly reports missing runtime observations.
+Effective policy/enablement and overlap resolution remain implementation gaps,
+not successful default values. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
 
