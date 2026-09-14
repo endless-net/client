@@ -10,15 +10,17 @@ import (
 // session while logged on, then consume that exact binding on logoff. These
 // records contain only public OS identity, never token handles or credentials.
 type windowsSessionOwners struct {
-	mu      sync.Mutex
-	owners  map[uint32]*windowsSessionOwner
-	query   func(uint32) (string, error)
-	seeding bool
+	mu         sync.Mutex
+	owners     map[uint32]*windowsSessionOwner
+	query      func(uint32) (string, error)
+	seeding    bool
+	retryAfter uint32
 }
 
 type windowsSessionOwner struct {
-	identity string
-	retired  bool
+	identity  string
+	retired   bool
+	resolving bool
 }
 
 const maxWindowsUserSessions = 4096
@@ -64,15 +66,20 @@ func (s *windowsSessionOwners) bind(session uint32, replace bool) error {
 		s.mu.Unlock()
 		return errors.New("windows session identity capacity exceeded")
 	}
-	reservation := &windowsSessionOwner{}
+	reservation := &windowsSessionOwner{resolving: true}
 	s.owners[session] = reservation
 	s.mu.Unlock()
+	return s.resolve(session, reservation)
+}
+
+func (s *windowsSessionOwners) resolve(session uint32, reservation *windowsSessionOwner) error {
 	identity, queryErr := s.query(session)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.owners[session] != reservation {
 		return errors.New("windows session identity changed during lookup")
 	}
+	reservation.resolving = false
 	if queryErr != nil || strings.TrimSpace(identity) == "" {
 		// Keep an unresolved record so startup enumeration cannot resurrect
 		// an older identity after a failed, newer logon notification.
@@ -80,6 +87,36 @@ func (s *windowsSessionOwners) bind(session uint32, replace bool) error {
 	}
 	reservation.identity = identity
 	return nil
+}
+
+// Retry at most one unresolved session per tick. Round-robin selection prevents
+// a persistently failing low-numbered session from starving other owners.
+func (s *windowsSessionOwners) retryUnresolved() (bool, error) {
+	s.mu.Lock()
+	next, first := ^uint32(0), ^uint32(0)
+	for id, owner := range s.owners {
+		if owner.retired || owner.resolving || owner.identity != "" {
+			continue
+		}
+		if id < first {
+			first = id
+		}
+		if id > s.retryAfter && id < next {
+			next = id
+		}
+	}
+	if next == ^uint32(0) {
+		next = first
+	}
+	if next == ^uint32(0) {
+		s.mu.Unlock()
+		return false, nil
+	}
+	reservation := s.owners[next]
+	reservation.resolving = true
+	s.retryAfter = next
+	s.mu.Unlock()
+	return true, s.resolve(next, reservation)
 }
 
 func (s *windowsSessionOwners) logoff(session uint32) (string, error) {

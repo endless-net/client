@@ -164,8 +164,15 @@ cover seeded/reused sessions, unknown owners and enumeration failure; agent unit
 cover owner-bound DISCONNECT and foreign-logoff/power-retry interleaving.
 Before resume releases the stopped gate, refreshed policy also resolves an
 earlier failed owner logoff; otherwise resume remains pending. Unrelated events
-do not postpone an already armed retry timer. Source-health projection and
-recovery for individual lookup failures, complete interleaving evidence,
+do not postpone an already armed retry timer. The Windows service also retries
+one unresolved WTS owner per second, using round-robin selection within the
+bounded registry. Resolved or departed sessions are not queried; an in-flight
+lookup is not duplicated. Every completion checks the original binding before
+storing SID, so a retry cannot overwrite a newer logon or resurrect logoff.
+`windows_session_retry_test.go` covers recovery, persistent-failure fairness,
+bounded calls, duplicate lookup suppression and replacement/departure races.
+Source-health projection, recovery of an already missed unknown-owner logoff,
+native lookup latency and complete interleaving evidence,
 native callback ABI, SCM execution and
 non-Windows lifecycle sources remain open for further implementation/audit and
 the agreed platform qualification stage.

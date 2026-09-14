@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
@@ -57,9 +58,15 @@ func (s *windowsService) execute(parent context.Context, requests <-chan windows
 		errCh <- s.run(ctx, events)
 	}()
 	changes <- svc.Status{State: svc.Running, Accepts: accepts}
+	lookupRetry := time.NewTicker(time.Second)
+	defer lookupRetry.Stop()
 
 	for {
 		select {
+		case <-lookupRetry.C:
+			if ctx.Err() == nil {
+				_, _ = owners.retryUnresolved()
+			}
 		case <-ctx.Done():
 			<-errCh
 			return false, 1
