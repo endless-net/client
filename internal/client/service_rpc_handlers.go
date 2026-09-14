@@ -29,6 +29,7 @@ type ClientRPCService struct {
 	// Configure before serving. Must be nonblocking and must not call RPC/store
 	// mutations: invoked under the configuration read lock after authentication.
 	ResourceEnforcementProvider func(Config, time.Time) bool
+	observedResourceEnforcement *[32]byte // guarded by mutations.mu
 	SessionProvider             ClientRPCSessionProvider
 	SessionRenewalProvider      ClientRPCSessionRenewalProvider
 	clientipcconnect.UnimplementedClientServiceHandler

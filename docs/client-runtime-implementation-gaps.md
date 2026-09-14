@@ -594,9 +594,15 @@ partial intersections remain restrictions, not claims that all its traffic is
 blocked. `TestResourceAppliedDenialProjectionRequiresObservation` checks a host
 and overlapping service, loss of confirmation, and rejection before provider
 invocation for an unauthenticated map. No confirmation is cached across reads.
-Positive availability still needs route/path/application evidence, and live
-observation transitions still need event invalidation. Neither an applied
-filter nor a successful operation proves reachability.
+The host-owned one-second resource clock now invalidates RESOURCES when the
+bound enforcement observation changes, even without a Status change. It
+authenticates before observation, binds map/profile and local choices, checks
+the current source again before committing a revision, and joins on shutdown.
+`TestResourceObservationClockInvalidatesTransitions` checks confirmation/loss,
+revision and profile binding, unchanged-state suppression and invalid-source
+rejection; `TestResourceObservationClockStopsWithHost` checks cancellation.
+Positive availability still needs route/path/application evidence. Neither an
+applied filter nor a successful operation proves reachability.
 
 Resource mutation worker increment: private `setResourceEnabledAs` admits a
 durable resource choice into the same transaction worker as network preferences.
