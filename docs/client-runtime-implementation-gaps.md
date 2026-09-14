@@ -50,6 +50,18 @@ Additional partial implementations must not be mistaken for complete domains:
 | Diagnostics | `service_rpc_diagnostics.go` projects bounded OS route samples; missing samples remain explicitly unavailable and supplied samples remain incomplete | Qualify platform command execution later; extend route coverage beyond host-address sampling without substituting desired configuration for observed OS state |
 | Updates | `service_rpc_update.go` reports `update_source_not_configured`; `service_rpc_update_test.go` exists | Bind an approved distribution source and verify its projection; unavailable is not up-to-date, and unavailable-path tests do not prove update discovery |
 
+UI-quit managed-policy increment: `service_rpc_lifecycle_policy.go` resolves
+KEEP_INTENT/DISCONNECT from the authenticated profile-recipient map. Reads,
+Set/Reset and UI_QUIT execution share that resolution. An unlocked managed
+value supplies the reset baseline; a locked value constrains an existing user
+override and rejects a conflicting new override. Provenance and the responsible
+administrator are projected. Invalid/expired/context-mismatched maps do not
+silently supply a default; accepted request replay precedes current-policy
+validation. Managed CONNECT still requires lifecycle connect execution and is
+explicitly unsupported. Other lifecycle keys, network preferences, policy-map
+change/expiry invalidation events and full OS lifecycle implementation remain
+open. This increment does not close US-10/12.
+
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
 

@@ -39,6 +39,13 @@ func (m *ClientRPCMutations) setPreferencesAs(peer local.Peer, request *ipc.SetP
 		if profile.ID != cfg.RPCState.ActiveProfileID {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
+		setting, err := m.uiQuitSetting(*cfg, profile)
+		if err != nil {
+			return err
+		}
+		if setting.Control.Locked && setting.Effective != value {
+			return rpc.Error(connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED)
+		}
 		profile.UIQuit = &value
 		cfg.RPCState.Profiles[profile.ID] = profile
 		op.ProfileId = profile.ID
@@ -66,6 +73,9 @@ func (m *ClientRPCMutations) resetPreferencesAs(peer local.Peer, request *ipc.Re
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		profile.UIQuit = nil
+		if _, err := m.uiQuitSetting(*cfg, profile); err != nil {
+			return err
+		}
 		cfg.RPCState.Profiles[profile.ID] = profile
 		op.ProfileId = profile.ID
 		op.Continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE
@@ -79,7 +89,9 @@ func (m *ClientRPCMutations) notifyLifecycleAs(peer local.Peer, request *ipc.Not
 	before := m.store.Read()
 	behavior := ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT
 	if before.RPCState != nil {
-		behavior = rpcUIQuit(before.RPCState.Profiles[request.GetProfile().GetProfileId()])
+		if setting, err := m.uiQuitSetting(before, before.RPCState.Profiles[request.GetProfile().GetProfileId()]); err == nil {
+			behavior = setting.Effective
+		}
 	}
 	op, _, err := m.acceptInternal(peer, "/client.v0.ClientService/NotifyLifecycle", request, func(cfg *Config, op *ipc.Operation) error {
 		if request.Event != ipc.LifecycleEvent_LIFECYCLE_EVENT_UI_QUIT {
@@ -89,7 +101,11 @@ func (m *ClientRPCMutations) notifyLifecycleAs(peer local.Peer, request *ipc.Not
 		if err != nil {
 			return err
 		}
-		if profile.ID != cfg.RPCState.ActiveProfileID || rpcUIQuit(profile) != behavior {
+		setting, err := m.uiQuitSetting(*cfg, profile)
+		if err != nil {
+			return err
+		}
+		if profile.ID != cfg.RPCState.ActiveProfileID || setting.Effective != behavior {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		switch behavior {
@@ -121,21 +137,11 @@ func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPrefer
 	if err != nil {
 		return nil, err
 	}
-	value := rpcUIQuit(profile)
-	if value != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT && value != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT {
-		return nil, rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+	setting, err := s.mutations.uiQuitSetting(cfg, profile)
+	if err != nil {
+		return nil, err
 	}
-	source := ipc.SettingSource_SETTING_SOURCE_DEFAULT
-	var requested *ipc.LifecycleBehavior
-	if profile.UIQuit != nil {
-		source = ipc.SettingSource_SETTING_SOURCE_USER
-		requested = value.Enum()
-	}
-	mutation := &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE}
-	if profile.ID != cfg.RPCState.ActiveProfileID {
-		mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_requires_active_profile", ActionOwner: ipc.ActionOwner_ACTION_OWNER_USER}
-	}
-	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: &ipc.LifecycleSetting{Effective: value, Requested: requested, AllowedValues: []ipc.LifecycleBehavior{ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT, ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT}, Control: &ipc.SettingControl{Source: source, Mutation: mutation}}}}}), nil
+	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: setting}}}), nil
 }
 
 func (s *ClientRPCService) SetPreferences(ctx context.Context, request *connect.Request[ipc.SetPreferencesRequest]) (*connect.Response[ipc.SetPreferencesResponse], error) {

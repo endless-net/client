@@ -11,7 +11,7 @@ import (
 )
 
 func TestRPCPreferencesRequireActiveProfileForMutation(t *testing.T) {
-	m, peer, active := rpcConnectFixture(t)
+	m, peer, active := rpcPreferenceFixture(t)
 	create := rpcCreateRequest(t, m)
 	create.ControlOrigin = "https://other.test"
 	created, err := m.createProfileAs(peer, create)
@@ -57,7 +57,7 @@ func TestRPCPreferencesRequireActiveProfileForMutation(t *testing.T) {
 }
 
 func TestRPCUIQuitPreferencesAndExecution(t *testing.T) {
-	m, peer, profile := rpcConnectFixture(t)
+	m, peer, profile := rpcPreferenceFixture(t)
 	if err := m.store.Update(func(cfg *Config) error {
 		cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
 		return nil
@@ -133,7 +133,7 @@ func TestRPCUIQuitPreferencesAndExecution(t *testing.T) {
 }
 
 func TestRPCUIQuitRejectsUnsupportedPatchAtomically(t *testing.T) {
-	m, peer, profile := rpcConnectFixture(t)
+	m, peer, profile := rpcPreferenceFixture(t)
 	before := m.Metadata().Revision
 	_, err := m.setPreferencesAs(peer, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum(), AcceptDns: proto.Bool(false)}})
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
@@ -145,7 +145,7 @@ func TestRPCUIQuitRejectsUnsupportedPatchAtomically(t *testing.T) {
 }
 
 func TestRPCUIQuitReplayDoesNotApplyChangedPreference(t *testing.T) {
-	m, peer, profile := rpcConnectFixture(t)
+	m, peer, profile := rpcPreferenceFixture(t)
 	if err := m.store.Update(func(cfg *Config) error {
 		cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
 		return nil
@@ -185,7 +185,7 @@ func TestRPCUIQuitReplayDoesNotApplyChangedPreference(t *testing.T) {
 }
 
 func TestRPCPreferenceChangeInvalidatesEffectiveSettings(t *testing.T) {
-	m, peer, profile := rpcConnectFixture(t)
+	m, peer, profile := rpcPreferenceFixture(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	sub, err := m.subscribe(peer, &ipc.BuildIdentity{}, nil)

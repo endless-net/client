@@ -117,6 +117,22 @@ families are identified in the IT table, rather than counted as proof by name.
 
 ## Remaining assertion audit
 
+US-10/12, RULE-06, UI-AC-19/21: `TestRPCUIQuitManagedBaselineLockAndReset`
+covers account/device provenance, unlocked override, conflicting lock rejection
+without a journal/state change, equal locked override, reset to the managed
+baseline after restart, and managed DISCONNECT admission through the existing
+durable Down executor before success. `TestRPCUIQuitRejectsInvalidPolicyAndReplaysAcceptedRequest`
+covers signature tampering, map expiry, wrong recipient/revision, missing trust,
+unsupported managed CONNECT, and a new lock overriding an older local request.
+Invalid-policy read/set/reset/new-notify fail without state changes, while a
+previously accepted notification replays unchanged before and after restart.
+Preference and local-transport fixtures now carry signed maps rather than empty
+unsigned placeholders. These assertions do not qualify OS Down, all lifecycle
+behaviors, cross-profile policy changes or policy invalidation events.
+Local root `go test -short ./...`, `go vet ./...`, configured golangci-lint
+and `goimports -w .` passed on Windows on 2026-09-14 after replacing those
+fixtures. No integration or platform acceptance run was performed.
+
 Resources / US-11 / IT-30/32: `TestRPCResourceServiceTargetsSearchAndIdentity`
 asserts that TCP and UDP on the same port and two TCP ports have distinct IDs,
 correct typed targets, and search by name, hostname:port, port and protocol

@@ -10,7 +10,7 @@ import (
 )
 
 func TestRPCPreferenceReadAuthorizationAndValidation(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcPreferenceFixture(t)
 	s := NewClientRPCService(m, nil)
 	before := m.store.Read()
 	for _, scenario := range []struct {

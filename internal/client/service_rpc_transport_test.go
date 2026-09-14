@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	clientapi "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
@@ -308,6 +307,9 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 	resumeCtx, stopResumedEnrollment := context.WithCancel(ctx)
 	defer stopResumedEnrollment()
 	allowEnrollmentCompletion := make(chan struct{})
+	policyFixture, policyKey := signedServiceDNSFixture(t)
+	policyFixture.NetworkMap.Node.ID = "synthetic-test-node"
+	resignApplicationMap(t, &policyFixture.NetworkMap, policyKey)
 	resumedDone, err := service.StartEnrollmentWorker(resumeCtx, func(ctx context.Context, cfg Config, _ ClientRPCEnrollmentInput, save func(Config) error) (*ipc.UserAction, error) {
 		select {
 		case <-allowEnrollmentCompletion:
@@ -320,7 +322,9 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 		cfg.EnrollmentRequestID, cfg.EnrollmentPollToken = "", ""
 		cfg.NodeID = "synthetic-test-node"
 		cfg.NodeCredential = "synthetic-logout-credential"
-		cfg.CachedMap = &clientapi.RegisterNodeResponse{Node: clientapi.Node{ID: cfg.NodeID}}
+		cfg.NetworkID = policyFixture.NetworkMap.Network.ID
+		cfg.MapRevision, cfg.MapGlobalRevision = policyFixture.NetworkMap.Network.Revision, policyFixture.NetworkMap.Revision.Global
+		cfg.CachedMap, cfg.MapSigningTrust = &policyFixture.NetworkMap, policyFixture.SigningTrust
 		return nil, save(cfg)
 	})
 	if err != nil {
