@@ -164,7 +164,14 @@ cover seeded/reused sessions, unknown owners and enumeration failure; agent unit
 cover owner-bound DISCONNECT and foreign-logoff/power-retry interleaving.
 Before resume releases the stopped gate, refreshed policy also resolves an
 earlier failed owner logoff; otherwise resume remains pending. Unrelated events
-do not postpone an already armed retry timer. The Windows service also retries
+do not postpone an already armed retry timer. Agent tests in
+`agent_runtime_lifecycle_pending_test.go` hold teardown at a barrier and verify
+that an unavailable logoff decision is committed before engine resume once
+local policy becomes available; a replaced owner retains its newer intent.
+An unsuccessful offline policy refresh neither resumes the engine nor wakes
+reconciliation, and a later successful attempt resolves the pending logoff.
+These are consumer-ordering units, not signed-map acquisition or native OS
+execution evidence. The Windows service also retries
 one unresolved WTS owner per second, using round-robin selection within the
 bounded registry. Resolved or departed sessions are not queried; an in-flight
 lookup is not duplicated. Every completion checks the original binding before
