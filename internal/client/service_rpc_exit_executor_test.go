@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func TestRPCExitExecutorSerializesConcurrentAttempts(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	var calls atomic.Int32
-	executor := clientRPCExitExecutor{Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+	executor := clientRPCExitExecutor{Lock: &sync.Mutex{}, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 		if calls.Add(1) == 1 {
 			close(entered)
 		}
@@ -90,7 +91,7 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 			calls := 0
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			executor := clientRPCExitExecutor{Modes: modes, Apply: func(_ context.Context, id string, input Config, selection *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+			executor := clientRPCExitExecutor{Lock: &sync.Mutex{}, Modes: modes, Apply: func(_ context.Context, id string, input Config, selection *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 				calls++
 				stored, loadErr := loadConfigFile(m.store.path)
 				if loadErr != nil {

@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,7 +60,7 @@ func TestExitSelectionBindsSignedMapAcrossRestartAndApply(t *testing.T) {
 				t.Fatal("restart lost admitted map binding")
 			}
 			applies, contains := 0, 0
-			executor := clientRPCExitExecutor{Modes: modes, Apply: func(_ context.Context, _ string, input Config, _ *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+			executor := clientRPCExitExecutor{Lock: &sync.Mutex{}, Modes: modes, Apply: func(_ context.Context, _ string, input Config, _ *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 				applies++
 				if input.CachedMap.MapSignature.PayloadHash != originalHash {
 					t.Fatal("replacement map reached executor")

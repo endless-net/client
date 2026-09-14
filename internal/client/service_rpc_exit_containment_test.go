@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -15,7 +16,7 @@ func TestExitContainmentRequiresBoundProofAndRecovers(t *testing.T) {
 		t.Fatal(err)
 	}
 	applies, contains := 0, 0
-	executor := clientRPCExitExecutor{Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+	executor := clientRPCExitExecutor{Lock: &sync.Mutex{}, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 		applies++
 		if _, err := m.disconnectAs(owner, &ipc.DisconnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}); err != nil {
 			t.Fatal(err)

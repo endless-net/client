@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -18,6 +19,11 @@ import (
 // errors (including cancellation) must retain protection, never fall back to
 // direct routing. No adapter is advertised until these OS effects exist.
 type clientRPCExitExecutor struct {
+	// The same lock used by connection, profile and map application. Callbacks
+	// run under it and must not acquire it again. Hold through durable completion
+	// or containment so another OS operation cannot invalidate an uncommitted
+	// observation between Apply returning and completeExitChange.
+	Lock    *sync.Mutex
 	Modes   []clientRPCExitMode
 	Apply   func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error)
 	Contain func(context.Context, clientRPCExitChange) (clientRPCExitContainment, error)
@@ -43,8 +49,13 @@ func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) 
 // call. Ambiguous/partial results retain the same durable operation for recovery;
 // they cannot commit selection, claim success, or unblock conflicting changes.
 func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor clientRPCExitExecutor) error {
+	if executor.Lock == nil {
+		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	}
 	m.exitWorker.Lock()
 	defer m.exitWorker.Unlock()
+	executor.Lock.Lock()
+	defer executor.Lock.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
 	}

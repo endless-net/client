@@ -309,6 +309,14 @@ underlay control/relay/DNS and IPv6 neighbor discovery requirements, family/LAN
 modes, kernel observations, packaging dependency checks and privileged CI.
 Windows and Darwin outside-TUN protection also remain open.
 
+Exit reconciliation now requires the adapter to supply the same effect mutex as
+connection/profile/map application. It holds that lock through preflight, native
+apply, durable completion and any late-context containment; callbacks must not
+reacquire it. Missing locks reject without a dispatch checkpoint, and cancellation
+is checked again after waiting for existing OS work. `service_rpc_exit_lock_test.go`
+covers these boundaries and accepted Disconnect during Apply. This establishes
+the executor locking contract, not native host wiring or platform acceptance.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,
