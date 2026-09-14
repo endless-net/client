@@ -34,12 +34,12 @@ or manual integration run is created merely to bypass the implementation phase.
 The generated handler interface is in
 `clientipc/v0/clientipcconnect/service.connect.go`. `ClientRPCService` embeds its
 unimplemented handler in `internal/client/service_rpc_handlers.go`. At this audit,
-the three methods below have no runtime overrides; generated SDK methods and CLI
+the two methods below have no runtime overrides; generated SDK methods and CLI
 commands must not be counted as their runtime implementations.
 
 | Requirement area | Missing runtime methods | Required implementation and unit evidence |
 | --- | --- | --- |
-| US-05 exit | `GetExitNode`, `SelectExitNode`, `ClearExitNode` | Family/LAN constraints; requested/effective distinction; durable selection; partial apply/clear and fail-closed path loss; list-only support does not establish selection |
+| US-05 exit | `SelectExitNode`, `ClearExitNode` | Family/LAN constraints; durable selection; partial apply/clear and fail-closed path loss; read support does not establish selection |
 
 Additional partial implementations must not be mistaken for complete domains:
 
@@ -580,6 +580,15 @@ the packet filter; these links do not establish actual reachability or OS
 acceptance. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
+
+Exit request read: public GetExitNode now exposes the profile's durable request
+and pending select/clear intent, including per-family requested IDs and LAN
+choice. With no OS observation provider, effective IDs remain absent, actual
+fail-closed remains unconfirmed and observation-unavailable failures are
+explicit. Saved requests survive grant withdrawal as intent, never as current
+authorization. `TestExitReadSeparatesDurableRequestAndUnknownEnforcement`
+checks absent/saved/pending/clear states, family separation and owner access.
+This does not implement public Select/Clear, OS application or positive status.
 
 Resource restart evidence: `TestResourceWorkerRestartsApplyOrContainment`
 reopens the durable store after worker cancellation or failed Down. A cancelled
