@@ -18,7 +18,7 @@ func TestRenderWireGuardCheckedRejectsMapInjection(t *testing.T) {
 			Endpoint: "node-2.example.test:51820", AllowedIPs: []string{"100.64.0.3/32"},
 		}},
 	}
-	if rendered, err := RenderWireGuardWithOptionsChecked("private-key", response, WireGuardRenderOptions{}); err == nil || rendered != "" {
+	if rendered, err := RenderWireGuardWithOptionsChecked(Config{PrivateKey: "private-key"}, response, WireGuardRenderOptions{}); err == nil || rendered != "" {
 		t.Fatalf("RenderWireGuardWithOptionsChecked rendered an unsafe map: rendered=%q err=%v", rendered, err)
 	}
 }

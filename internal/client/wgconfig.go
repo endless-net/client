@@ -30,7 +30,8 @@ type WireGuardRenderOptions struct {
 
 // RenderWireGuardWithOptionsChecked validates the complete untrusted map
 // before producing a WireGuard configuration for explicit manual export.
-func RenderWireGuardWithOptionsChecked(privateKey string, response clientapi.RegisterNodeResponse, opts WireGuardRenderOptions) (string, error) {
+func RenderWireGuardWithOptionsChecked(cfg Config, response clientapi.RegisterNodeResponse, opts WireGuardRenderOptions) (string, error) {
+	privateKey := cfg.PrivateKey
 	if len(response.Network.SharePeerGrants) > 0 && !opts.sharingPacketEnforcement {
 		return "", fmt.Errorf("machine sharing requires the managed WireGuard packet filter; static export is unavailable")
 	}
@@ -46,6 +47,15 @@ func RenderWireGuardWithOptionsChecked(privateKey string, response clientapi.Reg
 	if err := validateWireGuardRenderOptions(opts); err != nil {
 		return "", err
 	}
+	acceptance, err := resolveNetworkAcceptance(cfg, response, time.Now())
+	if err != nil {
+		return "", err
+	}
+	original := response
+	response = cloneRegisterNodeResponse(response)
+	if !acceptance.dns {
+		response.Network.DNS, response.Network.DNSConfig = nil, nil
+	}
 	// Static export cannot enforce an exit grant's lifetime or fail-closed
 	// transitions. Default routes in a map are not an explicit exit selection.
 	peers, err := exitRoutePeers(Config{}, response, nil, time.Time{})
@@ -53,6 +63,23 @@ func RenderWireGuardWithOptionsChecked(privateKey string, response clientapi.Reg
 		return "", err
 	}
 	response.Peers = peers
+	if !acceptance.routes {
+		for index := range response.Peers {
+			peer := &response.Peers[index]
+			prefixes := make([]netip.Prefix, 0, len(peer.AllowedIPs))
+			for _, value := range peer.AllowedIPs {
+				prefix, err := netip.ParsePrefix(value)
+				if err != nil {
+					return "", err
+				}
+				prefixes = append(prefixes, prefix)
+			}
+			peer.AllowedIPs = nil
+			for _, prefix := range restrictAcceptedResourceRoutes(prefixes, original) {
+				peer.AllowedIPs = append(peer.AllowedIPs, prefix.String())
+			}
+		}
+	}
 	return renderWireGuardValidated(privateKey, response, opts), nil
 }
 

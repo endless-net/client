@@ -1907,7 +1907,7 @@ func renderWireGuardForConfig(cfg client.Config, response clientapi.RegisterNode
 		}
 		opts.PeerEndpointOverrides = overrides
 	}
-	return client.RenderWireGuardWithOptionsChecked(cfg.PrivateKey, response, opts)
+	return client.RenderWireGuardWithOptionsChecked(cfg, response, opts)
 }
 
 func cmdRelayCheck(args []string) error {

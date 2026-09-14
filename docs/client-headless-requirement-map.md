@@ -117,6 +117,16 @@ families are identified in the IT table, rather than counted as proof by name.
 
 ## Remaining assertion audit
 
+DNS/routes export consistency: `TestStaticExportRespectsNetworkAcceptance`
+checks local disabled intent, managed disabled intent, locked enabled policy,
+ordinary host-route retention, explicit single-IP subnet handling, no implicit
+default route, rejected tampering/missing trust, and immutable source. The CLI
+and engine preflight both pass Config to the checked renderer; the old
+private-key-only signature is removed. Root short, vet, configured lint and
+goimports passed locally on Windows on 2026-09-14. Static output does not enforce
+later policy changes or expiry, and this does not close public preference
+admission/worker or OS acceptance requirements.
+
 US-10, IT-16, RULE-06: `TestNetworkAcceptancePolicyAndRouterEffects` covers the
 DNS/routes default, explicit false, managed false baseline, unlocked user
 override, both lock values, and absent overrides restoring the baseline. It

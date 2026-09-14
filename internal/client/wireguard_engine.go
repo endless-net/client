@@ -251,7 +251,7 @@ func (e *WireGuardEngine) preflightLocked(cfg Config, networkMap clientapi.Regis
 	if err != nil {
 		return plan, err
 	}
-	if _, err := RenderWireGuardWithOptionsChecked(plan.privateKey, plan.networkMap, WireGuardRenderOptions{
+	if _, err := RenderWireGuardWithOptionsChecked(plan.config, plan.networkMap, WireGuardRenderOptions{
 		sharingPacketEnforcement: true,
 		ListenPort:               e.opts.ListenPort,
 		MTU:                      plan.mtu,

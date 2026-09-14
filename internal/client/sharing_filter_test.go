@@ -149,7 +149,7 @@ func TestSharingRevisionAndMalformedPacketsFailClosed(t *testing.T) {
 			t.Fatal("malformed protected packet accepted")
 		}
 	}
-	if _, err := RenderWireGuardWithOptionsChecked("unused", m, WireGuardRenderOptions{}); err == nil {
+	if _, err := RenderWireGuardWithOptionsChecked(Config{PrivateKey: "unused"}, m, WireGuardRenderOptions{}); err == nil {
 		t.Fatal("unenforced static sharing export allowed")
 	}
 	clone := cloneRegisterNodeResponse(m)

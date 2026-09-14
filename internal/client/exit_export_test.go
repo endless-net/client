@@ -7,14 +7,15 @@ import (
 )
 
 func TestStaticExportDoesNotActivateImplicitExit(t *testing.T) {
-	_, networkMap, signingKey := signedApplicationFixture(t, false)
+	cfg, networkMap, signingKey := signedApplicationFixture(t, false)
+	cfg.PrivateKey = testWireGuardEngineKey(1)
 	networkMap.Network.Applications = nil
 	networkMap.Peers[0].AllowedIPs = []string{"100.64.0.3/32", "10.1.0.0/16", "0.0.0.0/0", "::/0"}
 	resignApplicationMap(t, &networkMap, signingKey)
 	before := cloneRegisterNodeResponse(networkMap)
 	for _, blockLAN := range []bool{false, true} {
 		for _, managed := range []bool{false, true} {
-			rendered, err := RenderWireGuardWithOptionsChecked(testWireGuardEngineKey(1), networkMap, WireGuardRenderOptions{
+			rendered, err := RenderWireGuardWithOptionsChecked(cfg, networkMap, WireGuardRenderOptions{
 				ExitBlockLAN: blockLAN, sharingPacketEnforcement: managed,
 			})
 			if err != nil {

@@ -77,8 +77,11 @@ subnets and application routes. Signed sources are recipient-bound and checked
 before preference resolution. This is used by the existing OS router adapters,
 but the unit evidence is derived router configuration, not observed OS effects.
 Public Set/Reset admission, a durable apply/rollback worker, requested/effective
-projection and resource invalidation after local changes remain missing, as do
-inbound filtering and static-export preference enforcement. No additional
+projection and resource invalidation after local changes remain missing, as does
+inbound filtering. Checked static export now receives the full Config and uses
+the same authenticated DNS/routes resolver; it cannot reintroduce a disabled
+resource route or DNS setting. Static output is still not a live policy/expiry
+enforcer. No additional
 preference capability is advertised by this increment.
 
 Existing test filenames above identify starting points for review, not assertions
