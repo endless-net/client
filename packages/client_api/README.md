@@ -17,9 +17,53 @@ No HTTP Connect wrapper or production transport adapter is included.
 For Android/iOS adapter and UI mock development, use the producer-owned
 [Mobile Bridge contract](../../docs/client-mobile-bridge.md). It defines logical
 calls, Protobuf payloads, errors, subscriptions and cancellation. Implement the
-same consumer interface for the mock and future native adapter; this package
-does not yet supply that interface or a mobile gRPC channel. Pin the specification
-and these generated messages to the same source commit.
+same consumer interface for the mock and future native adapter. The exported
+[`MobileBridge` interfaces and result types](lib/src/mobile_bridge.dart) are
+handwritten contract code; they do not implement a native transport or a mobile
+gRPC channel. Pin the specification and package to the same source commit.
+
+```dart
+import 'package:endlessnet_client_api/client_api.dart';
+
+Future<GetRuntimeInfoResponse> bootstrap(MobileBridge bridge) async {
+  final opened = await bridge.open(timeoutMillis: 5000).result;
+  if (opened is! MobileOpened) throw StateError('Mobile host unavailable');
+  final channel = opened.channel;
+  try {
+    final result = await channel.unary(
+      MobileRequest(
+        procedure: '/client.v0.ClientService/GetRuntimeInfo',
+        metadata: const [],
+        payload: GetRuntimeInfoRequest().writeToBuffer(),
+      ),
+      timeoutMillis: 5000,
+    ).result;
+    if (result is! MobileSuccess) throw StateError('Bootstrap failed');
+    final response = GetRuntimeInfoResponse.fromBuffer(result.payload);
+    final runtime = response.runtime;
+    if (runtime.protocol != ClientContract.protocol ||
+        runtime.ipcVersion != ClientContract.version ||
+        runtime.contractSha256 != ClientContract.sha256 ||
+        runtime.instanceId.isEmpty) {
+      throw StateError('Incompatible mobile runtime');
+    }
+    return response;
+  } finally {
+    await channel.close();
+  }
+}
+```
+
+This short probe closes its channel. A running UI retains the channel for status
+and subscriptions and handles `MobileRpcError` and `MobileBridgeError` separately.
+For subsequent calls, convert `ClientContract.metadata.entries` to a list of
+`MobileMetadataEntry(entry.key, entry.value)`; preserve duplicate entries in
+negative fixtures. Decode `MobileRpcError.failure`, when present, with
+`Failure.fromBuffer`. Implement `MobileBridge`, `MobileChannel`, `MobileCall`,
+`MobileOpenAttempt` and `MobileSubscription` in your mock; the normative document
+defines cancellation, terminal races, snapshot-first delivery and queue bounds.
+Constructors copy payloads and metadata into immutable values; adapter methods
+report validation failures asynchronously through the declared result types.
 
 `ClientContract` exports the exact descriptor SHA-256, protocol/version and
 lowercase gRPC metadata. Bootstrap must validate all three plus the runtime

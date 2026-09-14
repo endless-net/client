@@ -88,6 +88,9 @@ jobs:
       - name: Analyze Dart bindings
         working-directory: packages/client_api
         run: dart analyze --fatal-infos
+      - name: Check mobile bridge contract values
+        working-directory: packages/client_api
+        run: dart run test/mobile_bridge_contract_test.dart
       - name: Check generated artifacts are committed
         shell: bash
         run: |

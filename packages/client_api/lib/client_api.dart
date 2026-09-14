@@ -1,7 +1,8 @@
-/// Generated Client IPC v0 messages and gRPC client/server bindings.
+/// Client IPC v0 messages, gRPC bindings and logical mobile bridge interfaces.
 library;
 
 export 'src/contract.dart';
+export 'src/mobile_bridge.dart';
 export 'src/gen/client/v0/common.pb.dart';
 export 'src/gen/client/v0/features.pb.dart';
 export 'src/gen/client/v0/runtime.pb.dart';

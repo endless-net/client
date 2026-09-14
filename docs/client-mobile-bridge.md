@@ -7,7 +7,11 @@
 
 Это нормативный логический интерфейс между UI и native adapter. По нему
 `client-ui` реализует одинаковый интерфейс для mock и будущего platform adapter.
-Имена ниже — спецификация, а не уже доступные методы Go/Kotlin/Swift/Dart SDK.
+Псевдокод ниже реализован как импортируемые Dart interfaces и result types в
+[mobile_bridge.dart](../packages/client_api/lib/src/mobile_bridge.dart),
+экспортируемые через `package:endlessnet_client_api/client_api.dart`.
+`MobileBridge` и `MobileChannel` реализуются consumer mock и будущим adapter.
+Go/Kotlin/Swift реализации и native транспорт эта публикация не предоставляет.
 Документ не определяет native ABI, Binder framing или iOS provider-message wire.
 
 ## 1. Источники и подключение consumer
@@ -34,12 +38,17 @@ Mock сериализует и декодирует настоящие generated
 через Dart `writeToBuffer` / `fromBuffer`. JSON-модель бизнес-сообщений не нужна.
 Generated `ClientServiceClient` требует gRPC channel: данный логический adapter
 не является готовой реализацией такого channel. UI может реализовать facade
-поверх generated messages и этого API. Готового импортируемого bridge package
-или исполняемых fixtures эта публикация не добавляет.
+поверх generated messages и этого API. Пример использования импортируемого
+интерфейса находится в [Dart README](../packages/client_api/README.md).
+Готовый native bridge и сценарный UI mock остаются отдельными реализациями.
 
 ## 2. Логический API
 
 Псевдокод задаёт значения и асинхронную семантику; синтаксис языка свободен.
+В Dart имена типов имеют префикс `Mobile` (`MobileRequest`, `MobileRpcError`,
+`MobileSubscription` и т. д.); enum members используют lowerCamelCase.
+Например, `CHANNEL_LOST` соответствует `MobileBridgeCode.channelLost`.
+RPC enum содержит стандартные non-OK statuses; его ordinal не является wire code.
 `Bytes` — отдельное Protobuf message без HTTP/gRPC frame или Base64 оболочки.
 Переданные буферы считаются неизменяемыми до завершения вызова; adapter копирует
 их, если native boundary не обеспечивает такое владение.
