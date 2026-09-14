@@ -191,8 +191,8 @@ retains old denials while tightening, and relaxes only on commit. Map expiry and
 withdrawal close traffic. `TestResourceFilterDeniesOverlapsAndTransitionsInBothDirections`
 checks port/protocol separation, overlap and staged changes, expiry and withdraw;
 `TestResourceFilterRuleValidationAndOwnership` checks rule shape,
-defensive copying and malformed packets. Public SetResourceEnabled remains
-missing; the durable worker and engine integration are described below.
+defensive copying and malformed packets. Public dispatch, the durable worker
+and engine integration are described below; complete effects remain unqualified.
 `resource_rules.go` now authenticates once and compiles local/managed choices
 into bounded, deduplicated prefix/port denials for host, subnet, service and
 source-role application resources. Service host matching includes the current
@@ -573,8 +573,14 @@ choice and enters durable disconnection containment; Disconnect supersedes apply
 `TestResourceChangeAdmissionAndRestart`, `TestResourceChangeRejectsAtomically`
 and `TestResourceWorkerAppliesOrContains` cover admission/replay/restart, locks,
 invalid sources, apply failure and concurrent changes with injected drivers.
-This is not public RPC or OS acceptance: SetResourceEnabled dispatch, resource
-observations, overlap reporting and mutation event projection remain open.
+Public `SetResourceEnabled` now requires a live profile worker, admits the
+authenticated local caller and wakes reconciliation. Resource operations emit
+resource-domain invalidation on admission and state transitions.
+`TestResourcePublicTransportApplyReplayAndEvents` uses the actual local native
+transport and an injected driver to check authentication, missing-worker denial,
+pending-to-committed false choice, terminal replay and revision-bound resource
+events. Runtime reachability observations, overlap reporting and OS effect
+qualification remain open; resources capability is not yet advertised.
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On
   2026-09-14 the user explicitly approved consuming producer revision

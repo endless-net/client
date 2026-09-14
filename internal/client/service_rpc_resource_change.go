@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"maps"
 
 	"connectrpc.com/connect"
@@ -8,6 +9,17 @@ import (
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+func (s *ClientRPCService) SetResourceEnabled(ctx context.Context, request *connect.Request[ipc.SetResourceEnabledRequest]) (*connect.Response[ipc.SetResourceEnabledResponse], error) {
+	peer, _ := local.PeerFromContext(ctx)
+	op, err := s.acceptNetworkPreferenceOperation(func() (*ipc.Operation, error) {
+		return s.mutations.setResourceEnabledAs(peer, request.Msg)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&ipc.SetResourceEnabledResponse{Operation: op}), nil
+}
 
 func (m *ClientRPCMutations) setResourceEnabledAs(peer local.Peer, request *ipc.SetResourceEnabledRequest) (*ipc.Operation, error) {
 	op, _, err := m.acceptAs(peer, "/client.v0.ClientService/SetResourceEnabled", request, func(cfg *Config, op *ipc.Operation) error {
