@@ -207,6 +207,19 @@ func (m *ClientRPCMutations) snapshotLocked(peer local.Peer, build *ipc.BuildIde
 			Intent: &ipc.ConnectionIntent{DesiredState: status.GetIntent().GetDesiredState()}}
 	} else if cfg.RPCState != nil {
 		status.ActiveProfileId = cfg.RPCState.ActiveProfileID
+		// Session authority comes from bound persisted backend state, never a
+		// delayed dataplane observation or node-credential expiry.
+		status.Session = nil
+		if cfg.Token == "" {
+			status.Session = &ipc.Session{State: ipc.SessionState_SESSION_STATE_NOT_AUTHENTICATED}
+		} else if stored := cfg.UserSession; stored != nil && stored.TokenBinding == sessionTokenBinding(cfg.Token) &&
+			stored.ControlOrigin == cfg.RPCState.Profiles[cfg.RPCState.ActiveProfileID].ControlOrigin {
+			var err error
+			status.Session, err = rpcProjectSession(stored.Response, m.now())
+			if err != nil {
+				return nil, err
+			}
+		}
 		for _, record := range cfg.RPCState.Operations {
 			if !strings.EqualFold(record.Owner, peer.Identity) {
 				continue
