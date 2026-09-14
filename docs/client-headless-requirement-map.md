@@ -117,6 +117,19 @@ families are identified in the IT table, rather than counted as proof by name.
 
 ## Remaining assertion audit
 
+US-04/05/10/11, IT-27: `TestRPCCatalogChangesInvalidateDespiteIdenticalStatus`
+checks scoped invalidations for network/peer/exit/preference/managed/resource
+projections when the status bytes stay unchanged but the map, policy, trust,
+owner or map/exit/application deadline changes. Hashing actual source data also
+detects tampering that retains a claimed payload hash. Observer streams receive
+no private domain IDs; old owners lose their stream. Duplicate observations
+do not advance revision or emit events. `TestRPCCatalogRacePreservesLastAcceptedFingerprint`
+checks that a rejected in-flight probe does not consume the pending source
+change, and the next current probe publishes it. Root short, vet, configured
+lint and goimports passed locally on Windows on 2026-09-14. This establishes
+invalidation on observation; an independent host deadline clock is still needed
+when there is no network observation. It does not establish route/resource effects.
+
 US-10/12, RULE-06, UI-AC-19/21: `TestRPCUIQuitManagedBaselineLockAndReset`
 covers account/device provenance, unlocked override, conflicting lock rejection
 without a journal/state change, equal locked override, reset to the managed

@@ -372,11 +372,23 @@ func (m *ClientRPCMutations) publishStatus(status *ipc.Status, configFingerprint
 	if expected.GetInstanceId() != m.instanceID || expected.GetRevision() != revision {
 		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	}
-	unchanged := proto.Equal(m.observedStatus, status)
+	catalog, err := rpcCatalogFingerprint(cfg, m.now())
+	if err != nil {
+		return err
+	}
+	catalogChanged := m.observedCatalog != nil && *m.observedCatalog != catalog
+	unchanged := proto.Equal(m.observedStatus, status) && !catalogChanged
 	if unchanged && configFingerprint == nil {
 		return nil
 	}
 	if err := m.store.Update(func(cfg *Config) error {
+		currentCatalog, err := rpcCatalogFingerprint(*cfg, m.now())
+		if err != nil {
+			return err
+		}
+		if currentCatalog != catalog {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
 		if configFingerprint != nil {
 			raw, err := json.Marshal(cfg)
 			if err != nil {
@@ -405,9 +417,15 @@ func (m *ClientRPCMutations) publishStatus(status *ipc.Status, configFingerprint
 		return err
 	}
 	m.observedStatus = status
+	m.observedCatalog = &catalog
 	// Paths and membership are queried separately from Status. A committed
 	// observation invalidates that projection without disclosing it to observers.
-	m.publishMutationLocked(nil, ipc.Domain_DOMAIN_PEERS)
+	domains := []ipc.Domain{ipc.Domain_DOMAIN_PEERS}
+	if catalogChanged {
+		domains = append(domains, ipc.Domain_DOMAIN_NETWORKS, ipc.Domain_DOMAIN_EXIT_NODE,
+			ipc.Domain_DOMAIN_PREFERENCES, ipc.Domain_DOMAIN_MANAGED_SETTINGS, ipc.Domain_DOMAIN_RESOURCES)
+	}
+	m.publishMutationLocked(nil, domains...)
 	return nil
 }
 

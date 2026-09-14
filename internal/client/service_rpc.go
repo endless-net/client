@@ -71,6 +71,7 @@ type ClientRPCMutations struct {
 	instanceID           string
 	now                  func() time.Time
 	observedStatus       *ipc.Status
+	observedCatalog      *[32]byte // Volatile map/policy input identity, not authorization.
 	cancelApply          context.CancelFunc
 	cancelEnrollment     context.CancelFunc
 	cancelSessionRenewal context.CancelFunc
