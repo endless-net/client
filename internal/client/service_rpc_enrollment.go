@@ -151,6 +151,7 @@ func copyEnrollmentFields(dst *Config, src Config) {
 	dst.NodeID = src.NodeID
 	dst.NetworkID = src.NetworkID
 	dst.NodeCredential = src.NodeCredential
+	dst.NodeCredentialSigningTrust = src.NodeCredentialSigningTrust
 	dst.NodeApprovalState = src.NodeApprovalState
 	dst.EnrollmentRequestID = src.EnrollmentRequestID
 	dst.EnrollmentPollToken = src.EnrollmentPollToken
