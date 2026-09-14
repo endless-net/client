@@ -130,6 +130,20 @@ cross-domain invalidation coverage remain separate open evidence.
 The pinned x/sys SCM host forwards SessionChange EventData after its callback
 returns; the adapter must copy session data during a live native callback rather
 than dereference that forwarded pointer later.
+The session-owner component now binds a WTS session ID to the same SID string
+used by the named-pipe peer. A newer logon invalidates the old binding before
+lookup; a delayed lookup cannot restore it after replacement or logoff. Initial
+enumeration uses temporary logoff tombstones, so stale enumeration cannot
+resurrect a departed session. Bindings/tombstones are bounded, duplicate/unknown
+logoff has no owner, and post-enumeration logoff frees its slot. Unit races cover
+replacement, failed lookup, departure, late seeding, duplicate events and limits.
+Windows source functions enumerate copied session IDs and retrieve SID from
+[WTSQueryUserToken](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsqueryusertoken),
+closing token handles and freeing enumeration buffers. They require the
+documented LocalSystem/SE_TCB_NAME service context; that OS execution is not
+locally qualified. The component is not yet attached to SCM: safe callback-time
+copying of [session notification](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-wtssession_notification)
+data, source initialization/delivery and owner-bound logoff dispatch remain open.
 
 Linux/Darwin routers now retain a cleanup plan containing only failed or
 unattempted steps. Down propagates failures; Configure cannot overwrite pending
