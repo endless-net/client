@@ -76,9 +76,10 @@ retain ordinary host routes but omit subnets, explicitly managed single-IP
 subnets and application routes. Signed sources are recipient-bound and checked
 before preference resolution. This is used by the existing OS router adapters,
 but the unit evidence is derived router configuration, not observed OS effects.
-Public Set/Reset admission, a durable apply/rollback worker, requested/effective
-projection and resource invalidation after local changes remain missing, as does
-inbound filtering. Checked static export now receives the full Config and uses
+Public Set/Reset admission, requested/effective projection and resource
+invalidation after local changes remain missing, as does inbound filtering.
+The worker increment below provides candidate apply and durable containment.
+Checked static export now receives the full Config and uses
 the same authenticated DNS/routes resolver; it cannot reintroduce a disabled
 resource route or DNS setting. Static output is still not a live policy/expiry
 enforcer. No additional
@@ -93,8 +94,19 @@ same-request replay ahead of CAS/conflict checks;
 source tampering, revision mismatch, managed lock and unsupported/empty patches;
 `TestNetworkPreferenceResetPreservesUnselectedOverrides` covers selective reset.
 These private admission methods are not connected to the public service yet.
-The apply/rollback worker, actual effect observations and public projection are
-still required; a stored pending patch is not evidence of applied preferences.
+`service_rpc_network_preferences_worker.go` now runs in the profile worker's
+startup scan under the shared agent driver lock. It authenticates the candidate
+before apply and again at commit, rejects changed profile/owner/map/intent,
+and commits network and UI-quit overrides together. Failure enters a durable
+containment stage with disconnected intent before Down; a Down error is
+resumable after restart and never retries the failed candidate. This rollback
+retains prior preference values and disconnects; it does not restore a live
+connection. `TestNetworkPreferenceWorkerApplyAndContainment` covers successful
+candidate delivery, offline application, failure, concurrent Disconnect/map
+tampering and shutdown. `TestNetworkPreferenceContainmentRecoversAfterDownFailure`
+covers the persistent recovery stage. Driver callback success is unit evidence,
+not OS observation. Public admission/projection, observed effects, richer failure
+outcomes and resource invalidation remain required.
 
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.

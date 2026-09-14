@@ -24,6 +24,8 @@ type clientRPCNetworkPreferenceChange struct {
 	PreviousUIQuit  *ipc.LifecycleBehavior    `json:"previous_ui_quit,omitempty"`
 	RequestedUIQuit *ipc.LifecycleBehavior    `json:"requested_ui_quit,omitempty"`
 	Changed         bool                      `json:"changed"`
+	PreviousIntent  *ConnectionIntent         `json:"previous_intent,omitempty"`
+	Containing      bool                      `json:"containing,omitempty"`
 }
 
 func cloneNetworkPreferences(value *ClientNetworkPreferences) *ClientNetworkPreferences {
@@ -159,6 +161,10 @@ func (m *ClientRPCMutations) prepareNetworkPreferences(cfg *Config, op *ipc.Oper
 		Previous: cloneNetworkPreferences(cfg.NetworkPreferences), Requested: requested,
 		PreviousUIQuit: cloneLifecycleBehavior(profile.UIQuit), RequestedUIQuit: uiQuit,
 		Changed: !reflect.DeepEqual(cfg.NetworkPreferences, requested) || !reflect.DeepEqual(profile.UIQuit, uiQuit),
+	}
+	if cfg.ConnectionIntent != nil {
+		intent := *cfg.ConnectionIntent
+		cfg.RPCState.NetworkPreferenceChange.PreviousIntent = &intent
 	}
 	return nil
 }
