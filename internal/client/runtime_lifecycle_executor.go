@@ -27,16 +27,18 @@ func (e *RuntimeLifecycleEffectError) Unwrap() error { return e.Err }
 // suspension, including failed teardown and failed resume-policy resolution.
 // The owner must cancel the same lifetime used by its workers before Close.
 type RuntimeLifecycleExecutor struct {
-	mu            sync.Mutex
-	lifetime      context.Context
-	mutations     *ClientRPCMutations
-	engine        runtimeLifecycleEngine
-	operationLock sync.Locker
-	wake          func()
-	refreshPolicy func(context.Context) error
-	observe       func(bool, error) error
-	held          bool
-	closed        bool
+	mu                   sync.Mutex
+	lifetime             context.Context
+	mutations            *ClientRPCMutations
+	engine               runtimeLifecycleEngine
+	operationLock        sync.Locker
+	wake                 func()
+	refreshPolicy        func(context.Context) error
+	observe              func(bool, error) error
+	held                 bool
+	closed               bool
+	powerEvent           RuntimeLifecycleEvent
+	powerIntentCommitted bool
 }
 
 func NewRuntimeLifecycleExecutor(lifetime context.Context, mutations *ClientRPCMutations, engine runtimeLifecycleEngine, operationLock sync.Locker, wake func(), refreshPolicy func(context.Context) error, observe func(bool, error) error) (*RuntimeLifecycleExecutor, error) {
@@ -58,11 +60,18 @@ func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOw
 	if event != RuntimeSuspend && event != RuntimeResume && event != RuntimeUserLogoff {
 		return errors.New("invalid runtime lifecycle event")
 	}
+	if event != RuntimeUserLogoff && event != e.powerEvent {
+		e.powerEvent = event
+		e.powerIntentCommitted = false
+	}
 	// Persist Disconnect before waiting for an in-flight apply's effect lock;
 	// its committed cancellation allows that apply to yield to teardown.
 	var policyErr error
-	if event != RuntimeResume {
+	if event == RuntimeUserLogoff || (event == RuntimeSuspend && !e.powerIntentCommitted) {
 		policyErr = e.mutations.ApplyRuntimeLifecycleIntent(e.lifetime, event, sessionOwner)
+		if event == RuntimeSuspend && policyErr == nil {
+			e.powerIntentCommitted = true
+		}
 	}
 	if event == RuntimeUserLogoff && policyErr != nil {
 		return policyErr
@@ -103,9 +112,12 @@ func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOw
 		if err := e.refreshPolicy(e.lifetime); err != nil {
 			return errors.Join(err, e.observe(true, err))
 		}
-		policyErr = e.mutations.ApplyRuntimeLifecycleIntent(e.lifetime, event, sessionOwner)
-		if policyErr != nil {
-			return errors.Join(policyErr, e.observe(true, policyErr))
+		if !e.powerIntentCommitted {
+			policyErr = e.mutations.ApplyRuntimeLifecycleIntent(e.lifetime, event, sessionOwner)
+			if policyErr != nil {
+				return errors.Join(policyErr, e.observe(true, policyErr))
+			}
+			e.powerIntentCommitted = true
 		}
 		// Resume only opens the engine gate. No new tunnel has been applied.
 		if err := e.observe(true, nil); err != nil {

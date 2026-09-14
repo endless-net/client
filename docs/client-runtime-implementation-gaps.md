@@ -177,6 +177,14 @@ or resume's gated teardown and do not enqueue the original policy decision
 again. `agent_runtime_lifecycle_reconnect_test.go` verifies that a newer Connect
 intent survives resume after logoff's first Down failed. This does not yet
 establish ordering for every unresolved-policy/user-mutation interleaving.
+Power transitions also retain whether their intent decision committed: a
+same-transition retry after teardown or observation failure does not overwrite
+a newer intent. Opposite power events start a new decision; unresolved policy
+is still retried, and resume still refreshes authority before opening the gate.
+`runtime_lifecycle_power_retry_test.go` covers failed suspend teardown,
+failed suspend/resume observation, newer Connect preservation and the next
+power cycle applying policy again. These process-local markers do not replace
+the remaining crash-recovery and native event-ordering audit.
 The Windows service also retries
 one unresolved WTS owner per second, using round-robin selection within the
 bounded registry. Resolved or departed sessions are not queried; an in-flight
