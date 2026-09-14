@@ -76,18 +76,12 @@ func (s *ClientRPCService) networksAs(ctx context.Context, peer local.Peer, requ
 			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 		}
 		ids[network.Id] = true
-		items = append(items, &ipc.Network{Id: network.Id, Name: network.Name, AccountId: network.AccountId,
-			Selection: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_UNSUPPORTED, ReasonKey: "network_selection_provider_not_running"}})
+		items = append(items, &ipc.Network{Id: network.Id, Name: network.Name, AccountId: network.AccountId})
 	}
 	if selected.NetworkID != "" && !ids[selected.NetworkID] {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Id < items[j].Id })
-	encoded, err := (proto.MarshalOptions{Deterministic: true}).Marshal(&ipc.ListNetworksResponse{Networks: items, SelectedNetworkId: selected.NetworkID})
-	if err != nil {
-		return nil, err
-	}
-	digest := sha256.Sum256(encoded)
 	s.mutations.mu.Lock()
 	defer s.mutations.mu.Unlock()
 	current := s.mutations.store.Read()
@@ -100,12 +94,49 @@ func (s *ClientRPCService) networksAs(ctx context.Context, peer local.Peer, requ
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	worker := s.mutations.capabilityWorkers[ipc.Capability_CAPABILITY_NETWORK_SELECTION]
+	ready := worker != nil && worker.ctx.Err() == nil
+	for _, item := range items {
+		item.Selection = networkSelectionRestriction(current, profile.ID, item.Id, ready)
+	}
+	encoded, err := (proto.MarshalOptions{Deterministic: true}).Marshal(&ipc.ListNetworksResponse{Networks: items, SelectedNetworkId: selected.NetworkID})
+	if err != nil {
+		return nil, err
+	}
+	digest := sha256.Sum256(encoded)
 	start, end, next, err := s.mutations.pageRange(peer, "ListNetworks\x00"+profile.ID+"\x00"+hex.EncodeToString(digest[:]), request.GetPage(), cfg, len(items))
 	if err != nil {
 		return nil, err
 	}
 	return &ipc.ListNetworksResponse{Networks: items[start:end], SelectedNetworkId: selected.NetworkID, Page: &ipc.PageResponse{NextPageToken: next,
 		Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}}}, nil
+}
+
+func networkSelectionRestriction(cfg Config, profileID, networkID string, ready bool) *ipc.Restriction {
+	if !ready {
+		return &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_UNSUPPORTED, ReasonKey: "network_selection_provider_not_running"}
+	}
+	reason := ""
+	switch {
+	case cfg.RPCState == nil || cfg.RPCState.ActiveProfileID != profileID:
+		reason = "network_selection_profile_inactive"
+	case cfg.NodeID == "" || cfg.NetworkID == "" || cfg.NodeCredential == "" || (networkID != cfg.NetworkID && !networkSelectionInstallationReady(cfg)):
+		reason = "network_selection_needs_enrollment"
+	case cfg.RPCState.NetworkSelection != nil || cfg.RPCState.ProfileSwitch != nil:
+		reason = "network_selection_busy"
+	default:
+		for _, record := range cfg.RPCState.Operations {
+			op := new(ipc.Operation)
+			if proto.Unmarshal(record.Operation, op) != nil || !rpcOperationTerminal(op.State) {
+				reason = "network_selection_busy"
+				break
+			}
+		}
+	}
+	if reason != "" {
+		return &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: reason}
+	}
+	return &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE}
 }
 
 // Backend user authorization is not local IPC ownership. Preserve the recovery

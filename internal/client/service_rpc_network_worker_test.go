@@ -45,6 +45,7 @@ func TestNetworkWorkerResumesAllPhasesFromDisk(t *testing.T) {
 			return nil
 		},
 	}
+	s.NetworksProvider = s.NetworkSelectionProviders.Networks
 	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Start: func(_ context.Context, cfg Config) error {
 		starts.Add(1)
 		if cfg.NodeID != target.NodeID || cfg.NetworkID != target.NetworkID || stops.Load() != 1 {
@@ -103,6 +104,7 @@ func TestNetworkHostJoinsRegistrationOnShutdown(t *testing.T) {
 		},
 		Cleanup: func(context.Context, Config, ClientRPCNetworkRegistrationInput, func(Config) error) error { return nil },
 	}
+	s.NetworksProvider = s.NetworkSelectionProviders.Networks
 	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Start: func(context.Context, Config) error { return nil }, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
 		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
 	}}

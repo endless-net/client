@@ -11,9 +11,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Selecting the exact current ID is a durable no-op, not a cached-map catalog
-// fallback or permission to enroll into a different network. Switching still
-// requires the account-authorized enrollment/rollback provider.
+// This transaction handles only the exact current ID. Different-network
+// requests use beginNetworkSelectionAs and the durable native worker.
 func (m *ClientRPCMutations) selectNetworkAs(peer local.Peer, request *ipc.SelectNetworkRequest) (*ipc.Operation, error) {
 	op, _, err := m.acceptInternal(peer, "/client.v0.ClientService/SelectNetwork", request, func(cfg *Config, op *ipc.Operation) error {
 		profile, err := rpcFindProfile(cfg, request.Profile)
@@ -54,7 +53,30 @@ func (s *ClientRPCService) SelectNetwork(ctx context.Context, request *connect.R
 		return nil, err
 	}
 	peer, _ := local.PeerFromContext(ctx)
-	op, err := s.mutations.selectNetworkAs(peer, request.Msg)
+	s.networkMu.Lock()
+	defer s.networkMu.Unlock()
+	var op *ipc.Operation
+	var err error
+	if request.Msg.GetNetworkId() == s.mutations.store.Read().NetworkID {
+		op, err = s.mutations.selectNetworkAs(peer, request.Msg)
+	} else {
+		w := s.networkWorker
+		if w == nil || w.ctx.Err() != nil {
+			// Authorization and durable replay precede readiness. A stopped
+			// worker prevents new admission, not retrieval of accepted work.
+			op, _, err = s.mutations.acceptInternal(peer, "/client.v0.ClientService/SelectNetwork", request.Msg, func(*Config, *ipc.Operation) error {
+				return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+			}, false)
+		} else {
+			op, err = s.mutations.beginNetworkSelectionAs(peer, request.Msg)
+			if err == nil {
+				select {
+				case w.wake <- struct{}{}:
+				default:
+				}
+			}
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

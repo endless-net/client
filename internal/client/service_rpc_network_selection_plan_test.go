@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -15,7 +16,16 @@ import (
 func networkSelectionPlanFixture(t *testing.T) (*ClientRPCMutations, local.Peer, *ipc.SelectNetworkRequest) {
 	t.Helper()
 	m, owner, profile := rpcPreferenceFixture(t)
+	private, err := wgkeys.GeneratePrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := GenerateIdentityPrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := m.store.Update(func(cfg *Config) error {
+		cfg.PrivateKey, cfg.IdentityPrivateKey, cfg.DeviceFingerprint = private, identity, "synthetic-fingerprint"
 		cfg.ControlPlaneURLs = []string{cfg.RPCState.Profiles[profile.ProfileId].ControlOrigin}
 		cfg.Token, cfg.ActiveAccountID, cfg.NodeCredential = "synthetic-private-session", "account", "synthetic-private-node"
 		return nil
@@ -74,6 +84,35 @@ func TestNetworkSelectionPreparationPersistsIsolatedPlanAndReplay(t *testing.T) 
 	}
 	if result.State != ipc.OperationState_OPERATION_STATE_RUNNING || strings.Contains(string(raw), "synthetic-private") {
 		t.Fatal("preparation leaked authority or claimed completion")
+	}
+}
+
+func TestNetworkSelectionAdmissionRejectsInvalidInstallationAndOrigin(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		change func(*Config)
+		code   ipc.ErrorCode
+	}{
+		{"missing_wireguard_key", func(cfg *Config) { cfg.PrivateKey = "" }, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT},
+		{"invalid_wireguard_key", func(cfg *Config) { cfg.PrivateKey = "invalid" }, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT},
+		{"missing_identity_key", func(cfg *Config) { cfg.IdentityPrivateKey = "" }, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT},
+		{"invalid_identity_key", func(cfg *Config) { cfg.IdentityPrivateKey = "invalid" }, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT},
+		{"missing_fingerprint", func(cfg *Config) { cfg.DeviceFingerprint = "" }, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT},
+		{"missing_origin", func(cfg *Config) { cfg.ControlPlaneURLs = nil }, ipc.ErrorCode_ERROR_CODE_STALE_STATE},
+		{"foreign_origin", func(cfg *Config) { cfg.ControlPlaneURLs = append(cfg.ControlPlaneURLs, "https://foreign.test") }, ipc.ErrorCode_ERROR_CODE_STALE_STATE},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			m, owner, request := networkSelectionPlanFixture(t)
+			if err := m.store.Update(func(cfg *Config) error { test.change(cfg); return nil }); err != nil {
+				t.Fatal(err)
+			}
+			before := clonePersistentConfig(m.store.Read())
+			_, err := m.beginNetworkSelectionAs(owner, request)
+			assertRPCFailure(t, err, test.code)
+			if !reflect.DeepEqual(before, clonePersistentConfig(m.store.Read())) {
+				t.Fatal("rejected admission persisted an operation or changed source")
+			}
+		})
 	}
 }
 

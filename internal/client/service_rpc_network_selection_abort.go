@@ -13,7 +13,10 @@ import (
 // The private target is retained until remote cleanup and any uncertain local
 // teardown are confirmed. Runtime shutdown leaves the same plan recoverable.
 func (m *ClientRPCMutations) ReconcileNetworkSelectionAbort(ctx context.Context, driver ClientRPCProfileDriver, provider ClientRPCNetworkTargetCleanupProvider, code ipc.ErrorCode) error {
-	if code != ipc.ErrorCode_ERROR_CODE_CANCELLED && code != ipc.ErrorCode_ERROR_CODE_STALE_STATE && code != ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED && code != ipc.ErrorCode_ERROR_CODE_APPROVAL_REJECTED && code != ipc.ErrorCode_ERROR_CODE_APPLY_FAILED {
+	switch code {
+	case ipc.ErrorCode_ERROR_CODE_CANCELLED, ipc.ErrorCode_ERROR_CODE_STALE_STATE, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED, ipc.ErrorCode_ERROR_CODE_APPROVAL_REJECTED, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED,
+		ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, ipc.ErrorCode_ERROR_CODE_NOT_FOUND, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED:
+	default:
 		return rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	if driver.Lock == nil || driver.Stop == nil {

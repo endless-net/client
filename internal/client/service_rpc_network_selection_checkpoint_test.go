@@ -13,13 +13,6 @@ import (
 func preparedNetworkSelectionFixture(t *testing.T) (*ClientRPCMutations, string, Config) {
 	t.Helper()
 	m, owner, request := networkSelectionPlanFixture(t)
-	if err := m.store.Update(func(cfg *Config) error {
-		cfg.PrivateKey = "synthetic-installation-key"
-		cfg.IdentityPrivateKey = "synthetic-identity-key"
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
 	op, err := m.beginNetworkSelectionAs(owner, request)
 	if err != nil {
 		t.Fatal(err)

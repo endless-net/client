@@ -59,9 +59,10 @@ func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driv
 		return err // Unexpected failures stop the host with its journal intact.
 	}
 	switch failure.Code {
-	case ipc.ErrorCode_ERROR_CODE_CANCELLED, ipc.ErrorCode_ERROR_CODE_STALE_STATE, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED, ipc.ErrorCode_ERROR_CODE_APPROVAL_REJECTED, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED:
+	case ipc.ErrorCode_ERROR_CODE_CANCELLED, ipc.ErrorCode_ERROR_CODE_STALE_STATE, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED, ipc.ErrorCode_ERROR_CODE_APPROVAL_REJECTED, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED,
+		ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, ipc.ErrorCode_ERROR_CODE_NOT_FOUND, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED:
 		return m.ReconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, failure.Code)
-	case ipc.ErrorCode_ERROR_CODE_UNAVAILABLE:
+	case ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED:
 		return nil // Retry the same durable registration/phase, never a new ID.
 	default:
 		return err
@@ -70,10 +71,9 @@ func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driv
 
 // StartNetworkSelectionWorker resumes accepted operations before any request
 // replay. Host lifetime, not the accepting request, owns registration and apply.
-// Readiness is not advertised until public admission is wired and verified.
 func (s *ClientRPCService) StartNetworkSelectionWorker(ctx context.Context, driver ClientRPCProfileDriver) (<-chan error, error) {
 	providers := s.NetworkSelectionProviders
-	if driver.Lock == nil || driver.Stop == nil || driver.Start == nil || providers.Networks == nil || providers.Register == nil || providers.Cleanup == nil {
+	if driver.Lock == nil || driver.Stop == nil || driver.Start == nil || s.NetworksProvider == nil || providers.Networks == nil || providers.Register == nil || providers.Cleanup == nil {
 		return nil, rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
 	if err := ctx.Err(); err != nil {
@@ -86,10 +86,14 @@ func (s *ClientRPCService) StartNetworkSelectionWorker(ctx context.Context, driv
 	}
 	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	s.networkWorker = w
+	s.mutations.setWorkerCapabilities(w, true, ipc.Capability_CAPABILITY_NETWORK_SELECTION)
+	stopReadiness := context.AfterFunc(ctx, func() { s.mutations.setWorkerCapabilities(w, false, ipc.Capability_CAPABILITY_NETWORK_SELECTION) })
 	done := make(chan error, 1)
 	go func() {
 		var err error
 		defer func() {
+			stopReadiness()
+			s.mutations.setWorkerCapabilities(w, false, ipc.Capability_CAPABILITY_NETWORK_SELECTION)
 			s.networkMu.Lock()
 			s.networkWorker = nil
 			s.networkMu.Unlock()

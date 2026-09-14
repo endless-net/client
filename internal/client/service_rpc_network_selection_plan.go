@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"connectrpc.com/connect"
+	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 	"github.com/endless-net/client/clientipc/local"
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -13,7 +14,7 @@ import (
 )
 
 // Private journal: registration authority and rollback context never enter an
-// observable operation. No public admission until the handover worker is wired.
+// observable operation.
 type clientRPCNetworkSelection struct {
 	OperationID       string           `json:"operation_id"`
 	NetworkID         string           `json:"network_id"`
@@ -64,11 +65,34 @@ func (m *ClientRPCMutations) beginNetworkSelectionAs(peer local.Peer, request *i
 		if cfg.Token == "" || cfg.ActiveAccountID == "" {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN)
 		}
+		if !networkSelectionInstallationReady(*cfg) {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
+		}
+		if len(cfg.ControlURLs()) == 0 {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
+		for _, raw := range cfg.ControlURLs() {
+			origin, err := rpcProfileOrigin(raw)
+			if err != nil || origin != profile.ControlOrigin {
+				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			}
+		}
 		op.ProfileId = profile.ID
 		cfg.RPCState.NetworkSelection = &clientRPCNetworkSelection{OperationID: op.Id, NetworkID: request.NetworkId, Profile: profile, Source: networkSelectionContext(*cfg)}
 		return nil
 	}, false)
 	return op, err
+}
+
+func networkSelectionInstallationReady(cfg Config) bool {
+	if cfg.DeviceFingerprint == "" {
+		return false
+	}
+	if _, err := wgkeys.PublicKey(cfg.PrivateKey); err != nil {
+		return false
+	}
+	_, err := IdentityPublicKey(cfg.IdentityPrivateKey)
+	return err == nil
 }
 
 // ReconcileNetworkSelectionPreparation checkpoints fresh catalog authorization
