@@ -798,6 +798,7 @@ func wireGuardEngineRouterConfigForInterface(value wireGuardEngineRouterConfig, 
 }
 
 func cloneRegisterNodeResponse(value clientapi.RegisterNodeResponse) clientapi.RegisterNodeResponse {
+	value.Network.ClientPolicy = cloneClientPolicy(value.Network.ClientPolicy)
 	value.Network.DNS = append([]string(nil), value.Network.DNS...)
 	value.Network.Applications = append([]clientapi.Application(nil), value.Network.Applications...)
 	for i := range value.Network.Applications {

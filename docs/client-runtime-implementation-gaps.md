@@ -581,6 +581,15 @@ acceptance. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
 
+Runtime policy ownership audit: `cloneRegisterNodeResponse` previously retained
+the caller's ClientPolicy pointer in engine plans and rollback snapshots. It now
+deep-copies resource policy entries, setting value pointers and exit family/LAN
+constraint slices using producer DTOs. The signed-map regression
+`TestEngineMapClonePreservesSignedPolicyAfterCallerMutation` verifies that caller
+and rollback-copy mutations cannot invalidate the applied snapshot's signature.
+`TestClientPolicyCloneOwnsExitConstraints` checks nested exit constraints and
+absent policy preservation. This fixes memory ownership, not exit OS acceptance.
+
 Resource read cancellation: overlap and applied-denial projection now check
 request cancellation during iteration under the RPC read lock. Applied-denial
 comparison is capped at one million with typed LIMIT_EXCEEDED, matching the
