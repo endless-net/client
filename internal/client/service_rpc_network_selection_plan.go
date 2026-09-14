@@ -15,11 +15,12 @@ import (
 // Private journal: registration authority and rollback context never enter an
 // observable operation. No public admission until the handover worker is wired.
 type clientRPCNetworkSelection struct {
-	OperationID string           `json:"operation_id"`
-	NetworkID   string           `json:"network_id"`
-	Profile     clientRPCProfile `json:"profile"`
-	Source      Config           `json:"source"`
-	Target      *Config          `json:"target,omitempty"`
+	OperationID       string           `json:"operation_id"`
+	NetworkID         string           `json:"network_id"`
+	Profile           clientRPCProfile `json:"profile"`
+	Source            Config           `json:"source"`
+	Target            *Config          `json:"target,omitempty"`
+	RegistrationReady bool             `json:"registration_ready,omitempty"`
 }
 
 func networkSelectionContext(cfg Config) Config {
