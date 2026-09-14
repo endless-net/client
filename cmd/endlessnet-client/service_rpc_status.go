@@ -63,7 +63,7 @@ func buildAgentRPCStatusWithProbe(ctx context.Context, opts agentIPCOptions, cfg
 	if cfg.RPCState != nil {
 		status.ActiveProfileId = cfg.RPCState.ActiveProfileID
 	}
-	if intent := cfg.ConnectionIntent; intent != nil {
+	if intent := client.RequestedConnectionIntent(cfg); intent != nil {
 		status.Intent = &ipc.ConnectionIntent{}
 		switch intent.DesiredState {
 		case client.ConnectionIntentDesiredConnected:

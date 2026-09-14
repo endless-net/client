@@ -189,7 +189,7 @@ func (m *ClientRPCMutations) snapshotLocked(peer local.Peer, build *ipc.BuildIde
 	// Intent is durable command state, not a delayed provider observation.
 	status.Intent = nil
 	status.UserDisconnected = false
-	if intent := cfg.ConnectionIntent; intent != nil {
+	if intent := RequestedConnectionIntent(cfg); intent != nil {
 		status.Intent = &ipc.ConnectionIntent{}
 		status.UserDisconnected = intent.DesiredState == ConnectionIntentDesiredDisconnected
 		switch intent.DesiredState {

@@ -33,7 +33,7 @@ func runtimeStartWithRecovery(cfg Config, now time.Time) *ConnectionIntent {
 	original := cfg.ConnectionIntent
 	if original != nil && original.StartupRecovery != nil {
 		saved := original.StartupRecovery
-		if original.DesiredState == ConnectionIntentDesiredDisconnected && original.Reason == "runtime_start_policy_unavailable" && saved.PreviousState == ConnectionIntentDesiredConnected && saved.Context == runtimeStartRecoveryContext(cfg) {
+		if runtimeStartRecoveryBound(cfg) {
 			if runtimeStartRecoveryPending(cfg) {
 				return original
 			}
@@ -56,4 +56,27 @@ func runtimeStartWithRecovery(cfg Config, now time.Time) *ConnectionIntent {
 		next.StartupRecovery = &clientRuntimeStartRecovery{Context: runtimeStartRecoveryContext(cfg), PreviousState: cfg.ConnectionIntent.DesiredState, PreviousReason: cfg.ConnectionIntent.Reason, PreviousUpdatedAt: cfg.ConnectionIntent.UpdatedAt}
 	}
 	return next
+}
+
+func runtimeStartRecoveryBound(cfg Config) bool {
+	intent := cfg.ConnectionIntent
+	return intent != nil && intent.StartupRecovery != nil &&
+		intent.DesiredState == ConnectionIntentDesiredDisconnected && intent.Reason == "runtime_start_policy_unavailable" &&
+		intent.StartupRecovery.PreviousState == ConnectionIntentDesiredConnected && intent.StartupRecovery.Context == runtimeStartRecoveryContext(cfg)
+}
+
+// RequestedConnectionIntent is a detached status projection, never admission
+// to start networking. The runtime's disconnected policy-recovery gate remains
+// in Config.ConnectionIntent until authenticated policy permits recovery.
+func RequestedConnectionIntent(cfg Config) *ConnectionIntent {
+	if cfg.ConnectionIntent == nil {
+		return nil
+	}
+	if runtimeStartRecoveryBound(cfg) {
+		saved := cfg.ConnectionIntent.StartupRecovery
+		return &ConnectionIntent{DesiredState: saved.PreviousState, Reason: saved.PreviousReason, UpdatedAt: saved.PreviousUpdatedAt}
+	}
+	result := *cfg.ConnectionIntent
+	result.StartupRecovery = nil
+	return &result
 }

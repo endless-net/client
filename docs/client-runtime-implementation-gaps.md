@@ -587,6 +587,20 @@ reappearing through a stale observation. The regression
 and observer snapshots. This proves projection precedence, not actual tunnel
 shutdown or backend session revocation.
 
+Startup policy recovery now projects the original requested intent while its
+context-bound checkpoint remains valid. An unavailable/expired policy still
+holds the runtime disconnected; this operational gate is not a user Disconnect.
+Both native agent status and RPC snapshots use `RequestedConnectionIntent`.
+No recovery hash or private checkpoint is serialized, and connection phase
+remains independent. `TestRPCStartupRecoveryProjectsRequestedIntentWithoutStarting`
+checks reopened state, owner/observer snapshots, opening events, immutable reads
+and explicit Disconnect supersession. `TestRequestedIntentRejectsUnboundRecovery`
+checks owner/profile/node/network/credential/session-token/preference changes and
+invalid checkpoint reasons. Existing startup-recovery tests still require fresh
+authenticated policy before restoring runtime admission. These units address
+the misleading intent seen in cached-map/sharing restart CI failures; actual
+traffic recovery and platform acceptance still need evidence.
+
 `TestRPCRejectedObservationPreservesLastAcceptedStatus` exercises five config
 changes during a probe without an RPC revision change: active profile, node,
 network, owner and connection intent. The full-config fingerprint must reject
