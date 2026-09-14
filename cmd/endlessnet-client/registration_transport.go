@@ -15,6 +15,16 @@ type registrationAttemptTransport struct {
 	denied bool
 }
 
+// This marker is created only after the producer validates the complete public
+// rejection, including status and request correlation. It does not prove that
+// an earlier uncertain attempt did not create a node.
+type registrationAuthorizationDeniedError struct{ cause error }
+
+func (e registrationAuthorizationDeniedError) Error() string {
+	return "registration authorization denied"
+}
+func (e registrationAuthorizationDeniedError) Unwrap() error { return e.cause }
+
 func (t *registrationAttemptTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	t.denied = false
 	base := t.base

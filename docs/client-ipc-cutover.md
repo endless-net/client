@@ -6,6 +6,11 @@
   production protocol or preserved obsolete tests. Minor v0 schema corrections
   are allowed; version increases and infrastructure changes are not authorized.
 
+Release exception authorized on 2026-09-14: the user explicitly requested
+`v0.6.0`, GitHub Release and publication to `endless-net/apt`. This authorizes
+the release pipeline and its exact-source pre-release checks; it does not close
+the incomplete BA/SA cutover gates below or authorize other version increases.
+
 ## Completion gates
 
 The current task is limited to this repository and its producer contracts.

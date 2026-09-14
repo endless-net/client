@@ -44,12 +44,16 @@ func agentRPCRegisterNetworkTarget(ctx context.Context, cfg client.Config, input
 	if err != nil && (retryableTransport || retryableRPCEnrollmentError(err)) {
 		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
-	return action, err
+	return action, networkTargetProviderError(ctx, err)
 }
 
 func networkTargetProviderError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	var denied registrationAuthorizationDeniedError
+	if errors.As(err, &denied) {
+		return rpc.Error(connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED)
 	}
 	var cleanup remoteCleanupError
 	if (errors.As(err, &cleanup) && cleanup.Retryable) || retryableRPCEnrollmentError(err) {

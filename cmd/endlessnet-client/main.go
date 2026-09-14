@@ -987,6 +987,9 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 		attempt := &registrationAttemptTransport{base: api.HTTPClient.Transport}
 		api.HTTPClient.Transport = attempt
 		response, err = api.RegisterNode(req)
+		if err != nil && attempt.denied {
+			err = registrationAuthorizationDeniedError{cause: err}
+		}
 		if err != nil && attempt.denied && req.JoinToken != "" && req.NodeCredential == "" {
 			cfg.PendingDirectRegistration = nil
 			if saveErr := options.Save(cfg); saveErr != nil {
