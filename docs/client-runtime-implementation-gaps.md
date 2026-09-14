@@ -317,6 +317,15 @@ is checked again after waiting for existing OS work. `service_rpc_exit_lock_test
 covers these boundaries and accepted Disconnect during Apply. This establishes
 the executor locking contract, not native host wiring or platform acceptance.
 
+`service_rpc_exit_worker.go` adds a service-owned exit reconciliation loop with
+startup scanning, five-second retries, duplicate-worker rejection and joined
+cancellation. Ambiguous Apply keeps its original operation and durable deadline;
+temporary containment failures retry while unexpected reconciliation failures
+stop the worker. Tests reopen an accepted operation from disk, exercise a real
+timer retry without another request, and cancel an in-flight native callback
+without dropping its journal. The native Serve path still needs startup OS
+containment and a complete adapter before this worker may expose exit readiness.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,
