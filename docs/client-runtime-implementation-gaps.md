@@ -46,7 +46,7 @@ Additional partial implementations must not be mistaken for complete domains:
 
 | Area | Source evidence | Remaining work |
 | --- | --- | --- |
-| Preferences/policy | Public Set/Reset supports DNS/routes through the durable worker, optionally together with UI_QUIT; UI_QUIT-only operations are immediate. Signed network/lifecycle policy resolution and pending/committed reads are implemented | Implement inbound and remaining lifecycle keys; complete per-method transport, concurrency/recovery and OS effect evidence |
+| Preferences/policy | Public Set/Reset supports inbound/DNS/routes through the durable worker, optionally together with UI_QUIT; UI_QUIT-only operations are immediate. Signed policy resolution and pending/committed reads are implemented | Implement remaining lifecycle keys; complete per-method transport, concurrency/recovery and OS effect evidence |
 | Diagnostics | `service_rpc_diagnostics.go` projects bounded OS route samples; missing samples remain explicitly unavailable and supplied samples remain incomplete | Qualify platform command execution later; extend route coverage beyond host-address sampling without substituting desired configuration for observed OS state |
 | Updates | `service_rpc_update.go` reports `update_source_not_configured`; `service_rpc_update_test.go` exists | Bind an approved distribution source and verify its projection; unavailable is not up-to-date, and unavailable-path tests do not prove update discovery |
 
@@ -76,7 +76,7 @@ retain ordinary host routes but omit subnets, explicitly managed single-IP
 subnets and application routes. Signed sources are recipient-bound and checked
 before preference resolution. This is used by the existing OS router adapters,
 but the unit evidence is derived router configuration, not observed OS effects.
-Public inbound preference admission/projection and OS effect qualification remain missing.
+OS effect qualification remains missing; inbound public admission/projection is described below.
 The worker increment below provides candidate apply and durable containment.
 Checked static export now receives the full Config and uses
 the same authenticated DNS/routes resolver; it cannot reintroduce a disabled
@@ -131,8 +131,7 @@ live and cancelled worker states without altering preference values.
 
 Inbound filter preparation: `inbound_filter.go` implements a bounded volatile
 outbound-flow table for restricting new inbound traffic while preserving matched
-TCP/UDP/ICMP replies. It is not yet wired into the public
-preference patch. `TestInboundFilterTCPHandshakeExpiryAndPolicyChange` checks
+TCP/UDP/ICMP replies. `TestInboundFilterTCPHandshakeExpiryAndPolicyChange` checks
 unsolicited TCP denial, handshake ordering, expiry and policy-change clearing;
 `TestInboundFilterUDPBindingBoundsAndReplyLifetime` checks port binding, fixed
 reply windows, capacity/expiry recovery and malformed packets. Full IPv6
@@ -152,8 +151,16 @@ Static export rejects a resolved inbound restriction rather than dropping it.
 `TestInboundPolicyResolutionAndExportRestriction` covers signed baseline/reset,
 locks and checked-export rejection. `TestInboundEngineAppliesPolicyAndClearsIdentityFlows`
 exercises engine Configure with a test TUN/router, restriction and relaxation,
-and filter identity reset. OS qualification and public admission/projection
-remain open; these units are not system acceptance.
+and filter identity reset. Public Set/Reset now includes AllowInbound in the
+same durable atomic plan as DNS/routes and UI_QUIT, and GetPreferences plus
+ListManagedSettings expose its signed baseline, override and lock. The existing
+CLI `allow-inbound` key routes through these native methods.
+`TestInboundPreferenceAtomicPatchRestartAndSelectiveReset` checks pending versus
+committed values, disk restart/replay, atomic mixed commit and inbound-only reset.
+`TestInboundPolicyLockRejectsWholeMixedPreferencePatch` checks all-or-nothing
+lock rejection and device-policy provenance. Authenticated transport mutation
+coverage, complete IPv6 coverage and OS qualification remain open; these units
+are not system acceptance.
 
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
@@ -180,7 +187,7 @@ Paths in the table are under `internal/client/` unless qualified otherwise.
 | US-07 diagnostics | `service_rpc_diagnostics.go`, bundle worker/store/read handlers, `route_observations.go` | `TestRPCDiagnosticsRejectsChangedContextAndInvalidProvider`, `TestRPCAdministratorBundleScopeAndRestart`, injected route collector tests | Route sampling implemented but platform execution unqualified; inspect redaction, bounds and archive lifecycle coverage separately |
 | US-08 profiles/logout | Profile, logout and forget handlers | `TestRPCProfileRemovalGuards`, `TestRPCForgetCancelsQueuedEnrollmentAfterRestart`, `TestRPCProfilePaginationBindingsAndPrivacy` | Audit all removal/cleanup/replay cases; remote revocation depends on backend result |
 | US-09 session/renewal | Session reads, durable renewal/poll executor, dedicated host worker, public `RenewSession`, bound snapshot identity and generated backend transport | Session read/clock/store suites; `service_rpc_session_worker_test.go`, `service_rpc_session_executor_test.go`; C `service_rpc_session_transport_test.go` | Full concurrency/cleanup audit, additional approved browser origins and platform/backend qualification remain open; no seamless-renewal acceptance claim |
-| US-10 preferences/policy | `service_rpc_uiquit.go`, preference validators | `TestRPCUIQuitRejectsUnsupportedPatchAtomically` rejects mixed UI-quit/DNS patch without changing revision or override | Implement remaining settings; rejection is not DNS/routes/policy functionality |
+| US-10 preferences/policy | `service_rpc_uiquit.go`, network preference admission/worker/projection, inbound filter and router | `TestInboundPreferenceAtomicPatchRestartAndSelectiveReset`, `TestInboundPolicyLockRejectsWholeMixedPreferencePatch` and worker/filter tests described above | Remaining lifecycle keys, authenticated transport mutation and OS effects need evidence |
 | US-11 resources | `service_rpc_resources.go` reads the authenticated active-profile map with bounded search and typed targets | `TestRPCResourcesAuthenticateFilterAndBindPages` covers authentication, privacy, filters, page binding and immutable source | Effective enablement, policy controls, overlap/conflict projection, runtime availability and mutation remain open |
 | US-12 lifecycle | `service_rpc_uiquit.go` | `TestRPCUIQuitPreferencesAndExecution` | UI-quit support is not logoff/suspend/resume adapter implementation; audit each specified event |
 | US-13 distribution/help | `service_rpc_update.go`, `service_rpc_handlers.go`; packaging and producer manifest workflows | `TestRPCUpdateInfoDoesNotInferReleaseOrPairing` | Verified update source remains absent; installation/release evidence deferred until implementation phase completes |

@@ -77,7 +77,7 @@ func TestNetworkPreferenceAdmissionRejectsWholePatch(t *testing.T) {
 			case "locked":
 				want = ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED
 			case "unsupported":
-				patch.AllowInbound = proto.Bool(false)
+				patch.Suspend = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()
 				want = ipc.ErrorCode_ERROR_CODE_UNSUPPORTED
 			case "empty":
 				patch = &ipc.PreferencesPatch{}

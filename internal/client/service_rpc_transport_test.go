@@ -371,11 +371,14 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 				t.Fatal("native user preference projection", err)
 			}
 			managed, err := client.ListManagedSettings(ctx, connect.NewRequest(&ipc.ListManagedSettingsRequest{Profile: selection.Profile}))
-			if err != nil || len(managed.Msg.Settings) != 3 || managed.Msg.Settings[0].Key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT || managed.Msg.Settings[0].GetLifecycleValue() != preferences.Msg.Preferences.Lifecycle.UiQuit.Effective || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_USER || managed.Msg.Metadata.Revision != preferences.Msg.Preferences.Metadata.Revision {
+			if err != nil || len(managed.Msg.Settings) != 4 || managed.Msg.Settings[0].Key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT || managed.Msg.Settings[0].GetLifecycleValue() != preferences.Msg.Preferences.Lifecycle.UiQuit.Effective || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_USER || managed.Msg.Metadata.Revision != preferences.Msg.Preferences.Metadata.Revision {
 				t.Fatal("managed projection disagrees with native preferences", err)
 			}
 			if managed.Msg.Settings[1].Key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS || managed.Msg.Settings[1].GetBooleanValue() != preferences.Msg.Preferences.AcceptDns.Effective || managed.Msg.Settings[2].Key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_ROUTES || managed.Msg.Settings[2].GetBooleanValue() != preferences.Msg.Preferences.AcceptRoutes.Effective {
 				t.Fatal("managed network values disagree with native preferences")
+			}
+			if managed.Msg.Settings[3].Key != ipc.PreferenceKey_PREFERENCE_KEY_ALLOW_INBOUND || managed.Msg.Settings[3].GetBooleanValue() != preferences.Msg.Preferences.AllowInbound.Effective {
+				t.Fatal("managed inbound value disagrees with native preferences")
 			}
 			resetRequest := &ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT}}
 			resetAccepted, err := client.ResetPreferences(ctx, connect.NewRequest(resetRequest))

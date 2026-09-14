@@ -79,7 +79,7 @@ func (m *ClientRPCMutations) resetNetworkPreferencesAs(peer local.Peer, request 
 
 func (m *ClientRPCMutations) prepareNetworkPreferences(cfg *Config, op *ipc.Operation, ref *ipc.ProfileRef, keys []ipc.PreferenceKey, patch *ipc.PreferencesPatch) error {
 	for _, key := range keys {
-		if key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS && key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_ROUTES && key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT {
+		if key != ipc.PreferenceKey_PREFERENCE_KEY_ALLOW_INBOUND && key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS && key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_ROUTES && key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT {
 			return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 		}
 	}
@@ -120,6 +120,11 @@ func (m *ClientRPCMutations) prepareNetworkPreferences(cfg *Config, op *ipc.Oper
 		var value *bool
 		var policyKey api.ClientSettingKey
 		switch key {
+		case ipc.PreferenceKey_PREFERENCE_KEY_ALLOW_INBOUND:
+			if patch != nil {
+				value = proto.Bool(patch.GetAllowInbound())
+			}
+			requested.AllowInbound, policyKey = value, api.ClientSettingAllowInbound
 		case ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS:
 			if patch != nil {
 				value = proto.Bool(patch.GetAcceptDns())

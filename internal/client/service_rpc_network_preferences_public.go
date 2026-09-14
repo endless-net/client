@@ -29,18 +29,18 @@ func (s *ClientRPCService) acceptNetworkPreferenceOperation(accept func() (*ipc.
 // Effective is the authenticated policy resolution of the committed config.
 // It is not a claim that a particular resolver query or resource is reachable.
 // A pending patch changes Requested only; the worker commits both keys together.
-func (m *ClientRPCMutations) networkPreferenceSettings(cfg Config, profile clientRPCProfile) (*ipc.BooleanSetting, *ipc.BooleanSetting, error) {
+func (m *ClientRPCMutations) networkPreferenceSettings(cfg Config, profile clientRPCProfile) (*ipc.BooleanSetting, *ipc.BooleanSetting, *ipc.BooleanSetting, error) {
 	active := profile.ID == cfg.RPCState.ActiveProfileID
 	plan := cfg.RPCState.NetworkPreferenceChange
 	if !active {
 		cfg = profile.Configuration
 	}
 	if cfg.CachedMap == nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	resolved, err := resolveNetworkAcceptance(cfg, *cfg.CachedMap, m.now())
 	if err != nil || cfg.CachedMap.Network.Revision != cfg.MapRevision || cfg.CachedMap.Revision.Global != cfg.MapGlobalRevision {
-		return nil, nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+		return nil, nil, nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
 	committed := cloneNetworkPreferences(cfg.NetworkPreferences)
 	if committed == nil {
@@ -86,5 +86,5 @@ func (m *ClientRPCMutations) networkPreferenceSettings(cfg Config, profile clien
 		}
 		return result
 	}
-	return setting(api.ClientSettingAcceptDNS, resolved.dns, committed.AcceptDNS, requested.AcceptDNS), setting(api.ClientSettingAcceptRoutes, resolved.routes, committed.AcceptRoutes, requested.AcceptRoutes), nil
+	return setting(api.ClientSettingAcceptDNS, resolved.dns, committed.AcceptDNS, requested.AcceptDNS), setting(api.ClientSettingAcceptRoutes, resolved.routes, committed.AcceptRoutes, requested.AcceptRoutes), setting(api.ClientSettingAllowInbound, resolved.inbound, committed.AllowInbound, requested.AllowInbound), nil
 }
