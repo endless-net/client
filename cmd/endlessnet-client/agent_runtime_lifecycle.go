@@ -30,7 +30,19 @@ func startAgentRuntimeLifecycle(ctx context.Context, cancel context.CancelCauseF
 			return nil, err
 		}
 	}
-	executor, err := client.NewRuntimeLifecycleExecutor(ctx, mutations, engine, opts.OperationMu, func() { requestAgentSync(opts) })
+	refresh := func(ctx context.Context) error {
+		before := opts.ConfigStore.Read()
+		if before.NodeID == "" {
+			return nil // Unenrolled runtime has only local policy.
+		}
+		if opts.Offline {
+			return mutations.RefreshRuntimeLifecyclePolicy(ctx, before, before)
+		}
+		return refreshAgentPolicySnapshot(ctx, opts.ConfigStore, opts.Timeout, func(before, candidate client.Config) error {
+			return mutations.RefreshRuntimeLifecyclePolicy(ctx, before, candidate)
+		})
+	}
+	executor, err := client.NewRuntimeLifecycleExecutor(ctx, mutations, engine, opts.OperationMu, func() { requestAgentSync(opts) }, refresh)
 	if err != nil {
 		return nil, err
 	}

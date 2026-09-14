@@ -276,6 +276,7 @@ type agentIterationOptions struct {
 }
 
 type agentIPCOptions struct {
+	Offline        bool
 	Pipe           string
 	UnixSocket     string
 	ConfigPath     string

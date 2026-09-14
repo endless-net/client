@@ -14,7 +14,7 @@ import (
 )
 
 func TestStartupPolicyFetchAuthenticatesAndRejectsChangedIntent(t *testing.T) {
-	for _, scenario := range []string{"success", "tampered", "disconnect", "cancelled", "retry", "retry_disconnect"} {
+	for _, scenario := range []string{"success", "tampered", "disconnect", "cancelled", "retry", "retry_disconnect", "resume_disconnected"} {
 		t.Run(scenario, func(t *testing.T) {
 			projection := testNetworkMapWithRevision(t, testMapSigningKey(t), "net-1", "node-1", 14)
 			var store *client.ConfigStore
@@ -42,6 +42,9 @@ func TestStartupPolicyFetchAuthenticatesAndRejectsChangedIntent(t *testing.T) {
 			defer server.Close()
 			path := filepath.Join(t.TempDir(), "client.json")
 			cfg := client.Config{ControlPlaneURLs: []string{server.URL}, NodeID: "node-1", NetworkID: "net-1", NodeCredential: "synthetic-credential", MapSigningTrust: testSigningTrustBundle(t, testMapSigningPublicKey(t, projection.MapSignature)), ConnectionIntent: &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredConnected, Reason: "user_connect"}}
+			if scenario == "resume_disconnected" {
+				cfg.ConnectionIntent = &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredDisconnected, Reason: "user_disconnect"}
+			}
 			if err := client.SaveConfig(path, cfg); err != nil {
 				t.Fatal(err)
 			}
@@ -56,23 +59,32 @@ func TestStartupPolicyFetchAuthenticatesAndRejectsChangedIntent(t *testing.T) {
 			if scenario == "cancelled" {
 				cancel()
 			}
-			if scenario == "retry" || scenario == "retry_disconnect" {
+			switch scenario {
+			case "resume_disconnected":
+				mutations, mutationErr := client.NewClientRPCMutations(store)
+				if mutationErr != nil {
+					t.Fatal(mutationErr)
+				}
+				err = refreshAgentPolicySnapshot(ctx, store, time.Second, func(before, candidate client.Config) error {
+					return mutations.RefreshRuntimeLifecyclePolicy(ctx, before, candidate)
+				})
+			case "retry", "retry_disconnect":
 				if err := client.NewConnectionIntentStore(store).InitializeRuntimeIntent(); err != nil {
 					t.Fatal(err)
 				}
 				err = retryAgentStartupPolicy(ctx, nil, agentIPCOptions{ConfigStore: store}, time.Second)
-			} else {
+			default:
 				err = refreshAgentStartupPolicy(ctx, store, time.Second)
 			}
 			after := store.Read()
-			if scenario == "success" || scenario == "retry" {
+			if scenario == "success" || scenario == "retry" || scenario == "resume_disconnected" {
 				if err != nil || after.CachedMap == nil || after.MapRevision != 14 || !reflect.DeepEqual(before.ConnectionIntent, after.ConnectionIntent) {
 					t.Fatal("startup source was not adopted independently of intent", err)
 				}
 				if err := client.NewConnectionIntentStore(store).InitializeRuntimeIntent(); err != nil {
 					t.Fatal(err)
 				}
-				if store.Read().ConnectionIntent.DesiredState != client.ConnectionIntentDesiredConnected {
+				if store.Read().ConnectionIntent.DesiredState != before.ConnectionIntent.DesiredState {
 					t.Fatal("KEEP_INTENT could not use freshly authenticated map")
 				}
 			} else {

@@ -23,15 +23,16 @@ type RuntimeLifecycleExecutor struct {
 	engine        runtimeLifecycleEngine
 	operationLock sync.Locker
 	wake          func()
+	refreshPolicy func(context.Context) error
 	held          bool
 	closed        bool
 }
 
-func NewRuntimeLifecycleExecutor(lifetime context.Context, mutations *ClientRPCMutations, engine runtimeLifecycleEngine, operationLock sync.Locker, wake func()) (*RuntimeLifecycleExecutor, error) {
-	if lifetime == nil || mutations == nil || engine == nil || operationLock == nil || wake == nil {
-		return nil, errors.New("runtime lifecycle requires lifetime, mutations, engine, operation lock and wake")
+func NewRuntimeLifecycleExecutor(lifetime context.Context, mutations *ClientRPCMutations, engine runtimeLifecycleEngine, operationLock sync.Locker, wake func(), refreshPolicy func(context.Context) error) (*RuntimeLifecycleExecutor, error) {
+	if lifetime == nil || mutations == nil || engine == nil || operationLock == nil || wake == nil || refreshPolicy == nil {
+		return nil, errors.New("runtime lifecycle requires lifetime, mutations, engine, operation lock, wake and policy refresh")
 	}
-	return &RuntimeLifecycleExecutor{lifetime: lifetime, mutations: mutations, engine: engine, operationLock: operationLock, wake: wake}, nil
+	return &RuntimeLifecycleExecutor{lifetime: lifetime, mutations: mutations, engine: engine, operationLock: operationLock, wake: wake, refreshPolicy: refreshPolicy}, nil
 }
 
 func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOwner string) error {
@@ -48,7 +49,10 @@ func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOw
 	}
 	// Persist Disconnect before waiting for an in-flight apply's effect lock;
 	// its committed cancellation allows that apply to yield to teardown.
-	policyErr := e.mutations.ApplyRuntimeLifecycleIntent(e.lifetime, event, sessionOwner)
+	var policyErr error
+	if event != RuntimeResume {
+		policyErr = e.mutations.ApplyRuntimeLifecycleIntent(e.lifetime, event, sessionOwner)
+	}
 	if event == RuntimeUserLogoff && policyErr != nil {
 		return policyErr
 	}
@@ -77,18 +81,18 @@ func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOw
 		result, err := e.engine.Suspend(e.lifetime)
 		return errors.Join(policyErr, runtimeLifecycleDownError(result, err))
 	case RuntimeResume:
-		if policyErr != nil {
-			// Even an unsolicited resume with unavailable authority cannot leave
-			// an old tunnel active while ordinary workers are blocked.
-			result, err := e.engine.Suspend(e.lifetime)
-			return errors.Join(policyErr, runtimeLifecycleDownError(result, err))
+		// Close the gate even for an unsolicited resume. Fetch current authority
+		// before deciding intent; stale policy must not first commit Disconnect.
+		result, err := e.engine.Suspend(e.lifetime)
+		if err := runtimeLifecycleDownError(result, err); err != nil {
+			return err
 		}
-		cfg := e.mutations.store.Read()
-		if cfg.ConnectionIntent == nil || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredConnected {
-			result, err := e.engine.Suspend(e.lifetime)
-			if err := runtimeLifecycleDownError(result, err); err != nil {
-				return err
-			}
+		if err := e.refreshPolicy(e.lifetime); err != nil {
+			return err
+		}
+		policyErr = e.mutations.ApplyRuntimeLifecycleIntent(e.lifetime, event, sessionOwner)
+		if policyErr != nil {
+			return policyErr
 		}
 		if err := e.engine.Resume(e.lifetime); err != nil {
 			return err

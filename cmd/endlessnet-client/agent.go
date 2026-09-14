@@ -448,6 +448,7 @@ func cmdAgent(args []string) error {
 		operationMu := &sync.Mutex{}
 		syncWake := make(chan struct{}, 1)
 		ipcOpts := agentIPCOptions{
+			Offline:        *offline,
 			Pipe:           *ipcPipe,
 			UnixSocket:     *ipcSocket,
 			ConfigPath:     *configPath,

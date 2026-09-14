@@ -58,7 +58,7 @@ func TestRuntimeLifecycleExecutorHoldsWorkersUntilVerifiedResume(t *testing.T) {
 			lock := &sync.Mutex{}
 			engine := &testRuntimeLifecycleEngine{lock: lock, t: t, fail: scenario == "suspend_failure"}
 			wakes := 0
-			executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() { wakes++ })
+			executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() { wakes++ }, func(context.Context) error { return nil })
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -131,7 +131,7 @@ func TestRuntimeLifecycleExecutorRejectsForeignLogoffAndUnsafeClose(t *testing.T
 	ctx, cancel := context.WithCancel(t.Context())
 	lock := &sync.Mutex{}
 	engine := &testRuntimeLifecycleEngine{lock: lock, t: t}
-	executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() {})
+	executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() {}, func(context.Context) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,5 +157,50 @@ func TestRuntimeLifecycleExecutorRejectsForeignLogoffAndUnsafeClose(t *testing.T
 	}
 	if err := executor.Handle(RuntimeResume, ""); err == nil {
 		t.Fatal("closed executor accepted event")
+	}
+}
+
+func TestRuntimeResumeRefreshRunsInsideClosedGateAndRetries(t *testing.T) {
+	m, _, _ := rpcPreferenceFixture(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	lock := &sync.Mutex{}
+	engine := &testRuntimeLifecycleEngine{lock: lock, t: t}
+	available := false
+	wakes := 0
+	executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() { wakes++ }, func(context.Context) error {
+		engine.assertLocked()
+		if !engine.suspended {
+			t.Fatal("policy fetch ran before closing engine gate")
+		}
+		if !available {
+			return errors.New("source temporarily unavailable")
+		}
+		return m.store.Update(func(cfg *Config) error {
+			cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "newer_user_disconnect"}
+			return nil
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		cancel()
+		if err := executor.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if err := executor.Handle(RuntimeResume, ""); err == nil || wakes != 0 || engine.resumes != 0 {
+		t.Fatal("unavailable source released an unsolicited resume", err)
+	}
+	if lock.TryLock() {
+		lock.Unlock()
+		t.Fatal("source failure released worker gate")
+	}
+	available = true
+	if err := executor.Handle(RuntimeResume, ""); err != nil {
+		t.Fatal(err)
+	}
+	if wakes != 1 || engine.resumes != 1 || m.store.Read().ConnectionIntent.Reason != "newer_user_disconnect" {
+		t.Fatal("resume did not use the latest intent after refresh")
 	}
 }

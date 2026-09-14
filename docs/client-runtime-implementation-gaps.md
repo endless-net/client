@@ -22,6 +22,14 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Local verification observation (2026-09-14): the resume-policy short run initially
+hit Windows TCP bind access-denied errors in
+`TestDNSProxyServesTCPOnTheUDPAddress` and
+`TestDNSProxyPairRecoversFromTransportSpecificExclusion`. The final full short
+rerun passed unchanged DNS code. Ephemeral TCP/UDP pair allocation still needs
+deterministic exclusion/exhaustion evidence; a passing rerun does not close this
+intermittent failure. No native/system acceptance was run.
+
 The user also accepted KEEP_INTENT defaults for user_logoff, suspend and resume
 on 2026-09-14. Per-profile local preferences now persist those choices, resolve
 signed account/device baselines and locks, expose matching preference/managed
@@ -77,9 +85,21 @@ Headless service mode uses the same durable mutations without requiring an IPC
 listener. `windows_service_lifecycle_windows_test.go` covers scalar delivery,
 ignored events, stop and overflow; `agent_runtime_lifecycle_test.go` covers
 durable default intent, held gate, retry, resume wake, source loss and shutdown.
-These are synthetic source/engine units. Native delivery, callback latency,
-policy refresh while suspended, effect observation, logoff and non-Windows
-subscriptions remain open. The b4165b8 short run passed on all three OS runners.
+These are synthetic source/engine units. Resume now confirms teardown under
+the effect lock before refreshing an expired/missing signed policy snapshot,
+including when current intent is disconnected. The common snapshot fetch keeps
+startup admission separate; offline mode validates local authority without
+contacting control. `RefreshRuntimeLifecyclePolicy` uses a fresh full-context CAS,
+validates recipient/signature/expiry/revisions/hash and commits only authority,
+with domain invalidations on a changed revision. It never adopts fetched intent,
+credentials or profiles. Resume resolves current intent after refresh, so a
+newer user Disconnect is preserved. Fetch/validation/CAS failures retain the gate
+and the consumer retries. Primitive units cover rejected authority, cancellation,
+owner/intent races and idempotence; source units cover a real signed HTTP snapshot
+while disconnected; executor units cover source failure and subsequent recovery
+inside the closed gate. Native delivery, callback latency, effect observation,
+logoff, non-Windows subscriptions and the full suspension/recovery race audit
+remain open. The b4165b8 short run passed on all three OS runners.
 The pinned x/sys SCM host forwards SessionChange EventData after its callback
 returns; the adapter must copy session data during a live native callback rather
 than dereference that forwarded pointer later.

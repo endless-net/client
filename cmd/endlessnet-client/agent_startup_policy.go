@@ -37,6 +37,13 @@ func refreshAgentStartupPolicyWith(ctx context.Context, store *client.ConfigStor
 	if !wanted {
 		return nil
 	}
+	return refreshAgentPolicySnapshot(ctx, store, timeout, commit)
+}
+
+// Unlike startup admission, resume needs authenticated policy even when the
+// current intent is disconnected. The shared fetch never applies a tunnel.
+func refreshAgentPolicySnapshot(ctx context.Context, store *client.ConfigStore, timeout time.Duration, commit func(client.Config, client.Config) error) error {
+	before := store.Read()
 	if before.CachedMap != nil && before.CachedMap.MapSignature != nil && time.Now().Before(before.CachedMap.MapSignature.ExpiresAt) {
 		if _, err := verifiedCachedNetworkMap(&before); err == nil {
 			return commit(before, before)
