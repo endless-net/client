@@ -420,6 +420,9 @@ func cmdAgent(args []string) error {
 		if err != nil {
 			return err
 		}
+		if err := client.NewConnectionIntentStore(configStore).InitializeRuntimeIntent(); err != nil {
+			return err
+		}
 		stored := configStore.Read()
 		wireGuard, err := client.NewWireGuardEngine(client.WireGuardEngineOptions{
 			FlowSpoolPath:  *configPath + ".flow-queue",

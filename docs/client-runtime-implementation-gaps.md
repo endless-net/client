@@ -22,6 +22,16 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+The user accepted the runtime-start default on 2026-09-14: KEEP_INTENT,
+with DISCONNECT when no explicit intent is saved. The agent now initializes
+that durable baseline under its lifetime lock before engine creation, RPC workers
+or network sync. Existing connected/disconnected intents keep their reason and
+timestamp; malformed saved intents cannot imply Connect. The short test
+`TestRuntimeStartPreservesExplicitIntentAndDefaultsDisconnected` checks initial
+state and restart. Runtime-start local overrides, managed policy resolution and
+their effective preference projection still require implementation; this default
+alone does not close UF-21 or UI-AC-21.
+
 Exit selection admission now persists the authenticated map payload hash.
 Preflight, completion and retry reject replacement maps even when recipient,
 revisions and the selected grant still match. Queued work fails without dispatch;

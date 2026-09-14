@@ -1048,6 +1048,7 @@ func TestCmdAgentWritesFailureStateForTamperedMapWithoutReplacingOutput(t *testi
 		MapSigningTrust:  testSigningTrustBundle(t, testMapSigningPublicKey(t, base.MapSignature)),
 		MapRevision:      7,
 		CachedMap:        &base,
+		ConnectionIntent: &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredConnected, Reason: "user_connect", UpdatedAt: time.Now().UTC().Format(time.RFC3339)},
 	}); err != nil {
 		t.Fatal(err)
 	}

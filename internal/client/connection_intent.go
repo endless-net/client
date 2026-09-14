@@ -27,6 +27,31 @@ func NewConnectionIntentStore(config *ConfigStore) ConnectionIntentStore {
 	return ConnectionIntentStore{config: config, now: time.Now}
 }
 
+// InitializeRuntimeIntent implements the runtime-start baseline: keep an
+// explicit intent and start disconnected when none has been saved. The agent
+// calls it under its lifetime lock, before starting workers or network effects.
+func (s ConnectionIntentStore) InitializeRuntimeIntent() error {
+	if s.config == nil {
+		return errors.New("config store is required")
+	}
+	return s.config.Update(func(cfg *Config) error {
+		if cfg.ConnectionIntent != nil {
+			switch cfg.ConnectionIntent.DesiredState {
+			case ConnectionIntentDesiredConnected, ConnectionIntentDesiredDisconnected:
+				return nil
+			default:
+				return errors.New("unsupported saved runtime connection intent")
+			}
+		}
+		cfg.ConnectionIntent = &ConnectionIntent{
+			DesiredState: ConnectionIntentDesiredDisconnected,
+			Reason:       "runtime_start_no_saved_intent",
+			UpdatedAt:    s.now().UTC().Format(time.RFC3339),
+		}
+		return nil
+	})
+}
+
 func (s ConnectionIntentStore) Load() (ConnectionIntent, bool, error) {
 	if s.config == nil {
 		return ConnectionIntent{}, false, errors.New("config store is required")
