@@ -47,6 +47,7 @@ type ClientRPCState struct {
 	SessionRenewal          *clientRPCSessionRenewal            `json:"session_renewal,omitempty"`
 	ExitChange              *clientRPCExitChange                `json:"exit_change,omitempty"`
 	NetworkPreferenceChange *clientRPCNetworkPreferenceChange   `json:"network_preference_change,omitempty"`
+	NetworkSelection        *clientRPCNetworkSelection          `json:"network_selection,omitempty"`
 	Bundles                 map[string]clientRPCBundlePlan      `json:"bundles,omitempty"`
 }
 
@@ -61,25 +62,26 @@ type clientRPCOperationRecord struct {
 // mutate only the supplied config: no network, device or other external effects
 // may run until acceptance commits. Runtime reconciliation executes those effects.
 type ClientRPCMutations struct {
-	mu                   sync.Mutex
-	profileWorker        sync.Mutex
-	disconnectWorker     sync.Mutex
-	enrollmentWorker     sync.Mutex
-	trustWorker          sync.Mutex
-	sessionWorker        sync.Mutex
-	exitWorker           sync.Mutex
-	store                *ConfigStore
-	instanceID           string
-	now                  func() time.Time
-	observedStatus       *ipc.Status
-	observedCatalog      *[32]byte // Volatile map/policy input identity, not authorization.
-	cancelApply          context.CancelFunc
-	cancelEnrollment     context.CancelFunc
-	cancelSessionRenewal context.CancelFunc
-	cancelLogout         context.CancelFunc
-	subscribers          map[*rpcSubscriber]struct{}
-	recentLogs           []clientRPCScopedLog
-	capabilityWorkers    map[ipc.Capability]*clientRPCProfileWorker // Volatile readiness, never persisted.
+	mu                     sync.Mutex
+	profileWorker          sync.Mutex
+	disconnectWorker       sync.Mutex
+	enrollmentWorker       sync.Mutex
+	trustWorker            sync.Mutex
+	sessionWorker          sync.Mutex
+	exitWorker             sync.Mutex
+	networkSelectionWorker sync.Mutex
+	store                  *ConfigStore
+	instanceID             string
+	now                    func() time.Time
+	observedStatus         *ipc.Status
+	observedCatalog        *[32]byte // Volatile map/policy input identity, not authorization.
+	cancelApply            context.CancelFunc
+	cancelEnrollment       context.CancelFunc
+	cancelSessionRenewal   context.CancelFunc
+	cancelLogout           context.CancelFunc
+	subscribers            map[*rpcSubscriber]struct{}
+	recentLogs             []clientRPCScopedLog
+	capabilityWorkers      map[ipc.Capability]*clientRPCProfileWorker // Volatile readiness, never persisted.
 }
 
 func NewClientRPCMutations(store *ConfigStore) (*ClientRPCMutations, error) {
