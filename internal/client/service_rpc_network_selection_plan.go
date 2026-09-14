@@ -25,6 +25,8 @@ type clientRPCNetworkSelection struct {
 	Activated         bool             `json:"activated,omitempty"`
 	ApplyStarted      bool             `json:"apply_started,omitempty"`
 	ApplyFailure      *ipc.Failure     `json:"apply_failure,omitempty"`
+	AbortFailure      *ipc.Failure     `json:"abort_failure,omitempty"`
+	TargetRevoked     bool             `json:"target_revoked,omitempty"`
 }
 
 func networkSelectionContext(cfg Config) Config {
@@ -83,6 +85,9 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionPreparation(ctx context.Co
 		return nil
 	}
 	plan := cfg.RPCState.NetworkSelection
+	if plan.AbortFailure != nil {
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
 	if plan.Target != nil {
 		return nil
 	}

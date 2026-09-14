@@ -31,6 +31,9 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionActivation(ctx context.Con
 	}
 	plan := cfg.RPCState.NetworkSelection
 	stale := func() error { return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE) }
+	if plan.AbortFailure != nil {
+		return stale()
+	}
 	if plan.Activated {
 		if plan.Target == nil || !reflect.DeepEqual(networkSelectionContext(cfg), *plan.Target) {
 			return stale()

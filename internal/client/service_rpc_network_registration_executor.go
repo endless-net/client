@@ -29,7 +29,7 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionRegistration(ctx context.C
 		return nil
 	}
 	plan := cfg.RPCState.NetworkSelection
-	if plan.Target == nil || plan.DownStarted || !networkSelectionSourceMatches(cfg, plan) {
+	if plan.Target == nil || plan.DownStarted || plan.AbortFailure != nil || !networkSelectionSourceMatches(cfg, plan) {
 		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	}
 	if plan.RegistrationReady && networkSelectionTargetReady(*plan.Target, m.now()) {

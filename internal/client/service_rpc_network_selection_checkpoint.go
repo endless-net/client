@@ -30,7 +30,7 @@ func (m *ClientRPCMutations) NetworkSelectionSaveCallback(ctx context.Context, o
 			return stale()
 		}
 		expected := initial.RPCState.NetworkSelection
-		if expected.OperationID != operationID || expected.Target == nil {
+		if expected.OperationID != operationID || expected.Target == nil || expected.Activated || expected.TargetRevoked || (expected.DownStarted && expected.AbortFailure == nil) {
 			return stale()
 		}
 		next := clonePersistentConfig(updated)
@@ -66,7 +66,13 @@ func (m *ClientRPCMutations) NetworkSelectionSaveCallback(ctx context.Context, o
 			}
 			pending := current.RPCState.NetworkSelection
 			if op.Kind != ipc.OperationKind_OPERATION_KIND_SELECT_NETWORK || op.State != ipc.OperationState_OPERATION_STATE_RUNNING || op.ProfileId != expected.Profile.ID ||
-				pending == nil || !reflect.DeepEqual(pending, expected) || !networkSelectionSourceMatches(*current, expected) {
+				pending == nil || !reflect.DeepEqual(pending, expected) {
+				return stale()
+			}
+			if expected.AbortFailure == nil && !networkSelectionSourceMatches(*current, expected) {
+				return stale()
+			}
+			if expected.AbortFailure != nil && !networkSelectionCleanupTargetIsolated(*current, expected, next) {
 				return stale()
 			}
 			pending.Target = &next
