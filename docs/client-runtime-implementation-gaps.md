@@ -309,6 +309,17 @@ platform-aware selection/application is implemented. No exit capability is
 advertised by this read-only increment; Get/Select/Clear and traffic acceptance
 remain open.
 
+Exit routing foundation: `exit_routes.go` derives peer routes for an explicit
+recipient/peer-key-bound local selection. It authenticates the selected grant,
+checks exact family/LAN authorization and deadlines, and retains default routes
+only for the selected peer and address family. No selection removes defaults
+from the derived input; invalid selection returns an error, never a direct-route
+fallback. `TestExitRouteProjectionRequiresExactLiveSelection` covers IPv4,
+IPv6, dual stack, absent intent, expired/tampered grants, changed recipient/key,
+denied mode/LAN and unchanged signed source/ordinary routes. This foundation is
+not yet called by the live engine/router: packet enforcement, fail-closed
+platform rules, durable admission and effective-status wiring remain required.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On
