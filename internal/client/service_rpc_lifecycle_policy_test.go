@@ -125,12 +125,17 @@ func TestRPCUIQuitRejectsInvalidPolicyAndReplaysAcceptedRequest(t *testing.T) {
 	for _, scenario := range []string{"tampered", "expired", "recipient", "revision", "trust", "unsupported", "locked_override"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, owner, profile := rpcPreferenceFixture(t)
+			opts, key := signedServiceDNSFixture(t)
+			if scenario == "expired" {
+				// Expire the policy while the accepted operation is still within
+				// its replay retention period, independent of signing latency.
+				m.now = func() time.Time { return opts.NetworkMap.MapSignature.ExpiresAt.Add(-time.Minute) }
+			}
 			request := &ipc.NotifyLifecycleRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Event: ipc.LifecycleEvent_LIFECYCLE_EVENT_UI_QUIT}
 			original, err := m.notifyLifecycleAs(owner, request)
 			if err != nil {
 				t.Fatal(err)
 			}
-			opts, key := signedServiceDNSFixture(t)
 			behavior := api.ClientLifecycleDisconnect
 			if scenario == "unsupported" {
 				behavior = api.ClientLifecycleConnect
