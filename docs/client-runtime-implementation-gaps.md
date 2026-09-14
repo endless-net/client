@@ -46,7 +46,7 @@ Additional partial implementations must not be mistaken for complete domains:
 
 | Area | Source evidence | Remaining work |
 | --- | --- | --- |
-| Preferences/policy | `service_rpc_uiquit.go` accepts only a single `UI_QUIT` key for Set/Reset; `service_rpc_preferences_test.go` and `service_rpc_uiquit_test.go` exist | Implement the remaining specified settings and policy controls; unit-test presence versus false, locks/source, requested/effective state and atomic patch rejection |
+| Preferences/policy | Public Set/Reset supports DNS/routes through the durable worker, optionally together with UI_QUIT; UI_QUIT-only operations are immediate. Signed network/lifecycle policy resolution and pending/committed reads are implemented | Implement inbound and remaining lifecycle keys; complete per-method transport, concurrency/recovery and OS effect evidence |
 | Diagnostics | `service_rpc_diagnostics.go` projects bounded OS route samples; missing samples remain explicitly unavailable and supplied samples remain incomplete | Qualify platform command execution later; extend route coverage beyond host-address sampling without substituting desired configuration for observed OS state |
 | Updates | `service_rpc_update.go` reports `update_source_not_configured`; `service_rpc_update_test.go` exists | Bind an approved distribution source and verify its projection; unavailable is not up-to-date, and unavailable-path tests do not prove update discovery |
 
@@ -76,8 +76,7 @@ retain ordinary host routes but omit subnets, explicitly managed single-IP
 subnets and application routes. Signed sources are recipient-bound and checked
 before preference resolution. This is used by the existing OS router adapters,
 but the unit evidence is derived router configuration, not observed OS effects.
-Public Set/Reset admission, requested/effective projection and resource
-invalidation after local changes remain missing, as does inbound filtering.
+Inbound filtering and OS effect qualification remain missing.
 The worker increment below provides candidate apply and durable containment.
 Checked static export now receives the full Config and uses
 the same authenticated DNS/routes resolver; it cannot reintroduce a disabled
@@ -93,7 +92,8 @@ same-request replay ahead of CAS/conflict checks;
 `TestNetworkPreferenceAdmissionRejectsWholePatch` covers authorization, signed
 source tampering, revision mismatch, managed lock and unsupported/empty patches;
 `TestNetworkPreferenceResetPreservesUnselectedOverrides` covers selective reset.
-These private admission methods are not connected to the public service yet.
+Public Set/Reset now routes patches containing DNS/routes through the ready
+profile worker; UI-quit-only operations retain their immediate local semantics.
 `service_rpc_network_preferences_worker.go` now runs in the profile worker's
 startup scan under the shared agent driver lock. It authenticates the candidate
 before apply and again at commit, rejects changed profile/owner/map/intent,
@@ -109,8 +109,16 @@ not OS observation. Containment now persists the original bounded failure
 code/reason before Down: concurrent Disconnect yields CANCELLED and retains its
 accepted intent reason; context drift yields STALE_STATE, invalid signed source
 yields UNAVAILABLE, and driver errors yield APPLY_FAILED. Restart tests assert
-that a later Down failure does not replace the original apply cause. Public
-admission/projection, observed effects and resource invalidation remain required.
+that a later Down failure does not replace the original apply cause.
+`service_rpc_network_preferences_public.go` projects authenticated committed
+policy resolution separately from pending requested overrides, including reset
+absence and managed provenance/locks. GetPreferences and ListManagedSettings
+use that projection, and preference operations invalidate resources as well.
+`TestNetworkPreferencePublicAdmissionWakesWorkerAndSeparatesPending` exercises
+the readiness/acceptance bridge, worker wakeup and pending-to-committed reads;
+`TestNetworkPreferenceProjectionManagedLockAndReset` covers lock precedence
+and reset baseline restoration. This is not authenticated transport acceptance
+or observed OS effects, both of which still need evidence.
 
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.

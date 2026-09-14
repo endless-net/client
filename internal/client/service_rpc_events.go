@@ -335,6 +335,7 @@ func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation, inv
 			}
 			switch operation.Kind {
 			case ipc.OperationKind_OPERATION_KIND_SET_PREFERENCES, ipc.OperationKind_OPERATION_KIND_RESET_PREFERENCES:
+				subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_Invalidated{Invalidated: &ipc.DomainInvalidated{Domain: ipc.Domain_DOMAIN_RESOURCES, ProfileId: operation.ProfileId}}})
 				subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_Invalidated{Invalidated: &ipc.DomainInvalidated{Domain: ipc.Domain_DOMAIN_PREFERENCES, ProfileId: operation.ProfileId}}})
 				subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_Invalidated{Invalidated: &ipc.DomainInvalidated{Domain: ipc.Domain_DOMAIN_MANAGED_SETTINGS, ProfileId: operation.ProfileId}}})
 			case ipc.OperationKind_OPERATION_KIND_CREATE_PROFILE, ipc.OperationKind_OPERATION_KIND_RENAME_PROFILE, ipc.OperationKind_OPERATION_KIND_REMOVE_PROFILE, ipc.OperationKind_OPERATION_KIND_SELECT_PROFILE, ipc.OperationKind_OPERATION_KIND_ENROLL, ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT, ipc.OperationKind_OPERATION_KIND_LOGOUT:

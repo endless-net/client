@@ -201,7 +201,7 @@ func TestRPCPreferenceChangeInvalidatesEffectiveSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	seen := map[ipc.Domain]bool{}
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		event, err := sub.next(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -216,7 +216,7 @@ func TestRPCPreferenceChangeInvalidatesEffectiveSettings(t *testing.T) {
 			seen[invalidation.Domain] = true
 		}
 	}
-	if !seen[ipc.Domain_DOMAIN_PREFERENCES] || !seen[ipc.Domain_DOMAIN_MANAGED_SETTINGS] {
+	if !seen[ipc.Domain_DOMAIN_PREFERENCES] || !seen[ipc.Domain_DOMAIN_MANAGED_SETTINGS] || !seen[ipc.Domain_DOMAIN_RESOURCES] {
 		t.Fatal("effective setting consumers left stale")
 	}
 }

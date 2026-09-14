@@ -141,11 +141,25 @@ func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPrefer
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: setting}}}), nil
+	dns, routes, err := s.mutations.networkPreferenceSettings(cfg, profile)
+	if err != nil {
+		return nil, err
+	}
+	if plan := cfg.RPCState.NetworkPreferenceChange; plan != nil && plan.ProfileID == profile.ID {
+		setting.Requested = cloneLifecycleBehavior(plan.RequestedUIQuit)
+	}
+	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, AcceptDns: dns, AcceptRoutes: routes, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: setting}}}), nil
 }
 
 func (s *ClientRPCService) SetPreferences(ctx context.Context, request *connect.Request[ipc.SetPreferencesRequest]) (*connect.Response[ipc.SetPreferencesResponse], error) {
 	peer, _ := local.PeerFromContext(ctx)
+	if patch := request.Msg.GetPatch(); patch != nil && (patch.AcceptDns != nil || patch.AcceptRoutes != nil) {
+		op, err := s.acceptNetworkPreferenceOperation(func() (*ipc.Operation, error) { return s.mutations.setNetworkPreferencesAs(peer, request.Msg) })
+		if err != nil {
+			return nil, err
+		}
+		return connect.NewResponse(&ipc.SetPreferencesResponse{Operation: op}), nil
+	}
 	op, err := s.mutations.setPreferencesAs(peer, request.Msg)
 	if err != nil {
 		return nil, err
@@ -161,11 +175,29 @@ func (s *ClientRPCService) ListManagedSettings(ctx context.Context, request *con
 		return nil, err
 	}
 	value := preferences.Msg.Preferences.Lifecycle.UiQuit
-	return connect.NewResponse(&ipc.ListManagedSettingsResponse{Metadata: preferences.Msg.Preferences.Metadata, Settings: []*ipc.ManagedSetting{{Key: ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT, Control: proto.Clone(value.Control).(*ipc.SettingControl), EffectiveValue: &ipc.ManagedSetting_LifecycleValue{LifecycleValue: value.Effective}}}}), nil
+	settings := []*ipc.ManagedSetting{{Key: ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT, Control: proto.Clone(value.Control).(*ipc.SettingControl), EffectiveValue: &ipc.ManagedSetting_LifecycleValue{LifecycleValue: value.Effective}}}
+	for _, entry := range []struct {
+		key   ipc.PreferenceKey
+		value *ipc.BooleanSetting
+	}{{ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS, preferences.Msg.Preferences.AcceptDns}, {ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_ROUTES, preferences.Msg.Preferences.AcceptRoutes}} {
+		if entry.value != nil {
+			settings = append(settings, &ipc.ManagedSetting{Key: entry.key, Control: proto.Clone(entry.value.Control).(*ipc.SettingControl), EffectiveValue: &ipc.ManagedSetting_BooleanValue{BooleanValue: entry.value.Effective}})
+		}
+	}
+	return connect.NewResponse(&ipc.ListManagedSettingsResponse{Metadata: preferences.Msg.Preferences.Metadata, Settings: settings}), nil
 }
 
 func (s *ClientRPCService) ResetPreferences(ctx context.Context, request *connect.Request[ipc.ResetPreferencesRequest]) (*connect.Response[ipc.ResetPreferencesResponse], error) {
 	peer, _ := local.PeerFromContext(ctx)
+	for _, key := range request.Msg.GetKeys() {
+		if key == ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS || key == ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_ROUTES {
+			op, err := s.acceptNetworkPreferenceOperation(func() (*ipc.Operation, error) { return s.mutations.resetNetworkPreferencesAs(peer, request.Msg) })
+			if err != nil {
+				return nil, err
+			}
+			return connect.NewResponse(&ipc.ResetPreferencesResponse{Operation: op}), nil
+		}
+	}
 	op, err := s.mutations.resetPreferencesAs(peer, request.Msg)
 	if err != nil {
 		return nil, err
