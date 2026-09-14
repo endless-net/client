@@ -48,7 +48,12 @@ func exitRoutePeers(cfg Config, source api.RegisterNodeResponse, selection *Clie
 			return nil, errors.New("exit peer identity changed")
 		}
 	}
-	peers := cloneRegisterNodeResponse(source).Peers
+	return filterExitRoutePeers(cloneRegisterNodeResponse(source).Peers, selection)
+}
+
+// peers must be an owned projection. Authorization is checked against the
+// original signed map by exitRoutePeers, never against transformed peer data.
+func filterExitRoutePeers(peers []api.Peer, selection *ClientExitSelection) ([]api.Peer, error) {
 	for i := range peers {
 		peer := &peers[i]
 		allowed := make([]string, 0, len(peer.AllowedIPs))
@@ -71,4 +76,20 @@ func exitRoutePeers(cfg Config, source api.RegisterNodeResponse, selection *Clie
 		peer.AllowedIPs = allowed
 	}
 	return peers, nil
+}
+
+// Routing and UAPI must derive the same peer ownership from the original map.
+// Application routes are transformed only after exit authorization; filtering
+// defaults again prevents an application projection from adding an implicit exit.
+func wireGuardEngineRoutePeers(cfg Config, source api.RegisterNodeResponse, selection *ClientExitSelection, now time.Time) ([]api.Peer, error) {
+	peers, err := exitRoutePeers(cfg, source, selection, now)
+	if err != nil || len(source.Network.Applications) == 0 {
+		return peers, err
+	}
+	if selection != nil {
+		if err := verifyApplicationMap(cfg, source); err != nil {
+			return nil, err
+		}
+	}
+	return filterExitRoutePeers(applicationRoutePeers(source, now), selection)
 }

@@ -138,20 +138,26 @@ type wireGuardEngineRouterConfig struct {
 }
 
 func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config, networkMap clientapi.RegisterNodeResponse) (wireGuardEngineRouterConfig, error) {
+	return buildWireGuardEngineRouterConfigForExit(interfaceName, mtu, cfg, networkMap, nil, time.Now())
+}
+
+// Only an adapter that installs OS and TUN protection may use an explicit exit.
+// Ordinary configuration deliberately does not infer it from cfg.ExitSelection.
+func buildWireGuardEngineRouterConfigForExit(interfaceName string, mtu int, cfg Config, networkMap clientapi.RegisterNodeResponse, selection *ClientExitSelection, now time.Time) (wireGuardEngineRouterConfig, error) {
 	originalMap := networkMap
-	acceptance, err := resolveNetworkAcceptance(cfg, originalMap, time.Now())
+	acceptance, err := resolveNetworkAcceptance(cfg, originalMap, now)
 	if err != nil {
 		return wireGuardEngineRouterConfig{}, err
+	}
+	if selection != nil && (!acceptance.routes || strings.TrimSpace(cfg.WireGuardRouteTable) == "off") {
+		return wireGuardEngineRouterConfig{}, errors.New("explicit exit requires route installation")
 	}
 	if len(networkMap.Network.Applications) > 0 {
 		if err := verifyApplicationMap(cfg, networkMap); err != nil {
 			return wireGuardEngineRouterConfig{}, err
 		}
-		networkMap.Peers = applicationRoutePeers(networkMap, time.Now())
 	}
-	// Default routes require an explicit, fully enforced exit selection. The
-	// current host has no exit executor; never activate one from map presence.
-	peers, err := exitRoutePeers(cfg, networkMap, nil, time.Now())
+	peers, err := wireGuardEngineRoutePeers(cfg, originalMap, selection, now)
 	if err != nil {
 		return wireGuardEngineRouterConfig{}, err
 	}

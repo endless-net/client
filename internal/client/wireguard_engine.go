@@ -1381,12 +1381,13 @@ func wireGuardEngineUAPIWithoutEndpoints(privateKey string, networkMap clientapi
 }
 
 func wireGuardEngineUAPIWithEndpoints(privateKey string, networkMap clientapi.RegisterNodeResponse, listenPort int, configured bool, firewallMark uint32, endpointOverrides map[string]string, emitEndpoints bool) (string, error) {
-	if len(networkMap.Network.Applications) > 0 {
-		networkMap.Peers = applicationRoutePeers(networkMap, time.Now())
-	}
-	// This shared path also serves endpoint refresh and rollback. No implicit
-	// default-route permission may reappear through either of those paths.
-	peers, err := exitRoutePeers(Config{}, networkMap, nil, time.Now())
+	return wireGuardEngineUAPIForExit(privateKey, networkMap, listenPort, configured, firewallMark, endpointOverrides, emitEndpoints, Config{}, nil, time.Now())
+}
+
+// Explicit exit UAPI is only routing input, never evidence of OS protection.
+// Endpoint refresh/rollback through the ordinary wrapper still excludes defaults.
+func wireGuardEngineUAPIForExit(privateKey string, networkMap clientapi.RegisterNodeResponse, listenPort int, configured bool, firewallMark uint32, endpointOverrides map[string]string, emitEndpoints bool, cfg Config, selection *ClientExitSelection, now time.Time) (string, error) {
+	peers, err := wireGuardEngineRoutePeers(cfg, networkMap, selection, now)
 	if err != nil {
 		return "", err
 	}

@@ -32,7 +32,7 @@ func compileExitPacketPolicy(cfg Config, source api.RegisterNodeResponse, select
 		api.VerifyNetworkMapSignatureWithTrustBundle(source, trust) != nil || source.MapSignature == nil || !now.Before(source.MapSignature.ExpiresAt) {
 		return nil, errors.New("exit packet policy requires current recipient-bound signed map")
 	}
-	peers, err := exitRoutePeers(cfg, source, selection, now)
+	peers, err := wireGuardEngineRoutePeers(cfg, source, selection, now)
 	if err != nil {
 		return nil, err
 	}

@@ -335,6 +335,18 @@ conflict under an existing UUID, fresh rejection and acceptance-before-wake.
 The native host still supplies no exit adapter and does not advertise exit
 mutation readiness; these handlers do not establish OS implementation/evidence.
 
+Explicit engine route/UAPI projection now uses a shared peer transformation that
+checks the original signed exit authority before deriving application routes.
+Default prefixes are filtered after application projection as well. Adapter-only
+builders accept an explicit selection and observation time; ordinary engine paths
+and static export still cannot infer activation from persisted selection or `/0`.
+OS route input rejects explicit selection when route acceptance/installation is
+disabled. The exit TUN policy uses the same application-route projection while
+the independent application filter still enforces its own expiry and ports.
+`exit_projection_engine_test.go` checks both families, application route
+preservation, original-map immutability, rejected authority and suppressed routes.
+These are preflight builders; native guarded engine application remains open.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,
