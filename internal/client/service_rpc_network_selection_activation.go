@@ -84,10 +84,9 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionActivation(ctx context.Con
 		next := clonePersistentConfig(*plan.Target)
 		// Preserve requested connectivity, but no source network preferences,
 		// resources, exit selection, map or node authority cross this boundary.
-		next.ConnectionIntent = clonePersistentConfig(plan.Source).ConnectionIntent
-		if next.ConnectionIntent != nil {
-			next.ConnectionIntent.StartupRecovery = nil
-		}
+		// Resolve while the source profile/identity still exists: the private
+		// recovery binding cannot be checked against the isolated target.
+		next.ConnectionIntent = RequestedConnectionIntent(*current)
 		state := current.RPCState
 		profile := state.Profiles[plan.Profile.ID]
 		profile.Configuration = profileConfiguration(next)

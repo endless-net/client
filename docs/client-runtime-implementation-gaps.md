@@ -601,6 +601,16 @@ authenticated policy before restoring runtime admission. These units address
 the misleading intent seen in cached-map/sharing restart CI failures; actual
 traffic recovery and platform acceptance still need evidence.
 
+Network activation resolves that same context-bound requested intent against
+the still-current source, after confirmed source teardown and renewed target
+authority validation. It no longer copies the source's temporary disconnected
+gate and discards the saved Connect. The adopted target gets a detached intent
+with no source startup checkpoint. `TestNetworkSelectionPreservesBoundRequestedIntentAcrossActivationRestart`
+checks valid versus invalidated recovery and explicit Disconnect, disk restart
+between activation/apply, verified target-only Start, and no repeated effects
+after completion. This does not substitute requested intent for target policy
+authorization or qualify the native OS/backend selection path.
+
 `TestRPCRejectedObservationPreservesLastAcceptedStatus` exercises five config
 changes during a probe without an RPC revision change: active profile, node,
 network, owner and connection intent. The full-config fingerprint must reject

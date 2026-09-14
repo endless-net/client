@@ -65,9 +65,9 @@ func runtimeStartRecoveryBound(cfg Config) bool {
 		intent.StartupRecovery.PreviousState == ConnectionIntentDesiredConnected && intent.StartupRecovery.Context == runtimeStartRecoveryContext(cfg)
 }
 
-// RequestedConnectionIntent is a detached status projection, never admission
-// to start networking. The runtime's disconnected policy-recovery gate remains
-// in Config.ConnectionIntent until authenticated policy permits recovery.
+// RequestedConnectionIntent returns detached requested state, not authority
+// to start networking. Callers applying it must independently validate their
+// target policy/context. Reading it never changes the runtime recovery gate.
 func RequestedConnectionIntent(cfg Config) *ConnectionIntent {
 	if cfg.ConnectionIntent == nil {
 		return nil
