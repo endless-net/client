@@ -19,6 +19,20 @@ type inboundPacketFilter struct {
 	mu      sync.Mutex
 	blocked bool
 	flows   map[applicationPacket]inboundFlow
+	binding string
+}
+
+func (f *inboundPacketFilter) suspend(allowed bool, binding string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	changed := f.blocked == allowed || f.binding != binding
+	if f.binding != binding {
+		f.flows = nil
+	}
+	f.binding = binding
+	// Never enable new inbound traffic before the matching runtime commits.
+	f.blocked = f.blocked || !allowed
+	return changed
 }
 
 func (f *inboundPacketFilter) setAllowed(allowed bool) {

@@ -12,16 +12,17 @@ import (
 // managed lock wins over a previously saved conflicting override. This state is
 // part of each profile configuration and is never backend authorization.
 type ClientNetworkPreferences struct {
+	AllowInbound *bool `json:"allow_inbound,omitempty"`
 	AcceptDNS    *bool `json:"accept_dns,omitempty"`
 	AcceptRoutes *bool `json:"accept_routes,omitempty"`
 }
 
 type clientNetworkAcceptance struct {
-	dns, routes bool
+	dns, routes, inbound bool
 }
 
 func resolveNetworkAcceptance(cfg Config, source api.RegisterNodeResponse, now time.Time) (clientNetworkAcceptance, error) {
-	result := clientNetworkAcceptance{dns: true, routes: true}
+	result := clientNetworkAcceptance{dns: true, routes: true, inbound: true}
 	local := cfg.NetworkPreferences
 	policy := source.Network.ClientPolicy
 	if local == nil && policy == nil && source.MapSignature == nil && cfg.MapSigningTrust == nil {
@@ -44,11 +45,13 @@ func resolveNetworkAcceptance(cfg Config, source api.RegisterNodeResponse, now t
 		}
 		return value
 	}
-	var dns, routes *bool
+	var dns, routes, inbound *bool
 	if local != nil {
 		dns, routes = local.AcceptDNS, local.AcceptRoutes
+		inbound = local.AllowInbound
 	}
 	result.dns, result.routes = resolve(api.ClientSettingAcceptDNS, dns), resolve(api.ClientSettingAcceptRoutes, routes)
+	result.inbound = resolve(api.ClientSettingAllowInbound, inbound)
 	return result, nil
 }
 

@@ -35,6 +35,9 @@ func cloneNetworkPreferences(value *ClientNetworkPreferences) *ClientNetworkPref
 		return nil
 	}
 	copy := *value
+	if value.AllowInbound != nil {
+		copy.AllowInbound = proto.Bool(*value.AllowInbound)
+	}
 	if value.AcceptDNS != nil {
 		copy.AcceptDNS = proto.Bool(*value.AcceptDNS)
 	}
@@ -153,7 +156,7 @@ func (m *ClientRPCMutations) prepareNetworkPreferences(cfg *Config, op *ipc.Oper
 			}
 		}
 	}
-	if requested.AcceptDNS == nil && requested.AcceptRoutes == nil {
+	if requested.AcceptDNS == nil && requested.AcceptRoutes == nil && requested.AllowInbound == nil {
 		requested = nil
 	}
 	op.ProfileId = profile.ID

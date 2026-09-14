@@ -78,6 +78,7 @@ type WireGuardEngine struct {
 	pathWake          chan struct{}
 	pathCancel        context.CancelFunc
 	applicationFilter *applicationPacketFilter
+	inboundFilter     *inboundPacketFilter
 	peerACLFilter     *peerACLFilter
 	sharingFilter     *sharingPacketFilter
 	applicationCancel context.CancelFunc
@@ -187,6 +188,14 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 		return result, err
 	}
 	progress := wireGuardEngineApplyProgress{}
+	acceptance, err := resolveNetworkAcceptance(cfg, networkMap, time.Now())
+	if err != nil {
+		return result, err
+	}
+	if e.inboundFilter == nil {
+		e.inboundFilter = &inboundPacketFilter{}
+	}
+	inboundChanged := e.inboundFilter.suspend(acceptance.inbound, networkMap.Network.ID+"\x00"+networkMap.Node.ID+"\x00"+networkMap.Node.PublicKey)
 	if len(networkMap.Network.Applications) > 0 || len(networkMap.Network.SharePeerGrants) > 0 || e.sharingFilter.active() || e.applicationFilter != nil && e.applicationFilter.active() {
 		if err := verifyApplicationMap(cfg, networkMap); err != nil {
 			return result, err
@@ -214,6 +223,10 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 	peerACLChanged := e.peerACLFilter.suspend(aclPeers)
 	result, err = e.configureLocked(ctx, plan, previous, &progress)
 	if err == nil {
+		e.inboundFilter.setAllowed(acceptance.inbound)
+		if inboundChanged && !result.Changed {
+			result.Changed, result.Skipped, result.Reason = true, false, "inbound policy updated"
+		}
 		e.peerACLFilter.commit()
 		if peerACLChanged && !result.Changed {
 			result.Changed, result.Skipped, result.Reason = true, false, "peer ACL updated"
@@ -224,6 +237,7 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 		return result, nil
 	}
 	e.sharingFilter.withdraw()
+	e.inboundFilter.setAllowed(false)
 	e.peerACLFilter.withdraw()
 	if rollbackErr := e.restoreLocked(previous, progress); rollbackErr != nil {
 		return result, errors.Join(err, fmt.Errorf("rollback wireguard-go configuration: %w", rollbackErr))
@@ -253,6 +267,7 @@ func (e *WireGuardEngine) preflightLocked(cfg Config, networkMap clientapi.Regis
 	}
 	if _, err := RenderWireGuardWithOptionsChecked(plan.config, plan.networkMap, WireGuardRenderOptions{
 		sharingPacketEnforcement: true,
+		inboundPacketEnforcement: true,
 		ListenPort:               e.opts.ListenPort,
 		MTU:                      plan.mtu,
 		RouteTable:               cfg.WireGuardRouteTable,
@@ -549,7 +564,10 @@ func (e *WireGuardEngine) startLocked(mtu int) error {
 	if e.peerACLFilter == nil {
 		e.peerACLFilter = &peerACLFilter{}
 	}
-	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, sharing: e.sharingFilter, peerACL: e.peerACLFilter, flows: e.flows}, bind, logger)
+	if e.inboundFilter == nil {
+		e.inboundFilter = &inboundPacketFilter{}
+	}
+	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, sharing: e.sharingFilter, peerACL: e.peerACLFilter, flows: e.flows, inbound: e.inboundFilter}, bind, logger)
 	e.applicationFilter = filter
 	router := e.opts.router
 	if router == nil {
@@ -951,6 +969,9 @@ func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
 	}
 	if e.applicationFilter != nil {
 		e.applicationFilter.withdraw()
+	}
+	if e.inboundFilter != nil {
+		e.inboundFilter.suspend(false, "")
 	}
 	e.sharingFilter.withdraw()
 	if e.relayBridge != nil {

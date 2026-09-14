@@ -76,7 +76,7 @@ retain ordinary host routes but omit subnets, explicitly managed single-IP
 subnets and application routes. Signed sources are recipient-bound and checked
 before preference resolution. This is used by the existing OS router adapters,
 but the unit evidence is derived router configuration, not observed OS effects.
-Inbound filtering and OS effect qualification remain missing.
+Public inbound preference admission/projection and OS effect qualification remain missing.
 The worker increment below provides candidate apply and durable containment.
 Checked static export now receives the full Config and uses
 the same authenticated DNS/routes resolver; it cannot reintroduce a disabled
@@ -131,7 +131,7 @@ live and cancelled worker states without altering preference values.
 
 Inbound filter preparation: `inbound_filter.go` implements a bounded volatile
 outbound-flow table for restricting new inbound traffic while preserving matched
-TCP/UDP/ICMP replies. It is not yet wired into engine construction, policy resolver or public
+TCP/UDP/ICMP replies. It is not yet wired into the public
 preference patch. `TestInboundFilterTCPHandshakeExpiryAndPolicyChange` checks
 unsolicited TCP denial, handshake ordering, expiry and policy-change clearing;
 `TestInboundFilterUDPBindingBoundsAndReplyLifetime` checks port binding, fixed
@@ -143,8 +143,17 @@ seed its flow table. `TestInboundTUNFilteringPreservesBatchesAndCannotSeedDenied
 checks the actual wrapper with batch offsets, unsolicited reply denial, matched
 replies and an enabled preference that cannot bypass peer ACL.
 `TestInboundFilterEchoFamiliesAndExtensionRejection` checks IPv4/IPv6 echo
-identity/sequence, reply expiry and fragment rejection. Engine construction,
-identity-bound state reset, producer policy and public preferences remain open.
+identity/sequence, reply expiry and fragment rejection. Engine construction now
+installs this filter on the real userspace TUN. The shared producer-policy
+resolver includes optional AllowInbound, with locks taking precedence over local
+overrides. Configure tightens before apply and only relaxes after success;
+failure retains restriction. Identity changes and Down clear volatile flows.
+Static export rejects a resolved inbound restriction rather than dropping it.
+`TestInboundPolicyResolutionAndExportRestriction` covers signed baseline/reset,
+locks and checked-export rejection. `TestInboundEngineAppliesPolicyAndClearsIdentityFlows`
+exercises engine Configure with a test TUN/router, restriction and relaxation,
+and filter identity reset. OS qualification and public admission/projection
+remain open; these units are not system acceptance.
 
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
