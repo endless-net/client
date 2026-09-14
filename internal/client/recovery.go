@@ -101,6 +101,7 @@ func ApplyLocalLogoutCleanup(cfg *Config, now time.Time) error {
 }
 
 func clearNodeBoundState(cfg *Config) {
+	cfg.ExitSelection = nil
 	cfg.NodeID = ""
 	cfg.NetworkID = ""
 	cfg.NodeCredential = ""

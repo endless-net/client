@@ -45,6 +45,7 @@ type ClientRPCState struct {
 	Logout                *clientRPCLogout                    `json:"logout,omitempty"`
 	Trust                 *clientRPCTrust                     `json:"trust,omitempty"`
 	SessionRenewal        *clientRPCSessionRenewal            `json:"session_renewal,omitempty"`
+	ExitChange            *clientRPCExitChange                `json:"exit_change,omitempty"`
 	Bundles               map[string]clientRPCBundlePlan      `json:"bundles,omitempty"`
 }
 

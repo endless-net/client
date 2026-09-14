@@ -347,6 +347,16 @@ and unchanged signed source. This intentionally removes implicit exit behavior;
 it does not enable explicit Select/Clear, live exit-filter activation or OS
 fail-closed protection, which remain open.
 
+Internal exit admission now journals a recipient/peer-key-bound requested
+selection (or clear), previous selection, owner, profile and control origin before
+any routing effect. Exact supported family/LAN pairs are intersected with signed
+grant authorization and current map revision. `TestRPCExitSelectionAdmissionBindingAndRestart`
+covers invalid authority/policy/support, stale maps, privacy, pending conflicts,
+offline clear and replay across restart without reevaluating previously accepted
+support. `TestNodeCleanupRemovesBoundExitSelection` checks node/logout cleanup.
+These internal methods are not public RPC overrides: no worker or ready exit
+capability exists yet, and active routing is not changed by admission alone.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On

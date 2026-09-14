@@ -58,6 +58,7 @@ type Config struct {
 	MapHash                    string                          `json:"map_hash,omitempty"`
 	SubnetRouterSNAT           bool                            `json:"subnet_router_snat,omitempty"`
 	ExitLANPolicy              string                          `json:"exit_lan_policy,omitempty"`
+	ExitSelection              *ClientExitSelection            `json:"exit_selection,omitempty"`
 	WireGuardMTU               int                             `json:"wireguard_mtu,omitempty"`
 	WireGuardRouteTable        string                          `json:"wireguard_route_table,omitempty"`
 	CachedMap                  *clientapi.RegisterNodeResponse `json:"cached_map,omitempty"`
