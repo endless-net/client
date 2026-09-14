@@ -46,6 +46,7 @@ func (s *ClientRPCService) sessionAs(ctx context.Context, peer local.Peer, reque
 	}
 	session := &ipc.Session{State: ipc.SessionState_SESSION_STATE_NOT_AUTHENTICATED,
 		Renewal: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_UNSUPPORTED, ReasonKey: "session_renewal_not_implemented"}}
+	var stored *StoredUserSession
 	if selected.Token != "" {
 		if s.SessionProvider == nil {
 			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
@@ -61,6 +62,7 @@ func (s *ClientRPCService) sessionAs(ctx context.Context, peer local.Peer, reque
 			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 		}
 		observed := response.Session
+		stored = &StoredUserSession{ControlOrigin: profile.ControlOrigin, TokenBinding: sessionTokenBinding(selected.Token), Response: proto.Clone(response).(*backend.GetSessionResponse)}
 		switch observed.State {
 		case backend.UserSessionState_USER_SESSION_STATE_ACTIVE:
 			session.State = ipc.SessionState_SESSION_STATE_ACTIVE
@@ -99,6 +101,29 @@ func (s *ClientRPCService) sessionAs(ctx context.Context, peer local.Peer, reque
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	unchanged := stored != nil && selected.UserSession != nil &&
+		stored.ControlOrigin == selected.UserSession.ControlOrigin && stored.TokenBinding == selected.UserSession.TokenBinding &&
+		proto.Equal(stored.Response, selected.UserSession.Response)
+	if stored != nil && !unchanged {
+		if err := s.mutations.store.Update(func(next *Config) error {
+			if !reflect.DeepEqual(clonePersistentConfig(cfg), clonePersistentConfig(*next)) {
+				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			}
+			if profile.ID == next.RPCState.ActiveProfileID {
+				next.UserSession = stored
+			} else {
+				p := next.RPCState.Profiles[profile.ID]
+				p.Configuration.UserSession = stored
+				next.RPCState.Profiles[profile.ID] = p
+			}
+			next.RPCState.Revision++
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+		cfg = s.mutations.store.Read()
+		s.mutations.publishMutationLocked(nil, ipc.Domain_DOMAIN_SESSION)
 	}
 	return &ipc.GetSessionResponse{Session: session, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}}, nil
 }

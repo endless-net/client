@@ -339,6 +339,7 @@ func saveConfigFile(path string, cfg Config) error {
 }
 
 func normalizePersistentConfig(cfg Config) Config {
+	clearStaleUserSessions(&cfg)
 	cfg.StateFormat = CurrentConfigStateFormat
 	cfg.StateVersion = CurrentConfigStateVersion
 	cfg.ControlPlaneURLs = clientapi.NormalizeControlPlaneURLs(cfg.ControlPlaneURLs...)

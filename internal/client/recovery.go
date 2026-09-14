@@ -90,6 +90,7 @@ func ApplyLocalLogoutCleanup(cfg *Config, now time.Time) error {
 	}
 	clearNodeBoundState(cfg)
 	cfg.Token = ""
+	cfg.UserSession = nil
 	cfg.ActiveAccountID = ""
 	cfg.ConnectionIntent = &ConnectionIntent{
 		DesiredState: ConnectionIntentDesiredDisconnected,

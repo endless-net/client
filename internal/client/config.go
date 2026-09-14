@@ -37,6 +37,7 @@ type Config struct {
 	ControlPlaneURLs           []string                        `json:"control_plane_urls,omitempty"`
 	ManagementURL              string                          `json:"management_url,omitempty"`
 	Token                      string                          `json:"token"`
+	UserSession                *StoredUserSession              `json:"user_session,omitempty"`
 	ActiveAccountID            string                          `json:"active_account_id,omitempty"`
 	IdentityPrivateKey         string                          `json:"identity_private_key,omitempty"`
 	PrivateKey                 string                          `json:"private_key"`
@@ -268,7 +269,7 @@ func validateConfigFilePermissions(path string, cfg Config) error {
 func configContainsSecrets(cfg Config) bool {
 	// RPC state includes a private digest key, inactive profile credentials and
 	// resumable enrollment authorization even before root enrollment exists.
-	return cfg.RPCState != nil || cfg.PendingDirectRegistration != nil || strings.TrimSpace(cfg.Token) != "" ||
+	return cfg.UserSession != nil || cfg.RPCState != nil || cfg.PendingDirectRegistration != nil || strings.TrimSpace(cfg.Token) != "" ||
 		strings.TrimSpace(cfg.IdentityPrivateKey) != "" ||
 		strings.TrimSpace(cfg.PrivateKey) != "" ||
 		strings.TrimSpace(cfg.NodeCredential) != "" ||

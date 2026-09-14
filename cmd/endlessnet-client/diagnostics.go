@@ -283,7 +283,7 @@ func sensitiveDiagnosticsKey(key string) bool {
 		return false
 	}
 	switch normalized {
-	case "token", "enroll_token", "enrollment_token", "join_token", "access_token", "refresh_token", "session_token", "authorization":
+	case "token", "enroll_token", "enrollment_token", "join_token", "access_token", "refresh_token", "session_token", "authorization", "bearer", "renewal_authorization", "renewalauthorization", "user_session", "usersession":
 		return true
 	}
 	return strings.Contains(normalized, "private_key") ||
