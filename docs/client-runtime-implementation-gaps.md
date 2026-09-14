@@ -65,6 +65,18 @@ short CI; Windows-local checks do not execute those OS-tagged tests. Actual
 platform cleanup, Linux policy-rule absence and external deletion/replacement
 of macOS routes still need qualification and reconciliation evidence.
 
+Linux policy-rule cleanup now checks the family/table/mark-filtered JSON dump
+after deletion, including when the delete command failed. Only confirmed absence
+finishes the step; remaining duplicates, malformed/oversized dumps, failed
+observation and cancellation retain it. The parser uses iproute2's
+`suppress_prefixlen` JSON attribute for the main-table suppression rule, as
+defined by the upstream [rule implementation](https://github.com/iproute2/iproute2/blob/main/ip/iprule.c).
+The shared runner/parser tests cover both families and selectors locally.
+Native policy-rule ownership and platform effect qualification remain open.
+The a980455 push short run passed on Linux; macOS verification was skipped by
+the old push gate. Push unit CI now runs one short pass on Linux, Windows and
+macOS, including the nested IPC module, with no installer/system jobs enabled.
+
 The user accepted the runtime-start default on 2026-09-14: KEEP_INTENT,
 with DISCONNECT when no explicit intent is saved. The agent now initializes
 that durable baseline under its lifetime lock before engine creation, RPC workers

@@ -205,8 +205,13 @@ func (r *linuxWireGuardEngineRouter) cleanupPlan(cfg wireGuardEngineRouterConfig
 		}
 		if route.Bits() == 0 && cfg.FirewallMark != 0 {
 			table := strconv.FormatUint(uint64(cfg.FirewallMark), 10)
-			add(false, "ip", family, "rule", "del", "not", "fwmark", table, "table", table)
-			add(false, "ip", family, "rule", "del", "table", "main", "suppress_prefixlength", "0")
+			plan.pending = append(plan.pending,
+				func(ctx context.Context) error {
+					return removeLinuxPolicyRule(ctx, r.runner, family, cfg.FirewallMark, false)
+				},
+				func(ctx context.Context) error {
+					return removeLinuxPolicyRule(ctx, r.runner, family, cfg.FirewallMark, true)
+				})
 			add(true, "ip", family, "route", "flush", "exact", route.String(), "dev", cfg.Interface, "table", table)
 			continue
 		}
