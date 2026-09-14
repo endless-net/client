@@ -404,7 +404,7 @@ func cmdAgent(args []string) error {
 			return err
 		}
 	}
-	run := func(parentCtx context.Context) (runErr error) {
+	run := func(parentCtx context.Context, lifecycleEvents <-chan client.RuntimeLifecycleEvent) (runErr error) {
 		ctx, cancelRuntime := context.WithCancelCause(parentCtx)
 		defer cancelRuntime(nil)
 		lockPath, err := client.AgentLockPath(*configPath)
@@ -474,6 +474,15 @@ func cmdAgent(args []string) error {
 		}
 		defer func() {
 			if err := stopIPC(); runErr == nil && err != nil {
+				runErr = err
+			}
+		}()
+		stopLifecycle, err := startAgentRuntimeLifecycle(ctx, cancelRuntime, rpcMutations, ipcOpts, lifecycleEvents, wireGuard)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err := stopLifecycle(); runErr == nil && err != nil {
 				runErr = err
 			}
 		}()
@@ -706,7 +715,7 @@ func cmdAgent(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return run(ctx)
+	return run(ctx, nil)
 }
 
 func runAgentCachedBootstrap(ctx context.Context, opts agentIterationOptions) (client.AgentSnapshot, error) {

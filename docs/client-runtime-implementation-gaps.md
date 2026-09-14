@@ -44,7 +44,8 @@ its pending state instead of returning success on a repeated Down. Its native
 script enumerates then filters the owned interface so absent entries can be
 retried without suppressing command failures. Engine and Windows command-runner
 units cover these paths, not actual platform cleanup or SCM event delivery.
-The gate is not yet wired to trusted OS events or runtime worker suspension.
+Windows SCM power events now feed the gate through the agent consumer described
+below; other native event adapters remain open.
 The internal `ApplyRuntimeLifecycleIntent` handler now resolves signed
 logoff/suspend/resume policy and commits the current intent decision before
 cancelling an in-flight apply. It validates the logoff owner, rejects unknown
@@ -62,9 +63,23 @@ ordinary reconciliation without applying a saved map. Foreign logoff is rejected
 before engine access, and Close requires cancelled worker lifetime so shutdown
 cannot release live workers into an accidental reconnect. Executor units cover
 failed teardown, failed resume/source, Disconnect during suspend and shutdown.
-The executor is not yet attached to agent-native OS subscriptions; platform
-delivery, callback latency, policy refresh while suspended and effect observation
-remain open. The b4165b8 short run passed on Linux, Windows and macOS.
+The Windows service now accepts SCM power notifications and queues copied
+PBT_APMSUSPEND / PBT_APMRESUMEAUTOMATIC values to the agent executor. It ignores
+the subsequent user-interaction resume notification to avoid a second lifecycle
+decision. Microsoft documents the automatic wake event as occurring on each
+[resume](https://learn.microsoft.com/en-us/windows/win32/power/pbt-apmresumeautomatic)
+and the limited processing time for
+[suspend](https://learn.microsoft.com/en-us/windows/win32/power/pbt-apmsuspend).
+The bounded queue cancels the runtime on overflow instead of silently dropping
+an event. The agent serializes delivery, retries an unsuccessful latest transition,
+and releases the held worker lock on cancelled lifetime before worker shutdown.
+Headless service mode uses the same durable mutations without requiring an IPC
+listener. `windows_service_lifecycle_windows_test.go` covers scalar delivery,
+ignored events, stop and overflow; `agent_runtime_lifecycle_test.go` covers
+durable default intent, held gate, retry, resume wake, source loss and shutdown.
+These are synthetic source/engine units. Native delivery, callback latency,
+policy refresh while suspended, effect observation, logoff and non-Windows
+subscriptions remain open. The b4165b8 short run passed on all three OS runners.
 The pinned x/sys SCM host forwards SessionChange EventData after its callback
 returns; the adapter must copy session data during a live native callback rather
 than dereference that forwarded pointer later.

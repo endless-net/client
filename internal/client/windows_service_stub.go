@@ -7,6 +7,6 @@ import (
 	"errors"
 )
 
-func RunWindowsService(name string, run func(context.Context) error) error {
+func RunWindowsService(name string, run func(context.Context, <-chan RuntimeLifecycleEvent) error) error {
 	return errors.New("windows service mode is only supported on Windows")
 }
