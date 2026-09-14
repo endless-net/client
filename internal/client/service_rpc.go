@@ -492,6 +492,13 @@ func (m *ClientRPCMutations) ReconcileOperation(id string, apply func(*Config, *
 	if state := m.store.Read().RPCState; state != nil && state.ActiveProfileID != previousActive {
 		m.observedStatus = nil
 	}
+	if updated.Kind == ipc.OperationKind_OPERATION_KIND_SELECT_NETWORK {
+		if state := m.store.Read().RPCState; state != nil && state.NetworkSelection != nil && state.NetworkSelection.DownStarted {
+			// The old observation belongs to the source identity. Neither a
+			// durable teardown marker nor activation proves a connected target.
+			m.observedStatus = nil
+		}
+	}
 	if (updated.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT || updated.Kind == ipc.OperationKind_OPERATION_KIND_LOGOUT) && updated.State == ipc.OperationState_OPERATION_STATE_SUCCEEDED {
 		m.observedStatus = nil
 	}

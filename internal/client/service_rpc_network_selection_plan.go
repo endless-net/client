@@ -21,6 +21,8 @@ type clientRPCNetworkSelection struct {
 	Source            Config           `json:"source"`
 	Target            *Config          `json:"target,omitempty"`
 	RegistrationReady bool             `json:"registration_ready,omitempty"`
+	DownStarted       bool             `json:"down_started,omitempty"`
+	Activated         bool             `json:"activated,omitempty"`
 }
 
 func networkSelectionContext(cfg Config) Config {
