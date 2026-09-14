@@ -420,6 +420,11 @@ func cmdAgent(args []string) error {
 		if err != nil {
 			return err
 		}
+		if !*offline {
+			if err := refreshAgentStartupPolicy(ctx, configStore, timeout); err != nil {
+				log.Printf("startup policy refresh unavailable; local recovery remains available")
+			}
+		}
 		if err := client.NewConnectionIntentStore(configStore).InitializeRuntimeIntent(); err != nil {
 			return err
 		}

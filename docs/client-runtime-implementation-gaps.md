@@ -44,7 +44,14 @@ Startup additionally rejects a missing/mismatched active profile and holds an
 enrolled identity with no cached map down instead of executing local CONNECT or
 restoring a connected intent. The context regression checks persisted blocking
 and restart without rewriting recovery records. Automatic signed-source refresh
-remains open. Missing-map reads now preserve requested intent but report unknown
+now has a bounded real agent preflight: when reconnect is intended and the cached
+authority is unusable, it fetches a full map over the producer stream, verifies
+trust/signature and adopts only map fields if identity, intent, profile/recovery
+state and prior authority are unchanged. It runs before engine creation and never
+applies routes. A local HTTP fixture covers signed success, tampering, cancellation
+and Disconnect during fetch. Persistent retry after an offline startup and durable
+preservation of the original KEEP_INTENT across that failure remain open.
+Missing-map reads now preserve requested intent but report unknown
 effective value/source and temporary unavailability; set/reset reject the whole
 patch without modifying durable settings. The context regression checks this
 projection/admission parity. Unregistered profiles retain the accepted default.
