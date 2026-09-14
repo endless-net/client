@@ -16,3 +16,8 @@ type ClientRPCNetworkRegistrationInput struct {
 }
 
 type ClientRPCNetworkRegistrationProvider func(context.Context, Config, ClientRPCNetworkRegistrationInput, func(Config) error) (*ipc.UserAction, error)
+
+// ClientRPCNetworkTargetCleanupProvider compensates an isolated registration.
+// It must resolve an uncertain saved request before revoking its node, checkpoint
+// recovered authority before revocation, and never revoke the shared session.
+type ClientRPCNetworkTargetCleanupProvider func(context.Context, Config, ClientRPCNetworkRegistrationInput, func(Config) error) error
