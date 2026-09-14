@@ -110,7 +110,7 @@ func TestServiceDiscoveryUsesSignedHosts(t *testing.T) {
 
 func TestServiceDiscoveryIsInstalledByRuntimeRouter(t *testing.T) {
 	opts, private := signedServiceDNSFixture(t)
-	cfg := Config{MapSigningTrust: opts.SigningTrust}
+	cfg := Config{NodeID: opts.NetworkMap.Node.ID, NetworkID: opts.NetworkMap.Network.ID, MapSigningTrust: opts.SigningTrust}
 	router, err := buildWireGuardEngineRouterConfig("endlessnet", 1420, cfg, opts.NetworkMap)
 	if err != nil {
 		t.Fatal(err)

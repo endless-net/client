@@ -139,6 +139,10 @@ type wireGuardEngineRouterConfig struct {
 
 func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config, networkMap clientapi.RegisterNodeResponse) (wireGuardEngineRouterConfig, error) {
 	originalMap := networkMap
+	acceptance, err := resolveNetworkAcceptance(cfg, originalMap, time.Now())
+	if err != nil {
+		return wireGuardEngineRouterConfig{}, err
+	}
 	if len(networkMap.Network.Applications) > 0 {
 		if err := verifyApplicationMap(cfg, networkMap); err != nil {
 			return wireGuardEngineRouterConfig{}, err
@@ -284,6 +288,13 @@ func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config,
 	blockLAN, err := ExitLANPolicyBlocksLocalLAN(cfg.ExitLANPolicy)
 	if err != nil {
 		return out, err
+	}
+	if !acceptance.dns {
+		out.DNS, out.DNSDomains, out.SearchDomains = nil, nil, nil
+		out.DNSProxy, out.DNSOverride, out.DNSConfigPresent = nil, false, true
+	}
+	if !acceptance.routes {
+		out.Routes = restrictAcceptedResourceRoutes(out.Routes, originalMap)
 	}
 	if out.DNSProxy != nil {
 		out.DNSProxy.NetworkMap = originalMap

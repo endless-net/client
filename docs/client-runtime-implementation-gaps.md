@@ -68,6 +68,19 @@ networks, exit, preferences, managed settings and resources even when Status is
 unchanged. This does not implement resource effects or OS lifecycle events;
 inactive-profile and complete cross-domain invalidation audit remains open.
 
+Network acceptance increment: `network_preferences.go` persists optional DNS and
+route intent in the profile Config and resolves signed managed baselines/locks.
+The shared userspace router builder consumes this resolution: disabled DNS has
+no proxy, resolver, search or split-domain configuration; disabled learned routes
+retain ordinary host routes but omit subnets, explicitly managed single-IP
+subnets and application routes. Signed sources are recipient-bound and checked
+before preference resolution. This is used by the existing OS router adapters,
+but the unit evidence is derived router configuration, not observed OS effects.
+Public Set/Reset admission, a durable apply/rollback worker, requested/effective
+projection and resource invalidation after local changes remain missing, as do
+inbound filtering and static-export preference enforcement. No additional
+preference capability is advertised by this increment.
+
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
 

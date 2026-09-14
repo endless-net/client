@@ -117,6 +117,19 @@ families are identified in the IT table, rather than counted as proof by name.
 
 ## Remaining assertion audit
 
+US-10, IT-16, RULE-06: `TestNetworkAcceptancePolicyAndRouterEffects` covers the
+DNS/routes default, explicit false, managed false baseline, unlocked user
+override, both lock values, and absent overrides restoring the baseline. It
+asserts derived DNS/proxy withdrawal, ordinary IPv4/IPv6 host-route retention,
+subnet/application and explicit single-IP subnet exclusion, and immutable signed
+input. `TestNetworkAcceptanceRejectsUntrustedContext` rejects tampered or removed
+policy, expired/missing signature, missing trust and foreign node/network.
+`TestNetworkPreferencePresenceSurvivesStore` checks false versus absence after
+disk reopen and detached read values. Root short, vet, configured lint and
+goimports passed on Windows on 2026-09-14. Public mutations, durable apply/rollback,
+inbound preference, actual OS observations and export consistency remain open;
+these tests do not close IT-16 or UI-AC-19.
+
 US-04/05/10/11, IT-27: `TestRPCCatalogChangesInvalidateDespiteIdenticalStatus`
 checks scoped invalidations for network/peer/exit/preference/managed/resource
 projections when the status bytes stay unchanged but the map, policy, trust,
