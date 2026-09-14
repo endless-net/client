@@ -29,12 +29,14 @@ func (s *ClientRPCService) startExitWorker(ctx context.Context, executor clientR
 	executor.Modes = slices.Clone(executor.Modes)
 	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	s.exitWorker = w
+	s.exitModes = slices.Clone(executor.Modes)
 	done := make(chan error, 1)
 	go func() {
 		var result error
 		defer func() {
 			s.exitMu.Lock()
 			s.exitWorker = nil
+			s.exitModes = nil
 			s.exitMu.Unlock()
 			close(w.done)
 			done <- result

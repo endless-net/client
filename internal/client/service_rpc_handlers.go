@@ -52,6 +52,7 @@ type ClientRPCService struct {
 	networkWorker    *clientRPCProfileWorker
 	exitMu           sync.Mutex
 	exitWorker       *clientRPCProfileWorker
+	exitModes        []clientRPCExitMode // guarded by exitMu
 }
 
 func NewClientRPCService(mutations *ClientRPCMutations, build *ipc.BuildIdentity) *ClientRPCService {

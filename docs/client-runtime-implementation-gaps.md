@@ -326,6 +326,15 @@ timer retry without another request, and cancel an in-flight native callback
 without dropping its journal. The native Serve path still needs startup OS
 containment and a complete adapter before this worker may expose exit readiness.
 
+Public SelectExitNode/ClearExitNode handlers now route admission through the
+exit worker lifetime lock and wake only after durable acceptance. Without a
+live worker they authenticate and resolve exact persisted replay before rejecting
+new effects. `service_rpc_exit_public_test.go` covers pending/completed replay
+across restart, cancelled worker lifetime, foreign/anonymous callers, payload
+conflict under an existing UUID, fresh rejection and acceptance-before-wake.
+The native host still supplies no exit adapter and does not advertise exit
+mutation readiness; these handlers do not establish OS implementation/evidence.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,
