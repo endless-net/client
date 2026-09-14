@@ -26,6 +26,7 @@ type ClientRPCService struct {
 	NetworksProvider       ClientRPCNetworksProvider
 	DiagnosticsProvider    ClientRPCDiagnosticsProvider
 	PeersProvider          ClientRPCPeersProvider
+	SessionProvider        ClientRPCSessionProvider
 	clientipcconnect.UnimplementedClientServiceHandler
 	mutations        *ClientRPCMutations
 	build            *ipc.BuildIdentity
