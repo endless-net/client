@@ -34,6 +34,9 @@ func (m *ClientRPCMutations) completeSessionRenewal(id string, result *backend.S
 			!m.now().Before(result.ReplayExpiresAt.AsTime()) {
 			return stale()
 		}
+		if plan.BackendOperationID != "" && (plan.BackendOperationID != result.OperationId || !proto.Equal(plan.ReplayExpiresAt, result.ReplayExpiresAt)) {
+			return stale()
+		}
 		rotated := result.GetResult()
 		if rotated.Session.UserId != plan.UserID || rotated.AccessBearer == cfg.Token ||
 			(rotated.Session.ExpiresAt != nil && !m.now().Before(rotated.Session.ExpiresAt.AsTime())) {

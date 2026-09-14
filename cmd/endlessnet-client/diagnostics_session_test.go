@@ -3,7 +3,7 @@ package main
 import "testing"
 
 func TestDiagnosticsSessionAuthorityKeysAreSensitive(t *testing.T) {
-	for _, key := range []string{"bearer", "Bearer", "renewal_authorization", "renewalAuthorization", "renewal_grant", "renewalGrant", "user_session", "UserSession"} {
+	for _, key := range []string{"bearer", "Bearer", "poll_authorization", "pollAuthorization", "renewal_authorization", "renewalAuthorization", "renewal_grant", "renewalGrant", "user_session", "UserSession"} {
 		if !sensitiveDiagnosticsKey(key) {
 			t.Errorf("session authority key is not redacted: %s", key)
 		}

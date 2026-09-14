@@ -245,6 +245,17 @@ including unchanged durable state on rejection and preserved disconnected intent
 and node registration. Network dispatch, polling operation-ID binding, browser
 approval, ambiguous-failure retry and cleanup still require implementation.
 
+Internal browser checkpointing now persists backend operation ID, private polling
+authorization, replay deadline and next-poll time atomically with WAITING_FOR_USER.
+The producer validator checks request binding and the configured control origin;
+untrusted origins, elapsed actions, malformed polling authority and URLs carrying
+known bearer material (including percent-encoded material) are rejected. Later
+checkpoints and successful completion cannot switch a pinned backend operation
+ID/replay deadline. `TestRPCSessionBrowserCheckpointPrivacyAndBinding` covers
+checkpoint restart/privacy and these negative cases. The network polling worker,
+additional approved authentication origins and public RPC admission remain open;
+this internal checkpoint is not browser-flow acceptance.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On

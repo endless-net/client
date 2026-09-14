@@ -1,6 +1,8 @@
 package client
 
 import (
+	"time"
+
 	"connectrpc.com/connect"
 	api "github.com/endless-net/client-api/clientapi/v1"
 	backend "github.com/endless-net/client-api/clientapi/v1/clientrpc"
@@ -8,18 +10,23 @@ import (
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Private durable execution input. No bearer belongs in the public Operation.
 type clientRPCSessionRenewal struct {
-	OperationID   string                               `json:"operation_id"`
-	ProfileID     string                               `json:"profile_id"`
-	ControlOrigin string                               `json:"control_origin"`
-	TokenBinding  string                               `json:"token_binding"`
-	UserID        string                               `json:"user_id"`
-	OwnerID       string                               `json:"owner_id"`
-	Request       *backend.RenewSessionRequest         `json:"request"`
-	Authorization *backend.SessionRenewalAuthorization `json:"authorization"`
+	OperationID        string                               `json:"operation_id"`
+	ProfileID          string                               `json:"profile_id"`
+	ControlOrigin      string                               `json:"control_origin"`
+	TokenBinding       string                               `json:"token_binding"`
+	UserID             string                               `json:"user_id"`
+	OwnerID            string                               `json:"owner_id"`
+	Request            *backend.RenewSessionRequest         `json:"request"`
+	Authorization      *backend.SessionRenewalAuthorization `json:"authorization"`
+	BackendOperationID string                               `json:"backend_operation_id,omitempty"`
+	PollAuthorization  string                               `json:"poll_authorization,omitempty"`
+	ReplayExpiresAt    *timestamppb.Timestamp               `json:"replay_expires_at,omitempty"`
+	NextPollAt         time.Time                            `json:"next_poll_at,omitempty"`
 }
 
 func (m *ClientRPCMutations) renewSessionAs(peer local.Peer, request *ipc.RenewSessionRequest) (*ipc.Operation, error) {
