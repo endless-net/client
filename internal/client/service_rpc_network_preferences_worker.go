@@ -64,15 +64,20 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 	}
 	if !plan.Containing {
 		candidate, err := m.networkPreferenceCandidate(m.store.Read(), plan)
+		failureCode := ipc.ErrorCode_ERROR_CODE_UNAVAILABLE
+		failureReason := "preferences_source_unavailable"
 		if err == nil && candidate.ConnectionIntent != nil && candidate.ConnectionIntent.DesiredState == ConnectionIntentDesiredConnected {
+			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, "preferences_apply_failed"
 			err = m.applyProfileConnection(ctx, driver, candidate)
 		} else if err == nil {
+			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, "preferences_down_failed"
 			_, err = driver.Stop(ctx)
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if err == nil {
+			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_STALE_STATE, "preferences_context_changed"
 			_, err = m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
 				if _, err := m.networkPreferenceCandidate(*cfg, plan); err != nil {
 					return err
@@ -96,7 +101,17 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 			}
 			cfg.RPCState.NetworkPreferenceChange.Containing = true
-			cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "preferences_apply_failed", UpdatedAt: m.now().UTC().Format(time.RFC3339Nano)}
+			if failure := rpc.FailureFromError(err); failure != nil && failure.Code == ipc.ErrorCode_ERROR_CODE_STALE_STATE {
+				failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_STALE_STATE, "preferences_context_changed"
+			}
+			if cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == ConnectionIntentDesiredDisconnected && !reflect.DeepEqual(cfg.ConnectionIntent, plan.PreviousIntent) {
+				failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_CANCELLED, "preferences_superseded_by_disconnect"
+			}
+			cfg.RPCState.NetworkPreferenceChange.FailureCode = failureCode
+			cfg.RPCState.NetworkPreferenceChange.FailureReason = failureReason
+			if cfg.ConnectionIntent == nil || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
+				cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "preferences_apply_failed", UpdatedAt: m.now().UTC().Format(time.RFC3339Nano)}
+			}
 			return nil
 		}); err != nil {
 			return err
@@ -109,10 +124,17 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 		return err
 	}
 	_, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
+		plan := cfg.RPCState.NetworkPreferenceChange
+		if plan == nil || plan.OperationID != id || !plan.Containing || plan.FailureCode == ipc.ErrorCode_ERROR_CODE_UNSPECIFIED || plan.FailureReason == "" {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
 		cfg.RPCState.NetworkPreferenceChange = nil
 		op.State = ipc.OperationState_OPERATION_STATE_FAILED
+		if plan.FailureCode == ipc.ErrorCode_ERROR_CODE_CANCELLED {
+			op.State = ipc.OperationState_OPERATION_STATE_CANCELLED
+		}
 		op.Continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN
-		op.Outcome = &ipc.Operation_Failure{Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, ReasonKey: "preferences_apply_contained"}}
+		op.Outcome = &ipc.Operation_Failure{Failure: &ipc.Failure{Code: plan.FailureCode, ReasonKey: plan.FailureReason}}
 		return nil
 	})
 	return err

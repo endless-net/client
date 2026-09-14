@@ -26,6 +26,8 @@ type clientRPCNetworkPreferenceChange struct {
 	Changed         bool                      `json:"changed"`
 	PreviousIntent  *ConnectionIntent         `json:"previous_intent,omitempty"`
 	Containing      bool                      `json:"containing,omitempty"`
+	FailureCode     ipc.ErrorCode             `json:"failure_code,omitempty"`
+	FailureReason   string                    `json:"failure_reason,omitempty"`
 }
 
 func cloneNetworkPreferences(value *ClientNetworkPreferences) *ClientNetworkPreferences {

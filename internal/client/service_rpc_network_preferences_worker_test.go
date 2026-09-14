@@ -86,8 +86,23 @@ func TestNetworkPreferenceWorkerApplyAndContainment(t *testing.T) {
 				if result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || cfg.NetworkPreferences == nil || cfg.RPCState.Profiles[profile.ProfileId].UIQuit == nil {
 					t.Fatal("successful effect did not commit atomic patch")
 				}
-			} else if result.State != ipc.OperationState_OPERATION_STATE_FAILED || cfg.NetworkPreferences != nil || cfg.RPCState.Profiles[profile.ProfileId].UIQuit != nil || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected || stops != 1 {
-				t.Fatal("failed/superseded apply escaped containment")
+			} else {
+				wantState, wantCode := ipc.OperationState_OPERATION_STATE_FAILED, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED
+				if scenario == "disconnect_during_apply" {
+					wantState, wantCode = ipc.OperationState_OPERATION_STATE_CANCELLED, ipc.ErrorCode_ERROR_CODE_CANCELLED
+					if cfg.ConnectionIntent.Reason != "user_disconnect" {
+						t.Fatal("containment overwrote accepted disconnect reason")
+					}
+				}
+				if scenario == "map_changed_during_apply" {
+					wantCode = ipc.ErrorCode_ERROR_CODE_STALE_STATE
+				}
+				if scenario == "tampered_before_apply" {
+					wantCode = ipc.ErrorCode_ERROR_CODE_UNAVAILABLE
+				}
+				if result.State != wantState || result.GetFailure().GetCode() != wantCode || cfg.NetworkPreferences != nil || cfg.RPCState.Profiles[profile.ProfileId].UIQuit != nil || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected || stops != 1 {
+					t.Fatal("failure cause or containment lost", result)
+				}
 			}
 			if (scenario == "tampered_before_apply" || scenario == "disconnected") && starts != 0 {
 				t.Fatal("worker started unauthorized or disconnected candidate")
@@ -104,7 +119,7 @@ func TestNetworkPreferenceContainmentRecoversAfterDownFailure(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := m.setNetworkPreferencesAs(owner, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{AcceptDns: proto.Bool(false)}})
+	op, err := m.setNetworkPreferencesAs(owner, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{AcceptDns: proto.Bool(false)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,5 +149,9 @@ func TestNetworkPreferenceContainmentRecoversAfterDownFailure(t *testing.T) {
 	}
 	if m.store.Read().RPCState.NetworkPreferenceChange != nil || m.store.Read().NetworkPreferences != nil {
 		t.Fatal("recovered containment applied candidate or retained plan")
+	}
+	result, err := m.operationAs(owner, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
+	if err != nil || result.GetFailure().GetCode() != ipc.ErrorCode_ERROR_CODE_APPLY_FAILED || result.GetFailure().GetReasonKey() != "preferences_apply_failed" {
+		t.Fatal("restart lost original failure cause", err, result)
 	}
 }

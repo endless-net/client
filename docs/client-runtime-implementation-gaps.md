@@ -105,8 +105,12 @@ connection. `TestNetworkPreferenceWorkerApplyAndContainment` covers successful
 candidate delivery, offline application, failure, concurrent Disconnect/map
 tampering and shutdown. `TestNetworkPreferenceContainmentRecoversAfterDownFailure`
 covers the persistent recovery stage. Driver callback success is unit evidence,
-not OS observation. Public admission/projection, observed effects, richer failure
-outcomes and resource invalidation remain required.
+not OS observation. Containment now persists the original bounded failure
+code/reason before Down: concurrent Disconnect yields CANCELLED and retains its
+accepted intent reason; context drift yields STALE_STATE, invalid signed source
+yields UNAVAILABLE, and driver errors yield APPLY_FAILED. Restart tests assert
+that a later Down failure does not replace the original apply cause. Public
+admission/projection, observed effects and resource invalidation remain required.
 
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
