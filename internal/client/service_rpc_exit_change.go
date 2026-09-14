@@ -13,15 +13,16 @@ import (
 )
 
 type clientRPCExitChange struct {
-	OperationID   string               `json:"operation_id"`
-	ProfileID     string               `json:"profile_id"`
-	OwnerID       string               `json:"owner_id"`
-	ControlOrigin string               `json:"control_origin"`
-	NodeID        string               `json:"node_id"`
-	NetworkID     string               `json:"network_id"`
-	Requested     *ClientExitSelection `json:"requested,omitempty"`
-	Previous      *ClientExitSelection `json:"previous,omitempty"`
-	NextAttemptAt time.Time            `json:"next_attempt_at,omitempty"`
+	OperationID    string               `json:"operation_id"`
+	ProfileID      string               `json:"profile_id"`
+	OwnerID        string               `json:"owner_id"`
+	ControlOrigin  string               `json:"control_origin"`
+	NodeID         string               `json:"node_id"`
+	NetworkID      string               `json:"network_id"`
+	Requested      *ClientExitSelection `json:"requested,omitempty"`
+	Previous       *ClientExitSelection `json:"previous,omitempty"`
+	PreviousIntent *ConnectionIntent    `json:"previous_intent,omitempty"`
+	NextAttemptAt  time.Time            `json:"next_attempt_at,omitempty"`
 }
 
 // Trusted executor support is a set of exact pairs, never a Cartesian product
@@ -60,7 +61,12 @@ func (m *ClientRPCMutations) prepareExitChange(cfg *Config, op *ipc.Operation, r
 		}
 	}
 	op.ProfileId = profile.ID
-	return &clientRPCExitChange{OperationID: op.Id, ProfileID: profile.ID, OwnerID: cfg.LocalOwnerID, ControlOrigin: profile.ControlOrigin, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, Previous: cloneExitSelection(cfg.ExitSelection)}, nil
+	plan := &clientRPCExitChange{OperationID: op.Id, ProfileID: profile.ID, OwnerID: cfg.LocalOwnerID, ControlOrigin: profile.ControlOrigin, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, Previous: cloneExitSelection(cfg.ExitSelection)}
+	if cfg.ConnectionIntent != nil {
+		intent := *cfg.ConnectionIntent
+		plan.PreviousIntent = &intent
+	}
+	return plan, nil
 }
 
 func (m *ClientRPCMutations) selectExitNodeAs(peer local.Peer, request *ipc.SelectExitNodeRequest, supported []clientRPCExitMode) (*ipc.Operation, error) {

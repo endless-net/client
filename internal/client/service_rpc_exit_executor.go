@@ -30,6 +30,7 @@ func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) 
 	return exists && plan.OperationID == op.Id && plan.ProfileID == op.ProfileId && plan.ProfileID == cfg.RPCState.ActiveProfileID &&
 		strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) && plan.ControlOrigin == profile.ControlOrigin &&
 		plan.NodeID == cfg.NodeID && plan.NetworkID == cfg.NetworkID && reflect.DeepEqual(plan.Previous, cfg.ExitSelection) &&
+		reflect.DeepEqual(plan.PreviousIntent, cfg.ConnectionIntent) &&
 		((plan.Requested == nil && op.Kind == ipc.OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE) ||
 			(plan.Requested != nil && op.Kind == ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE))
 }

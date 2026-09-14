@@ -581,6 +581,14 @@ acceptance. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
 
+Exit intent race: admission now snapshots ConnectionIntent, and preflight and
+completion both require that snapshot to match. An accepted Disconnect during
+Apply prevents stale success and preserves the dispatched operation's recovery
+guard. `TestExitApplyCannotCommitAfterAcceptedDisconnect` checks late Disconnect,
+nonterminal outcome, preserved user reason and rejection of redispatch after
+store reopen. This closes the missing intent binding; OS containment still must
+be implemented before that retained guard can safely become terminal.
+
 Exit request read: public GetExitNode now exposes the profile's durable request
 and pending select/clear intent, including per-family requested IDs and LAN
 choice. With no OS observation provider, effective IDs remain absent, actual
