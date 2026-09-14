@@ -6,6 +6,7 @@ import (
 	"time"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/proto"
 )
 
 // Re-evaluate session deadlines independently of network observations. This
@@ -26,7 +27,7 @@ func (m *ClientRPCMutations) publishSessionClock() error {
 		if err != nil {
 			return err
 		}
-		if snapshot.Status.GetSession().GetState() != sub.sessionState {
+		if !proto.Equal(snapshot.Status.GetSession(), sub.sessionProjection) {
 			changed = true
 			break
 		}
@@ -51,6 +52,13 @@ func (m *ClientRPCMutations) publishSessionClock() error {
 	}
 	m.publishMutationLocked(nil, ipc.Domain_DOMAIN_SESSION)
 	return nil
+}
+
+func cloneSessionProjection(session *ipc.Session) *ipc.Session {
+	if session == nil {
+		return nil
+	}
+	return proto.Clone(session).(*ipc.Session)
 }
 
 func (m *ClientRPCMutations) startSessionClock(ctx context.Context) <-chan error {

@@ -37,8 +37,8 @@ type rpcSubscriber struct {
 	abort    func()
 	sending  bool
 	// Access is read/written under the owning mutations lock.
-	access       ipc.Access
-	sessionState ipc.SessionState // guarded by the owning mutations lock
+	access            ipc.Access
+	sessionProjection *ipc.Session // guarded by the owning mutations lock
 }
 
 func (s *rpcSubscriber) enqueue(event *ipc.WatchEventsResponse) {
@@ -278,7 +278,7 @@ func (m *ClientRPCMutations) subscribe(peer local.Peer, build *ipc.BuildIdentity
 	}
 	s := &rpcSubscriber{peer: peer, build: proto.Clone(build).(*ipc.BuildIdentity), queue: make(chan *ipc.WatchEventsResponse, rpcEventQueueCount), done: make(chan struct{}), abort: abort}
 	s.access = snapshot.Runtime.CallerAccess
-	s.sessionState = snapshot.Status.GetSession().GetState()
+	s.sessionProjection = cloneSessionProjection(snapshot.Status.GetSession())
 	s.enqueue(&ipc.WatchEventsResponse{Metadata: snapshot.Status.Metadata, Event: &ipc.WatchEventsResponse_Snapshot{Snapshot: snapshot}})
 	if m.subscribers == nil {
 		m.subscribers = map[*rpcSubscriber]struct{}{}
@@ -317,7 +317,7 @@ func (m *ClientRPCMutations) publishMutationLocked(operation *ipc.Operation, inv
 			continue
 		}
 		subscriber.access = snapshot.Runtime.CallerAccess
-		subscriber.sessionState = snapshot.Status.GetSession().GetState()
+		subscriber.sessionProjection = cloneSessionProjection(snapshot.Status.GetSession())
 		metadata := snapshot.Status.Metadata
 		subscriber.enqueue(&ipc.WatchEventsResponse{Metadata: metadata, Event: &ipc.WatchEventsResponse_StatusChanged{StatusChanged: snapshot.Status}})
 		if snapshot.Runtime.CallerAccess == ipc.Access_ACCESS_OBSERVER {

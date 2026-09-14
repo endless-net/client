@@ -288,6 +288,16 @@ a late successful provider response, rejected unconfirmed forget and queued or
 browser-waiting cancellation after restart. Logout/profile-switch concurrency
 and the rest of the renewal cleanup matrix remain under audit.
 
+`TestRPCSessionRenewalConflictsAndIndependentDisconnect` now verifies both
+admission orders for renewal versus logout/profile switch: conflicts return BUSY
+without changing durable state. A blocked renewal provider does not block
+Disconnect, and later successful rotation preserves disconnected intent and node
+authority. Session-clock invalidation now compares the entire public session
+projection, not only its state enum. `TestRPCSessionClockPublishesRenewalGrantExpiry`
+verifies that renewal grant expiry withdraws availability while access remains
+ACTIVE, emitting one transition rather than silently leaving stale availability.
+These are unit observations, not real traffic or platform qualification.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On
