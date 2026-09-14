@@ -23,8 +23,6 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionAbort(ctx context.Context,
 	defer m.networkSelectionWorker.Unlock()
 	m.profileWorker.Lock()
 	defer m.profileWorker.Unlock()
-	driver.Lock.Lock()
-	defer driver.Lock.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -102,6 +100,8 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionAbort(ctx context.Context,
 		}
 		plan.TargetRevoked = true
 	}
+	driver.Lock.Lock()
+	defer driver.Lock.Unlock()
 	continuity := ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED
 	if plan.DownStarted {
 		if err := stopNetworkSelectionTarget(ctx, driver); err != nil {

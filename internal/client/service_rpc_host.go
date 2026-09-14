@@ -69,6 +69,23 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 			return err
 		}
 	}
+	var networkDone <-chan error
+	if cfg := s.mutations.store.Read(); s.NetworkSelectionProviders.Networks != nil || s.NetworkSelectionProviders.Register != nil || s.NetworkSelectionProviders.Cleanup != nil || (cfg.RPCState != nil && cfg.RPCState.NetworkSelection != nil) {
+		networkDone, err = s.StartNetworkSelectionWorker(workerCtx, driver)
+		if err != nil {
+			cancel()
+			<-profileDone
+			<-enrollmentDone
+			if trustDone != nil {
+				<-trustDone
+			}
+			<-bundleDone
+			if sessionDone != nil {
+				<-sessionDone
+			}
+			return err
+		}
+	}
 	stopReadCapabilities := s.startReadCapabilities(workerCtx)
 	defer stopReadCapabilities()
 	sessionClockDone := s.mutations.startSessionClock(workerCtx)
@@ -96,6 +113,8 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 		resourceClockDone = nil
 	case err = <-sessionDone:
 		sessionDone = nil
+	case err = <-networkDone:
+		networkDone = nil
 	case err = <-serverDone:
 		serverDone = nil
 	}
@@ -124,6 +143,9 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	}
 	if sessionDone != nil {
 		<-sessionDone
+	}
+	if networkDone != nil {
+		<-networkDone
 	}
 	if serverDone != nil {
 		<-serverDone

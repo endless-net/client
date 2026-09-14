@@ -20,12 +20,13 @@ import (
 // ongoing; unimplemented methods never forward to the retired HTTP v2 handler.
 type ClientRPCService struct {
 	// Configure before serving; reads public signing authority only.
-	ServerIdentityProvider ClientRPCServerIdentityProvider
-	TrustRecoveryProvider  ClientRPCTrustRecoveryProvider
-	RecentLogsProvider     ClientRPCRecentLogsProvider
-	NetworksProvider       ClientRPCNetworksProvider
-	DiagnosticsProvider    ClientRPCDiagnosticsProvider
-	PeersProvider          ClientRPCPeersProvider
+	ServerIdentityProvider    ClientRPCServerIdentityProvider
+	TrustRecoveryProvider     ClientRPCTrustRecoveryProvider
+	RecentLogsProvider        ClientRPCRecentLogsProvider
+	NetworksProvider          ClientRPCNetworksProvider
+	NetworkSelectionProviders ClientRPCNetworkSelectionProviders
+	DiagnosticsProvider       ClientRPCDiagnosticsProvider
+	PeersProvider             ClientRPCPeersProvider
 	// Configure before serving. Must be nonblocking and must not call RPC/store
 	// mutations: invoked under the configuration read lock after authentication.
 	ResourceEnforcementProvider func(Config, time.Time) bool
@@ -47,6 +48,8 @@ type ClientRPCService struct {
 	bundleWorker     *clientRPCProfileWorker
 	sessionMu        sync.Mutex
 	sessionWorker    *clientRPCProfileWorker
+	networkMu        sync.Mutex
+	networkWorker    *clientRPCProfileWorker
 }
 
 func NewClientRPCService(mutations *ClientRPCMutations, build *ipc.BuildIdentity) *ClientRPCService {
