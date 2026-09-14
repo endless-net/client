@@ -581,6 +581,14 @@ acceptance. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
 
+Resource restart evidence: `TestResourceWorkerRestartsApplyOrContainment`
+reopens the durable store after worker cancellation or failed Down. A cancelled
+worker resumes its pending apply; persisted containment performs Down without
+starting the failed candidate. Apply failure retains the previous explicit
+choice, Disconnect retains its reason and cancellation outcome, and request-ID
+replay after recovery returns the same terminal operation. This uses injected
+runtime effects and a real store reopen; it does not establish OS crash safety.
+
 Runtime policy ownership audit: `cloneRegisterNodeResponse` previously retained
 the caller's ClientPolicy pointer in engine plans and rollback snapshots. It now
 deep-copies resource policy entries, setting value pointers and exit family/LAN
