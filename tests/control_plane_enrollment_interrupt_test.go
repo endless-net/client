@@ -75,6 +75,7 @@ func TestControlPlaneBrowserEnrollmentInterrupted(t *testing.T) {
 	status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
 		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetNodeCredentialPresent() && v.GetStoredState().GetCachedMapValid()
 	})
+	runNativeControlMutation(t, n, "connect", "6b140000-0000-4000-8000-000000000001")
 	n.Stop()
 	n.Start()
 	n.AwaitNativeStatus(func(v *ipc.Status) bool {

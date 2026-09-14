@@ -77,6 +77,7 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 	accounts("initial-login", true)
 	n.MustRun("up", "--config", n.Config, "--network", network.Name, "--hostname", "session-node", "--route-table", "auto")
 	n.Start()
+	runNativeControlMutation(t, n, "connect", "6b140000-0000-4000-8000-000000000001")
 	defer n.Stop()
 	status := n.AwaitNativeStatus(func(v *ipc.Status) bool {
 		return v.NodeId != "" && v.ActiveProfileId != "" && v.GetStoredState().GetCachedMapValid() && v.GetStoredState().GetNodeCredentialPresent() && nativeOverlayAddress(v, false).IsValid()

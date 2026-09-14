@@ -31,6 +31,17 @@ their traffic/recovery assertions remain. Accountless SelectNetwork expects
 NEEDS_LOGIN and still requires no accepted operation or additional registration.
 The cancelled run is partial evidence only, not a successful release gate.
 
+The [third Test run](https://github.com/endless-net/client/actions/runs/34881749817)
+on `d656324` also failed platform contracts. Completed Linux reports identify
+cached-authority restart intent, browser enrollment/session setup, exit routing
+and event-stream failures. Windows additionally reports repeated STALE_STATE
+diagnostics and consequent traffic-observation failures. Browser enrollment and
+session fixtures now explicitly Connect before testing connected recovery.
+The other failures remain unresolved: do not publish this source or treat the
+separate successful Protobuf run as a substitute for the release gate. Exit
+tests must not restore implicit default routes to conceal the missing native
+exit implementation.
+
 ## Completion gates
 
 The current task is limited to this repository and its producer contracts.
