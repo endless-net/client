@@ -54,6 +54,17 @@ disconnect to a pending profile-switch target. Runtime lifecycle tests cover
 these decisions, restart and duplicate delivery; no public RPC operation or
 completed OS teardown is fabricated. Native event delivery, worker ordering,
 source-failure recovery and CONNECT behavior remain to be integrated.
+The new `RuntimeLifecycleExecutor` joins those intent decisions to the engine
+Suspend/Resume/Down interface and the same operation lock used by ordinary
+workers. It retains that lock across suspension and failed resume; an
+unconfirmed Down or unavailable policy cannot release the gate. Resume wakes
+ordinary reconciliation without applying a saved map. Foreign logoff is rejected
+before engine access, and Close requires cancelled worker lifetime so shutdown
+cannot release live workers into an accidental reconnect. Executor units cover
+failed teardown, failed resume/source, Disconnect during suspend and shutdown.
+The executor is not yet attached to agent-native OS subscriptions; platform
+delivery, callback latency, policy refresh while suspended and effect observation
+remain open. The b4165b8 short run passed on Linux, Windows and macOS.
 The pinned x/sys SCM host forwards SessionChange EventData after its callback
 returns; the adapter must copy session data during a live native callback rather
 than dereference that forwarded pointer later.
