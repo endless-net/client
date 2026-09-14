@@ -375,6 +375,18 @@ values and the internal sharing-enforcement flag: neither enables exit routes or
 exit LAN hooks. Static export cannot enforce grant expiry or platform fail-closed
 transitions and does not implement explicit exit selection.
 
+`service_rpc_exit_executor.go` now serializes one internal apply attempt and
+persists RUNNING/retry time before dispatch. It rechecks owner, profile, recipient,
+previous selection, signed grant, map revision and exact platform family/LAN pair.
+Invalid queued intent fails without OS dispatch; ambiguous, cancelled or partial
+dispatched effects retain the durable guard and retry the same operation ID.
+`TestRPCExitExecutorDurabilityAndRevalidation` covers these cases and disk restart;
+`TestRPCExitExecutorSerializesConcurrentAttempts` checks duplicate dispatch.
+The adapter is injected in unit tests only. Actual OS protection/application,
+containment after context changes during an attempted apply, public Select/Clear,
+GetExitNode observations and background worker lifecycle remain unimplemented.
+A retained operation guard is concurrency protection, not an OS fail-closed rule.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On

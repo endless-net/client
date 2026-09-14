@@ -1,9 +1,6 @@
 package client
 
 import (
-	"reflect"
-	"strings"
-
 	"connectrpc.com/connect"
 	api "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/clientipc/rpc"
@@ -47,12 +44,7 @@ func (m *ClientRPCMutations) completeExitChange(id string, observed *ipc.ExitNod
 	return m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
 		stale := func() error { return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE) }
 		plan := cfg.RPCState.ExitChange
-		if plan == nil || plan.OperationID != id || plan.ProfileID != op.ProfileId || plan.ProfileID != cfg.RPCState.ActiveProfileID ||
-			!strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) || plan.NodeID != cfg.NodeID || plan.NetworkID != cfg.NetworkID || plan.ControlOrigin != cfg.RPCState.Profiles[plan.ProfileID].ControlOrigin ||
-			!reflect.DeepEqual(plan.Previous, cfg.ExitSelection) || op.State != ipc.OperationState_OPERATION_STATE_RUNNING {
-			return stale()
-		}
-		if (plan.Requested == nil && op.Kind != ipc.OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE) || (plan.Requested != nil && op.Kind != ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE) {
+		if !exitChangeBound(cfg, plan, op) || op.State != ipc.OperationState_OPERATION_STATE_RUNNING {
 			return stale()
 		}
 		if !exitAppliedResultMatches(plan, observed) {

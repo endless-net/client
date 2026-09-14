@@ -2,6 +2,7 @@ package client
 
 import (
 	"slices"
+	"time"
 
 	"connectrpc.com/connect"
 	api "github.com/endless-net/client-api/clientapi/v1"
@@ -20,6 +21,7 @@ type clientRPCExitChange struct {
 	NetworkID     string               `json:"network_id"`
 	Requested     *ClientExitSelection `json:"requested,omitempty"`
 	Previous      *ClientExitSelection `json:"previous,omitempty"`
+	NextAttemptAt time.Time            `json:"next_attempt_at,omitempty"`
 }
 
 // Trusted executor support is a set of exact pairs, never a Cartesian product
