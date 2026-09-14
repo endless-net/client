@@ -320,6 +320,16 @@ denied mode/LAN and unchanged signed source/ordinary routes. This foundation is
 not yet called by the live engine/router: packet enforcement, fail-closed
 platform rules, durable admission and effective-status wiring remain required.
 
+`exit_filter.go` adds an isolated TUN packet-enforcement layer using authenticated
+recipient-bound maps and exact exit selection. Every packet checks map and grant
+deadlines; changes permit only the old/new intersection before commit. Invalid
+updates close the filter, and withdrawal cannot be undone by a stale commit.
+`TestExitPacketFilterExpiryTransitionAndWithdrawal` exercises request/reply
+expiry, IPv4/dual-stack expansion and restriction, clear, tampering, malformed
+packets and withdrawal. This is an additional gate, not a replacement for ACL,
+application or sharing checks. Engine/TUN wiring and OS protection against traffic
+bypassing the TUN remain unimplemented; these units do not prove fail-closed exit.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On
