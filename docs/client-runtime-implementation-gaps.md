@@ -165,6 +165,18 @@ are not system acceptance.
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
 
+Resource mutation identity preparation: `resource_identity.go` shares canonical
+ID encoding with ListResources and resolves IDs against the authenticated current
+recipient map. It rejects noncanonical encoding/ports, undisclosed targets,
+default routes, ordinary single-IP host addresses masquerading as subnets and
+applications for which the recipient is only a connector. Explicit managed
+single-IP subnets remain valid. `TestResourceIdentityMatchesCatalogAndRejectsForgedTargets`
+round-trips catalog IDs and tests forgery/tampering;
+`TestResourceIdentityManagedSingleIPAndApplicationSource` covers subnet identity
+and application role. This is preparatory validation: SetResourceEnabled,
+resource policy resolution, durable intent/effects and overlap handling remain
+unimplemented.
+
 ## Client-owned scenario map
 
 The separate [headless per-IT trace](client-headless-requirement-map.md) retains

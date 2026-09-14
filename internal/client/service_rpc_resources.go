@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"net/netip"
 	"slices"
@@ -68,7 +67,7 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		if (len(kinds) > 0 && !slices.Contains(kinds, kind)) || !strings.Contains(strings.ToLower(name+"\n"+targetText), search) {
 			return
 		}
-		resource.Id = base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(int(kind)) + "\x00" + key))
+		resource.Id = rpcResourceID(kind, key)
 		resource.Kind, resource.DisplayName, resource.NetworkId = kind, name, state.Network.ID
 		// Signed disclosure is not observed reachability or applied enablement.
 		// Keep Enabled absent until the runtime supplies an effective setting.
