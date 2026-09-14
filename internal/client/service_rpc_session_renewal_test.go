@@ -20,6 +20,7 @@ func TestRPCSessionRenewalAdmissionAndDurableReplay(t *testing.T) {
 			Session:              &backend.UserSession{SessionId: "session", UserId: "user", State: backend.UserSessionState_USER_SESSION_STATE_ACTIVE, RenewalSupported: true, ExpiresAt: timestamppb.New(m.now().Add(-time.Hour))},
 			RenewalAuthorization: &backend.SessionRenewalAuthorization{Bearer: strings.Repeat("private-renewal-authority", 2), ExpiresAt: timestamppb.New(m.now().Add(time.Hour))},
 		}}
+		cfg.UserSession.RenewalGrant = proto.Clone(cfg.UserSession.Response).(*backend.GetSessionResponse)
 		return nil
 	}); err != nil {
 		t.Fatal(err)

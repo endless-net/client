@@ -64,6 +64,15 @@ func (s *ClientRPCService) sessionAs(ctx context.Context, peer local.Peer, reque
 			return nil, err
 		}
 		stored = &StoredUserSession{ControlOrigin: profile.ControlOrigin, TokenBinding: sessionTokenBinding(selected.Token), Response: proto.Clone(response).(*backend.GetSessionResponse)}
+		if response.Session.RenewalSupported {
+			stored.RenewalGrant = proto.Clone(response).(*backend.GetSessionResponse)
+		} else if response.Session.State == backend.UserSessionState_USER_SESSION_STATE_EXPIRED {
+			previous := selected.UserSession
+			if previous != nil && previous.ControlOrigin == stored.ControlOrigin && previous.TokenBinding == stored.TokenBinding &&
+				validRetainedSessionGrant(previous.RenewalGrant, response.Session, s.mutations.now()) {
+				stored.RenewalGrant = proto.Clone(previous.RenewalGrant).(*backend.GetSessionResponse)
+			}
+		}
 	}
 	s.mutations.mu.Lock()
 	defer s.mutations.mu.Unlock()
@@ -79,7 +88,7 @@ func (s *ClientRPCService) sessionAs(ctx context.Context, peer local.Peer, reque
 	}
 	unchanged := stored != nil && selected.UserSession != nil &&
 		stored.ControlOrigin == selected.UserSession.ControlOrigin && stored.TokenBinding == selected.UserSession.TokenBinding &&
-		proto.Equal(stored.Response, selected.UserSession.Response)
+		proto.Equal(stored.Response, selected.UserSession.Response) && proto.Equal(stored.RenewalGrant, selected.UserSession.RenewalGrant)
 	if stored != nil && !unchanged {
 		if err := s.mutations.store.Update(func(next *Config) error {
 			if !reflect.DeepEqual(clonePersistentConfig(cfg), clonePersistentConfig(*next)) {

@@ -46,10 +46,10 @@ func (m *ClientRPCMutations) renewSessionAs(peer local.Peer, request *ipc.RenewS
 		if stored == nil || stored.TokenBinding != sessionTokenBinding(cfg.Token) || stored.ControlOrigin != profile.ControlOrigin || api.ValidateSessionResponse(stored.Response) != nil {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN)
 		}
-		authority := stored.Response.RenewalAuthorization
-		if authority == nil || !m.now().Before(authority.ExpiresAt.AsTime()) {
+		if !validRetainedSessionGrant(stored.RenewalGrant, stored.Response.Session, m.now()) {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN)
 		}
+		authority := stored.RenewalGrant.RenewalAuthorization
 		if stored.Response.Session.State == backend.UserSessionState_USER_SESSION_STATE_REVOKED {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN)
 		}

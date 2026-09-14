@@ -3,7 +3,9 @@ package client
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"time"
 
+	api "github.com/endless-net/client-api/clientapi/v1"
 	backend "github.com/endless-net/client-api/clientapi/v1/clientrpc"
 )
 
@@ -13,6 +15,14 @@ type StoredUserSession struct {
 	ControlOrigin string                      `json:"control_origin"`
 	TokenBinding  string                      `json:"token_binding"`
 	Response      *backend.GetSessionResponse `json:"response"`
+	RenewalGrant  *backend.GetSessionResponse `json:"renewal_grant,omitempty"`
+}
+
+func validRetainedSessionGrant(grant *backend.GetSessionResponse, session *backend.UserSession, now time.Time) bool {
+	return session != nil && session.State != backend.UserSessionState_USER_SESSION_STATE_REVOKED &&
+		api.ValidateSessionResponse(grant) == nil && grant.RenewalAuthorization != nil &&
+		grant.Session.SessionId == session.SessionId && grant.Session.UserId == session.UserId &&
+		now.Before(grant.RenewalAuthorization.ExpiresAt.AsTime())
 }
 
 func sessionTokenBinding(token string) string {

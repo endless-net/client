@@ -224,12 +224,15 @@ mutation, pending-operation privacy, exact disk-backed replay and rejection of
 a second operation. Backend dispatch, polling, response authority validation,
 atomic token rotation, cancellation/cleanup and their full negative coverage
 remain required before exposing the RPC or claiming renewal functionality.
-Before exposure, separate the retained renewal grant from the latest session
-observation: the backend forbids issuing renewal authority in an expired/revoked
-session response. A later expired observation must not silently discard a still
-valid grant obtained while active; explicit revocation must not retain usable
-authority. The current admission test uses that earlier active projection with
-an elapsed access deadline, not a new grant issued for an expired session.
+The retained renewal grant is now separate from the latest session observation:
+the backend forbids issuing renewal authority in an expired/revoked response.
+An expired observation preserves an earlier grant only when its user/session,
+origin and bearer binding match and its own deadline is still valid. Revocation,
+changed identity, grant expiry or an active response disabling renewal drops it.
+Admission validates both the current observation and retained grant. The test
+`TestRPCSessionGrantRetentionAfterExpiryObservation` covers all six cases through
+read, disk reopen and renewal admission. This does not make the public renewal
+RPC or execution worker complete. No legacy grant fallback is introduced.
 
 ## External dependencies and approvals
 
