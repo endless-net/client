@@ -45,6 +45,7 @@ type recoveryControlResult struct {
 
 type remoteCleanupError struct {
 	RequestID string
+	Retryable bool
 	cause     error
 }
 
@@ -242,7 +243,7 @@ func revokeNode(ctx context.Context, api *clientapi.API, nodeID string) error {
 			return remoteCleanupError{cause: err}
 		}
 		if publicError.ErrorCode == clientapi.ErrorCodeTemporarilyUnavailable {
-			lastErr = remoteCleanupError{RequestID: publicError.RequestID, cause: errors.New(string(publicError.ErrorCode))}
+			lastErr = remoteCleanupError{RequestID: publicError.RequestID, Retryable: true, cause: errors.New(string(publicError.ErrorCode))}
 			continue
 		}
 		return remoteCleanupError{RequestID: publicError.RequestID, cause: errors.New(string(publicError.ErrorCode))}

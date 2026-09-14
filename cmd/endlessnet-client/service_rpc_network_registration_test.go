@@ -7,12 +7,13 @@ import (
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
+	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
 )
 
 func TestNetworkTargetApprovalRefreshDoesNotReregister(t *testing.T) {
-	for _, mode := range []string{"approved", "tampered", "foreign_account"} {
+	for _, mode := range []string{"approved", "tampered", "foreign_account", "temporary"} {
 		t.Run(mode, func(t *testing.T) { testNetworkTargetApprovalRefresh(t, mode) })
 	}
 }
@@ -32,6 +33,10 @@ func testNetworkTargetApprovalRefresh(t *testing.T, mode string) {
 			return
 		}
 		streams++
+		if mode == "temporary" && streams == 1 {
+			writeRecoveryPublicError(t, w, api.ErrorCodeTemporarilyUnavailable, "synthetic-map-retry")
+			return
+		}
 		if r.Header.Get("X-EndlessNet-Node-Credential") == "" {
 			t.Error("approval refresh omitted node credential")
 		}
@@ -70,7 +75,15 @@ func testNetworkTargetApprovalRefresh(t *testing.T, mode string) {
 	}
 	input.Hostname = "must-not-register-again"
 	action, err = agentRPCRegisterNetworkTarget(t.Context(), cfg, input, save)
-	if mode != "approved" {
+	wantStreams := 1
+	if mode == "temporary" {
+		if failure := rpc.FailureFromError(err); failure == nil || failure.Code != ipc.ErrorCode_ERROR_CODE_UNAVAILABLE || cfg.CachedMap != nil {
+			t.Fatal("temporary map response lost its retry classification or changed target")
+		}
+		action, err = agentRPCRegisterNetworkTarget(t.Context(), cfg, input, save)
+		wantStreams = 2
+	}
+	if mode != "approved" && mode != "temporary" {
 		_, calls := snapshot()
 		if err == nil || cfg.CachedMap != nil || cfg.NodeApprovalState != api.NodeApprovalPending || calls != 1 || streams != 1 {
 			t.Fatal("invalid approval snapshot changed target authority or repeated registration")
@@ -81,7 +94,7 @@ func testNetworkTargetApprovalRefresh(t *testing.T, mode string) {
 		t.Fatal("approval refresh failed", err)
 	}
 	_, calls := snapshot()
-	if calls != 1 || streams != 1 || cfg.CachedMap == nil || cfg.CachedMap.Node.Hostname != "target-host" || cfg.NodeApprovalState != api.NodeApprovalApproved {
+	if calls != 1 || streams != wantStreams || cfg.CachedMap == nil || cfg.CachedMap.Node.Hostname != "target-host" || cfg.NodeApprovalState != api.NodeApprovalApproved {
 		t.Fatal("approval polling repeated registration or lost verified context")
 	}
 }

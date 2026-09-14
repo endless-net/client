@@ -21,7 +21,8 @@ func agentRPCRegisterNetworkTarget(ctx context.Context, cfg client.Config, input
 		return nil, errors.New("network registration requires a prepared authorized target")
 	}
 	if cfg.NodeID != "" {
-		return refreshRegisteredNetworkTarget(ctx, cfg, save)
+		action, err := refreshRegisteredNetworkTarget(ctx, cfg, save)
+		return action, networkTargetProviderError(ctx, err)
 	}
 	hostname, tags := input.Hostname, input.Tags
 	if pending := cfg.PendingDirectRegistration; pending != nil {
@@ -46,7 +47,26 @@ func agentRPCRegisterNetworkTarget(ctx context.Context, cfg client.Config, input
 	return action, err
 }
 
-func refreshRegisteredNetworkTarget(ctx context.Context, cfg client.Config, save func(client.Config) error) (*ipc.UserAction, error) {
+func networkTargetProviderError(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	var cleanup remoteCleanupError
+	if (errors.As(err, &cleanup) && cleanup.Retryable) || retryableRPCEnrollmentError(err) {
+		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	}
+	return err
+}
+
+func refreshRegisteredNetworkTarget(ctx context.Context, cfg client.Config, save func(client.Config) error) (action *ipc.UserAction, result error) {
+	var retryableTransport bool
+	defer func() {
+		// The pinned producer aggregates failover errors as text. Capture the
+		// last transport outcome instead of parsing or exposing that text.
+		if result != nil && ctx.Err() == nil && retryableTransport {
+			result = rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+		}
+	}()
 	if cfg.NodeCredential == "" || cfg.NodeCredentialSigningTrust == nil {
 		return nil, errors.New("network target credential authority unavailable")
 	}
@@ -58,7 +78,9 @@ func refreshRegisteredNetworkTarget(ctx context.Context, cfg client.Config, save
 		return nil, err
 	}
 	control := apiFromConfig(cfg)
-	control.HTTPClient.Transport = enrollmentContextTransport{lifetime: ctx, base: control.HTTPClient.Transport}
+	control.HTTPClient.Transport = enrollmentContextTransport{lifetime: ctx, base: control.HTTPClient.Transport, outcome: func(status int, err error) {
+		retryableTransport = retryableEnrollmentHTTPStatus(status) || retryableRPCEnrollmentError(err)
+	}}
 	if err := refreshMapSigningTrust(&cfg, control); err != nil {
 		return nil, err
 	}

@@ -9,11 +9,13 @@ import (
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
+	"github.com/endless-net/client/clientipc/rpc"
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
 )
 
 func TestNetworkTargetCleanupRevokesOnlyItsNode(t *testing.T) {
-	for _, mode := range []string{"registered", "lost_response", "revoke_failure", "checkpoint_failure", "wrong_operation", "wrong_network", "wrong_node", "invalid_credential"} {
+	for _, mode := range []string{"registered", "lost_response", "revoke_failure", "temporary_revoke", "rejected_revoke", "checkpoint_failure", "wrong_operation", "wrong_network", "wrong_node", "invalid_credential"} {
 		t.Run(mode, func(t *testing.T) { testNetworkTargetCleanup(t, mode) })
 	}
 }
@@ -42,6 +44,14 @@ func testNetworkTargetCleanup(t *testing.T, mode string) {
 		}
 		if mode == "revoke_failure" {
 			http.Error(w, "synthetic remote failure", http.StatusServiceUnavailable)
+			return
+		}
+		if mode == "temporary_revoke" && revokes == 1 {
+			writeRecoveryPublicError(t, w, api.ErrorCodeTemporarilyUnavailable, "synthetic-revoke-retry")
+			return
+		}
+		if mode == "rejected_revoke" {
+			writeRecoveryPublicError(t, w, api.ErrorCodeNodeCredentialRevoked, "synthetic-revoke-denied")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -109,6 +119,23 @@ func testNetworkTargetCleanup(t *testing.T, mode string) {
 	wantSuccess := mode == "registered" || mode == "lost_response"
 	if (err == nil) != wantSuccess || revokes != wantRevokes || registrations != wantRegistrations || logouts != 0 || cfg.Token != before.Token {
 		t.Fatalf("cleanup outcome/binding mismatch: err=%v revoke=%d register=%d logout=%d", err, revokes, registrations, logouts)
+	}
+	if mode == "temporary_revoke" {
+		if failure := rpc.FailureFromError(err); failure == nil || failure.Code != ipc.ErrorCode_ERROR_CODE_UNAVAILABLE {
+			t.Fatal("validated temporary revoke lost retry classification", err)
+		}
+		if err := agentRPCCleanupNetworkTarget(t.Context(), cfg, input, func(next client.Config) error { cfg = next; return nil }); err != nil {
+			t.Fatal("retry did not confirm the same target revocation", err)
+		}
+		_, registrations = snapshot()
+		if revokes != 2 || registrations != 1 || logouts != 0 || cfg.Token != before.Token {
+			t.Fatal("revoke retry registered a new target or logged out the shared session")
+		}
+	}
+	if mode == "revoke_failure" || mode == "rejected_revoke" {
+		if failure := rpc.FailureFromError(err); failure != nil && failure.Code == ipc.ErrorCode_ERROR_CODE_UNAVAILABLE {
+			t.Fatal("protocol or authorization failure was marked temporary")
+		}
 	}
 	if mode == "lost_response" {
 		request, _ := snapshot()

@@ -18,9 +18,22 @@ type ClientRPCNetworkSelectionProviders struct {
 
 // ReconcileNetworkSelection dispatches by durable phase; it never starts
 // registration again after teardown, activation or a recorded abort.
-func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driver ClientRPCProfileDriver, providers ClientRPCNetworkSelectionProviders) error {
+func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driver ClientRPCProfileDriver, providers ClientRPCNetworkSelectionProviders) (result error) {
 	m.networkCoordinator.Lock()
 	defer m.networkCoordinator.Unlock()
+	// Every durable phase, including resumed compensation and local cleanup,
+	// must retain its journal and serving host on an explicitly temporary error.
+	defer func() {
+		if ctx.Err() != nil {
+			return
+		}
+		if failure := rpc.FailureFromError(result); failure != nil {
+			switch failure.Code {
+			case ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED:
+				result = nil
+			}
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -62,8 +75,6 @@ func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driv
 	case ipc.ErrorCode_ERROR_CODE_CANCELLED, ipc.ErrorCode_ERROR_CODE_STALE_STATE, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED, ipc.ErrorCode_ERROR_CODE_APPROVAL_REJECTED, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED,
 		ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, ipc.ErrorCode_ERROR_CODE_NOT_FOUND, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED:
 		return m.ReconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, failure.Code)
-	case ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED:
-		return nil // Retry the same durable registration/phase, never a new ID.
 	default:
 		return err
 	}

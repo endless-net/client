@@ -58,5 +58,5 @@ func agentRPCCleanupNetworkTarget(ctx context.Context, cfg client.Config, input 
 	}
 	control := apiFromConfig(cfg)
 	control.HTTPClient.Transport = enrollmentContextTransport{lifetime: ctx, base: control.HTTPClient.Transport}
-	return revokeNode(ctx, control, cfg.NodeID)
+	return networkTargetProviderError(ctx, revokeNode(ctx, control, cfg.NodeID))
 }
