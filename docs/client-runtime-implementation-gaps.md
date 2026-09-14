@@ -338,6 +338,15 @@ offset/batch compaction and independent ACL denial. The live engine does not yet
 construct or activate this filter: engine lifecycle, durable selection, route
 application and OS fail-closed protections still require implementation.
 
+The live engine's shared UAPI renderer and OS-route builder now apply the
+no-selection route projection: neither IPv4 nor IPv6 default routes activate
+solely because they appear in a map. The shared UAPI path includes initial
+configuration, endpoint refresh and rollback. `TestEngineDoesNotActivateImplicitExitRoutes`
+checks both endpoint modes and configured states, ordinary-route preservation
+and unchanged signed source. This intentionally removes implicit exit behavior;
+it does not enable explicit Select/Clear, live exit-filter activation or OS
+fail-closed protection, which remain open.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On

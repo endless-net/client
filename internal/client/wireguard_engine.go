@@ -1314,6 +1314,13 @@ func wireGuardEngineUAPIWithEndpoints(privateKey string, networkMap clientapi.Re
 	if len(networkMap.Network.Applications) > 0 {
 		networkMap.Peers = applicationRoutePeers(networkMap, time.Now())
 	}
+	// This shared path also serves endpoint refresh and rollback. No implicit
+	// default-route permission may reappear through either of those paths.
+	peers, err := exitRoutePeers(Config{}, networkMap, nil, time.Now())
+	if err != nil {
+		return "", err
+	}
+	networkMap.Peers = peers
 	privateHex, err := wireGuardKeyToHex(privateKey, false)
 	if err != nil {
 		return "", err

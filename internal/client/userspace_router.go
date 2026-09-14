@@ -145,6 +145,13 @@ func buildWireGuardEngineRouterConfig(interfaceName string, mtu int, cfg Config,
 		}
 		networkMap.Peers = applicationRoutePeers(networkMap, time.Now())
 	}
+	// Default routes require an explicit, fully enforced exit selection. The
+	// current host has no exit executor; never activate one from map presence.
+	peers, err := exitRoutePeers(cfg, networkMap, nil, time.Now())
+	if err != nil {
+		return wireGuardEngineRouterConfig{}, err
+	}
+	networkMap.Peers = peers
 	out := wireGuardEngineRouterConfig{
 		Interface:  strings.TrimSpace(interfaceName),
 		MTU:        mtu,
