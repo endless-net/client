@@ -99,7 +99,7 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 			err = m.applyProfileConnection(ctx, driver, candidate)
 		} else if err == nil {
 			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, reasonPrefix+"_down_failed"
-			_, err = driver.Stop(ctx)
+			err = stopProfileNetwork(ctx, driver)
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -150,7 +150,7 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 			return err
 		}
 	}
-	if _, err := driver.Stop(ctx); err != nil {
+	if err := stopProfileNetwork(ctx, driver); err != nil {
 		return err
 	}
 	if err := ctx.Err(); err != nil {

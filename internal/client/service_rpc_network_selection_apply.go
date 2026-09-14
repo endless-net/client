@@ -55,7 +55,7 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionApply(ctx context.Context,
 			plan.ApplyStarted = true
 			connected := cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == ConnectionIntentDesiredConnected
 			if resuming || !connected {
-				if err := stopNetworkSelectionTarget(ctx, driver); err != nil {
+				if err := stopProfileNetwork(ctx, driver); err != nil {
 					return err
 				}
 			}
@@ -106,7 +106,7 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionApply(ctx context.Context,
 		current.RPCState.NetworkSelection.ApplyFailure = failure
 		return nil
 	})
-	if err := stopNetworkSelectionTarget(ctx, driver); err != nil {
+	if err := stopProfileNetwork(ctx, driver); err != nil {
 		return err
 	}
 	if checkpointErr != nil {
@@ -153,7 +153,7 @@ func networkSelectionApplyOperationMatches(cfg Config, op *ipc.Operation, plan *
 		op.Id == plan.OperationID && op.Kind == ipc.OperationKind_OPERATION_KIND_SELECT_NETWORK && op.ProfileId == plan.Profile.ID && op.State == ipc.OperationState_OPERATION_STATE_RUNNING
 }
 
-func stopNetworkSelectionTarget(ctx context.Context, driver ClientRPCProfileDriver) error {
+func stopProfileNetwork(ctx context.Context, driver ClientRPCProfileDriver) error {
 	continuity, err := driver.Stop(ctx)
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -161,7 +161,7 @@ func stopNetworkSelectionTarget(ctx context.Context, driver ClientRPCProfileDriv
 	if err != nil {
 		return err
 	}
-	if !networkSelectionStopConfirmed(continuity) {
+	if !profileStopConfirmed(continuity) {
 		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
 	return nil

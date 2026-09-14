@@ -67,7 +67,7 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionActivation(ctx context.Con
 	if err != nil {
 		return err // Keep the barrier: an error does not confirm route removal.
 	}
-	if !networkSelectionStopConfirmed(continuity) {
+	if !profileStopConfirmed(continuity) {
 		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
 	if resuming && continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED {
@@ -105,7 +105,7 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionActivation(ctx context.Con
 // Stop's nil error confirms removal by the driver contract. UNKNOWN describes
 // historical continuity, not an unsuccessful Down; the native driver uses it
 // when it cannot inspect the prior tunnel.
-func networkSelectionStopConfirmed(continuity ipc.ConnectionContinuity) bool {
+func profileStopConfirmed(continuity ipc.ConnectionContinuity) bool {
 	return continuity == ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED ||
 		continuity == ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE ||
 		continuity == ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN

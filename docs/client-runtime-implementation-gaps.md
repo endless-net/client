@@ -382,6 +382,15 @@ code/reason before Down: concurrent Disconnect yields CANCELLED and retains its
 accepted intent reason; context drift yields STALE_STATE, invalid signed source
 yields UNAVAILABLE, and driver errors yield APPLY_FAILED. Restart tests assert
 that a later Down failure does not replace the original apply cause.
+Resources/preferences now share the network-selection Stop confirmation rule:
+nil error alone is insufficient when continuity is PRESERVED, UNSPECIFIED or
+an unknown enum. Such results cannot commit offline preferences or finish
+containment. UNKNOWN remains an accepted historical-continuity result from a
+driver that confirms successful Down. `TestPreferenceAndResourceCleanupRequiresConfirmedStop`
+covers both operation families and connected/disconnected candidates, durable
+RUNNING containment, unchanged committed settings, disk recovery and exactly
+one confirmed cleanup without repeating Apply. Persistent native cleanup errors
+and automatic retry availability still need their own runtime qualification.
 `service_rpc_network_preferences_public.go` projects authenticated committed
 policy resolution separately from pending requested overrides, including reset
 absence and managed provenance/locks. GetPreferences and ListManagedSettings

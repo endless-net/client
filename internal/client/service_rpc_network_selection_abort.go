@@ -107,7 +107,7 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionAbort(ctx context.Context,
 	defer driver.Lock.Unlock()
 	continuity := ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED
 	if plan.DownStarted {
-		if err := stopNetworkSelectionTarget(ctx, driver); err != nil {
+		if err := stopProfileNetwork(ctx, driver); err != nil {
 			return err
 		}
 		continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN
