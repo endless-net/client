@@ -134,7 +134,10 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Id < items[j].Id })
-	if err := projectResourceOverlaps(state, items); err != nil {
+	if err := projectResourceOverlaps(ctx, state, items); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 	}
 	conflicting := rpcConfigurationChangeConflict(cfg) != nil
@@ -146,7 +149,13 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		resource.Enabled = rpcResourceSetting(cfg, resource.Id, identity, ready, conflicting)
 	}
 	if s.ResourceEnforcementProvider != nil && s.ResourceEnforcementProvider(cfg, m.now()) {
-		if err := projectAppliedResourceDenials(cfg, items, m.now()); err != nil {
+		if err := projectAppliedResourceDenials(ctx, cfg, items, m.now()); err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if failure := rpc.FailureFromError(err); failure != nil && failure.Code == ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED {
+				return nil, err
+			}
 			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 		}
 	}

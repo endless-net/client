@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
@@ -13,10 +14,16 @@ func resourceRulesOverlap(a, b resourceDenyRule) bool {
 
 // Called for the entire authenticated catalog before search and pagination,
 // so a filtered-out row cannot hide a conflicting disclosed resource.
-func projectResourceOverlaps(source *api.RegisterNodeResponse, items []*ipc.Resource) error {
+func projectResourceOverlaps(ctx context.Context, source *api.RegisterNodeResponse, items []*ipc.Resource) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	footprints := make([][]resourceDenyRule, len(items))
 	total := 0
 	for i, item := range items {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		identity, err := resolveResourceInAuthenticatedMap(source, item.Id)
 		if err != nil {
 			return err
@@ -33,6 +40,9 @@ func projectResourceOverlaps(source *api.RegisterNodeResponse, items []*ipc.Reso
 	comparisons, links := 0, 0
 	for i := range items {
 		for j := i + 1; j < len(items); j++ {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			overlaps := false
 			for _, a := range footprints[i] {
 				for _, b := range footprints[j] {

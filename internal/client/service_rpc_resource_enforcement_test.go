@@ -1,11 +1,35 @@
 package client
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+func TestResourceProjectionCancellationDuringObservation(t *testing.T) {
+	m, owner, profile := rpcPreferenceFixture(t)
+	s := NewClientRPCService(m, nil)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s.ResourceEnforcementProvider = func(Config, time.Time) bool { cancel(); return true }
+	before := m.Metadata()
+	rows, err := s.resourcesAs(ctx, owner, &ipc.ListResourcesRequest{Profile: profile})
+	if !errors.Is(err, context.Canceled) || rows != nil {
+		t.Fatal("cancelled observation returned partial resource result", err)
+	}
+	if m.Metadata().Revision != before.Revision {
+		t.Fatal("cancelled read mutated revision")
+	}
+	if err := projectResourceOverlaps(ctx, nil, nil); !errors.Is(err, context.Canceled) {
+		t.Fatal("overlap ignored cancellation", err)
+	}
+	if err := projectAppliedResourceDenials(ctx, Config{}, nil, time.Now()); !errors.Is(err, context.Canceled) {
+		t.Fatal("denial projection ignored cancellation", err)
+	}
+}
 
 func TestResourceAppliedDenialProjectionRequiresObservation(t *testing.T) {
 	m, owner, profile := rpcPreferenceFixture(t)

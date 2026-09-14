@@ -34,18 +34,18 @@ or manual integration run is created merely to bypass the implementation phase.
 The generated handler interface is in
 `clientipc/v0/clientipcconnect/service.connect.go`. `ClientRPCService` embeds its
 unimplemented handler in `internal/client/service_rpc_handlers.go`. At this audit,
-the four methods below have no runtime overrides; generated SDK methods and CLI
+the three methods below have no runtime overrides; generated SDK methods and CLI
 commands must not be counted as their runtime implementations.
 
 | Requirement area | Missing runtime methods | Required implementation and unit evidence |
 | --- | --- | --- |
 | US-05 exit | `GetExitNode`, `SelectExitNode`, `ClearExitNode` | Family/LAN constraints; requested/effective distinction; durable selection; partial apply/clear and fail-closed path loss; list-only support does not establish selection |
-| US-11 resources | `SetResourceEnabled` | Policy-aware local intent and actual effects; hidden-resource denial, stale context and conflicts; the catalog alone does not implement enablement |
 
 Additional partial implementations must not be mistaken for complete domains:
 
 | Area | Source evidence | Remaining work |
 | --- | --- | --- |
+| Resources | Public `SetResourceEnabled` uses the durable worker; catalog projects policy, overlap and confirmed TUN denials, with observation events | Complete positive route/path/application observations, stale-choice reconciliation, failure/restart audit and OS effect qualification |
 | Preferences/policy | Public Set/Reset supports inbound/DNS/routes through the durable worker, optionally together with UI_QUIT; UI_QUIT-only operations are immediate. Signed policy resolution and pending/committed reads are implemented | Implement remaining lifecycle keys; complete per-method transport, concurrency/recovery and OS effect evidence |
 | Diagnostics | `service_rpc_diagnostics.go` projects bounded OS route samples; missing samples remain explicitly unavailable and supplied samples remain incomplete | Qualify platform command execution later; extend route coverage beyond host-address sampling without substituting desired configuration for observed OS state |
 | Updates | `service_rpc_update.go` reports `update_source_not_configured`; `service_rpc_update_test.go` exists | Bind an approved distribution source and verify its projection; unavailable is not up-to-date, and unavailable-path tests do not prove update discovery |
@@ -580,6 +580,14 @@ the packet filter; these links do not establish actual reachability or OS
 acceptance. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
+
+Resource read cancellation: overlap and applied-denial projection now check
+request cancellation during iteration under the RPC read lock. Applied-denial
+comparison is capped at one million with typed LIMIT_EXCEEDED, matching the
+existing overlap work bound; no partial catalog is returned on either failure.
+`TestResourceProjectionCancellationDuringObservation` checks cancellation by
+the observation provider, cancellation before either calculation, and unchanged
+durable revision. This does not qualify OS networking.
 
 Resource enforcement observation: `WireGuardEngine.TryResourceEnforcement`
 authenticates the requested configuration and confirms a configured device,
