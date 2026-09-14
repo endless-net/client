@@ -279,6 +279,15 @@ serialization against an in-memory handler (no external backend or socket).
 Full cleanup/concurrency coverage, approved cross-origin browser approval and
 real provider/platform acceptance remain open; seamless renewal is not claimed.
 
+Confirmed local forget now durably requests cancellation of a same-profile
+renewal, cancels an in-flight provider only after admission commits, and drains
+the session executor before local cleanup. Cancellation removes private renewal
+and polling authority and records a replayable CANCELLED operation without a
+browser action. `TestRPCForgetCancelsSessionRenewalAndDrainsBeforeCleanup` covers
+a late successful provider response, rejected unconfirmed forget and queued or
+browser-waiting cancellation after restart. Logout/profile-switch concurrency
+and the rest of the renewal cleanup matrix remain under audit.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On

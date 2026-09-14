@@ -59,22 +59,23 @@ type clientRPCOperationRecord struct {
 // mutate only the supplied config: no network, device or other external effects
 // may run until acceptance commits. Runtime reconciliation executes those effects.
 type ClientRPCMutations struct {
-	mu                sync.Mutex
-	profileWorker     sync.Mutex
-	disconnectWorker  sync.Mutex
-	enrollmentWorker  sync.Mutex
-	trustWorker       sync.Mutex
-	sessionWorker     sync.Mutex
-	store             *ConfigStore
-	instanceID        string
-	now               func() time.Time
-	observedStatus    *ipc.Status
-	cancelApply       context.CancelFunc
-	cancelEnrollment  context.CancelFunc
-	cancelLogout      context.CancelFunc
-	subscribers       map[*rpcSubscriber]struct{}
-	recentLogs        []clientRPCScopedLog
-	capabilityWorkers map[ipc.Capability]*clientRPCProfileWorker // Volatile readiness, never persisted.
+	mu                   sync.Mutex
+	profileWorker        sync.Mutex
+	disconnectWorker     sync.Mutex
+	enrollmentWorker     sync.Mutex
+	trustWorker          sync.Mutex
+	sessionWorker        sync.Mutex
+	store                *ConfigStore
+	instanceID           string
+	now                  func() time.Time
+	observedStatus       *ipc.Status
+	cancelApply          context.CancelFunc
+	cancelEnrollment     context.CancelFunc
+	cancelSessionRenewal context.CancelFunc
+	cancelLogout         context.CancelFunc
+	subscribers          map[*rpcSubscriber]struct{}
+	recentLogs           []clientRPCScopedLog
+	capabilityWorkers    map[ipc.Capability]*clientRPCProfileWorker // Volatile readiness, never persisted.
 }
 
 func NewClientRPCMutations(store *ConfigStore) (*ClientRPCMutations, error) {
@@ -312,6 +313,9 @@ func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, r
 		return nil, false, err
 	}
 	if !reused {
+		if state := m.store.Read().RPCState; state != nil && state.SessionRenewal != nil && state.SessionRenewal.CancelRequested && m.cancelSessionRenewal != nil {
+			m.cancelSessionRenewal() // Only a committed cancellation can stop the provider.
+		}
 		if state := m.store.Read().RPCState; state != nil && state.DisconnectOperationID == accepted.Id && m.cancelLogout != nil {
 			m.cancelLogout() // Yield remote logout only after accepted disconnect intent.
 		}

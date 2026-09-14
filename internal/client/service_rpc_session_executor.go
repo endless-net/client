@@ -21,7 +21,7 @@ type ClientRPCSessionRenewalProvider struct {
 }
 
 func sessionRenewalBound(cfg *Config, plan *clientRPCSessionRenewal) bool {
-	if cfg.RPCState == nil || plan == nil || plan.Request == nil || plan.Authorization == nil ||
+	if cfg.RPCState == nil || plan == nil || plan.CancelRequested || plan.Request == nil || plan.Authorization == nil ||
 		plan.ProfileID != cfg.RPCState.ActiveProfileID || !strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) ||
 		plan.TokenBinding != sessionTokenBinding(cfg.Token) || plan.ControlOrigin != cfg.RPCState.Profiles[plan.ProfileID].ControlOrigin {
 		return false
@@ -46,7 +46,16 @@ func failSessionRenewal(cfg *Config, op *ipc.Operation, code ipc.ErrorCode, reas
 func (m *ClientRPCMutations) ReconcileSessionRenewal(ctx context.Context, provider ClientRPCSessionRenewalProvider) error {
 	m.sessionWorker.Lock()
 	defer m.sessionWorker.Unlock()
+	parent := ctx
+	ctx, cancel := context.WithCancel(parent)
+	m.mu.Lock()
+	m.cancelSessionRenewal = cancel
+	m.mu.Unlock()
+	defer func() { m.mu.Lock(); m.cancelSessionRenewal = nil; m.mu.Unlock(); cancel() }()
 	if err := ctx.Err(); err != nil {
+		if parent.Err() == nil && m.sessionRenewalCancellationRequested() {
+			return m.cancelSessionRenewalForForget()
+		}
 		return err
 	}
 	if provider.Renew == nil || provider.Poll == nil {
@@ -62,6 +71,10 @@ func (m *ClientRPCMutations) ReconcileSessionRenewal(ctx context.Context, provid
 		current := cfg.RPCState.SessionRenewal
 		if current == nil || current.OperationID != id || rpcOperationTerminal(op.State) {
 			return errRPCNoChange
+		}
+		if current.CancelRequested {
+			setSessionRenewalForgotten(cfg, op)
+			return nil
 		}
 		if !sessionRenewalBound(cfg, current) {
 			failSessionRenewal(cfg, op, ipc.ErrorCode_ERROR_CODE_STALE_STATE, "session_renewal_context_changed")
@@ -92,6 +105,9 @@ func (m *ClientRPCMutations) ReconcileSessionRenewal(ctx context.Context, provid
 		return err
 	}
 	if err := ctx.Err(); err != nil {
+		if parent.Err() == nil && m.sessionRenewalCancellationRequested() {
+			return m.cancelSessionRenewalForForget()
+		}
 		return err
 	}
 	var response *backend.RenewSessionResponse
@@ -103,6 +119,9 @@ func (m *ClientRPCMutations) ReconcileSessionRenewal(ctx context.Context, provid
 		if polled != nil {
 			response = &backend.RenewSessionResponse{Operation: polled.Operation, PollAuthorization: plan.PollAuthorization}
 		}
+	}
+	if parent.Err() == nil && m.sessionRenewalCancellationRequested() {
+		return m.cancelSessionRenewalForForget()
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -135,6 +154,10 @@ func (m *ClientRPCMutations) rejectSessionRenewal(id string, code ipc.ErrorCode,
 	_, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
 		if cfg.RPCState.SessionRenewal == nil || cfg.RPCState.SessionRenewal.OperationID != id || rpcOperationTerminal(op.State) {
 			return errRPCNoChange
+		}
+		if cfg.RPCState.SessionRenewal.CancelRequested {
+			setSessionRenewalForgotten(cfg, op)
+			return nil
 		}
 		if !sessionRenewalBound(cfg, cfg.RPCState.SessionRenewal) {
 			code, reason = ipc.ErrorCode_ERROR_CODE_STALE_STATE, "session_renewal_context_changed"

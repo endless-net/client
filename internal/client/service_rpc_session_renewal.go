@@ -27,6 +27,7 @@ type clientRPCSessionRenewal struct {
 	PollAuthorization  string                               `json:"poll_authorization,omitempty"`
 	ReplayExpiresAt    *timestamppb.Timestamp               `json:"replay_expires_at,omitempty"`
 	NextPollAt         time.Time                            `json:"next_poll_at,omitempty"`
+	CancelRequested    bool                                 `json:"cancel_requested,omitempty"`
 }
 
 func (m *ClientRPCMutations) renewSessionAs(peer local.Peer, request *ipc.RenewSessionRequest) (*ipc.Operation, error) {

@@ -30,6 +30,10 @@ func (m *ClientRPCMutations) forgetEnrollmentAs(peer local.Peer, request *ipc.Fo
 				return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
 			}
 			if !rpcOperationTerminal(pending.State) {
+				if pending.Kind == ipc.OperationKind_OPERATION_KIND_RENEW_SESSION && pending.ProfileId == request.GetProfile().GetProfileId() && cfg.RPCState.SessionRenewal != nil && cfg.RPCState.SessionRenewal.OperationID == pending.Id {
+					cfg.RPCState.SessionRenewal.CancelRequested = true
+					continue
+				}
 				if pending.Kind == ipc.OperationKind_OPERATION_KIND_ENROLL && pending.ProfileId == request.GetProfile().GetProfileId() && cfg.RPCState.Enrollment != nil && cfg.RPCState.Enrollment.OperationID == pending.Id {
 					cfg.RPCState.Enrollment.CancelRequested = true
 					continue
