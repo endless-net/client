@@ -581,6 +581,17 @@ acceptance. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
 
+Resource enforcement observation: `WireGuardEngine.TryResourceEnforcement`
+authenticates the requested configuration and confirms a configured device,
+exact signed payload, current committed denial rules and unexpired authority.
+It returns no confirmation during Configure/Down, a staged or withdrawn filter,
+changed choices, or a different map with the same revisions. The existing
+`TestResourceEngineAppliesChangesAndRejectsStaticBypass` checks map and choice
+bindings, engine contention, closure and expiry with a test TUN/router.
+This establishes a narrow TUN enforcement observation only. Public resource
+availability still needs route/path/application evidence and observation wiring;
+neither an applied filter nor a successful operation proves reachability.
+
 Resource mutation worker increment: private `setResourceEnabledAs` admits a
 durable resource choice into the same transaction worker as network preferences.
 It authenticates the active map, resolves the canonical disclosed resource,

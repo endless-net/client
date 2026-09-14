@@ -25,17 +25,51 @@ func TestResourceEngineAppliesChangesAndRejectsStaticBypass(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = engine.Close() }()
+	waitEnforced := func() {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for !engine.TryResourceEnforcement(cfg, time.Now()) {
+			if time.Now().After(deadline) {
+				t.Fatal("committed filter observation missing")
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	cfg.CachedMap = &source
+	cfg.MapRevision, cfg.MapGlobalRevision = source.Network.Revision, source.Revision.Global
+	if engine.TryResourceEnforcement(cfg, time.Now()) {
+		t.Fatal("unconfigured filter reported applied")
+	}
 	if _, err := engine.Configure(t.Context(), cfg, source); err != nil {
 		t.Fatal(err)
 	}
+	waitEnforced()
 	packet := applicationTCPPacket("100.64.0.1", "10.1.2.3", 50000, 443)
 	if !engine.resourceFilter.allows(packet, false, time.Now()) {
 		t.Fatal("default resource choice denied")
 	}
 	cfg.ResourcePreferences = map[string]bool{id: false}
+	if engine.TryResourceEnforcement(cfg, time.Now()) {
+		t.Fatal("unapplied choice reported as enforced")
+	}
 	result, err := engine.Configure(t.Context(), cfg, source)
 	if err != nil || !result.Changed || engine.resourceFilter.allows(packet, false, time.Now()) {
 		t.Fatal("resource-only change not applied/reported", result, err)
+	}
+	waitEnforced()
+	engine.mu.Lock()
+	observedWhileBusy := engine.TryResourceEnforcement(cfg, time.Now())
+	engine.mu.Unlock()
+	if observedWhileBusy {
+		t.Fatal("busy engine exposed observation")
+	}
+	changed := source
+	changed.Network.Name = "different signed content"
+	resignApplicationMap(t, &changed, key)
+	foreign := cfg
+	foreign.CachedMap = &changed
+	if engine.TryResourceEnforcement(foreign, time.Now()) {
+		t.Fatal("same revisions bound different map payload")
 	}
 	if output, err := RenderWireGuardWithOptionsChecked(cfg, source, WireGuardRenderOptions{}); err == nil || output != "" || !strings.Contains(err.Error(), "resource restrictions") {
 		t.Fatal("static export bypassed resource restriction", err)
@@ -50,10 +84,16 @@ func TestResourceEngineAppliesChangesAndRejectsStaticBypass(t *testing.T) {
 	if engine.resourceFilter.allows(packet, false, source.MapSignature.ExpiresAt) {
 		t.Fatal("engine resource authority ignored expiry")
 	}
+	if engine.TryResourceEnforcement(cfg, source.MapSignature.ExpiresAt) {
+		t.Fatal("expired filter reported applied")
+	}
 	if err := engine.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if engine.resourceFilter.allows(packet, false, time.Now()) {
 		t.Fatal("engine shutdown retained resource access")
+	}
+	if engine.TryResourceEnforcement(cfg, time.Now()) {
+		t.Fatal("closed engine retained observation")
 	}
 }
