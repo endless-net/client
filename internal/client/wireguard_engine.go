@@ -49,9 +49,10 @@ type WireGuardEngineOptions struct {
 	RelayDirectRetry time.Duration
 	inputRunner      commandInputRunner
 
-	tunFactory func(string, int) (tun.Device, error)
-	router     wireGuardEngineRouter
-	stageHook  func(wireGuardEngineApplyStage) error
+	tunFactory    func(string, int) (tun.Device, error)
+	router        wireGuardEngineRouter
+	stageHook     func(wireGuardEngineApplyStage) error
+	setSocketMark func(*net.UDPConn, uint32) error
 }
 
 // WireGuardEngine embeds wireguard-go and supplies MagicBind as its UDP
@@ -81,6 +82,10 @@ type WireGuardEngine struct {
 	applicationFilter *applicationPacketFilter
 	inboundFilter     *inboundPacketFilter
 	resourceFilter    *resourcePacketFilter
+	exitFilter        *exitPacketFilter
+	exitGuard         *linuxExitGuard
+	exitSelection     *ClientExitSelection
+	exitConfig        Config
 	peerACLFilter     *peerACLFilter
 	sharingFilter     *sharingPacketFilter
 	applicationCancel context.CancelFunc
@@ -114,13 +119,14 @@ type wireGuardEngineSnapshot struct {
 }
 
 type wireGuardEnginePlan struct {
-	config      Config
-	mtu         int
-	networkMap  clientapi.RegisterNodeResponse
-	privateKey  string
-	pathProbe   magicBindPathProbeSnapshot
-	routerCfg   wireGuardEngineRouterConfig
-	initialUAPI string
+	exitSelection *ClientExitSelection
+	config        Config
+	mtu           int
+	networkMap    clientapi.RegisterNodeResponse
+	privateKey    string
+	pathProbe     magicBindPathProbeSnapshot
+	routerCfg     wireGuardEngineRouterConfig
+	initialUAPI   string
 }
 
 type wireGuardEngineApplyProgress struct {
@@ -182,7 +188,58 @@ func createWireGuardEngineTUN(name string, mtu int) (device tun.Device, err erro
 func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap clientapi.RegisterNodeResponse) (WireGuardApplyResult, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	result := WireGuardApplyResult{Method: "wireguard-go", Interface: e.interface_}
+	if e.exitGuard != nil {
+		if cfg.ExitSelection == nil || e.exitSelection == nil || *cfg.ExitSelection != *e.exitSelection {
+			e.exitFilter.withdraw()
+			return WireGuardApplyResult{}, errors.Join(errors.New("exit context requires explicit protected reconciliation"), e.exitGuard.Contain(ctx))
+		}
+		return e.configureWithExitLocked(ctx, cfg, networkMap, e.exitSelection, e.exitGuard)
+	}
+	if cfg.ExitSelection != nil {
+		return WireGuardApplyResult{}, errors.New("exit selection requires protected runtime recovery")
+	}
+	return e.configureWithExitLocked(ctx, cfg, networkMap, nil, nil)
+}
+
+// configureExit is used only by a native adapter after durable admission. The
+// same guard instance owns this engine until explicit, verified clear. Returning
+// OK means engine application, not a complete RPC observation or durable commit.
+func (e *WireGuardEngine) configureExit(ctx context.Context, cfg Config, networkMap clientapi.RegisterNodeResponse, selection *ClientExitSelection, guard *linuxExitGuard) (WireGuardApplyResult, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if selection == nil || guard == nil || (e.exitGuard != nil && e.exitGuard != guard) {
+		return WireGuardApplyResult{}, errors.New("explicit exit requires its owned OS guard")
+	}
+	return e.configureWithExitLocked(ctx, cfg, networkMap, selection, guard)
+}
+
+func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Config, networkMap clientapi.RegisterNodeResponse, selection *ClientExitSelection, guard *linuxExitGuard) (result WireGuardApplyResult, applyErr error) {
+	if guard != nil {
+		e.exitGuard = guard
+		attachFilter := e.exitFilter == nil
+		if e.exitFilter == nil {
+			e.exitFilter = &exitPacketFilter{}
+		}
+		e.exitFilter.withdraw()
+		if err := guard.Contain(ctx); err != nil {
+			return WireGuardApplyResult{}, err
+		}
+		// Existing ordinary TUN wrappers do not contain an exit filter. Replace
+		// that runtime under protection rather than racing a live wrapper pointer.
+		if attachFilter && e.device != nil {
+			if err := e.closeLocked(ctx); err != nil {
+				return WireGuardApplyResult{}, err
+			}
+		}
+		defer func() {
+			if applyErr != nil {
+				e.exitFilter.withdraw()
+				// The persistent kernel guard is never released on error. It was
+				// contained before preflight and is opened only as the last step.
+			}
+		}()
+	}
+	result = WireGuardApplyResult{Method: "wireguard-go", Interface: e.interface_}
 	if e.runtimeSuspended {
 		result.UpError = ErrWireGuardRuntimeSuspended.Error()
 		return result, ErrWireGuardRuntimeSuspended
@@ -198,6 +255,12 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 	if err != nil {
 		result.UpError = err.Error()
 		return result, err
+	}
+	if guard != nil {
+		plan.exitSelection = cloneExitSelection(selection)
+		if err := e.completePlanForInterface(&plan, plan.routerCfg.Interface); err != nil {
+			return result, err
+		}
 	}
 	progress := wireGuardEngineApplyProgress{}
 	acceptance, err := resolveNetworkAcceptance(cfg, networkMap, time.Now())
@@ -268,12 +331,34 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 		e.sharingFilter.update(networkMap)
 		e.configureApplicationsLocked(cfg, networkMap)
 		e.configureFlowLocked(cfg, networkMap)
+		if guard != nil {
+			if _, err := exitRoutePeers(cfg, networkMap, selection, time.Now()); err != nil {
+				result.OK = false
+				return result, err
+			}
+			e.exitConfig = clonePersistentConfig(cfg)
+			e.exitSelection = cloneExitSelection(selection)
+			e.exitFilter.commit()
+			if err := ctx.Err(); err != nil {
+				result.OK = false
+				return result, err
+			}
+			if err := guard.OpenTunnel(ctx); err != nil {
+				result.OK = false
+				return result, err
+			}
+		}
 		return result, nil
 	}
 	e.sharingFilter.withdraw()
 	e.inboundFilter.setAllowed(false)
 	e.resourceFilter.withdraw()
 	e.peerACLFilter.withdraw()
+	if guard != nil {
+		// Restoring a previous UAPI/map could revive withdrawn exit authority.
+		// Close the failed runtime under the retained guard instead.
+		return result, errors.Join(err, e.closeLocked(ctx))
+	}
 	if rollbackErr := e.restoreLocked(previous, progress); rollbackErr != nil {
 		return result, errors.Join(err, fmt.Errorf("rollback wireguard-go configuration: %w", rollbackErr))
 	}
@@ -329,18 +414,21 @@ func (e *WireGuardEngine) preflightLocked(cfg Config, networkMap clientapi.Regis
 }
 
 func (e *WireGuardEngine) completePlanForInterface(plan *wireGuardEnginePlan, interfaceName string) error {
-	routerCfg, err := buildWireGuardEngineRouterConfig(interfaceName, plan.mtu, plan.config, plan.networkMap)
+	routerCfg, err := buildWireGuardEngineRouterConfigForExit(interfaceName, plan.mtu, plan.config, plan.networkMap, plan.exitSelection, time.Now())
 	if err != nil {
 		return err
 	}
-	initialUAPI, err := wireGuardEngineUAPIWithoutEndpoints(plan.privateKey, plan.networkMap, e.opts.ListenPort, false, routerCfg.FirewallMark)
+	if plan.exitSelection != nil && (e.exitGuard == nil || (routerCfg.FirewallMark != 0 && routerCfg.FirewallMark != e.exitGuard.mark)) {
+		return errors.New("exit route mark does not match OS protection")
+	}
+	initialUAPI, err := wireGuardEngineUAPIForExit(plan.privateKey, plan.networkMap, e.opts.ListenPort, false, routerCfg.FirewallMark, nil, false, plan.config, plan.exitSelection, time.Now())
 	if err != nil {
 		return err
 	}
 	// Validate the final UAPI shape before touching runtime. Relay loopback
 	// endpoints are only known after Device.Up opens MagicBind, so the final
 	// endpoint-bearing UAPI is rendered once more at that boundary.
-	if _, err := wireGuardEngineUAPI(plan.privateKey, plan.networkMap, e.opts.ListenPort, true, routerCfg.FirewallMark, nil); err != nil {
+	if _, err := wireGuardEngineUAPIForExit(plan.privateKey, plan.networkMap, e.opts.ListenPort, true, routerCfg.FirewallMark, nil, true, plan.config, plan.exitSelection, time.Now()); err != nil {
 		return err
 	}
 	plan.routerCfg = routerCfg
@@ -354,6 +442,11 @@ func (e *WireGuardEngine) configureLocked(ctx context.Context, plan wireGuardEng
 		progress.runtimeReplaced = true
 		if err := e.closeLocked(ctx); err != nil {
 			result.DownError = err.Error()
+			return result, err
+		}
+	}
+	if plan.exitSelection != nil {
+		if err := e.exitFilter.suspend(plan.config, plan.networkMap, plan.exitSelection, time.Now()); err != nil {
 			return result, err
 		}
 	}
@@ -420,7 +513,7 @@ func (e *WireGuardEngine) configureLocked(ctx context.Context, plan wireGuardEng
 	} else {
 		endpointOverrides, _ = nextRelayPaths.Reconcile(plan.networkMap, relayOverrides, relayResult, relayErr, nil, time.Now().UTC())
 	}
-	desiredUAPI, err := wireGuardEngineUAPI(plan.privateKey, plan.networkMap, e.opts.ListenPort, true, plan.routerCfg.FirewallMark, endpointOverrides)
+	desiredUAPI, err := wireGuardEngineUAPIForExit(plan.privateKey, plan.networkMap, e.opts.ListenPort, true, plan.routerCfg.FirewallMark, endpointOverrides, true, plan.config, plan.exitSelection, time.Now())
 	if err != nil {
 		result.SyncError = err.Error()
 		return result, err
@@ -583,7 +676,12 @@ func (e *WireGuardEngine) startLocked(mtu int) error {
 		_ = tunDevice.Close()
 		return fmt.Errorf("read wireguard-go TUN name: %w", err)
 	}
+	if e.exitGuard != nil && interfaceName != e.exitGuard.interfaceName {
+		_ = tunDevice.Close()
+		return errors.New("exit TUN does not match OS protection")
+	}
 	bind := NewMagicBind()
+	bind.setSocketMark = e.opts.setSocketMark
 	logger := &device.Logger{
 		Verbosef: device.DiscardLogf,
 		Errorf: func(format string, args ...any) {
@@ -606,7 +704,7 @@ func (e *WireGuardEngine) startLocked(mtu int) error {
 	if e.resourceFilter == nil {
 		e.resourceFilter = &resourcePacketFilter{}
 	}
-	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, sharing: e.sharingFilter, peerACL: e.peerACLFilter, flows: e.flows, inbound: e.inboundFilter, resources: e.resourceFilter}, bind, logger)
+	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, sharing: e.sharingFilter, peerACL: e.peerACLFilter, flows: e.flows, inbound: e.inboundFilter, resources: e.resourceFilter, exit: e.exitFilter}, bind, logger)
 	e.applicationFilter = filter
 	router := e.opts.router
 	if router == nil {
@@ -977,6 +1075,12 @@ func (e *WireGuardEngine) Down(ctx context.Context) (WireGuardApplyResult, error
 func (e *WireGuardEngine) downLocked(ctx context.Context) (WireGuardApplyResult, error) {
 	result := WireGuardApplyResult{Method: "wireguard-go", Interface: e.interface_}
 	if e.device == nil && e.router == nil {
+		if e.exitGuard != nil {
+			e.exitFilter.withdraw()
+			if err := e.exitGuard.Contain(ctx); err != nil {
+				return result, err
+			}
+		}
 		result.OK = true
 		result.Skipped = true
 		result.Reason = "wireguard-go is already stopped"
@@ -1000,6 +1104,11 @@ func (e *WireGuardEngine) Close() error {
 }
 
 func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
+	var guardErr error
+	if e.exitGuard != nil {
+		e.exitFilter.withdraw()
+		guardErr = e.exitGuard.Contain(ctx)
+	}
 	if e.flowCancel != nil {
 		e.flowCancel()
 		<-e.flowDone
@@ -1050,7 +1159,7 @@ func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
 		e.pathCancel()
 		e.pathCancel = nil
 	}
-	return routeErr
+	return errors.Join(guardErr, routeErr)
 }
 
 func (e *WireGuardEngine) Inspection() WireGuardInspection {
@@ -1221,7 +1330,11 @@ func (e *WireGuardEngine) reconcilePaths(ctx context.Context, interval time.Dura
 	}
 	relayOverrides, relayResult, relayErr := e.relayEndpointOverridesLocked(ctx, e.pathMap)
 	overrides, triggerTargets := e.relayPaths.Reconcile(e.pathMap, relayOverrides, relayResult, relayErr, probes, time.Now().UTC())
-	desiredUAPI, err := wireGuardEngineUAPI(e.pathKey, e.pathMap, e.opts.ListenPort, true, e.routerCfg.FirewallMark, overrides)
+	desiredUAPI, err := wireGuardEngineUAPIForExit(e.pathKey, e.pathMap, e.opts.ListenPort, true, e.routerCfg.FirewallMark, overrides, true, e.exitConfig, e.exitSelection, time.Now())
+	if err != nil && e.exitGuard != nil {
+		e.exitFilter.withdraw()
+		_ = e.exitGuard.Contain(ctx)
+	}
 	inspection := e.inspectionLocked()
 	endpointsMatch := wireGuardEndpointsMatch(e.pathMap, inspection, overrides)
 	if err == nil && (desiredUAPI != e.uapi || !endpointsMatch) {

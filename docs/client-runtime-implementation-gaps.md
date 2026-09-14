@@ -347,6 +347,19 @@ the independent application filter still enforces its own expiry and ports.
 preservation, original-map immutability, rejected authority and suppressed routes.
 These are preflight builders; native guarded engine application remains open.
 
+The engine now has a guarded explicit-select path: nftables containment precedes
+preflight/TUN/routes/UAPI; the TUN exit filter commits before the guard opens its
+interface. Transitioning from an ordinary TUN recreates that runtime under the
+guard so filter attachment cannot race packet processing. Failed guarded apply
+closes under protection instead of restoring previous exit authority. Endpoint
+refresh uses the selected signed projection and contains invalid authority;
+ordinary Configure cannot implicitly restore persisted exit intent or clear a
+guard. `exit_guarded_engine_test.go` exercises userspace WireGuard with a channel
+TUN and injected firewall/socket-mark boundaries, including route-stage failure
+and grant withdrawal. This is not privileged kernel evidence. Native host adapter
+wiring, complete underlay exceptions, verified clear/release, startup restoration,
+observations, Windows/Darwin protection and platform acceptance remain open.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,

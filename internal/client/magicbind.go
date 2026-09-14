@@ -28,6 +28,7 @@ type MagicBind struct {
 	pathWaiters      map[[16]byte]magicBindPathProbeWaiter
 	pathLocalPublic  [32]byte
 	pathProbeEnabled bool
+	setSocketMark    func(*net.UDPConn, uint32) error // configured before use; nil uses the native implementation
 }
 
 type magicBindSession struct {
@@ -236,7 +237,11 @@ func (b *MagicBind) SetMark(mark uint32) error {
 	if b.session == nil {
 		return net.ErrClosed
 	}
-	return errors.Join(setMagicBindSocketMark(b.session.v4, mark), setMagicBindSocketMark(b.session.v6, mark))
+	setMark := b.setSocketMark
+	if setMark == nil {
+		setMark = setMagicBindSocketMark
+	}
+	return errors.Join(setMark(b.session.v4, mark), setMark(b.session.v6, mark))
 }
 
 func (b *MagicBind) Send(bufs [][]byte, endpoint conn.Endpoint, offset int) error {
