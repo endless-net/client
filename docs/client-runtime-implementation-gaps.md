@@ -53,8 +53,15 @@ and Disconnect during fetch. A private checkpoint in the blocked intent now keep
 the original KEEP_INTENT across an offline failure and restart. Recovery binds
 profile, owner, identity, credentials and local startup choice, then applies the
 fresh signed policy to the original intent. Tests cover restoration, explicit
-Disconnect, identity/credential changes and a new managed DISCONNECT. Periodic
-retry within the same running agent after an offline startup remains open.
+Disconnect, identity/credential changes and a new managed DISCONNECT. The running
+agent now retries source recovery from the confirmed-Down branch under its shared
+effect lock and existing retry/backoff loop. Map authority and resumed intent
+commit together after CAS and pending-operation checks, with one revision and
+catalog/preference invalidations. The retry unit matrix covers success, signature
+tampering, expiry, concurrent Disconnect, pending exit work, retained enrollment
+recovery and cancellation;
+connected intent does not imply applied network state. Full platform and
+control-plane outage/recovery qualification remain open.
 Missing-map reads now preserve requested intent but report unknown
 effective value/source and temporary unavailability; set/reset reject the whole
 patch without modifying durable settings. The context regression checks this

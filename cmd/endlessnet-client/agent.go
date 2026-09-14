@@ -512,11 +512,22 @@ func cmdAgent(args []string) error {
 					err = errors.New("enforce disconnected WireGuard state: Down was not confirmed")
 				}
 				phase := ipcv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED
+				resumeStartup := false
 				if err == nil {
 					phase = ipcv0.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED
+					if !*offline && !*once {
+						if retryErr := retryAgentStartupPolicy(ctx, rpcMutations, ipcOpts, timeout); retryErr != nil {
+							err = errors.New("startup policy recovery unavailable")
+						} else if current := configStore.Read().ConnectionIntent; current != nil {
+							resumeStartup = current.DesiredState == client.ConnectionIntentDesiredConnected
+						}
+					}
 				}
-				publishAgentRPCObservation(ctx, rpcMutations, ipcOpts, phase, nil)
+				publishAgentRPCObservation(ctx, rpcMutations, ipcOpts, phase, err)
 				operationMu.Unlock()
+				if resumeStartup {
+					continue
+				}
 				if *once {
 					if err != nil {
 						_ = writeAgentFailureSnapshot(*stateOutput, *configPath, err)

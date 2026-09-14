@@ -14,7 +14,7 @@ import (
 )
 
 func TestStartupPolicyFetchAuthenticatesAndRejectsChangedIntent(t *testing.T) {
-	for _, scenario := range []string{"success", "tampered", "disconnect", "cancelled"} {
+	for _, scenario := range []string{"success", "tampered", "disconnect", "cancelled", "retry", "retry_disconnect"} {
 		t.Run(scenario, func(t *testing.T) {
 			projection := testNetworkMapWithRevision(t, testMapSigningKey(t), "net-1", "node-1", 14)
 			var store *client.ConfigStore
@@ -24,7 +24,7 @@ func TestStartupPolicyFetchAuthenticatesAndRejectsChangedIntent(t *testing.T) {
 					_ = json.NewEncoder(w).Encode(testServerKeyResponse(t, testMapSigningPublicKey(t, projection.MapSignature)))
 				case "/maps/node-1/stream":
 					setTestMapStreamResponseHeaders(w)
-					if scenario == "disconnect" {
+					if scenario == "disconnect" || scenario == "retry_disconnect" {
 						if err := client.NewConnectionIntentStore(store).SetDisconnected("user_disconnect"); err != nil {
 							t.Error(err)
 						}
@@ -56,9 +56,16 @@ func TestStartupPolicyFetchAuthenticatesAndRejectsChangedIntent(t *testing.T) {
 			if scenario == "cancelled" {
 				cancel()
 			}
-			err = refreshAgentStartupPolicy(ctx, store, time.Second)
+			if scenario == "retry" || scenario == "retry_disconnect" {
+				if err := client.NewConnectionIntentStore(store).InitializeRuntimeIntent(); err != nil {
+					t.Fatal(err)
+				}
+				err = retryAgentStartupPolicy(ctx, nil, agentIPCOptions{ConfigStore: store}, time.Second)
+			} else {
+				err = refreshAgentStartupPolicy(ctx, store, time.Second)
+			}
 			after := store.Read()
-			if scenario == "success" {
+			if scenario == "success" || scenario == "retry" {
 				if err != nil || after.CachedMap == nil || after.MapRevision != 14 || !reflect.DeepEqual(before.ConnectionIntent, after.ConnectionIntent) {
 					t.Fatal("startup source was not adopted independently of intent", err)
 				}
@@ -72,7 +79,7 @@ func TestStartupPolicyFetchAuthenticatesAndRejectsChangedIntent(t *testing.T) {
 				if err == nil || after.CachedMap != nil || after.MapRevision != before.MapRevision {
 					t.Fatal("failed or stale fetch mutated map authority", err)
 				}
-				if scenario == "disconnect" && (after.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected || after.ConnectionIntent.Reason != "user_disconnect") {
+				if (scenario == "disconnect" || scenario == "retry_disconnect") && (after.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected || after.ConnectionIntent.Reason != "user_disconnect") {
 					t.Fatal("stale fetch overwrote disconnect")
 				}
 			}

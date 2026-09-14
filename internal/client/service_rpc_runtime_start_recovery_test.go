@@ -8,7 +8,7 @@ import (
 )
 
 func TestRuntimeStartupRecoveryKeepsOriginalIntentWithoutRevivingNewDisconnect(t *testing.T) {
-	for _, scenario := range []string{"restore", "user_disconnect", "owner_changed", "credential_changed", "managed_disconnect"} {
+	for _, scenario := range []string{"restore", "user_disconnect", "owner_changed", "credential_changed", "managed_disconnect", "enrollment_recovery"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, _, _ := rpcPreferenceFixture(t)
 			valid := m.store.Read().CachedMap
@@ -46,6 +46,9 @@ func TestRuntimeStartupRecoveryKeepsOriginalIntentWithoutRevivingNewDisconnect(t
 			if err := store.Update(func(cfg *Config) error {
 				cfg.CachedMap = valid
 				cfg.MapSigningTrust = trust
+				if scenario == "enrollment_recovery" {
+					cfg.EnrollmentRecovery = &EnrollmentRecovery{Phase: RecoveryPhaseNeedsLogin}
+				}
 				if scenario == "owner_changed" {
 					cfg.LocalOwnerID = "other"
 				}
@@ -60,6 +63,12 @@ func TestRuntimeStartupRecoveryKeepsOriginalIntentWithoutRevivingNewDisconnect(t
 				t.Fatal(err)
 			}
 			final := store.Read().ConnectionIntent
+			if scenario == "enrollment_recovery" {
+				if !reflect.DeepEqual(final, blocked) {
+					t.Fatal("restart bypassed retained enrollment recovery")
+				}
+				return
+			}
 			if final.StartupRecovery != nil {
 				t.Fatal("resolved or invalidated startup retained checkpoint")
 			}

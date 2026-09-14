@@ -67,6 +67,9 @@ func runtimeStartBlockedIntent(cfg Config, now time.Time, reason string) *Connec
 }
 
 func runtimeStartRecoveryPending(cfg Config) bool {
+	if cfg.EnrollmentRecovery != nil {
+		return true
+	}
 	if cfg.RPCState == nil {
 		return false
 	}

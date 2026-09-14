@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"reflect"
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
@@ -14,6 +13,21 @@ import (
 // Fetch policy before startup can reconnect. This path never applies network
 // configuration and does not refresh trust across an unapproved key change.
 func refreshAgentStartupPolicy(ctx context.Context, store *client.ConfigStore, timeout time.Duration) error {
+	return refreshAgentStartupPolicyWith(ctx, store, timeout, func(before, candidate client.Config) error {
+		return store.Update(func(current *client.Config) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if !client.StartupPolicyContextEqual(before, *current) {
+				return errors.New("startup policy context changed")
+			}
+			client.ApplyStartupPolicyMap(current, candidate)
+			return nil
+		})
+	})
+}
+
+func refreshAgentStartupPolicyWith(ctx context.Context, store *client.ConfigStore, timeout time.Duration, commit func(client.Config, client.Config) error) error {
 	before := store.Read()
 	wanted := before.ConnectionIntent != nil && (before.ConnectionIntent.DesiredState == client.ConnectionIntentDesiredConnected || before.ConnectionIntent.Reason == "runtime_start_policy_unavailable")
 	if before.RPCState != nil {
@@ -25,7 +39,7 @@ func refreshAgentStartupPolicy(ctx context.Context, store *client.ConfigStore, t
 	}
 	if before.CachedMap != nil && before.CachedMap.MapSignature != nil && time.Now().Before(before.CachedMap.MapSignature.ExpiresAt) {
 		if _, err := verifiedCachedNetworkMap(&before); err == nil {
-			return nil
+			return commit(before, before)
 		}
 	}
 	if before.NodeID == "" || before.NodeCredential == "" || len(before.ControlURLs()) == 0 {
@@ -40,7 +54,7 @@ func refreshAgentStartupPolicy(ctx context.Context, store *client.ConfigStore, t
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	candidate := store.Read()
-	if !startupPolicyContextEqual(before, candidate) {
+	if !client.StartupPolicyContextEqual(before, candidate) {
 		return errors.New("startup policy context changed")
 	}
 	control := apiFromConfig(candidate)
@@ -71,26 +85,17 @@ func refreshAgentStartupPolicy(ctx context.Context, store *client.ConfigStore, t
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return store.Update(func(current *client.Config) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if !startupPolicyContextEqual(before, *current) {
-			return errors.New("startup policy context changed")
-		}
-		current.CachedMap, current.CachedMapSavedAt = candidate.CachedMap, candidate.CachedMapSavedAt
-		current.MapRevision, current.MapGlobalRevision = candidate.MapRevision, candidate.MapGlobalRevision
-		current.MapHash = candidate.MapHash
-		current.MapSigningTrust = candidate.MapSigningTrust
-		current.NodeApprovalState = candidate.NodeApprovalState
-		return nil
-	})
+	return commit(before, candidate)
 }
 
-func startupPolicyContextEqual(a, b client.Config) bool {
-	return a.NodeID == b.NodeID && a.NetworkID == b.NetworkID && a.NodeCredential == b.NodeCredential && a.LocalOwnerID == b.LocalOwnerID &&
-		a.PrivateKey == b.PrivateKey && a.IdentityPrivateKey == b.IdentityPrivateKey && a.DeviceFingerprint == b.DeviceFingerprint && a.Token == b.Token &&
-		a.MapRevision == b.MapRevision && a.MapGlobalRevision == b.MapGlobalRevision && a.MapHash == b.MapHash && reflect.DeepEqual(a.ControlURLs(), b.ControlURLs()) &&
-		reflect.DeepEqual(a.ConnectionIntent, b.ConnectionIntent) && reflect.DeepEqual(a.RPCState, b.RPCState) &&
-		reflect.DeepEqual(a.MapSigningTrust, b.MapSigningTrust) && reflect.DeepEqual(a.CachedMap, b.CachedMap)
+func retryAgentStartupPolicy(ctx context.Context, mutations *client.ClientRPCMutations, opts agentIPCOptions, timeout time.Duration) error {
+	if !client.RuntimeStartRecoveryReady(opts.ConfigStore.Read()) {
+		return nil
+	}
+	return refreshAgentStartupPolicyWith(ctx, opts.ConfigStore, timeout, func(before, candidate client.Config) error {
+		if mutations != nil {
+			return mutations.RecoverStartupPolicy(ctx, before, candidate)
+		}
+		return client.NewConnectionIntentStore(opts.ConfigStore).RecoverStartupPolicy(ctx, before, candidate)
+	})
 }
