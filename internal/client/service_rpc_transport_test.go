@@ -361,7 +361,7 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 			if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.Kind != ipc.OperationKind_OPERATION_KIND_CONNECT {
 				t.Fatal("native Connect failed")
 			}
-			setRequest := &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT.Enum()}}
+			setRequest := &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT.Enum(), RuntimeStart: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}}
 			setAccepted, err := client.SetPreferences(ctx, connect.NewRequest(setRequest))
 			if err != nil {
 				t.Fatal(err)
@@ -371,7 +371,7 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 				t.Fatal("native user preference projection", err)
 			}
 			managed, err := client.ListManagedSettings(ctx, connect.NewRequest(&ipc.ListManagedSettingsRequest{Profile: selection.Profile}))
-			if err != nil || len(managed.Msg.Settings) != 4 || managed.Msg.Settings[0].Key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT || managed.Msg.Settings[0].GetLifecycleValue() != preferences.Msg.Preferences.Lifecycle.UiQuit.Effective || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_USER || managed.Msg.Metadata.Revision != preferences.Msg.Preferences.Metadata.Revision {
+			if err != nil || len(managed.Msg.Settings) != 5 || managed.Msg.Settings[0].Key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT || managed.Msg.Settings[0].GetLifecycleValue() != preferences.Msg.Preferences.Lifecycle.UiQuit.Effective || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_USER || managed.Msg.Metadata.Revision != preferences.Msg.Preferences.Metadata.Revision {
 				t.Fatal("managed projection disagrees with native preferences", err)
 			}
 			if managed.Msg.Settings[1].Key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS || managed.Msg.Settings[1].GetBooleanValue() != preferences.Msg.Preferences.AcceptDns.Effective || managed.Msg.Settings[2].Key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_ROUTES || managed.Msg.Settings[2].GetBooleanValue() != preferences.Msg.Preferences.AcceptRoutes.Effective {
@@ -380,13 +380,16 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 			if managed.Msg.Settings[3].Key != ipc.PreferenceKey_PREFERENCE_KEY_ALLOW_INBOUND || managed.Msg.Settings[3].GetBooleanValue() != preferences.Msg.Preferences.AllowInbound.Effective {
 				t.Fatal("managed inbound value disagrees with native preferences")
 			}
-			resetRequest := &ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT}}
+			if managed.Msg.Settings[4].Key != ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START || managed.Msg.Settings[4].GetLifecycleValue() != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT || preferences.Msg.Preferences.Lifecycle.RuntimeStart.GetRequested() != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT || managed.Msg.Settings[4].Control.Source != ipc.SettingSource_SETTING_SOURCE_USER {
+				t.Fatal("native runtime-start projection disagrees")
+			}
+			resetRequest := &ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT, ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START}}
 			resetAccepted, err := client.ResetPreferences(ctx, connect.NewRequest(resetRequest))
 			if err != nil {
 				t.Fatal(err)
 			}
 			managed, err = client.ListManagedSettings(ctx, connect.NewRequest(&ipc.ListManagedSettingsRequest{Profile: selection.Profile}))
-			if err != nil || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_DEFAULT {
+			if err != nil || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_DEFAULT || managed.Msg.Settings[4].Control.Source != ipc.SettingSource_SETTING_SOURCE_DEFAULT || managed.Msg.Settings[4].GetLifecycleValue() != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT {
 				t.Fatal("reset retained managed user source", err)
 			}
 			// A delayed retransmission of an older successful setter must not

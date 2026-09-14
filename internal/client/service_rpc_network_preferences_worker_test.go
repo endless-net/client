@@ -23,7 +23,7 @@ func TestNetworkPreferenceWorkerApplyAndContainment(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			op, err := m.setNetworkPreferencesAs(owner, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{AcceptDns: proto.Bool(false), AcceptRoutes: proto.Bool(false), UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}})
+			op, err := m.setNetworkPreferencesAs(owner, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{AcceptDns: proto.Bool(false), AcceptRoutes: proto.Bool(false), UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum(), RuntimeStart: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT.Enum()}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -40,7 +40,7 @@ func TestNetworkPreferenceWorkerApplyAndContainment(t *testing.T) {
 				if cfg.NetworkPreferences == nil || cfg.NetworkPreferences.AcceptDNS == nil || *cfg.NetworkPreferences.AcceptDNS || *cfg.NetworkPreferences.AcceptRoutes {
 					t.Fatal("driver did not receive candidate")
 				}
-				if m.store.Read().NetworkPreferences != nil {
+				if m.store.Read().NetworkPreferences != nil || m.store.Read().RPCState.Profiles[profile.ProfileId].RuntimeStart != nil {
 					t.Fatal("candidate published before effect")
 				}
 				switch scenario {
@@ -83,7 +83,7 @@ func TestNetworkPreferenceWorkerApplyAndContainment(t *testing.T) {
 				t.Fatal("terminal operation retained plan")
 			}
 			if scenario == "apply" || scenario == "disconnected" {
-				if result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || cfg.NetworkPreferences == nil || cfg.RPCState.Profiles[profile.ProfileId].UIQuit == nil {
+				if result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || cfg.NetworkPreferences == nil || cfg.RPCState.Profiles[profile.ProfileId].UIQuit == nil || cfg.RPCState.Profiles[profile.ProfileId].RuntimeStart == nil || *cfg.RPCState.Profiles[profile.ProfileId].RuntimeStart != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT {
 					t.Fatal("successful effect did not commit atomic patch")
 				}
 			} else {
@@ -100,7 +100,7 @@ func TestNetworkPreferenceWorkerApplyAndContainment(t *testing.T) {
 				if scenario == "tampered_before_apply" {
 					wantCode = ipc.ErrorCode_ERROR_CODE_UNAVAILABLE
 				}
-				if result.State != wantState || result.GetFailure().GetCode() != wantCode || cfg.NetworkPreferences != nil || cfg.RPCState.Profiles[profile.ProfileId].UIQuit != nil || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected || stops != 1 {
+				if result.State != wantState || result.GetFailure().GetCode() != wantCode || cfg.NetworkPreferences != nil || cfg.RPCState.Profiles[profile.ProfileId].UIQuit != nil || cfg.RPCState.Profiles[profile.ProfileId].RuntimeStart != nil || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected || stops != 1 {
 					t.Fatal("failure cause or containment lost", result)
 				}
 			}

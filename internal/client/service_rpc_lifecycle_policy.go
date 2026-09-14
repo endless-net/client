@@ -1,6 +1,8 @@
 package client
 
 import (
+	"time"
+
 	"connectrpc.com/connect"
 	api "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/clientipc/rpc"
@@ -11,27 +13,39 @@ import (
 // a different profile's active map. The result describes event behavior, not an
 // already completed tunnel transition.
 func (m *ClientRPCMutations) uiQuitSetting(cfg Config, profile clientRPCProfile) (*ipc.LifecycleSetting, error) {
+	return lifecycleSetting(cfg, profile, api.ClientSettingUIQuit, profile.UIQuit, m.now())
+}
+
+func (m *ClientRPCMutations) runtimeStartSetting(cfg Config, profile clientRPCProfile) (*ipc.LifecycleSetting, error) {
+	return lifecycleSetting(cfg, profile, api.ClientSettingRuntimeStart, profile.RuntimeStart, m.now())
+}
+
+func lifecycleSetting(cfg Config, profile clientRPCProfile, key api.ClientSettingKey, requested *ipc.LifecycleBehavior, now time.Time) (*ipc.LifecycleSetting, error) {
 	setting := &ipc.LifecycleSetting{
-		Effective: rpcUIQuit(profile), Requested: profile.UIQuit,
+		Effective:     ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT,
 		AllowedValues: []ipc.LifecycleBehavior{ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT, ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT},
 		Control:       &ipc.SettingControl{Source: ipc.SettingSource_SETTING_SOURCE_DEFAULT, Mutation: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE}},
 	}
-	if profile.UIQuit != nil {
-		setting.Requested = profile.UIQuit.Enum()
+	if key == api.ClientSettingRuntimeStart {
+		setting.AllowedValues = append(setting.AllowedValues, ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT)
+	}
+	if requested != nil {
+		setting.Requested = requested.Enum()
+		setting.Effective = *requested
 		setting.Control.Source = ipc.SettingSource_SETTING_SOURCE_USER
 	}
-	if profile.ID != cfg.RPCState.ActiveProfileID {
+	if cfg.RPCState != nil && profile.ID != cfg.RPCState.ActiveProfileID {
 		setting.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_requires_active_profile", ActionOwner: ipc.ActionOwner_ACTION_OWNER_USER}
 		// Inactive profiles retain their own configuration, never active policy.
 		cfg = profile.Configuration
 	}
 	if state := cfg.CachedMap; state != nil {
-		if cfg.MapSigningTrust == nil || cfg.NodeID == "" || cfg.NetworkID == "" || state.Node.ID != cfg.NodeID || state.Network.ID != cfg.NetworkID || state.Network.Revision != cfg.MapRevision || state.Revision.Global != cfg.MapGlobalRevision || api.ValidateNetworkMap(*state) != nil || api.VerifyNetworkMapSignatureWithTrustBundle(*state, *cfg.MapSigningTrust) != nil || state.MapSignature == nil || !m.now().Before(state.MapSignature.ExpiresAt) {
+		if cfg.MapSigningTrust == nil || cfg.NodeID == "" || cfg.NetworkID == "" || state.Node.ID != cfg.NodeID || state.Network.ID != cfg.NetworkID || state.Network.Revision != cfg.MapRevision || state.Revision.Global != cfg.MapGlobalRevision || api.ValidateNetworkMap(*state) != nil || api.VerifyNetworkMapSignatureWithTrustBundle(*state, *cfg.MapSigningTrust) != nil || state.MapSignature == nil || !now.Before(state.MapSignature.ExpiresAt) {
 			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 		}
 		if policy := state.Network.ClientPolicy; policy != nil {
 			for _, managed := range policy.Settings {
-				if managed.Key != api.ClientSettingUIQuit {
+				if managed.Key != key {
 					continue
 				}
 				var value ipc.LifecycleBehavior
@@ -40,6 +54,11 @@ func (m *ClientRPCMutations) uiQuitSetting(cfg Config, profile clientRPCProfile)
 					value = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT
 				case api.ClientLifecycleDisconnect:
 					value = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT
+				case api.ClientLifecycleConnect:
+					if key != api.ClientSettingRuntimeStart {
+						return nil, rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+					}
+					value = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT
 				default:
 					// CONNECT requires a lifecycle connect executor. Do not execute
 					// a local default in place of an unsupported managed behavior.
@@ -47,7 +66,7 @@ func (m *ClientRPCMutations) uiQuitSetting(cfg Config, profile clientRPCProfile)
 				}
 				setting.Control.PolicyId = managed.PolicyID
 				setting.Control.Locked = managed.Locked
-				if managed.Locked || profile.UIQuit == nil {
+				if managed.Locked || requested == nil {
 					setting.Effective = value
 					setting.Control.Source = ipc.SettingSource_SETTING_SOURCE_ACCOUNT_POLICY
 					actor := ipc.ActionOwner_ACTION_OWNER_ACCESS_ADMINISTRATOR
@@ -63,7 +82,7 @@ func (m *ClientRPCMutations) uiQuitSetting(cfg Config, profile clientRPCProfile)
 			}
 		}
 	}
-	if setting.Effective != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT && setting.Effective != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT {
+	if setting.Effective != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT && setting.Effective != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT && (key != api.ClientSettingRuntimeStart || setting.Effective != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT) {
 		return nil, rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
 	}
 	return setting, nil

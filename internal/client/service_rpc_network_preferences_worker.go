@@ -22,7 +22,7 @@ func (m *ClientRPCMutations) networkPreferenceCandidate(cfg Config, plan *client
 	if !maps.Equal(cfg.ResourcePreferences, plan.PreviousResources) {
 		return stale()
 	}
-	if !exists || profile.ControlOrigin != plan.ControlOrigin || !reflect.DeepEqual(cfg.NetworkPreferences, plan.Previous) || !reflect.DeepEqual(profile.UIQuit, plan.PreviousUIQuit) || !reflect.DeepEqual(cfg.ConnectionIntent, plan.PreviousIntent) {
+	if !exists || profile.ControlOrigin != plan.ControlOrigin || !reflect.DeepEqual(cfg.NetworkPreferences, plan.Previous) || !reflect.DeepEqual(profile.UIQuit, plan.PreviousUIQuit) || !reflect.DeepEqual(profile.RuntimeStart, plan.PreviousRuntimeStart) || !reflect.DeepEqual(cfg.ConnectionIntent, plan.PreviousIntent) {
 		return stale()
 	}
 	cfg.NetworkPreferences = cloneNetworkPreferences(plan.Requested)
@@ -34,6 +34,10 @@ func (m *ClientRPCMutations) networkPreferenceCandidate(cfg Config, plan *client
 		return Config{}, err
 	}
 	profile.UIQuit = cloneLifecycleBehavior(plan.RequestedUIQuit)
+	profile.RuntimeStart = cloneLifecycleBehavior(plan.RequestedRuntimeStart)
+	if _, err := m.runtimeStartSetting(cfg, profile); err != nil {
+		return Config{}, err
+	}
 	if _, err := m.uiQuitSetting(cfg, profile); err != nil {
 		return Config{}, err
 	}
@@ -99,6 +103,7 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 				cfg.ResourcePreferences = maps.Clone(plan.RequestedResources)
 				profile := cfg.RPCState.Profiles[plan.ProfileID]
 				profile.UIQuit = cloneLifecycleBehavior(plan.RequestedUIQuit)
+				profile.RuntimeStart = cloneLifecycleBehavior(plan.RequestedRuntimeStart)
 				cfg.RPCState.Profiles[profile.ID] = profile
 				cfg.RPCState.NetworkPreferenceChange = nil
 				op.State = ipc.OperationState_OPERATION_STATE_SUCCEEDED

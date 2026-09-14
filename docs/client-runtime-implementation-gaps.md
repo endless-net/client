@@ -28,9 +28,22 @@ that durable baseline under its lifetime lock before engine creation, RPC worker
 or network sync. Existing connected/disconnected intents keep their reason and
 timestamp; malformed saved intents cannot imply Connect. The short test
 `TestRuntimeStartPreservesExplicitIntentAndDefaultsDisconnected` checks initial
-state and restart. Runtime-start local overrides, managed policy resolution and
-their effective preference projection still require implementation; this default
-alone does not close UF-21 or UI-AC-21.
+state and restart. Runtime-start now supports local KEEP_INTENT/CONNECT/DISCONNECT,
+signed account/device baselines and locks, requested/effective/source projection,
+selective reset and atomic patches with UI_QUIT or network preferences. Preference
+mutation changes future startup behavior, not the current connection intent.
+The real agent startup resolves the committed setting before network work;
+unverifiable policy holds networking down while leaving local recovery available.
+CONNECT cannot supersede a nonterminal operation's saved recovery intent.
+`service_rpc_runtime_start_test.go` checks policy/lock/reset/replay, source failures,
+owner denial and pending Disconnect; the network worker matrix includes runtime-start
+commit/rollback. Logoff/suspend/resume inputs and platform qualification remain open;
+startup refresh when the authenticated cached policy is absent/expired also needs
+a control-plane recovery audit. These tests do not close UF-21 or UI-AC-21.
+Local vet/lint and the final short run passed. A preceding short run exhausted
+the DNS TCP/UDP ephemeral-port pairing attempts on Windows (bind access denied);
+the unchanged listener passed on repetition. This is not evidence of platform
+binding reliability or lifecycle acceptance.
 
 Exit selection admission now persists the authenticated map payload hash.
 Preflight, completion and retry reject replacement maps even when recipient,

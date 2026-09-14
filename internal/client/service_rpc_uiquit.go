@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"reflect"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
@@ -24,37 +25,7 @@ func (m *ClientRPCMutations) setPreferencesAs(peer local.Peer, request *ipc.SetP
 		if err != nil {
 			return err
 		}
-		if len(keys) != 1 || keys[0] != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT {
-			return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
-		}
-		value := request.Patch.GetUiQuit()
-		if value != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT && value != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT {
-			return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
-		}
-		profile, err := rpcFindProfile(cfg, request.Profile)
-		if err != nil {
-			return err
-		}
-		changed := profile.UIQuit == nil || *profile.UIQuit != value
-		if cfg.RPCState.NetworkPreferenceChange != nil {
-			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
-		}
-		if profile.ID != cfg.RPCState.ActiveProfileID {
-			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
-		}
-		setting, err := m.uiQuitSetting(*cfg, profile)
-		if err != nil {
-			return err
-		}
-		if setting.Control.Locked && setting.Effective != value {
-			return rpc.Error(connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED)
-		}
-		profile.UIQuit = &value
-		cfg.RPCState.Profiles[profile.ID] = profile
-		op.ProfileId = profile.ID
-		op.Continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE
-		op.Outcome = &ipc.Operation_Change{Change: &ipc.ChangeResult{Changed: changed}}
-		return nil
+		return m.prepareLifecyclePreferences(cfg, op, request.Profile, keys, request.Patch)
 	}, true)
 	return op, err
 }
@@ -64,31 +35,69 @@ func (m *ClientRPCMutations) resetPreferencesAs(peer local.Peer, request *ipc.Re
 		if err := rpcValidatePreferenceReset(request.Keys); err != nil {
 			return err
 		}
-		if len(request.Keys) != 1 || request.Keys[0] != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT {
-			return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
-		}
-		profile, err := rpcFindProfile(cfg, request.Profile)
-		if err != nil {
-			return err
-		}
-		changed := profile.UIQuit != nil
-		if cfg.RPCState.NetworkPreferenceChange != nil {
-			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
-		}
-		if profile.ID != cfg.RPCState.ActiveProfileID {
-			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
-		}
-		profile.UIQuit = nil
-		if _, err := m.uiQuitSetting(*cfg, profile); err != nil {
-			return err
-		}
-		cfg.RPCState.Profiles[profile.ID] = profile
-		op.ProfileId = profile.ID
-		op.Continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE
-		op.Outcome = &ipc.Operation_Change{Change: &ipc.ChangeResult{Changed: changed}}
-		return nil
+		return m.prepareLifecyclePreferences(cfg, op, request.Profile, request.Keys, nil)
 	}, true)
 	return op, err
+}
+
+func (m *ClientRPCMutations) prepareLifecyclePreferences(cfg *Config, op *ipc.Operation, ref *ipc.ProfileRef, keys []ipc.PreferenceKey, patch *ipc.PreferencesPatch) error {
+	profile, err := rpcFindProfile(cfg, ref)
+	if err != nil {
+		return err
+	}
+	if profile.ID != cfg.RPCState.ActiveProfileID {
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
+	if cfg.RPCState.NetworkPreferenceChange != nil {
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+	}
+	previous := profile
+	for _, key := range keys {
+		if err := m.patchLifecyclePreference(*cfg, &profile, key, patch); err != nil {
+			return err
+		}
+	}
+	cfg.RPCState.Profiles[profile.ID] = profile
+	op.ProfileId = profile.ID
+	op.Continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE
+	op.Outcome = &ipc.Operation_Change{Change: &ipc.ChangeResult{Changed: !reflect.DeepEqual(previous.UIQuit, profile.UIQuit) || !reflect.DeepEqual(previous.RuntimeStart, profile.RuntimeStart)}}
+	return nil
+}
+
+// Mutates a candidate only. The caller commits all keys in one transaction.
+func (m *ClientRPCMutations) patchLifecyclePreference(cfg Config, profile *clientRPCProfile, key ipc.PreferenceKey, patch *ipc.PreferencesPatch) error {
+	var value *ipc.LifecycleBehavior
+	var resolve func(Config, clientRPCProfile) (*ipc.LifecycleSetting, error)
+	switch key {
+	case ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT:
+		if patch != nil {
+			value = patch.GetUiQuit().Enum()
+		}
+		resolve = m.uiQuitSetting
+	case ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START:
+		if patch != nil {
+			value = patch.GetRuntimeStart().Enum()
+		}
+		resolve = m.runtimeStartSetting
+	default:
+		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	}
+	if value != nil && *value != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT && *value != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT && (key != ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START || *value != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT) {
+		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	}
+	if key == ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT {
+		profile.UIQuit = value
+	} else {
+		profile.RuntimeStart = value
+	}
+	setting, err := resolve(cfg, *profile)
+	if err != nil {
+		return err
+	}
+	if value != nil && setting.Control.Locked && setting.Effective != *value {
+		return rpc.Error(connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED)
+	}
+	return nil
 }
 
 func (m *ClientRPCMutations) notifyLifecycleAs(peer local.Peer, request *ipc.NotifyLifecycleRequest) (*ipc.Operation, error) {
@@ -147,6 +156,10 @@ func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPrefer
 	if err != nil {
 		return nil, err
 	}
+	startup, err := s.mutations.runtimeStartSetting(cfg, profile)
+	if err != nil {
+		return nil, err
+	}
 	dns, routes, inbound, err := s.mutations.networkPreferenceSettings(cfg, profile)
 	if err != nil {
 		return nil, err
@@ -162,12 +175,16 @@ func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPrefer
 		}
 	}
 	if plan := cfg.RPCState.NetworkPreferenceChange; plan != nil && plan.ProfileID == profile.ID {
+		startup.Requested = cloneLifecycleBehavior(plan.RequestedRuntimeStart)
+		if !startup.Control.Locked {
+			startup.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_patch_pending"}
+		}
 		setting.Requested = cloneLifecycleBehavior(plan.RequestedUIQuit)
 		if !setting.Control.Locked {
 			setting.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_patch_pending"}
 		}
 	}
-	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, AcceptDns: dns, AcceptRoutes: routes, AllowInbound: inbound, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: setting}}}), nil
+	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, AcceptDns: dns, AcceptRoutes: routes, AllowInbound: inbound, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: setting, RuntimeStart: startup}}}), nil
 }
 
 func (s *ClientRPCService) SetPreferences(ctx context.Context, request *connect.Request[ipc.SetPreferencesRequest]) (*connect.Response[ipc.SetPreferencesResponse], error) {
@@ -195,6 +212,7 @@ func (s *ClientRPCService) ListManagedSettings(ctx context.Context, request *con
 	}
 	value := preferences.Msg.Preferences.Lifecycle.UiQuit
 	settings := []*ipc.ManagedSetting{{Key: ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT, Control: proto.Clone(value.Control).(*ipc.SettingControl), EffectiveValue: &ipc.ManagedSetting_LifecycleValue{LifecycleValue: value.Effective}}}
+	startup := preferences.Msg.Preferences.Lifecycle.RuntimeStart
 	for _, entry := range []struct {
 		key   ipc.PreferenceKey
 		value *ipc.BooleanSetting
@@ -203,6 +221,7 @@ func (s *ClientRPCService) ListManagedSettings(ctx context.Context, request *con
 			settings = append(settings, &ipc.ManagedSetting{Key: entry.key, Control: proto.Clone(entry.value.Control).(*ipc.SettingControl), EffectiveValue: &ipc.ManagedSetting_BooleanValue{BooleanValue: entry.value.Effective}})
 		}
 	}
+	settings = append(settings, &ipc.ManagedSetting{Key: ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START, Control: proto.Clone(startup.Control).(*ipc.SettingControl), EffectiveValue: &ipc.ManagedSetting_LifecycleValue{LifecycleValue: startup.Effective}})
 	return connect.NewResponse(&ipc.ListManagedSettingsResponse{Metadata: preferences.Msg.Preferences.Metadata, Settings: settings}), nil
 }
 

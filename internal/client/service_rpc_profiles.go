@@ -87,6 +87,7 @@ type clientRPCProfile struct {
 	ControlOrigin      string                       `json:"control_origin"`
 	Configuration      Config                       `json:"configuration"`
 	UIQuit             *ipc.LifecycleBehavior       `json:"ui_quit,omitempty"`
+	RuntimeStart       *ipc.LifecycleBehavior       `json:"runtime_start,omitempty"`
 	LogoutConfirmation *clientRPCLogoutConfirmation `json:"logout_confirmation,omitempty"`
 }
 
