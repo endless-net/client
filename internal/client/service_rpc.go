@@ -33,20 +33,21 @@ var errRPCNoChange = errors.New("RPC durable state unchanged")
 // may retain protected authorization needed to resume accepted work; these are
 // never included in an operation, snapshot, event or RPC response.
 type ClientRPCState struct {
-	Revision              uint64                              `json:"revision"`
-	DigestKey             []byte                              `json:"digest_key"`
-	Operations            map[string]clientRPCOperationRecord `json:"operations"`
-	Profiles              map[string]clientRPCProfile         `json:"profiles,omitempty"`
-	ActiveProfileID       string                              `json:"active_profile_id,omitempty"`
-	ProfileSwitch         *clientRPCProfileSwitch             `json:"profile_switch,omitempty"`
-	DisconnectOperationID string                              `json:"disconnect_operation_id,omitempty"`
-	ConnectOperationID    string                              `json:"connect_operation_id,omitempty"`
-	Enrollment            *clientRPCEnrollment                `json:"enrollment,omitempty"`
-	Logout                *clientRPCLogout                    `json:"logout,omitempty"`
-	Trust                 *clientRPCTrust                     `json:"trust,omitempty"`
-	SessionRenewal        *clientRPCSessionRenewal            `json:"session_renewal,omitempty"`
-	ExitChange            *clientRPCExitChange                `json:"exit_change,omitempty"`
-	Bundles               map[string]clientRPCBundlePlan      `json:"bundles,omitempty"`
+	Revision                uint64                              `json:"revision"`
+	DigestKey               []byte                              `json:"digest_key"`
+	Operations              map[string]clientRPCOperationRecord `json:"operations"`
+	Profiles                map[string]clientRPCProfile         `json:"profiles,omitempty"`
+	ActiveProfileID         string                              `json:"active_profile_id,omitempty"`
+	ProfileSwitch           *clientRPCProfileSwitch             `json:"profile_switch,omitempty"`
+	DisconnectOperationID   string                              `json:"disconnect_operation_id,omitempty"`
+	ConnectOperationID      string                              `json:"connect_operation_id,omitempty"`
+	Enrollment              *clientRPCEnrollment                `json:"enrollment,omitempty"`
+	Logout                  *clientRPCLogout                    `json:"logout,omitempty"`
+	Trust                   *clientRPCTrust                     `json:"trust,omitempty"`
+	SessionRenewal          *clientRPCSessionRenewal            `json:"session_renewal,omitempty"`
+	ExitChange              *clientRPCExitChange                `json:"exit_change,omitempty"`
+	NetworkPreferenceChange *clientRPCNetworkPreferenceChange   `json:"network_preference_change,omitempty"`
+	Bundles                 map[string]clientRPCBundlePlan      `json:"bundles,omitempty"`
 }
 
 type clientRPCOperationRecord struct {

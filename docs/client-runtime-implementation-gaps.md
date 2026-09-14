@@ -84,6 +84,18 @@ resource route or DNS setting. Static output is still not a live policy/expiry
 enforcer. No additional
 preference capability is advertised by this increment.
 
+Durable admission preparation: `service_rpc_network_preferences.go` records an
+atomic DNS/routes patch (optionally including UI-quit) separately from active
+configuration, bound to owner, profile, node, network and signed map payload.
+`TestNetworkPreferenceAdmissionIsDurableAndDoesNotApply` covers restart and
+same-request replay ahead of CAS/conflict checks;
+`TestNetworkPreferenceAdmissionRejectsWholePatch` covers authorization, signed
+source tampering, revision mismatch, managed lock and unsupported/empty patches;
+`TestNetworkPreferenceResetPreservesUnselectedOverrides` covers selective reset.
+These private admission methods are not connected to the public service yet.
+The apply/rollback worker, actual effect observations and public projection are
+still required; a stored pending patch is not evidence of applied preferences.
+
 Existing test filenames above identify starting points for review, not assertions
 that all listed scenarios are already covered.
 
