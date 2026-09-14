@@ -206,7 +206,7 @@ func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPrefer
 	s.profileMu.Unlock()
 	if !ready {
 		for _, value := range []*ipc.BooleanSetting{dns, routes, inbound} {
-			if value != nil && !value.Control.Locked {
+			if value != nil && value.GetControl().GetMutation().GetAvailability() == ipc.Availability_AVAILABILITY_AVAILABLE {
 				value.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_worker_unavailable"}
 			}
 		}

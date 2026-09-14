@@ -421,6 +421,12 @@ Existing capability tests now include both families in Bootstrap/opening snapsho
 worker cancellation, independent enrollment lifetime, replacement-worker safety
 and host shutdown. Per-setting/resource policy restrictions still apply, and
 full OS effects, recovery and BA/SA acceptance remain separately open.
+Read-restriction audit: ListResources already preserves pending/conflict and
+managed-policy precedence over worker absence. GetPreferences now applies
+`preference_worker_unavailable` only to otherwise AVAILABLE boolean mutations;
+it no longer hides inactive-profile or pending-patch reasons.
+`TestPreferenceWorkerAbsencePreservesContextRestriction` covers idle, pending
+and inactive reads for DNS, routes and inbound settings with no executor.
 `TestNetworkPreferencePublicAdmissionWakesWorkerAndSeparatesPending` exercises
 the readiness/acceptance bridge, worker wakeup and pending-to-committed reads;
 `TestNetworkPreferenceProjectionManagedLockAndReset` covers lock precedence
