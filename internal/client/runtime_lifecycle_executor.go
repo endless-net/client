@@ -24,15 +24,16 @@ type RuntimeLifecycleExecutor struct {
 	operationLock sync.Locker
 	wake          func()
 	refreshPolicy func(context.Context) error
+	observe       func(bool, error) error
 	held          bool
 	closed        bool
 }
 
-func NewRuntimeLifecycleExecutor(lifetime context.Context, mutations *ClientRPCMutations, engine runtimeLifecycleEngine, operationLock sync.Locker, wake func(), refreshPolicy func(context.Context) error) (*RuntimeLifecycleExecutor, error) {
-	if lifetime == nil || mutations == nil || engine == nil || operationLock == nil || wake == nil || refreshPolicy == nil {
-		return nil, errors.New("runtime lifecycle requires lifetime, mutations, engine, operation lock, wake and policy refresh")
+func NewRuntimeLifecycleExecutor(lifetime context.Context, mutations *ClientRPCMutations, engine runtimeLifecycleEngine, operationLock sync.Locker, wake func(), refreshPolicy func(context.Context) error, observe func(bool, error) error) (*RuntimeLifecycleExecutor, error) {
+	if lifetime == nil || mutations == nil || engine == nil || operationLock == nil || wake == nil || refreshPolicy == nil || observe == nil {
+		return nil, errors.New("runtime lifecycle requires lifetime, mutations, engine, operation lock, wake, policy refresh and observation")
 	}
-	return &RuntimeLifecycleExecutor{lifetime: lifetime, mutations: mutations, engine: engine, operationLock: operationLock, wake: wake, refreshPolicy: refreshPolicy}, nil
+	return &RuntimeLifecycleExecutor{lifetime: lifetime, mutations: mutations, engine: engine, operationLock: operationLock, wake: wake, refreshPolicy: refreshPolicy, observe: observe}, nil
 }
 
 func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOwner string) error {
@@ -79,34 +80,42 @@ func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOw
 	switch event {
 	case RuntimeSuspend:
 		result, err := e.engine.Suspend(e.lifetime)
-		return errors.Join(policyErr, runtimeLifecycleDownError(result, err))
+		downErr := runtimeLifecycleDownError(result, err)
+		failure := errors.Join(policyErr, downErr)
+		return errors.Join(failure, e.observe(downErr == nil, failure))
 	case RuntimeResume:
 		// Close the gate even for an unsolicited resume. Fetch current authority
 		// before deciding intent; stale policy must not first commit Disconnect.
 		result, err := e.engine.Suspend(e.lifetime)
 		if err := runtimeLifecycleDownError(result, err); err != nil {
-			return err
+			return errors.Join(err, e.observe(false, err))
 		}
 		if err := e.refreshPolicy(e.lifetime); err != nil {
-			return err
+			return errors.Join(err, e.observe(true, err))
 		}
 		policyErr = e.mutations.ApplyRuntimeLifecycleIntent(e.lifetime, event, sessionOwner)
 		if policyErr != nil {
-			return policyErr
+			return errors.Join(policyErr, e.observe(true, policyErr))
+		}
+		// Resume only opens the engine gate. No new tunnel has been applied.
+		if err := e.observe(true, nil); err != nil {
+			return err
 		}
 		if err := e.engine.Resume(e.lifetime); err != nil {
-			return err
+			return errors.Join(err, e.observe(true, err))
 		}
 		e.release()
 		e.wake()
 		return nil
 	case RuntimeUserLogoff:
 		result, err := e.engine.Down(e.lifetime)
+		downErr := runtimeLifecycleDownError(result, err)
+		observationErr := e.observe(downErr == nil, downErr)
 		if !previouslyHeld {
 			e.release()
 			e.wake() // Ordinary disconnected reconciliation retries a failed Down.
 		}
-		return runtimeLifecycleDownError(result, err)
+		return errors.Join(downErr, observationErr)
 	}
 	return nil
 }

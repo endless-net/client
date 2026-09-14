@@ -106,6 +106,17 @@ while disconnected; executor units cover source failure and subsequent recovery
 inside the closed gate. Native delivery, callback latency, effect observation,
 logoff, non-Windows subscriptions and the full suspension/recovery race audit
 remain open. The b4165b8 short run passed on all three OS runners.
+Lifecycle transitions now publish a bounded status observation under the shared
+effect lock. Confirmed teardown projects DISCONNECTED while preserving a
+connected KEEP_INTENT; failed teardown projects DISCONNECTING. Resume never
+projects CONNECTED before a new ordinary apply. A fresh profile/map-bound agent
+snapshot clears previous path/relay/apply successes, with fixed failure keys
+instead of raw source bodies and no control-plane probe. Observation failure
+retains resume serialization for retry. Executor units cover confirmation and
+publication ordering/failure; agent units cover stale-path replacement, failure
+privacy, no probes and separation of intent from dataplane state. Full native
+event/subscriber delivery, restart semantics and resources/exit effective-state
+observations still require the remaining audit and platform qualification.
 The pinned x/sys SCM host forwards SessionChange EventData after its callback
 returns; the adapter must copy session data during a live native callback rather
 than dereference that forwarded pointer later.

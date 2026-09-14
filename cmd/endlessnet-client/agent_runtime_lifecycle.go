@@ -42,7 +42,9 @@ func startAgentRuntimeLifecycle(ctx context.Context, cancel context.CancelCauseF
 			return mutations.RefreshRuntimeLifecyclePolicy(ctx, before, candidate)
 		})
 	}
-	executor, err := client.NewRuntimeLifecycleExecutor(ctx, mutations, engine, opts.OperationMu, func() { requestAgentSync(opts) }, refresh)
+	executor, err := client.NewRuntimeLifecycleExecutor(ctx, mutations, engine, opts.OperationMu, func() { requestAgentSync(opts) }, refresh, func(stopped bool, failure error) error {
+		return observeAgentRuntimeLifecycle(ctx, mutations, opts, stopped, failure)
+	})
 	if err != nil {
 		return nil, err
 	}
