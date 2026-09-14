@@ -9,6 +9,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
+	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -114,10 +115,11 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 		endpoint = n.Pipe
 	}
 	type subscription struct {
-		events <-chan *ipc.WatchEventsResponse
-		done   <-chan struct{}
-		cancel context.CancelFunc
-		cursor nativeEventCursor
+		events  <-chan *ipc.WatchEventsResponse
+		failure <-chan error
+		done    <-chan struct{}
+		cancel  context.CancelFunc
+		cursor  nativeEventCursor
 	}
 	subscribe := func() *subscription {
 		t.Helper()
@@ -127,12 +129,15 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		events, done := make(chan *ipc.WatchEventsResponse, 32), make(chan struct{})
+		failure := make(chan error, 1)
 		go func() {
 			defer close(done)
 			defer close(events)
 			defer consumer.Close()
+			defer close(failure)
 			stream, err := consumer.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
 			if err != nil {
+				failure <- err
 				return
 			}
 			defer func() { _ = stream.Close() }()
@@ -144,6 +149,7 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 					return
 				}
 			}
+			failure <- stream.Err()
 		}()
 		t.Cleanup(func() {
 			cancel()
@@ -153,7 +159,7 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 				t.Error("cancelled native stream did not terminate")
 			}
 		})
-		return &subscription{events: events, done: done, cancel: cancel}
+		return &subscription{events: events, failure: failure, done: done, cancel: cancel}
 	}
 	await := func(sub *subscription, match func(*ipc.WatchEventsResponse) bool) *ipc.WatchEventsResponse {
 		t.Helper()
@@ -163,7 +169,8 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 			select {
 			case event, ok := <-sub.events:
 				if !ok {
-					t.Fatal("native stream ended before expected event")
+					err := <-sub.failure
+					t.Fatalf("native stream ended before expected event: transport=%d failure=%d", connect.CodeOf(err), rpc.FailureFromError(err).GetCode())
 				}
 				if !sub.cursor.accept(event) {
 					t.Fatal("native stream violated sequence, timestamp or instance binding")
@@ -188,10 +195,33 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 			t.Fatal("independent stream cancellation did not terminate")
 		}
 	}
-	concurrent := make([]*subscription, 8)
+	// The service admits four streams per authenticated OS identity. Saturate
+	// that budget, then prove excess admission fails without disturbing them.
+	concurrent := make([]*subscription, 4)
 	for i := range concurrent {
 		concurrent[i] = subscribe()
 	}
+	for _, sub := range concurrent {
+		awaitState(sub, false)
+	}
+	excess := subscribe()
+	select {
+	case <-excess.done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("excess native event subscription did not terminate")
+	}
+	if _, ok := <-excess.events; ok {
+		t.Fatal("excess native subscription received an event")
+	}
+	err := <-excess.failure
+	if connect.CodeOf(err) != connect.CodeResourceExhausted || rpc.FailureFromError(err).GetCode() != ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED {
+		t.Fatal("excess native subscription did not report typed capacity failure")
+	}
+	runNativeControlMutation(t, n, "disconnect", "6b150000-0000-4000-8000-000000000001")
+	for _, sub := range concurrent {
+		awaitState(sub, true)
+	}
+	runNativeControlMutation(t, n, "connect", "6b150000-0000-4000-8000-000000000002")
 	for _, sub := range concurrent {
 		awaitState(sub, false)
 	}

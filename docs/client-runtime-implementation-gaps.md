@@ -613,6 +613,17 @@ remaining attempts, and zero retained registrations after unsubscription. No
 subscription is released until every admission attempt has completed. This is
 unit concurrency evidence, not a race-detector or transport-load run.
 
+The native HC-052/HC-053 scenario previously attempted eight subscriptions from
+one identity and discarded terminal RPC errors. Run 34881749817 consequently
+reported an unexplained early stream end at its opening-snapshot assertion.
+`TestControlPlaneIPCEvents` now fills the four-slot identity budget, requires
+typed LIMIT_EXCEEDED for a fifth stream with no snapshot, and verifies both
+Disconnect and Connect reach every admitted stream after that rejection. It
+then retains the cancellation, slot reuse, independent delivery and host-restart
+sequence checks. Unexpected termination reports only allowlisted transport and
+domain codes. The updated native scenario still requires platform CI evidence;
+the service limits and authorization rules have not been relaxed.
+
 Session read increment (2026-09-14): `GetSession` authorizes the local caller,
 selects the profile's user bearer, invokes the bounded TLS backend adapter and
 validates the response with the producer's `ValidateSessionResponse`. Only state
