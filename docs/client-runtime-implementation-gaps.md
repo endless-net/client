@@ -141,9 +141,22 @@ Windows source functions enumerate copied session IDs and retrieve SID from
 [WTSQueryUserToken](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsqueryusertoken),
 closing token handles and freeing enumeration buffers. They require the
 documented LocalSystem/SE_TCB_NAME service context; that OS execution is not
-locally qualified. The component is not yet attached to SCM: safe callback-time
-copying of [session notification](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-wtssession_notification)
-data, source initialization/delivery and owner-bound logoff dispatch remain open.
+locally qualified. The owner component is not yet attached to SCM: source
+initialization/delivery and owner-bound logoff dispatch remain open. Safe copying
+of [session notification](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-wtssession_notification)
+data is implemented by the dispatcher below.
+The service now uses a local SCM dispatcher instead of forwarding native data
+through x/sys's asynchronous EventData field. Its HandlerEx callback validates
+and copies the WTS session ID while native data is live; the queue contains no
+pointer. Malformed session data or a full bounded control queue cancels the
+runtime. The status pump drains shutdown after reporting failure, joins runtime
+cleanup, and reports STOPPED exactly once as required by
+[SetServiceStatus](https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-setservicestatus).
+Synthetic callback/status-pump units cover copy lifetime, invalid data, overflow,
+reporting failure and terminal ordering. The existing power path uses this
+dispatcher. SessionChange acceptance and owner-source wiring are still pending;
+this change alone does not implement user logoff. Native callback ABI and SCM
+service execution remain for the agreed platform qualification stage.
 
 Linux/Darwin routers now retain a cleanup plan containing only failed or
 unattempted steps. Down propagates failures; Configure cannot overwrite pending

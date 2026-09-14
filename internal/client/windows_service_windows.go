@@ -17,16 +17,16 @@ func RunWindowsService(name string, run func(context.Context, <-chan RuntimeLife
 	if !isService {
 		return errors.New("windows service mode requires the Windows Service Control Manager")
 	}
-	return svc.Run(name, &windowsService{run: run})
+	return runWindowsSCM(name, &windowsService{run: run})
 }
 
 type windowsService struct {
 	run func(context.Context, <-chan RuntimeLifecycleEvent) error
 }
 
-func (s *windowsService) Execute(args []string, requests <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
+func (s *windowsService) execute(parent context.Context, requests <-chan windowsServiceControl, changes chan<- svc.Status) (bool, uint32) {
 	const accepts = svc.AcceptStop | svc.AcceptShutdown | svc.AcceptPowerEvent
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
 	errCh := make(chan error, 1)
@@ -39,6 +39,9 @@ func (s *windowsService) Execute(args []string, requests <-chan svc.ChangeReques
 
 	for {
 		select {
+		case <-ctx.Done():
+			<-errCh
+			return false, 1
 		case request, ok := <-requests:
 			if !ok {
 				cancel()
@@ -47,7 +50,7 @@ func (s *windowsService) Execute(args []string, requests <-chan svc.ChangeReques
 			}
 			switch request.Cmd {
 			case svc.Interrogate:
-				changes <- request.CurrentStatus
+				changes <- svc.Status{State: svc.Running, Accepts: accepts}
 			case svc.PowerEvent:
 				var event RuntimeLifecycleEvent
 				switch request.EventType {

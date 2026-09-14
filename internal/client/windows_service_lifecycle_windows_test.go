@@ -11,7 +11,7 @@ import (
 )
 
 func TestWindowsServicePowerDelivery(t *testing.T) {
-	requests := make(chan svc.ChangeRequest, 8)
+	requests := make(chan windowsServiceControl, 8)
 	changes := make(chan svc.Status, 8)
 	observed := make(chan RuntimeLifecycleEvent, 8)
 	s := windowsService{run: func(ctx context.Context, events <-chan RuntimeLifecycleEvent) error {
@@ -25,7 +25,7 @@ func TestWindowsServicePowerDelivery(t *testing.T) {
 		}
 	}}
 	done := make(chan uint32, 1)
-	go func() { _, code := s.Execute(nil, requests, changes); done <- code }()
+	go func() { _, code := s.execute(t.Context(), requests, changes); done <- code }()
 	if (<-changes).State != svc.StartPending {
 		t.Fatal("missing start pending")
 	}
@@ -33,8 +33,8 @@ func TestWindowsServicePowerDelivery(t *testing.T) {
 	if running.State != svc.Running || running.Accepts&svc.AcceptPowerEvent == 0 {
 		t.Fatal("power notifications not accepted")
 	}
-	requests <- svc.ChangeRequest{Cmd: svc.PowerEvent, EventType: 0x4, EventData: 1}
-	requests <- svc.ChangeRequest{Cmd: svc.PowerEvent, EventType: 0x12, EventData: 1}
+	requests <- windowsServiceControl{Cmd: svc.PowerEvent, EventType: 0x4}
+	requests <- windowsServiceControl{Cmd: svc.PowerEvent, EventType: 0x12}
 	for _, expected := range []RuntimeLifecycleEvent{RuntimeSuspend, RuntimeResume} {
 		select {
 		case got := <-observed:
@@ -45,11 +45,11 @@ func TestWindowsServicePowerDelivery(t *testing.T) {
 			t.Fatal("power event not delivered")
 		}
 	}
-	// User-interaction resume duplicates the automatic wake. Session data
-	// deliberately has an invalid pointer: the service must never read it.
-	requests <- svc.ChangeRequest{Cmd: svc.PowerEvent, EventType: 0x7}
-	requests <- svc.ChangeRequest{Cmd: svc.SessionChange, EventType: 6, EventData: 1}
-	requests <- svc.ChangeRequest{Cmd: svc.Stop}
+	// User-interaction resume duplicates the automatic wake. SessionChange
+	// dispatch is not enabled until its owner-binding source is attached.
+	requests <- windowsServiceControl{Cmd: svc.PowerEvent, EventType: 0x7}
+	requests <- windowsServiceControl{Cmd: svc.SessionChange, EventType: 6}
+	requests <- windowsServiceControl{Cmd: svc.Stop}
 	select {
 	case code := <-done:
 		if code != 0 || len(observed) != 0 {
@@ -61,16 +61,16 @@ func TestWindowsServicePowerDelivery(t *testing.T) {
 }
 
 func TestWindowsServicePowerOverflowCancelsRuntime(t *testing.T) {
-	requests := make(chan svc.ChangeRequest, 65)
+	requests := make(chan windowsServiceControl, 65)
 	changes := make(chan svc.Status, 8)
 	s := windowsService{run: func(ctx context.Context, _ <-chan RuntimeLifecycleEvent) error {
 		<-ctx.Done()
 		return nil
 	}}
 	done := make(chan uint32, 1)
-	go func() { _, code := s.Execute(nil, requests, changes); done <- code }()
+	go func() { _, code := s.execute(t.Context(), requests, changes); done <- code }()
 	for range 65 {
-		requests <- svc.ChangeRequest{Cmd: svc.PowerEvent, EventType: 0x4}
+		requests <- windowsServiceControl{Cmd: svc.PowerEvent, EventType: 0x4}
 	}
 	select {
 	case code := <-done:
