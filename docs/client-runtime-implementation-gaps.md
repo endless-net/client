@@ -191,8 +191,8 @@ retains old denials while tightening, and relaxes only on commit. Map expiry and
 withdrawal close traffic. `TestResourceFilterDeniesOverlapsAndTransitionsInBothDirections`
 checks port/protocol separation, overlap and staged changes, expiry and withdraw;
 `TestResourceFilterRuleValidationAndOwnership` checks rule shape,
-defensive copying and malformed packets. The durable resource mutation worker
-and public SetResourceEnabled remain missing; engine integration is described below.
+defensive copying and malformed packets. Public SetResourceEnabled remains
+missing; the durable worker and engine integration are described below.
 `resource_rules.go` now authenticates once and compiles local/managed choices
 into bounded, deduplicated prefix/port denials for host, subnet, service and
 source-role application resources. Service host matching includes the current
@@ -562,6 +562,19 @@ Effective policy/enablement and overlap resolution remain implementation gaps,
 not successful default values. No resources capability is advertised by this step.
 
 ## External dependencies and approvals
+
+Resource mutation worker increment: private `setResourceEnabledAs` admits a
+durable resource choice into the same transaction worker as network preferences.
+It authenticates the active map, resolves the canonical disclosed resource,
+honors managed locks and rejects conflicting pending operations. Admission does
+not publish the choice. The worker applies a candidate, rechecks map, profile,
+intent and previous resource choices, then commits. Failure retains the previous
+choice and enters durable disconnection containment; Disconnect supersedes apply.
+`TestResourceChangeAdmissionAndRestart`, `TestResourceChangeRejectsAtomically`
+and `TestResourceWorkerAppliesOrContains` cover admission/replay/restart, locks,
+invalid sources, apply failure and concurrent changes with injected drivers.
+This is not public RPC or OS acceptance: SetResourceEnabled dispatch, resource
+observations, overlap reporting and mutation event projection remain open.
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On
   2026-09-14 the user explicitly approved consuming producer revision

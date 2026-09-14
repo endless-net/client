@@ -1,6 +1,7 @@
 package client
 
 import (
+	"maps"
 	"reflect"
 
 	"connectrpc.com/connect"
@@ -12,22 +13,25 @@ import (
 )
 
 type clientRPCNetworkPreferenceChange struct {
-	OperationID     string                    `json:"operation_id"`
-	ProfileID       string                    `json:"profile_id"`
-	OwnerID         string                    `json:"owner_id"`
-	ControlOrigin   string                    `json:"control_origin"`
-	NodeID          string                    `json:"node_id"`
-	NetworkID       string                    `json:"network_id"`
-	MapHash         string                    `json:"map_hash"`
-	Previous        *ClientNetworkPreferences `json:"previous,omitempty"`
-	Requested       *ClientNetworkPreferences `json:"requested,omitempty"`
-	PreviousUIQuit  *ipc.LifecycleBehavior    `json:"previous_ui_quit,omitempty"`
-	RequestedUIQuit *ipc.LifecycleBehavior    `json:"requested_ui_quit,omitempty"`
-	Changed         bool                      `json:"changed"`
-	PreviousIntent  *ConnectionIntent         `json:"previous_intent,omitempty"`
-	Containing      bool                      `json:"containing,omitempty"`
-	FailureCode     ipc.ErrorCode             `json:"failure_code,omitempty"`
-	FailureReason   string                    `json:"failure_reason,omitempty"`
+	OperationID        string                    `json:"operation_id"`
+	ProfileID          string                    `json:"profile_id"`
+	OwnerID            string                    `json:"owner_id"`
+	ControlOrigin      string                    `json:"control_origin"`
+	NodeID             string                    `json:"node_id"`
+	NetworkID          string                    `json:"network_id"`
+	MapHash            string                    `json:"map_hash"`
+	Previous           *ClientNetworkPreferences `json:"previous,omitempty"`
+	Requested          *ClientNetworkPreferences `json:"requested,omitempty"`
+	PreviousUIQuit     *ipc.LifecycleBehavior    `json:"previous_ui_quit,omitempty"`
+	RequestedUIQuit    *ipc.LifecycleBehavior    `json:"requested_ui_quit,omitempty"`
+	Changed            bool                      `json:"changed"`
+	PreviousIntent     *ConnectionIntent         `json:"previous_intent,omitempty"`
+	Containing         bool                      `json:"containing,omitempty"`
+	FailureCode        ipc.ErrorCode             `json:"failure_code,omitempty"`
+	FailureReason      string                    `json:"failure_reason,omitempty"`
+	ResourceID         string                    `json:"resource_id,omitempty"`
+	PreviousResources  map[string]bool           `json:"previous_resources,omitempty"`
+	RequestedResources map[string]bool           `json:"requested_resources,omitempty"`
 }
 
 func cloneNetworkPreferences(value *ClientNetworkPreferences) *ClientNetworkPreferences {
@@ -170,6 +174,7 @@ func (m *ClientRPCMutations) prepareNetworkPreferences(cfg *Config, op *ipc.Oper
 		NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, MapHash: cfg.CachedMap.MapSignature.PayloadHash,
 		Previous: cloneNetworkPreferences(cfg.NetworkPreferences), Requested: requested,
 		PreviousUIQuit: cloneLifecycleBehavior(profile.UIQuit), RequestedUIQuit: uiQuit,
+		PreviousResources: maps.Clone(cfg.ResourcePreferences), RequestedResources: maps.Clone(cfg.ResourcePreferences),
 		Changed: !reflect.DeepEqual(cfg.NetworkPreferences, requested) || !reflect.DeepEqual(profile.UIQuit, uiQuit),
 	}
 	if cfg.ConnectionIntent != nil {

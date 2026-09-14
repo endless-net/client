@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"maps"
 	"reflect"
 	"time"
 
@@ -18,11 +19,18 @@ func (m *ClientRPCMutations) networkPreferenceCandidate(cfg Config, plan *client
 		return stale()
 	}
 	profile, exists := cfg.RPCState.Profiles[plan.ProfileID]
+	if !maps.Equal(cfg.ResourcePreferences, plan.PreviousResources) {
+		return stale()
+	}
 	if !exists || profile.ControlOrigin != plan.ControlOrigin || !reflect.DeepEqual(cfg.NetworkPreferences, plan.Previous) || !reflect.DeepEqual(profile.UIQuit, plan.PreviousUIQuit) || !reflect.DeepEqual(cfg.ConnectionIntent, plan.PreviousIntent) {
 		return stale()
 	}
 	cfg.NetworkPreferences = cloneNetworkPreferences(plan.Requested)
+	cfg.ResourcePreferences = maps.Clone(plan.RequestedResources)
 	if _, err := resolveNetworkAcceptance(cfg, *cfg.CachedMap, m.now()); err != nil {
+		return Config{}, err
+	}
+	if _, err := compileResourceDenials(cfg, m.now()); err != nil {
 		return Config{}, err
 	}
 	profile.UIQuit = cloneLifecycleBehavior(plan.RequestedUIQuit)
@@ -53,8 +61,13 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 	}
 	plan := cfg.RPCState.NetworkPreferenceChange
 	id := plan.OperationID
+	reasonPrefix := "preferences"
+	if plan.ResourceID != "" {
+		reasonPrefix = "resource"
+	}
 	if _, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
-		if cfg.RPCState.NetworkPreferenceChange == nil || cfg.RPCState.NetworkPreferenceChange.OperationID != id || op.ProfileId != plan.ProfileID || (op.Kind != ipc.OperationKind_OPERATION_KIND_SET_PREFERENCES && op.Kind != ipc.OperationKind_OPERATION_KIND_RESET_PREFERENCES) || (op.State != ipc.OperationState_OPERATION_STATE_PENDING && op.State != ipc.OperationState_OPERATION_STATE_RUNNING) {
+		validKind := plan.ResourceID != "" && op.Kind == ipc.OperationKind_OPERATION_KIND_SET_RESOURCE_ENABLED || plan.ResourceID == "" && (op.Kind == ipc.OperationKind_OPERATION_KIND_SET_PREFERENCES || op.Kind == ipc.OperationKind_OPERATION_KIND_RESET_PREFERENCES)
+		if cfg.RPCState.NetworkPreferenceChange == nil || cfg.RPCState.NetworkPreferenceChange.OperationID != id || op.ProfileId != plan.ProfileID || !validKind || (op.State != ipc.OperationState_OPERATION_STATE_PENDING && op.State != ipc.OperationState_OPERATION_STATE_RUNNING) {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		op.State = ipc.OperationState_OPERATION_STATE_RUNNING
@@ -65,24 +78,25 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 	if !plan.Containing {
 		candidate, err := m.networkPreferenceCandidate(m.store.Read(), plan)
 		failureCode := ipc.ErrorCode_ERROR_CODE_UNAVAILABLE
-		failureReason := "preferences_source_unavailable"
+		failureReason := reasonPrefix + "_source_unavailable"
 		if err == nil && candidate.ConnectionIntent != nil && candidate.ConnectionIntent.DesiredState == ConnectionIntentDesiredConnected {
-			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, "preferences_apply_failed"
+			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, reasonPrefix+"_apply_failed"
 			err = m.applyProfileConnection(ctx, driver, candidate)
 		} else if err == nil {
-			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, "preferences_down_failed"
+			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, reasonPrefix+"_down_failed"
 			_, err = driver.Stop(ctx)
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if err == nil {
-			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_STALE_STATE, "preferences_context_changed"
+			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_STALE_STATE, reasonPrefix+"_context_changed"
 			_, err = m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
 				if _, err := m.networkPreferenceCandidate(*cfg, plan); err != nil {
 					return err
 				}
 				cfg.NetworkPreferences = cloneNetworkPreferences(plan.Requested)
+				cfg.ResourcePreferences = maps.Clone(plan.RequestedResources)
 				profile := cfg.RPCState.Profiles[plan.ProfileID]
 				profile.UIQuit = cloneLifecycleBehavior(plan.RequestedUIQuit)
 				cfg.RPCState.Profiles[profile.ID] = profile
@@ -102,15 +116,15 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 			}
 			cfg.RPCState.NetworkPreferenceChange.Containing = true
 			if failure := rpc.FailureFromError(err); failure != nil && failure.Code == ipc.ErrorCode_ERROR_CODE_STALE_STATE {
-				failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_STALE_STATE, "preferences_context_changed"
+				failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_STALE_STATE, reasonPrefix+"_context_changed"
 			}
 			if cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == ConnectionIntentDesiredDisconnected && !reflect.DeepEqual(cfg.ConnectionIntent, plan.PreviousIntent) {
-				failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_CANCELLED, "preferences_superseded_by_disconnect"
+				failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_CANCELLED, reasonPrefix+"_superseded_by_disconnect"
 			}
 			cfg.RPCState.NetworkPreferenceChange.FailureCode = failureCode
 			cfg.RPCState.NetworkPreferenceChange.FailureReason = failureReason
 			if cfg.ConnectionIntent == nil || cfg.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
-				cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "preferences_apply_failed", UpdatedAt: m.now().UTC().Format(time.RFC3339Nano)}
+				cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: reasonPrefix + "_apply_failed", UpdatedAt: m.now().UTC().Format(time.RFC3339Nano)}
 			}
 			return nil
 		}); err != nil {
