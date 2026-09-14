@@ -23,7 +23,20 @@ func TestNetworkPreferenceWorkerApplyAndContainment(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			op, err := m.setNetworkPreferencesAs(owner, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{AcceptDns: proto.Bool(false), AcceptRoutes: proto.Bool(false), UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum(), RuntimeStart: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT.Enum()}})
+			op, err := m.setNetworkPreferencesAs(owner, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{AcceptDns: proto.Bool(false), AcceptRoutes: proto.Bool(false), UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum(), RuntimeStart: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT.Enum(), UserLogoff: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum(), Suspend: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum(), Resume: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT.Enum()}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			response, err := NewClientRPCService(m, nil).preferencesAs(owner, &ipc.GetPreferencesRequest{Profile: profile})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, setting := range []*ipc.LifecycleSetting{response.Msg.Preferences.Lifecycle.UserLogoff, response.Msg.Preferences.Lifecycle.Suspend, response.Msg.Preferences.Lifecycle.Resume} {
+				if setting.Requested == nil || setting.Effective != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT || setting.Control.Mutation.ReasonKey != "preference_patch_pending" {
+					t.Fatal("pending desktop projection lost", setting)
+				}
+			}
+			m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -79,6 +92,20 @@ func TestNetworkPreferenceWorkerApplyAndContainment(t *testing.T) {
 				t.Fatal(err)
 			}
 			cfg := m.store.Read()
+			committed := cfg.RPCState.Profiles[profile.ProfileId]
+			for i, value := range []*ipc.LifecycleBehavior{committed.UserLogoff, committed.Suspend, committed.Resume} {
+				if scenario == "apply" || scenario == "disconnected" {
+					want := ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT
+					if i == 2 {
+						want = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT
+					}
+					if value == nil || *value != want {
+						t.Fatal("successful effect lost desktop preference")
+					}
+				} else if value != nil {
+					t.Fatal("failed effect partially committed desktop preference")
+				}
+			}
 			if cfg.RPCState.NetworkPreferenceChange != nil {
 				t.Fatal("terminal operation retained plan")
 			}

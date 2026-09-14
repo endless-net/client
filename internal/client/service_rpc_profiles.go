@@ -88,6 +88,9 @@ type clientRPCProfile struct {
 	Configuration      Config                       `json:"configuration"`
 	UIQuit             *ipc.LifecycleBehavior       `json:"ui_quit,omitempty"`
 	RuntimeStart       *ipc.LifecycleBehavior       `json:"runtime_start,omitempty"`
+	UserLogoff         *ipc.LifecycleBehavior       `json:"user_logoff,omitempty"`
+	Suspend            *ipc.LifecycleBehavior       `json:"suspend,omitempty"`
+	Resume             *ipc.LifecycleBehavior       `json:"resume,omitempty"`
 	LogoutConfirmation *clientRPCLogoutConfirmation `json:"logout_confirmation,omitempty"`
 }
 

@@ -20,6 +20,18 @@ func (m *ClientRPCMutations) runtimeStartSetting(cfg Config, profile clientRPCPr
 	return lifecycleSetting(cfg, profile, api.ClientSettingRuntimeStart, profile.RuntimeStart, m.now())
 }
 
+func (m *ClientRPCMutations) userLogoffSetting(cfg Config, profile clientRPCProfile) (*ipc.LifecycleSetting, error) {
+	return lifecycleSetting(cfg, profile, api.ClientSettingUserLogoff, profile.UserLogoff, m.now())
+}
+
+func (m *ClientRPCMutations) suspendSetting(cfg Config, profile clientRPCProfile) (*ipc.LifecycleSetting, error) {
+	return lifecycleSetting(cfg, profile, api.ClientSettingSuspend, profile.Suspend, m.now())
+}
+
+func (m *ClientRPCMutations) resumeSetting(cfg Config, profile clientRPCProfile) (*ipc.LifecycleSetting, error) {
+	return lifecycleSetting(cfg, profile, api.ClientSettingResume, profile.Resume, m.now())
+}
+
 func lifecycleSetting(cfg Config, profile clientRPCProfile, key api.ClientSettingKey, requested *ipc.LifecycleBehavior, now time.Time) (*ipc.LifecycleSetting, error) {
 	setting := &ipc.LifecycleSetting{
 		Effective:     ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT,
@@ -39,12 +51,12 @@ func lifecycleSetting(cfg Config, profile clientRPCProfile, key api.ClientSettin
 		// Inactive profiles retain their own configuration, never active policy.
 		cfg = profile.Configuration
 	}
-	if key == api.ClientSettingRuntimeStart && cfg.CachedMap == nil && rpcConfigHasEnrollment(cfg) {
+	if key != api.ClientSettingUIQuit && cfg.CachedMap == nil && rpcConfigHasEnrollment(cfg) {
 		// Retain the user's requested value without fabricating an effective
 		// default or a known unlocked policy for an enrolled identity.
 		setting.Effective = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_UNSPECIFIED
 		setting.AllowedValues = nil
-		setting.Control = &ipc.SettingControl{Source: ipc.SettingSource_SETTING_SOURCE_UNSPECIFIED, Mutation: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "runtime_start_policy_unavailable"}}
+		setting.Control = &ipc.SettingControl{Source: ipc.SettingSource_SETTING_SOURCE_UNSPECIFIED, Mutation: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: string(key) + "_policy_unavailable"}}
 		return setting, nil
 	}
 	if state := cfg.CachedMap; state != nil {

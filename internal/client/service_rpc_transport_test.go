@@ -382,7 +382,7 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 				t.Fatal("native user preference projection", err)
 			}
 			managed, err := client.ListManagedSettings(ctx, connect.NewRequest(&ipc.ListManagedSettingsRequest{Profile: selection.Profile}))
-			if err != nil || len(managed.Msg.Settings) != 5 || managed.Msg.Settings[0].Key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT || managed.Msg.Settings[0].GetLifecycleValue() != preferences.Msg.Preferences.Lifecycle.UiQuit.Effective || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_USER || managed.Msg.Metadata.Revision != preferences.Msg.Preferences.Metadata.Revision {
+			if err != nil || len(managed.Msg.Settings) != 8 || managed.Msg.Settings[0].Key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT || managed.Msg.Settings[0].GetLifecycleValue() != preferences.Msg.Preferences.Lifecycle.UiQuit.Effective || managed.Msg.Settings[0].Control.Source != ipc.SettingSource_SETTING_SOURCE_USER || managed.Msg.Metadata.Revision != preferences.Msg.Preferences.Metadata.Revision {
 				t.Fatal("managed projection disagrees with native preferences", err)
 			}
 			if managed.Msg.Settings[1].Key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS || managed.Msg.Settings[1].GetBooleanValue() != preferences.Msg.Preferences.AcceptDns.Effective || managed.Msg.Settings[2].Key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_ROUTES || managed.Msg.Settings[2].GetBooleanValue() != preferences.Msg.Preferences.AcceptRoutes.Effective {
@@ -393,6 +393,15 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 			}
 			if managed.Msg.Settings[4].Key != ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START || managed.Msg.Settings[4].GetLifecycleValue() != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT || preferences.Msg.Preferences.Lifecycle.RuntimeStart.GetRequested() != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT || managed.Msg.Settings[4].Control.Source != ipc.SettingSource_SETTING_SOURCE_USER {
 				t.Fatal("native runtime-start projection disagrees")
+			}
+			for i, entry := range []struct {
+				key   ipc.PreferenceKey
+				value *ipc.LifecycleSetting
+			}{{ipc.PreferenceKey_PREFERENCE_KEY_USER_LOGOFF, preferences.Msg.Preferences.Lifecycle.UserLogoff}, {ipc.PreferenceKey_PREFERENCE_KEY_SUSPEND, preferences.Msg.Preferences.Lifecycle.Suspend}, {ipc.PreferenceKey_PREFERENCE_KEY_RESUME, preferences.Msg.Preferences.Lifecycle.Resume}} {
+				got := managed.Msg.Settings[i+5]
+				if got.Key != entry.key || got.GetLifecycleValue() != entry.value.Effective || !proto.Equal(got.Control, entry.value.Control) {
+					t.Fatal("native desktop lifecycle projections disagree", got)
+				}
 			}
 			resetRequest := &ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT, ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START}}
 			resetAccepted, err := client.ResetPreferences(ctx, connect.NewRequest(resetRequest))

@@ -60,7 +60,7 @@ func (m *ClientRPCMutations) prepareLifecyclePreferences(cfg *Config, op *ipc.Op
 	cfg.RPCState.Profiles[profile.ID] = profile
 	op.ProfileId = profile.ID
 	op.Continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE
-	op.Outcome = &ipc.Operation_Change{Change: &ipc.ChangeResult{Changed: !reflect.DeepEqual(previous.UIQuit, profile.UIQuit) || !reflect.DeepEqual(previous.RuntimeStart, profile.RuntimeStart)}}
+	op.Outcome = &ipc.Operation_Change{Change: &ipc.ChangeResult{Changed: !reflect.DeepEqual(previous.UIQuit, profile.UIQuit) || !reflect.DeepEqual(previous.RuntimeStart, profile.RuntimeStart) || !reflect.DeepEqual(previous.UserLogoff, profile.UserLogoff) || !reflect.DeepEqual(previous.Suspend, profile.Suspend) || !reflect.DeepEqual(previous.Resume, profile.Resume)}}
 	return nil
 }
 
@@ -79,16 +79,38 @@ func (m *ClientRPCMutations) patchLifecyclePreference(cfg Config, profile *clien
 			value = patch.GetRuntimeStart().Enum()
 		}
 		resolve = m.runtimeStartSetting
+	case ipc.PreferenceKey_PREFERENCE_KEY_USER_LOGOFF:
+		if patch != nil {
+			value = patch.GetUserLogoff().Enum()
+		}
+		resolve = m.userLogoffSetting
+	case ipc.PreferenceKey_PREFERENCE_KEY_SUSPEND:
+		if patch != nil {
+			value = patch.GetSuspend().Enum()
+		}
+		resolve = m.suspendSetting
+	case ipc.PreferenceKey_PREFERENCE_KEY_RESUME:
+		if patch != nil {
+			value = patch.GetResume().Enum()
+		}
+		resolve = m.resumeSetting
 	default:
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
 	if value != nil && *value != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT && *value != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT && (key != ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START || *value != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT) {
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
-	if key == ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT {
+	switch key {
+	case ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT:
 		profile.UIQuit = value
-	} else {
+	case ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START:
 		profile.RuntimeStart = value
+	case ipc.PreferenceKey_PREFERENCE_KEY_USER_LOGOFF:
+		profile.UserLogoff = value
+	case ipc.PreferenceKey_PREFERENCE_KEY_SUSPEND:
+		profile.Suspend = value
+	case ipc.PreferenceKey_PREFERENCE_KEY_RESUME:
+		profile.Resume = value
 	}
 	setting, err := resolve(cfg, *profile)
 	if err != nil {
@@ -163,6 +185,18 @@ func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPrefer
 	if err != nil {
 		return nil, err
 	}
+	logoff, err := s.mutations.userLogoffSetting(cfg, profile)
+	if err != nil {
+		return nil, err
+	}
+	suspend, err := s.mutations.suspendSetting(cfg, profile)
+	if err != nil {
+		return nil, err
+	}
+	resume, err := s.mutations.resumeSetting(cfg, profile)
+	if err != nil {
+		return nil, err
+	}
 	dns, routes, inbound, err := s.mutations.networkPreferenceSettings(cfg, profile)
 	if err != nil {
 		return nil, err
@@ -178,6 +212,15 @@ func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPrefer
 		}
 	}
 	if plan := cfg.RPCState.NetworkPreferenceChange; plan != nil && plan.ProfileID == profile.ID {
+		for _, entry := range []struct {
+			setting   *ipc.LifecycleSetting
+			requested *ipc.LifecycleBehavior
+		}{{logoff, plan.RequestedUserLogoff}, {suspend, plan.RequestedSuspend}, {resume, plan.RequestedResume}} {
+			entry.setting.Requested = cloneLifecycleBehavior(entry.requested)
+			if !entry.setting.Control.Locked {
+				entry.setting.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_patch_pending"}
+			}
+		}
 		startup.Requested = cloneLifecycleBehavior(plan.RequestedRuntimeStart)
 		if !startup.Control.Locked {
 			startup.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_patch_pending"}
@@ -187,7 +230,7 @@ func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPrefer
 			setting.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "preference_patch_pending"}
 		}
 	}
-	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, AcceptDns: dns, AcceptRoutes: routes, AllowInbound: inbound, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: setting, RuntimeStart: startup}}}), nil
+	return connect.NewResponse(&ipc.GetPreferencesResponse{Preferences: &ipc.Preferences{ProfileId: profile.ID, Metadata: &ipc.SnapshotMetadata{InstanceId: s.mutations.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(s.mutations.now())}, AcceptDns: dns, AcceptRoutes: routes, AllowInbound: inbound, Lifecycle: &ipc.RuntimeLifecycle{UiQuit: setting, RuntimeStart: startup, UserLogoff: logoff, Suspend: suspend, Resume: resume}}}), nil
 }
 
 func (s *ClientRPCService) SetPreferences(ctx context.Context, request *connect.Request[ipc.SetPreferencesRequest]) (*connect.Response[ipc.SetPreferencesResponse], error) {
@@ -225,6 +268,12 @@ func (s *ClientRPCService) ListManagedSettings(ctx context.Context, request *con
 		}
 	}
 	settings = append(settings, &ipc.ManagedSetting{Key: ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START, Control: proto.Clone(startup.Control).(*ipc.SettingControl), EffectiveValue: &ipc.ManagedSetting_LifecycleValue{LifecycleValue: startup.Effective}})
+	for _, entry := range []struct {
+		key   ipc.PreferenceKey
+		value *ipc.LifecycleSetting
+	}{{ipc.PreferenceKey_PREFERENCE_KEY_USER_LOGOFF, preferences.Msg.Preferences.Lifecycle.UserLogoff}, {ipc.PreferenceKey_PREFERENCE_KEY_SUSPEND, preferences.Msg.Preferences.Lifecycle.Suspend}, {ipc.PreferenceKey_PREFERENCE_KEY_RESUME, preferences.Msg.Preferences.Lifecycle.Resume}} {
+		settings = append(settings, &ipc.ManagedSetting{Key: entry.key, Control: proto.Clone(entry.value.Control).(*ipc.SettingControl), EffectiveValue: &ipc.ManagedSetting_LifecycleValue{LifecycleValue: entry.value.Effective}})
+	}
 	return connect.NewResponse(&ipc.ListManagedSettingsResponse{Metadata: preferences.Msg.Preferences.Metadata, Settings: settings}), nil
 }
 

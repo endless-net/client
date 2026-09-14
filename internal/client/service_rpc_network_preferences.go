@@ -26,6 +26,12 @@ type clientRPCNetworkPreferenceChange struct {
 	RequestedUIQuit       *ipc.LifecycleBehavior    `json:"requested_ui_quit,omitempty"`
 	PreviousRuntimeStart  *ipc.LifecycleBehavior    `json:"previous_runtime_start,omitempty"`
 	RequestedRuntimeStart *ipc.LifecycleBehavior    `json:"requested_runtime_start,omitempty"`
+	PreviousUserLogoff    *ipc.LifecycleBehavior    `json:"previous_user_logoff,omitempty"`
+	RequestedUserLogoff   *ipc.LifecycleBehavior    `json:"requested_user_logoff,omitempty"`
+	PreviousSuspend       *ipc.LifecycleBehavior    `json:"previous_suspend,omitempty"`
+	RequestedSuspend      *ipc.LifecycleBehavior    `json:"requested_suspend,omitempty"`
+	PreviousResume        *ipc.LifecycleBehavior    `json:"previous_resume,omitempty"`
+	RequestedResume       *ipc.LifecycleBehavior    `json:"requested_resume,omitempty"`
 	Changed               bool                      `json:"changed"`
 	PreviousIntent        *ConnectionIntent         `json:"previous_intent,omitempty"`
 	Containing            bool                      `json:"containing,omitempty"`
@@ -85,7 +91,7 @@ func (m *ClientRPCMutations) resetNetworkPreferencesAs(peer local.Peer, request 
 
 func (m *ClientRPCMutations) prepareNetworkPreferences(cfg *Config, op *ipc.Operation, ref *ipc.ProfileRef, keys []ipc.PreferenceKey, patch *ipc.PreferencesPatch) error {
 	for _, key := range keys {
-		if key != ipc.PreferenceKey_PREFERENCE_KEY_ALLOW_INBOUND && key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS && key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_ROUTES && key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT && key != ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START {
+		if key != ipc.PreferenceKey_PREFERENCE_KEY_ALLOW_INBOUND && key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS && key != ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_ROUTES && key != ipc.PreferenceKey_PREFERENCE_KEY_UI_QUIT && key != ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START && key != ipc.PreferenceKey_PREFERENCE_KEY_USER_LOGOFF && key != ipc.PreferenceKey_PREFERENCE_KEY_SUSPEND && key != ipc.PreferenceKey_PREFERENCE_KEY_RESUME {
 			return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 		}
 	}
@@ -114,10 +120,15 @@ func (m *ClientRPCMutations) prepareNetworkPreferences(cfg *Config, op *ipc.Oper
 	}
 	uiQuit := cloneLifecycleBehavior(profile.UIQuit)
 	startup := cloneLifecycleBehavior(profile.RuntimeStart)
+	desktop := profile
 	for _, key := range keys {
 		var value *bool
 		var policyKey api.ClientSettingKey
 		switch key {
+		case ipc.PreferenceKey_PREFERENCE_KEY_USER_LOGOFF, ipc.PreferenceKey_PREFERENCE_KEY_SUSPEND, ipc.PreferenceKey_PREFERENCE_KEY_RESUME:
+			if err := m.patchLifecyclePreference(*cfg, &desktop, key, patch); err != nil {
+				return err
+			}
 		case ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START:
 			candidate := profile
 			if err := m.patchLifecyclePreference(*cfg, &candidate, key, patch); err != nil {
@@ -175,8 +186,11 @@ func (m *ClientRPCMutations) prepareNetworkPreferences(cfg *Config, op *ipc.Oper
 		Previous: cloneNetworkPreferences(cfg.NetworkPreferences), Requested: requested,
 		PreviousUIQuit: cloneLifecycleBehavior(profile.UIQuit), RequestedUIQuit: uiQuit,
 		PreviousRuntimeStart: cloneLifecycleBehavior(profile.RuntimeStart), RequestedRuntimeStart: startup,
+		PreviousUserLogoff: cloneLifecycleBehavior(profile.UserLogoff), RequestedUserLogoff: cloneLifecycleBehavior(desktop.UserLogoff),
+		PreviousSuspend: cloneLifecycleBehavior(profile.Suspend), RequestedSuspend: cloneLifecycleBehavior(desktop.Suspend),
+		PreviousResume: cloneLifecycleBehavior(profile.Resume), RequestedResume: cloneLifecycleBehavior(desktop.Resume),
 		PreviousResources: maps.Clone(cfg.ResourcePreferences), RequestedResources: maps.Clone(cfg.ResourcePreferences),
-		Changed: !reflect.DeepEqual(cfg.NetworkPreferences, requested) || !reflect.DeepEqual(profile.UIQuit, uiQuit) || !reflect.DeepEqual(profile.RuntimeStart, startup),
+		Changed: !reflect.DeepEqual(cfg.NetworkPreferences, requested) || !reflect.DeepEqual(profile.UIQuit, uiQuit) || !reflect.DeepEqual(profile.RuntimeStart, startup) || !reflect.DeepEqual(profile.UserLogoff, desktop.UserLogoff) || !reflect.DeepEqual(profile.Suspend, desktop.Suspend) || !reflect.DeepEqual(profile.Resume, desktop.Resume),
 	}
 	if cfg.ConnectionIntent != nil {
 		intent := *cfg.ConnectionIntent

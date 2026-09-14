@@ -22,6 +22,19 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+The user also accepted KEEP_INTENT defaults for user_logoff, suspend and resume
+on 2026-09-14. Per-profile local preferences now persist those choices, resolve
+signed account/device baselines and locks, expose matching preference/managed
+catalogs, and reset selectively to policy or the accepted default. Missing
+authenticated authority for an enrolled profile exposes unknown effective
+behavior; rejected source or locked choices cannot partially commit a patch.
+The shared network/resource worker captures all three settings across restart,
+commits them only with the complete effect, and retains old settings on failure.
+`service_rpc_desktop_preferences_test.go`, the worker apply/containment matrix
+and native catalog checks cover these preference semantics. They do not prove
+OS event execution: trusted logoff/suspend/resume adapters and CONNECT execution
+for those events remain unimplemented, and platform qualification remains open.
+
 The user accepted the runtime-start default on 2026-09-14: KEEP_INTENT,
 with DISCONNECT when no explicit intent is saved. The agent now initializes
 that durable baseline under its lifetime lock before engine creation, RPC workers

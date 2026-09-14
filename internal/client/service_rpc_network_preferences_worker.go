@@ -19,6 +19,9 @@ func (m *ClientRPCMutations) networkPreferenceCandidate(cfg Config, plan *client
 		return stale()
 	}
 	profile, exists := cfg.RPCState.Profiles[plan.ProfileID]
+	if !reflect.DeepEqual(profile.UserLogoff, plan.PreviousUserLogoff) || !reflect.DeepEqual(profile.Suspend, plan.PreviousSuspend) || !reflect.DeepEqual(profile.Resume, plan.PreviousResume) {
+		return stale()
+	}
 	if !maps.Equal(cfg.ResourcePreferences, plan.PreviousResources) {
 		return stale()
 	}
@@ -35,6 +38,14 @@ func (m *ClientRPCMutations) networkPreferenceCandidate(cfg Config, plan *client
 	}
 	profile.UIQuit = cloneLifecycleBehavior(plan.RequestedUIQuit)
 	profile.RuntimeStart = cloneLifecycleBehavior(plan.RequestedRuntimeStart)
+	profile.UserLogoff = cloneLifecycleBehavior(plan.RequestedUserLogoff)
+	profile.Suspend = cloneLifecycleBehavior(plan.RequestedSuspend)
+	profile.Resume = cloneLifecycleBehavior(plan.RequestedResume)
+	for _, resolve := range []func(Config, clientRPCProfile) (*ipc.LifecycleSetting, error){m.userLogoffSetting, m.suspendSetting, m.resumeSetting} {
+		if _, err := resolve(cfg, profile); err != nil {
+			return Config{}, err
+		}
+	}
 	if _, err := m.runtimeStartSetting(cfg, profile); err != nil {
 		return Config{}, err
 	}
@@ -104,6 +115,9 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 				profile := cfg.RPCState.Profiles[plan.ProfileID]
 				profile.UIQuit = cloneLifecycleBehavior(plan.RequestedUIQuit)
 				profile.RuntimeStart = cloneLifecycleBehavior(plan.RequestedRuntimeStart)
+				profile.UserLogoff = cloneLifecycleBehavior(plan.RequestedUserLogoff)
+				profile.Suspend = cloneLifecycleBehavior(plan.RequestedSuspend)
+				profile.Resume = cloneLifecycleBehavior(plan.RequestedResume)
 				cfg.RPCState.Profiles[profile.ID] = profile
 				cfg.RPCState.NetworkPreferenceChange = nil
 				op.State = ipc.OperationState_OPERATION_STATE_SUCCEEDED
