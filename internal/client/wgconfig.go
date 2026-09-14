@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 
@@ -45,6 +46,13 @@ func RenderWireGuardWithOptionsChecked(privateKey string, response clientapi.Reg
 	if err := validateWireGuardRenderOptions(opts); err != nil {
 		return "", err
 	}
+	// Static export cannot enforce an exit grant's lifetime or fail-closed
+	// transitions. Default routes in a map are not an explicit exit selection.
+	peers, err := exitRoutePeers(Config{}, response, nil, time.Time{})
+	if err != nil {
+		return "", err
+	}
+	response.Peers = peers
 	return renderWireGuardValidated(privateKey, response, opts), nil
 }
 

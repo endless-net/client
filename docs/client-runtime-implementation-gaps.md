@@ -368,6 +368,13 @@ changed node/selection. These injected observations are not real OS evidence.
 The executor, partial-failure recovery, live effective-status provider and public
 Select/Clear wiring remain open; this helper alone does not implement exit apply.
 
+Static WireGuard export also strips implicit IPv4/IPv6 default routes before
+rendering, preserving ordinary peer/subnet routes and the original signed map.
+`TestStaticExportDoesNotActivateImplicitExit` covers both legacy LAN-block option
+values and the internal sharing-enforcement flag: neither enables exit routes or
+exit LAN hooks. Static export cannot enforce grant expiry or platform fail-closed
+transitions and does not implement explicit exit selection.
+
 ## External dependencies and approvals
 
 - `clientapi` owns backend DTOs, policy validation and session transport. On
