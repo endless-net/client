@@ -93,6 +93,8 @@ func (*testAgentWireGuard) TryPathStatus(string, string, uint64, uint64) ([]clie
 	return nil, false
 }
 
+func (*testAgentWireGuard) TryResourceEnforcement(client.Config, time.Time) bool { return false }
+
 func (*testAgentWireGuard) RelayStatus() (client.RelayDataplaneBridgeStatus, bool, error) {
 	return client.RelayDataplaneBridgeStatus{}, false, nil
 }

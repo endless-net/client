@@ -322,6 +322,7 @@ type agentWireGuard interface {
 	TryMapInspection(string, string, uint64, uint64) (client.WireGuardInspection, bool)
 	PathStatus() []client.PeerPathStatus
 	TryPathStatus(string, string, uint64, uint64) ([]client.PeerPathStatus, bool)
+	TryResourceEnforcement(client.Config, time.Time) bool
 	RelayStatus() (client.RelayDataplaneBridgeStatus, bool, error)
 }
 

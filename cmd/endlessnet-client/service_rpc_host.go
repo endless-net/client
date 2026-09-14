@@ -45,6 +45,7 @@ func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agent
 	service.SessionRenewalProvider = agentRPCSessionRenewal()
 	service.DiagnosticsProvider = agentRPCDiagnostics(opts)
 	service.PeersProvider = agentRPCPeers(opts)
+	service.ResourceEnforcementProvider = opts.WireGuard.TryResourceEnforcement
 	hostCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	var hostErr error

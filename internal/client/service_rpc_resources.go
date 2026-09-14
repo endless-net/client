@@ -145,6 +145,11 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		}
 		resource.Enabled = rpcResourceSetting(cfg, resource.Id, identity, ready, conflicting)
 	}
+	if s.ResourceEnforcementProvider != nil && s.ResourceEnforcementProvider(cfg, m.now()) {
+		if err := projectAppliedResourceDenials(cfg, items, m.now()); err != nil {
+			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+		}
+	}
 	items = slices.DeleteFunc(items, func(resource *ipc.Resource) bool {
 		return (len(kinds) > 0 && !slices.Contains(kinds, resource.Kind)) || !strings.Contains(searchTargets[resource.Id], search)
 	})

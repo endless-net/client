@@ -588,9 +588,15 @@ It returns no confirmation during Configure/Down, a staged or withdrawn filter,
 changed choices, or a different map with the same revisions. The existing
 `TestResourceEngineAppliesChangesAndRejectsStaticBypass` checks map and choice
 bindings, engine contention, closure and expiry with a test TUN/router.
-This establishes a narrow TUN enforcement observation only. Public resource
-availability still needs route/path/application evidence and observation wiring;
-neither an applied filter nor a successful operation proves reachability.
+The agent now wires this observation into ListResources. A confirmed denial
+projects `resource_packet_restriction_applied` for each intersecting resource;
+partial intersections remain restrictions, not claims that all its traffic is
+blocked. `TestResourceAppliedDenialProjectionRequiresObservation` checks a host
+and overlapping service, loss of confirmation, and rejection before provider
+invocation for an unauthenticated map. No confirmation is cached across reads.
+Positive availability still needs route/path/application evidence, and live
+observation transitions still need event invalidation. Neither an applied
+filter nor a successful operation proves reachability.
 
 Resource mutation worker increment: private `setResourceEnabledAs` admits a
 durable resource choice into the same transaction worker as network preferences.

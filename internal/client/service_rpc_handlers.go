@@ -26,8 +26,11 @@ type ClientRPCService struct {
 	NetworksProvider       ClientRPCNetworksProvider
 	DiagnosticsProvider    ClientRPCDiagnosticsProvider
 	PeersProvider          ClientRPCPeersProvider
-	SessionProvider        ClientRPCSessionProvider
-	SessionRenewalProvider ClientRPCSessionRenewalProvider
+	// Configure before serving. Must be nonblocking and must not call RPC/store
+	// mutations: invoked under the configuration read lock after authentication.
+	ResourceEnforcementProvider func(Config, time.Time) bool
+	SessionProvider             ClientRPCSessionProvider
+	SessionRenewalProvider      ClientRPCSessionRenewalProvider
 	clientipcconnect.UnimplementedClientServiceHandler
 	mutations        *ClientRPCMutations
 	build            *ipc.BuildIdentity
