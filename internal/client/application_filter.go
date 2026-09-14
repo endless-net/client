@@ -247,12 +247,13 @@ func (f *applicationPacketFilter) allows(raw []byte, inbound bool, now time.Time
 
 type applicationTUN struct {
 	tun.Device
-	filter  *applicationPacketFilter
-	flows   *flowCollector
-	sharing *sharingPacketFilter
-	peerACL *peerACLFilter
-	exit    *exitPacketFilter
-	inbound *inboundPacketFilter
+	filter    *applicationPacketFilter
+	flows     *flowCollector
+	sharing   *sharingPacketFilter
+	peerACL   *peerACLFilter
+	exit      *exitPacketFilter
+	inbound   *inboundPacketFilter
+	resources *resourcePacketFilter
 }
 
 func (t *applicationTUN) Write(bufs [][]byte, offset int) (int, error) {
@@ -262,7 +263,7 @@ func (t *applicationTUN) Write(bufs [][]byte, offset int) (int, error) {
 			continue
 		}
 		now := time.Now()
-		allowed := t.filter.allows(buf[offset:], true, now) && t.sharing.allows(buf[offset:], true, now) && (t.exit == nil || t.exit.allows(buf[offset:], true, now)) && t.inbound.allows(buf[offset:], true, now)
+		allowed := t.filter.allows(buf[offset:], true, now) && t.sharing.allows(buf[offset:], true, now) && (t.exit == nil || t.exit.allows(buf[offset:], true, now)) && t.resources.allows(buf[offset:], true, now) && t.inbound.allows(buf[offset:], true, now)
 		t.flows.observe(buf[offset:], allowed, now)
 		if allowed {
 			accepted = append(accepted, buf)
@@ -290,7 +291,7 @@ func (t *applicationTUN) Read(bufs [][]byte, sizes []int, offset int) (int, erro
 			now := time.Now()
 			packet := bufs[i][offset : offset+sizes[i]]
 			normalizeIPv6UDPChecksum(packet)
-			allowed := t.peerACL.allows(packet) && t.filter.allows(packet, false, now) && t.sharing.allows(packet, false, now) && (t.exit == nil || t.exit.allows(packet, false, now)) && t.inbound.allows(packet, false, now)
+			allowed := t.peerACL.allows(packet) && t.filter.allows(packet, false, now) && t.sharing.allows(packet, false, now) && (t.exit == nil || t.exit.allows(packet, false, now)) && t.resources.allows(packet, false, now) && t.inbound.allows(packet, false, now)
 			t.flows.observe(packet, allowed, now)
 			if !allowed {
 				continue

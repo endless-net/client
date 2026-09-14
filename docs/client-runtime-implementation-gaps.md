@@ -184,6 +184,17 @@ and cloned reads. `TestResourcePreferenceFalsePresenceAndAuthenticatedSource`
 checks explicit false across disk reopen and signature rejection. Public
 SetResourceEnabled and packet/route enforcement are still required.
 
+Resource packet enforcement preparation: `resource_filter.go` is composed into
+the optional TUN filter chain before inbound response tracking. It applies
+prefix/port denials in both directions with deny precedence for overlaps,
+retains old denials while tightening, and relaxes only on commit. Map expiry and
+withdrawal close traffic. `TestResourceFilterDeniesOverlapsAndTransitionsInBothDirections`
+checks port/protocol separation, overlap and staged changes, expiry and withdraw;
+`TestResourceFilterRuleValidationAndOwnership` checks rule shape,
+defensive copying and malformed packets. The signed-resource-to-rule compiler,
+engine construction, durable mutation worker and public SetResourceEnabled are
+still missing; optional TUN composition alone does not activate resource policy.
+
 ## Client-owned scenario map
 
 The separate [headless per-IT trace](client-headless-requirement-map.md) retains
