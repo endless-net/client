@@ -15,6 +15,13 @@ import (
 // events are deliberately absent from the public NotifyLifecycle RPC enum.
 type RuntimeLifecycleEvent uint8
 
+// RuntimeLifecycleNotification is produced only by trusted OS sources. The
+// session owner is the identity captured for that session, never the UI caller.
+type RuntimeLifecycleNotification struct {
+	Event        RuntimeLifecycleEvent
+	SessionOwner string
+}
+
 const (
 	RuntimeUserLogoff RuntimeLifecycleEvent = iota + 1
 	RuntimeSuspend

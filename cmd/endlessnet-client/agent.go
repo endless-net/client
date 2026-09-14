@@ -404,7 +404,7 @@ func cmdAgent(args []string) error {
 			return err
 		}
 	}
-	run := func(parentCtx context.Context, lifecycleEvents <-chan client.RuntimeLifecycleEvent) (runErr error) {
+	run := func(parentCtx context.Context, lifecycleEvents <-chan client.RuntimeLifecycleNotification) (runErr error) {
 		ctx, cancelRuntime := context.WithCancelCause(parentCtx)
 		defer cancelRuntime(nil)
 		lockPath, err := client.AgentLockPath(*configPath)

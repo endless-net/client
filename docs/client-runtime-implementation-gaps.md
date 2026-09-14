@@ -141,8 +141,7 @@ Windows source functions enumerate copied session IDs and retrieve SID from
 [WTSQueryUserToken](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsqueryusertoken),
 closing token handles and freeing enumeration buffers. They require the
 documented LocalSystem/SE_TCB_NAME service context; that OS execution is not
-locally qualified. The owner component is not yet attached to SCM: source
-initialization/delivery and owner-bound logoff dispatch remain open. Safe copying
+locally qualified. The owner component is now attached to SCM. Safe copying
 of [session notification](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-wtssession_notification)
 data is implemented by the dispatcher below.
 The service now uses a local SCM dispatcher instead of forwarding native data
@@ -153,10 +152,23 @@ runtime. The status pump drains shutdown after reporting failure, joins runtime
 cleanup, and reports STOPPED exactly once as required by
 [SetServiceStatus](https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-setservicestatus).
 Synthetic callback/status-pump units cover copy lifetime, invalid data, overflow,
-reporting failure and terminal ordering. The existing power path uses this
-dispatcher. SessionChange acceptance and owner-source wiring are still pending;
-this change alone does not implement user logoff. Native callback ABI and SCM
-service execution remain for the agreed platform qualification stage.
+reporting failure and terminal ordering. Power and SessionChange use this
+dispatcher. Startup enumerates sessions, seeds SID bindings and fails before
+runtime launch if enumeration fails. Logon refreshes the binding; logoff consumes
+it and sends an owner-bearing internal notification to the agent. Unknown,
+duplicate and failed-lookup logoffs never infer the current profile's owner.
+The consumer rechecks the current local owner before execution; mutation
+admission rechecks it under its lock. Logoff retries cannot replace pending power
+retries, and a foreign logoff leaves a failed suspend retry intact. Source units
+cover seeded/reused sessions, unknown owners and enumeration failure; agent units
+cover owner-bound DISCONNECT and foreign-logoff/power-retry interleaving.
+Before resume releases the stopped gate, refreshed policy also resolves an
+earlier failed owner logoff; otherwise resume remains pending. Unrelated events
+do not postpone an already armed retry timer. Source-health projection and
+recovery for individual lookup failures, complete interleaving evidence,
+native callback ABI, SCM execution and
+non-Windows lifecycle sources remain open for further implementation/audit and
+the agreed platform qualification stage.
 
 Linux/Darwin routers now retain a cleanup plan containing only failed or
 unattempted steps. Down propagates failures; Configure cannot overwrite pending

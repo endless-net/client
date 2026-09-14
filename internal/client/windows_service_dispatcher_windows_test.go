@@ -49,7 +49,9 @@ func TestWindowsSCMStatusFailureCancelsAndJoinsRuntime(t *testing.T) {
 			defer cancel()
 			controls := make(chan windowsServiceControl, 1)
 			joined := make(chan struct{})
-			service := &windowsService{run: func(ctx context.Context, _ <-chan RuntimeLifecycleEvent) error {
+			started := make(chan struct{})
+			service := &windowsService{enumerate: func() ([]uint32, error) { return nil, nil }, queryOwner: func(uint32) (string, error) { return "test-SID", nil }, run: func(ctx context.Context, _ <-chan RuntimeLifecycleNotification) error {
+				close(started)
 				<-ctx.Done()
 				close(joined)
 				return nil
@@ -60,9 +62,16 @@ func TestWindowsSCMStatusFailureCancelsAndJoinsRuntime(t *testing.T) {
 				states = append(states, status.State)
 				if status.State == svc.Stopped {
 					select {
-					case <-joined:
+					case <-started:
+						select {
+						case <-joined:
+						default:
+							t.Fatal("STOPPED preceded runtime cleanup")
+						}
 					default:
-						t.Fatal("STOPPED preceded runtime cleanup")
+						if failState != svc.StartPending {
+							t.Fatal("runtime never started")
+						}
 					}
 					if status.Accepts != 0 || (status.Win32ExitCode != 0) != (failState != 0) {
 						t.Fatal("invalid terminal status")
