@@ -26,9 +26,15 @@ Local verification observation (2026-09-14): the resume-policy short run initial
 hit Windows TCP bind access-denied errors in
 `TestDNSProxyServesTCPOnTheUDPAddress` and
 `TestDNSProxyPairRecoversFromTransportSpecificExclusion`. The final full short
-rerun passed unchanged DNS code. Ephemeral TCP/UDP pair allocation still needs
-deterministic exclusion/exhaustion evidence; a passing rerun does not close this
-intermittent failure. No native/system acceptance was run.
+rerun passed unchanged DNS code. Source inspection then found that a failed
+ephemeral selector bind terminated before trying the other transport. Selection
+now continues within the existing 16-attempt bound; explicit ports still get
+one attempt. Deterministic socket units cover either selector failing,
+transport-specific exclusion, full exhaustion, fixed-port failure and ownership
+of all retained reservations. The separate loopback TCP DNS response/shutdown
+test remains. These units do not prove every Windows exclusion layout has an
+available pair, and host exclusion qualification remains open. No native/system
+acceptance was run.
 
 The user also accepted KEEP_INTENT defaults for user_logoff, suspend and resume
 on 2026-09-14. Per-profile local preferences now persist those choices, resolve

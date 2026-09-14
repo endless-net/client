@@ -118,7 +118,8 @@ func listenDNSProxyPairWith(address string, listenTCP func(string) (net.Listener
 		if attempt%2 == 1 {
 			udp, err := listenUDP(address)
 			if err != nil {
-				return nil, nil, err
+				lastErr = err
+				continue
 			}
 			tcp, err := listenTCP(udp.LocalAddr().String())
 			if err == nil {
@@ -130,7 +131,8 @@ func listenDNSProxyPairWith(address string, listenTCP func(string) (net.Listener
 		}
 		tcp, err := listenTCP(address)
 		if err != nil {
-			return nil, nil, err
+			lastErr = err
+			continue
 		}
 		udp, err := listenUDP(tcp.Addr().String())
 		if err == nil {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -213,74 +214,135 @@ type dnsProxyTestUpstream struct {
 	queries chan string
 }
 
-func TestDNSProxyPairRecoversFromTransportSpecificExclusion(t *testing.T) {
-	denied := errors.New("simulated UDP port exclusion")
-	var first net.Listener
-	var udpAddresses []string
-	tcp, udp, err := listenDNSProxyPairWith("127.0.0.1:0",
-		func(addr string) (net.Listener, error) {
-			listener, err := net.Listen("tcp4", addr)
-			if err == nil {
-				t.Cleanup(func() { _ = listener.Close() })
-			}
-			if first == nil {
-				first = listener
-			}
-			return listener, err
-		},
-		func(addr string) (net.PacketConn, error) {
-			udpAddresses = append(udpAddresses, addr)
-			if len(udpAddresses) == 1 {
-				return nil, denied
-			}
-			return net.ListenPacket("udp4", addr)
-		})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = tcp.Close(); _ = udp.Close() }()
-	if len(udpAddresses) < 2 || udpAddresses[1] != "127.0.0.1:0" {
-		t.Fatal("UDP did not choose the replacement ephemeral port")
-	}
-	if tcp.Addr().String() != udp.LocalAddr().String() {
-		t.Fatal("DNS transports do not share an address")
-	}
-	_ = first.(*net.TCPListener).SetDeadline(time.Now().Add(time.Second))
-	if conn, err := first.Accept(); !errors.Is(err, net.ErrClosed) {
-		if conn != nil {
-			_ = conn.Close()
-		}
-		t.Fatal("failed TCP reservation was not closed")
-	}
+type dnsPairTestTCP struct {
+	net.Listener
+	address net.Addr
+	closed  bool
 }
 
-func TestDNSProxyPairDoesNotMoveExplicitPort(t *testing.T) {
-	denied := errors.New("simulated UDP port exclusion")
-	var first net.Listener
-	calls := 0
-	tcp, udp, err := listenDNSProxyPairWith("127.0.0.1:5353",
-		func(addr string) (net.Listener, error) {
-			if addr != "127.0.0.1:5353" {
-				t.Fatal("explicit port changed")
+func (s *dnsPairTestTCP) Addr() net.Addr { return s.address }
+func (s *dnsPairTestTCP) Close() error   { s.closed = true; return nil }
+
+type dnsPairTestUDP struct {
+	net.PacketConn
+	address net.Addr
+	closed  bool
+}
+
+func (s *dnsPairTestUDP) LocalAddr() net.Addr { return s.address }
+func (s *dnsPairTestUDP) Close() error        { s.closed = true; return nil }
+
+func TestDNSProxyPairRecoversFromTransportSpecificExclusion(t *testing.T) {
+	for _, scenario := range []string{"udp_partner_denied", "first_tcp_denied", "first_udp_denied", "exhausted", "selectors_denied", "explicit"} {
+		t.Run(scenario, func(t *testing.T) {
+			denied := errors.New("simulated port exclusion")
+			address := "127.0.0.1:0"
+			if scenario == "explicit" {
+				address = "127.0.0.1:5353"
 			}
-			var err error
-			// Allocate a test reservation without requiring host port 5353.
-			first, err = net.Listen("tcp4", "127.0.0.1:0")
-			if err == nil {
-				t.Cleanup(func() { _ = first.Close() })
+			var tcpSockets []*dnsPairTestTCP
+			var udpSockets []*dnsPairTestUDP
+			var selections, calls int
+			makeAddress := func(addr string) net.Addr {
+				host, port, err := net.SplitHostPort(addr)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if port == "0" {
+					selections++
+					port = strconv.Itoa(50000 + selections)
+				}
+				number, err := strconv.Atoi(port)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return &net.TCPAddr{IP: net.ParseIP(host), Port: number}
 			}
-			return first, err
-		},
-		func(string) (net.PacketConn, error) { calls++; return nil, denied })
-	if !errors.Is(err, denied) || tcp != nil || udp != nil || calls != 1 {
-		t.Fatal("explicit bind failure was retried or ignored")
-	}
-	_ = first.(*net.TCPListener).SetDeadline(time.Now().Add(time.Second))
-	if conn, err := first.Accept(); !errors.Is(err, net.ErrClosed) {
-		if conn != nil {
-			_ = conn.Close()
-		}
-		t.Fatal("failed TCP reservation was not closed")
+			assertRetained := func() {
+				for _, s := range tcpSockets {
+					if s.closed {
+						t.Fatal("TCP reservation released during selection")
+					}
+				}
+				for _, s := range udpSockets {
+					if s.closed {
+						t.Fatal("UDP reservation released during selection")
+					}
+				}
+			}
+			tcp, udp, err := listenDNSProxyPairWith(address,
+				func(addr string) (net.Listener, error) {
+					calls++
+					if scenario == "explicit" && addr != address {
+						t.Fatal("explicit TCP port changed")
+					}
+					assertRetained()
+					if scenario == "selectors_denied" || (scenario == "first_tcp_denied" && calls == 1) || (scenario == "exhausted" && addr != address) {
+						return nil, denied
+					}
+					s := &dnsPairTestTCP{address: makeAddress(addr)}
+					tcpSockets = append(tcpSockets, s)
+					return s, nil
+				},
+				func(addr string) (net.PacketConn, error) {
+					calls++
+					if scenario == "explicit" && addr != address {
+						t.Fatal("explicit UDP port changed")
+					}
+					assertRetained()
+					if scenario == "selectors_denied" || scenario == "explicit" || (scenario == "exhausted" && addr != address) || (calls == 2 && scenario != "first_tcp_denied") || (scenario == "first_udp_denied" && calls == 3) {
+						return nil, denied
+					}
+					s := &dnsPairTestUDP{address: makeAddress(addr)}
+					udpSockets = append(udpSockets, s)
+					return s, nil
+				})
+			failed := scenario == "exhausted" || scenario == "selectors_denied" || scenario == "explicit"
+			if failed {
+				if !errors.Is(err, denied) || tcp != nil || udp != nil {
+					t.Fatal("failed bind escaped as success", err)
+				}
+				expected := 32
+				if scenario == "selectors_denied" {
+					expected = 16
+				}
+				if scenario == "explicit" {
+					expected = 2
+				}
+				if calls != expected {
+					t.Fatalf("%d bind calls, want bounded %d", calls, expected)
+				}
+			} else {
+				if err != nil || tcp == nil || udp == nil {
+					t.Fatal("did not recover selection", err)
+				}
+				if tcp.Addr().String() != udp.LocalAddr().String() {
+					t.Fatal("transports differ")
+				}
+				if scenario == "first_tcp_denied" && calls != 3 {
+					t.Fatal("did not switch to UDP after TCP selector failure")
+				}
+				if scenario == "first_udp_denied" && calls != 5 {
+					t.Fatal("did not switch to TCP after UDP selector failure")
+				}
+			}
+			for _, s := range tcpSockets {
+				if s.closed == (tcp == s) {
+					t.Fatal("TCP reservation ownership incorrect")
+				}
+			}
+			for _, s := range udpSockets {
+				if s.closed == (udp == s) {
+					t.Fatal("UDP reservation ownership incorrect")
+				}
+			}
+			if tcp != nil {
+				_ = tcp.Close()
+			}
+			if udp != nil {
+				_ = udp.Close()
+			}
+		})
 	}
 }
 
