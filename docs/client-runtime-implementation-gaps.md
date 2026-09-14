@@ -70,7 +70,7 @@ Paths in the table are under `internal/client/` unless qualified otherwise.
 | US-06 trust/recovery | `service_rpc_trust_worker.go`, `service_rpc_trust_recovery.go` | `TestRPCTrustWorkerRecoveryAndIndependentDisconnect` | Audit exact authority tuple, replay and privilege outcomes; helper/OS integration remains later evidence |
 | US-07 diagnostics | `service_rpc_diagnostics.go`, bundle worker/store/read handlers, `route_observations.go` | `TestRPCDiagnosticsRejectsChangedContextAndInvalidProvider`, `TestRPCAdministratorBundleScopeAndRestart`, injected route collector tests | Route sampling implemented but platform execution unqualified; inspect redaction, bounds and archive lifecycle coverage separately |
 | US-08 profiles/logout | Profile, logout and forget handlers | `TestRPCProfileRemovalGuards`, `TestRPCForgetCancelsQueuedEnrollmentAfterRestart`, `TestRPCProfilePaginationBindingsAndPrivacy` | Audit all removal/cleanup/replay cases; remote revocation depends on backend result |
-| US-09 session/renewal | `GetSession` persists protected responses; snapshot uses bound active-profile session; `RenewSession` remains missing | Session read, snapshot and persistence/cleanup unit suites | Durable renewal execution/recovery and scheduled session-clock event transitions remain open |
+| US-09 session/renewal | `GetSession` persists protected responses; snapshot uses bound session; host emits session-clock transitions; `RenewSession` remains missing | Session read, snapshot, clock and persistence/cleanup unit suites | Durable renewal execution/recovery and platform/backend qualification remain open |
 | US-10 preferences/policy | `service_rpc_uiquit.go`, preference validators | `TestRPCUIQuitRejectsUnsupportedPatchAtomically` rejects mixed UI-quit/DNS patch without changing revision or override | Implement remaining settings; rejection is not DNS/routes/policy functionality |
 | US-11 resources | Missing list/mutation overrides | No runtime implementation to qualify | Implement catalog, policy-aware enablement and actual runtime effects |
 | US-12 lifecycle | `service_rpc_uiquit.go` | `TestRPCUIQuitPreferencesAndExecution` | UI-quit support is not logoff/suspend/resume adapter implementation; audit each specified event |
@@ -184,7 +184,7 @@ the session domain; identical protobuf responses do not rewrite state. Renewal
 is explicitly unavailable until its durable execution workflow is implemented.
 `TestRPCSessionReadProjectionAndContext` covers these
 read-domain cases with an injected backend provider; actual backend deployment,
-transport integration and scheduled snapshot/events session refresh remain unqualified.
+transport integration and platform/backend qualification remain open.
 
 `rpcProjectSession` is shared by GetSession and snapshot/event projections.
 Owner/admin snapshots only use stored authority matching the active profile
@@ -192,8 +192,15 @@ origin and current bearer binding; stale provider Session fields cannot override
 it. Missing observations remain unknown, missing bearer is not-authenticated,
 and observer snapshots exclude session data. `TestRPCSessionSnapshotUsesBoundAuthorityAndOwnClock`
 checks those boundaries plus expiry independent of a valid node credential.
-Fresh snapshots evaluate the session clock; a timer that emits transitions on
-an otherwise idle stream is not yet implemented.
+Fresh snapshots evaluate the session clock. The host now owns a one-second
+session-clock worker for open subscriptions; it advances revision and publishes
+status plus session invalidation only when a subscriber's projected state changes.
+Observers retain the public status projection without session data/invalidation.
+`TestRPCSessionClockPublishesOnlyTransitions` checks warning/expiry using controlled
+time, no duplicate emissions, and unchanged tunnel intent. The cancellation test
+checks worker termination. Host failures cancel/join this worker alongside other
+workers. This does not renew a session or establish real idle-stream timing on
+every supported OS.
 
 `TestRPCSessionAuthorityPersistenceAndCleanup` checks private authority retention
 across disk reopen, returned revision, identical-read stability, no bearer in IPC,
