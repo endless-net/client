@@ -174,8 +174,15 @@ single-IP subnets remain valid. `TestResourceIdentityMatchesCatalogAndRejectsFor
 round-trips catalog IDs and tests forgery/tampering;
 `TestResourceIdentityManagedSingleIPAndApplicationSource` covers subnet identity
 and application role. This is preparatory validation: SetResourceEnabled,
-resource policy resolution, durable intent/effects and overlap handling remain
-unimplemented.
+durable operation intent/effects and overlap handling remain unimplemented.
+`resource_preferences.go` now resolves a per-profile optional local choice over
+the authenticated producer baseline/lock without claiming reachability. Service
+ports share the producer service policy while local overrides remain per catalog
+ID. `TestResourcePreferenceServicePolicyCoversPortsAndPreservesLocalChoice`
+checks both ports, locked/unlocked precedence, disk persistence, absence/reset
+and cloned reads. `TestResourcePreferenceFalsePresenceAndAuthenticatedSource`
+checks explicit false across disk reopen and signature rejection. Public
+SetResourceEnabled and packet/route enforcement are still required.
 
 ## Client-owned scenario map
 
