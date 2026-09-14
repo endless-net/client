@@ -20,8 +20,9 @@ name: Test
         type: boolean
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-v2
-  # New runs supersede older checks for the same workflow and ref.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.sha }}-v2
+  # Replace duplicate checks of the same source and event, while preserving
+  # release qualification when a delayed push check or a newer commit arrives.
   cancel-in-progress: true
 
 permissions:

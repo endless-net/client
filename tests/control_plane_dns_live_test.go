@@ -137,8 +137,10 @@ func TestControlPlaneNativeDNSMapUpdates(t *testing.T) {
 		status = n.AwaitNativeStatus(func(v *native.Status) bool {
 			return nativeDNSMapApplied(v, id, previous) && v.MapRevision >= desired.Revision.Network
 		})
-		diagnostic := &native.GetDiagnosticsResponse{}
-		if err := n.NativeService("diagnostics", diagnostic, "--profile-id", status.ActiveProfileId); err != nil {
+		diagnostic, err := retryNativeDiagnosticsRead(func(response *native.GetDiagnosticsResponse) error {
+			return n.NativeService("diagnostics", response, "--profile-id", status.ActiveProfileId)
+		})
+		if err != nil {
 			t.Fatal(err)
 		}
 		d := diagnostic.Diagnostics

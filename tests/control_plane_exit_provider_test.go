@@ -17,9 +17,11 @@ import (
 	"github.com/endless-net/client/internal/testcontrol"
 )
 
-// HC-038: one real Client advertises and serves as an IPv4 exit provider for
-// another real Client. Linux proves forwarding and SNAT with an external
-// namespace; other native platforms publish the explicit unsupported outcome.
+// HC-038 provider boundary: a real Client advertises an IPv4 default route and
+// forwards/SNATs traffic to an external namespace. Its consumer uses an explicit
+// resource route; a default advertisement cannot select an exit implicitly.
+// Other native platforms publish the explicit unsupported provider outcome.
+// This does not qualify consumer exit selection or HC-037 exit LAN policy.
 func TestControlPlaneExitProvider(t *testing.T) {
 	requireControlScenario(t)
 	if runtime.GOOS != "linux" {
@@ -139,7 +141,7 @@ func testLinuxExitProvider(t *testing.T) {
 		t.Helper()
 		tcpOK, udpOK := probe("tcp"), probe("udp")
 		if tcpOK || udpOK {
-			t.Fatal("external target was reachable without an approved default route")
+			t.Fatal("external target was reachable without an authorized resource route or explicit exit selection")
 		}
 	}
 	reachable := func() {
@@ -147,14 +149,15 @@ func testLinuxExitProvider(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 		defer cancel()
 		if err := testclient.Await(ctx, func() bool { return probe("tcp") && probe("udp") }); err != nil {
-			t.Fatal("approved default route did not pass TCP and UDP through the Client exit provider")
+			t.Fatal("authorized resource route did not pass TCP and UDP through the Client provider")
 		}
 	}
 	apply := func(approved bool) {
 		t.Helper()
 		peer := providerPeer
+		peer.AllowedIPs = append(peer.AllowedIPs, "0.0.0.0/0")
 		if approved {
-			peer.AllowedIPs = append(peer.AllowedIPs, "0.0.0.0/0")
+			peer.AllowedIPs = append(peer.AllowedIPs, "203.0.113.20/32")
 		}
 		if err := s.UpdatePeers(states[0].NodeId, []api.Peer{peer}); err != nil {
 			t.Fatal(err)
@@ -166,6 +169,8 @@ func testLinuxExitProvider(t *testing.T) {
 		states[0] = awaitNativePeerMap(t, nodes[0], states[0], m.Revision.Network, 1)
 	}
 
+	blocked()
+	apply(false)
 	blocked()
 	apply(true)
 	reachable()
@@ -187,7 +192,8 @@ func testLinuxExitProvider(t *testing.T) {
 	nodes[1].Start()
 	states[1] = awaitNativePeerMap(t, nodes[1], states[1], states[1].MapRevision, 1)
 	reachable()
-	// HC-037: keep the local LAN independent from the external exit target.
+	// Without an explicit consumer exit selection, ordinary resource routing
+	// must keep local LAN access independent from the provider's advertisement.
 	{
 		lanNamespace, lanLink := attachRouterResource(t, namespaces[0])
 		namespaceCommand(t, "-n", lanNamespace, "addr", "add", "10.88.0.20/32", "dev", "lo")
@@ -214,26 +220,17 @@ func testLinuxExitProvider(t *testing.T) {
 				}
 			}
 		}
-		setPolicy := func(policy string) {
-			t.Helper()
-			nodes[0].Stop()
-			if _, err := nodes[0].Run("sync", "--config", nodes[0].Config, "--offline", "--exit-lan-policy", policy); err != nil {
-				t.Fatal("could not persist exit LAN preference through the CLI")
-			}
-			nodes[0].Start()
-			states[0] = awaitNativePeerMap(t, nodes[0], states[0], states[0].MapRevision, 1)
-		}
 		lanAccess(true)
-		setPolicy("block")
-		lanAccess(false)
 		reachable()
 		apply(false)
 		blocked()
 		lanAccess(true)
 		apply(true)
-		lanAccess(false)
+		lanAccess(true)
 		reachable()
-		setPolicy("allow")
+		nodes[0].Stop()
+		nodes[0].Start()
+		states[0] = awaitNativePeerMap(t, nodes[0], states[0], states[0].MapRevision, 1)
 		lanAccess(true)
 		reachable()
 	}
@@ -247,6 +244,6 @@ func testLinuxExitProvider(t *testing.T) {
 		}
 	}
 	if registrations != 2 {
-		t.Fatal("exit-provider or LAN-policy restart created another registration")
+		t.Fatal("provider or consumer restart created another registration")
 	}
 }

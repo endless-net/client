@@ -22,6 +22,19 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Release CI scenario migration (2026-09-15): the old HC-036/HC-038 fixtures
+expected a peer's signed default route to activate consumer exit routing without
+SelectExitNode. That contradicts the current no-selection projection. The native
+IPv4/IPv6 exit-route scenario now proves those defaults remain ineffective,
+including withdrawal and reappearance, and uses an authorized host route as a
+positive TCP/UDP forwarding control. The provider scenario retains real default
+advertisement, forwarding/SNAT, revocation, established-session withdrawal and
+restart checks using an explicit resource route on its consumer. It also checks
+ordinary LAN access remains independent of that route. The superseded offline
+exit-LAN CLI fixture is removed. These checks do not close HC-036 explicit exit
+activation, HC-037 selected-exit LAN policy, or complete HC-038 consumer/provider
+acceptance; those remain open with the native exit runtime work below.
+
 Local verification observation (2026-09-14): the resume-policy short run initially
 hit Windows TCP bind access-denied errors in
 `TestDNSProxyServesTCPOnTheUDPAddress` and

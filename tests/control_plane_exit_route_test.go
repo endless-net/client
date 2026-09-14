@@ -18,11 +18,10 @@ import (
 	"github.com/endless-net/client/internal/testwireguard"
 )
 
-// HC-036: a real native Client consumes an approved IPv4 or IPv6 default route,
-// sends application traffic through the selected WireGuard peer, withdraws the
-// route without losing control connectivity, and recovers when it is restored.
-// The reference peer proves the client egress hop; it is not a public Internet
-// service and therefore does not claim a production public-address observation.
+// HC-036 boundary: a signed peer default route cannot select an exit implicitly.
+// Exercise IPv4 and IPv6 withdrawal/reappearance, with an authorized host route
+// as a positive control proving the reference peer and application are live.
+// This does not qualify explicit SelectExitNode activation or exit LAN policy.
 func TestControlPlaneNativeExitRoute(t *testing.T) {
 	requireControlScenario(t)
 	for _, family := range []string{"ipv4", "ipv6"} {
@@ -94,7 +93,7 @@ func TestControlPlaneNativeExitRoute(t *testing.T) {
 			blocked := func() {
 				t.Helper()
 				if probe("tcp") || probe("udp") {
-					t.Fatal("egress target remained reachable without an approved default route")
+					t.Fatal("egress target became reachable without an explicit exit selection or authorized host route")
 				}
 			}
 			reachable := func() {
@@ -109,7 +108,7 @@ func TestControlPlaneNativeExitRoute(t *testing.T) {
 					return tcpOK && udpOK
 				}); err != nil {
 					toResource, fromResource := reference.ForwardedPacketCounts()
-					t.Fatalf("approved default route did not carry TCP and UDP through the exit peer: tcp=%t udp=%t forwarded=%d/%d before=%d/%d",
+					t.Fatalf("authorized host route did not carry TCP and UDP through the reference peer: tcp=%t udp=%t forwarded=%d/%d before=%d/%d",
 						tcpOK, udpOK, toResource, fromResource, beforeTo, beforeFrom)
 				}
 				toResource, fromResource := reference.ForwardedPacketCounts()
@@ -121,10 +120,17 @@ func TestControlPlaneNativeExitRoute(t *testing.T) {
 			apply([]string{peerHost})
 			blocked()
 			apply([]string{peerHost, exitRoute})
+			blocked()
+			resourceRoute := netip.PrefixFrom(resourceIP, resourceIP.BitLen()).String()
+			apply([]string{peerHost, exitRoute, resourceRoute})
 			reachable()
+			apply([]string{peerHost, exitRoute})
+			blocked()
 			apply([]string{peerHost})
 			blocked()
 			apply([]string{peerHost, exitRoute})
+			blocked()
+			apply([]string{peerHost, resourceRoute})
 			reachable()
 		})
 	}
