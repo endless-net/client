@@ -45,6 +45,15 @@ script enumerates then filters the owned interface so absent entries can be
 retried without suppressing command failures. Engine and Windows command-runner
 units cover these paths, not actual platform cleanup or SCM event delivery.
 The gate is not yet wired to trusted OS events or runtime worker suspension.
+The internal `ApplyRuntimeLifecycleIntent` handler now resolves signed
+logoff/suspend/resume policy and commits the current intent decision before
+cancelling an in-flight apply. It validates the logoff owner, rejects unknown
+policy without mutation, preserves newer Disconnect under KEEP_INTENT, clears
+a startup-recovery checkpoint under managed DISCONNECT, and propagates that
+disconnect to a pending profile-switch target. Runtime lifecycle tests cover
+these decisions, restart and duplicate delivery; no public RPC operation or
+completed OS teardown is fabricated. Native event delivery, worker ordering,
+source-failure recovery and CONNECT behavior remain to be integrated.
 The pinned x/sys SCM host forwards SessionChange EventData after its callback
 returns; the adapter must copy session data during a live native callback rather
 than dereference that forwarded pointer later.
@@ -76,6 +85,9 @@ Native policy-rule ownership and platform effect qualification remain open.
 The a980455 push short run passed on Linux; macOS verification was skipped by
 the old push gate. Push unit CI now runs one short pass on Linux, Windows and
 macOS, including the nested IPC module, with no installer/system jobs enabled.
+The 65bf9f5 push short run completed successfully on all three OS runners,
+including the OS-tagged cleanup tests. This is unit evidence, not native
+installer/networking or lifecycle acceptance.
 
 The user accepted the runtime-start default on 2026-09-14: KEEP_INTENT,
 with DISCONNECT when no explicit intent is saved. The agent now initializes
