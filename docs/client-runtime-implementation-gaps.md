@@ -395,6 +395,13 @@ and automatic retry availability still need their own runtime qualification.
 policy resolution separately from pending requested overrides, including reset
 absence and managed provenance/locks. GetPreferences and ListManagedSettings
 use that projection, and preference operations invalidate resources as well.
+Network preference/reset and resource admission now perform authorization,
+mutation validation and durable replay before rejecting an absent/stopped worker.
+Only new work requires executor readiness. `TestPreferenceResourceReplayWithoutWorker`
+checks pending and terminal replay after disk reopen for all three methods,
+absent and cancelled workers, unauthenticated/foreign callers, changed payload
+under the same request ID and new-work rejection without persistent mutation.
+The rejecting admission callback cannot execute a candidate or create a plan.
 `TestNetworkPreferencePublicAdmissionWakesWorkerAndSeparatesPending` exercises
 the readiness/acceptance bridge, worker wakeup and pending-to-committed reads;
 `TestNetworkPreferenceProjectionManagedLockAndReset` covers lock precedence

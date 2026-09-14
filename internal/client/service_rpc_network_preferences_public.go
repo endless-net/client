@@ -3,17 +3,23 @@ package client
 import (
 	"connectrpc.com/connect"
 	api "github.com/endless-net/client-api/clientapi/v1"
+	"github.com/endless-net/client/clientipc/local"
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
 )
 
-func (s *ClientRPCService) acceptNetworkPreferenceOperation(accept func() (*ipc.Operation, error)) (*ipc.Operation, error) {
+func (s *ClientRPCService) acceptNetworkPreferenceOperation(peer local.Peer, method string, request proto.Message, accept func() (*ipc.Operation, error)) (*ipc.Operation, error) {
 	s.profileMu.Lock()
 	defer s.profileMu.Unlock()
 	w := s.profileWorker
 	if w == nil || w.ctx.Err() != nil {
-		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+		// Authorization, mutation validation and durable replay precede worker
+		// readiness. The rejecting prepare callback cannot admit new effects.
+		op, _, err := s.mutations.acceptAs(peer, method, request, func(*Config, *ipc.Operation) error {
+			return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+		})
+		return op, err
 	}
 	op, err := accept()
 	if err != nil {

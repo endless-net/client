@@ -12,7 +12,7 @@ import (
 
 func (s *ClientRPCService) SetResourceEnabled(ctx context.Context, request *connect.Request[ipc.SetResourceEnabledRequest]) (*connect.Response[ipc.SetResourceEnabledResponse], error) {
 	peer, _ := local.PeerFromContext(ctx)
-	op, err := s.acceptNetworkPreferenceOperation(func() (*ipc.Operation, error) {
+	op, err := s.acceptNetworkPreferenceOperation(peer, "/client.v0.ClientService/SetResourceEnabled", request.Msg, func() (*ipc.Operation, error) {
 		return s.mutations.setResourceEnabledAs(peer, request.Msg)
 	})
 	if err != nil {

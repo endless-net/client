@@ -236,7 +236,7 @@ func (s *ClientRPCService) preferencesAs(peer local.Peer, request *ipc.GetPrefer
 func (s *ClientRPCService) SetPreferences(ctx context.Context, request *connect.Request[ipc.SetPreferencesRequest]) (*connect.Response[ipc.SetPreferencesResponse], error) {
 	peer, _ := local.PeerFromContext(ctx)
 	if patch := request.Msg.GetPatch(); patch != nil && (patch.AllowInbound != nil || patch.AcceptDns != nil || patch.AcceptRoutes != nil) {
-		op, err := s.acceptNetworkPreferenceOperation(func() (*ipc.Operation, error) { return s.mutations.setNetworkPreferencesAs(peer, request.Msg) })
+		op, err := s.acceptNetworkPreferenceOperation(peer, "/client.v0.ClientService/SetPreferences", request.Msg, func() (*ipc.Operation, error) { return s.mutations.setNetworkPreferencesAs(peer, request.Msg) })
 		if err != nil {
 			return nil, err
 		}
@@ -281,7 +281,7 @@ func (s *ClientRPCService) ResetPreferences(ctx context.Context, request *connec
 	peer, _ := local.PeerFromContext(ctx)
 	for _, key := range request.Msg.GetKeys() {
 		if key == ipc.PreferenceKey_PREFERENCE_KEY_ALLOW_INBOUND || key == ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_DNS || key == ipc.PreferenceKey_PREFERENCE_KEY_ACCEPT_ROUTES {
-			op, err := s.acceptNetworkPreferenceOperation(func() (*ipc.Operation, error) { return s.mutations.resetNetworkPreferencesAs(peer, request.Msg) })
+			op, err := s.acceptNetworkPreferenceOperation(peer, "/client.v0.ClientService/ResetPreferences", request.Msg, func() (*ipc.Operation, error) { return s.mutations.resetNetworkPreferencesAs(peer, request.Msg) })
 			if err != nil {
 				return nil, err
 			}

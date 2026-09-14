@@ -22,7 +22,7 @@ func TestNetworkPreferencePublicAdmissionWakesWorkerAndSeparatesPending(t *testi
 	}
 	s := NewClientRPCService(m, nil)
 	request := &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{AcceptDns: proto.Bool(false), AcceptRoutes: proto.Bool(false)}}
-	_, err := s.acceptNetworkPreferenceOperation(func() (*ipc.Operation, error) { t.Fatal("admitted without worker"); return nil, nil })
+	_, err := s.acceptNetworkPreferenceOperation(owner, "/client.v0.ClientService/SetPreferences", request, func() (*ipc.Operation, error) { t.Fatal("admitted without worker"); return nil, nil })
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -48,7 +48,7 @@ func TestNetworkPreferencePublicAdmissionWakesWorkerAndSeparatesPending(t *testi
 	_, err = s.SetPreferences(context.Background(), connect.NewRequest(request))
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNAUTHENTICATED)
 	request.Mutation = rpcCreateRequest(t, m).Mutation
-	op, err := s.acceptNetworkPreferenceOperation(func() (*ipc.Operation, error) { return m.setNetworkPreferencesAs(owner, request) })
+	op, err := s.acceptNetworkPreferenceOperation(owner, "/client.v0.ClientService/SetPreferences", request, func() (*ipc.Operation, error) { return m.setNetworkPreferencesAs(owner, request) })
 	if err != nil {
 		t.Fatal(err)
 	}
