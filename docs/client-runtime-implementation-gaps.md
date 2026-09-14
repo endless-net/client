@@ -22,6 +22,15 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Exit selection admission now persists the authenticated map payload hash.
+Preflight, completion and retry reject replacement maps even when recipient,
+revisions and the selected grant still match. Queued work fails without dispatch;
+dispatched work retains its guard until containment succeeds, including restart.
+`TestExitSelectionBindsSignedMapAcrossRestartAndApply` covers both paths using
+valid signed replacement maps and an injected executor. Clear remains possible
+without a map. This does not supply the missing OS exit adapter or qualify
+fail-closed behavior on a platform.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,

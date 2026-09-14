@@ -28,10 +28,13 @@ func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) 
 		return false
 	}
 	profile, exists := cfg.RPCState.Profiles[plan.ProfileID]
+	// A still-valid grant in a replacement map does not prove that the OS
+	// applied that map. Clear remains independent of withdrawn map authority.
 	return exists && plan.OperationID == op.Id && plan.ProfileID == op.ProfileId && plan.ProfileID == cfg.RPCState.ActiveProfileID &&
 		strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) && plan.ControlOrigin == profile.ControlOrigin &&
 		plan.NodeID == cfg.NodeID && plan.NetworkID == cfg.NetworkID && reflect.DeepEqual(plan.Previous, cfg.ExitSelection) &&
 		reflect.DeepEqual(plan.PreviousIntent, cfg.ConnectionIntent) &&
+		(plan.Requested == nil || (plan.MapHash != "" && cfg.CachedMap != nil && cfg.CachedMap.MapSignature != nil && plan.MapHash == cfg.CachedMap.MapSignature.PayloadHash)) &&
 		((plan.Requested == nil && op.Kind == ipc.OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE) ||
 			(plan.Requested != nil && op.Kind == ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE))
 }

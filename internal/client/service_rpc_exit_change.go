@@ -19,6 +19,7 @@ type clientRPCExitChange struct {
 	ControlOrigin  string               `json:"control_origin"`
 	NodeID         string               `json:"node_id"`
 	NetworkID      string               `json:"network_id"`
+	MapHash        string               `json:"map_hash,omitempty"`
 	Requested      *ClientExitSelection `json:"requested,omitempty"`
 	Previous       *ClientExitSelection `json:"previous,omitempty"`
 	PreviousIntent *ConnectionIntent    `json:"previous_intent,omitempty"`
@@ -120,6 +121,7 @@ func (m *ClientRPCMutations) selectExitNodeAs(peer local.Peer, request *ipc.Sele
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED)
 		}
 		plan.Requested = selected
+		plan.MapHash = cfg.CachedMap.MapSignature.PayloadHash
 		cfg.RPCState.ExitChange = plan
 		// Acceptance records intent only; the engine must not observe a newly
 		// active selection before enforcement and application have completed.
