@@ -117,6 +117,16 @@ publication ordering/failure; agent units cover stale-path replacement, failure
 privacy, no probes and separation of intent from dataplane state. Full native
 event/subscriber delivery, restart semantics and resources/exit effective-state
 observations still require the remaining audit and platform qualification.
+`runtime_lifecycle_events_test.go` now exercises the executor with the actual
+mutation observation, snapshot and subscriber queues: failed teardown reports
+DISCONNECTING, retry reports DISCONNECTED with connected KEEP_INTENT, and resume
+cannot invent CONNECTED or an RPC operation. Owner/observer projections share
+the committed revision and maintain per-stream sequence, while observer output
+omits private identity/failure details. Reattachment receives a fresh stopped
+snapshot; reopening durable storage in a new mutation runtime preserves intent
+without replaying a previous runtime's observation as evidence of a tunnel.
+Native transport/SCM timing, interruption during durable writes and complete
+cross-domain invalidation coverage remain separate open evidence.
 The pinned x/sys SCM host forwards SessionChange EventData after its callback
 returns; the adapter must copy session data during a live native callback rather
 than dereference that forwarded pointer later.
