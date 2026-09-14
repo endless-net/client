@@ -264,7 +264,7 @@ func resolveConfigFileLocation(path string) (string, error) {
 
 func loadConfigFile(path string) (Config, error) {
 	var cfg Config
-	raw, err := os.ReadFile(path)
+	raw, err := readAtomicFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return normalizePersistentConfig(Config{}), nil

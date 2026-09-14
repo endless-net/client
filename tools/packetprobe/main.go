@@ -254,8 +254,13 @@ func sessionWithTimeout(network, address string, input io.Reader, output io.Writ
 	if network != "tcp" && network != "udp" {
 		return errors.New("network must be tcp or udp")
 	}
-	conn, err := net.DialTimeout(probeNetwork(network, address), address, time.Second)
+	// Allow TCP establishment to retransmit before selecting the one retained
+	// socket. Exchange deadlines and post-establishment failure checks stay strict.
+	conn, err := net.DialTimeout(probeNetwork(network, address), address, 3*time.Second)
 	if err != nil {
+		if _, writeErr := fmt.Fprintln(output, "dial-unavailable"); writeErr != nil {
+			return writeErr
+		}
 		return errDialUnavailable
 	}
 	defer func() { _ = conn.Close() }()

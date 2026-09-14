@@ -176,6 +176,14 @@ func TestSessionKeepsOneConnectionAcrossExchanges(t *testing.T) {
 	}
 }
 
+func TestSessionReportsDialFailureWithoutAddress(t *testing.T) {
+	var output bytes.Buffer
+	err := session("tcp", "private-address-without-port", strings.NewReader(""), &output)
+	if !errors.Is(err, errDialUnavailable) || output.String() != "dial-unavailable\n" {
+		t.Fatal("session setup failure lost its bounded public classification")
+	}
+}
+
 func TestSessionHandlesLateReplies(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

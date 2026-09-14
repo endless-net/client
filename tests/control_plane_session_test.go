@@ -65,7 +65,7 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 		hasAccount := strings.Contains(string(output), "test-account")
 		if want {
 			if err != nil || !hasAccount || accepted == 0 || denied != 0 {
-				t.Fatalf("authenticated user RPC did not return the published account: phase=%s exit_code=%d output_bytes=%d account_present=%t accepted=%d denied=%d elapsed=%s", phase, exitCode, len(output), hasAccount, accepted, denied, time.Since(started).Round(time.Millisecond))
+				t.Fatalf("authenticated user RPC did not return the published account: phase=%s exit_code=%d failure_stage=%s output_bytes=%d account_present=%t accepted=%d denied=%d elapsed=%s", phase, exitCode, userAccountFailureStage(output), len(output), hasAccount, accepted, denied, time.Since(started).Round(time.Millisecond))
 			}
 			return
 		}
@@ -179,5 +179,43 @@ func exerciseSessionExpiryRecovery(t *testing.T, family string) {
 	}
 	if registrations != 1 {
 		t.Fatal("session recovery created another node registration")
+	}
+}
+
+// Only fixed classifications leave the subprocess boundary, never state paths,
+// server responses, account data or authorization material from raw output.
+func userAccountFailureStage(output []byte) string {
+	message := strings.ToLower(strings.TrimSpace(string(output)))
+	switch {
+	case strings.HasPrefix(message, "list accounts:"):
+		return "user-rpc"
+	case strings.HasPrefix(message, "unprotect client state "):
+		return "state-unprotect"
+	case strings.Contains(message, "sharing violation"), strings.Contains(message, "being used by another process"), strings.Contains(message, "access is denied"):
+		return "file-access"
+	case strings.HasPrefix(message, "open "), strings.HasPrefix(message, "createfile "), strings.HasPrefix(message, "lstat "), strings.HasPrefix(message, "getfileattributesex "):
+		return "state-file"
+	case strings.HasPrefix(message, "not logged in;"):
+		return "local-session-absent"
+	case strings.HasPrefix(message, "control url"):
+		return "control-origin"
+	default:
+		return "unclassified"
+	}
+}
+
+func TestUserAccountFailureStageDoesNotExposeOutput(t *testing.T) {
+	for _, tc := range []struct{ output, stage string }{
+		{"list accounts: private server response", "user-rpc"},
+		{"unprotect client state private-path: private detail", "state-unprotect"},
+		{"CreateFile private-path: Access is denied.", "file-access"},
+		{"open private-path: missing file", "state-file"},
+		{"not logged in; private detail", "local-session-absent"},
+		{"control URL private value", "control-origin"},
+		{"private unexpected output", "unclassified"},
+	} {
+		if userAccountFailureStage([]byte(tc.output)) != tc.stage {
+			t.Fatal("account failure classification lost its fixed boundary")
+		}
 	}
 }

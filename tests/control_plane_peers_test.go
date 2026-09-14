@@ -485,6 +485,10 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 	exchange := 0
 	expect := func(want string) {
 		t.Helper()
+		deadline := 3 * time.Second
+		if want == "ready" {
+			deadline = 5 * time.Second // Initial dial plus subprocess scheduling.
+		}
 		recovery := want == "recover"
 		if recovery {
 			want = "ok"
@@ -495,7 +499,7 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 				observed := "invalid output"
 				if !ok {
 					observed = "closed"
-				} else if got == "ok" || got == "blocked" || got == "ready" {
+				} else if got == "ok" || got == "blocked" || got == "ready" || got == "dial-unavailable" {
 					observed = got
 				}
 				if ok && got == "blocked" && want == "ok" {
@@ -506,7 +510,7 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 				}
 				t.Fatalf("persistent %s application session reported %s, expected %s", protocol, observed, want)
 			}
-		case <-time.After(3 * time.Second):
+		case <-time.After(deadline):
 			t.Fatalf("persistent %s application session did not respond: expected=%s exchange=%d", protocol, want, exchange)
 		}
 	}

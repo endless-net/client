@@ -59,6 +59,27 @@ func nativeLogoutConsentUnchanged(before, after *ipc.Status) bool {
 		before.UserDisconnected == after.UserDisconnected && proto.Equal(before.Intent, after.Intent) && proto.Equal(before.Network, after.Network)
 }
 
+func nativeLocalForgetAttempt(n *testclient.Node, status *ipc.Status, requestID string) (*ipc.ForgetLocalEnrollmentResponse, []string, error) {
+	for attempt := 0; ; attempt++ {
+		args := append(testclient.NativeMutationArguments(requestID, status), "--confirm-local-forget")
+		response := &ipc.ForgetLocalEnrollmentResponse{}
+		err := n.NativeService("local-forget", response, args...)
+		if !testclient.IsNativeStaleState(err) || attempt == 2 {
+			return response, args, err
+		}
+		// Reconfirm the fixture's explicit cleanup only after a definitive
+		// rejection and only for the unchanged enrollment, owner scope and intent.
+		fresh := &ipc.GetStatusResponse{}
+		if readErr := n.NativeService("status", fresh); readErr != nil {
+			return nil, args, readErr
+		}
+		if !nativeLogoutConsentUnchanged(status, fresh.Status) {
+			return nil, args, err
+		}
+		status = fresh.Status
+	}
+}
+
 func assertNativeUnconfirmedLogout(t *testing.T, op *ipc.Operation) {
 	t.Helper()
 	if op.GetState() != ipc.OperationState_OPERATION_STATE_FAILED || op.GetFailure().GetCode() != ipc.ErrorCode_ERROR_CODE_REMOTE_CLEANUP_REQUIRED {
@@ -142,9 +163,8 @@ func TestControlPlaneLocalForgetAfterUnconfirmedLogout(t *testing.T) {
 	failed, _ := nativeLogoutAttempt(t, n, "00000000-0000-4000-8000-000000000001")
 	assertNativeUnconfirmedLogout(t, failed)
 	status := n.AwaitNativeStatus(retained)
-	args := append(testclient.NativeMutationArguments("00000000-0000-4000-8000-000000000002", status), "--confirm-local-forget")
-	response := &ipc.ForgetLocalEnrollmentResponse{}
-	if err := n.NativeService("local-forget", response, args...); err != nil {
+	response, args, err := nativeLocalForgetAttempt(n, status, "00000000-0000-4000-8000-000000000002")
+	if err != nil {
 		t.Fatal(err)
 	}
 	if response.Operation == nil || response.Operation.Id == "" || response.Operation.Kind != ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT || response.Operation.ProfileId != status.ActiveProfileId {

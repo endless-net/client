@@ -322,9 +322,8 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 				return v.NodeId == baseline.NodeId && v.ActiveProfileId == baseline.ActiveProfileId && v.GetStoredState().GetNodeCredentialPresent() &&
 					v.ControlState == native.ControlState_CONTROL_STATE_DEGRADED
 			})
-			args = append(testclient.NativeMutationArguments("4f110000-0000-4000-8000-000000000001", current), "--confirm-local-forget")
-			response := &native.ForgetLocalEnrollmentResponse{}
-			cleanupErr := n.NativeService("local-forget", response, args...)
+			response, acceptedArgs, cleanupErr := nativeLocalForgetAttempt(n, current, "4f110000-0000-4000-8000-000000000001")
+			args = acceptedArgs
 			if cleanupErr != nil || response.Operation == nil || response.Operation.Id == "" ||
 				response.Operation.Kind != native.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT || response.Operation.ProfileId != baseline.ActiveProfileId {
 				t.Fatalf("native local cleanup failed: operation_present=%t kind=%d profile_matches=%t error=%v",

@@ -3,9 +3,71 @@ package client
 import (
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+func TestConfigReadersDuringAtomicReplacement(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "client.json")
+	store, err := OpenConfigStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Update(func(cfg *Config) error {
+		cfg.NodeID = "atomic-reader-initial"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	start, stop := make(chan struct{}), make(chan struct{})
+	failures := make(chan error, 4)
+	var readers sync.WaitGroup
+	for range 4 {
+		readers.Go(func() {
+			<-start
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				// Bypass the process cache, as each fresh CLI process does.
+				resolved, err := resolveConfigPath(path)
+				if err == nil {
+					var cfg Config
+					cfg, err = loadConfigFile(resolved)
+					if err == nil && !strings.HasPrefix(cfg.NodeID, "atomic-reader-") {
+						t.Error("atomic replacement exposed missing or partial state")
+						return
+					}
+				}
+				if err != nil {
+					failures <- err
+					return
+				}
+			}
+		})
+	}
+	close(start)
+	for i := range 100 {
+		if err := store.Update(func(cfg *Config) error {
+			cfg.NodeID = "atomic-reader-" + strconv.Itoa(i)
+			return nil
+		}); err != nil {
+			t.Error(err)
+			break
+		}
+	}
+	close(stop)
+	readers.Wait()
+	close(failures)
+	for err := range failures {
+		t.Error(err)
+	}
+}
 
 func TestWriteFileAtomicRetriesWindowsSharingViolation(t *testing.T) {
 	dir := t.TempDir()
