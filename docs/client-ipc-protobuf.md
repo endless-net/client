@@ -94,6 +94,11 @@ unsupported platform behavior from policy denial, missing OS permission and
 temporary unavailability. A capability must remain unavailable until its provider
 and platform adapter exist. Missing capability entries mean unsupported.
 
+The producer-owned [Mobile Bridge contract](client-mobile-bridge.md) publishes
+the logical Android/iOS adapter API and scenarios for consumer mocks using v0.
+It fixes call/error/stream/cancellation semantics for implementation; publication
+does not establish a working native bridge, VPN host or mobile acceptance.
+
 `IDENTITY_RECOVERY` is advertised only while the trust executor is running with
 both public identity inspection and credential recovery providers and the tunnel
 stop/lock adapter. Startup refusal and cancellation leave it unavailable; late

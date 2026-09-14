@@ -14,6 +14,13 @@ implement Windows named-pipe dialing, Unix peer credentials or a mobile bridge.
 The Go Connect handler supports the gRPC protocol used by this Dart client.
 No HTTP Connect wrapper or production transport adapter is included.
 
+For Android/iOS adapter and UI mock development, use the producer-owned
+[Mobile Bridge contract](../../docs/client-mobile-bridge.md). It defines logical
+calls, Protobuf payloads, errors, subscriptions and cancellation. Implement the
+same consumer interface for the mock and future native adapter; this package
+does not yet supply that interface or a mobile gRPC channel. Pin the specification
+and these generated messages to the same source commit.
+
 `ClientContract` exports the exact descriptor SHA-256, protocol/version and
 lowercase gRPC metadata. Bootstrap must validate all three plus the runtime
 instance ID; subsequent calls send `ClientContract.metadata`. Regenerate these

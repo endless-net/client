@@ -16,6 +16,11 @@ pinned in the Protobuf CI workflow.
 Commit generated files with schema changes; consumers pin immutable module
 revisions. Do not edit generated Go files manually.
 
+The [Mobile Bridge contract](../docs/client-mobile-bridge.md) specifies the
+Android/iOS adapter API, errors, event lifecycle and consumer mock scenarios
+over these same v0 messages. It is a published specification, not an implemented
+native bridge. Pin its source commit together with the generated bindings.
+
 The module does not implement runtime domain behavior or owner policy. Install
 `rpc.Guard` with authorization derived from `local.PeerFromContext`; missing
 authorization fails closed. Production handlers must also configure message
