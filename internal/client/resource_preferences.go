@@ -23,6 +23,10 @@ func resolveResourcePreference(cfg Config, id string, now time.Time) (clientReso
 	if err != nil {
 		return clientResourceSetting{}, err
 	}
+	return resourcePreferenceForIdentity(cfg, id, identity), nil
+}
+
+func resourcePreferenceForIdentity(cfg Config, id string, identity clientResourceIdentity) clientResourceSetting {
 	result := clientResourceSetting{Identity: identity, Enabled: true}
 	kind := map[ipc.ResourceKind]api.ManagedResourceKind{
 		ipc.ResourceKind_RESOURCE_KIND_HOST:        api.ManagedResourceHost,
@@ -52,5 +56,5 @@ func resolveResourcePreference(cfg Config, id string, now time.Time) (clientReso
 			result.Enabled = requested
 		}
 	}
-	return result, nil
+	return result
 }

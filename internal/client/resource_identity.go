@@ -29,6 +29,17 @@ func rpcResourceID(kind ipc.ResourceKind, key string) string {
 // recipient catalog. A caller cannot turn a host into a subnet, invent a port,
 // target an application connector, or use a default route as a resource.
 func resolveRPCResource(cfg Config, id string, now time.Time) (clientResourceIdentity, error) {
+	if cfg.CachedMap == nil || cfg.CachedMap.MapSignature == nil || cfg.MapRevision != cfg.CachedMap.Network.Revision || cfg.MapGlobalRevision != cfg.CachedMap.Revision.Global {
+		return clientResourceIdentity{}, errors.New("resource map is unavailable")
+	}
+	if _, err := resolveNetworkAcceptance(cfg, *cfg.CachedMap, now); err != nil {
+		return clientResourceIdentity{}, err
+	}
+	return resolveResourceInAuthenticatedMap(cfg.CachedMap, id)
+}
+
+// Caller must authenticate the complete current recipient map first.
+func resolveResourceInAuthenticatedMap(source *api.RegisterNodeResponse, id string) (clientResourceIdentity, error) {
 	invalid := func() (clientResourceIdentity, error) {
 		return clientResourceIdentity{}, errors.New("resource is not in the authenticated catalog")
 	}
@@ -43,13 +54,6 @@ func resolveRPCResource(cfg Config, id string, now time.Time) (clientResourceIde
 	if len(parts) < 2 || parts[1] == "" {
 		return invalid()
 	}
-	if cfg.CachedMap == nil || cfg.CachedMap.MapSignature == nil || cfg.MapRevision != cfg.CachedMap.Network.Revision || cfg.MapGlobalRevision != cfg.CachedMap.Revision.Global {
-		return invalid()
-	}
-	if _, err := resolveNetworkAcceptance(cfg, *cfg.CachedMap, now); err != nil {
-		return invalid()
-	}
-	source := cfg.CachedMap
 	result := clientResourceIdentity{ID: parts[1]}
 	switch parts[0] {
 	case "1":

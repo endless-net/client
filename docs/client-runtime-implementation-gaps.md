@@ -191,9 +191,18 @@ retains old denials while tightening, and relaxes only on commit. Map expiry and
 withdrawal close traffic. `TestResourceFilterDeniesOverlapsAndTransitionsInBothDirections`
 checks port/protocol separation, overlap and staged changes, expiry and withdraw;
 `TestResourceFilterRuleValidationAndOwnership` checks rule shape,
-defensive copying and malformed packets. The signed-resource-to-rule compiler,
-engine construction, durable mutation worker and public SetResourceEnabled are
+defensive copying and malformed packets. Resource-filter engine construction,
+durable mutation worker and public SetResourceEnabled are
 still missing; optional TUN composition alone does not activate resource policy.
+`resource_rules.go` now authenticates once and compiles local/managed choices
+into bounded, deduplicated prefix/port denials for host, subnet, service and
+source-role application resources. Service host matching includes the current
+public key; application port targets remain port-specific. Default routes are
+excluded. Stale local choices cause a compilation error and still need a
+reconciliation policy. `TestResourceCompilerSubnetOverlapAndApplicationPort`
+checks overlap deny precedence, application port scope and stale choice failure;
+`TestResourceCompilerManagedServiceAndSignature` checks locked service ports and
+tampered-map rejection. Engine/public integration remains open.
 
 ## Client-owned scenario map
 
