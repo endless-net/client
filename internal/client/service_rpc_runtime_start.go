@@ -11,7 +11,17 @@ import (
 func runtimeStartIntent(cfg Config, now time.Time) *ConnectionIntent {
 	profile := clientRPCProfile{}
 	if cfg.RPCState != nil {
-		profile = cfg.RPCState.Profiles[cfg.RPCState.ActiveProfileID]
+		var exists bool
+		profile, exists = cfg.RPCState.Profiles[cfg.RPCState.ActiveProfileID]
+		if cfg.RPCState.ActiveProfileID != "" && (!exists || profile.ID != cfg.RPCState.ActiveProfileID) {
+			return runtimeStartBlockedIntent(cfg, now, "runtime_start_profile_unavailable")
+		}
+	}
+	// An enrolled identity without its authenticated map has no known startup
+	// policy. It must not turn a local CONNECT or old connected intent into
+	// authorization to apply networking before policy recovery.
+	if cfg.CachedMap == nil && rpcConfigHasEnrollment(cfg) && (profile.RuntimeStart != nil && *profile.RuntimeStart == ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT || cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == ConnectionIntentDesiredConnected) {
+		return runtimeStartBlockedIntent(cfg, now, "runtime_start_policy_unavailable")
 	}
 	setting, err := lifecycleSetting(cfg, profile, api.ClientSettingRuntimeStart, profile.RuntimeStart, now)
 	desired, reason := ConnectionIntentDesiredDisconnected, "runtime_start_no_saved_intent"
@@ -45,6 +55,13 @@ func runtimeStartIntent(cfg Config, now time.Time) *ConnectionIntent {
 		return cfg.ConnectionIntent
 	}
 	return &ConnectionIntent{DesiredState: desired, Reason: reason, UpdatedAt: now.UTC().Format(time.RFC3339)}
+}
+
+func runtimeStartBlockedIntent(cfg Config, now time.Time, reason string) *ConnectionIntent {
+	if cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == ConnectionIntentDesiredDisconnected {
+		return cfg.ConnectionIntent
+	}
+	return &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: reason, UpdatedAt: now.UTC().Format(time.RFC3339)}
 }
 
 func runtimeStartRecoveryPending(cfg Config) bool {

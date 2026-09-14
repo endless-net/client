@@ -40,6 +40,11 @@ owner denial and pending Disconnect; the network worker matrix includes runtime-
 commit/rollback. Logoff/suspend/resume inputs and platform qualification remain open;
 startup refresh when the authenticated cached policy is absent/expired also needs
 a control-plane recovery audit. These tests do not close UF-21 or UI-AC-21.
+Startup additionally rejects a missing/mismatched active profile and holds an
+enrolled identity with no cached map down instead of executing local CONNECT or
+restoring a connected intent. The context regression checks persisted blocking
+and restart without rewriting recovery records. Automatic signed-source refresh
+and the matching unavailable preference projection remain open.
 Local vet/lint and the final short run passed. A preceding short run exhausted
 the DNS TCP/UDP ephemeral-port pairing attempts on Windows (bind access denied);
 the unchanged listener passed on repetition. This is not evidence of platform
