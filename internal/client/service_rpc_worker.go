@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
@@ -68,7 +69,23 @@ func (s *ClientRPCService) StartProfileWorker(ctx context.Context, driver Client
 				return
 			}
 			if err = s.mutations.ReconcileNetworkPreferences(ctx, driver); err != nil {
-				return
+				if ctx.Err() != nil || !s.mutations.preferenceCleanupRetryable(err) {
+					return
+				}
+				// Retry only durable containment. A new wake also lets an
+				// accepted Disconnect take priority on the next iteration.
+				timer := time.NewTimer(5 * time.Second)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					err = ctx.Err()
+					return
+				case <-w.wake:
+				case <-timer.C:
+				}
+				timer.Stop()
+				err = nil
+				continue
 			}
 			// Also reconcile once at startup: no request needs to be replayed
 			// to recover an accepted operation after a process crash.
@@ -87,6 +104,17 @@ func (s *ClientRPCService) StartProfileWorker(ctx context.Context, driver Client
 		}
 	}()
 	return done, nil
+}
+
+func (m *ClientRPCMutations) preferenceCleanupRetryable(err error) bool {
+	failure := rpc.FailureFromError(err)
+	switch failure.GetCode() {
+	case ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED:
+	default:
+		return false
+	}
+	cfg := m.store.Read()
+	return cfg.RPCState != nil && cfg.RPCState.NetworkPreferenceChange != nil && cfg.RPCState.NetworkPreferenceChange.Containing
 }
 
 func (s *ClientRPCService) SelectProfile(ctx context.Context, request *connect.Request[ipc.SelectProfileRequest]) (*connect.Response[ipc.SelectProfileResponse], error) {

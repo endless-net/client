@@ -391,6 +391,17 @@ covers both operation families and connected/disconnected candidates, durable
 RUNNING containment, unchanged committed settings, disk recovery and exactly
 one confirmed cleanup without repeating Apply. Persistent native cleanup errors
 and automatic retry availability still need their own runtime qualification.
+The profile worker now retains service availability for typed UNAVAILABLE,
+DEADLINE_EXCEEDED or LIMIT_EXCEEDED returned during durable resource/preference
+containment. It retries after five seconds or a wake, beginning again with
+Disconnect reconciliation. It never retries an uncheckpointed candidate on this
+path; unknown/permanent errors still terminate the worker for host recovery.
+`TestPreferenceWorkerRetriesTemporaryCleanupWithoutReplay` exercises the actual
+worker timer through a failed Apply, temporary Down and confirmed cleanup with
+one Start, two Stops and the original APPLY_FAILED outcome. Classification units
+exclude non-containment, raw, cancellation, permission and stale-state errors.
+This is worker/unit evidence; native error mapping and platform qualification
+remain open.
 `service_rpc_network_preferences_public.go` projects authenticated committed
 policy resolution separately from pending requested overrides, including reset
 absence and managed provenance/locks. GetPreferences and ListManagedSettings
