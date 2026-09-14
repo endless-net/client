@@ -29,7 +29,7 @@ func TestCmdAgentWithoutSavedIntentDoesNotContactControlPlane(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if requests.Load() != 0 || cfg.ConnectionIntent == nil || cfg.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected || cfg.ConnectionIntent.Reason != "runtime_start_no_saved_intent" {
+		if requests.Load() != 0 || cfg.ConnectionIntent == nil || cfg.ConnectionIntent.DesiredState != client.ConnectionIntentDesiredDisconnected || cfg.ConnectionIntent.Reason != "runtime_start_policy_unavailable" {
 			t.Fatal("agent implicitly connected without a saved intent", requests.Load())
 		}
 	}

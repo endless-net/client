@@ -32,6 +32,8 @@ func runtimeStartIntent(cfg Config, now time.Time) *ConnectionIntent {
 		reason = "runtime_start_policy_unavailable"
 	} else {
 		switch setting.Effective {
+		case ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_UNSPECIFIED:
+			reason = "runtime_start_policy_unavailable"
 		case ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT:
 			if cfg.ConnectionIntent != nil {
 				return cfg.ConnectionIntent

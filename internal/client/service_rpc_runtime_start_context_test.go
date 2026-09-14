@@ -7,6 +7,35 @@ import (
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
 
+func TestRuntimeStartMissingMapProjectionAndMutationAreConsistent(t *testing.T) {
+	m, owner, ref := rpcPreferenceFixture(t)
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.CachedMap = nil
+		profile := cfg.RPCState.Profiles[ref.ProfileId]
+		profile.RuntimeStart = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT.Enum()
+		cfg.RPCState.Profiles[ref.ProfileId] = profile
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	response, err := NewClientRPCService(m, nil).preferencesAs(owner, &ipc.GetPreferencesRequest{Profile: ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	setting := response.Msg.Preferences.Lifecycle.RuntimeStart
+	if setting.GetRequested() != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT || setting.Effective != ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_UNSPECIFIED || len(setting.AllowedValues) != 0 || setting.Control.Source != ipc.SettingSource_SETTING_SOURCE_UNSPECIFIED || setting.Control.Mutation.Availability != ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE {
+		t.Fatal("missing authority was projected as an effective unlocked preference", setting)
+	}
+	before := m.store.Read()
+	_, err = m.setPreferencesAs(owner, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: ref, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum(), RuntimeStart: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	_, err = m.resetPreferencesAs(owner, &ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: ref, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_RUNTIME_START}})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	if !reflect.DeepEqual(before, m.store.Read()) {
+		t.Fatal("missing policy admission mutated durable settings")
+	}
+}
+
 func TestRuntimeStartCannotUseMissingActiveProfileOrMap(t *testing.T) {
 	for _, scenario := range []string{"missing_profile", "mismatched_profile", "missing_map_keep", "missing_map_connect"} {
 		t.Run(scenario, func(t *testing.T) {

@@ -44,7 +44,10 @@ Startup additionally rejects a missing/mismatched active profile and holds an
 enrolled identity with no cached map down instead of executing local CONNECT or
 restoring a connected intent. The context regression checks persisted blocking
 and restart without rewriting recovery records. Automatic signed-source refresh
-and the matching unavailable preference projection remain open.
+remains open. Missing-map reads now preserve requested intent but report unknown
+effective value/source and temporary unavailability; set/reset reject the whole
+patch without modifying durable settings. The context regression checks this
+projection/admission parity. Unregistered profiles retain the accepted default.
 Local vet/lint and the final short run passed. A preceding short run exhausted
 the DNS TCP/UDP ephemeral-port pairing attempts on Windows (bind access denied);
 the unchanged listener passed on repetition. This is not evidence of platform

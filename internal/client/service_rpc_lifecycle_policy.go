@@ -39,6 +39,14 @@ func lifecycleSetting(cfg Config, profile clientRPCProfile, key api.ClientSettin
 		// Inactive profiles retain their own configuration, never active policy.
 		cfg = profile.Configuration
 	}
+	if key == api.ClientSettingRuntimeStart && cfg.CachedMap == nil && rpcConfigHasEnrollment(cfg) {
+		// Retain the user's requested value without fabricating an effective
+		// default or a known unlocked policy for an enrolled identity.
+		setting.Effective = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_UNSPECIFIED
+		setting.AllowedValues = nil
+		setting.Control = &ipc.SettingControl{Source: ipc.SettingSource_SETTING_SOURCE_UNSPECIFIED, Mutation: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "runtime_start_policy_unavailable"}}
+		return setting, nil
+	}
 	if state := cfg.CachedMap; state != nil {
 		if cfg.MapSigningTrust == nil || cfg.NodeID == "" || cfg.NetworkID == "" || state.Node.ID != cfg.NodeID || state.Network.ID != cfg.NetworkID || state.Network.Revision != cfg.MapRevision || state.Revision.Global != cfg.MapGlobalRevision || api.ValidateNetworkMap(*state) != nil || api.VerifyNetworkMapSignatureWithTrustBundle(*state, *cfg.MapSigningTrust) != nil || state.MapSignature == nil || !now.Before(state.MapSignature.ExpiresAt) {
 			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)

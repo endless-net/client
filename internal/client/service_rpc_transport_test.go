@@ -361,6 +361,17 @@ func TestRPCLocalAcceptanceAndLostResponseRecovery(t *testing.T) {
 			if op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.Kind != ipc.OperationKind_OPERATION_KIND_CONNECT {
 				t.Fatal("native Connect failed")
 			}
+			// The injected Connect driver does not fetch a map. Supply signed
+			// policy authority before exercising startup preference mutations.
+			policyOpts, _ := signedServiceDNSFixture(t)
+			if err := m.store.Update(func(cfg *Config) error {
+				cfg.NodeID, cfg.NetworkID = policyOpts.NetworkMap.Node.ID, policyOpts.NetworkMap.Network.ID
+				cfg.MapRevision, cfg.MapGlobalRevision = policyOpts.NetworkMap.Network.Revision, policyOpts.NetworkMap.Revision.Global
+				cfg.CachedMap, cfg.MapSigningTrust = &policyOpts.NetworkMap, policyOpts.SigningTrust
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
 			setRequest := &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: selection.Profile, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_KEEP_INTENT.Enum(), RuntimeStart: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}}
 			setAccepted, err := client.SetPreferences(ctx, connect.NewRequest(setRequest))
 			if err != nil {

@@ -94,6 +94,9 @@ func (m *ClientRPCMutations) patchLifecyclePreference(cfg Config, profile *clien
 	if err != nil {
 		return err
 	}
+	if setting.Effective == ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_UNSPECIFIED {
+		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	}
 	if value != nil && setting.Control.Locked && setting.Effective != *value {
 		return rpc.Error(connect.CodePermissionDenied, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED)
 	}
