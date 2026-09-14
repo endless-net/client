@@ -15,6 +15,11 @@ services or infrastructure are authorized by this implementation plan.
 4. Fix acceptance defects with unit regressions where applicable. SDK generation,
    transport conformance and green CI alone do not establish feature completeness.
 
+The [local v0 requirement matrix](client-local-requirement-map.md) complements
+the headless BR/AC/RULE/IT inventory with all UF/UBR/UR/UI-AC IDs from the pinned
+BA and their US implementation/unit and external-owner joins. Inventory coverage
+does not close the remaining assertion audit or implementation gaps below.
+
 ## Confirmed source gaps
 
 CI execution policy: branch pushes run only `go test -short ./...` in the Test

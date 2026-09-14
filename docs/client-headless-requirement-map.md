@@ -2,6 +2,11 @@
 
 Status: open implementation audit, not integration execution or acceptance.
 
+The [local v0 matrix](client-local-requirement-map.md) explicitly traces the
+additional UF-01–23, UBR-01–40, UR-01–13 and UI-AC-01–27 obligations through
+US-01–14 to client implementation/unit entry points and dependency owners.
+Both matrices remain open for assertion-level review and completion evidence.
+
 Source: [headless SA, architecture at bdb5ba6](https://github.com/endless-net/architecture/blob/bdb5ba63c0e5356122c0760f4d63205e84ef507d/docs/ru/headless-client-system-design.md#10-спецификации-первых-интеграционных-тестов).
 All 33 specified IT identifiers are retained below. Integration execution is
 deferred until the implementation/unit phase has been audited. A unit test is
