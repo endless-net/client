@@ -3,10 +3,8 @@ package client
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/netip"
 	"os/exec"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -18,10 +16,24 @@ const routeOutputLimit = 16 * 1024
 // ObserveOSRoutes performs a bounded, read-only sample. It does not enumerate
 // the full routing table and must never be presented as complete diagnostics.
 func ObserveOSRoutes(ctx context.Context, iface string, targets []string) []WireGuardRouteInspection {
-	return observeOSRoutes(ctx, runtime.GOOS, iface, targets, runRouteObservation)
+	return observePlatformOSRoutes(ctx, iface, targets)
 }
 
 func observeOSRoutes(ctx context.Context, goos, iface string, targets []string, runner CommandRunner) []WireGuardRouteInspection {
+	return observeRouteTargets(ctx, iface, targets, func(ctx context.Context, addr netip.Addr) (string, error) {
+		name, args := routeObservationCommand(goos, addr.String())
+		if name == "" {
+			return "", errors.New("OS route observation unsupported")
+		}
+		out, err := runner(ctx, name, args...)
+		if err != nil || len(out) > routeOutputLimit {
+			return "", errors.New("OS route observation unavailable")
+		}
+		return routeObservationInterface(goos, string(out)), nil
+	})
+}
+
+func observeRouteTargets(ctx context.Context, iface string, targets []string, lookup func(context.Context, netip.Addr) (string, error)) []WireGuardRouteInspection {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	var result []WireGuardRouteInspection
@@ -39,23 +51,15 @@ func observeOSRoutes(ctx context.Context, goos, iface string, targets []string, 
 			continue
 		}
 		seen[target] = true
-		name, args := routeObservationCommand(goos, target)
 		route := WireGuardRouteInspection{Target: target}
-		if name == "" {
-			route.Error = "OS route observation unsupported"
+		alias, err := lookup(ctx, addr)
+		if err != nil || ctx.Err() != nil {
+			route.Error = "OS route observation unavailable"
+		} else if alias == "" || len(alias) > 256 || strings.ContainsAny(alias, "\r\n\x00") {
+			route.Error = "OS route observation invalid"
 		} else {
-			out, err := runner(ctx, name, args...)
-			if err != nil || ctx.Err() != nil || len(out) > routeOutputLimit {
-				route.Error = "OS route observation unavailable"
-			} else {
-				route.Interface = routeObservationInterface(goos, string(out))
-				if route.Interface == "" || len(route.Interface) > 256 || strings.ContainsAny(route.Interface, "\r\n\x00") {
-					route.Interface = ""
-					route.Error = "OS route observation invalid"
-				} else {
-					route.UsesInterface = iface != "" && route.Interface == iface
-				}
-			}
+			route.Interface = alias
+			route.UsesInterface = iface != "" && alias == iface
 		}
 		result = append(result, route)
 	}
@@ -68,11 +72,6 @@ func routeObservationCommand(goos, target string) (string, []string) {
 		return "ip", []string{"route", "get", target}
 	case "darwin":
 		return "route", []string{"-n", "get", target}
-	case "windows":
-		// Find-NetRoute returns address and route objects. Require one unique
-		// interface alias instead of formatting either object as free text.
-		script := fmt.Sprintf("$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $aliases=@(Find-NetRoute -RemoteIPAddress '%s' | Select-Object -ExpandProperty InterfaceAlias -Unique); if ($aliases.Count -ne 1) { throw 'ambiguous route' }; [Console]::Out.Write([string]$aliases[0])", target)
-		return "powershell.exe", []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script}
 	default:
 		return "", nil
 	}
@@ -88,8 +87,6 @@ func routeObservationInterface(goos, output string) string {
 				return strings.TrimSpace(value)
 			}
 		}
-	case "windows":
-		return strings.TrimSpace(output)
 	}
 	return ""
 }

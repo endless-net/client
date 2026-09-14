@@ -560,18 +560,24 @@ the incomplete marker.
 `ObserveOSRoutes` is now wired into agent diagnostics after map verification.
 It samples up to 32 unique literal host addresses with a shared three-second
 deadline and a 16 KiB per-command output bound. Linux uses `ip route get`, macOS
-uses `route -n get`, and Windows uses `Find-NetRoute` with exactly one unique
-interface alias and a hidden process window. Untrusted address text is never
+uses `route -n get`, and Windows calls the pinned x/sys `GetBestInterfaceEx`
+binding followed by interface lookup by the returned index. Windows no longer
+starts a PowerShell process for each target. Untrusted address text is never
 interpolated into a command. Subnets, scoped addresses, unsupported platforms,
 lookup failures and exhausted collection budgets do not become successful route
 claims. Responses remain marked partial: sampling peer host addresses is not
 full routing-table or subnet/exit acceptance.
 
-`route_observations_test.go` covers all three command/parser branches with an
+`route_observations_test.go` covers both Unix command/parser branches with an
 injected executor, duplicate/invalid addresses, cancellation, target/output
-limits and failure redaction. The agent test verifies that an unverified map
-does not invoke route collection. No real OS route command is executed by these
-unit tests; platform execution qualification belongs to the later test phase.
+limits and failure redaction. `TestWindowsNativeRouteObservation` covers the
+native IPv4/IPv6 sockaddr binding, zero/error indexes, disappeared or mismatched
+interfaces, invalid aliases and cancellation between native calls. The agent
+test verifies that an unverified map does not invoke route collection. These
+unit tests inject OS boundaries; platform execution qualification remains open.
+The native lookup removes per-target process startup from the strict diagnostic
+snapshot-consistency interval; it does not weaken the rejection of changed
+configuration or prove all STALE_STATE failures in run 34881749817 resolved.
 
 Snapshot intent audit: `snapshotLocked` clears provider-supplied intent and the
 user-disconnected flag before projecting the durable configuration, including

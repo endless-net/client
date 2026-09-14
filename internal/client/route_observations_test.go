@@ -10,7 +10,7 @@ import (
 )
 
 func TestOSRouteObservationPlatformsAndFailures(t *testing.T) {
-	for _, goos := range []string{"linux", "darwin", "windows"} {
+	for _, goos := range []string{"linux", "darwin"} {
 		for _, mode := range []string{"ok", "missing", "error", "oversized"} {
 			t.Run(goos+"/"+mode, func(t *testing.T) {
 				calls := 0
@@ -20,7 +20,7 @@ func TestOSRouteObservationPlatformsAndFailures(t *testing.T) {
 					if !ok || time.Until(deadline) > 3*time.Second || !strings.Contains(strings.Join(args, " "), "2001:db8::1") {
 						t.Fatal("missing bound or literal target")
 					}
-					wantCommand := map[string]string{"linux": "ip", "darwin": "route", "windows": "powershell.exe"}[goos]
+					wantCommand := map[string]string{"linux": "ip", "darwin": "route"}[goos]
 					if name != wantCommand {
 						t.Fatal("wrong platform command")
 					}
@@ -32,7 +32,7 @@ func TestOSRouteObservationPlatformsAndFailures(t *testing.T) {
 					case "oversized":
 						return []byte(strings.Repeat("x", routeOutputLimit+1)), nil
 					}
-					return []byte(map[string]string{"linux": "2001:db8::1 dev tun0 src 2001:db8::2", "darwin": "route to: 2001:db8::1\n interface: tun0\n", "windows": "tun0"}[goos]), nil
+					return []byte(map[string]string{"linux": "2001:db8::1 dev tun0 src 2001:db8::2", "darwin": "route to: 2001:db8::1\n interface: tun0\n"}[goos]), nil
 				}
 				routes := observeOSRoutes(t.Context(), goos, "tun0", []string{"bad'input", "fe80::1%eth0", "2001:db8::1", "2001:0db8::1"}, runner)
 				if calls != 1 || len(routes) != 1 || routes[0].UsesInterface != (mode == "ok") || (routes[0].Error == "") != (mode == "ok") || strings.Contains(routes[0].Error, "private") {
