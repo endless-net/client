@@ -5,14 +5,16 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestResourceWorkerRestartsApplyOrContainment(t *testing.T) {
-	for _, scenario := range []string{"shutdown", "apply_failed", "disconnect"} {
+	for _, scenario := range []string{"shutdown", "commit_cancel", "apply_failed", "disconnect"} {
 		t.Run(scenario, func(t *testing.T) {
+			interrupted := scenario == "shutdown" || scenario == "commit_cancel"
 			m, owner, profile := rpcPreferenceFixture(t)
 			id := rpcResourceID(ipc.ResourceKind_RESOURCE_KIND_HOST, m.store.Read().CachedMap.Peers[0].ID)
 			if err := m.store.Update(func(cfg *Config) error {
@@ -39,6 +41,10 @@ func TestResourceWorkerRestartsApplyOrContainment(t *testing.T) {
 					cancel()
 					return ctx.Err()
 				}
+				if scenario == "commit_cancel" {
+					m.now = func() time.Time { cancel(); return time.Now() }
+					return nil
+				}
 				if scenario == "disconnect" {
 					if _, err := m.disconnectAs(owner, &ipc.DisconnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}); err != nil {
 						t.Fatal(err)
@@ -54,10 +60,10 @@ func TestResourceWorkerRestartsApplyOrContainment(t *testing.T) {
 			}
 			before := m.store.Read()
 			plan := before.RPCState.NetworkPreferenceChange
-			if plan == nil || plan.Containing != (scenario != "shutdown") || !before.ResourcePreferences[id] {
+			if plan == nil || plan.Containing != !interrupted || !before.ResourcePreferences[id] {
 				t.Fatal("restart state lost prior choice or recovery phase")
 			}
-			if scenario != "shutdown" && before.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
+			if !interrupted && before.ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
 				t.Fatal("down failure did not persist disconnected intent")
 			}
 			m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
@@ -66,7 +72,7 @@ func TestResourceWorkerRestartsApplyOrContainment(t *testing.T) {
 			}
 			driver.Start = func(_ context.Context, cfg Config) error {
 				starts++
-				if scenario != "shutdown" {
+				if !interrupted {
 					t.Fatal("containment restarted failed candidate")
 				}
 				if value, exists := cfg.ResourcePreferences[id]; !exists || value {
@@ -89,7 +95,7 @@ func TestResourceWorkerRestartsApplyOrContainment(t *testing.T) {
 			if cfg.RPCState.NetworkPreferenceChange != nil {
 				t.Fatal("terminal recovery retained plan")
 			}
-			if scenario == "shutdown" {
+			if interrupted {
 				if result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || cfg.ResourcePreferences[id] || starts != 2 || stops != 0 {
 					t.Fatal("restart did not finish pending apply", result)
 				}

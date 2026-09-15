@@ -107,7 +107,13 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 		if err == nil {
 			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_STALE_STATE, reasonPrefix+"_context_changed"
 			_, err = m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				if _, err := m.networkPreferenceCandidate(*cfg, plan); err != nil {
+					return err
+				}
+				if err := ctx.Err(); err != nil {
 					return err
 				}
 				cfg.NetworkPreferences = cloneNetworkPreferences(plan.Requested)
@@ -127,6 +133,9 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 			})
 			if err == nil {
 				return nil
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
 		}
 		if _, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {

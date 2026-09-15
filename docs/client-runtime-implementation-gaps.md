@@ -474,6 +474,13 @@ or observation errors abort application. The injected Linux test
 `TestLinuxExitRouteRequiresObservedRuleRemovalBeforeAddingRules` covers both
 families and both rule stages. Shared suppression-rule ownership remains open.
 
+The resource/preferences worker also checks cancellation inside the durable
+commit transaction, after policy revalidation. Cancellation there leaves the
+previous values and resumable operation intact instead of publishing success or
+misclassifying shutdown as an apply failure. The `commit_cancel` case in
+`TestResourceWorkerRestartsApplyOrContainment` cancels during commit-time policy
+validation, reopens the store and finishes the original operation with replay.
+
 Runtime configuration now checks cancellation before starting and at the logical
 state and filter commit boundaries. A stage returning nil after context
 cancellation cannot commit a relaxed resource policy. The resource engine test
