@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"net"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -14,6 +16,48 @@ import (
 	"github.com/tailscale/wireguard-go/tun"
 	"github.com/tailscale/wireguard-go/tun/tuntest"
 )
+
+func TestWireGuardRelayReplacesConnectionsWhenUnderlayMarkChanges(t *testing.T) {
+	peer, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = peer.Close() })
+	server := testrelay.New(t, "network", "client", "peer", peer.LocalAddr().String(), nil)
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(server.CertificatePEM) {
+		t.Fatal("invalid reference Relay CA")
+	}
+	bridge := newWireGuardRelayBridge(time.Second, &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots})
+	t.Cleanup(bridge.Stop)
+	var lastMark atomic.Uint32
+	var marked atomic.Int32
+	bridge.markSocket = func(_ syscall.RawConn, mark uint32) error {
+		lastMark.Store(mark)
+		marked.Add(1)
+		return nil
+	}
+	m := api.RegisterNodeResponse{
+		Network: api.Network{ID: "network", Revision: 1},
+		Node:    api.Node{ID: "client", NetworkID: "network"},
+		Peers:   []api.Peer{{ID: "peer", NetworkID: "network"}},
+		Relays:  []relay.Endpoint{server.Endpoint}, RelayCredential: &server.Credential,
+	}
+	for _, mark := range []uint32{51820, 51821} {
+		before, _, _ := server.Counts()
+		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), mark); err != nil {
+			t.Fatal(err)
+		}
+		after, _, _ := server.Counts()
+		if after <= before || lastMark.Load() != mark {
+			t.Fatal("relay retained a connection with the previous socket policy")
+		}
+		calls := marked.Load()
+		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), mark); err != nil || marked.Load() != calls {
+			t.Fatal("unchanged relay policy unnecessarily reconnected", err)
+		}
+	}
+}
 
 // Component regression: the background monitor must reconnect without a new
 // Configure call or map revision. Native traffic remains covered in CI.

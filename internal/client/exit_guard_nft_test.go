@@ -38,7 +38,7 @@ func TestLinuxExitGuardAtomicContainmentAndRelease(t *testing.T) {
 		"hook output priority 0; policy drop;",
 		"hook forward priority 0; policy drop;",
 		"output oifname \"lo\" accept",
-		"output meta mark 51820 meta l4proto udp accept",
+		"output meta mark 51820 meta l4proto { tcp, udp } accept",
 		"output oifname != \"endlessnet\" ip6 hoplimit 255 icmpv6 type { nd-router-solicit, nd-neighbor-solicit, nd-neighbor-advert } icmpv6 code 0 accept",
 	} {
 		if !strings.Contains(closed, want) {

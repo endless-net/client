@@ -524,7 +524,7 @@ func (e *WireGuardEngine) configureLocked(ctx context.Context, plan wireGuardEng
 		}
 	}
 	progress.relayBridge = true
-	relayOverrides, relayResult, relayErr := e.relayEndpointOverridesLocked(ctx, plan.networkMap)
+	relayOverrides, relayResult, relayErr := e.relayEndpointOverridesLocked(ctx, plan.networkMap, plan.routerCfg.FirewallMark)
 	if err := e.runApplyStage(wireGuardEngineStageRelay); err != nil {
 		result.SyncError = err.Error()
 		return result, err
@@ -840,7 +840,7 @@ func (e *WireGuardEngine) restoreRelayBridgeLocked(previous wireGuardEngineSnaps
 	if e.bind == nil {
 		return errors.New("restore wireguard-go relay bridge: UDP bind is unavailable")
 	}
-	if err := e.relayBridge.Ensure(context.Background(), previous.pathMap, e.bind.LoopbackEndpoint()); err != nil {
+	if err := e.relayBridge.Ensure(context.Background(), previous.pathMap, e.bind.LoopbackEndpoint(), previous.routerCfg.FirewallMark); err != nil {
 		return fmt.Errorf("restore wireguard-go relay bridge: %w", err)
 	}
 	return nil
@@ -1277,11 +1277,11 @@ func (e *WireGuardEngine) TryPathStatus(networkID, nodeID string, revision, glob
 	return e.relayPaths.Statuses(), true
 }
 
-func (e *WireGuardEngine) relayEndpointOverridesLocked(ctx context.Context, networkMap clientapi.RegisterNodeResponse) (map[string]string, RelayDialResult, error) {
+func (e *WireGuardEngine) relayEndpointOverridesLocked(ctx context.Context, networkMap clientapi.RegisterNodeResponse, mark uint32) (map[string]string, RelayDialResult, error) {
 	if e.relayBridge == nil || e.relayPaths == nil || e.bind == nil {
 		return nil, RelayDialResult{}, nil
 	}
-	if err := e.relayBridge.Ensure(ctx, networkMap, e.bind.LoopbackEndpoint()); err != nil {
+	if err := e.relayBridge.Ensure(ctx, networkMap, e.bind.LoopbackEndpoint(), mark); err != nil {
 		log.Printf("wireguard-go relay bridge unavailable: %v", err)
 		return nil, RelayDialResult{}, err
 	}
@@ -1354,7 +1354,7 @@ func (e *WireGuardEngine) reconcilePaths(ctx context.Context, interval time.Dura
 		e.mu.Unlock()
 		return
 	}
-	relayOverrides, relayResult, relayErr := e.relayEndpointOverridesLocked(ctx, e.pathMap)
+	relayOverrides, relayResult, relayErr := e.relayEndpointOverridesLocked(ctx, e.pathMap, e.routerCfg.FirewallMark)
 	overrides, triggerTargets := e.relayPaths.Reconcile(e.pathMap, relayOverrides, relayResult, relayErr, probes, time.Now().UTC())
 	desiredUAPI, err := wireGuardEngineUAPIForExit(e.pathKey, e.pathMap, e.opts.ListenPort, true, e.routerCfg.FirewallMark, overrides, true, e.exitConfig, e.exitSelection, time.Now())
 	if err != nil && e.exitGuard != nil {

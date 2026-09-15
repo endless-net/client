@@ -309,7 +309,7 @@ fail-closed behavior on a platform.
 
 The Linux OS protection component `exit_guard_nft.go` now submits interface-scoped
 nftables batches through the native executable. Output containment covers both
-IP families, exempting loopback, marked UDP underlay and bounded host IPv6
+IP families, exempting loopback, marked TCP/UDP underlay and bounded host IPv6
 Neighbor Discovery outside the guarded TUN; forwarding is
 blocked. Opening permits output through the TUN. Rule replacement and repeatable explicit
 release use single transactions, without global ruleset changes or automatic
@@ -414,6 +414,20 @@ The atomic-batch unit checks this exemption in contained/open/restarted states
 while rejecting generic ICMP echo, router advertisements and redirects. Kernel
 validation, multicast-listener/DHCP maintenance and authorized control/relay/DNS
 underlay integration remain open; this does not enable native exit readiness.
+
+The engine relay bridge now uses the application plan's firewall mark for TCP
+and its Go resolver's UDP/TCP sockets. The native Linux setter is shared with
+MagicBind; setter errors abort dialing, and non-Linux platforms reject a nonzero
+mark. A mark change replaces the relay connection even without a new map or UDP
+endpoint, while ordinary zero-mark connections keep their default resolver.
+The nft guard permits TCP only under the same reserved mark as UDP.
+`TestMarkedUnderlayCoversTransportAndResolverWithoutFallback` covers successful
+socket setup and mark failures on all three paths;
+`TestWireGuardRelayReplacesConnectionsWhenUnderlayMarkChanges` authenticates to
+the reference relay before and after a mark change with an injected socket setter.
+Native SO_MARK/routing/firewall evidence, a pre-exit DNS source (including system
+stub forwarding), control-plane transport marking and startup restoration remain
+open. These changes do not yet advertise an operational native exit adapter.
 
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root

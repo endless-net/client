@@ -9,21 +9,23 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
 
 type wireGuardRelayBridge struct {
-	mu        sync.Mutex
-	timeout   time.Duration
-	tlsConfig *tls.Config
-	key       string
-	status    RelayDataplaneBridgeStatus
-	statusOK  bool
-	lastErr   error
-	cancel    context.CancelFunc
-	done      chan error
+	mu         sync.Mutex
+	timeout    time.Duration
+	tlsConfig  *tls.Config
+	key        string
+	status     RelayDataplaneBridgeStatus
+	statusOK   bool
+	lastErr    error
+	cancel     context.CancelFunc
+	done       chan error
+	markSocket func(syscall.RawConn, uint32) error // configured before use; nil uses the native setter
 }
 
 func newWireGuardRelayBridge(timeout time.Duration, tlsConfig *tls.Config) *wireGuardRelayBridge {
@@ -33,7 +35,7 @@ func newWireGuardRelayBridge(timeout time.Duration, tlsConfig *tls.Config) *wire
 	return &wireGuardRelayBridge{timeout: timeout, tlsConfig: tlsConfig}
 }
 
-func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.RegisterNodeResponse, wireGuardListenAddr string) error {
+func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.RegisterNodeResponse, wireGuardListenAddr string, mark uint32) error {
 	if b == nil {
 		return nil
 	}
@@ -44,7 +46,7 @@ func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.
 	if strings.TrimSpace(wireGuardListenAddr) == "" {
 		return errors.New("wireguard-go relay bridge requires a live UDP endpoint")
 	}
-	key := wireGuardRelayBridgeKey(networkMap, wireGuardListenAddr)
+	key := wireGuardRelayBridgeKey(networkMap, wireGuardListenAddr, mark)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.reapLocked()
@@ -64,6 +66,7 @@ func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.
 			WireGuardListenAddr: wireGuardListenAddr,
 			Timeout:             b.timeout,
 			TLSConfig:           b.tlsConfig,
+			Dialer:              markedUnderlayDialer(mark, b.markSocket),
 			Ready: func(status RelayDataplaneBridgeStatus) {
 				select {
 				case ready <- status:
@@ -172,12 +175,13 @@ func (b *wireGuardRelayBridge) stopLocked() {
 	}
 }
 
-func wireGuardRelayBridgeKey(networkMap clientapi.RegisterNodeResponse, wireGuardListenAddr string) string {
+func wireGuardRelayBridgeKey(networkMap clientapi.RegisterNodeResponse, wireGuardListenAddr string, mark uint32) string {
 	parts := []string{
 		strings.TrimSpace(networkMap.Network.ID),
 		strconv.FormatUint(networkMap.Network.Revision, 10),
 		strings.TrimSpace(networkMap.Node.ID),
 		strings.TrimSpace(wireGuardListenAddr),
+		strconv.FormatUint(uint64(mark), 10),
 	}
 	for _, relay := range networkMap.Relays {
 		parts = append(parts, strings.TrimSpace(relay.ID), strings.TrimSpace(relay.Addr), strings.TrimSpace(relay.Protocol))

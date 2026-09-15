@@ -20,7 +20,7 @@ import (
 // must serialize it with engine changes, install Contain before changing routes,
 // and call OpenTunnel only after the authenticated TUN filters are installed.
 // Release is permitted only after an explicit clear and confirmed route cleanup.
-// LAN bypass and non-UDP underlay transport are not supported by this component.
+// LAN bypass is not supported by this component.
 type linuxExitGuard struct {
 	mu            sync.Mutex
 	interfaceName string
@@ -48,7 +48,7 @@ func newLinuxExitGuard(interfaceName string, mark uint32, runner commandInputRun
 		table: fmt.Sprintf("endlessnet_exit_%x", scope[:12]), run: runner}, nil
 }
 
-// Contain blocks both IP families outside loopback, marked UDP underlay and
+// Contain blocks both IP families outside loopback, marked TCP/UDP underlay and
 // host Neighbor Discovery, including physical-default application traffic.
 // It also closes TUN egress while routes, identity or packet filters are changing.
 func (g *linuxExitGuard) Contain(ctx context.Context) error {
@@ -71,7 +71,7 @@ func (g *linuxExitGuard) replace(ctx context.Context, tunnel bool) error {
 	fmt.Fprintf(&b, "add rule inet %s output oifname \"lo\" accept\n", g.table)
 	// Never allow all established traffic: pre-existing direct connections must
 	// be blocked too. SO_MARK is reserved for the privileged tunnel transport.
-	fmt.Fprintf(&b, "add rule inet %s output meta mark %d meta l4proto udp accept\n", g.table, g.mark)
+	fmt.Fprintf(&b, "add rule inet %s output meta mark %d meta l4proto { tcp, udp } accept\n", g.table, g.mark)
 	// The physical IPv6 underlay still needs address resolution, DAD and router
 	// solicitation. RFC 4861 requires hop limit 255 and ICMP code 0. Do not open
 	// the guarded TUN, echo traffic, router advertisements or redirects here.
