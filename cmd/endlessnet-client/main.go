@@ -2030,7 +2030,7 @@ func cmdRelayBridge(args []string) error {
 	if err != nil {
 		return err
 	}
-	cfg, networkMap, _, err := agentNetworkMap(context.Background(), *configPath, timeout, false, 0, 0)
+	cfg, networkMap, _, err := agentNetworkMap(context.Background(), nil, *configPath, timeout, false, 0, 0)
 	if err != nil {
 		return err
 	}

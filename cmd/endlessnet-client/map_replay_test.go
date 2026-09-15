@@ -68,7 +68,7 @@ func TestAgentRepeatedDeltaRefreshesRelayCredential(t *testing.T) {
 	if err := client.SaveConfig(path, cfg); err != nil {
 		t.Fatal(err)
 	}
-	gotConfig, got, _, err := agentOnlineNetworkMap(t.Context(), path, 100*time.Millisecond, 1)
+	gotConfig, got, _, err := agentOnlineNetworkMap(t.Context(), nil, path, 100*time.Millisecond, 1)
 	if err != nil {
 		t.Fatal("agent failed repeated delta refresh")
 	}

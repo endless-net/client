@@ -474,7 +474,20 @@ connections. `TestAgentIterationCancellationStopsControlResponseBody` cancels
 blocked trust and map-stream bodies through `runAgentIteration`, verifies the
 request ends without waiting for its 30-second timeout and checks the durable
 configuration is unchanged. Main-agent underlay marking and startup restoration
-are still open; this increment establishes runtime cancellation only.
+are addressed separately from this runtime cancellation guarantee.
+
+Map iterations with an engine now obtain their HTTP client from
+`WireGuardEngine.ControlPlaneHTTPClient`. An owned exit guard supplies its mark
+even after route cleanup; the saved successful engine context must match node,
+network, credential and control origins. A saved exit without a restored guard,
+or a guard without a bound successful context, rejects control access instead
+of opening an unmarked socket. `TestEngineControlUnderlayRequiresOwnedExitIdentity`
+covers these construction boundaries without native socket operations. The caller
+is checked by `TestAgentDoesNotBypassRefusedEngineControlTransport`: an engine
+refusal is returned before trust or map requests rather than bypassed. The caller
+still must serialize runtime effects and cancel requests before identity changes.
+Initial protected startup/recovery, credential renewal handover, separate endpoint
+publication/session clients, pre-exit DNS and native kernel evidence remain open.
 
 The shared workflow transport closes request bodies rejected because the runtime
 was already cancelled, without reading the payload or recording a remote attempt.

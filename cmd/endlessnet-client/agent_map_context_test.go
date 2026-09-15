@@ -15,6 +15,31 @@ import (
 	"github.com/endless-net/client/internal/client"
 )
 
+type refusingControlEngine struct {
+	testAgentWireGuard
+	failure error
+	calls   int
+}
+
+func (e *refusingControlEngine) ControlPlaneHTTPClient(client.Config) (*http.Client, error) {
+	e.calls++
+	return nil, e.failure
+}
+
+func TestAgentDoesNotBypassRefusedEngineControlTransport(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "client.json")
+	cfg := client.Config{ControlPlaneURLs: []string{"https://control.example"}, NodeID: "node", NodeCredential: "synthetic-credential", NetworkID: "network"}
+	if err := client.SaveConfig(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	failure := errors.New("protected underlay is not restored")
+	engine := &refusingControlEngine{failure: failure}
+	_, _, err := runAgentIteration(t.Context(), agentIterationOptions{ConfigPath: path, WireGuard: engine, Timeout: time.Second})
+	if !errors.Is(err, failure) || engine.calls != 1 {
+		t.Fatalf("factory calls=%d error=%v", engine.calls, err)
+	}
+}
+
 func TestAgentIterationCancellationStopsControlResponseBody(t *testing.T) {
 	for _, blockedPath := range []string{"/server-key", "/maps/node-1/stream"} {
 		t.Run(blockedPath, func(t *testing.T) {

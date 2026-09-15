@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -314,6 +315,7 @@ func invalidateAgentSnapshot(opts agentIPCOptions) {
 }
 
 type agentWireGuard interface {
+	ControlPlaneHTTPClient(client.Config) (*http.Client, error)
 	Configure(context.Context, client.Config, clientapi.RegisterNodeResponse) (client.WireGuardApplyResult, error)
 	Down(context.Context) (client.WireGuardApplyResult, error)
 	LastEndpointDiscovery() client.WireGuardEngineEndpointDiscovery

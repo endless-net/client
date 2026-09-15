@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -46,6 +47,10 @@ type testAgentWireGuard struct {
 	downCalls      int
 	configure      func(client.Config, clientapi.RegisterNodeResponse) (client.WireGuardApplyResult, error)
 	down           func() (client.WireGuardApplyResult, error)
+}
+
+func (w *testAgentWireGuard) ControlPlaneHTTPClient(cfg client.Config) (*http.Client, error) {
+	return apiFromConfig(cfg).HTTPClient, nil
 }
 
 func (w *testAgentWireGuard) Configure(_ context.Context, cfg client.Config, networkMap clientapi.RegisterNodeResponse) (client.WireGuardApplyResult, error) {
@@ -805,7 +810,7 @@ func TestAgentOnlineNetworkMapRefreshesSnapshotOnIdleStream(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, got, unchanged, err := agentOnlineNetworkMap(t.Context(), configPath, 50*time.Millisecond, 7)
+	_, got, unchanged, err := agentOnlineNetworkMap(t.Context(), nil, configPath, 50*time.Millisecond, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -893,7 +898,7 @@ func TestAgentOnlineNetworkMapFailsOverToConfiguredCoordinator(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, got, unchanged, err := agentOnlineNetworkMap(t.Context(), configPath, 200*time.Millisecond, 10)
+	_, got, unchanged, err := agentOnlineNetworkMap(t.Context(), nil, configPath, 200*time.Millisecond, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -987,7 +992,7 @@ func TestCmdAgentWritesFailureStateForTamperedMapWithoutReplacingOutput(t *testi
 		Endpoint:   "evil.example.test:51820",
 		AllowedIPs: []string{"100.64.0.99/32"},
 	}}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/client/readyz":
 			_, _ = w.Write([]byte("ok"))
@@ -1030,6 +1035,14 @@ func TestCmdAgentWritesFailureStateForTamperedMapWithoutReplacingOutput(t *testi
 		}
 	}))
 	defer server.Close()
+	// Model a trusted test CA without changing the production TLS policy.
+	previousTransport := http.DefaultTransport
+	trustedTransport := previousTransport.(*http.Transport).Clone()
+	trustedTLS := server.Client().Transport.(*http.Transport).TLSClientConfig.Clone()
+	trustedTLS.MinVersion = tls.VersionTLS13
+	trustedTransport.DialTLSContext = (&tls.Dialer{Config: trustedTLS}).DialContext
+	http.DefaultTransport = trustedTransport
+	t.Cleanup(func() { http.DefaultTransport = previousTransport; trustedTransport.CloseIdleConnections() })
 
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "client.json")
@@ -1061,21 +1074,7 @@ func TestCmdAgentWritesFailureStateForTamperedMapWithoutReplacingOutput(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Profile admission requires HTTPS; the component test uses a local HTTP
-	// control-plane fixture after admission, without changing production rules.
-	if err := store.Update(func(cfg *client.Config) error {
-		cfg.ControlPlaneURLs = []string{"https://control.example.test"}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
 	if err := mutations.AdoptInitialProfile(); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Update(func(cfg *client.Config) error {
-		cfg.ControlPlaneURLs = []string{server.URL}
-		return nil
-	}); err != nil {
 		t.Fatal(err)
 	}
 	err = cmdAgent([]string{"--once", "--config", configPath, "--state-output", statePath, "--timeout", "1s"})
@@ -1721,14 +1720,14 @@ func TestAgentOnlineNetworkMapActivatesRestrictedEnrollmentAfterApproval(t *test
 				t.Fatal(err)
 			}
 
-			if _, _, _, err := agentOnlineNetworkMap(t.Context(), configPath, time.Second, 0); err == nil || !strings.Contains(err.Error(), "pending") {
+			if _, _, _, err := agentOnlineNetworkMap(t.Context(), nil, configPath, time.Second, 0); err == nil || !strings.Contains(err.Error(), "pending") {
 				t.Fatalf("pending map poll error = %v, want pending denial", err)
 			}
 			if endpointCalls.Load() != 0 {
 				t.Fatalf("pending map poll endpoint calls = %d, want 0", endpointCalls.Load())
 			}
 			approved.Store(true)
-			updatedCfg, networkMap, unchanged, err := agentOnlineNetworkMap(t.Context(), configPath, time.Second, 0)
+			updatedCfg, networkMap, unchanged, err := agentOnlineNetworkMap(t.Context(), nil, configPath, time.Second, 0)
 			if err != nil {
 				t.Fatal(err)
 			}

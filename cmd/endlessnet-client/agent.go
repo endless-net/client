@@ -736,7 +736,7 @@ func runAgentCachedBootstrap(ctx context.Context, opts agentIterationOptions) (c
 }
 
 func runAgentIteration(ctx context.Context, opts agentIterationOptions) (client.AgentSnapshot, bool, error) {
-	cfg, networkMap, mapUnchanged, err := agentNetworkMap(ctx, opts.ConfigPath, opts.Timeout, opts.Offline, opts.FromRevision, opts.MaxCacheAge)
+	cfg, networkMap, mapUnchanged, err := agentNetworkMap(ctx, opts.WireGuard, opts.ConfigPath, opts.Timeout, opts.Offline, opts.FromRevision, opts.MaxCacheAge)
 	if err != nil {
 		return client.AgentSnapshot{}, false, err
 	}
@@ -858,12 +858,12 @@ func writeAgentFailureSnapshot(stateOutput, configPath string, failure error) er
 	return client.WriteFileAtomic(stateOutput, raw, 0o600)
 }
 
-func agentNetworkMap(ctx context.Context, configPath string, timeout time.Duration, offline bool, fromRevision uint64, maxCacheAge time.Duration) (client.Config, clientapi.RegisterNodeResponse, bool, error) {
+func agentNetworkMap(ctx context.Context, engine agentWireGuard, configPath string, timeout time.Duration, offline bool, fromRevision uint64, maxCacheAge time.Duration) (client.Config, clientapi.RegisterNodeResponse, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return client.Config{}, clientapi.RegisterNodeResponse{}, false, err
 	}
 	if !offline {
-		return agentOnlineNetworkMap(ctx, configPath, timeout, fromRevision)
+		return agentOnlineNetworkMap(ctx, engine, configPath, timeout, fromRevision)
 	}
 	cfg, err := client.LoadConfig(configPath)
 	if err != nil {
@@ -876,7 +876,7 @@ func agentNetworkMap(ctx context.Context, configPath string, timeout time.Durati
 	return cfg, networkMap, false, nil
 }
 
-func agentOnlineNetworkMap(ctx context.Context, configPath string, timeout time.Duration, fromRevision uint64) (resultConfig client.Config, resultMap clientapi.RegisterNodeResponse, unchanged bool, resultErr error) {
+func agentOnlineNetworkMap(ctx context.Context, engine agentWireGuard, configPath string, timeout time.Duration, fromRevision uint64) (resultConfig client.Config, resultMap clientapi.RegisterNodeResponse, unchanged bool, resultErr error) {
 	if err := ctx.Err(); err != nil {
 		return client.Config{}, clientapi.RegisterNodeResponse{}, false, err
 	}
@@ -894,6 +894,12 @@ func agentOnlineNetworkMap(ctx context.Context, configPath string, timeout time.
 		return cfg, clientapi.RegisterNodeResponse{}, false, err
 	}
 	api := apiFromConfig(cfg)
+	if engine != nil {
+		api.HTTPClient, err = engine.ControlPlaneHTTPClient(cfg)
+		if err != nil {
+			return cfg, clientapi.RegisterNodeResponse{}, false, err
+		}
+	}
 	api.HTTPClient.Timeout = timeout + 5*time.Second
 	if closer, ok := api.HTTPClient.Transport.(interface{ CloseIdleConnections() }); ok {
 		defer closer.CloseIdleConnections()
