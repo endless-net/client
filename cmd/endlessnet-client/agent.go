@@ -736,7 +736,7 @@ func runAgentCachedBootstrap(ctx context.Context, opts agentIterationOptions) (c
 }
 
 func runAgentIteration(ctx context.Context, opts agentIterationOptions) (client.AgentSnapshot, bool, error) {
-	cfg, networkMap, mapUnchanged, err := agentNetworkMap(opts.ConfigPath, opts.Timeout, opts.Offline, opts.FromRevision, opts.MaxCacheAge)
+	cfg, networkMap, mapUnchanged, err := agentNetworkMap(ctx, opts.ConfigPath, opts.Timeout, opts.Offline, opts.FromRevision, opts.MaxCacheAge)
 	if err != nil {
 		return client.AgentSnapshot{}, false, err
 	}
@@ -858,9 +858,12 @@ func writeAgentFailureSnapshot(stateOutput, configPath string, failure error) er
 	return client.WriteFileAtomic(stateOutput, raw, 0o600)
 }
 
-func agentNetworkMap(configPath string, timeout time.Duration, offline bool, fromRevision uint64, maxCacheAge time.Duration) (client.Config, clientapi.RegisterNodeResponse, bool, error) {
+func agentNetworkMap(ctx context.Context, configPath string, timeout time.Duration, offline bool, fromRevision uint64, maxCacheAge time.Duration) (client.Config, clientapi.RegisterNodeResponse, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return client.Config{}, clientapi.RegisterNodeResponse{}, false, err
+	}
 	if !offline {
-		return agentOnlineNetworkMap(configPath, timeout, fromRevision)
+		return agentOnlineNetworkMap(ctx, configPath, timeout, fromRevision)
 	}
 	cfg, err := client.LoadConfig(configPath)
 	if err != nil {
@@ -873,7 +876,10 @@ func agentNetworkMap(configPath string, timeout time.Duration, offline bool, fro
 	return cfg, networkMap, false, nil
 }
 
-func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevision uint64) (resultConfig client.Config, resultMap clientapi.RegisterNodeResponse, unchanged bool, resultErr error) {
+func agentOnlineNetworkMap(ctx context.Context, configPath string, timeout time.Duration, fromRevision uint64) (resultConfig client.Config, resultMap clientapi.RegisterNodeResponse, unchanged bool, resultErr error) {
+	if err := ctx.Err(); err != nil {
+		return client.Config{}, clientapi.RegisterNodeResponse{}, false, err
+	}
 	cfg, err := client.LoadConfig(configPath)
 	if err != nil {
 		return cfg, clientapi.RegisterNodeResponse{}, false, err
@@ -889,9 +895,16 @@ func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevisio
 	}
 	api := apiFromConfig(cfg)
 	api.HTTPClient.Timeout = timeout + 5*time.Second
-	transport := &agentCredentialTransport{base: api.HTTPClient.Transport, nodeID: cfg.NodeID, credential: cfg.NodeCredential}
+	if closer, ok := api.HTTPClient.Transport.(interface{ CloseIdleConnections() }); ok {
+		defer closer.CloseIdleConnections()
+	}
+	transport := &agentCredentialTransport{base: enrollmentContextTransport{lifetime: ctx, base: api.HTTPClient.Transport}, nodeID: cfg.NodeID, credential: cfg.NodeCredential}
 	api.HTTPClient.Transport = transport
 	defer func() {
+		if ctx.Err() != nil {
+			resultErr = ctx.Err()
+			return
+		}
 		if resultErr != nil && transport.terminal != nil {
 			resultErr = transport.terminal
 		}
@@ -910,6 +923,9 @@ func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevisio
 			return cfg, clientapi.RegisterNodeResponse{}, false, err
 		}
 		if heartbeatSent {
+			if err := ctx.Err(); err != nil {
+				return cfg, clientapi.RegisterNodeResponse{}, false, err
+			}
 			if err := client.SaveConfig(configPath, cfg); err != nil {
 				return cfg, clientapi.RegisterNodeResponse{}, false, err
 			}
@@ -946,6 +962,9 @@ func agentOnlineNetworkMap(configPath string, timeout time.Duration, fromRevisio
 		if err != nil {
 			return cfg, clientapi.RegisterNodeResponse{}, false, err
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return cfg, clientapi.RegisterNodeResponse{}, false, err
 	}
 	if err := client.SaveConfig(configPath, cfg); err != nil {
 		return cfg, clientapi.RegisterNodeResponse{}, false, err

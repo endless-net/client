@@ -40,7 +40,7 @@ func TestAgentAppliesHeartbeatAheadOfLastSnapshotBeforeStreaming(t *testing.T) {
 	if err := client.SaveConfig(path, cfg); err != nil {
 		t.Fatal(err)
 	}
-	_, got, unchanged, err := agentOnlineNetworkMap(path, 200*time.Millisecond, 13)
+	_, got, unchanged, err := agentOnlineNetworkMap(t.Context(), path, 200*time.Millisecond, 13)
 	if err != nil {
 		t.Fatal("verified pending projection was blocked on stream", err)
 	}

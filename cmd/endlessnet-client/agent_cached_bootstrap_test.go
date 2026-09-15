@@ -50,7 +50,7 @@ func TestAgentCachedBootstrapWithoutControl(t *testing.T) {
 			}
 			s.SetUnavailable(true)
 			if scenario == "valid" {
-				if _, _, _, err := agentOnlineNetworkMap(path, 100*time.Millisecond, 0); err == nil {
+				if _, _, _, err := agentOnlineNetworkMap(t.Context(), path, 100*time.Millisecond, 0); err == nil {
 					t.Fatal("online sync unexpectedly succeeded without control")
 				}
 			}

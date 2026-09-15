@@ -805,7 +805,7 @@ func TestAgentOnlineNetworkMapRefreshesSnapshotOnIdleStream(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, got, unchanged, err := agentOnlineNetworkMap(configPath, 50*time.Millisecond, 7)
+	_, got, unchanged, err := agentOnlineNetworkMap(t.Context(), configPath, 50*time.Millisecond, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -893,7 +893,7 @@ func TestAgentOnlineNetworkMapFailsOverToConfiguredCoordinator(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, got, unchanged, err := agentOnlineNetworkMap(configPath, 200*time.Millisecond, 10)
+	_, got, unchanged, err := agentOnlineNetworkMap(t.Context(), configPath, 200*time.Millisecond, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1721,14 +1721,14 @@ func TestAgentOnlineNetworkMapActivatesRestrictedEnrollmentAfterApproval(t *test
 				t.Fatal(err)
 			}
 
-			if _, _, _, err := agentOnlineNetworkMap(configPath, time.Second, 0); err == nil || !strings.Contains(err.Error(), "pending") {
+			if _, _, _, err := agentOnlineNetworkMap(t.Context(), configPath, time.Second, 0); err == nil || !strings.Contains(err.Error(), "pending") {
 				t.Fatalf("pending map poll error = %v, want pending denial", err)
 			}
 			if endpointCalls.Load() != 0 {
 				t.Fatalf("pending map poll endpoint calls = %d, want 0", endpointCalls.Load())
 			}
 			approved.Store(true)
-			updatedCfg, networkMap, unchanged, err := agentOnlineNetworkMap(configPath, time.Second, 0)
+			updatedCfg, networkMap, unchanged, err := agentOnlineNetworkMap(t.Context(), configPath, time.Second, 0)
 			if err != nil {
 				t.Fatal(err)
 			}

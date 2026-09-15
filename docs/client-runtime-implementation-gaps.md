@@ -466,6 +466,16 @@ stages after cancellation and verifies replacement waits for completion; the
 DNS case also proves no report is attempted. Server-side processing already
 accepted before cancellation remains outside this local completion guarantee.
 
+The main agent map iteration now propagates its runtime context through signing
+trust, heartbeat and stream HTTP requests using the existing workflow transport.
+Cancellation remains effective while reading response bodies and is checked
+before saving the received projection; each iteration closes its idle HTTP
+connections. `TestAgentIterationCancellationStopsControlResponseBody` cancels
+blocked trust and map-stream bodies through `runAgentIteration`, verifies the
+request ends without waiting for its 30-second timeout and checks the durable
+configuration is unchanged. Main-agent underlay marking and startup restoration
+are still open; this increment establishes runtime cancellation only.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,
