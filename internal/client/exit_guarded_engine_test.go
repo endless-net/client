@@ -138,7 +138,18 @@ func TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease(t *testing.T
 	engine.router = router
 	var released bool
 	var releases, commands int
-	guard, err := newLinuxExitGuard("endlessnet", 51820, func(_ context.Context, batch, _ string, _ ...string) ([]byte, error) {
+	var observationFailure bool
+	var remainingRoutes bool
+	guard, err := newLinuxExitGuard("endlessnet", 51820, func(_ context.Context, batch, name string, _ ...string) ([]byte, error) {
+		if name == "ip" {
+			if observationFailure {
+				return nil, errors.New("route observation failed")
+			}
+			if remainingRoutes {
+				return []byte(`[{"dst":"default","table":"51820"}]`), nil
+			}
+			return []byte(`[]`), nil
+		}
 		commands++
 		if strings.Contains(batch, "delete table") {
 			releases++
@@ -178,6 +189,16 @@ func TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease(t *testing.T
 	if err := engine.releaseClearedExit(t.Context(), &linuxExitGuard{}); err == nil || commands != before {
 		t.Fatal("foreign guard cleared owned protection")
 	}
+	observationFailure = true
+	if err := engine.releaseClearedExit(t.Context(), guard); err == nil || releases != 0 || engine.exitGuard != guard {
+		t.Fatal("unobserved routes allowed protection release")
+	}
+	observationFailure = false
+	remainingRoutes = true
+	if err := engine.releaseClearedExit(t.Context(), guard); err == nil || releases != 0 || engine.exitGuard != guard {
+		t.Fatal("remaining OS routes allowed protection release")
+	}
+	remainingRoutes = false
 	if err := engine.releaseClearedExit(t.Context(), guard); err == nil || releases != 1 || commands != before+2 || released || engine.exitGuard != guard || engine.exitSelection == nil {
 		t.Fatal("uncertain release lost ownership or did not restore containment", err)
 	}

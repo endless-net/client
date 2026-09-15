@@ -234,6 +234,15 @@ func (e *WireGuardEngine) releaseClearedExit(ctx context.Context, guard *linuxEx
 		return errors.New("exit clear requires confirmed runtime and route cleanup")
 	}
 	e.exitFilter.withdraw()
+	empty, err := exitRouteTablesEmpty(ctx, guard.mark, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return guard.run(ctx, "", name, args...)
+	})
+	if err != nil {
+		return err
+	}
+	if !empty {
+		return errors.New("exit clear still has OS routes")
+	}
 	if err := guard.Release(ctx); err != nil {
 		return errors.Join(err, guard.Contain(context.WithoutCancel(ctx)))
 	}

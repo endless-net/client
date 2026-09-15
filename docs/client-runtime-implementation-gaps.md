@@ -429,6 +429,18 @@ Native SO_MARK/routing/firewall evidence, a pre-exit DNS source (including syste
 stub forwarding), complete control-plane transport marking and startup restoration remain
 open. These changes do not yet advertise an operational native exit adapter.
 
+Linux exit clear now checks the actual IPv4 and IPv6 route dumps before releasing
+its owned firewall guard. `exit_route_observation.go` queries all tables with
+`ip -j -N` so a missing dedicated table is an empty observation, while command
+errors, malformed output and cancellation cannot prove cleanup. Any remaining
+route in the reserved table retains protection. The numeric string table format
+follows [iproute2 table rendering](https://github.com/iproute2/iproute2/blob/main/lib/rt_names.c).
+`TestExitRouteCleanupRequiresBothFamilyObservations` covers both families and
+observation failures; `TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease`
+also verifies that failed observation and remaining routes prevent guard release.
+This proves the injected observation/release boundary only: native command
+qualification, policy-rule observations and the complete exit worker remain open.
+
 Application connector reporting now uses an origin-scoped control HTTP client
 with the pinned clientapi TLS policy and the engine's firewall mark. The transport
 rejects unauthorized origins and Host overrides before dialing, closes rejected
