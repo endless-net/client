@@ -309,7 +309,8 @@ fail-closed behavior on a platform.
 
 The Linux OS protection component `exit_guard_nft.go` now submits interface-scoped
 nftables batches through the native executable. Output containment covers both
-IP families, exempting only loopback and marked UDP underlay; forwarding is
+IP families, exempting loopback, marked UDP underlay and bounded host IPv6
+Neighbor Discovery outside the guarded TUN; forwarding is
 blocked. Opening permits output through the TUN. Rule replacement and repeatable explicit
 release use single transactions, without global ruleset changes or automatic
 cleanup after ambiguous errors. `TestLinuxExitGuardAtomicContainmentAndRelease`
@@ -403,6 +404,16 @@ each proof field; `TestExitWorkerRetriesUnconfirmedContainmentAfterRestart`
 resumes the containing phase from disk, retries without Apply or another RPC and
 retains the original failure cause until complete evidence arrives. This does
 not prove kernel containment or complete the native adapter.
+
+Linux containment now permits only host Router Solicitation and Neighbor
+Solicitation/Advertisement outside its TUN, with hop limit 255 and ICMP code 0.
+Without these messages, the marked IPv6 UDP underlay cannot resolve or maintain
+its next-hop neighbor. The constraints follow [RFC 4861](https://www.rfc-editor.org/rfc/rfc4861.html)
+and use the [nftables ICMPv6 selectors](https://netfilter.org/projects/nftables/manpage.html).
+The atomic-batch unit checks this exemption in contained/open/restarted states
+while rejecting generic ICMP echo, router advertisements and redirects. Kernel
+validation, multicast-listener/DHCP maintenance and authorized control/relay/DNS
+underlay integration remain open; this does not enable native exit readiness.
 
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root

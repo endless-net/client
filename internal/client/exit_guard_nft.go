@@ -48,8 +48,8 @@ func newLinuxExitGuard(interfaceName string, mark uint32, runner commandInputRun
 		table: fmt.Sprintf("endlessnet_exit_%x", scope[:12]), run: runner}, nil
 }
 
-// Contain blocks both IP families outside loopback and the marked UDP underlay,
-// including traffic that would otherwise fall back to a physical default route.
+// Contain blocks both IP families outside loopback, marked UDP underlay and
+// host Neighbor Discovery, including physical-default application traffic.
 // It also closes TUN egress while routes, identity or packet filters are changing.
 func (g *linuxExitGuard) Contain(ctx context.Context) error {
 	return g.replace(ctx, false)
@@ -72,6 +72,10 @@ func (g *linuxExitGuard) replace(ctx context.Context, tunnel bool) error {
 	// Never allow all established traffic: pre-existing direct connections must
 	// be blocked too. SO_MARK is reserved for the privileged tunnel transport.
 	fmt.Fprintf(&b, "add rule inet %s output meta mark %d meta l4proto udp accept\n", g.table, g.mark)
+	// The physical IPv6 underlay still needs address resolution, DAD and router
+	// solicitation. RFC 4861 requires hop limit 255 and ICMP code 0. Do not open
+	// the guarded TUN, echo traffic, router advertisements or redirects here.
+	fmt.Fprintf(&b, "add rule inet %s output oifname != %q ip6 hoplimit 255 icmpv6 type { nd-router-solicit, nd-neighbor-solicit, nd-neighbor-advert } icmpv6 code 0 accept\n", g.table, g.interfaceName)
 	if tunnel {
 		fmt.Fprintf(&b, "add rule inet %s output oifname %q accept\n", g.table, g.interfaceName)
 	}

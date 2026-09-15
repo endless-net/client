@@ -39,17 +39,18 @@ func TestLinuxExitGuardAtomicContainmentAndRelease(t *testing.T) {
 		"hook forward priority 0; policy drop;",
 		"output oifname \"lo\" accept",
 		"output meta mark 51820 meta l4proto udp accept",
+		"output oifname != \"endlessnet\" ip6 hoplimit 255 icmpv6 type { nd-router-solicit, nd-neighbor-solicit, nd-neighbor-advert } icmpv6 code 0 accept",
 	} {
 		if !strings.Contains(closed, want) {
 			t.Fatalf("missing guard constraint: %s", want)
 		}
 	}
-	for _, forbidden := range []string{"flush ruleset", "delete table", "ct state", "ip daddr", "ip6 daddr", "oifname \"endlessnet\""} {
+	for _, forbidden := range []string{"flush ruleset", "delete table", "ct state", "ip daddr", "ip6 daddr", "oifname \"endlessnet\"", "echo-request", "echo-reply", "nd-router-advert", "nd-redirect"} {
 		if strings.Contains(closed, forbidden) {
 			t.Fatalf("unexpected containment bypass: %s", forbidden)
 		}
 	}
-	if strings.Count(closed, " accept\n") != 2 {
+	if strings.Count(closed, " accept\n") != 3 {
 		t.Fatal("unexpected direct-traffic exemption")
 	}
 	if err := guard.OpenTunnel(ctx); err != nil {
