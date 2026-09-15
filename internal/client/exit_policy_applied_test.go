@@ -18,7 +18,7 @@ func exitAppliedRuleFixture(table string) []byte {
 
 func TestExitPolicyAppliedRequiresBothSelectorsAndOrder(t *testing.T) {
 	for _, family := range []string{"-4", "-6"} {
-		for _, outcome := range []string{"present", "missing", "error", "cancelled", "order"} {
+		for _, outcome := range []string{"present", "missing", "error", "cancelled", "order", "main_before", "main_equal"} {
 			t.Run(family+"/"+outcome, func(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
@@ -42,6 +42,10 @@ func TestExitPolicyAppliedRequiresBothSelectorsAndOrder(t *testing.T) {
 							cancel()
 						case "order":
 							return []byte(strings.ReplaceAll(string(exitAppliedRuleFixture(table)), "32764", "32765")), nil
+						case "main_before":
+							return []byte(strings.ReplaceAll(string(exitAppliedRuleFixture(table)), "32766", "100")), nil
+						case "main_equal":
+							return []byte(strings.ReplaceAll(string(exitAppliedRuleFixture(table)), "32766", "32765")), nil
 						}
 					}
 					return exitAppliedRuleFixture(table), nil
@@ -75,13 +79,29 @@ func TestExitPolicyAppliedRejectsChangedSelectors(t *testing.T) {
 		strings.ReplaceAll(valid, `"src":"all"`, `"src":"all","goto":100`),
 		"[" + valid[1:len(valid)-1] + "," + valid[1:len(valid)-1] + "]",
 	} {
-		if _, ok := exitPolicyRuleObserved([]byte(raw), 51999, false); ok {
+		if _, ok := exitPolicyRuleObserved([]byte(raw), 51999, false, 0); ok {
 			t.Fatal("accepted changed selector", raw)
 		}
 	}
 	for _, raw := range []string{valid, strings.ReplaceAll(valid, `"fwmark":"51999"`, `"fwmark":"0xcb1f"`)} {
-		if _, ok := exitPolicyRuleObserved([]byte(raw), 51999, false); !ok {
+		if _, ok := exitPolicyRuleObserved([]byte(raw), 51999, false, 0); !ok {
 			t.Fatal("rejected complete mark selector", raw)
+		}
+	}
+}
+
+func TestExitPolicySuppressionRejectsChangedOrDuplicateRules(t *testing.T) {
+	valid := string(exitAppliedRuleFixture("254"))
+	for _, raw := range []string{
+		strings.ReplaceAll(valid, `"suppress_prefixlen":0`, `"suppress_prefixlen":null`),
+		strings.ReplaceAll(valid, `"suppress_prefixlen":0`, `"suppress_prefixlen":1`),
+		strings.ReplaceAll(valid, `"suppress_prefixlen":0`, `"suppress_prefixlen":0,"not":null`),
+		strings.ReplaceAll(valid, `"suppress_prefixlen":0`, `"suppress_prefixlen":0,"fwmark":"0xcb1f"`),
+		strings.ReplaceAll(valid, `"suppress_prefixlen":0`, `"suppress_prefixlen":0,"dst":"192.0.2.0","dstlen":24`),
+		strings.ReplaceAll(valid, `"priority":32766,"src":"all","table":"254"`, `"priority":32763,"src":"all","table":"254","suppress_prefixlen":0`),
+	} {
+		if _, ok := exitPolicyRuleObserved([]byte(raw), 51999, true, 32765); ok {
+			t.Fatal("accepted changed suppression", raw)
 		}
 	}
 }

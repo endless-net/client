@@ -706,7 +706,11 @@ and cancellation retain containment. Injected unit observations cover the query
 scope and guarded apply failure. Each requested family also requires the exact
 unmarked-traffic table selector and main-table suppression rule, with suppression
 before the exit-table lookup. Changed selectors, duplicates and reversed/equal
-priorities fail closed. These observations do not prove interference freedom
+priorities fail closed. An unsuppressed main-table rule at or before the exit
+lookup also prevents opening: otherwise its default route could preempt the exit
+lookup despite a correctly ordered suppression rule. Injected engine coverage
+asserts containment for this conflict; parser cases reject changed/duplicate
+suppression selectors. These observations do not prove interference freedom
 from other tables' rules, firewall readback, disabled-family absence or end-to-end
 path health, and the production exit worker remains unwired.
 

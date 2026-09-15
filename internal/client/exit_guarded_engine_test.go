@@ -16,7 +16,7 @@ import (
 )
 
 func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
-	for _, scenario := range []string{"new", "replace_ordinary", "route_failure", "guard_failure", "wrong_interface", "route_unobserved", "rule_unobserved"} {
+	for _, scenario := range []string{"new", "replace_ordinary", "route_failure", "guard_failure", "wrong_interface", "route_unobserved", "rule_unobserved", "main_rule_preempts"} {
 		t.Run(scenario, func(t *testing.T) {
 			cfg, source, key := signedApplicationFixture(t, false)
 			cfg.PrivateKey = testWireGuardEngineKey(1)
@@ -79,6 +79,9 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 					if len(args) > 3 && args[3] == "rule" {
 						if scenario == "rule_unobserved" {
 							return []byte(`[]`), nil
+						}
+						if scenario == "main_rule_preempts" && args[len(args)-1] == "254" {
+							return []byte(strings.ReplaceAll(string(exitAppliedRuleFixture("254")), "32766", "100")), nil
 						}
 						return exitAppliedRuleFixture(args[len(args)-1]), nil
 					}

@@ -19,7 +19,7 @@ func confirmExitPolicyRules(ctx context.Context, guard *linuxExitGuard, family s
 		if err != nil {
 			return errors.New("exit policy rule observation failed")
 		}
-		priority, ok := exitPolicyRuleObserved(raw, guard.mark, i == 1)
+		priority, ok := exitPolicyRuleObserved(raw, guard.mark, i == 1, priorities[0])
 		if !ok {
 			return errors.New("exit policy rule is not confirmed")
 		}
@@ -31,7 +31,7 @@ func confirmExitPolicyRules(ctx context.Context, guard *linuxExitGuard, family s
 	return ctx.Err()
 }
 
-func exitPolicyRuleObserved(raw []byte, mark uint32, suppress bool) (uint32, bool) {
+func exitPolicyRuleObserved(raw []byte, mark uint32, suppress bool, exitPriority uint32) (uint32, bool) {
 	if len(raw) > 1<<20 {
 		return 0, false
 	}
@@ -56,6 +56,11 @@ func exitPolicyRuleObserved(raw []byte, mark uint32, suppress bool) (uint32, boo
 		}
 		if suppress {
 			if _, ok := rule["suppress_prefixlen"]; !ok {
+				// A main-table lookup before (or tied with) the exit lookup
+				// can select the ordinary default route despite suppression.
+				if priority <= exitPriority {
+					return 0, false
+				}
 				continue
 			}
 			if string(rule["suppress_prefixlen"]) != "0" {
