@@ -29,6 +29,9 @@ func (e *WireGuardEngine) restoreStartupExit(ctx context.Context, cfg Config, cr
 	if guard == nil {
 		var err error
 		table := cfg.WireGuardRouteTable
+		if cfg.ExitSelection != nil {
+			table = cfg.ExitSelection.RouteTable
+		}
 		if cfg.RPCState != nil && cfg.RPCState.ExitChange != nil {
 			// A dispatched operation owns its admitted table even if local
 			// configuration changed while the process was stopped.

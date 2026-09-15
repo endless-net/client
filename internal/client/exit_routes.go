@@ -11,12 +11,13 @@ import (
 // ClientExitSelection is local intent, not backend authorization or evidence of
 // applied routes. Pin both the map recipient and the selected WireGuard identity.
 type ClientExitSelection struct {
-	ID        string             `json:"id"`
-	NetworkID string             `json:"network_id"`
-	NodeID    string             `json:"node_id"`
-	Host      api.ServiceHost    `json:"host"`
-	Family    api.ExitFamilyMode `json:"family"`
-	LAN       api.ExitLANAccess  `json:"lan"`
+	ID         string             `json:"id"`
+	NetworkID  string             `json:"network_id"`
+	NodeID     string             `json:"node_id"`
+	RouteTable string             `json:"route_table"`
+	Host       api.ServiceHost    `json:"host"`
+	Family     api.ExitFamilyMode `json:"family"`
+	LAN        api.ExitLANAccess  `json:"lan"`
 }
 
 // Derive only routing input; never mutate the signed source. The caller must
@@ -24,6 +25,9 @@ type ClientExitSelection struct {
 // A rejected selection is an error, never an implicit clear/direct fallback.
 func exitRoutePeers(cfg Config, source api.RegisterNodeResponse, selection *ClientExitSelection, now time.Time) ([]api.Peer, error) {
 	if selection != nil {
+		if selection.RouteTable != cfg.WireGuardRouteTable {
+			return nil, errors.New("exit selection route table changed")
+		}
 		trust, err := SigningTrustBundle(cfg)
 		if err != nil {
 			return nil, err

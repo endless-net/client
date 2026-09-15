@@ -17,6 +17,7 @@ func TestFirstExitRecoveryRequiresBoundRunningJournal(t *testing.T) {
 			cfg := Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic-credential", LocalOwnerID: "owner", ControlPlaneURLs: []string{"https://control.example"}}
 			plan := &clientRPCExitChange{OperationID: "operation", ProfileID: "profile", OwnerID: "owner", ControlOrigin: "https://control.example", NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, Requested: &ClientExitSelection{ID: "exit", NodeID: cfg.NodeID, NetworkID: cfg.NetworkID}}
 			cfg.WireGuardRouteTable, plan.RouteTable = "51999", "51999"
+			plan.Requested.RouteTable = cfg.WireGuardRouteTable
 			cfg.RPCState = &ClientRPCState{ActiveProfileID: "profile", Profiles: map[string]clientRPCProfile{"profile": {ID: "profile", ControlOrigin: plan.ControlOrigin}}, ExitChange: plan}
 			op := &ipc.Operation{Id: plan.OperationID, ProfileId: plan.ProfileID, State: ipc.OperationState_OPERATION_STATE_RUNNING, Kind: ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE}
 			record := clientRPCOperationRecord{Owner: "owner"}

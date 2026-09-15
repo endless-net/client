@@ -17,6 +17,7 @@ func TestExitStartupRestoresContainmentBeforeControlAccess(t *testing.T) {
 	cfg := Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic", ControlPlaneURLs: []string{"https://control.example"}, ExitSelection: &ClientExitSelection{ID: "exit", NodeID: "node", NetworkID: "network"}}
 	created, contained := 0, 0
 	cfg.WireGuardRouteTable = "51999"
+	cfg.ExitSelection.RouteTable = cfg.WireGuardRouteTable
 	create := func(name, table string) (*linuxExitGuard, error) {
 		created++
 		if name != "endlessnet" {
@@ -43,6 +44,22 @@ func TestExitStartupRestoresContainmentBeforeControlAccess(t *testing.T) {
 	}
 	if created != 1 || contained != 2 {
 		t.Fatal("startup retry replaced guard ownership")
+	}
+	// No operation journal remains for a completed selection.
+	fresh, err := NewWireGuardEngine(WireGuardEngineOptions{Interface: "endlessnet"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := cfg
+	changed.WireGuardRouteTable = "52000"
+	if err := fresh.restoreStartupExit(t.Context(), changed, create); err == nil || created != 2 || contained != 3 || fresh.exitGuard == nil || fresh.exitGuard.mark != 51999 {
+		t.Fatal("completed selection lost its original table after restart", err)
+	}
+	if control, err := fresh.ControlPlaneHTTPClient(changed); err == nil || control != nil {
+		t.Fatal("changed table acquired completed selection's control authority")
+	}
+	if err := fresh.restoreStartupExit(t.Context(), cfg, create); err != nil || created != 2 || contained != 4 {
+		t.Fatal("original completed selection could not recover", err)
 	}
 }
 

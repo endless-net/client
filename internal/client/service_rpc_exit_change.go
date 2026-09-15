@@ -53,6 +53,9 @@ func (m *ClientRPCMutations) prepareExitChange(cfg *Config, op *ipc.Operation, r
 	if profile.ID != cfg.RPCState.ActiveProfileID {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	}
+	if cfg.ExitSelection != nil && cfg.ExitSelection.RouteTable != cfg.WireGuardRouteTable {
+		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
 	if cfg.RPCState.ExitChange != nil {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 	}
@@ -113,6 +116,7 @@ func (m *ClientRPCMutations) selectExitNodeAs(peer local.Peer, request *ipc.Sele
 		for _, grant := range cfg.CachedMap.Network.ClientPolicy.ExitNodes {
 			if grant.ID == request.ExitNodeId {
 				selected = &ClientExitSelection{ID: grant.ID, NetworkID: cfg.NetworkID, NodeID: cfg.NodeID, Host: grant.Host, Family: mode.Family, LAN: mode.LAN}
+				selected.RouteTable = plan.RouteTable
 				break
 			}
 		}

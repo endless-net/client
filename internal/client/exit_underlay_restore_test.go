@@ -83,6 +83,7 @@ func TestExitRecoveryRetainsTableBindingAcrossRetry(t *testing.T) {
 	for _, failed := range []bool{false, true} {
 		t.Run(fmt.Sprint(failed), func(t *testing.T) {
 			cfg := Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic", ControlPlaneURLs: []string{"https://control.example"}, WireGuardRouteTable: "51999", ExitSelection: &ClientExitSelection{ID: "exit", NodeID: "node", NetworkID: "network"}}
+			cfg.ExitSelection.RouteTable = cfg.WireGuardRouteTable
 			engine := &WireGuardEngine{}
 			calls := 0
 			guard, err := newLinuxExitGuard("endlessnet", 51999, func(context.Context, string, string, ...string) ([]byte, error) {

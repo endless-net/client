@@ -61,6 +61,7 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 				cfg.CachedMap, cfg.MapSigningTrust = &networkMap, trusted.MapSigningTrust
 				if scenario == "clear" {
 					cfg.ExitSelection = &ClientExitSelection{ID: "exit", NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, Host: host, Family: api.ExitFamilyIPv4Only, LAN: api.ExitLANBlock}
+					cfg.ExitSelection.RouteTable = cfg.WireGuardRouteTable
 					cfg.CachedMap = nil
 				}
 				return nil
@@ -186,6 +187,12 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 			default:
 				if calls != 1 || current.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || m.store.Read().RPCState.ExitChange != nil {
 					t.Fatal("verified application did not complete")
+				}
+				if scenario == "select" {
+					stored, err := loadConfigFile(m.store.path)
+					if err != nil || stored.ExitSelection == nil || stored.ExitSelection.RouteTable != "51821" || stored.RPCState.ExitChange != nil {
+						t.Fatal("completed selection lost its durable route table", err)
+					}
 				}
 			}
 		})

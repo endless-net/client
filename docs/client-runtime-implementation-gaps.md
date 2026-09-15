@@ -451,8 +451,14 @@ closed protection and denies control authority when configuration differs.
 `TestRPCExitExecutorDurabilityAndRevalidation` checks disk persistence, changes
 before dispatch and during apply, including retry after reopening the store.
 `TestFirstExitRecoveryRequiresBoundRunningJournal` checks original-table startup
-containment with changed configuration. Completed selection ownership after the
-operation journal is cleared still needs durable native ownership tracking.
+containment with changed configuration. Completed selections also retain the
+admitted route table after the journal is cleared. Startup restores that table
+and rejects a changed current configuration; route projection and new exit
+admission enforce the same binding. The executor test reads the completed
+selection back from disk, and the startup test exercises a fresh engine without
+an operation journal. This persists the table association, not complete native
+ownership: interface identity, policy-rule coexistence and the clear/release
+crash window remain open.
 
 Linux exit clear now checks the actual IPv4 and IPv6 route dumps before releasing
 its owned firewall guard. `exit_route_observation.go` queries all tables with

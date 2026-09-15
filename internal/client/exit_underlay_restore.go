@@ -85,6 +85,9 @@ func exitUnderlayRecoverySelection(cfg Config) (*ClientExitSelection, error) {
 		return nil, errors.New("exit recovery route table differs from its durable operation")
 	}
 	if cfg.ExitSelection != nil {
+		if cfg.ExitSelection.RouteTable != cfg.WireGuardRouteTable {
+			return nil, errors.New("exit recovery route table differs from its durable selection")
+		}
 		return cfg.ExitSelection, nil
 	}
 	invalid := errors.New("exit underlay recovery requires a bound dispatched operation")
