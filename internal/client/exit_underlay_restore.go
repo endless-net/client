@@ -22,6 +22,37 @@ func (e *WireGuardEngine) restoreExitUnderlay(ctx context.Context, cfg Config, g
 	if guard == nil || guard.mark == 0 || (e.exitGuard != nil && e.exitGuard != guard) || e.device != nil || e.router != nil || e.tun != nil || e.configured {
 		return errors.New("exit underlay recovery requires an owned guard and stopped runtime")
 	}
+	authorityErr := e.validateExitRecoveryAuthority(cfg, guard)
+	// An invalid/stale journal denies control authority, not containment. Keep
+	// the last owned identity reserved while restoring the closed firewall.
+	if e.exitRestoreConfig.NodeID == "" && e.exitConfig.NodeID != "" {
+		e.exitRestoreConfig = clonePersistentConfig(e.exitConfig)
+	}
+	e.exitGuard = guard
+	if authorityErr == nil {
+		e.exitRestoreConfig = clonePersistentConfig(cfg)
+	}
+	e.exitSelection = nil
+	e.exitConfig = Config{}
+	if e.exitFilter == nil {
+		e.exitFilter = &exitPacketFilter{}
+	}
+	e.exitFilter.withdraw()
+	if err := guard.Contain(ctx); err != nil {
+		return errors.Join(authorityErr, err)
+	}
+	if authorityErr != nil {
+		return authorityErr
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	e.exitConfig = clonePersistentConfig(cfg)
+	e.exitRestoreConfig = Config{}
+	return nil
+}
+
+func (e *WireGuardEngine) validateExitRecoveryAuthority(cfg Config, guard *linuxExitGuard) error {
 	selection, err := exitUnderlayRecoverySelection(cfg)
 	if err != nil {
 		return err
@@ -32,8 +63,6 @@ func (e *WireGuardEngine) restoreExitUnderlay(ctx context.Context, cfg Config, g
 	if err := ValidateConfigCurrentDevice(cfg); err != nil {
 		return err
 	}
-	// Validate the entire origin set before taking ownership; construction opens
-	// no sockets. The guard supplies the mark even with no router configuration.
 	control, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), guard.mark, nil)
 	if err != nil {
 		return err
@@ -45,22 +74,6 @@ func (e *WireGuardEngine) restoreExitUnderlay(ctx context.Context, cfg Config, g
 	if e.exitRestoreConfig.NodeID != "" && !sameExitControlIdentity(cfg, e.exitRestoreConfig) {
 		return errors.New("exit underlay recovery cannot replace its pending identity")
 	}
-	e.exitGuard = guard
-	e.exitRestoreConfig = clonePersistentConfig(cfg)
-	e.exitSelection = nil
-	e.exitConfig = Config{}
-	if e.exitFilter == nil {
-		e.exitFilter = &exitPacketFilter{}
-	}
-	e.exitFilter.withdraw()
-	if err := guard.Contain(ctx); err != nil {
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	e.exitConfig = clonePersistentConfig(cfg)
-	e.exitRestoreConfig = Config{}
 	return nil
 }
 

@@ -46,7 +46,7 @@ func TestExitUnderlayRestoreBindsOnlyAfterContainment(t *testing.T) {
 				other := cfg
 				other.NodeCredential = "replacement"
 				before := calls
-				if err := engine.restoreExitUnderlay(t.Context(), other, guard); err == nil || calls != before {
+				if err := engine.restoreExitUnderlay(t.Context(), other, guard); err == nil || calls != before+1 || engine.exitRestoreConfig.NodeCredential != cfg.NodeCredential {
 					t.Fatal("failed recovery allowed a replacement identity")
 				}
 				fail, cancelContain = false, false
@@ -66,9 +66,10 @@ func TestExitUnderlayRestoreBindsOnlyAfterContainment(t *testing.T) {
 			before := calls
 			other := cfg
 			other.NodeCredential = "replacement"
-			if err := engine.restoreExitUnderlay(t.Context(), other, guard); err == nil || calls != before {
+			if err := engine.restoreExitUnderlay(t.Context(), other, guard); err == nil || calls != before+1 || engine.exitRestoreConfig.NodeCredential != cfg.NodeCredential {
 				t.Fatal("recovery replaced protected identity")
 			}
+			before = calls
 			engine.configured = true
 			if err := engine.restoreExitUnderlay(t.Context(), cfg, guard); err == nil || calls != before {
 				t.Fatal("recovery changed a running engine")

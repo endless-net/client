@@ -63,8 +63,11 @@ func TestFirstExitRecoveryRequiresBoundRunningJournal(t *testing.T) {
 			}
 			err = engine.restoreExitUnderlay(t.Context(), cfg, guard)
 			if scenario != "running" {
-				if err == nil || calls != 0 || engine.exitGuard != nil {
+				if err == nil || calls != 1 || engine.exitGuard != guard {
 					t.Fatalf("invalid journal accepted: calls=%d error=%v", calls, err)
+				}
+				if control, err := engine.ControlPlaneHTTPClient(cfg); err == nil || control != nil {
+					t.Fatal("invalid journal acquired control authority after containment")
 				}
 				return
 			}

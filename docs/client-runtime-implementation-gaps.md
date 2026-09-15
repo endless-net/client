@@ -542,6 +542,14 @@ effects. `TestAgentStartupRestoresGuardBeforePolicyAndIntent` verifies host orde
 failure and cancellation. Native nft/SO_MARK validation, pre-exit DNS, apply/clear
 executor wiring and full startup/boot crash evidence remain incomplete.
 
+Recovery now restores containment even when journal/identity validation denies
+control authority. It retains the guard and any previously reserved identity,
+clears control access and returns the validation error after the closed firewall
+is installed. The journal and underlay recovery tests verify stale owner/profile/
+origin/intent records cannot skip containment or acquire control access, and a
+replacement credential cannot overwrite the reserved identity. An active engine
+or a different guard owner is still rejected before changing OS state.
+
 The shared workflow transport closes request bodies rejected because the runtime
 was already cancelled, without reading the payload or recording a remote attempt.
 `TestEnrollmentCancelledBeforeRequestClosesBodyWithoutAttempt` verifies body
