@@ -75,7 +75,9 @@ func (r *linuxWireGuardEngineRouter) Configure(ctx context.Context, cfg wireGuar
 		return fail(err)
 	}
 	for _, family := range []string{"-4", "-6"} {
-		_, _ = r.runner(ctx, "ip", family, "addr", "flush", "dev", cfg.Interface, "scope", "global")
+		if err := r.run(ctx, "ip", family, "addr", "flush", "dev", cfg.Interface, "scope", "global"); err != nil {
+			return fail(err)
+		}
 	}
 	for _, address := range cfg.Addresses {
 		family := "-4"

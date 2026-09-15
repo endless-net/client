@@ -66,3 +66,44 @@ func TestLinuxRouterCleanupRetriesFailuresWithoutReapplying(t *testing.T) {
 		})
 	}
 }
+
+func TestLinuxRouterRejectsUnclearedAddressesBeforeNewConfiguration(t *testing.T) {
+	for _, family := range []string{"-4", "-6"} {
+		t.Run(family, func(t *testing.T) {
+			cfg := wireGuardEngineRouterConfig{Interface: "endlessnet", MTU: 1280,
+				Addresses: []netip.Prefix{netip.MustParsePrefix("198.18.94.2/32")},
+				Routes:    []netip.Prefix{netip.MustParsePrefix("198.18.94.20/32")},
+				DNS:       []netip.Addr{netip.MustParseAddr("127.0.0.1")}}
+			failure := errors.New("old address flush failed")
+			failing := true
+			applied := 0
+			flushes := 0
+			r := &linuxWireGuardEngineRouter{interfaceName: cfg.Interface,
+				interfacePresent: func(string) (bool, error) { return true, nil },
+				runner: func(_ context.Context, name string, args ...string) ([]byte, error) {
+					command := name + " " + strings.Join(args, " ")
+					if strings.Contains(command, "addr add") || strings.Contains(command, "route replace") || strings.HasPrefix(command, "resolvectl dns") {
+						applied++
+					}
+					if command == "ip "+family+" addr flush dev endlessnet scope global" {
+						flushes++
+						if failing {
+							return nil, failure
+						}
+					}
+					return nil, nil
+				}}
+			if err := r.Configure(t.Context(), cfg); err == nil || applied != 0 || !r.configured || r.pendingCleanup == nil {
+				t.Fatal("failed address cleanup allowed new configuration or lost retry state", err)
+			}
+			if err := r.Configure(t.Context(), cfg); err == nil || applied != 0 {
+				t.Fatal("new attempt bypassed failed cleanup", err)
+			}
+			before := flushes
+			failing = false
+			if err := r.Configure(t.Context(), cfg); err != nil || applied != 3 || r.pendingCleanup != nil || flushes != before+2 {
+				t.Fatal("successful cleanup did not precede reapplication", err, applied, flushes)
+			}
+		})
+	}
+}

@@ -460,6 +460,13 @@ an operation journal. This persists the table association, not complete native
 ownership: interface identity, policy-rule coexistence and the clear/release
 crash window remain open.
 
+Linux router configuration now rejects an error flushing either family's old
+global interface addresses before adding new addresses, routes or DNS. Its
+cleanup journal retains failed removals and blocks reapplication until cleanup
+succeeds. `TestLinuxRouterRejectsUnclearedAddressesBeforeNewConfiguration` checks
+both families, repeated failure and successful cleanup before reapplication with
+an injected command runner. Linux execution remains part of platform CI evidence.
+
 Linux exit clear now checks the actual IPv4 and IPv6 route dumps before releasing
 its owned firewall guard. `exit_route_observation.go` queries all tables with
 `ip -j -N` so a missing dedicated table is an empty observation, while command
