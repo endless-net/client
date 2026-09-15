@@ -213,6 +213,32 @@ func (e *WireGuardEngine) configureExit(ctx context.Context, cfg Config, network
 	return e.configureWithExitLocked(ctx, cfg, networkMap, selection, guard)
 }
 
+// releaseClearedExit is the final native-adapter step after durable clear and
+// confirmed Down, under the shared effect lock. Down and Close never release
+// protection themselves. An uncertain release retains ownership for retry and
+// attempts to restore containment before returning the error.
+func (e *WireGuardEngine) releaseClearedExit(ctx context.Context, guard *linuxExitGuard) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if guard == nil || e.exitGuard != guard {
+		return errors.New("exit clear requires its owned OS guard")
+	}
+	if e.device != nil || e.router != nil || e.tun != nil || e.configured {
+		return errors.New("exit clear requires confirmed runtime and route cleanup")
+	}
+	e.exitFilter.withdraw()
+	if err := guard.Release(ctx); err != nil {
+		return errors.Join(err, guard.Contain(context.WithoutCancel(ctx)))
+	}
+	e.exitGuard = nil
+	e.exitSelection = nil
+	e.exitFilter = nil
+	return nil
+}
+
 func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Config, networkMap clientapi.RegisterNodeResponse, selection *ClientExitSelection, guard *linuxExitGuard) (result WireGuardApplyResult, applyErr error) {
 	if guard != nil {
 		e.exitGuard = guard

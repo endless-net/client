@@ -373,6 +373,18 @@ and grant withdrawal. This is not privileged kernel evidence. Native host adapte
 wiring, complete underlay exceptions, verified clear/release, startup restoration,
 observations, Windows/Darwin protection and platform acceptance remain open.
 
+The engine now has an explicit post-clear protection release step. It requires
+the owned guard and a stopped runtime with no retained route-cleanup object;
+ordinary Down/Close still retain protection. A lost release result retains engine
+ownership and attempts containment again with a bounded cancellation-independent
+firewall call, so the adapter can retry instead of claiming confirmed cleanup.
+`TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease` covers failed
+route removal, retry, cancellation, foreign guards and a lost kernel reply.
+The guarded-engine test also rejects release while a real userspace TUN is live.
+These use injected firewall/router boundaries. The native adapter must invoke
+release only after durable clear under its shared effect lock, and must recover
+that ordering across restart; host wiring and privileged OS evidence remain open.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,

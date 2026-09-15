@@ -113,6 +113,9 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 			if scenario == "replace_ordinary" && created.Load() != 2 {
 				t.Fatal("ordinary TUN was not replaced to attach exit enforcement")
 			}
+			if err := engine.releaseClearedExit(t.Context(), guard); err == nil || engine.exitGuard != guard {
+				t.Fatal("live exit runtime allowed protection release")
+			}
 			// A changed authority cannot leave the previously opened TUN usable.
 			cfg.ExitSelection = cloneExitSelection(selection)
 			source.Network.ClientPolicy.ExitNodes[0].ExpiresAt = time.Now().Add(-time.Second)
@@ -122,4 +125,73 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease(t *testing.T) {
+	engine, err := NewWireGuardEngine(WireGuardEngineOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	routeFailure := errors.New("route removal failed")
+	releaseFailure := errors.New("release result lost")
+	router := &exitClearTestRouter{failure: routeFailure}
+	engine.router = router
+	var released bool
+	var releases, commands int
+	guard, err := newLinuxExitGuard("endlessnet", 51820, func(_ context.Context, batch, _ string, _ ...string) ([]byte, error) {
+		commands++
+		if strings.Contains(batch, "delete table") {
+			releases++
+			released = true
+			if releases == 1 {
+				// Model a committed kernel transaction with a lost reply.
+				return nil, releaseFailure
+			}
+		} else {
+			released = false
+		}
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine.exitGuard = guard
+	engine.exitFilter = &exitPacketFilter{}
+	engine.exitSelection = &ClientExitSelection{ID: "selected"}
+	t.Cleanup(func() { _ = engine.Close() })
+	if _, err := engine.Down(t.Context()); !errors.Is(err, routeFailure) {
+		t.Fatal("failed route cleanup was not retained", err)
+	}
+	if err := engine.releaseClearedExit(t.Context(), guard); err == nil || releases != 0 {
+		t.Fatal("failed route cleanup allowed guard release")
+	}
+	router.failure = nil
+	if result, err := engine.Down(t.Context()); err != nil || !result.OK || router.down != 2 {
+		t.Fatal("route cleanup did not retry", err)
+	}
+	before := commands
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := engine.releaseClearedExit(cancelled, guard); !errors.Is(err, context.Canceled) || commands != before {
+		t.Fatal("cancelled clear reached firewall")
+	}
+	if err := engine.releaseClearedExit(t.Context(), &linuxExitGuard{}); err == nil || commands != before {
+		t.Fatal("foreign guard cleared owned protection")
+	}
+	if err := engine.releaseClearedExit(t.Context(), guard); err == nil || releases != 1 || commands != before+2 || released || engine.exitGuard != guard || engine.exitSelection == nil {
+		t.Fatal("uncertain release lost ownership or did not restore containment", err)
+	}
+	if err := engine.releaseClearedExit(t.Context(), guard); err != nil || !released || engine.exitGuard != nil || engine.exitSelection != nil || engine.exitFilter != nil {
+		t.Fatal("confirmed clear did not release engine exit ownership", err)
+	}
+}
+
+type exitClearTestRouter struct {
+	testWireGuardEngineRouter
+	failure error
+}
+
+func (r *exitClearTestRouter) Down(context.Context) error {
+	r.down++
+	return r.failure
 }
