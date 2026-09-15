@@ -474,6 +474,13 @@ or observation errors abort application. The injected Linux test
 `TestLinuxExitRouteRequiresObservedRuleRemovalBeforeAddingRules` covers both
 families and both rule stages. Shared suppression-rule ownership remains open.
 
+The native exit command runner now caps combined stdout/stderr during capture
+at 1 MiB, cancels on overflow and returns no truncated observation. A bounded
+pipe wait also prevents inherited output pipes from delaying completion without
+limit. `TestExitCommandOutputCancelsOnOverflowWithoutAcceptingTruncation` checks
+single-chunk and incremental overflow, cancellation and retained-data bounds;
+process termination behavior still needs platform qualification.
+
 Linux exit clear now checks the actual IPv4 and IPv6 route dumps before releasing
 its owned firewall guard. `exit_route_observation.go` queries all tables with
 `ip -j -N` so a missing dedicated table is an empty observation, while command

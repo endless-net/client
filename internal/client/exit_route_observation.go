@@ -19,7 +19,9 @@ func exitRouteTablesEmpty(ctx context.Context, table uint32, runner CommandRunne
 		if runtime.GOOS != "linux" {
 			return false, errors.New("exit route observation requires Linux")
 		}
-		runner = runCommand
+		runner = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+			return runExitCommand(ctx, "", name, args...)
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

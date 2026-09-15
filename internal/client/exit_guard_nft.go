@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
@@ -37,11 +36,7 @@ func newLinuxExitGuard(interfaceName string, mark uint32, runner commandInputRun
 		if runtime.GOOS != "linux" {
 			return nil, errors.New("exit guard requires Linux")
 		}
-		runner = func(ctx context.Context, input, name string, args ...string) ([]byte, error) {
-			cmd := exec.CommandContext(ctx, name, args...)
-			cmd.Stdin = strings.NewReader(input)
-			return cmd.CombinedOutput()
-		}
+		runner = runExitCommand
 	}
 	scope := sha256.Sum256([]byte(interfaceName))
 	return &linuxExitGuard{interfaceName: interfaceName, mark: mark,
