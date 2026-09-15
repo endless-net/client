@@ -81,6 +81,30 @@ func TestControlPlaneNativeServiceCatalog(t *testing.T) {
 				Ports:        []api.ServicePort{{Protocol: "tcp", Port: 24001}},
 				ApprovalMode: "manual", ApprovalStatus: "pending",
 			}
+			var clientPort uint16
+			defer func() {
+				if !t.Failed() {
+					return
+				}
+				// Observe before stopping the Client. Emit only numeric codes,
+				// counts and binding checks, never arbitrary diagnostics text.
+				logNativeInterfaceState(t)
+				response := &ipc.GetDiagnosticsResponse{}
+				err := n.NativeService("diagnostics", response, "--profile-id", profileID, "--timeout", "1s")
+				diagnostics := response.GetDiagnostics()
+				current := diagnostics.GetStatus()
+				t.Logf("service failure: inspection_available=%t configured_client_port=%d current_client_port=%d phase=%d map_revision=%d expected_revision=%d agent_revision=%d agent_failure=%d cached_map_valid=%t disconnected=%t tunnel={%s}",
+					err == nil, clientPort, diagnostics.GetTunnel().GetListenPort(), current.GetConnectionPhase(),
+					current.GetMapRevision(), status.GetMapRevision(), current.GetAgent().GetMapRevision(),
+					current.GetAgent().GetLastFailure().GetCode(), current.GetStoredState().GetCachedMapValid(),
+					current.GetUserDisconnected(), nativePeerTunnelSummary(diagnostics, status))
+				for index, reference := range references {
+					received, echoed := reference.PacketCounts()
+					initiations, responses, other := reference.HandshakeCounts()
+					attempts, responseErrors := reference.HandshakeResponseCounts()
+					t.Logf("service reference: index=%d received=%d echoed=%d initiations=%d responses=%d other=%d response_attempts=%d response_errors=%d", index, received, echoed, initiations, responses, other, attempts, responseErrors)
+				}
+			}()
 			apply := func(approval string, selected []api.ServiceHost) {
 				t.Helper()
 				service.ApprovalStatus = approval
@@ -96,9 +120,9 @@ func TestControlPlaneNativeServiceCatalog(t *testing.T) {
 					t.Fatal(err)
 				}
 				status = awaitNativePeerMap(t, n, status, current.Revision.Network, uint32(len(peers)))
-				port := nativeTunnelPort(t, n, status)
+				clientPort = nativeTunnelPort(t, n, status)
 				for i := range references {
-					references[i].SetClientEndpoint(t, netip.AddrPortFrom(underlay, port))
+					references[i].SetClientEndpoint(t, netip.AddrPortFrom(underlay, clientPort))
 				}
 			}
 			binary := requiredPath(t, "ENDLESSNET_PACKET_PROBE")
