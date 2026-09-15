@@ -18,6 +18,34 @@ type enrollmentRoundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f enrollmentRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
+type enrollmentTrackedBody struct{ reads, closes int }
+
+func (b *enrollmentTrackedBody) Read([]byte) (int, error) { b.reads++; return 0, io.EOF }
+func (b *enrollmentTrackedBody) Close() error             { b.closes++; return nil }
+
+func TestEnrollmentCancelledBeforeRequestClosesBodyWithoutAttempt(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	body := &enrollmentTrackedBody{}
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://control.test/enrollment", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempts, outcomes := 0, 0
+	transport := enrollmentContextTransport{
+		lifetime: ctx,
+		base:     enrollmentRoundTripFunc(func(*http.Request) (*http.Response, error) { attempts++; return nil, errors.New("unexpected request") }),
+		outcome:  func(int, error) { outcomes++ },
+	}
+	response, err := transport.RoundTrip(request)
+	if response != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("response=%v error=%v", response, err)
+	}
+	if body.closes != 1 || body.reads != 0 || attempts != 0 || outcomes != 0 {
+		t.Fatalf("closes=%d reads=%d attempts=%d outcomes=%d", body.closes, body.reads, attempts, outcomes)
+	}
+}
+
 func TestEnrollmentContextSurvivesHeadersUntilBodyConsumed(t *testing.T) {
 	lifetime, cancel := context.WithCancel(t.Context())
 	defer cancel()

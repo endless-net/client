@@ -18,6 +18,9 @@ type enrollmentContextTransport struct {
 
 func (t enrollmentContextTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err := t.lifetime.Err(); err != nil {
+		if req.Body != nil {
+			_ = req.Body.Close()
+		}
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(req.Context())

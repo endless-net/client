@@ -476,6 +476,11 @@ request ends without waiting for its 30-second timeout and checks the durable
 configuration is unchanged. Main-agent underlay marking and startup restoration
 are still open; this increment establishes runtime cancellation only.
 
+The shared workflow transport closes request bodies rejected because the runtime
+was already cancelled, without reading the payload or recording a remote attempt.
+`TestEnrollmentCancelledBeforeRequestClosesBodyWithoutAttempt` verifies body
+ownership and that neither the underlying transport nor the outcome callback runs.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,
