@@ -1,6 +1,6 @@
 # Client runtime implementation gaps
 
-Status: incomplete implementation; initial source audit, 2026-09-13.
+Status: incomplete implementation; current blocking-path audit, 2026-09-15.
 Scope: `client` and its producer contracts only. No changes to UI, backend
 services or infrastructure are authorized by this implementation plan.
 
@@ -668,22 +668,36 @@ or manual integration run is created merely to bypass the implementation phase.
 
 The generated handler interface is in
 `clientipc/v0/clientipcconnect/service.connect.go`. `ClientRPCService` embeds its
-unimplemented handler in `internal/client/service_rpc_handlers.go`. At this audit,
-the two methods below have no runtime overrides; generated SDK methods and CLI
-commands must not be counted as their runtime implementations.
+unimplemented handler, but SelectExitNode and ClearExitNode now have explicit
+overrides in `internal/client/service_rpc_exit_public.go`; GetExitNode is in
+`service_rpc_exit_status.go`. Their missing production executor must not be
+described as missing handlers or counted as an operational exit implementation.
+The only callers of `startExitWorker` remain unit tests in
+`service_rpc_exit_worker_test.go`. Fresh Select/Clear requests therefore fail
+readiness admission in the production service, while durable replay remains
+available. No agent call starts a native exit worker.
 
-| Requirement area | Missing runtime methods | Required implementation and unit evidence |
+| Requirement area | Implemented client boundary | Missing operational implementation and evidence |
 | --- | --- | --- |
-| US-05 exit | `SelectExitNode`, `ClearExitNode` | Family/LAN constraints; durable selection; partial apply/clear and fail-closed path loss; read support does not establish selection |
+| US-05 exit | Public Get/Select/Clear handlers, readiness gate, durable journal, revalidation/containment worker and injected executor tests | A production native adapter and agent worker startup; observed per-family route/firewall results; clear/release crash recovery; pre-exit DNS and complete ownership across restart; supported OS and LAN policy qualification |
 
 Additional partial implementations must not be mistaken for complete domains:
 
 | Area | Source evidence | Remaining work |
 | --- | --- | --- |
 | Resources | Public `SetResourceEnabled` uses the durable worker; catalog projects policy, overlap and confirmed TUN denials, with observation events | Complete positive route/path/application observations, stale-choice reconciliation, failure/restart audit and OS effect qualification |
-| Preferences/policy | Public Set/Reset supports inbound/DNS/routes through the durable worker, optionally together with UI_QUIT; UI_QUIT-only operations are immediate. Signed policy resolution and pending/committed reads are implemented | Implement remaining lifecycle keys; complete per-method transport, concurrency/recovery and OS effect evidence |
+| Preferences/policy | Public Set/Reset supports inbound/DNS/routes and runtime_start/user_logoff/suspend/resume with durable worker state; UI_QUIT is resolved with signed policy. The network preference journal captures all lifecycle fields and resource choices | Complete per-method assertion audit, concurrency/recovery and actual OS effect evidence; implemented fields and policy resolution do not prove native lifecycle delivery |
 | Diagnostics | `service_rpc_diagnostics.go` projects bounded OS route samples; missing samples remain explicitly unavailable and supplied samples remain incomplete | Qualify platform command execution later; extend route coverage beyond host-address sampling without substituting desired configuration for observed OS state |
 | Updates | `service_rpc_update.go` reports `update_source_not_configured`; `service_rpc_update_test.go` exists | Bind an approved distribution source and verify its projection; unavailable is not up-to-date, and unavailable-path tests do not prove update discovery |
+
+Next implementation work must close these operational paths rather than use
+the component tests above as acceptance. In particular, the Linux exit guard,
+route/rule absence checks and persisted table binding do not yet provide the
+adapter's positive Apply observation, complete Clear transaction or startup
+worker. Update discovery still has no configured verified source: the current
+handler returns SOURCE_UNAVAILABLE unconditionally and cannot attest an installed
+UI/core pair. Resource enforcement confirms the committed denial filter only;
+positive path/route/application availability remains separate work.
 
 UI-quit managed-policy increment: `service_rpc_lifecycle_policy.go` resolves
 KEEP_INTENT/DISCONNECT from the authenticated profile-recipient map. Reads,
