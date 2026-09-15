@@ -437,6 +437,13 @@ custom table and guard reuse; `TestExitStartupGuardUsesRouterTableMark` checks
 Linux guard construction without executing OS commands. Native recovery evidence
 remains open.
 
+The owned control context also binds `WireGuardRouteTable`. Recovery with a
+different table re-establishes containment but cannot replace the original
+binding or obtain marked control access. `TestExitRecoveryRetainsTableBindingAcrossRetry`
+covers this after both successful and failed containment, followed by recovery
+with the original table. This is an in-process ownership check; a durable OS
+ownership ledger across external configuration changes remains open.
+
 Linux exit clear now checks the actual IPv4 and IPv6 route dumps before releasing
 its owned firewall guard. `exit_route_observation.go` queries all tables with
 `ip -j -N` so a missing dedicated table is an empty observation, while command

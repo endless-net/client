@@ -23,6 +23,7 @@ func TestEngineControlUnderlayRequiresOwnedExitIdentity(t *testing.T) {
 		{"node", func(c *Config) { c.NodeID = "other" }},
 		{"credential", func(c *Config) { c.NodeCredential = "other" }},
 		{"network", func(c *Config) { c.NetworkID = "other" }},
+		{"route_table", func(c *Config) { c.WireGuardRouteTable = "51999" }},
 		{"origin", func(c *Config) { c.ControlPlaneURLs = []string{"https://other.example"} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

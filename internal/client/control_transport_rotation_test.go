@@ -9,10 +9,12 @@ import (
 )
 
 func TestControlTransportRotationCancelsAndJoinsOldResponse(t *testing.T) {
+	serverCancelled := make(chan struct{})
 	old := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.(http.Flusher).Flush()
 		<-r.Context().Done()
+		close(serverCancelled)
 	}))
 	defer old.Close()
 	client := newRotatingControlClient(old.Client())
@@ -33,12 +35,16 @@ func TestControlTransportRotationCancelsAndJoinsOldResponse(t *testing.T) {
 	read := make(chan error, 1)
 	go func() { _, readErr := io.ReadAll(response.Body); read <- readErr }()
 	select {
-	case readErr := <-read:
-		if readErr == nil {
-			t.Fatal("old response was not cancelled")
-		}
+	case <-read:
+		// Reading may reach EOF after the cancelled handler returns. The
+		// server context below proves cancellation independently of read error.
 	case <-time.After(5 * time.Second):
 		t.Fatal("old response did not stop")
+	}
+	select {
+	case <-serverCancelled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("old server request was not cancelled")
 	}
 	select {
 	case <-replaced:

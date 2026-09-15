@@ -26,5 +26,6 @@ func (e *WireGuardEngine) ControlPlaneHTTPClient(cfg Config) (*http.Client, erro
 }
 
 func sameExitControlIdentity(a, b Config) bool {
-	return a.NodeID == b.NodeID && a.NodeCredential == b.NodeCredential && a.NetworkID == b.NetworkID && slices.Equal(a.ControlURLs(), b.ControlURLs())
+	return a.NodeID == b.NodeID && a.NodeCredential == b.NodeCredential && a.NetworkID == b.NetworkID &&
+		a.WireGuardRouteTable == b.WireGuardRouteTable && slices.Equal(a.ControlURLs(), b.ControlURLs())
 }

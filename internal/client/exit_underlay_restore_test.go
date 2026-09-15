@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -74,6 +75,45 @@ func TestExitUnderlayRestoreBindsOnlyAfterContainment(t *testing.T) {
 			if err := engine.restoreExitUnderlay(t.Context(), cfg, guard); err == nil || calls != before {
 				t.Fatal("recovery changed a running engine")
 			}
+		})
+	}
+}
+
+func TestExitRecoveryRetainsTableBindingAcrossRetry(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		t.Run(fmt.Sprint(failed), func(t *testing.T) {
+			cfg := Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic", ControlPlaneURLs: []string{"https://control.example"}, WireGuardRouteTable: "51999", ExitSelection: &ClientExitSelection{ID: "exit", NodeID: "node", NetworkID: "network"}}
+			engine := &WireGuardEngine{}
+			calls := 0
+			guard, err := newLinuxExitGuard("endlessnet", 51999, func(context.Context, string, string, ...string) ([]byte, error) {
+				calls++
+				if failed && calls == 1 {
+					return nil, errors.New("containment failed")
+				}
+				return nil, nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := engine.restoreExitUnderlay(t.Context(), cfg, guard); (err != nil) != failed {
+				t.Fatal("unexpected first recovery", err)
+			}
+			other := cfg
+			other.WireGuardRouteTable = "52000"
+			if err := engine.restoreExitUnderlay(t.Context(), other, guard); err == nil || calls != 2 || engine.exitGuard != guard || engine.exitRestoreConfig.WireGuardRouteTable != "51999" {
+				t.Fatal("recovery rebound the owned guard to a different table", err)
+			}
+			if control, err := engine.ControlPlaneHTTPClient(other); err == nil || control != nil {
+				t.Fatal("changed table obtained old guard's control authority")
+			}
+			if err := engine.restoreExitUnderlay(t.Context(), cfg, guard); err != nil || calls != 3 {
+				t.Fatal("original table could not recover", err)
+			}
+			control, err := engine.ControlPlaneHTTPClient(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			control.CloseIdleConnections()
 		})
 	}
 }
