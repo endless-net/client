@@ -494,10 +494,10 @@ func startApplicationSession(t *testing.T, binary, namespace, protocol, address 
 	exchange := 0
 	expect := func(want string) {
 		t.Helper()
-		deadline := 3 * time.Second
-		if want == "ready" {
-			deadline = 5 * time.Second // Initial dial plus subprocess scheduling.
-		}
+		// The child enforces its own one-second exchange deadline. Give its
+		// pipe reader and scheduler headroom to deliver that exact outcome;
+		// receiving "blocked" still fails every immediate "ok" assertion.
+		deadline := 5 * time.Second
 		recovery := want == "recover"
 		if recovery {
 			want = "ok"
