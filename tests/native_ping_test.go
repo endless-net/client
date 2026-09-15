@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -19,6 +20,7 @@ import (
 func nativePing(t *testing.T, address netip.Addr) (bool, int, string) {
 	t.Helper()
 	program := "ping"
+	processTimeout := 3 * time.Second
 	args := []string{"-n", "-c", "1", address.String()}
 	switch runtime.GOOS {
 	case "linux":
@@ -32,6 +34,9 @@ func nativePing(t *testing.T, address netip.Addr) (bool, int, string) {
 			program = "ping6"
 		}
 	case "windows":
+		// ping enforces its own one-second reply wait. Leave separate
+		// headroom for process creation and output delivery on CI runners.
+		processTimeout = 10 * time.Second
 		family := "-4"
 		if address.Is6() {
 			family = "-6"
@@ -40,15 +45,19 @@ func nativePing(t *testing.T, address netip.Addr) (bool, int, string) {
 	default:
 		t.Fatal("native ICMP probe has no driver for this platform")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), processTimeout)
 	defer cancel()
+	started := time.Now()
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		var exit *exec.ExitError
-		if !errors.As(err, &exit) {
-			t.Fatal("native ICMP probe could not execute")
+		if !errors.As(err, &exit) || runtime.GOOS == "windows" && ctx.Err() != nil {
+			var errno syscall.Errno
+			_ = errors.As(err, &errno)
+			t.Fatalf("native ICMP probe could not complete: error_type=%T errno=%d context_expired=%t process_started=%t process_exited=%t elapsed=%s output_bytes=%d",
+				err, uint64(errno), ctx.Err() != nil, cmd.Process != nil, cmd.ProcessState != nil, time.Since(started).Round(time.Millisecond), len(output))
 		}
 		return false, exit.ExitCode(), string(output)
 	}
