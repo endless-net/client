@@ -199,7 +199,7 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 		}
 		return e.configureWithExitLocked(ctx, cfg, networkMap, e.exitSelection, e.exitGuard)
 	}
-	if cfg.ExitSelection != nil {
+	if cfg.ExitSelection != nil || (cfg.RPCState != nil && cfg.RPCState.ExitChange != nil) {
 		return WireGuardApplyResult{}, errors.New("exit selection requires protected runtime recovery")
 	}
 	return e.configureWithExitLocked(ctx, cfg, networkMap, nil, nil)

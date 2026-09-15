@@ -19,7 +19,7 @@ func (e *WireGuardEngine) ControlPlaneHTTPClient(cfg Config) (*http.Client, erro
 			return nil, errors.New("control underlay does not match protected runtime identity")
 		}
 		mark = e.exitGuard.mark
-	} else if cfg.ExitSelection != nil {
+	} else if cfg.ExitSelection != nil || (cfg.RPCState != nil && cfg.RPCState.ExitChange != nil) {
 		return nil, errors.New("control underlay requires protected exit recovery")
 	}
 	return newControlUnderlayHTTPClient(cfg.ControlURLs(), mark, nil)

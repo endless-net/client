@@ -512,6 +512,17 @@ and the final cancellation check; no routes or applied selection are published.
 retry and identity replacement. The host startup sequence and native executor
 still do not call this primitive; protected startup is not accepted as complete.
 
+The same recovery primitive accepts a first selection that reached RUNNING but
+has not committed `ExitSelection`. Its operation record must match the journal,
+owner, active profile, primary origin, node, network and previous intent. Pending,
+terminal or missing operations cannot authorize control access. Any exit journal
+without an owned guard also blocks ordinary engine HTTP-client construction.
+Ordinary engine `Configure` rejects that journal too, including cached bootstrap
+before the first selection has committed; only protected reconciliation may apply it.
+`TestFirstExitRecoveryRequiresBoundRunningJournal` checks these boundaries with
+no cached map and verifies the requested selection remains unapplied. Native
+startup wiring and crash recovery of guard ownership still require completion.
+
 The shared workflow transport closes request bodies rejected because the runtime
 was already cancelled, without reading the payload or recording a remote attempt.
 `TestEnrollmentCancelledBeforeRequestClosesBodyWithoutAttempt` verifies body

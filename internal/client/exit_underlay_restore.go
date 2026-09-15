@@ -3,6 +3,11 @@ package client
 import (
 	"context"
 	"errors"
+	"reflect"
+	"strings"
+
+	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/proto"
 )
 
 // restoreExitUnderlay is the native adapter's pre-network recovery step for an
@@ -17,7 +22,11 @@ func (e *WireGuardEngine) restoreExitUnderlay(ctx context.Context, cfg Config, g
 	if guard == nil || guard.mark == 0 || (e.exitGuard != nil && e.exitGuard != guard) || e.device != nil || e.router != nil || e.tun != nil || e.configured {
 		return errors.New("exit underlay recovery requires an owned guard and stopped runtime")
 	}
-	if cfg.ExitSelection == nil || cfg.NodeID == "" || cfg.NodeCredential == "" || cfg.NetworkID == "" || cfg.ExitSelection.NodeID != cfg.NodeID || cfg.ExitSelection.NetworkID != cfg.NetworkID {
+	selection, err := exitUnderlayRecoverySelection(cfg)
+	if err != nil {
+		return err
+	}
+	if selection == nil || selection.ID == "" || cfg.NodeID == "" || cfg.NodeCredential == "" || cfg.NetworkID == "" || selection.NodeID != cfg.NodeID || selection.NetworkID != cfg.NetworkID {
 		return errors.New("exit underlay recovery requires a bound durable selection")
 	}
 	if err := ValidateConfigCurrentDevice(cfg); err != nil {
@@ -53,4 +62,48 @@ func (e *WireGuardEngine) restoreExitUnderlay(ctx context.Context, cfg Config, g
 	e.exitConfig = clonePersistentConfig(cfg)
 	e.exitRestoreConfig = Config{}
 	return nil
+}
+
+// A first selection may have touched the OS before ExitSelection committed.
+// Recover control authority from its dispatched journal, without treating the
+// requested selection or an expired/missing cached map as an applied grant.
+func exitUnderlayRecoverySelection(cfg Config) (*ClientExitSelection, error) {
+	if cfg.ExitSelection != nil {
+		return cfg.ExitSelection, nil
+	}
+	invalid := errors.New("exit underlay recovery requires a bound dispatched operation")
+	if cfg.RPCState == nil || cfg.RPCState.ExitChange == nil {
+		return nil, invalid
+	}
+	plan := cfg.RPCState.ExitChange
+	profile, exists := cfg.RPCState.Profiles[plan.ProfileID]
+	if !exists || profile.ID != plan.ProfileID || plan.OperationID == "" || plan.ProfileID != cfg.RPCState.ActiveProfileID || plan.ControlOrigin != profile.ControlOrigin || plan.OwnerID == "" || !strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) || plan.NodeID != cfg.NodeID || plan.NetworkID != cfg.NetworkID || plan.Previous != nil || plan.Requested == nil || !reflect.DeepEqual(plan.PreviousIntent, cfg.ConnectionIntent) {
+		return nil, invalid
+	}
+	origin, err := rpcProfileOrigin(plan.ControlOrigin)
+	if err != nil || len(cfg.ControlURLs()) == 0 {
+		return nil, invalid
+	}
+	primary, err := rpcProfileOrigin(cfg.ControlURLs()[0])
+	if err != nil || primary != origin {
+		return nil, invalid
+	}
+	var found *ipc.Operation
+	for _, record := range cfg.RPCState.Operations {
+		op := new(ipc.Operation)
+		if proto.Unmarshal(record.Operation, op) != nil {
+			return nil, invalid
+		}
+		if op.Id != plan.OperationID {
+			continue
+		}
+		if found != nil || record.CompletedAt != nil || !strings.EqualFold(record.Owner, plan.OwnerID) || op.State != ipc.OperationState_OPERATION_STATE_RUNNING || op.Kind != ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE || op.ProfileId != plan.ProfileID {
+			return nil, invalid
+		}
+		found = op
+	}
+	if found == nil {
+		return nil, invalid
+	}
+	return plan.Requested, nil
 }
