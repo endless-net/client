@@ -3,14 +3,24 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
 )
+
+func TestProbeDialFailureHidesAddressesAndErrorText(t *testing.T) {
+	err := &net.OpError{Op: "dial", Net: "tcp", Addr: &net.TCPAddr{IP: net.IPv4(192, 0, 2, 77), Port: 4321}, Err: fmt.Errorf("private error text: %w", syscall.Errno(12345))}
+	got := probeDialFailure(err)
+	if !errors.Is(got, errDialUnavailable) || got.Error() != "application exchange unavailable: dial: errno=12345 timeout=false" {
+		t.Fatal("dial classification exposed raw error data or lost the OS code")
+	}
+}
 
 func TestUDPPreviouslyCompletedEchoCannotSatisfyNewExchange(t *testing.T) {
 	for _, mode := range []string{"duplicate-and-current", "duplicate-only", "unknown-reply", "unknown-then-current"} {

@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"syscall"
 	"time"
 )
 
@@ -76,6 +77,15 @@ var errReadUnavailable = fmt.Errorf("%w: read", errUnreachable)
 var errNameNotFound = errors.New("DNS name not found")
 var errDeadlineSetup = errors.New("application deadline setup failed")
 
+// Report only numeric OS diagnostics, never addresses or raw error strings.
+func probeDialFailure(err error) error {
+	var code syscall.Errno
+	_ = errors.As(err, &code)
+	var networkError net.Error
+	timedOut := errors.As(err, &networkError) && networkError.Timeout()
+	return fmt.Errorf("%w: errno=%d timeout=%t", errDialUnavailable, uint64(code), timedOut)
+}
+
 func resolver(server string) *net.Resolver {
 	if server == "" {
 		return net.DefaultResolver
@@ -131,7 +141,7 @@ func probeDNSWithTimeout(network, address, dnsServer string, exchangeTimeout tim
 	dialer := net.Dialer{Timeout: time.Second, Resolver: resolver(dnsServer)}
 	conn, err := dialer.Dial(probeNetwork(network, address), address)
 	if err != nil {
-		return errDialUnavailable
+		return probeDialFailure(err)
 	}
 	defer func() { _ = conn.Close() }()
 	x := applicationExchange{datagram: network == "udp", timeout: exchangeTimeout}

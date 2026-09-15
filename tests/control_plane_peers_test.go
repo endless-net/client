@@ -410,6 +410,15 @@ func packetProbeReportsDenial(exitCode int, output []byte) bool {
 }
 
 func packetProbeUnavailableStage(output []byte) string {
+	const format = "application exchange unavailable: dial: errno=%d timeout=%t"
+	var code uint32
+	var timedOut bool
+	if n, err := fmt.Sscanf(string(output), format, &code, &timedOut); err == nil && n == 2 {
+		canonical := fmt.Sprintf(format, code, timedOut)
+		if string(output) == canonical+"\n" || string(output) == canonical+"\r\n" {
+			return fmt.Sprintf("dial errno=%d timeout=%t", code, timedOut)
+		}
+	}
 	for _, stage := range []string{"exchange", "dial", "write", "read"} {
 		message := "application exchange unavailable"
 		if stage != "exchange" {
