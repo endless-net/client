@@ -16,7 +16,7 @@ import (
 )
 
 func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
-	for _, scenario := range []string{"new", "replace_ordinary", "route_failure", "guard_failure", "wrong_interface", "route_unobserved"} {
+	for _, scenario := range []string{"new", "replace_ordinary", "route_failure", "guard_failure", "wrong_interface", "route_unobserved", "rule_unobserved"} {
 		t.Run(scenario, func(t *testing.T) {
 			cfg, source, key := signedApplicationFixture(t, false)
 			cfg.PrivateKey = testWireGuardEngineKey(1)
@@ -74,8 +74,14 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 			if scenario == "wrong_interface" {
 				guardName = "other-tun"
 			}
-			guard, err := newLinuxExitGuard(guardName, 51820, func(_ context.Context, batch, command string, _ ...string) ([]byte, error) {
+			guard, err := newLinuxExitGuard(guardName, 51820, func(_ context.Context, batch, command string, args ...string) ([]byte, error) {
 				if command == "ip" {
+					if len(args) > 3 && args[3] == "rule" {
+						if scenario == "rule_unobserved" {
+							return []byte(`[]`), nil
+						}
+						return exitAppliedRuleFixture(args[len(args)-1]), nil
+					}
 					if scenario == "route_unobserved" {
 						return []byte(`[]`), nil
 					}

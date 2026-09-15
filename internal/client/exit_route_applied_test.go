@@ -25,6 +25,9 @@ func TestExitDefaultRouteObservationQueriesSelectedFamilies(t *testing.T) {
 				defer cancel()
 				calls := 0
 				guard, err := newLinuxExitGuard("exit0", 51999, func(call context.Context, input, command string, args ...string) ([]byte, error) {
+					if len(args) > 3 && args[3] == "rule" {
+						return exitAppliedRuleFixture(args[len(args)-1]), nil
+					}
 					if calls >= len(tc.queries) {
 						t.Fatal("unexpected query")
 					}

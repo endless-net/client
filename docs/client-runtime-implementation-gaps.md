@@ -703,9 +703,12 @@ The guarded Linux engine now queries the selected table's exact default route
 for each requested address family before opening tunnel egress. Missing routes,
 another interface, link-down flags, indirect/multipath routes, command failures
 and cancellation retain containment. Injected unit observations cover the query
-scope and guarded apply failure. This is only a direct-route observation: policy
-rules, firewall readback, disabled-family absence and end-to-end path health are
-not proven, and the production exit worker remains unwired.
+scope and guarded apply failure. Each requested family also requires the exact
+unmarked-traffic table selector and main-table suppression rule, with suppression
+before the exit-table lookup. Changed selectors, duplicates and reversed/equal
+priorities fail closed. These observations do not prove interference freedom
+from other tables' rules, firewall readback, disabled-family absence or end-to-end
+path health, and the production exit worker remains unwired.
 
 UI-quit managed-policy increment: `service_rpc_lifecycle_policy.go` resolves
 KEEP_INTENT/DISCONNECT from the authenticated profile-recipient map. Reads,

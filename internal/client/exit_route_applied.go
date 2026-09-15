@@ -33,6 +33,9 @@ func confirmExitDefaultRoutes(ctx context.Context, guard *linuxExitGuard, family
 		if err != nil || !exitDirectDefaultObserved(raw, guard.interfaceName) {
 			return errors.New("exit default route is not confirmed")
 		}
+		if err := confirmExitPolicyRules(ctx, guard, ipFamily); err != nil {
+			return err
+		}
 	}
 	return ctx.Err()
 }
