@@ -12,8 +12,8 @@ import (
 
 // Fetch policy before startup can reconnect. This path never applies network
 // configuration and does not refresh trust across an unapproved key change.
-func refreshAgentStartupPolicy(ctx context.Context, store *client.ConfigStore, timeout time.Duration) error {
-	return refreshAgentStartupPolicyWith(ctx, store, timeout, func(before, candidate client.Config) error {
+func refreshAgentStartupPolicy(ctx context.Context, engine agentWireGuard, store *client.ConfigStore, timeout time.Duration) error {
+	return refreshAgentStartupPolicyWith(ctx, engine, store, timeout, func(before, candidate client.Config) error {
 		return store.Update(func(current *client.Config) error {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -27,7 +27,7 @@ func refreshAgentStartupPolicy(ctx context.Context, store *client.ConfigStore, t
 	})
 }
 
-func refreshAgentStartupPolicyWith(ctx context.Context, store *client.ConfigStore, timeout time.Duration, commit func(client.Config, client.Config) error) error {
+func refreshAgentStartupPolicyWith(ctx context.Context, engine agentWireGuard, store *client.ConfigStore, timeout time.Duration, commit func(client.Config, client.Config) error) error {
 	before := store.Read()
 	wanted := before.ConnectionIntent != nil && (before.ConnectionIntent.DesiredState == client.ConnectionIntentDesiredConnected || before.ConnectionIntent.Reason == "runtime_start_policy_unavailable")
 	if before.RPCState != nil {
@@ -37,12 +37,12 @@ func refreshAgentStartupPolicyWith(ctx context.Context, store *client.ConfigStor
 	if !wanted {
 		return nil
 	}
-	return refreshAgentPolicySnapshot(ctx, store, timeout, commit)
+	return refreshAgentPolicySnapshot(ctx, engine, store, timeout, commit)
 }
 
 // Unlike startup admission, resume needs authenticated policy even when the
 // current intent is disconnected. The shared fetch never applies a tunnel.
-func refreshAgentPolicySnapshot(ctx context.Context, store *client.ConfigStore, timeout time.Duration, commit func(client.Config, client.Config) error) error {
+func refreshAgentPolicySnapshot(ctx context.Context, engine agentWireGuard, store *client.ConfigStore, timeout time.Duration, commit func(client.Config, client.Config) error) error {
 	before := store.Read()
 	if before.CachedMap != nil && before.CachedMap.MapSignature != nil && time.Now().Before(before.CachedMap.MapSignature.ExpiresAt) {
 		if _, err := verifiedCachedNetworkMap(&before); err == nil {
@@ -65,7 +65,17 @@ func refreshAgentPolicySnapshot(ctx context.Context, store *client.ConfigStore, 
 		return errors.New("startup policy context changed")
 	}
 	control := apiFromConfig(candidate)
+	if engine != nil {
+		var err error
+		control.HTTPClient, err = engine.ControlPlaneHTTPClient(candidate)
+		if err != nil {
+			return err
+		}
+	}
 	control.HTTPClient.Timeout = timeout
+	if closer, ok := control.HTTPClient.Transport.(interface{ CloseIdleConnections() }); ok {
+		defer closer.CloseIdleConnections()
+	}
 	control.HTTPClient.Transport = enrollmentContextTransport{lifetime: ctx, base: control.HTTPClient.Transport}
 	if err := refreshMapSigningTrust(&candidate, control); err != nil {
 		return errors.New("startup policy trust unavailable")
@@ -99,7 +109,7 @@ func retryAgentStartupPolicy(ctx context.Context, mutations *client.ClientRPCMut
 	if !client.RuntimeStartRecoveryReady(opts.ConfigStore.Read()) {
 		return nil
 	}
-	return refreshAgentStartupPolicyWith(ctx, opts.ConfigStore, timeout, func(before, candidate client.Config) error {
+	return refreshAgentStartupPolicyWith(ctx, opts.WireGuard, opts.ConfigStore, timeout, func(before, candidate client.Config) error {
 		if mutations != nil {
 			return mutations.RecoverStartupPolicy(ctx, before, candidate)
 		}

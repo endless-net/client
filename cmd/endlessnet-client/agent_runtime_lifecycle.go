@@ -40,7 +40,7 @@ func startAgentRuntimeLifecycle(ctx context.Context, cancel context.CancelCauseF
 		if opts.Offline {
 			return mutations.RefreshRuntimeLifecyclePolicy(ctx, before, before)
 		}
-		return refreshAgentPolicySnapshot(ctx, opts.ConfigStore, opts.Timeout, func(before, candidate client.Config) error {
+		return refreshAgentPolicySnapshot(ctx, opts.WireGuard, opts.ConfigStore, opts.Timeout, func(before, candidate client.Config) error {
 			return mutations.RefreshRuntimeLifecyclePolicy(ctx, before, candidate)
 		})
 	}

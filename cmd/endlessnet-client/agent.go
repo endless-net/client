@@ -439,14 +439,6 @@ func cmdAgent(args []string) error {
 		if err != nil {
 			return err
 		}
-		if !*offline {
-			if err := refreshAgentStartupPolicy(ctx, configStore, timeout); err != nil {
-				log.Printf("startup policy refresh unavailable; local recovery remains available")
-			}
-		}
-		if err := client.NewConnectionIntentStore(configStore).InitializeRuntimeIntent(); err != nil {
-			return err
-		}
 		stored := configStore.Read()
 		wireGuard, err := client.NewWireGuardEngine(client.WireGuardEngineOptions{
 			FlowSpoolPath:  *configPath + ".flow-queue",
@@ -464,6 +456,14 @@ func cmdAgent(args []string) error {
 				log.Printf("close wireguard-go: %v", closeErr)
 			}
 		}()
+		if !*offline {
+			if err := refreshAgentStartupPolicy(ctx, wireGuard, configStore, timeout); err != nil {
+				log.Printf("startup policy refresh unavailable; local recovery remains available")
+			}
+		}
+		if err := client.NewConnectionIntentStore(configStore).InitializeRuntimeIntent(); err != nil {
+			return err
+		}
 		operationMu := &sync.Mutex{}
 		syncWake := make(chan struct{}, 1)
 		ipcOpts := agentIPCOptions{

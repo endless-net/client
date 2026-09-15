@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -12,6 +13,44 @@ import (
 
 	"github.com/endless-net/client/internal/client"
 )
+
+func TestStartupAndResumePolicyDoNotBypassEngineRefusal(t *testing.T) {
+	for _, phase := range []string{"startup", "retry", "resume"} {
+		t.Run(phase, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "client.json")
+			cfg := client.Config{ControlPlaneURLs: []string{"https://control.example"}, NodeID: "node", NetworkID: "network", NodeCredential: "synthetic-credential", ConnectionIntent: &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredConnected, Reason: "user_connect"}}
+			if err := client.SaveConfig(path, cfg); err != nil {
+				t.Fatal(err)
+			}
+			store, err := client.OpenConfigStore(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if phase == "retry" {
+				if err := client.NewConnectionIntentStore(store).InitializeRuntimeIntent(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := store.Read()
+			failure := errors.New("exit guard recovery required")
+			engine := &refusingControlEngine{failure: failure}
+			switch phase {
+			case "startup":
+				err = refreshAgentStartupPolicy(t.Context(), engine, store, time.Second)
+			case "retry":
+				err = retryAgentStartupPolicy(t.Context(), nil, agentIPCOptions{ConfigStore: store, WireGuard: engine}, time.Second)
+			case "resume":
+				err = refreshAgentPolicySnapshot(t.Context(), engine, store, time.Second, func(client.Config, client.Config) error { t.Error("refused fetch committed policy"); return nil })
+			}
+			if !errors.Is(err, failure) || engine.calls != 1 {
+				t.Fatalf("factory calls=%d error=%v", engine.calls, err)
+			}
+			if !reflect.DeepEqual(before, store.Read()) {
+				t.Fatal("refused fetch changed durable state")
+			}
+		})
+	}
+}
 
 func TestStartupPolicyFetchAuthenticatesAndRejectsChangedIntent(t *testing.T) {
 	for _, scenario := range []string{"success", "tampered", "disconnect", "cancelled", "retry", "retry_disconnect", "resume_disconnected"} {
@@ -65,7 +104,7 @@ func TestStartupPolicyFetchAuthenticatesAndRejectsChangedIntent(t *testing.T) {
 				if mutationErr != nil {
 					t.Fatal(mutationErr)
 				}
-				err = refreshAgentPolicySnapshot(ctx, store, time.Second, func(before, candidate client.Config) error {
+				err = refreshAgentPolicySnapshot(ctx, nil, store, time.Second, func(before, candidate client.Config) error {
 					return mutations.RefreshRuntimeLifecyclePolicy(ctx, before, candidate)
 				})
 			case "retry", "retry_disconnect":
@@ -74,7 +113,7 @@ func TestStartupPolicyFetchAuthenticatesAndRejectsChangedIntent(t *testing.T) {
 				}
 				err = retryAgentStartupPolicy(ctx, nil, agentIPCOptions{ConfigStore: store}, time.Second)
 			default:
-				err = refreshAgentStartupPolicy(ctx, store, time.Second)
+				err = refreshAgentStartupPolicy(ctx, nil, store, time.Second)
 			}
 			after := store.Read()
 			if scenario == "success" || scenario == "retry" || scenario == "resume_disconnected" {

@@ -523,6 +523,14 @@ before the first selection has committed; only protected reconciliation may appl
 no cached map and verifies the requested selection remains unapplied. Native
 startup wiring and crash recovery of guard ownership still require completion.
 
+Startup policy refresh now runs after engine construction and obtains its HTTP
+client from the engine. The shared fetch used by startup retry and resume follows
+the same rule and closes idle connections. `TestStartupAndResumePolicyDoNotBypassEngineRefusal`
+checks all three paths return a refused transport without committing policy or
+changing durable state. Valid cached policy still needs no HTTP request. This
+closes the pre-engine policy-fetch bypass; native guard restoration itself is
+still not wired into startup and remains required before exit can recover.
+
 The shared workflow transport closes request bodies rejected because the runtime
 was already cancelled, without reading the payload or recording a remote attempt.
 `TestEnrollmentCancelledBeforeRequestClosesBodyWithoutAttempt` verifies body
