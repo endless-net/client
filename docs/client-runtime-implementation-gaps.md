@@ -699,6 +699,14 @@ handler returns SOURCE_UNAVAILABLE unconditionally and cannot attest an installe
 UI/core pair. Resource enforcement confirms the committed denial filter only;
 positive path/route/application availability remains separate work.
 
+The guarded Linux engine now queries the selected table's exact default route
+for each requested address family before opening tunnel egress. Missing routes,
+another interface, link-down flags, indirect/multipath routes, command failures
+and cancellation retain containment. Injected unit observations cover the query
+scope and guarded apply failure. This is only a direct-route observation: policy
+rules, firewall readback, disabled-family absence and end-to-end path health are
+not proven, and the production exit worker remains unwired.
+
 UI-quit managed-policy increment: `service_rpc_lifecycle_policy.go` resolves
 KEEP_INTENT/DISCONNECT from the authenticated profile-recipient map. Reads,
 Set/Reset and UI_QUIT execution share that resolution. An unlocked managed

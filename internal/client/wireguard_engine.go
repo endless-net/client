@@ -390,6 +390,10 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 		e.configureApplicationsLocked(cfg, networkMap)
 		e.configureFlowLocked(cfg, networkMap)
 		if guard != nil {
+			if err := confirmExitDefaultRoutes(ctx, guard, selection.Family); err != nil {
+				result.OK = false
+				return result, err
+			}
 			if _, err := exitRoutePeers(cfg, networkMap, selection, time.Now()); err != nil {
 				result.OK = false
 				return result, err

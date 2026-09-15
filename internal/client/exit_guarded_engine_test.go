@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -15,7 +16,7 @@ import (
 )
 
 func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
-	for _, scenario := range []string{"new", "replace_ordinary", "route_failure", "guard_failure", "wrong_interface"} {
+	for _, scenario := range []string{"new", "replace_ordinary", "route_failure", "guard_failure", "wrong_interface", "route_unobserved"} {
 		t.Run(scenario, func(t *testing.T) {
 			cfg, source, key := signedApplicationFixture(t, false)
 			cfg.PrivateKey = testWireGuardEngineKey(1)
@@ -73,7 +74,13 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 			if scenario == "wrong_interface" {
 				guardName = "other-tun"
 			}
-			guard, err := newLinuxExitGuard(guardName, 51820, func(_ context.Context, batch, _ string, _ ...string) ([]byte, error) {
+			guard, err := newLinuxExitGuard(guardName, 51820, func(_ context.Context, batch, command string, _ ...string) ([]byte, error) {
+				if command == "ip" {
+					if scenario == "route_unobserved" {
+						return []byte(`[]`), nil
+					}
+					return []byte(fmt.Sprintf(`[{"dst":"default","dev":%q,"flags":[]}]`, guardName)), nil
+				}
 				if strings.Contains(batch, "delete table") {
 					t.Error("engine automatically released protection")
 				}
