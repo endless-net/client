@@ -441,6 +441,11 @@ covers fail-closed dialing. Agent map/session transport wiring,
 pre-exit DNS and native kernel evidence remain open. This is a connector transport
 increment, not native exit readiness.
 
+Marked control clients also clear inherited TLS-specific dial hooks: these hooks
+otherwise bypass the marked `DialContext`. The HTTPS/redirect test installs both
+TLS hook variants on the default transport and verifies neither is called while
+the injected socket marker is used for the successful TLS request.
+
 Flow policy/report RPCs also use the scoped marked HTTPS transport. A mark change
 cancels and joins old HTTP response bodies and closes idle connections while
 retaining the flow worker, its consent scope and pending queue. Identity changes

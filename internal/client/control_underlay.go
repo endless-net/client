@@ -30,6 +30,9 @@ func newControlUnderlayHTTPClient(origins []string, mark uint32, setMark func(sy
 		// A proxy is a separate underlay authority, not an implicit exemption
 		// derived from HTTP_PROXY/HTTPS_PROXY on the native service host.
 		transport.Proxy = nil
+		// TLS-specific hooks bypass DialContext and therefore its socket mark.
+		transport.DialTLSContext = nil
+		transport.DialTLS = nil //nolint:staticcheck // Disable the inherited deprecated hook rather than allowing it to bypass marking.
 		transport.DialContext = markedUnderlayDialer(mark, setMark).DialContext
 	}
 	client.Transport = &controlUnderlayTransport{base: transport, origins: allowed}

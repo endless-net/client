@@ -62,6 +62,19 @@ func TestControlUnderlayRejectsUnauthorizedRequestsBeforeDial(t *testing.T) {
 }
 
 func TestControlUnderlayUsesMarkedTLSAndDoesNotFollowRedirects(t *testing.T) {
+	previousTransport := http.DefaultTransport
+	customTransport := previousTransport.(*http.Transport).Clone()
+	var customDials atomic.Int32
+	customTransport.DialTLSContext = func(context.Context, string, string) (net.Conn, error) {
+		customDials.Add(1)
+		return nil, errors.New("unmarked TLS override")
+	}
+	customTransport.DialTLS = func(string, string) (net.Conn, error) { //nolint:staticcheck // Verify inherited deprecated hooks cannot bypass marking.
+		customDials.Add(1)
+		return nil, errors.New("unmarked TLS override")
+	}
+	http.DefaultTransport = customTransport
+	t.Cleanup(func() { http.DefaultTransport = previousTransport; customTransport.CloseIdleConnections() })
 	var redirected atomic.Int32
 	other := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { redirected.Add(1) }))
 	defer other.Close()
@@ -96,8 +109,8 @@ func TestControlUnderlayUsesMarkedTLSAndDoesNotFollowRedirects(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusFound || redirected.Load() != 0 || marks.Load() == 0 {
-		t.Fatalf("status=%d redirected=%d marks=%d", response.StatusCode, redirected.Load(), marks.Load())
+	if response.StatusCode != http.StatusFound || redirected.Load() != 0 || marks.Load() == 0 || customDials.Load() != 0 {
+		t.Fatalf("status=%d redirected=%d marks=%d custom dials=%d", response.StatusCode, redirected.Load(), marks.Load(), customDials.Load())
 	}
 }
 
