@@ -89,6 +89,7 @@ type WireGuardEngine struct {
 	peerACLFilter     *peerACLFilter
 	sharingFilter     *sharingPacketFilter
 	applicationCancel context.CancelFunc
+	applicationDone   chan struct{}
 	flows             *flowCollector
 	flowCancel        context.CancelFunc
 	flowKey           string
@@ -1144,10 +1145,7 @@ func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
 	}
 	e.flows.stop()
 	e.discardFlowSpoolLocked()
-	if e.applicationCancel != nil {
-		e.applicationCancel()
-		e.applicationCancel = nil
-	}
+	e.stopApplicationReportsLocked()
 	if e.applicationFilter != nil {
 		e.applicationFilter.withdraw()
 	}

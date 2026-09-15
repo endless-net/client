@@ -450,6 +450,15 @@ checks cancellation and body ownership across replacement;
 an unacknowledged report and its retry and checks the same durable window is sent.
 These unit observations do not establish native SO_MARK or route evidence.
 
+Application connector context replacement and engine shutdown now cancel and
+join the discovery worker before releasing its ownership. Old HTTP idle
+connections close before worker completion is signalled. Cancellation during
+DNS does not emit an empty-address withdrawal for the old identity.
+`TestApplicationContextChangeJoinsDiscoveryAndReport` holds both DNS and HTTP
+stages after cancellation and verifies replacement waits for completion; the
+DNS case also proves no report is attempted. Server-side processing already
+accepted before cancellation remains outside this local completion guarantee.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,

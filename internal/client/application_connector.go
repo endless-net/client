@@ -25,12 +25,9 @@ type applicationResolver interface {
 }
 
 func (e *WireGuardEngine) configureApplicationsLocked(cfg Config, m clientapi.RegisterNodeResponse) {
+	e.stopApplicationReportsLocked()
 	if e.applicationFilter != nil && (len(m.Network.Applications) > 0 || e.applicationFilter.active()) {
 		e.applicationFilter.update(m)
-	}
-	if e.applicationCancel != nil {
-		e.applicationCancel()
-		e.applicationCancel = nil
 	}
 	// Sources run on every supported client OS. Connector forwarding currently
 	// uses Linux routing/NAT; unsupported connectors must never advertise leases.
@@ -48,15 +45,32 @@ func (e *WireGuardEngine) configureApplicationsLocked(cfg Config, m clientapi.Re
 	if err != nil {
 		return
 	}
+	e.startApplicationReportsLocked(cfg, m, net.DefaultResolver, httpClient)
+}
+
+func (e *WireGuardEngine) stopApplicationReportsLocked() {
+	if e.applicationCancel == nil {
+		return
+	}
+	e.applicationCancel()
+	<-e.applicationDone
+	e.applicationCancel = nil
+	e.applicationDone = nil
+}
+
+func (e *WireGuardEngine) startApplicationReportsLocked(cfg Config, m clientapi.RegisterNodeResponse, resolver applicationResolver, httpClient *http.Client) {
 	ctx, cancel := context.WithCancel(context.Background())
 	e.applicationCancel = cancel
+	e.applicationDone = make(chan struct{})
+	done := e.applicationDone
 	m = cloneRegisterNodeResponse(m)
 	go func() {
+		defer close(done)
 		defer httpClient.CloseIdleConnections()
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
-		for {
-			reportApplicationDiscoveries(ctx, cfg, m, net.DefaultResolver, httpClient)
+		for ctx.Err() == nil {
+			reportApplicationDiscoveries(ctx, cfg, m, resolver, httpClient)
 			select {
 			case <-ctx.Done():
 				return
@@ -71,7 +85,7 @@ func applicationHTTPClient() *http.Client {
 }
 
 func reportApplicationDiscoveries(ctx context.Context, cfg Config, m clientapi.RegisterNodeResponse, resolver applicationResolver, httpClient *http.Client) {
-	if verifyApplicationMap(cfg, m) != nil || cfg.NodeCredential == "" {
+	if ctx.Err() != nil || verifyApplicationMap(cfg, m) != nil || cfg.NodeCredential == "" {
 		return
 	}
 	for _, app := range m.Network.Applications {
@@ -87,6 +101,9 @@ func reportApplicationDiscoveries(ctx context.Context, cfg Config, m clientapi.R
 			resolveCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			resolved, err := resolver.LookupNetIP(resolveCtx, "ip", target.Domain)
 			cancel()
+			if ctx.Err() != nil {
+				return
+			}
 			if err == nil {
 				for _, address := range resolved {
 					address = address.Unmap()
@@ -103,6 +120,9 @@ func reportApplicationDiscoveries(ctx context.Context, cfg Config, m clientapi.R
 			}
 		}
 		for _, endpoint := range cfg.ControlURLs() {
+			if ctx.Err() != nil {
+				return
+			}
 			origin, err := rpcProfileOrigin(endpoint)
 			if err != nil {
 				continue
