@@ -1,6 +1,8 @@
 package client
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -75,6 +77,24 @@ func TestResourceEngineAppliesChangesAndRejectsStaticBypass(t *testing.T) {
 		t.Fatal("static export bypassed resource restriction", err)
 	}
 	cfg.ResourcePreferences[id] = true
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	engine.opts.stageHook = func(stage wireGuardEngineApplyStage) error {
+		if stage == wireGuardEngineStagePathProbe {
+			if engine.resourceFilter.allows(packet, false, time.Now()) {
+				t.Error("pending enable released the previous denial")
+			}
+			cancel()
+		}
+		return nil
+	}
+	if result, err := engine.Configure(ctx, cfg, source); !errors.Is(err, context.Canceled) || result.OK {
+		t.Fatal("cancelled resource enable committed runtime success", result, err)
+	}
+	if engine.resourceFilter.allows(packet, false, time.Now()) || engine.TryResourceEnforcement(cfg, time.Now()) {
+		t.Fatal("cancelled enable reopened the resource or reported enforcement")
+	}
+	engine.opts.stageHook = nil
 	if _, err := engine.Configure(t.Context(), cfg, source); err != nil {
 		t.Fatal(err)
 	}

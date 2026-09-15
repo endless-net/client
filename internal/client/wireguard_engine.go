@@ -263,6 +263,9 @@ func (e *WireGuardEngine) releaseClearedExit(ctx context.Context, guard *linuxEx
 }
 
 func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Config, networkMap clientapi.RegisterNodeResponse, selection *ClientExitSelection, guard *linuxExitGuard) (result WireGuardApplyResult, applyErr error) {
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	if guard != nil {
 		e.exitGuard = guard
 		attachFilter := e.exitFilter == nil
@@ -362,6 +365,12 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 	}
 	peerACLChanged := e.peerACLFilter.suspend(aclPeers)
 	result, err = e.configureLocked(ctx, plan, previous, &progress)
+	if err == nil {
+		err = ctx.Err()
+		if err != nil {
+			result.OK = false
+		}
+	}
 	if err == nil {
 		if e.resourceFilter != nil {
 			e.resourceFilter.commit()
@@ -594,6 +603,9 @@ func (e *WireGuardEngine) configureLocked(ctx context.Context, plan wireGuardEng
 		}
 	}
 	// Commit logical state only after every runtime stage has succeeded.
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	e.opts.MTU = plan.mtu
 	e.routerCfg = cloneWireGuardEngineRouterConfig(plan.routerCfg)
 	e.pathMap = cloneRegisterNodeResponse(plan.networkMap)

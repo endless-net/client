@@ -474,6 +474,13 @@ or observation errors abort application. The injected Linux test
 `TestLinuxExitRouteRequiresObservedRuleRemovalBeforeAddingRules` covers both
 families and both rule stages. Shared suppression-rule ownership remains open.
 
+Runtime configuration now checks cancellation before starting and at the logical
+state and filter commit boundaries. A stage returning nil after context
+cancellation cannot commit a relaxed resource policy. The resource engine test
+cancels an enable during path setup, verifies the old denial remains and no
+enforcement observation is exposed, then verifies a fresh attempt can enable it.
+This uses the real engine with injected TUN/router, not native OS effects.
+
 Resource service compilation now has packet-level regression coverage for
 independent TCP and UDP preferences sharing the same numeric port. The signed-map
 test `TestResourceCompilerServiceDenialPreservesTransportPortAndHostScope`
