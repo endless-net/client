@@ -16,12 +16,16 @@ func TestExitStartupRestoresContainmentBeforeControlAccess(t *testing.T) {
 	}
 	cfg := Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic", ControlPlaneURLs: []string{"https://control.example"}, ExitSelection: &ClientExitSelection{ID: "exit", NodeID: "node", NetworkID: "network"}}
 	created, contained := 0, 0
-	create := func(name string) (*linuxExitGuard, error) {
+	cfg.WireGuardRouteTable = "51999"
+	create := func(name, table string) (*linuxExitGuard, error) {
 		created++
 		if name != "endlessnet" {
 			t.Fatal("startup changed guard interface")
 		}
-		return newLinuxExitGuard(name, 51820, func(context.Context, string, string, ...string) ([]byte, error) { contained++; return nil, nil })
+		if table != "51999" {
+			t.Fatal("startup lost the configured route table")
+		}
+		return newLinuxExitGuard(name, 51999, func(context.Context, string, string, ...string) ([]byte, error) { contained++; return nil, nil })
 	}
 	if err := engine.restoreStartupExit(t.Context(), cfg, create); err != nil {
 		t.Fatal(err)
@@ -52,7 +56,7 @@ func TestExitStartupSkipsOnlyUndispatchedJournal(t *testing.T) {
 	cfg := Config{RPCState: &ClientRPCState{ExitChange: &clientRPCExitChange{OperationID: "op", ProfileID: "profile"}, Operations: map[string]clientRPCOperationRecord{"request": {Operation: raw}}}}
 	failure := errors.New("platform guard unavailable")
 	calls := 0
-	create := func(string) (*linuxExitGuard, error) { calls++; return nil, failure }
+	create := func(string, string) (*linuxExitGuard, error) { calls++; return nil, failure }
 	if err := engine.restoreStartupExit(t.Context(), Config{}, create); err != nil || calls != 0 {
 		t.Fatal("ordinary startup requested an exit guard")
 	}

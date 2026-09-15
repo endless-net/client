@@ -13,7 +13,7 @@ func (e *WireGuardEngine) RestoreExitProtection(ctx context.Context, cfg Config)
 	return e.restoreStartupExit(ctx, cfg, newPlatformExitGuard)
 }
 
-func (e *WireGuardEngine) restoreStartupExit(ctx context.Context, cfg Config, create func(string) (*linuxExitGuard, error)) error {
+func (e *WireGuardEngine) restoreStartupExit(ctx context.Context, cfg Config, create func(string, string) (*linuxExitGuard, error)) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func (e *WireGuardEngine) restoreStartupExit(ctx context.Context, cfg Config, cr
 	e.mu.Unlock()
 	if guard == nil {
 		var err error
-		guard, err = create(name)
+		guard, err = create(name, cfg.WireGuardRouteTable)
 		if err != nil {
 			return err
 		}

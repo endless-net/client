@@ -429,6 +429,14 @@ Native SO_MARK/routing/firewall evidence, a pre-exit DNS source (including syste
 stub forwarding), complete control-plane transport marking and startup restoration remain
 open. These changes do not yet advertise an operational native exit adapter.
 
+Startup guard creation now receives `WireGuardRouteTable` and derives its mark
+using the same Linux router selection as route application. This fixes recovery
+with a custom numeric table previously replaced by the default 51820 mark.
+`TestExitStartupRestoresContainmentBeforeControlAccess` covers forwarding the
+custom table and guard reuse; `TestExitStartupGuardUsesRouterTableMark` checks
+Linux guard construction without executing OS commands. Native recovery evidence
+remains open.
+
 Linux exit clear now checks the actual IPv4 and IPv6 route dumps before releasing
 its owned firewall guard. `exit_route_observation.go` queries all tables with
 `ip -j -N` so a missing dedicated table is an empty observation, while command
