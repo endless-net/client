@@ -53,6 +53,8 @@ func (w *testAgentWireGuard) ControlPlaneHTTPClient(cfg client.Config) (*http.Cl
 	return apiFromConfig(cfg).HTTPClient, nil
 }
 
+func (w *testAgentWireGuard) RestoreExitProtection(context.Context, client.Config) error { return nil }
+
 func (w *testAgentWireGuard) Configure(_ context.Context, cfg client.Config, networkMap clientapi.RegisterNodeResponse) (client.WireGuardApplyResult, error) {
 	w.configureCalls++
 	if w.configure != nil {

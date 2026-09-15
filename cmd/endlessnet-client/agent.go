@@ -456,12 +456,7 @@ func cmdAgent(args []string) error {
 				log.Printf("close wireguard-go: %v", closeErr)
 			}
 		}()
-		if !*offline {
-			if err := refreshAgentStartupPolicy(ctx, wireGuard, configStore, timeout); err != nil {
-				log.Printf("startup policy refresh unavailable; local recovery remains available")
-			}
-		}
-		if err := client.NewConnectionIntentStore(configStore).InitializeRuntimeIntent(); err != nil {
+		if err := initializeAgentStartup(ctx, wireGuard, configStore, timeout, *offline); err != nil {
 			return err
 		}
 		operationMu := &sync.Mutex{}

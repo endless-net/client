@@ -14,6 +14,62 @@ import (
 	"github.com/endless-net/client/internal/client"
 )
 
+type startupOrderEngine struct {
+	testAgentWireGuard
+	order   []string
+	failure error
+	cancel  context.CancelFunc
+}
+
+func (e *startupOrderEngine) RestoreExitProtection(context.Context, client.Config) error {
+	e.order = append(e.order, "guard")
+	return e.failure
+}
+
+func (e *startupOrderEngine) ControlPlaneHTTPClient(client.Config) (*http.Client, error) {
+	e.order = append(e.order, "policy")
+	if e.cancel != nil {
+		e.cancel()
+	}
+	return nil, errors.New("test policy source unavailable")
+}
+
+func TestAgentStartupRestoresGuardBeforePolicyAndIntent(t *testing.T) {
+	for _, phase := range []string{"ready", "guard_failure", "cancelled"} {
+		path := filepath.Join(t.TempDir(), "client.json")
+		cfg := client.Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic", ControlPlaneURLs: []string{"https://control.example"}, ConnectionIntent: &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredConnected, Reason: "user_connect"}}
+		if err := client.SaveConfig(path, cfg); err != nil {
+			t.Fatal(err)
+		}
+		store, err := client.OpenConfigStore(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := store.Read()
+		engine := &startupOrderEngine{}
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		if phase == "cancelled" {
+			engine.cancel = cancel
+		}
+		if phase == "guard_failure" {
+			engine.failure = errors.New("guard failed")
+		}
+		err = initializeAgentStartup(ctx, engine, store, time.Second, false)
+		if phase == "guard_failure" {
+			if !errors.Is(err, engine.failure) || !reflect.DeepEqual(engine.order, []string{"guard"}) || !reflect.DeepEqual(before, store.Read()) {
+				t.Fatal("failed guard allowed policy or intent effects")
+			}
+		} else if phase == "cancelled" {
+			if !errors.Is(err, context.Canceled) || !reflect.DeepEqual(before, store.Read()) {
+				t.Fatal("cancelled startup changed intent")
+			}
+		} else if err != nil || !reflect.DeepEqual(engine.order, []string{"guard", "policy"}) {
+			t.Fatalf("startup order=%v error=%v", engine.order, err)
+		}
+	}
+}
+
 func TestStartupAndResumePolicyDoNotBypassEngineRefusal(t *testing.T) {
 	for _, phase := range []string{"startup", "retry", "resume"} {
 		t.Run(phase, func(t *testing.T) {

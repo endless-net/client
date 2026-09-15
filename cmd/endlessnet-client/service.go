@@ -315,6 +315,7 @@ func invalidateAgentSnapshot(opts agentIPCOptions) {
 }
 
 type agentWireGuard interface {
+	RestoreExitProtection(context.Context, client.Config) error
 	ControlPlaneHTTPClient(client.Config) (*http.Client, error)
 	Configure(context.Context, client.Config, clientapi.RegisterNodeResponse) (client.WireGuardApplyResult, error)
 	Down(context.Context) (client.WireGuardApplyResult, error)

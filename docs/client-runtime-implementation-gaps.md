@@ -509,8 +509,8 @@ pending identity survives failed containment so a retry cannot substitute anothe
 credential or origin. Control access becomes available only after containment
 and the final cancellation check; no routes or applied selection are published.
 `TestExitUnderlayRestoreBindsOnlyAfterContainment` covers failure, cancellation,
-retry and identity replacement. The host startup sequence and native executor
-still do not call this primitive; protected startup is not accepted as complete.
+retry and identity replacement. Host startup now calls this primitive through
+`RestoreExitProtection`; the native apply executor remains unwired.
 
 The same recovery primitive accepts a first selection that reached RUNNING but
 has not committed `ExitSelection`. Its operation record must match the journal,
@@ -520,16 +520,27 @@ without an owned guard also blocks ordinary engine HTTP-client construction.
 Ordinary engine `Configure` rejects that journal too, including cached bootstrap
 before the first selection has committed; only protected reconciliation may apply it.
 `TestFirstExitRecoveryRequiresBoundRunningJournal` checks these boundaries with
-no cached map and verifies the requested selection remains unapplied. Native
-startup wiring and crash recovery of guard ownership still require completion.
+no cached map and verifies the requested selection remains unapplied. Crash
+recovery of guard ownership across all clear/identity transitions remains open.
 
 Startup policy refresh now runs after engine construction and obtains its HTTP
 client from the engine. The shared fetch used by startup retry and resume follows
 the same rule and closes idle connections. `TestStartupAndResumePolicyDoNotBypassEngineRefusal`
 checks all three paths return a refused transport without committing policy or
 changing durable state. Valid cached policy still needs no HTTP request. This
-closes the pre-engine policy-fetch bypass; native guard restoration itself is
-still not wired into startup and remains required before exit can recover.
+closes the pre-engine policy-fetch bypass.
+
+Agent startup now invokes `RestoreExitProtection` before policy refresh and intent
+initialization. Linux constructs the interface-scoped nft guard with the router's
+reserved mark and restores closed containment; unsupported platforms fail before
+control I/O. An undispatched PENDING operation with no previous selection waits
+for the executor without creating a guard, while ordinary apply/control remains
+blocked by its journal. `TestExitStartupRestoresContainmentBeforeControlAccess`
+checks guard reuse and control access with an injected command runner;
+`TestExitStartupSkipsOnlyUndispatchedJournal` checks pending versus uncertain
+effects. `TestAgentStartupRestoresGuardBeforePolicyAndIntent` verifies host ordering,
+failure and cancellation. Native nft/SO_MARK validation, pre-exit DNS, apply/clear
+executor wiring and full startup/boot crash evidence remain incomplete.
 
 The shared workflow transport closes request bodies rejected because the runtime
 was already cancelled, without reading the payload or recording a remote attempt.

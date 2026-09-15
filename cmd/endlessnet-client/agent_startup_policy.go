@@ -3,12 +3,28 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
 )
+
+func initializeAgentStartup(ctx context.Context, engine agentWireGuard, store *client.ConfigStore, timeout time.Duration, offline bool) error {
+	if err := engine.RestoreExitProtection(ctx, store.Read()); err != nil {
+		return err
+	}
+	if !offline {
+		if err := refreshAgentStartupPolicy(ctx, engine, store, timeout); err != nil {
+			log.Printf("startup policy refresh unavailable; local recovery remains available")
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return client.NewConnectionIntentStore(store).InitializeRuntimeIntent()
+}
 
 // Fetch policy before startup can reconnect. This path never applies network
 // configuration and does not refresh trust across an unapproved key change.
