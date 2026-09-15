@@ -14,7 +14,20 @@ import (
 )
 
 func TestExitWorkerResumesAndRetriesWithoutRequestReplay(t *testing.T) {
+	for _, firstResult := range []string{"error", "missing", "partial"} {
+		t.Run(firstResult, func(t *testing.T) { testExitWorkerResumesAndRetries(t, firstResult) })
+	}
+}
+
+func testExitWorkerResumesAndRetries(t *testing.T, firstResult string) {
+	t.Helper()
 	m, owner, profile := rpcConnectFixture(t)
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.ExitSelection = &ClientExitSelection{ID: "previous", NodeID: cfg.NodeID, NetworkID: cfg.NetworkID}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	op, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +47,16 @@ func TestExitWorkerResumesAndRetriesWithoutRequestReplay(t *testing.T) {
 			}
 			if calls.Add(1) == 1 {
 				close(first)
-				return nil, 0, errors.New("ambiguous native apply")
+				switch firstResult {
+				case "missing":
+					return nil, 0, nil
+				case "partial":
+					status := appliedExitTestStatus(profile.ProfileId, false)
+					status.Ipv6.ApplyState = ipc.ApplyState_APPLY_STATE_PENDING
+					return status, 0, nil
+				default:
+					return nil, 0, errors.New("ambiguous native apply")
+				}
 			}
 			return appliedExitTestStatus(profile.ProfileId, false), ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
 		},
@@ -54,6 +76,10 @@ func TestExitWorkerResumesAndRetriesWithoutRequestReplay(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("startup did not resume saved work")
 	}
+	stored := m.store.Read()
+	if stored.ExitSelection == nil || stored.ExitSelection.ID != "previous" || stored.RPCState.ExitChange == nil || stored.RPCState.ExitChange.NextAttemptAt.IsZero() {
+		t.Fatal("incomplete clear discarded previous selection or retry checkpoint")
+	}
 	if _, err := service.startExitWorker(ctx, executor); err == nil {
 		t.Fatal("started duplicate exit worker")
 	}
@@ -62,7 +88,7 @@ func TestExitWorkerResumesAndRetriesWithoutRequestReplay(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	result, err := m.operationAs(owner, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
-	if err != nil || result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || calls.Load() != 2 {
+	if err != nil || result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || calls.Load() != 2 || m.store.Read().ExitSelection != nil {
 		t.Fatal("worker did not retry and complete original operation", err, result, calls.Load())
 	}
 }

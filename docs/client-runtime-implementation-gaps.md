@@ -385,6 +385,16 @@ These use injected firewall/router boundaries. The native adapter must invoke
 release only after durable clear under its shared effect lock, and must recover
 that ordering across restart; host wiring and privileged OS evidence remain open.
 
+Exit-worker recovery now retains its lifetime after missing or partial apply
+observations when the durable context remains authorized. Previously completion
+rejected that evidence correctly, but propagated STALE_STATE and stopped the
+worker, requiring a restart to retry. The same operation and retry deadline now
+remain active without committing selection; context loss still enters containment.
+`TestExitWorkerResumesAndRetriesWithoutRequestReplay` reopens a pending clear from
+disk and covers native errors, absent observations and incomplete IPv6 results,
+retaining the previous selection until a later complete result. This is worker
+recovery evidence with an injected adapter, not native clear qualification.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,

@@ -125,7 +125,7 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 				return status, ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
 			}}
 			err = m.reconcileExitChange(ctx, executor)
-			if scenario == "partial" || scenario == "late_context_change" {
+			if scenario == "late_context_change" {
 				assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 			} else if scenario == "cancelled" {
 				if !errors.Is(err, context.Canceled) {

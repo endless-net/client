@@ -157,7 +157,11 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 				return nil
 			})
 			if errors.Is(checkpointErr, errRPCNoChange) {
-				return err
+				// The context is still authorized, but the adapter has not
+				// supplied complete enforcement evidence. Retain the original
+				// operation/deadline and let the worker retry, just as for an
+				// ambiguous Apply error. STALE_STATE would terminate the worker.
+				return nil
 			}
 			if checkpointErr != nil {
 				return checkpointErr
