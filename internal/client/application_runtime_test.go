@@ -177,7 +177,7 @@ func TestConnectorResolvesAndReportsUsingNativeNodeRPC(t *testing.T) {
 	cfg, m, _ := signedApplicationFixture(t, true)
 	reporter := &applicationReporterStub{}
 	_, handler := clientrpcconnect.NewConnectorServiceHandler(reporter)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != clientrpcconnect.ConnectorServiceReportApplicationDiscoveryProcedure || r.Header.Get("Content-Type") != "application/proto" {
 			t.Errorf("unexpected transport %s %s", r.URL.Path, r.Header.Get("Content-Type"))
 		}

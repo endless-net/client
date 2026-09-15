@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"net/url"
 	"runtime"
 	"slices"
 	"sort"
@@ -45,14 +44,19 @@ func (e *WireGuardEngine) configureApplicationsLocked(cfg Config, m clientapi.Re
 	if !selected {
 		return
 	}
+	httpClient, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), e.routerCfg.FirewallMark, nil)
+	if err != nil {
+		return
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	e.applicationCancel = cancel
 	m = cloneRegisterNodeResponse(m)
 	go func() {
+		defer httpClient.CloseIdleConnections()
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		for {
-			reportApplicationDiscoveries(ctx, cfg, m, net.DefaultResolver, applicationHTTPClient())
+			reportApplicationDiscoveries(ctx, cfg, m, net.DefaultResolver, httpClient)
 			select {
 			case <-ctx.Done():
 				return
@@ -63,7 +67,7 @@ func (e *WireGuardEngine) configureApplicationsLocked(cfg Config, m clientapi.Re
 }
 
 func applicationHTTPClient() *http.Client {
-	return &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return clientapi.NewControlPlaneHTTPClient(10*time.Second, nil)
 }
 
 func reportApplicationDiscoveries(ctx context.Context, cfg Config, m clientapi.RegisterNodeResponse, resolver applicationResolver, httpClient *http.Client) {
@@ -99,12 +103,11 @@ func reportApplicationDiscoveries(ctx context.Context, cfg Config, m clientapi.R
 			}
 		}
 		for _, endpoint := range cfg.ControlURLs() {
-			base, err := url.Parse(endpoint)
-			if err != nil || base.Host == "" || base.User != nil || base.Scheme != "https" && base.Scheme != "http" {
+			origin, err := rpcProfileOrigin(endpoint)
+			if err != nil {
 				continue
 			}
-			base.Path, base.RawPath, base.RawQuery, base.Fragment = "", "", "", ""
-			client := clientrpcconnect.NewConnectorServiceClient(httpClient, base.String())
+			client := clientrpcconnect.NewConnectorServiceClient(httpClient, origin)
 			request := connect.NewRequest(&clientrpc.ReportApplicationDiscoveryRequest{NodeId: m.Node.ID, ApplicationId: app.ID, PolicyHash: app.PolicyHash, Addresses: addresses, TtlSeconds: applicationDiscoveryLeaseSeconds})
 			request.Header().Set("Authorization", "Bearer "+cfg.NodeCredential)
 			if _, err := client.ReportApplicationDiscovery(ctx, request); err == nil {

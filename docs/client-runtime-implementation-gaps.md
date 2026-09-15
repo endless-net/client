@@ -426,8 +426,20 @@ socket setup and mark failures on all three paths;
 `TestWireGuardRelayReplacesConnectionsWhenUnderlayMarkChanges` authenticates to
 the reference relay before and after a mark change with an injected socket setter.
 Native SO_MARK/routing/firewall evidence, a pre-exit DNS source (including system
-stub forwarding), control-plane transport marking and startup restoration remain
+stub forwarding), complete control-plane transport marking and startup restoration remain
 open. These changes do not yet advertise an operational native exit adapter.
+
+Application connector reporting now uses an origin-scoped control HTTP client
+with the pinned clientapi TLS policy and the engine's firewall mark. The transport
+rejects unauthorized origins and Host overrides before dialing, closes rejected
+request bodies, disables implicit environment proxies when marked and retains
+the producer's no-redirect policy. Connector reports require HTTPS origins.
+`TestControlUnderlayRejectsUnauthorizedRequestsBeforeDial` covers the authority
+boundary; `TestControlUnderlayUsesMarkedTLSAndDoesNotFollowRedirects` exercises
+HTTPS requests with an injected marker; `TestControlUnderlayMarkFailureHasNoFallback`
+covers fail-closed dialing. Agent map/session and flow-report transport wiring,
+pre-exit DNS and native kernel evidence remain open. This is a connector transport
+increment, not native exit readiness.
 
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
