@@ -182,7 +182,8 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 		}()
 		options := []string(nil)
 		if flowLogs {
-			options = []string{"--exchange-timeout", "2s"}
+			// Allow the same TCP connection attempt to retransmit its first SYN.
+			options = []string{"--dial-timeout", "3s", "--exchange-timeout", "2s"}
 		}
 		ok = applicationProbe(t, binary, "", protocol, address(port), options...)
 		classified = true

@@ -131,14 +131,14 @@ func probeNetwork(network, address string) string {
 }
 
 func probeDNS(network, address, dnsServer string) error {
-	return probeDNSWithTimeout(network, address, dnsServer, time.Second)
+	return probeDNSWithTimeout(network, address, dnsServer, time.Second, time.Second)
 }
 
-func probeDNSWithTimeout(network, address, dnsServer string, exchangeTimeout time.Duration) error {
+func probeDNSWithTimeout(network, address, dnsServer string, dialTimeout, exchangeTimeout time.Duration) error {
 	if network != "tcp" && network != "udp" {
 		return errors.New("network must be tcp or udp")
 	}
-	dialer := net.Dialer{Timeout: time.Second, Resolver: resolver(dnsServer)}
+	dialer := net.Dialer{Timeout: dialTimeout, Resolver: resolver(dnsServer)}
 	conn, err := dialer.Dial(probeNetwork(network, address), address)
 	if err != nil {
 		return probeDialFailure(err)
@@ -302,9 +302,13 @@ func main() {
 	address := fs.String("address", "", "IPv4 address and port")
 	network := fs.String("network", "tcp", "tcp or udp for probes")
 	dnsServer := fs.String("dns", "", "explicit DNS resolver host:port")
+	dialTimeout := fs.Duration("dial-timeout", time.Second, "connection establishment deadline (at most 3s)")
 	exchangeTimeout := fs.Duration("exchange-timeout", time.Second, "application exchange deadline")
 	_ = fs.Parse(os.Args[1:])
 	var err error
+	if *dialTimeout <= 0 || *dialTimeout > 3*time.Second {
+		err = errors.New("dial-timeout must be greater than zero and at most 3s")
+	}
 	if *exchangeTimeout <= 0 || *exchangeTimeout > 5*time.Second {
 		err = errors.New("exchange-timeout must be greater than zero and at most 5s")
 	}
@@ -315,7 +319,7 @@ func main() {
 		}
 	case "probe":
 		if err == nil {
-			err = probeDNSWithTimeout(*network, *address, *dnsServer, *exchangeTimeout)
+			err = probeDNSWithTimeout(*network, *address, *dnsServer, *dialTimeout, *exchangeTimeout)
 		}
 	case "resolve":
 		if err == nil {

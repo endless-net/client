@@ -373,10 +373,10 @@ func exercisePeerDNS(t *testing.T, s *testcontrol.Server, nodes [2]*testclient.N
 func applicationProbe(t *testing.T, binary, namespace, protocol, address string, options ...string) bool {
 	t.Helper()
 	for attempt := 1; attempt <= 2; attempt++ {
-		// The probe's longest supported exchange timeout is five seconds. Leave
+		// The probe allows three seconds to dial and five to exchange. Leave
 		// enough parent-process headroom for Windows to flush and close inherited
 		// handles after the child reports the network outcome.
-		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		args := []string{"--mode", "probe", "--network", protocol, "--address", address}
 		started := time.Now()
 		output, err := packetProbeCommand(ctx, namespace, binary, append(args, options...)...).CombinedOutput()

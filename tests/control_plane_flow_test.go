@@ -118,7 +118,15 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id, protocol st
 		awaitPolicy("flow-policy-granted", beforeGrant)
 		ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
 		defer cancel()
+		trafficTick := time.NewTicker(200 * time.Millisecond)
+		defer trafficTick.Stop()
 		if err := testclient.Await(ctx, func() bool {
+			// Match the quiet observation's cadence, including lost-ack retries.
+			select {
+			case <-trafficTick.C:
+			case <-ctx.Done():
+				return false
+			}
 			if !fresh("24001") {
 				t.Fatal("consented traffic could not reach the reference peer")
 			}
@@ -154,7 +162,14 @@ func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id, protocol st
 	ctx, cancel := context.WithDeadline(t.Context(), expires.Add(10*time.Second))
 	defer cancel()
 	beforeExpiry, afterExpiry := 0, 0
+	trafficTick := time.NewTicker(200 * time.Millisecond)
+	defer trafficTick.Stop()
 	if err := testclient.Await(ctx, func() bool {
+		select {
+		case <-trafficTick.C:
+		case <-ctx.Done():
+			return false
+		}
 		started := time.Now()
 		if !fresh("24001") {
 			t.Fatalf("traffic failed during consent-expiry observation: probe_started_relative_to_expiry=%s probe_finished_relative_to_expiry=%s successful_before=%d successful_after=%d", started.Sub(expires).Round(time.Millisecond), time.Since(expires).Round(time.Millisecond), beforeExpiry, afterExpiry)

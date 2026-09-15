@@ -323,7 +323,7 @@ func TestConfiguredExchangeTimeoutAllowsDelayedReply(t *testing.T) {
 		_, err = conn.Write(body)
 		done <- err
 	}()
-	if err := probeDNSWithTimeout("tcp", listener.Addr().String(), "", 2*time.Second); err != nil {
+	if err := probeDNSWithTimeout("tcp", listener.Addr().String(), "", time.Second, 2*time.Second); err != nil {
 		t.Fatal("configured application exchange timeout rejected a timely reply")
 	}
 	if err := <-done; err != nil {
