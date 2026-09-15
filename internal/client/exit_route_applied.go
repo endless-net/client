@@ -10,8 +10,8 @@ import (
 	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
-// Confirm the direct default routes installed by the Linux router. This is not
-// firewall, policy-rule, peer-health or end-to-end exit evidence.
+// Confirm routes and policy selectors installed by the Linux router. This is not
+// firewall, peer-health or end-to-end exit evidence.
 func confirmExitDefaultRoutes(ctx context.Context, guard *linuxExitGuard, family api.ExitFamilyMode) error {
 	families := []string{"-4", "-6"}
 	switch family {
@@ -35,6 +35,47 @@ func confirmExitDefaultRoutes(ctx context.Context, guard *linuxExitGuard, family
 		}
 		if err := confirmExitPolicyRules(ctx, guard, ipFamily); err != nil {
 			return err
+		}
+	}
+	if family != api.ExitFamilyDualStack {
+		disabled := "-6"
+		if family == api.ExitFamilyIPv6Only {
+			disabled = "-4"
+		}
+		if err := confirmExitFamilyAbsent(ctx, guard, disabled); err != nil {
+			return err
+		}
+	}
+	return ctx.Err()
+}
+
+func confirmExitFamilyAbsent(ctx context.Context, guard *linuxExitGuard, family string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	raw, err := guard.run(ctx, "", "ip", "-j", "-N", family, "route", "show", "table", "all")
+	if err != nil {
+		return errors.New("disabled exit family route observation failed")
+	}
+	absent, err := exitRouteTableAbsent(raw, guard.mark)
+	if err != nil || !absent {
+		return errors.New("disabled exit family routes remain unconfirmed")
+	}
+	for _, suppress := range []bool{false, true} {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		table := strconv.FormatUint(uint64(guard.mark), 10)
+		if suppress {
+			table = "254"
+		}
+		raw, err := guard.run(ctx, "", "ip", family, "-j", "-N", "rule", "show", "table", table)
+		if err != nil {
+			return errors.New("disabled exit family rule observation failed")
+		}
+		absent, err := linuxPolicyRuleAbsent(raw, suppress)
+		if err != nil || !absent {
+			return errors.New("disabled exit family rules remain unconfirmed")
 		}
 	}
 	return ctx.Err()

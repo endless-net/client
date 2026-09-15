@@ -711,8 +711,13 @@ lookup also prevents opening: otherwise its default route could preempt the exit
 lookup despite a correctly ordered suppression rule. Injected engine coverage
 asserts containment for this conflict; parser cases reject changed/duplicate
 suppression selectors. These observations do not prove interference freedom
-from other tables' rules, firewall readback, disabled-family absence or end-to-end
-path health, and the production exit worker remains unwired.
+from other tables' rules, firewall readback or end-to-end path health, and the
+production exit worker remains unwired. Single-family selection additionally
+observes that the disabled family's dedicated table, table references and main
+suppression rule are absent before opening. Both family directions have injected
+absence/error/cancellation coverage; the engine test retains containment for a
+leftover disabled-family route. This does not prove native packet blocking for
+that family, which still requires firewall and platform qualification.
 
 UI-quit managed-policy increment: `service_rpc_lifecycle_policy.go` resolves
 KEEP_INTENT/DISCONNECT from the authenticated profile-recipient map. Reads,

@@ -16,7 +16,7 @@ import (
 )
 
 func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
-	for _, scenario := range []string{"new", "replace_ordinary", "route_failure", "guard_failure", "wrong_interface", "route_unobserved", "rule_unobserved", "main_rule_preempts"} {
+	for _, scenario := range []string{"new", "replace_ordinary", "route_failure", "guard_failure", "wrong_interface", "route_unobserved", "rule_unobserved", "main_rule_preempts", "disabled_family_remains"} {
 		t.Run(scenario, func(t *testing.T) {
 			cfg, source, key := signedApplicationFixture(t, false)
 			cfg.PrivateKey = testWireGuardEngineKey(1)
@@ -76,6 +76,12 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 			}
 			guard, err := newLinuxExitGuard(guardName, 51820, func(_ context.Context, batch, command string, args ...string) ([]byte, error) {
 				if command == "ip" {
+					if args[0] == "-6" || (args[0] == "-j" && args[2] == "-6") {
+						if scenario == "disabled_family_remains" {
+							return []byte(`[{"dst":"default","table":"51820"}]`), nil
+						}
+						return []byte(`[]`), nil
+					}
 					if len(args) > 3 && args[3] == "rule" {
 						if scenario == "rule_unobserved" {
 							return []byte(`[]`), nil
