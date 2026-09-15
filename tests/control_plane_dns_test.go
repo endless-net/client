@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"os/exec"
@@ -283,14 +284,16 @@ func dnsContractUpstream(t *testing.T, network string, truncated bool, address [
 	var conn net.PacketConn
 	var err error
 	if truncated {
-		// An ephemeral port available to one transport can be excluded for the
-		// other. Allocate both before publishing the fixture endpoint, releasing
-		// every partial pair. This retries setup only, never a Client exchange.
+		// Choose independent dynamic-port candidates instead of walking an OS
+		// allocation range excluded for the other transport. Allocate both before
+		// publishing the endpoint and release every partial pair. Retry only
+		// fixture setup, never a Client exchange.
 		for attempt := range 16 {
+			endpoint = netip.AddrPortFrom(netip.MustParseAddr(host), uint16(49152+rand.IntN(16384))).String()
 			if attempt%2 == 0 {
 				listener, err = net.Listen(strings.Replace(network, "udp", "tcp", 1), endpoint)
 				if err != nil {
-					t.Fatal("could not allocate DNS TCP fallback fixture")
+					continue
 				}
 				conn, err = net.ListenPacket(network, listener.Addr().String())
 				if err == nil {
@@ -300,7 +303,7 @@ func dnsContractUpstream(t *testing.T, network string, truncated bool, address [
 			} else {
 				conn, err = net.ListenPacket(network, endpoint)
 				if err != nil {
-					t.Fatal("could not allocate DNS UDP fixture")
+					continue
 				}
 				listener, err = net.Listen(strings.Replace(network, "udp", "tcp", 1), conn.LocalAddr().String())
 				if err == nil {
