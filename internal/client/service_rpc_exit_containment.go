@@ -51,7 +51,9 @@ func (m *ClientRPCMutations) containExitChange(ctx context.Context, id string, e
 		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
 	if proof.OperationID != id || proof.ProfileID != plan.ProfileID || proof.NodeID != plan.NodeID || proof.NetworkID != plan.NetworkID || !proof.IPv4Blocked || !proof.IPv6Blocked || !proof.ExitRoutesRemoved {
-		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		// Missing or misbound native evidence cannot complete containment, but
+		// it must not terminate the worker that owns its durable recovery.
+		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
 	_, err = m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
 		if !reflect.DeepEqual(cfg.RPCState.ExitChange, &plan) || rpcOperationTerminal(op.State) {

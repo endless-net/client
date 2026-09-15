@@ -395,6 +395,15 @@ disk and covers native errors, absent observations and incomplete IPv6 results,
 retaining the previous selection until a later complete result. This is worker
 recovery evidence with an injected adapter, not native clear qualification.
 
+Containment also keeps the worker alive while its adapter cannot supply a bound,
+complete proof. Rejected operation/profile/node/network identities, either
+unconfirmed IP family and unconfirmed route cleanup retain the journal and return
+UNAVAILABLE for retry. `TestExitContainmentRequiresBoundProofAndRecovers` covers
+each proof field; `TestExitWorkerRetriesUnconfirmedContainmentAfterRestart`
+resumes the containing phase from disk, retries without Apply or another RPC and
+retains the original failure cause until complete evidence arrives. This does
+not prove kernel containment or complete the native adapter.
+
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
 package pattern does not traverse nested modules. Full verification,

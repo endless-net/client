@@ -143,6 +143,68 @@ func TestExitWorkerCancellationRetainsDispatchedWork(t *testing.T) {
 	}
 }
 
+func TestExitWorkerRetriesUnconfirmedContainmentAfterRestart(t *testing.T) {
+	m, owner, profile := rpcConnectFixture(t)
+	op, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.ReconcileOperation(op.Id, func(cfg *Config, op *ipc.Operation) error {
+		op.State = ipc.OperationState_OPERATION_STATE_RUNNING
+		markExitContainment(cfg, cfg.RPCState.ExitChange, ipc.ErrorCode_ERROR_CODE_STALE_STATE, m.now())
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m, err = NewClientRPCMutations(reopenRPCStoreFromDisk(t, m.store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewClientRPCService(m, nil)
+	ctx, cancel := context.WithCancel(t.Context())
+	var calls atomic.Int32
+	first := make(chan struct{})
+	executor := clientRPCExitExecutor{Lock: &sync.Mutex{},
+		Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+			t.Error("containment recovery redispatched application")
+			return nil, 0, errors.New("unexpected apply")
+		},
+		Contain: func(_ context.Context, plan clientRPCExitChange) (clientRPCExitContainment, error) {
+			if plan.OperationID != op.Id || !plan.Containing || plan.FailureCode != ipc.ErrorCode_ERROR_CODE_STALE_STATE {
+				t.Error("containment retry changed its durable cause or identity")
+			}
+			proof := clientRPCExitContainment{OperationID: plan.OperationID, ProfileID: plan.ProfileID, NodeID: plan.NodeID, NetworkID: plan.NetworkID, IPv4Blocked: true, IPv6Blocked: true, ExitRoutesRemoved: true}
+			if calls.Add(1) == 1 {
+				proof.ExitRoutesRemoved = false
+				close(first)
+			}
+			return proof, nil
+		},
+	}
+	done, err := service.startExitWorker(ctx, executor)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cancel(); <-done })
+	select {
+	case <-first:
+	case <-time.After(3 * time.Second):
+		t.Fatal("startup did not resume containment")
+	}
+	if retained := m.store.Read().RPCState.ExitChange; retained == nil || !retained.Containing {
+		t.Fatal("unconfirmed containment discarded its durable barrier")
+	}
+	deadline := time.Now().Add(8 * time.Second)
+	for m.store.Read().RPCState.ExitChange != nil && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	result, err := m.operationAs(owner, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
+	if err != nil || result.State != ipc.OperationState_OPERATION_STATE_FAILED || result.GetFailure().GetCode() != ipc.ErrorCode_ERROR_CODE_STALE_STATE || calls.Load() != 2 || m.store.Read().RPCState.ExitChange != nil {
+		t.Fatal("worker did not retry containment and preserve the original failure", err, result)
+	}
+}
+
 func TestExitWorkerRequiresCompleteAdapter(t *testing.T) {
 	m, _, _ := rpcConnectFixture(t)
 	service := NewClientRPCService(m, nil)

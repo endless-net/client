@@ -36,21 +36,31 @@ func TestExitContainmentRequiresBoundProofAndRecovers(t *testing.T) {
 		t.Fatal(err)
 	}
 	executor.Apply = nil // Recovery must not require or redispatch Apply.
-	for _, mode := range []string{"partial", "wrong_id", "complete"} {
+	for _, mode := range []string{"ipv4", "ipv6", "routes", "wrong_id", "wrong_profile", "wrong_node", "wrong_network", "complete"} {
 		executor.Contain = func(_ context.Context, plan clientRPCExitChange) (clientRPCExitContainment, error) {
 			contains++
 			proof := clientRPCExitContainment{OperationID: plan.OperationID, ProfileID: plan.ProfileID, NodeID: plan.NodeID, NetworkID: plan.NetworkID, IPv4Blocked: true, IPv6Blocked: true, ExitRoutesRemoved: true}
-			if mode == "partial" {
+			switch mode {
+			case "ipv4":
+				proof.IPv4Blocked = false
+			case "ipv6":
 				proof.IPv6Blocked = false
-			}
-			if mode == "wrong_id" {
+			case "routes":
+				proof.ExitRoutesRemoved = false
+			case "wrong_id":
 				proof.OperationID = "different"
+			case "wrong_profile":
+				proof.ProfileID = "different"
+			case "wrong_node":
+				proof.NodeID = "different"
+			case "wrong_network":
+				proof.NetworkID = "different"
 			}
 			return proof, nil
 		}
 		err = m.reconcileExitChange(t.Context(), executor)
 		if mode != "complete" {
-			assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 			if m.store.Read().RPCState.ExitChange == nil {
 				t.Fatal("invalid proof released guard")
 			}
@@ -59,7 +69,7 @@ func TestExitContainmentRequiresBoundProofAndRecovers(t *testing.T) {
 		}
 	}
 	result, err := m.operationAs(owner, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
-	if err != nil || result.State != ipc.OperationState_OPERATION_STATE_CANCELLED || result.GetFailure().GetReasonKey() != "exit_superseded_by_disconnect" || m.store.Read().RPCState.ExitChange != nil || applies != 1 || contains != 4 {
+	if err != nil || result.State != ipc.OperationState_OPERATION_STATE_CANCELLED || result.GetFailure().GetReasonKey() != "exit_superseded_by_disconnect" || m.store.Read().RPCState.ExitChange != nil || applies != 1 || contains != 9 {
 		t.Fatal("containment recovery lost cause or redispatched", err, result)
 	}
 	if m.store.Read().ConnectionIntent.Reason != "user_disconnect" {
