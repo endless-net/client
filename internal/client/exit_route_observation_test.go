@@ -116,9 +116,20 @@ func TestExitPolicyCleanupRequiresEveryRuleObservation(t *testing.T) {
 }
 
 func TestExitRouteObservationRejectsAmbiguousOutput(t *testing.T) {
-	for _, raw := range []string{``, `null`, `{}`, `[null]`, `[{}]`, `[{"dst":"default","table":"custom"}]`, `[{"dst":"default","table":51820}]`, `[] []`, strings.Repeat(" ", (1<<20)+1)} {
+	for _, raw := range []string{``, `null`, `{}`, `[null]`, `[{}]`, `[{"dst":"default","table":"custom"}]`, `[{"dst":"default","table":51820}]`, `[{"dst":"default","table":null}]`, `[{"dst":"default","table":""}]`, `[] []`, strings.Repeat(" ", (1<<20)+1)} {
 		if absent, err := exitRouteTableAbsent([]byte(raw), 51820); absent || err == nil {
 			t.Fatal("invalid route output proved cleanup")
+		}
+	}
+}
+
+func TestExitRouteObservationDistinguishesOmittedMainTable(t *testing.T) {
+	for _, raw := range []string{`[{"dst":"default"}]`, `[{"dst":"default","table":"254"}]`} {
+		if absent, err := exitRouteTableAbsent([]byte(raw), 254); err != nil || absent {
+			t.Fatal("main route was not observed", err)
+		}
+		if absent, err := exitRouteTableAbsent([]byte(raw), 51820); err != nil || !absent {
+			t.Fatal("main route was assigned to the dedicated table", err)
 		}
 	}
 }

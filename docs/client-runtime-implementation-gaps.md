@@ -503,6 +503,12 @@ limit. `TestExitCommandOutputCancelsOnOverflowWithoutAcceptingTruncation` checks
 single-chunk and incremental overflow, cancellation and retained-data bounds;
 process termination behavior still needs platform qualification.
 
+Route observation distinguishes an omitted main-table field from an explicitly
+null or empty table value. The latter is invalid and cannot prove cleanup.
+`TestExitRouteObservationDistinguishesOmittedMainTable` checks implicit and
+explicit main-table routes against both the main and dedicated table; malformed
+table values are covered by the ambiguous-output rejection test.
+
 Linux exit clear now checks the actual IPv4 and IPv6 route dumps before releasing
 its owned firewall guard. `exit_route_observation.go` queries all tables with
 `ip -j -N` so a missing dedicated table is an empty observation, while command

@@ -52,8 +52,8 @@ func exitRouteTableAbsent(raw []byte, table uint32) (bool, error) {
 		return false, invalid
 	}
 	var routes []struct {
-		Destination string `json:"dst"`
-		Table       string `json:"table"`
+		Destination string          `json:"dst"`
+		Table       json.RawMessage `json:"table"`
 	}
 	if json.Unmarshal(raw, &routes) != nil || routes == nil {
 		return false, invalid
@@ -66,9 +66,13 @@ func exitRouteTableAbsent(raw []byte, table uint32) (bool, error) {
 		// iproute2 omits the main table unless details are requested. With -N,
 		// every explicit table is printed as a numeric string.
 		id := uint64(254)
-		if route.Table != "" {
+		if route.Table != nil {
+			var label string
+			if json.Unmarshal(route.Table, &label) != nil || label == "" {
+				return false, invalid
+			}
 			var err error
-			id, err = strconv.ParseUint(route.Table, 10, 32)
+			id, err = strconv.ParseUint(label, 10, 32)
 			if err != nil || id == 0 {
 				return false, invalid
 			}
