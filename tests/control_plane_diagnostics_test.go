@@ -65,19 +65,12 @@ func TestControlPlaneDiagnosticsExport(t *testing.T) {
 	}
 	s.SetUnavailable(false)
 	n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ControlState == ipc.ControlState_CONTROL_STATE_READY })
-	disconnect := &ipc.DisconnectResponse{}
-	status := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ActiveProfileId == profile })
-	if err := n.NativeService("disconnect", disconnect, testclient.NativeMutationArguments("00000000-0000-4000-8000-000000000001", status)...); err != nil {
-		t.Fatal(err)
-	}
-	if n.AwaitNativeOperation(disconnect.GetOperation().GetId()).State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
-		t.Fatal("disconnect failed")
-	}
+	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
 	check(true)
 	n.Stop()
 	n.Start()
 	check(true)
-	status = n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ActiveProfileId == profile })
+	status := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ActiveProfileId == profile })
 	var args []string
 	var op *ipc.Operation
 	for _, requestID := range []string{"00000000-0000-4000-8000-000000000002", "a5040000-0000-4000-8000-000000000002", "a5040000-0000-4000-8000-000000000003"} {

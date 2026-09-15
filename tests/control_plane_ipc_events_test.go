@@ -21,6 +21,31 @@ type nativeEventCursor struct {
 	instance           string
 }
 
+func nativeEventAdmissionPending(received bool, err error) bool {
+	return !received && connect.CodeOf(err) == connect.CodeResourceExhausted &&
+		rpc.FailureFromError(err).GetCode() == ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED
+}
+
+func TestNativeEventAdmissionNeverRestartsAcceptedStream(t *testing.T) {
+	capacity := rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+	for _, tc := range []struct {
+		received bool
+		err      error
+		pending  bool
+	}{
+		{false, capacity, true},
+		{true, capacity, false},
+		{false, nil, false},
+		{false, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED), false},
+		{false, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE), false},
+		{false, context.Canceled, false},
+	} {
+		if nativeEventAdmissionPending(tc.received, tc.err) != tc.pending {
+			t.Fatal("event admission retry crossed its pre-snapshot capacity boundary")
+		}
+	}
+}
+
 func TestNativeEventCursorRejectsBrokenStreams(t *testing.T) {
 	for _, mode := range []string{"valid", "gap", "duplicate", "instance", "revision", "timestamp", "snapshot", "failure", "empty"} {
 		t.Run(mode, func(t *testing.T) {
@@ -121,7 +146,7 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 		cancel  context.CancelFunc
 		cursor  nativeEventCursor
 	}
-	subscribe := func() *subscription {
+	subscribe := func(waitForReleasedSlot bool) *subscription {
 		t.Helper()
 		consumer, err := local.NewClient(endpoint)
 		if err != nil {
@@ -135,21 +160,36 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 			defer close(events)
 			defer consumer.Close()
 			defer close(failure)
-			stream, err := consumer.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
-			if err != nil {
-				failure <- err
-				return
-			}
-			defer func() { _ = stream.Close() }()
-			for stream.Receive() {
-				event := proto.Clone(stream.Msg()).(*ipc.WatchEventsResponse)
+			// Client cancellation can finish before the server removes its slot.
+			// Wait only on admission rejection, never restart an accepted stream.
+			deadline := time.Now().Add(3 * time.Second)
+			for {
+				received := false
+				stream, err := consumer.WatchEvents(ctx, connect.NewRequest(&ipc.WatchEventsRequest{}))
+				if err == nil {
+					for stream.Receive() {
+						received = true
+						event := proto.Clone(stream.Msg()).(*ipc.WatchEventsResponse)
+						select {
+						case events <- event:
+						case <-ctx.Done():
+							_ = stream.Close()
+							return
+						}
+					}
+					err = stream.Err()
+					_ = stream.Close()
+				}
+				if !waitForReleasedSlot || !nativeEventAdmissionPending(received, err) || time.Now().After(deadline) || ctx.Err() != nil {
+					failure <- err
+					return
+				}
 				select {
-				case events <- event:
+				case <-time.After(20 * time.Millisecond):
 				case <-ctx.Done():
 					return
 				}
 			}
-			failure <- stream.Err()
 		}()
 		t.Cleanup(func() {
 			cancel()
@@ -199,12 +239,12 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 	// that budget, then prove excess admission fails without disturbing them.
 	concurrent := make([]*subscription, 4)
 	for i := range concurrent {
-		concurrent[i] = subscribe()
+		concurrent[i] = subscribe(true)
 	}
 	for _, sub := range concurrent {
 		awaitState(sub, false)
 	}
-	excess := subscribe()
+	excess := subscribe(false)
 	select {
 	case <-excess.done:
 	case <-time.After(3 * time.Second):
@@ -228,7 +268,7 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 	for _, sub := range concurrent {
 		stop(sub)
 	}
-	stream, second := subscribe(), subscribe()
+	stream, second := subscribe(true), subscribe(true)
 	awaitState(stream, false)
 	awaitState(second, false)
 	runNativeControlMutation(t, n, "disconnect", "00000000-0000-4000-8000-000000000001")
@@ -254,7 +294,7 @@ func TestControlPlaneIPCEvents(t *testing.T) {
 		return v.NodeId == id && v.GetStoredState().GetCachedMapValid() && v.UserDisconnected
 	})
 	cliEvents(true)
-	stream = subscribe()
+	stream = subscribe(true)
 	first := awaitState(stream, true)
 	if first.Sequence != 1 || stream.cursor.instance == previousInstance {
 		t.Fatal("new host stream did not begin with a fresh snapshot and instance")

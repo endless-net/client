@@ -574,9 +574,11 @@ func exerciseNativeTrafficScenario(t *testing.T, ipv6 bool, protocol string, flo
 	}
 	// Keep the return path usable if a defective Client reopened its device;
 	// a stale fixture endpoint must not turn accidental connectivity into denial.
-	diagnostics := &native.GetDiagnosticsResponse{}
-	if n.NativeService("diagnostics", diagnostics, "--profile-id", trustBaseline.ActiveProfileId) != nil {
-		t.Fatal("native trust confirmation tunnel inspection unavailable")
+	diagnostics, inspectionErr := retryNativeDiagnosticsRead(func(response *native.GetDiagnosticsResponse) error {
+		return n.NativeService("diagnostics", response, "--profile-id", trustBaseline.ActiveProfileId)
+	})
+	if inspectionErr != nil {
+		t.Fatalf("native trust confirmation tunnel inspection unavailable: %v", inspectionErr)
 	}
 	inspected := diagnostics.GetDiagnostics().GetStatus()
 	if inspected.GetNodeId() != initial.NodeId || inspected.GetActiveProfileId() != trustBaseline.ActiveProfileId || inspected.GetMapRevision() < statusResponse.GetStatus().GetMapRevision() {
