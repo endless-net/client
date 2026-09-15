@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"syscall"
@@ -286,9 +287,13 @@ func TestProbeExchangesApplicationPayload(t *testing.T) {
 func commonTCPUDPPort(t *testing.T) (net.Listener, net.PacketConn) {
 	t.Helper()
 	for range 100 {
-		tcp, err := net.Listen("tcp4", "127.0.0.1:0")
+		// TCP auto-allocation can repeatedly walk a range excluded for UDP
+		// on Windows. Keep the shared-port assertion but vary candidates
+		// independently across the dynamic range for both transports.
+		address := fmt.Sprintf("127.0.0.1:%d", 49152+rand.IntN(16384))
+		tcp, err := net.Listen("tcp4", address)
 		if err != nil {
-			t.Fatal(err)
+			continue
 		}
 		udp, err := net.ListenPacket("udp4", tcp.Addr().String())
 		if err == nil {
