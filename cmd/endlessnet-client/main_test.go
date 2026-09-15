@@ -1403,7 +1403,7 @@ func TestUpdatePublishedEndpointRetriesUnconfirmedHTTP200(t *testing.T) {
 	}
 
 	state := &endpointUpdateState{}
-	confirmed, err := updatePublishedEndpoint(configPath, time.Second, candidates, true, 2*time.Minute, state, 0, now)
+	confirmed, err := updatePublishedEndpoint(t.Context(), nil, configPath, time.Second, candidates, true, 2*time.Minute, state, 0, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1421,7 +1421,7 @@ func TestUpdatePublishedEndpointRetriesUnconfirmedHTTP200(t *testing.T) {
 		t.Fatalf("unconfirmed endpoint state = %#v", state)
 	}
 
-	confirmed, err = updatePublishedEndpoint(configPath, time.Second, candidates, true, 2*time.Minute, state, 0, now.Add(30*time.Second))
+	confirmed, err = updatePublishedEndpoint(t.Context(), nil, configPath, time.Second, candidates, true, 2*time.Minute, state, 0, now.Add(30*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1435,7 +1435,7 @@ func TestUpdatePublishedEndpointRetriesUnconfirmedHTTP200(t *testing.T) {
 		t.Fatalf("confirmed endpoint remained pending: %#v", state)
 	}
 
-	confirmed, err = updatePublishedEndpoint(configPath, time.Second, candidates, true, 2*time.Minute, state, 0, now.Add(45*time.Second))
+	confirmed, err = updatePublishedEndpoint(t.Context(), nil, configPath, time.Second, candidates, true, 2*time.Minute, state, 0, now.Add(45*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}

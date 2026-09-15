@@ -38,17 +38,21 @@ func TestAgentDoesNotBypassRefusedEngineControlTransport(t *testing.T) {
 	if !errors.Is(err, failure) || engine.calls != 1 {
 		t.Fatalf("factory calls=%d error=%v", engine.calls, err)
 	}
+	_, err = updatePublishedEndpoint(t.Context(), engine, path, time.Second, []string{"198.51.100.1:51820"}, false, 0, &endpointUpdateState{}, 0, time.Now())
+	if !errors.Is(err, failure) || engine.calls != 2 {
+		t.Fatalf("endpoint factory calls=%d error=%v", engine.calls, err)
+	}
 }
 
 func TestAgentIterationCancellationStopsControlResponseBody(t *testing.T) {
-	for _, blockedPath := range []string{"/server-key", "/maps/node-1/stream"} {
+	for _, blockedPath := range []string{"/server-key", "/maps/node-1/stream", "/nodes/node-1/endpoint"} {
 		t.Run(blockedPath, func(t *testing.T) {
 			key := testMapSigningKey(t)
 			projection := testNetworkMapWithRevision(t, key, "net-1", "node-1", 14)
 			started, stopped := make(chan struct{}), make(chan struct{})
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == blockedPath {
-					if blockedPath == "/server-key" {
+					if blockedPath != "/maps/node-1/stream" {
 						w.Header().Set("Content-Type", "application/json")
 					} else {
 						w.Header().Set("Content-Type", "application/x-ndjson")
@@ -70,7 +74,9 @@ func TestAgentIterationCancellationStopsControlResponseBody(t *testing.T) {
 			defer server.Close()
 			cfg := client.Config{ControlPlaneURLs: []string{server.URL}, PrivateKey: "synthetic-private-key", NodeID: "node-1", NodeCredential: "synthetic-credential", NetworkID: "net-1", MapSigningTrust: testSigningTrustBundle(t, testMapSigningPublicKey(t, projection.MapSignature))}
 			cacheNetworkMap(&cfg, projection)
-			cfg.NodeApprovalState = "pending" // No online heartbeat before the stream.
+			if blockedPath != "/nodes/node-1/endpoint" {
+				cfg.NodeApprovalState = "pending"
+			} // No online heartbeat before the stream.
 			path := filepath.Join(t.TempDir(), "client.json")
 			if err := client.SaveConfig(path, cfg); err != nil {
 				t.Fatal(err)
@@ -83,6 +89,11 @@ func TestAgentIterationCancellationStopsControlResponseBody(t *testing.T) {
 			defer cancel()
 			result := make(chan error, 1)
 			go func() {
+				if blockedPath == "/nodes/node-1/endpoint" {
+					_, callErr := updatePublishedEndpoint(ctx, nil, path, 30*time.Second, []string{"198.51.100.1:51820"}, false, 0, &endpointUpdateState{}, 0, time.Now())
+					result <- callErr
+					return
+				}
 				_, _, callErr := runAgentIteration(ctx, agentIterationOptions{ConfigPath: path, Timeout: 30 * time.Second, FromRevision: 14})
 				result <- callErr
 			}()

@@ -491,8 +491,16 @@ covers these construction boundaries without native socket operations. The calle
 is checked by `TestAgentDoesNotBypassRefusedEngineControlTransport`: an engine
 refusal is returned before trust or map requests rather than bypassed. The caller
 still must serialize runtime effects and cancel requests before identity changes.
-Initial protected startup/recovery, credential renewal handover, separate endpoint
-publication/session clients, pre-exit DNS and native kernel evidence remain open.
+Initial protected startup/recovery, credential renewal handover, session clients,
+pre-exit DNS and native kernel evidence remain open.
+
+Separate endpoint publication (manual and discovery paths) now uses the engine's
+control client and runtime cancellation, closes idle connections and checks
+cancellation before persisting the returned map. The control-body cancellation
+test also blocks an endpoint response and verifies the saved configuration is
+unchanged; the engine-refusal test checks endpoint publication cannot bypass a
+refused protected transport. Remote endpoint commits that precede cancellation
+still require reconciliation; cancellation is not evidence of remote rollback.
 
 The shared workflow transport closes request bodies rejected because the runtime
 was already cancelled, without reading the payload or recording a remote attempt.

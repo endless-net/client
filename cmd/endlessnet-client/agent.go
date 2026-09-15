@@ -159,7 +159,10 @@ func agentEndpointCandidates(endpoint, endpointFile string, listenPort int) ([]s
 	return candidates, len(candidates) > 0, nil
 }
 
-func updatePublishedEndpoint(configPath string, timeout time.Duration, candidates []string, generated bool, ttl time.Duration, state *endpointUpdateState, debounce time.Duration, now time.Time) (updated bool, resultErr error) {
+func updatePublishedEndpoint(ctx context.Context, engine agentWireGuard, configPath string, timeout time.Duration, candidates []string, generated bool, ttl time.Duration, state *endpointUpdateState, debounce time.Duration, now time.Time) (updated bool, resultErr error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	cfg, err := client.LoadConfig(configPath)
 	if err != nil {
 		return false, err
@@ -199,10 +202,23 @@ func updatePublishedEndpoint(configPath string, timeout time.Duration, candidate
 		}
 	}
 	api := apiFromConfig(cfg)
+	if engine != nil {
+		api.HTTPClient, err = engine.ControlPlaneHTTPClient(cfg)
+		if err != nil {
+			return false, err
+		}
+	}
 	api.HTTPClient.Timeout = timeout + 5*time.Second
-	transport := &agentCredentialTransport{base: api.HTTPClient.Transport, nodeID: cfg.NodeID, credential: cfg.NodeCredential}
+	if closer, ok := api.HTTPClient.Transport.(interface{ CloseIdleConnections() }); ok {
+		defer closer.CloseIdleConnections()
+	}
+	transport := &agentCredentialTransport{base: enrollmentContextTransport{lifetime: ctx, base: api.HTTPClient.Transport}, nodeID: cfg.NodeID, credential: cfg.NodeCredential}
 	api.HTTPClient.Transport = transport
 	defer func() {
+		if ctx.Err() != nil {
+			resultErr = ctx.Err()
+			return
+		}
 		if resultErr != nil && transport.terminal != nil {
 			resultErr = transport.terminal
 		}
@@ -216,6 +232,9 @@ func updatePublishedEndpoint(configPath string, timeout time.Duration, candidate
 	}
 	if !changed {
 		return false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
 	}
 	if err := client.SaveConfig(configPath, cfg); err != nil {
 		return false, err
@@ -625,7 +644,7 @@ func cmdAgent(args []string) error {
 				if candidateErr != nil {
 					err = candidateErr
 				} else if len(candidates) > 0 {
-					_, err = updatePublishedEndpoint(*configPath, timeout, candidates, generated, endpointTTL, &endpointState, endpointUpdateDebounce, time.Now().UTC())
+					_, err = updatePublishedEndpoint(ctx, wireGuard, *configPath, timeout, candidates, generated, endpointTTL, &endpointState, endpointUpdateDebounce, time.Now().UTC())
 				}
 			}
 			if err == nil && !skipForDisconnected && !skipForRecovery {
@@ -634,7 +653,7 @@ func cmdAgent(args []string) error {
 			if err == nil && !skipForDisconnected && !skipForRecovery && !*offline && !manualEndpoint {
 				discovery := wireGuard.LastEndpointDiscovery()
 				if len(discovery.Candidates) > 0 {
-					_, err = updatePublishedEndpoint(*configPath, timeout, discovery.Candidates, true, endpointTTL, &endpointState, endpointUpdateDebounce, time.Now().UTC())
+					_, err = updatePublishedEndpoint(ctx, wireGuard, *configPath, timeout, discovery.Candidates, true, endpointTTL, &endpointState, endpointUpdateDebounce, time.Now().UTC())
 					if err == nil {
 						var applied bool
 						snapshot, applied, err = applyAgentPublishedMap(ctx, iteration, snapshot)
