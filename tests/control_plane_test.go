@@ -289,8 +289,10 @@ func TestControlPlaneLifecycle(t *testing.T) {
 		m.Peers = []api.Peer{{ID: "test-peer", Hostname: "peer", PublicKey: public, AllowedIPs: []string{"100.90.0.20/32"}, ACLRestricted: true, ACLGrants: []api.ACLGrant{{DestinationCIDRs: []string{"100.90.0.20/32"}, AllowedPorts: []api.ACLPort{{Protocol: "tcp", Port: 443}}}}}}
 	})
 	status := n.AwaitNativeStatus(func(v *native.Status) bool { return v.PeerCount == 1 && v.MapRevision >= 2 })
-	diagnostics := &native.GetDiagnosticsResponse{}
-	if err := n.NativeService("diagnostics", diagnostics, "--profile-id", status.ActiveProfileId); err != nil {
+	diagnostics, err := retryNativeDiagnosticsRead(func(response *native.GetDiagnosticsResponse) error {
+		return n.NativeService("diagnostics", response, "--profile-id", status.ActiveProfileId)
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if diagnostics.Diagnostics == nil || len(diagnostics.Diagnostics.Peers) != 1 || diagnostics.Diagnostics.Peers[0].Id != "test-peer" {
@@ -460,8 +462,10 @@ func TestControlPlaneDNSProjection(t *testing.T) {
 	status := n.AwaitNativeStatus(func(v *native.Status) bool {
 		return v.NodeId == id && v.UserDisconnected && v.GetStoredState().GetCachedMapValid()
 	})
-	diagnostics := &native.GetDiagnosticsResponse{}
-	if err := n.NativeService("diagnostics", diagnostics, "--profile-id", status.ActiveProfileId); err != nil {
+	diagnostics, err := retryNativeDiagnosticsRead(func(response *native.GetDiagnosticsResponse) error {
+		return n.NativeService("diagnostics", response, "--profile-id", status.ActiveProfileId)
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	dns := diagnostics.GetDiagnostics().GetDns()

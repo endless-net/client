@@ -35,13 +35,7 @@ func TestControlPlaneNativeCachedMapExpiry(t *testing.T) {
 			})
 			// Bootstrap enrollment does not accept a durable native connection
 			// intent. Establish that precondition before testing its preservation.
-			connected := &ipc.ConnectResponse{}
-			if err := n.NativeService("connect", connected, testclient.NativeMutationArguments("71e10000-0000-4000-8000-000000000001", status)...); err != nil {
-				t.Fatal(err)
-			}
-			if n.AwaitNativeOperation(connected.GetOperation().GetId()).GetState() != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
-				t.Fatal("cache expiry fixture did not establish native connected intent")
-			}
+			runNativeControlMutation(t, n, "connect", "71e10000-0000-4000-8000-000000000001")
 			status = n.AwaitNativeStatus(func(v *ipc.Status) bool {
 				return v.NodeId == status.NodeId && v.ActiveProfileId == status.ActiveProfileId && !v.UserDisconnected &&
 					v.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED && v.GetStoredState().GetCachedMapValid()

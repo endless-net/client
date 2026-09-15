@@ -145,13 +145,6 @@ func TestControlPlaneDiagnosticsExport(t *testing.T) {
 	if !bytes.Equal(download(), data) {
 		t.Fatal("archive changed across restart")
 	}
-	connected := &ipc.ConnectResponse{}
-	status = n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ActiveProfileId == profile })
-	if err := n.NativeService("connect", connected, testclient.NativeMutationArguments("00000000-0000-4000-8000-000000000003", status)...); err != nil {
-		t.Fatal(err)
-	}
-	if n.AwaitNativeOperation(connected.GetOperation().GetId()).State != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
-		t.Fatal("connect failed")
-	}
+	runNativeControlMutation(t, n, "connect", "00000000-0000-4000-8000-000000000003")
 	check(false)
 }
