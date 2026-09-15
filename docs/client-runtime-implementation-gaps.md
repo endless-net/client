@@ -502,6 +502,16 @@ unchanged; the engine-refusal test checks endpoint publication cannot bypass a
 refused protected transport. Remote endpoint commits that precede cancellation
 still require reconciliation; cancellation is not evidence of remote rollback.
 
+The private native-adapter primitive `restoreExitUnderlay` can now restore closed
+containment for a durable selection before fetching a fresh map. It requires a
+stopped engine, matching selection/node/network and valid control origins. The
+pending identity survives failed containment so a retry cannot substitute another
+credential or origin. Control access becomes available only after containment
+and the final cancellation check; no routes or applied selection are published.
+`TestExitUnderlayRestoreBindsOnlyAfterContainment` covers failure, cancellation,
+retry and identity replacement. The host startup sequence and native executor
+still do not call this primitive; protected startup is not accepted as complete.
+
 The shared workflow transport closes request bodies rejected because the runtime
 was already cancelled, without reading the payload or recording a remote attempt.
 `TestEnrollmentCancelledBeforeRequestClosesBodyWithoutAttempt` verifies body

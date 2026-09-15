@@ -86,6 +86,7 @@ type WireGuardEngine struct {
 	exitGuard         *linuxExitGuard
 	exitSelection     *ClientExitSelection
 	exitConfig        Config
+	exitRestoreConfig Config
 	peerACLFilter     *peerACLFilter
 	sharingFilter     *sharingPacketFilter
 	applicationCancel context.CancelFunc
@@ -237,6 +238,7 @@ func (e *WireGuardEngine) releaseClearedExit(ctx context.Context, guard *linuxEx
 		return errors.Join(err, guard.Contain(context.WithoutCancel(ctx)))
 	}
 	e.exitGuard = nil
+	e.exitRestoreConfig = Config{}
 	e.exitSelection = nil
 	e.exitFilter = nil
 	return nil

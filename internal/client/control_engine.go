@@ -15,7 +15,7 @@ func (e *WireGuardEngine) ControlPlaneHTTPClient(cfg Config) (*http.Client, erro
 	var mark uint32
 	if e.exitGuard != nil {
 		bound := e.exitConfig
-		if bound.NodeID == "" || bound.NodeCredential == "" || cfg.NodeID != bound.NodeID || cfg.NodeCredential != bound.NodeCredential || cfg.NetworkID != bound.NetworkID || !slices.Equal(cfg.ControlURLs(), bound.ControlURLs()) {
+		if bound.NodeID == "" || bound.NodeCredential == "" || !sameExitControlIdentity(cfg, bound) {
 			return nil, errors.New("control underlay does not match protected runtime identity")
 		}
 		mark = e.exitGuard.mark
@@ -23,4 +23,8 @@ func (e *WireGuardEngine) ControlPlaneHTTPClient(cfg Config) (*http.Client, erro
 		return nil, errors.New("control underlay requires protected exit recovery")
 	}
 	return newControlUnderlayHTTPClient(cfg.ControlURLs(), mark, nil)
+}
+
+func sameExitControlIdentity(a, b Config) bool {
+	return a.NodeID == b.NodeID && a.NodeCredential == b.NodeCredential && a.NetworkID == b.NetworkID && slices.Equal(a.ControlURLs(), b.ControlURLs())
 }
