@@ -3,8 +3,10 @@ package client
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -115,7 +117,9 @@ func TestTUNFlowProducerRetriesThroughTLSProtobuf(t *testing.T) {
 	_, handler := clientrpcconnect.NewFlowLogServiceHandler(service)
 	endpoint := httptest.NewTLSServer(handler)
 	defer endpoint.Close()
-	client := clientrpcconnect.NewFlowLogServiceClient(endpoint.Client(), endpoint.URL)
+	transport := newRotatingControlClient(endpoint.Client())
+	defer transport.replace(nil)
+	client := clientrpcconnect.NewFlowLogServiceClient(transport, endpoint.URL)
 	c := &flowCollector{}
 	now := time.Now()
 	c.policy(flowPolicy(now, 7), now)
@@ -139,6 +143,14 @@ func TestTUNFlowProducerRetriesThroughTLSProtobuf(t *testing.T) {
 		case request := <-service.reports:
 			if i == 0 {
 				first = request
+				// A network-only transport replacement must retain the same worker,
+				// durable consent scope and immutable unacknowledged window.
+				replacement, replaceErr := newControlUnderlayHTTPClient([]string{endpoint.URL}, 51820, func(syscall.RawConn, uint32) error { return nil })
+				if replaceErr != nil {
+					t.Fatal(replaceErr)
+				}
+				replacement.Transport.(*controlUnderlayTransport).base.TLSClientConfig.RootCAs = endpoint.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs
+				transport.replace(replacement)
 			} else if !proto.Equal(first, request) {
 				t.Fatal("retry changed immutable flow")
 			}

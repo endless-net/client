@@ -92,6 +92,8 @@ type WireGuardEngine struct {
 	flows             *flowCollector
 	flowCancel        context.CancelFunc
 	flowKey           string
+	flowMark          uint32
+	flowTransport     *rotatingControlClient
 	flowDone          chan struct{}
 }
 

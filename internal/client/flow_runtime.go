@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
-	"net/url"
 	"time"
 
 	"connectrpc.com/connect"
@@ -18,7 +17,20 @@ import (
 func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.RegisterNodeResponse) {
 	key := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%q", []string{network.Node.ID, cfg.NodeCredential, fmt.Sprint(cfg.ControlURLs())}))))
 	if e.flowCancel != nil && e.flowKey == key {
-		return
+		select {
+		case <-e.flowDone:
+			// A terminated worker cannot service a transport replacement.
+		default:
+			if e.flowMark != e.routerCfg.FirewallMark {
+				client, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), e.routerCfg.FirewallMark, nil)
+				if err != nil {
+					return
+				}
+				e.flowTransport.replace(client)
+				e.flowMark = e.routerCfg.FirewallMark
+			}
+			return
+		}
 	}
 	if e.flowCancel != nil {
 		e.flowCancel()
@@ -30,34 +42,36 @@ func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.Regi
 		e.discardFlowSpoolLocked()
 		return
 	}
-	var clients []clientrpcconnect.FlowLogServiceClient
-	for _, endpoint := range cfg.ControlURLs() {
-		base, err := url.Parse(endpoint)
-		if err != nil || base.Host == "" || base.User != nil || base.Scheme != "https" {
-			continue
-		}
-		base.Path, base.RawPath, base.RawQuery, base.Fragment = "", "", "", ""
-		clients = append(clients, clientrpcconnect.NewFlowLogServiceClient(applicationHTTPClient(), base.String()))
-	}
-	if len(clients) == 0 {
+	httpClient, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), e.routerCfg.FirewallMark, nil)
+	if err != nil {
 		e.discardFlowSpoolLocked()
 		return
+	}
+	transport := newRotatingControlClient(httpClient)
+	var clients []clientrpcconnect.FlowLogServiceClient
+	for _, endpoint := range cfg.ControlURLs() {
+		origin, _ := rpcProfileOrigin(endpoint) // Validated by the transport constructor.
+		clients = append(clients, clientrpcconnect.NewFlowLogServiceClient(transport, origin))
 	}
 	var spool *flowSpool
 	if e.opts.FlowSpoolPath != "" {
 		var err error
 		spool, err = newFlowSpool(e.opts.FlowSpoolPath, cfg.NodeCredential, key)
 		if err != nil {
+			transport.replace(nil)
 			return
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	e.flowCancel = cancel
 	e.flowKey = key
+	e.flowMark = e.routerCfg.FirewallMark
+	e.flowTransport = transport
 	e.flowDone = make(chan struct{})
 	done := e.flowDone
 	go func() {
 		defer close(done)
+		defer transport.replace(nil)
 		runFlowLogs(ctx, e.flows, clients, network.Node.ID, cfg.NodeCredential, spool)
 	}()
 }

@@ -437,9 +437,18 @@ the producer's no-redirect policy. Connector reports require HTTPS origins.
 `TestControlUnderlayRejectsUnauthorizedRequestsBeforeDial` covers the authority
 boundary; `TestControlUnderlayUsesMarkedTLSAndDoesNotFollowRedirects` exercises
 HTTPS requests with an injected marker; `TestControlUnderlayMarkFailureHasNoFallback`
-covers fail-closed dialing. Agent map/session and flow-report transport wiring,
+covers fail-closed dialing. Agent map/session transport wiring,
 pre-exit DNS and native kernel evidence remain open. This is a connector transport
 increment, not native exit readiness.
+
+Flow policy/report RPCs also use the scoped marked HTTPS transport. A mark change
+cancels and joins old HTTP response bodies and closes idle connections while
+retaining the flow worker, its consent scope and pending queue. Identity changes
+still stop and purge the old worker. `TestControlTransportRotationCancelsAndJoinsOldResponse`
+checks cancellation and body ownership across replacement;
+`TestTUNFlowProducerRetriesThroughTLSProtobuf` now replaces the transport between
+an unacknowledged report and its retry and checks the same durable window is sent.
+These unit observations do not establish native SO_MARK or route evidence.
 
 CI execution policy: branch pushes run only `go test -short ./...` in the Test
 workflow, separately in the root and nested `clientipc` Go modules. The root
