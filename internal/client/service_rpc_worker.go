@@ -107,10 +107,7 @@ func (s *ClientRPCService) StartProfileWorker(ctx context.Context, driver Client
 }
 
 func (m *ClientRPCMutations) preferenceCleanupRetryable(err error) bool {
-	failure := rpc.FailureFromError(err)
-	switch failure.GetCode() {
-	case ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED:
-	default:
+	if !rpcFailureTemporary(err) {
 		return false
 	}
 	cfg := m.store.Read()

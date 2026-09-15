@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
-	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
 
@@ -213,14 +211,5 @@ func TestExitWorkerRequiresCompleteAdapter(t *testing.T) {
 	}}} {
 		_, err := service.startExitWorker(t.Context(), executor)
 		assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
-	}
-	for _, code := range []ipc.ErrorCode{ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED, ipc.ErrorCode_ERROR_CODE_INTERNAL, ipc.ErrorCode_ERROR_CODE_STALE_STATE, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED} {
-		want := code == ipc.ErrorCode_ERROR_CODE_UNAVAILABLE || code == ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED || code == ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED
-		if exitWorkerRetryable(rpc.Error(connect.CodeUnavailable, code)) != want {
-			t.Fatal("wrong worker failure classification", code)
-		}
-	}
-	if exitWorkerRetryable(errors.New("unexpected error")) || exitWorkerRetryable(context.Canceled) {
-		t.Fatal("unexpected worker errors must stop the host")
 	}
 }

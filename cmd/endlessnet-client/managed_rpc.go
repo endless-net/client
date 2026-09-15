@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/endless-net/client/internal/rpcutil"
+
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -31,7 +33,7 @@ func cmdManagedUp(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 0 || *profile == "" || *instance == "" || *revision == 0 || !nativeRequestUUID(*connectID) || (*enrollID != "" && (!nativeRequestUUID(*enrollID) || strings.EqualFold(*enrollID, *connectID))) {
+	if fs.NArg() != 0 || *profile == "" || *instance == "" || *revision == 0 || !rpcutil.ValidUUID(*connectID) || (*enrollID != "" && (!rpcutil.ValidUUID(*enrollID) || strings.EqualFold(*enrollID, *connectID))) {
 		return fmt.Errorf("up requires a profile, snapshot CAS and distinct valid operation request UUIDs")
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)

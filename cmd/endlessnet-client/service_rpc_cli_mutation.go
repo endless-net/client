@@ -8,21 +8,14 @@ import (
 	"io"
 	"strings"
 
+	"github.com/endless-net/client/internal/rpcutil"
+
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
-
-func nativeRequestUUID(value string) bool {
-	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
-		return false
-	}
-	raw := strings.ReplaceAll(value, "-", "")
-	_, err := hex.DecodeString(raw)
-	return err == nil && len(raw) == 32 && strings.Trim(raw, "0") != ""
-}
 
 // Explicit request identity and CAS values let scripts retain the exact command
 // before sending. Never refresh/replay a mutation automatically on an error.
@@ -107,7 +100,7 @@ func cmdServiceRPCMutation(command string, args []string, output io.Writer) erro
 			return fmt.Errorf("trust-server requires --confirmed-control-origin, --confirmed-key-id and --confirmed-announcement-id (SHA-256 hex) from server-identity")
 		}
 	}
-	if fs.NArg() != 0 || !nativeRequestUUID(*requestID) || strings.TrimSpace(*instance) == "" || *revision == 0 || (command != "create-profile" && strings.TrimSpace(profile) == "") {
+	if fs.NArg() != 0 || !rpcutil.ValidUUID(*requestID) || strings.TrimSpace(*instance) == "" || *revision == 0 || (command != "create-profile" && strings.TrimSpace(profile) == "") {
 		return fmt.Errorf("service %s requires --request-id UUID, --expected-instance-id and --expected-revision; non-create commands also require --profile-id; no positional arguments are allowed", command)
 	}
 	if (command == "create-profile" || command == "rename-profile") && strings.TrimSpace(displayName) == "" {

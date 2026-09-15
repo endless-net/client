@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/endless-net/client/internal/rpcutil"
+
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -25,7 +27,7 @@ func cmdServiceRPCBundleExport(args []string, output io.Writer) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 0 || !nativeRequestUUID(*operationID) || strings.TrimSpace(*profileID) == "" {
+	if fs.NArg() != 0 || !rpcutil.ValidUUID(*operationID) || strings.TrimSpace(*profileID) == "" {
 		return fmt.Errorf("export requires --operation-id UUID and --profile-id, without positional arguments")
 	}
 	timeout, err := parsePositiveServiceIPCTimeout(*timeoutValue)

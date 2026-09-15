@@ -48,7 +48,7 @@ func (s *ClientRPCService) startExitWorker(ctx context.Context, executor clientR
 				result = ctx.Err()
 				return
 			}
-			if result != nil && !exitWorkerRetryable(result) {
+			if result != nil && !rpcFailureTemporary(result) {
 				return
 			}
 			// Pending work has a durable retry deadline checked by reconciliation.
@@ -67,13 +67,4 @@ func (s *ClientRPCService) startExitWorker(ctx context.Context, executor clientR
 		}
 	}()
 	return done, nil
-}
-
-func exitWorkerRetryable(err error) bool {
-	switch rpc.FailureFromError(err).GetCode() {
-	case ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED:
-		return true
-	default:
-		return false
-	}
 }

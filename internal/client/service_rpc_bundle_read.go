@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/endless-net/client/internal/rpcutil"
+
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
 	"github.com/endless-net/client/clientipc/rpc"
@@ -32,7 +34,7 @@ func (s *ClientRPCService) readDiagnosticsBundleAs(ctx context.Context, peer loc
 	if err := authorizeRPCPeer(peer, rpcMethod("/client.v0.ClientService/ReadDiagnosticsBundle"), cfg); err != nil {
 		return nil, err
 	}
-	if request == nil || !validRPCUUID(request.BundleId) || request.MaxBytes > 256<<10 {
+	if request == nil || !rpcutil.ValidUUID(request.BundleId) || request.MaxBytes > 256<<10 {
 		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	if s.bundleStore == nil {

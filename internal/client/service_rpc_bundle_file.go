@@ -12,6 +12,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/endless-net/client/internal/rpcutil"
+
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
 )
@@ -123,7 +125,7 @@ func (s *clientRPCBundleStore) restore(raw []byte) error {
 		}
 		digest := sha256.Sum256(record.Data)
 		if record.Owner == "" || record.Profile == "" || len(record.Owner) > 4096 || len(record.InstallationOwner) > 4096 || len(record.Profile) > 4096 ||
-			!validRPCUUID(metadata.BundleId) || seen[metadata.BundleId] || len(metadata.ProtoReflect().GetUnknown()) != 0 ||
+			!rpcutil.ValidUUID(metadata.BundleId) || seen[metadata.BundleId] || len(metadata.ProtoReflect().GetUnknown()) != 0 ||
 			len(record.Data) == 0 || len(record.Data) > rpcBundleMaxBytes || metadata.SizeBytes != uint64(len(record.Data)) ||
 			metadata.Sha256 != hex.EncodeToString(digest[:]) || metadata.CreatedAt.CheckValid() != nil || metadata.ExpiresAt.CheckValid() != nil {
 			return invalid

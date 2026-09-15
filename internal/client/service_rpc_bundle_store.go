@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/endless-net/client/internal/rpcutil"
+
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -61,7 +63,7 @@ func (s *clientRPCBundleStore) put(owner, profile string, data []byte) (*ipc.Bun
 }
 
 func (s *clientRPCBundleStore) putID(id, owner, installationOwner, profile string, data []byte) (*ipc.BundleResult, error) {
-	if !validRPCUUID(id) {
+	if !rpcutil.ValidUUID(id) {
 		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	if owner == "" || profile == "" || len(owner) > 4096 || len(installationOwner) > 4096 || len(profile) > 4096 || len(data) == 0 || len(data) > rpcBundleMaxBytes {
@@ -98,7 +100,7 @@ func (s *clientRPCBundleStore) putID(id, owner, installationOwner, profile strin
 }
 
 func (s *clientRPCBundleStore) read(owner, profile string, request *ipc.ReadDiagnosticsBundleRequest) (*ipc.ReadDiagnosticsBundleResponse, error) {
-	if request == nil || !validRPCUUID(request.BundleId) || request.MaxBytes > 256<<10 {
+	if request == nil || !rpcutil.ValidUUID(request.BundleId) || request.MaxBytes > 256<<10 {
 		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	s.mu.Lock()

@@ -5,12 +5,13 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/endless-net/client/internal/rpcutil"
 
 	"connectrpc.com/connect"
 	"github.com/endless-net/client/clientipc/local"
@@ -106,17 +107,6 @@ func newRPCUUID() (string, error) {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", value[:4], value[4:6], value[6:8], value[8:10], value[10:]), nil
 }
 
-func validRPCUUID(value string) bool {
-	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
-		return false
-	}
-	raw, err := hex.DecodeString(strings.ReplaceAll(value, "-", ""))
-	if err != nil || len(raw) != 16 {
-		return false
-	}
-	return strings.Trim(strings.ReplaceAll(value, "-", ""), "0") != ""
-}
-
 func rpcMethod(procedure string) protoreflect.MethodDescriptor {
 	const prefix = "/client.v0.ClientService/"
 	if !strings.HasPrefix(procedure, prefix) {
@@ -208,7 +198,7 @@ func (m *ClientRPCMutations) acceptInternal(peer local.Peer, procedure string, r
 			return rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 		}
 		mutation := request.ProtoReflect().Get(field).Message().Interface().(*ipc.MutationContext)
-		if !validRPCUUID(mutation.GetRequestId()) || mutation.GetExpectedInstanceId() == "" || mutation.GetExpectedRevision() == 0 {
+		if !rpcutil.ValidUUID(mutation.GetRequestId()) || mutation.GetExpectedInstanceId() == "" || mutation.GetExpectedRevision() == 0 {
 			return rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 		}
 		if cfg.RPCState == nil {

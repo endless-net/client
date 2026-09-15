@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/endless-net/client/internal/rpcutil"
+
 	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
@@ -31,7 +33,7 @@ func TestRPCInitialProfileAdoptionPreservesState(t *testing.T) {
 		if !reflect.DeepEqual(before, after) {
 			t.Fatal("adoption changed existing runtime config")
 		}
-		if !validRPCUUID(state.ActiveProfileID) || len(state.Profiles) != 1 || state.Profiles[state.ActiveProfileID].ControlOrigin != "https://control.test" {
+		if !rpcutil.ValidUUID(state.ActiveProfileID) || len(state.Profiles) != 1 || state.Profiles[state.ActiveProfileID].ControlOrigin != "https://control.test" {
 			t.Fatal("invalid adopted profile")
 		}
 		if state.Profiles[state.ActiveProfileID].Configuration.PrivateKey != "" {

@@ -27,11 +27,8 @@ func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driv
 		if ctx.Err() != nil {
 			return
 		}
-		if failure := rpc.FailureFromError(result); failure != nil {
-			switch failure.Code {
-			case ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ipc.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED:
-				result = nil
-			}
+		if rpcFailureTemporary(result) {
+			result = nil
 		}
 	}()
 	if err := ctx.Err(); err != nil {
