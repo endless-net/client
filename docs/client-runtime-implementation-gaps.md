@@ -450,6 +450,13 @@ checks cancellation and body ownership across replacement;
 an unacknowledged report and its retry and checks the same durable window is sent.
 These unit observations do not establish native SO_MARK or route evidence.
 
+`TestFlowConfigurationRestartsWorkerAfterStorageFailure` exercises the engine's
+actual flow-worker lifecycle using an unreadable, non-discardable queue path.
+Two identical configurations each attempt storage recovery, retain the same
+consent scope and close the failed worker's HTTP transport before signalling
+completion. This proves a completed worker is not reused as if it were running;
+it does not claim that an unrepaired storage failure has been recovered.
+
 Application connector context replacement and engine shutdown now cancel and
 join the discovery worker before releasing its ownership. Old HTTP idle
 connections close before worker completion is signalled. Cancellation during
