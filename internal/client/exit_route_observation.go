@@ -77,3 +77,39 @@ func exitRouteTableAbsent(raw []byte, table uint32) (bool, error) {
 	}
 	return absent, nil
 }
+
+// Re-observe rules after Down, including recovery where no in-memory router
+// survived. Table references are checked without a mark filter so altered or
+// duplicate rules cannot be mistaken for a cleared dedicated table.
+func exitPolicyRulesAbsent(ctx context.Context, table uint32, runner CommandRunner) (bool, error) {
+	if table == 0 || runner == nil {
+		return false, errors.New("invalid exit policy rule observation target")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	absent := true
+	for _, family := range []string{"-4", "-6"} {
+		for _, suppress := range []bool{false, true} {
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+			id := strconv.FormatUint(uint64(table), 10)
+			if suppress {
+				id = "254"
+			}
+			raw, err := runner(ctx, "ip", family, "-j", "-N", "rule", "show", "table", id)
+			if err != nil {
+				return false, errors.New("exit policy rule observation failed")
+			}
+			clear, err := linuxPolicyRuleAbsent(raw, suppress)
+			if err != nil {
+				return false, err
+			}
+			absent = absent && clear
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	return absent, nil
+}

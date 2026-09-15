@@ -439,7 +439,17 @@ follows [iproute2 table rendering](https://github.com/iproute2/iproute2/blob/mai
 observation failures; `TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease`
 also verifies that failed observation and remaining routes prevent guard release.
 This proves the injected observation/release boundary only: native command
-qualification, policy-rule observations and the complete exit worker remain open.
+qualification and the complete exit worker remain open.
+
+Guard release also re-observes policy rules independently of the in-memory
+router cleanup journal. For both families, any rule referencing the dedicated
+table or suppressing the main table's default route prevents release. Read-only
+table-filtered dumps reuse the bounded policy-rule parser; they never delete
+potentially unrelated rules. `TestExitPolicyCleanupRequiresEveryRuleObservation`
+exercises each of the four queries with success, remaining rules, command errors,
+malformed output and cancellation. The engine release test checks retained guard
+ownership when rules remain. Native ownership/coexistence qualification is open,
+including the shared main-table suppression rule used by the current router.
 
 Application connector reporting now uses an origin-scoped control HTTP client
 with the pinned clientapi TLS policy and the engine's firewall mark. The transport

@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -56,6 +57,61 @@ func TestExitRouteCleanupRequiresBothFamilyObservations(t *testing.T) {
 				t.Fatalf("invalid observation: empty=%v error=%v", empty, err)
 			}
 		})
+	}
+}
+
+func TestExitPolicyCleanupRequiresEveryRuleObservation(t *testing.T) {
+	for target := 1; target <= 4; target++ {
+		for _, outcome := range []string{"clear", "remaining", "failed", "malformed", "cancelled"} {
+			t.Run(fmt.Sprintf("%d/%s", target, outcome), func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				calls := 0
+				absent, err := exitPolicyRulesAbsent(ctx, 51820, func(call context.Context, name string, args ...string) ([]byte, error) {
+					calls++
+					family, table := "-4", "51820"
+					if calls > 2 {
+						family = "-6"
+					}
+					if calls%2 == 0 {
+						table = "254"
+					}
+					if name != "ip" || !reflect.DeepEqual(args, []string{family, "-j", "-N", "rule", "show", "table", table}) {
+						t.Fatal("incorrect rule observation scope", args)
+					}
+					if _, ok := call.Deadline(); !ok {
+						t.Fatal("unbounded rule observation")
+					}
+					if calls == target {
+						switch outcome {
+						case "remaining":
+							return []byte(fmt.Sprintf(`[{"priority":32764,"table":%q,"suppress_prefixlen":0}]`, table)), nil
+						case "failed":
+							return nil, errors.New("synthetic-private-error")
+						case "malformed":
+							return []byte(`null`), nil
+						case "cancelled":
+							cancel()
+						}
+					}
+					if table == "254" {
+						return []byte(`[{"priority":32766,"table":"254"}]`), nil
+					}
+					return []byte(`[]`), nil
+				})
+				if outcome == "clear" {
+					if !absent || err != nil || calls != 4 {
+						t.Fatal("clear rules not confirmed", absent, err, calls)
+					}
+				} else if outcome == "remaining" {
+					if absent || err != nil || calls != 4 {
+						t.Fatal("remaining rules misclassified", absent, err, calls)
+					}
+				} else if absent || err == nil || strings.Contains(err.Error(), "private") || calls != target {
+					t.Fatal("failed observation permitted cleanup", absent, err, calls)
+				}
+			})
+		}
 	}
 }
 

@@ -243,6 +243,15 @@ func (e *WireGuardEngine) releaseClearedExit(ctx context.Context, guard *linuxEx
 	if !empty {
 		return errors.New("exit clear still has OS routes")
 	}
+	clear, err := exitPolicyRulesAbsent(ctx, guard.mark, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return guard.run(ctx, "", name, args...)
+	})
+	if err != nil {
+		return err
+	}
+	if !clear {
+		return errors.New("exit clear still has OS policy rules")
+	}
 	if err := guard.Release(ctx); err != nil {
 		return errors.Join(err, guard.Contain(context.WithoutCancel(ctx)))
 	}
