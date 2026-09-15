@@ -59,12 +59,24 @@ func TestControlPlaneIPCRequestValidation(t *testing.T) {
 			var err error
 			if tc.name == "unconfirmed-local-forget" {
 				// Protobuf bool absence and explicit false have the same meaning.
-				_, err = consumer.ForgetLocalEnrollment(ctx, connect.NewRequest(&ipc.ForgetLocalEnrollmentRequest{Mutation: request.Mutation, Profile: request.Profile, Confirmed: false}))
+				// CAS is checked before domain validation. Refresh only an explicit
+				// stale admission rejection while identity and intent stay fixed.
+				err = retryNativeControlAdmission(tc.name, before, func() (*ipc.Status, error) {
+					response, err := consumer.GetStatus(ctx, connect.NewRequest(&ipc.GetStatusRequest{}))
+					if err != nil {
+						return nil, err
+					}
+					return response.Msg.GetStatus(), nil
+				}, func(current *ipc.Status) error {
+					request.Mutation.ExpectedRevision = current.Metadata.Revision
+					_, err := consumer.ForgetLocalEnrollment(ctx, connect.NewRequest(&ipc.ForgetLocalEnrollmentRequest{Mutation: request.Mutation, Profile: request.Profile, Confirmed: false}))
+					return err
+				})
 			} else {
 				_, err = consumer.Disconnect(ctx, connect.NewRequest(request))
 			}
 			if rpc.FailureFromError(err).GetCode() != tc.code {
-				t.Fatal("invalid native request did not return the specified typed error")
+				t.Fatalf("invalid native request returned transport=%s failure=%s, want failure=%s", connect.CodeOf(err), rpc.FailureFromError(err).GetCode(), tc.code)
 			}
 			after, err := consumer.GetStatus(ctx, connect.NewRequest(&ipc.GetStatusRequest{}))
 			if err != nil {
