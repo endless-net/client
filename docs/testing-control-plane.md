@@ -69,6 +69,10 @@ may terminate or enter retransmission backoff, so immediate reuse is not require
 The fixture configures its return endpoint from public Client IPC;
 it does not read Client keys or import Client runtime code. Its handshake and
 decrypted-packet counters are diagnostics, not replacements for nonce echoes.
+UDP challenges may resend the same fresh nonce on the same socket within the
+original exchange deadline. Only that nonce's echo completes the exchange;
+duplicates from previous exchanges cannot satisfy it. This measures bounded
+application delivery, not loss-free delivery of every individual datagram.
 
 Both TCP scenarios also invoke native OS ping for their overlay address family.
 Echo must pass initially, fail under a TCP-only grant while authorized TCP

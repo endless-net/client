@@ -104,6 +104,81 @@ func TestApplicationDeadlineFailureIsNotTrafficDenial(t *testing.T) {
 	}
 }
 
+func TestUDPChallengeRetriesStayWithinTheOriginalDeadline(t *testing.T) {
+	for _, dropAll := range []bool{false, true} {
+		t.Run(fmt.Sprintf("drop_all=%t", dropAll), func(t *testing.T) {
+			server, err := net.ListenPacket("udp4", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = server.Close() }()
+			go func() {
+				for received := 0; ; received++ {
+					var packet [33]byte
+					n, address, err := server.ReadFrom(packet[:])
+					if err != nil {
+						return
+					}
+					if !dropAll && received > 0 {
+						_, _ = server.WriteTo(packet[:n], address)
+					}
+				}
+			}()
+			conn, err := net.Dial("udp4", server.LocalAddr().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = conn.Close() }()
+			bounded := &boundedUDPProbeConn{Conn: conn}
+			exchange := applicationExchange{datagram: true, timeout: 750 * time.Millisecond}
+			err = exchange.exchange(bounded)
+			if dropAll {
+				if !errors.Is(err, errReadUnavailable) {
+					t.Fatal("lost UDP replies did not exhaust the original read deadline")
+				}
+			} else if err != nil {
+				t.Fatal("the current UDP challenge did not recover from a lost first datagram")
+			}
+			if len(bounded.requests) < 2 || len(bounded.requests[0]) != 32 {
+				t.Fatal("UDP did not retry its application challenge")
+			}
+			for _, request := range bounded.requests[1:] {
+				if !bytes.Equal(request, bounded.requests[0]) {
+					t.Fatal("UDP retry changed the current challenge")
+				}
+			}
+		})
+	}
+}
+
+// A retry that extends either deadline fails immediately, without depending on
+// wall-clock scheduling or permitting a broken test to wait indefinitely.
+type boundedUDPProbeConn struct {
+	net.Conn
+	expires  time.Time
+	requests [][]byte
+}
+
+func (c *boundedUDPProbeConn) SetDeadline(deadline time.Time) error {
+	if !c.expires.IsZero() {
+		return errors.New("probe reset its original deadline")
+	}
+	c.expires = deadline
+	return c.Conn.SetDeadline(deadline)
+}
+
+func (c *boundedUDPProbeConn) SetReadDeadline(deadline time.Time) error {
+	if c.expires.IsZero() || deadline.After(c.expires) {
+		return errors.New("probe extended its original read deadline")
+	}
+	return c.Conn.SetReadDeadline(deadline)
+}
+
+func (c *boundedUDPProbeConn) Write(request []byte) (int, error) {
+	c.requests = append(c.requests, bytes.Clone(request))
+	return c.Conn.Write(request)
+}
+
 func TestExplicitDNSResolverAndNameNotFound(t *testing.T) {
 	tcp, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {

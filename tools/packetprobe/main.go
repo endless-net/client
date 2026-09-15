@@ -166,7 +166,8 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 	if deadline <= 0 {
 		deadline = time.Second
 	}
-	if err := conn.SetDeadline(time.Now().Add(deadline)); err != nil {
+	expires := time.Now().Add(deadline)
+	if err := conn.SetDeadline(expires); err != nil {
 		return errDeadlineSetup
 	}
 	if len(x.pending) >= 128 {
@@ -190,12 +191,34 @@ func (x *applicationExchange) exchange(conn net.Conn) error {
 		return errWriteUnavailable
 	}
 	var datagramMismatch error
+	nextDatagram := time.Now().Add(200 * time.Millisecond)
 	for {
 		if x.datagram {
+			// Retry the same challenge on this socket within the original
+			// exchange deadline. UDP delivery itself is not reliable.
+			readDeadline := expires
+			if nextDatagram.Before(readDeadline) {
+				readDeadline = nextDatagram
+			}
+			if err := conn.SetReadDeadline(readDeadline); err != nil {
+				return errDeadlineSetup
+			}
 			// Preserve datagram boundaries and reject truncated/oversized echoes.
 			var packet [33]byte
 			n, err := conn.Read(packet[:])
 			if err != nil {
+				var timeout net.Error
+				if errors.As(err, &timeout) && timeout.Timeout() && time.Now().Before(expires) {
+					n, writeErr := conn.Write(request[:])
+					if n != 0 && n != len(request) {
+						return errors.New("partial application request write")
+					}
+					if writeErr != nil || n == 0 {
+						return errWriteUnavailable
+					}
+					nextDatagram = time.Now().Add(200 * time.Millisecond)
+					continue
+				}
 				if datagramMismatch != nil {
 					return datagramMismatch
 				}
