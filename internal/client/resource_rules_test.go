@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/binary"
 	"net/netip"
 	"strconv"
 	"testing"
@@ -9,6 +10,53 @@ import (
 	api "github.com/endless-net/client-api/clientapi/v1"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+func TestResourceCompilerServiceDenialPreservesTransportPortAndHostScope(t *testing.T) {
+	for _, disabled := range []string{"tcp", "udp"} {
+		t.Run(disabled, func(t *testing.T) {
+			opts, key := signedServiceDNSFixture(t)
+			source := opts.NetworkMap
+			source.Network.Services[0].Ports = []api.ServicePort{{Protocol: "tcp", Port: 5432}, {Protocol: "udp", Port: 5432}}
+			resignApplicationMap(t, &source, key)
+			cfg := Config{NodeID: source.Node.ID, NetworkID: source.Network.ID, CachedMap: &source, MapSigningTrust: opts.SigningTrust,
+				MapRevision: source.Network.Revision, MapGlobalRevision: source.Revision.Global,
+				ResourcePreferences: map[string]bool{rpcResourceID(ipc.ResourceKind_RESOURCE_KIND_SERVICE, "db\x00"+disabled+"\x005432"): false}}
+			now := time.Now()
+			rules, err := compileResourceDenials(cfg, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			filter := &resourcePacketFilter{}
+			if err := filter.suspend(rules, source.MapSignature.ExpiresAt); err != nil {
+				t.Fatal(err)
+			}
+			filter.commit()
+			for _, inbound := range []bool{false, true} {
+				for _, protocol := range []string{"tcp", "udp"} {
+					for _, host := range []string{"100.64.0.2", "100.64.0.3"} {
+						for _, port := range []uint16{5432, 5433} {
+							from, to, srcPort, dstPort := "100.64.0.1", host, uint16(50000), port
+							if inbound {
+								from, to, srcPort, dstPort = to, from, dstPort, srcPort
+							}
+							packet := applicationTCPPacket(from, to, srcPort, dstPort)
+							if protocol == "udp" {
+								packet = packet[:28]
+								packet[9] = 17
+								binary.BigEndian.PutUint16(packet[2:4], uint16(len(packet)))
+								binary.BigEndian.PutUint16(packet[24:26], 8)
+							}
+							denied := protocol == disabled && host == "100.64.0.2" && port == 5432
+							if filter.allows(packet, inbound, now) == denied {
+								t.Fatalf("wrong service scope: inbound=%v protocol=%s host=%s port=%d denied=%v", inbound, protocol, host, port, denied)
+							}
+						}
+					}
+				}
+			}
+		})
+	}
+}
 
 func TestResourceCompilerSubnetOverlapAndApplicationPort(t *testing.T) {
 	cfg, source, key := signedApplicationFixture(t, false)

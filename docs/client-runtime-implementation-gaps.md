@@ -474,6 +474,14 @@ or observation errors abort application. The injected Linux test
 `TestLinuxExitRouteRequiresObservedRuleRemovalBeforeAddingRules` covers both
 families and both rule stages. Shared suppression-rule ownership remains open.
 
+Resource service compilation now has packet-level regression coverage for
+independent TCP and UDP preferences sharing the same numeric port. The signed-map
+test `TestResourceCompilerServiceDenialPreservesTransportPortAndHostScope`
+compiles the preference, commits the filter and checks requests and replies:
+only the disabled transport/port on the advertised host is denied. Other ports,
+the other transport and unrelated hosts remain outside that resource denial.
+This verifies filter scope, not route availability or end-to-end reachability.
+
 The native exit command runner now caps combined stdout/stderr during capture
 at 1 MiB, cancels on overflow and returns no truncated observation. A bounded
 pipe wait also prevents inherited output pipes from delaying completion without
