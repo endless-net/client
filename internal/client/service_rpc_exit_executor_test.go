@@ -44,7 +44,7 @@ func TestRPCExitExecutorSerializesConcurrentAttempts(t *testing.T) {
 }
 
 func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
-	for _, scenario := range []string{"select", "clear", "expired", "unsupported", "stale", "ambiguous", "partial", "late_context_change", "cancelled"} {
+	for _, scenario := range []string{"select", "clear", "expired", "unsupported", "stale", "route_table", "ambiguous", "partial", "late_context_change", "late_table_change", "cancelled"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, owner, profile := rpcConnectFixture(t)
 			trusted, networkMap, key := signedApplicationFixture(t, false)
@@ -56,6 +56,7 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 			resignApplicationMap(t, &networkMap, key)
 			if err := m.store.Update(func(cfg *Config) error {
 				cfg.NodeID, cfg.NetworkID = networkMap.Node.ID, networkMap.Network.ID
+				cfg.WireGuardRouteTable = "51821"
 				cfg.MapRevision, cfg.MapGlobalRevision = networkMap.Network.Revision, networkMap.Revision.Global
 				cfg.CachedMap, cfg.MapSigningTrust = &networkMap, trusted.MapSigningTrust
 				if scenario == "clear" {
@@ -88,6 +89,11 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			if scenario == "route_table" {
+				if err := m.store.Update(func(cfg *Config) error { cfg.WireGuardRouteTable = "51999"; return nil }); err != nil {
+					t.Fatal(err)
+				}
+			}
 			calls := 0
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -99,6 +105,9 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 				}
 				if id != op.Id || input.RPCState.ExitChange.OperationID != id || stored.RPCState.ExitChange.OperationID != id || !stored.RPCState.ExitChange.NextAttemptAt.After(now) {
 					t.Fatal("OS dispatch preceded durable checkpoint or changed operation identity")
+				}
+				if stored.RPCState.ExitChange.RouteTable != "51821" || input.RPCState.ExitChange.RouteTable != "51821" {
+					t.Fatal("route table was not durably admitted before OS dispatch")
 				}
 				current, err := m.operationAs(owner, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: id}})
 				if err != nil || current.State != ipc.OperationState_OPERATION_STATE_RUNNING {
@@ -120,12 +129,16 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 						if err := m.store.Update(func(cfg *Config) error { cfg.NodeID = "replacement"; return nil }); err != nil {
 							t.Fatal(err)
 						}
+					case "late_table_change":
+						if err := m.store.Update(func(cfg *Config) error { cfg.WireGuardRouteTable = "51999"; return nil }); err != nil {
+							t.Fatal(err)
+						}
 					}
 				}
 				return status, ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
 			}}
 			err = m.reconcileExitChange(ctx, executor)
-			if scenario == "late_context_change" {
+			if scenario == "late_context_change" || scenario == "late_table_change" {
 				assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 			} else if scenario == "cancelled" {
 				if !errors.Is(err, context.Canceled) {
@@ -139,11 +152,11 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 				t.Fatal(err)
 			}
 			switch scenario {
-			case "expired", "unsupported", "stale":
+			case "expired", "unsupported", "stale", "route_table":
 				if calls != 0 || current.State != ipc.OperationState_OPERATION_STATE_FAILED || m.store.Read().RPCState.ExitChange != nil {
 					t.Fatal("invalid queued intent reached executor or retained guard")
 				}
-			case "ambiguous", "partial", "cancelled", "late_context_change":
+			case "ambiguous", "partial", "cancelled", "late_context_change", "late_table_change":
 				if calls != 1 || current.State != ipc.OperationState_OPERATION_STATE_RUNNING || m.store.Read().ExitSelection != nil || m.store.Read().RPCState.ExitChange == nil {
 					t.Fatal("uncertain effects were committed or their guard released")
 				}
@@ -152,7 +165,7 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 					t.Fatal(err)
 				}
 				m.now = func() time.Time { return now }
-				if scenario == "late_context_change" {
+				if scenario == "late_context_change" || scenario == "late_table_change" {
 					assertRPCFailure(t, m.reconcileExitChange(t.Context(), executor), ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 					if calls != 1 || m.store.Read().RPCState.ExitChange == nil {
 						t.Fatal("stale running effects lost containment guard")

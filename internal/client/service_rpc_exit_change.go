@@ -19,6 +19,7 @@ type clientRPCExitChange struct {
 	ControlOrigin  string               `json:"control_origin"`
 	NodeID         string               `json:"node_id"`
 	NetworkID      string               `json:"network_id"`
+	RouteTable     string               `json:"route_table"`
 	MapHash        string               `json:"map_hash,omitempty"`
 	Requested      *ClientExitSelection `json:"requested,omitempty"`
 	Previous       *ClientExitSelection `json:"previous,omitempty"`
@@ -66,6 +67,7 @@ func (m *ClientRPCMutations) prepareExitChange(cfg *Config, op *ipc.Operation, r
 	}
 	op.ProfileId = profile.ID
 	plan := &clientRPCExitChange{OperationID: op.Id, ProfileID: profile.ID, OwnerID: cfg.LocalOwnerID, ControlOrigin: profile.ControlOrigin, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, Previous: cloneExitSelection(cfg.ExitSelection)}
+	plan.RouteTable = cfg.WireGuardRouteTable
 	if cfg.ConnectionIntent != nil {
 		intent := *cfg.ConnectionIntent
 		plan.PreviousIntent = &intent

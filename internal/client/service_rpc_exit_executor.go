@@ -38,7 +38,7 @@ func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) 
 	// applied that map. Clear remains independent of withdrawn map authority.
 	return exists && plan.OperationID == op.Id && plan.ProfileID == op.ProfileId && plan.ProfileID == cfg.RPCState.ActiveProfileID &&
 		strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) && plan.ControlOrigin == profile.ControlOrigin &&
-		plan.NodeID == cfg.NodeID && plan.NetworkID == cfg.NetworkID && reflect.DeepEqual(plan.Previous, cfg.ExitSelection) &&
+		plan.NodeID == cfg.NodeID && plan.NetworkID == cfg.NetworkID && plan.RouteTable == cfg.WireGuardRouteTable && reflect.DeepEqual(plan.Previous, cfg.ExitSelection) &&
 		reflect.DeepEqual(plan.PreviousIntent, cfg.ConnectionIntent) &&
 		(plan.Requested == nil || (plan.MapHash != "" && cfg.CachedMap != nil && cfg.CachedMap.MapSignature != nil && plan.MapHash == cfg.CachedMap.MapSignature.PayloadHash)) &&
 		((plan.Requested == nil && op.Kind == ipc.OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE) ||

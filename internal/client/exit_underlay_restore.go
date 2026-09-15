@@ -81,6 +81,9 @@ func (e *WireGuardEngine) validateExitRecoveryAuthority(cfg Config, guard *linux
 // Recover control authority from its dispatched journal, without treating the
 // requested selection or an expired/missing cached map as an applied grant.
 func exitUnderlayRecoverySelection(cfg Config) (*ClientExitSelection, error) {
+	if cfg.RPCState != nil && cfg.RPCState.ExitChange != nil && cfg.RPCState.ExitChange.RouteTable != cfg.WireGuardRouteTable {
+		return nil, errors.New("exit recovery route table differs from its durable operation")
+	}
 	if cfg.ExitSelection != nil {
 		return cfg.ExitSelection, nil
 	}

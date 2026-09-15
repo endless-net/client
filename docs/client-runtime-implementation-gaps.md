@@ -444,6 +444,16 @@ covers this after both successful and failed containment, followed by recovery
 with the original table. This is an in-process ownership check; a durable OS
 ownership ledger across external configuration changes remains open.
 
+Pending exit operations now persist their admitted route table. Worker preflight
+and completion reject a different current table; a dispatched operation retains
+its journal for containment. Startup uses the journal's original table to restore
+closed protection and denies control authority when configuration differs.
+`TestRPCExitExecutorDurabilityAndRevalidation` checks disk persistence, changes
+before dispatch and during apply, including retry after reopening the store.
+`TestFirstExitRecoveryRequiresBoundRunningJournal` checks original-table startup
+containment with changed configuration. Completed selection ownership after the
+operation journal is cleared still needs durable native ownership tracking.
+
 Linux exit clear now checks the actual IPv4 and IPv6 route dumps before releasing
 its owned firewall guard. `exit_route_observation.go` queries all tables with
 `ip -j -N` so a missing dedicated table is an empty observation, while command
