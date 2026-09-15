@@ -147,8 +147,11 @@ func (r *linuxWireGuardEngineRouter) addRoute(ctx context.Context, cfg wireGuard
 		if err := r.run(ctx, "ip", family, "route", "replace", "default", "dev", cfg.Interface, "table", table); err != nil {
 			return err
 		}
-		_, _ = r.runner(ctx, "ip", family, "rule", "del", "not", "fwmark", table, "table", table)
-		_, _ = r.runner(ctx, "ip", family, "rule", "del", "table", "main", "suppress_prefixlength", "0")
+		for _, suppress := range []bool{false, true} {
+			if err := removeLinuxPolicyRule(ctx, r.runner, family, cfg.FirewallMark, suppress); err != nil {
+				return err
+			}
+		}
 		if err := r.run(ctx, "ip", family, "rule", "add", "not", "fwmark", table, "table", table); err != nil {
 			return err
 		}

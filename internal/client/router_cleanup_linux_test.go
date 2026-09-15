@@ -67,6 +67,55 @@ func TestLinuxRouterCleanupRetriesFailuresWithoutReapplying(t *testing.T) {
 	}
 }
 
+func TestLinuxExitRouteRequiresObservedRuleRemovalBeforeAddingRules(t *testing.T) {
+	for _, family := range []string{"-4", "-6"} {
+		for _, stage := range []string{"dedicated", "suppression"} {
+			for _, outcome := range []string{"absent", "remaining", "failed"} {
+				t.Run(family+"/"+stage+"/"+outcome, func(t *testing.T) {
+					added, inspected := 0, 0
+					r := &linuxWireGuardEngineRouter{runner: func(_ context.Context, name string, args ...string) ([]byte, error) {
+						command := name + " " + strings.Join(args, " ")
+						if strings.Contains(command, "rule add") {
+							added++
+						}
+						if strings.Contains(command, "rule del") {
+							return nil, errors.New("ambiguous delete")
+						}
+						if strings.Contains(command, "rule show") {
+							inspected++
+							if args[0] != family {
+								t.Fatal("rule observation changed IP family")
+							}
+							if (stage == "dedicated" && inspected == 1) || (stage == "suppression" && inspected == 2) {
+								switch outcome {
+								case "failed":
+									return nil, errors.New("observation failed")
+								case "remaining":
+									return []byte(`[{"priority":32764,"table":"51820","suppress_prefixlen":0}]`), nil
+								}
+							}
+							return []byte(`[]`), nil
+						}
+						return nil, nil
+					}}
+					route := netip.MustParsePrefix("0.0.0.0/0")
+					if family == "-6" {
+						route = netip.MustParsePrefix("::/0")
+					}
+					err := r.addRoute(t.Context(), wireGuardEngineRouterConfig{Interface: "endlessnet", FirewallMark: 51820}, route)
+					if outcome == "absent" {
+						if err != nil || inspected != 2 || added != 2 {
+							t.Fatal("confirmed absence did not permit rule installation", err, inspected, added)
+						}
+					} else if err == nil || added != 0 {
+						t.Fatal("unconfirmed removal permitted rule installation", err, added)
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestLinuxRouterRejectsUnclearedAddressesBeforeNewConfiguration(t *testing.T) {
 	for _, family := range []string{"-4", "-6"} {
 		t.Run(family, func(t *testing.T) {

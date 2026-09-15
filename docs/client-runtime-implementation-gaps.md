@@ -467,6 +467,13 @@ succeeds. `TestLinuxRouterRejectsUnclearedAddressesBeforeNewConfiguration` check
 both families, repeated failure and successful cleanup before reapplication with
 an injected command runner. Linux execution remains part of platform CI evidence.
 
+Linux default-route application also requires observed removal of old dedicated
+and main-table suppression rules before installing new rules. An ambiguous
+delete is acceptable only if the subsequent dump proves absence; retained rules
+or observation errors abort application. The injected Linux test
+`TestLinuxExitRouteRequiresObservedRuleRemovalBeforeAddingRules` covers both
+families and both rule stages. Shared suppression-rule ownership remains open.
+
 Linux exit clear now checks the actual IPv4 and IPv6 route dumps before releasing
 its owned firewall guard. `exit_route_observation.go` queries all tables with
 `ip -j -N` so a missing dedicated table is an empty observation, while command
