@@ -44,7 +44,7 @@ func TestRPCExitExecutorSerializesConcurrentAttempts(t *testing.T) {
 }
 
 func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
-	for _, scenario := range []string{"select", "clear", "expired", "unsupported", "stale", "route_table", "disconnected_journal", "ambiguous", "partial", "late_context_change", "late_table_change", "late_disconnect", "cancelled"} {
+	for _, scenario := range []string{"select", "clear", "expired", "unsupported", "stale", "route_table", "old_interface", "old_interface_running", "disconnected_journal", "ambiguous", "partial", "late_context_change", "late_table_change", "late_disconnect", "cancelled"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, owner, profile := rpcExitFixture(t)
 			trusted, networkMap, key := signedApplicationFixture(t, false)
@@ -97,6 +97,24 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 				}
 			}
 			calls := 0
+			if scenario == "old_interface" || scenario == "old_interface_running" {
+				if err := m.store.Update(func(cfg *Config) error {
+					plan := cfg.RPCState.ExitChange
+					plan.Protection = &clientRPCExitProtection{OperationID: "previous", ProfileID: plan.ProfileID, OwnerID: plan.OwnerID, NodeID: plan.NodeID, NetworkID: plan.NetworkID, InterfaceName: "oldexit0", RouteTable: plan.RouteTable}
+					cfg.RPCState.ExitProtection = cloneExitProtection(plan.Protection)
+					return nil
+				}); err != nil {
+					t.Fatal(err)
+				}
+				if scenario == "old_interface_running" {
+					if _, err := m.ReconcileOperation(op.Id, func(_ *Config, operation *ipc.Operation) error {
+						operation.State = ipc.OperationState_OPERATION_STATE_RUNNING
+						return nil
+					}); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
 			if scenario == "disconnected_journal" {
 				if err := m.store.Update(func(cfg *Config) error {
 					// Even an internally consistent old journal must not turn a
@@ -158,6 +176,16 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 				}
 				return status, ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
 			}}
+			if scenario == "old_interface_running" {
+				run := exitGuardReadbackRunner(t, "oldexit0", 51821, func(context.Context, string, string, ...string) ([]byte, error) { return []byte(`[]`), nil })
+				native := &nativeExitExecutor{engine: &WireGuardEngine{opts: WireGuardEngineOptions{Interface: "endlessnet"}}, createGuard: func(iface, table string) (*linuxExitGuard, error) {
+					if iface != "oldexit0" || table != "51821" {
+						t.Error("containment replaced original scope")
+					}
+					return newLinuxExitGuard(iface, 51821, run)
+				}}
+				executor.Contain = native.contain
+			}
 			err = m.reconcileExitChange(ctx, executor)
 			if scenario == "late_context_change" || scenario == "late_table_change" || scenario == "late_disconnect" {
 				assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
@@ -173,7 +201,7 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 				t.Fatal(err)
 			}
 			switch scenario {
-			case "expired", "unsupported", "stale", "route_table", "disconnected_journal":
+			case "expired", "unsupported", "stale", "route_table", "old_interface", "old_interface_running", "disconnected_journal":
 				if calls != 0 || current.State != ipc.OperationState_OPERATION_STATE_FAILED || m.store.Read().RPCState.ExitChange != nil {
 					t.Fatal("invalid queued intent reached executor or retained guard")
 				}

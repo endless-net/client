@@ -32,12 +32,14 @@ func (n *nativeExitExecutor) observeCleared(ctx context.Context, cfg Config) (*i
 	e := n.engine
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.opts.Interface != guard.interfaceName || e.exitGuard != nil || e.exitSelection != nil || e.exitFilter != nil {
+	if e.exitGuard != nil || e.exitSelection != nil || e.exitFilter != nil {
 		return nil, errNativeExitCleared
 	}
 	live := e.configured || e.device != nil || e.router != nil || e.tun != nil
 	if live {
-		if !e.configured || e.device == nil || e.router == nil || e.tun == nil || e.interface_ != guard.interfaceName || e.pathMap.Node.ID != cfg.NodeID || e.pathMap.Network.ID != cfg.NetworkID || cfg.CachedMap == nil || cfg.CachedMap.MapSignature == nil || e.pathMap.MapSignature == nil || cfg.CachedMap.MapSignature.PayloadHash != e.pathMap.MapSignature.PayloadHash || e.routerCfg.Interface != guard.interfaceName || e.routerCfg.RouteTable != cfg.WireGuardRouteTable || e.routerCfg.FirewallMark != 0 {
+		// A new ordinary runtime may use another configured interface. Prove
+		// that runtime independently; the guard below still addresses old artifacts.
+		if !e.configured || e.device == nil || e.router == nil || e.tun == nil || e.interface_ != e.opts.Interface || e.pathMap.Node.ID != cfg.NodeID || e.pathMap.Network.ID != cfg.NetworkID || cfg.CachedMap == nil || cfg.CachedMap.MapSignature == nil || e.pathMap.MapSignature == nil || cfg.CachedMap.MapSignature.PayloadHash != e.pathMap.MapSignature.PayloadHash || e.routerCfg.Interface != e.opts.Interface || e.routerCfg.RouteTable != cfg.WireGuardRouteTable || e.routerCfg.FirewallMark != 0 || !reflect.DeepEqual(e.runtimeIdentity, nativeExitAppliedIdentity(cfg, e.pathMap, e.opts.Interface)) {
 			return nil, errNativeExitCleared
 		}
 		for _, route := range e.routerCfg.Routes {
@@ -65,7 +67,7 @@ func (n *nativeExitExecutor) observeCleared(ctx context.Context, cfg Config) (*i
 			return nil, err
 		}
 		raw, err := run(ctx, "ip", "-j", "-N", family, "route", "show", "table", "all")
-		if err != nil || !nativeExitDefaultsAbsent(raw, guard.mark, guard.interfaceName) {
+		if err != nil || !nativeExitDefaultsAbsent(raw, guard.mark, guard.interfaceName) || (live && !nativeExitDefaultsAbsent(raw, guard.mark, e.opts.Interface)) {
 			return nil, errors.Join(errNativeExitCleared, ctx.Err())
 		}
 	}

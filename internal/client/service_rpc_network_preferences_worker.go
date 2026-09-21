@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"reflect"
 	"time"
@@ -59,7 +60,7 @@ func (m *ClientRPCMutations) networkPreferenceCandidate(cfg Config, plan *client
 // applying retries the authenticated candidate; a failed or superseded apply
 // durably enters containment before Down. Down failure leaves that plan pending
 // for recovery, with disconnected intent preventing automatic reapplication.
-func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, driver ClientRPCProfileDriver) error {
+func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, driver ClientRPCProfileDriver) (resultErr error) {
 	if driver.Lock == nil || driver.Start == nil || driver.Stop == nil {
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
@@ -67,6 +68,18 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 	defer m.profileWorker.Unlock()
 	driver.Lock.Lock()
 	defer driver.Lock.Unlock()
+	attempted, committed := false, false
+	defer func() {
+		if !attempted || committed || ctx.Err() == nil {
+			return
+		}
+		// Cancellation can arrive after Start returns but before durable commit.
+		// Stop the uncommitted runtime while still owning the effect lock. Keep
+		// the journal for retry; cancellation is not proof that Start had no effect.
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		resultErr = errors.Join(resultErr, stopProfileNetwork(cleanup, driver))
+	}()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -96,6 +109,7 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 		failureReason := reasonPrefix + "_source_unavailable"
 		if err == nil && candidate.ConnectionIntent != nil && candidate.ConnectionIntent.DesiredState == ConnectionIntentDesiredConnected {
 			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, reasonPrefix+"_apply_failed"
+			attempted = true
 			err = m.applyProfileConnection(ctx, driver, candidate)
 		} else if err == nil {
 			failureCode, failureReason = ipc.ErrorCode_ERROR_CODE_APPLY_FAILED, reasonPrefix+"_down_failed"
@@ -132,6 +146,7 @@ func (m *ClientRPCMutations) ReconcileNetworkPreferences(ctx context.Context, dr
 				return nil
 			})
 			if err == nil {
+				committed = true
 				return nil
 			}
 			if ctx.Err() != nil {

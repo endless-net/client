@@ -31,7 +31,7 @@ func (r *clientRPCExitCleared) bound(cfg Config, iface string) bool {
 		return false
 	}
 	scope := r.Protection
-	if scope.OperationID == "" || scope.ProfileID == "" || scope.NodeID == "" || scope.NetworkID == "" || scope.InterfaceName != iface || !strings.EqualFold(scope.OwnerID, r.OwnerID) || r.OwnerID == "" {
+	if scope.OperationID == "" || scope.ProfileID == "" || scope.NodeID == "" || scope.NetworkID == "" || !safeWireGuardInterfaceName(scope.InterfaceName) || scope.InterfaceName == "lo" || strings.TrimSpace(scope.InterfaceName) != scope.InterfaceName || !safeWireGuardInterfaceName(iface) || iface == "lo" || strings.TrimSpace(iface) != iface || !strings.EqualFold(scope.OwnerID, r.OwnerID) || r.OwnerID == "" {
 		return false
 	}
 	profile, exists := cfg.RPCState.Profiles[r.ActiveProfileID]

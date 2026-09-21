@@ -52,6 +52,15 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+Transition increment от 2026-09-21: Clear после смены имени TUN/route table
+использует исходную durable область защиты; после Clear старые артефакты и новый
+ordinary runtime проверяются независимо. Select/Resume не переносят selection
+на другой интерфейс автоматически. Preferences/resources при сохранённом exit
+получили отдельное применение точного RUNNING candidate с native readback,
+повторной проверкой store и containment при ошибке. Отмена между Start и commit
+вызывает bounded Stop с сохранением журнала. Уведомление offline после Disconnect
+также использует transport engine без обычного HTTP fallback.
+
 Resources/probe increment от 2026-09-21: Linux HOST observer проверяет реальные
 route lookup, адрес интерфейса, routing rules, live UAPI и свежий direct path.
 Смена scope, просроченная map и ограничения ACL/application/sharing исключают
@@ -92,7 +101,7 @@ Capability теперь включается только публичным nat
 | IPC и потребители | Protobuf client.v0, generated API, локальный gRPC через pipe/Unix socket; CLI и recovery helper используют v0 | Полный аудит удаления legacy, совместной работы Go/Dart и всех потребителей; приёмка UI относится к внешнему репозиторию |
 | Состояние и операции | Durable операции, идентификаторы запросов, replay, проверки владельца/профиля, конфликты и восстановление; snapshot/events | Проверка каждой мутации и перехода по матрице, включая права, CAS, отмену, рестарт и приватность событий |
 | Enrollment, trust, session | Workers и транспорт enrollment/trust/renewal, сохранение прогресса, ротация credentials, отмена старых запросов и защита от поздних ответов | Полный аудит cleanup/concurrency и контекста; подтверждение producer semantics и реального seamless renewal |
-| Exit | Linux native host/worker независимо от IPC, durable Select/Clear/ownership, защищённый saved resume, fresh UAPI/routes/firewall/DNS observations, catalog/control/events/capability; durable cleared scope через restart | LAN_ALLOW, recovery при смене интерфейса, полная совместная работа с profile/network/preference transitions, проверка live recovery и OS qualification; Select-before-Connect сейчас отклоняется |
+| Exit | Linux native host/worker независимо от IPC, durable Select/Clear/ownership, защищённый saved resume, fresh UAPI/routes/firewall/DNS observations, catalog/control/events/capability; Clear/restart по исходному scope после смены интерфейса; guarded preference/resource candidate | LAN_ALLOW, полная совместная работа с profile/network transitions, автоматическая миграция интерфейса, проверка live recovery и OS qualification; Select-before-Connect сейчас отклоняется |
 | Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN и наблюдения запретов; retirement/возврат choices; Linux HOST route/UAPI/direct-path observer, fresh publication и invalidation | Relay/subnet/service/application observations, полный rollback/restart audit и приёмка реальных OS-эффектов |
 | Preferences и lifecycle | Set/Reset inbound/DNS/routes и lifecycle-полей, managed policy/locks/source; Windows power/logoff paths и resume-policy refresh | Полный аудит эффектов каждой настройки, доставка событий на других ОС, восстановление источников событий и native qualification |
 | Networks/profiles | Контекстные проверки, guards переключения, изоляция состояния и защита от устаревших ответов | Полная смена identity/map/routes, recovery и фактическая изоляция при переключении сети/provider |
@@ -115,13 +124,13 @@ Capability теперь включается только публичным nat
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: после resources/probe increment internal/client прошёл
-за 121.081 s, cmd/endlessnet-client — за 11.187 s. Все пакеты прошли.
+и `go test -short ./...`: после transition increment internal/client прошёл
+за 126.442 s, cmd/endlessnet-client — за 11.771 s. Все пакеты прошли.
 Локальные native/E2E/installer проверки не запускались.
 
-1. Завершить native exit LAN_ALLOW, сочетания exit с profile/network/preference
-   transitions, аудит withdrawn live recovery и recovery при
-   изменении настроенного интерфейса с сохранённым старым protection scope. Точный
+1. Завершить native exit LAN_ALLOW, сочетания exit с profile/network
+   transitions, аудит withdrawn live recovery и автоматическую миграцию
+   интерфейса с сохранённым exit. Explicit Clear уже очищает исходный scope. Точный
    combined IPv6 ND readback и socket effects остаются предметом native qualification.
 2. Довести resources, preferences/lifecycle и переключение сетей до реальных
    эффектов с положительными и отрицательными unit assertions.

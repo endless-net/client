@@ -79,7 +79,7 @@ func TestNetworkPreferenceWorkerApplyAndContainment(t *testing.T) {
 			}}
 			err = m.ReconcileNetworkPreferences(ctx, driver)
 			if scenario == "shutdown" {
-				if !errors.Is(err, context.Canceled) || m.store.Read().RPCState.NetworkPreferenceChange == nil {
+				if !errors.Is(err, context.Canceled) || m.store.Read().RPCState.NetworkPreferenceChange == nil || stops != 1 {
 					t.Fatal("shutdown lost resumable operation", err)
 				}
 				return

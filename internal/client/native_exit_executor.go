@@ -70,13 +70,21 @@ func nativeExitOperation(cfg Config, id string, requested *ClientExitSelection, 
 	return plan, nil
 }
 
+// Reconstruct the original durable artifact independently of current options.
+// Select and ResumeSaved separately require the configured interface; cleanup
+// and read-only absence checks must remain possible after an interface change.
 func (n *nativeExitExecutor) guard(scope *clientRPCExitProtection) (*linuxExitGuard, error) {
-	if scope == nil || scope.OperationID == "" || scope.ProfileID == "" || scope.OwnerID == "" || scope.NodeID == "" || scope.NetworkID == "" || scope.InterfaceName != n.engine.opts.Interface {
+	if scope == nil || scope.OperationID == "" || scope.ProfileID == "" || scope.OwnerID == "" || scope.NodeID == "" || scope.NetworkID == "" || !safeWireGuardInterfaceName(scope.InterfaceName) || scope.InterfaceName == "lo" || strings.TrimSpace(scope.InterfaceName) != scope.InterfaceName {
 		return nil, errors.New("native exit protection has no ownership")
 	}
 	normalized, err := NormalizeWireGuardRouteTable(scope.RouteTable)
 	if err != nil || normalized != scope.RouteTable || normalized == "off" {
 		return nil, errors.New("native exit protection has invalid route scope")
+	}
+	n.engine.mu.Lock()
+	defer n.engine.mu.Unlock()
+	if guard := n.engine.exitGuard; guard != nil && guard.interfaceName != scope.InterfaceName {
+		return nil, errors.New("native exit runtime owns another protection scope")
 	}
 	expected, err := n.createGuard(scope.InterfaceName, scope.RouteTable)
 	if err != nil {
@@ -85,8 +93,6 @@ func (n *nativeExitExecutor) guard(scope *clientRPCExitProtection) (*linuxExitGu
 	if expected == nil || expected.interfaceName != scope.InterfaceName || !validExitPolicyTable(expected.mark) {
 		return nil, errors.New("native exit guard differs from durable scope")
 	}
-	n.engine.mu.Lock()
-	defer n.engine.mu.Unlock()
 	if guard := n.engine.exitGuard; guard != nil {
 		if guard.interfaceName != expected.interfaceName || guard.mark != expected.mark || guard.table != expected.table {
 			return nil, errors.New("native exit runtime owns another protection scope")

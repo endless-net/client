@@ -104,7 +104,7 @@ func TestInactiveProfileClearPersistsOriginalArtifactsAndCurrentObservationIdent
 		func(c *Config) { c.LocalOwnerID = "another-owner" },
 		func(c *Config) { c.RPCState.ActiveProfileID = original.ProfileId },
 		func(c *Config) { c.NetworkID = "replacement" },
-		func(c *Config) { c.RPCState.ExitCleared.Protection.InterfaceName = "foreign" },
+		func(c *Config) { c.RPCState.ExitCleared.Protection.InterfaceName = "../foreign" },
 		func(c *Config) { c.RPCState.ExitCleared.Protection.OwnerID = "another-owner" },
 	} {
 		changed := clonePersistentConfig(cfg)

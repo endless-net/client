@@ -104,7 +104,7 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 			return errRPCNoChange
 		}
 		code := ipc.ErrorCode_ERROR_CODE_UNSPECIFIED
-		if !exitChangeBound(cfg, plan, op) || (plan.Releasing && plan.Requested != nil) || (plan.Protection != nil && plan.Protection.InterfaceName != executor.InterfaceName) {
+		if !exitChangeBound(cfg, plan, op) || (plan.Releasing && plan.Requested != nil) || (plan.Requested != nil && plan.Protection != nil && plan.Protection.InterfaceName != executor.InterfaceName) {
 			code = ipc.ErrorCode_ERROR_CODE_STALE_STATE
 		} else if plan.Requested != nil {
 			if !slices.Contains(executor.Modes, clientRPCExitMode{Family: plan.Requested.Family, LAN: plan.Requested.LAN}) {

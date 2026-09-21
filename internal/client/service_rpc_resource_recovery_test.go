@@ -51,8 +51,13 @@ func TestResourceWorkerRestartsApplyOrContainment(t *testing.T) {
 					}
 				}
 				return errors.New("apply failed")
-			}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+			}, Stop: func(stopCtx context.Context) (ipc.ConnectionContinuity, error) {
 				stops++
+				if interrupted {
+					if _, bounded := stopCtx.Deadline(); !bounded || stopCtx.Err() != nil {
+						t.Fatal("cancelled apply cleanup lost its independent bound")
+					}
+				}
 				return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, errors.New("down failed")
 			}}
 			if err := m.ReconcileNetworkPreferences(ctx, driver); err == nil {
@@ -96,7 +101,7 @@ func TestResourceWorkerRestartsApplyOrContainment(t *testing.T) {
 				t.Fatal("terminal recovery retained plan")
 			}
 			if interrupted {
-				if result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || cfg.ResourcePreferences[id] || starts != 2 || stops != 0 {
+				if result.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || cfg.ResourcePreferences[id] || starts != 2 || stops != 1 {
 					t.Fatal("restart did not finish pending apply", result)
 				}
 			} else {

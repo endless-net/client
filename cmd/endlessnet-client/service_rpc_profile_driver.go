@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"time"
 
@@ -60,7 +61,13 @@ func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 				if opts.ExitRuntime == nil {
 					return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 				}
-				if err := opts.ExitRuntime.ResumeSavedLocked(ctx, opts.OperationMu, cfg); err != nil {
+				var err error
+				if cfg.RPCState != nil && cfg.RPCState.NetworkPreferenceChange != nil {
+					err = opts.ExitRuntime.ApplyPreferenceCandidateLocked(ctx, opts.OperationMu, cfg)
+				} else {
+					err = opts.ExitRuntime.ResumeSavedLocked(ctx, opts.OperationMu, cfg)
+				}
+				if err != nil {
 					return err
 				}
 			} else {
@@ -91,7 +98,7 @@ func nativeApprovalFailure(state string) error {
 // unreachable control plane prevent Disconnect, and never persist the response's
 // map over concurrently accepted mutations. The next sync verifies a fresh map.
 func notifyRPCNodeOffline(ctx context.Context, opts agentIPCOptions) {
-	if ctx.Err() != nil || opts.ConfigStore == nil {
+	if ctx.Err() != nil || opts.ConfigStore == nil || opts.WireGuard == nil {
 		return
 	}
 	cfg := opts.ConfigStore.Read()
@@ -100,8 +107,22 @@ func notifyRPCNodeOffline(ctx context.Context, opts agentIPCOptions) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	owned, err := opts.WireGuard.ControlPlaneHTTPClient(cfg)
+	if owned != nil && owned.Transport != nil {
+		defer owned.CloseIdleConnections()
+	}
+	if err != nil || owned == nil || owned.Transport == nil || ctx.Err() != nil {
+		return
+	}
 	control := apiFromConfig(cfg)
-	control.HTTPClient.Transport = enrollmentContextTransport{lifetime: ctx, base: control.HTTPClient.Transport}
+	transportClient := *owned
+	transportClient.Jar = nil
+	transportClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	if transportClient.Timeout <= 0 || transportClient.Timeout > 2*time.Second {
+		transportClient.Timeout = 2 * time.Second
+	}
+	transportClient.Transport = enrollmentContextTransport{lifetime: ctx, base: owned.Transport}
+	control.HTTPClient = &transportClient
 	// The response is deliberately not adopted: this is notification, not sync.
 	_, _ = control.UpdateNodeEndpointState(cfg.NodeID, api.UpdateNodeEndpointRequest{Status: api.NodeStatusOffline, ClientVersion: version})
 }

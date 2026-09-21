@@ -22,6 +22,39 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Transition increment (2026-09-21): post-Disconnect offline notification uses the
+engine-owned control transport. Successful local Down remains successful when
+notification authority/transport is unavailable; no ordinary HTTP fallback is
+permitted. Retained exit now has a separate, durably bound preference/resource
+apply path. It validates the RUNNING operation, scope and exact candidate before
+guarded effects, observes native state and rechecks the durable snapshot afterwards.
+Saved resume still refuses transaction candidates. Failure/cancellation withdraws
+the attempted exit; cancellation between Start and durable commit additionally
+performs bounded independent Stop under the worker effect lock, retaining the
+journal for retry. Profile/network switches remain separate transitions.
+The remaining worker lifetime audit includes cancellable acquisition of
+`profileWorker` and the shared driver lock: preference/connect/profile/network
+workers still use blocking Lock calls, unlike the exit worker. Shutdown joining
+under a lifecycle-owned effect lock needs coverage before lifetime completion.
+
+Changed-interface recovery now keeps original artifact identity separate from
+current engine configuration. Clear and containment use the durable old interface
+and table, including retry after the release checkpoint. Select and Resume still
+require the configured interface. Foreign live runtime is rejected before native
+effects. After Clear, read-only observation checks absence of old artifacts and
+the current ordinary runtime identity/UAPI/default routes independently. This
+does not migrate saved exit selection to a new interface or qualify OS effects.
+
+Transition validation: goimports, vet, lint (0 issues) and the full short suite
+passed; internal/client 126.442 s and cmd/endlessnet-client 11.771 s. The first
+run exposed an uninitialized test RPC state and a scope check placed after guard
+construction; both were corrected before the passing run. Native/system tests
+were not run.
+
+Cross-platform short CI for `36ff58a` passed on Linux, macOS and Windows
+([run 35618126821](https://github.com/endless-net/client/actions/runs/35618126821)).
+Native/system qualification jobs were skipped, as required for push CI.
+
 Resources/probe increment validation (2026-09-21): `goimports -w .`,
 `go vet ./...`, configured golangci-lint (0 issues) and `go test -short ./...`
 passed; internal/client 121.081 s and cmd/endlessnet-client 11.187 s. The positive
@@ -61,8 +94,8 @@ observation scope. After restart and operation pruning, the native observer
 reconstructs only the original artifact address and repeats all absence checks.
 Inactive-profile cleanup keeps original artifacts distinct from current active
 identity. Credential rotation does not erase this read-only scope or grant it
-control authority. New Select success discards it. Changed interface recovery,
-LAN_ALLOW, complete profile/network/preference transitions with retained exit,
+control authority. New Select success discards it. Automatic interface migration,
+LAN_ALLOW, complete profile/network transitions with retained exit,
 and native/system qualification remain open; host wiring is not acceptance.
 
 Clear can adopt a committed ordinary runtime only after matching its owner,
@@ -217,10 +250,9 @@ Pending changes, inactive profiles and Clear without its original scope remain u
 The Clear operation itself requires observed cleanup/release before success.
 The production host owns catalog/events lifetime and advertises exit capability
 through the public native handle, not through arbitrary injected callbacks.
-The adapter currently requires its configured interface to equal the durable
-protection interface. Host recovery must resolve an interface-option change
-against the original protection scope before enabling Clear; it must not simply
-substitute the newly configured interface or remove the old protection.
+The later changed-interface increment permits explicit Clear against original
+protection even when configured interface changed; Select/Resume still require
+the configured interface. Automatic migration is not implemented.
 
 The firewall now preserves ordinary output/forward policy for the unselected
 family in IPv4-only/IPv6-only modes and restricts its TUN gate to the selected

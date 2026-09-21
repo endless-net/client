@@ -50,7 +50,8 @@ func TestNativeExitClearedObservationRechecksReleasedScopeAndOrdinaryRuntime(t *
 	t.Cleanup(func() { _ = engine.Close() })
 	routes, rules, nftBad := `[]`, `[]`, false
 	mutations, reads := 0, 0
-	native := exitGuardReadbackRunner(t, name, 51820, func(_ context.Context, input, command string, args ...string) ([]byte, error) {
+	oldName := "oldexit0"
+	native := exitGuardReadbackRunner(t, oldName, 51820, func(_ context.Context, input, command string, args ...string) ([]byte, error) {
 		if command == "nft" {
 			mutations++
 			return nil, nil
@@ -70,6 +71,14 @@ func TestNativeExitClearedObservationRechecksReleasedScopeAndOrdinaryRuntime(t *
 		return native(ctx, input, command, args...)
 	}
 	n := &nativeExitExecutor{engine: engine, createGuard: func(iface, _ string) (*linuxExitGuard, error) { return newLinuxExitGuard(iface, 51820, run) }}
+	// The artifact belongs to a previous configured interface. Ordinary runtime
+	// after Clear uses the real channel TUN name, independently of this scope.
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.RPCState.ExitProtection = &clientRPCExitProtection{OperationID: "previous", ProfileID: profile.ProfileId, OwnerID: cfg.LocalOwnerID, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, InterfaceName: oldName, RouteTable: "51820"}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	executor := clientRPCExitExecutor{InterfaceName: name, Lock: &sync.Mutex{}, Apply: n.apply, Release: n.release, Contain: n.contain}
 	if _, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}); err != nil {
 		t.Fatal(err)
@@ -133,13 +142,18 @@ func TestNativeExitClearedObservationRechecksReleasedScopeAndOrdinaryRuntime(t *
 			t.Fatal("replacement identity or selection retained cleared observation")
 		}
 	}
-	for _, fault := range []string{"nft", "routes", "rules", "uapi"} {
+	for _, fault := range []string{"nft", "routes", "old_routes", "identity", "rules", "uapi"} {
 		savedRoutes, savedRules := routes, rules
+		savedIdentity := engine.runtimeIdentity
 		switch fault {
 		case "nft":
 			nftBad = true
 		case "routes":
-			routes = fmt.Sprintf(`[{"dst":"default","dev":%q,"table":"51820"}]`, name)
+			routes = fmt.Sprintf(`[{"dst":"default","dev":%q,"table":"254"}]`, name)
+		case "old_routes":
+			routes = fmt.Sprintf(`[{"dst":"default","dev":%q,"table":"254"}]`, oldName)
+		case "identity":
+			engine.runtimeIdentity.OwnerID = "another-owner"
 		case "rules":
 			rules = `[{"priority":100,"src":"all","table":"51820"}]`
 		case "uapi":
@@ -151,6 +165,7 @@ func TestNativeExitClearedObservationRechecksReleasedScopeAndOrdinaryRuntime(t *
 			t.Fatal("changed native state retained cleared status or disclosed output", fault, err)
 		}
 		routes, rules, nftBad = savedRoutes, savedRules, false
+		engine.runtimeIdentity = savedIdentity
 		if fault == "uapi" {
 			if err := engine.device.IpcSet("fwmark=0\n"); err != nil {
 				t.Fatal(err)
