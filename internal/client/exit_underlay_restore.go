@@ -63,14 +63,17 @@ func (e *WireGuardEngine) restoreExitUnderlay(ctx context.Context, cfg Config, g
 	if err := guard.Contain(ctx); err != nil {
 		return errors.Join(authorityErr, err)
 	}
-	if authorityErr != nil {
-		return authorityErr
-	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if authorityErr != nil {
+		return &exitProtectionAuthorityUnavailableError{cause: authorityErr}
+	}
 	if err := e.captureUnderlayDNSLocked(ctx, underlayDNSRequired(cfg, nil)); err != nil {
-		return err
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return &exitProtectionAuthorityUnavailableError{cause: err}
 	}
 	e.exitConfig = clonePersistentConfig(cfg)
 	e.exitRestoreConfig = Config{}

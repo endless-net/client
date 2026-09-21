@@ -7,12 +7,17 @@ import (
 	"io"
 	"reflect"
 	"strconv"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 // nft -j -n emits libnftables-json objects, with numeric protocol values and
 // priorities. Only the exact owned ruleset is evidence: unrecognised objects,
 // table flags, chain hooks and additional statements cannot widen its scope.
-func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunnel bool) bool {
+func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunnel bool, family api.ExitFamilyMode) bool {
+	if tunnel && !exitGuardFamilyValid(family) {
+		return false
+	}
 	objects, ok := exitGuardObjects(raw)
 	if !ok {
 		return false
@@ -20,6 +25,7 @@ func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunne
 	tables := 0
 	chains := map[string]bool{}
 	var rules []any
+	var forwarding []any
 	for _, object := range objects {
 		if len(object) != 1 {
 			return false
@@ -46,10 +52,14 @@ func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunne
 				}
 				chains[name] = true
 			case "rule":
-				if len(body) != 4 || body["family"] != "inet" || body["table"] != table || body["chain"] != "output" {
+				if len(body) != 4 || body["family"] != "inet" || body["table"] != table || (body["chain"] != "output" && body["chain"] != "forward") {
 					return false
 				}
-				rules = append(rules, body["expr"])
+				if body["chain"] == "output" {
+					rules = append(rules, body["expr"])
+				} else {
+					forwarding = append(forwarding, body["expr"])
+				}
 			default:
 				return false
 			}
@@ -79,9 +89,31 @@ func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunne
 		return false
 	}
 	if tunnel {
-		want = append(want, []any{map[string]any{"match": map[string]any{"op": "==", "left": map[string]any{"meta": map[string]any{"key": "oifname"}}, "right": device}}, map[string]any{"accept": nil}})
+		selected, ordinary := exitGuardFamilyProtocols(family)
+		tunRule := []any{map[string]any{"match": map[string]any{"op": "==", "left": map[string]any{"meta": map[string]any{"key": "oifname"}}, "right": device}}, map[string]any{"accept": nil}}
+		if ordinary != "" {
+			ordinaryRule := []any{exitGuardNFProtoMatch(ordinary), map[string]any{"accept": nil}}
+			if !reflect.DeepEqual(forwarding, []any{ordinaryRule}) {
+				return false
+			}
+			want = append(want, ordinaryRule)
+			tunRule = append([]any{exitGuardNFProtoMatch(selected)}, tunRule...)
+		} else if len(forwarding) != 0 {
+			return false
+		}
+		want = append(want, tunRule)
+	} else if len(forwarding) != 0 {
+		return false
 	}
 	return reflect.DeepEqual(rules, want)
+}
+
+func exitGuardNFProtoMatch(protocol string) any {
+	number := json.Number("2")
+	if protocol == "ipv6" {
+		number = json.Number("10")
+	}
+	return map[string]any{"match": map[string]any{"op": "==", "left": map[string]any{"meta": map[string]any{"key": "nfproto"}}, "right": number}}
 }
 
 // Querying all tables avoids interpreting a missing-table command error as

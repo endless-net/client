@@ -419,7 +419,7 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 				result.OK = false
 				return result, err
 			}
-			if err := guard.OpenTunnel(ctx); err != nil {
+			if err := guard.OpenTunnel(ctx, selection.Family); err != nil {
 				result.OK = false
 				return result, err
 			}
@@ -496,6 +496,11 @@ func (e *WireGuardEngine) completePlanForInterface(plan *wireGuardEnginePlan, in
 	}
 	if plan.exitSelection != nil && (e.exitGuard == nil || (routerCfg.FirewallMark != 0 && routerCfg.FirewallMark != e.exitGuard.mark)) {
 		return errors.New("exit route mark does not match OS protection")
+	}
+	if plan.exitSelection != nil {
+		// The owned guard also defines the transport mark. A platform route
+		// projection without a mark cannot silently create unmarked exit sockets.
+		routerCfg.FirewallMark = e.exitGuard.mark
 	}
 	initialUAPI, err := wireGuardEngineUAPIForExit(plan.privateKey, plan.networkMap, e.opts.ListenPort, false, routerCfg.FirewallMark, nil, false, plan.config, plan.exitSelection, time.Now())
 	if err != nil {

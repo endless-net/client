@@ -31,6 +31,9 @@ type clientRPCExitExecutor struct {
 	// Release runs only after the durable clear checkpoint. It must repeat OS
 	// cleanup/readback safely after restart and retain containment on ambiguity.
 	Release func(context.Context, string, Config) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error)
+	// Observe runs under Lock and rechecks native enforcement independently of
+	// a previous successful operation. It does not mutate durable intent.
+	Observe func(context.Context, Config) (*ipc.ExitNodeStatus, error)
 }
 
 func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) bool {
@@ -141,6 +144,43 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	// ReconcileOperation serializes its changed operation only after its callback
+	// returns. The dispatch snapshot captured above therefore still contains the
+	// prior serialized operation. Read the committed RUNNING record under the
+	// mutation lock, without substituting a changed journal or authority scope.
+	if !releasing {
+		ready, contain = false, false
+		_, err = m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			plan := cfg.RPCState.ExitChange
+			if plan == nil || plan.OperationID != id || rpcOperationTerminal(op.State) {
+				return errRPCNoChange
+			}
+			if plan.Containing {
+				contain = true
+				return errRPCNoChange
+			}
+			if op.State != ipc.OperationState_OPERATION_STATE_RUNNING || !reflect.DeepEqual(plan, input.RPCState.ExitChange) || !exitChangeBound(cfg, plan, op) {
+				markExitContainment(cfg, plan, ipc.ErrorCode_ERROR_CODE_STALE_STATE, m.now())
+				contain = true
+				return nil
+			}
+			input = clonePersistentConfig(*cfg)
+			ready = true
+			return errRPCNoChange
+		})
+		if errors.Is(err, errRPCNoChange) {
+			err = nil
+		}
+		if err == nil && contain {
+			return m.containExitChange(ctx, id, executor)
+		}
+		if err != nil || !ready {
+			return err
+		}
 	}
 	var observed *ipc.ExitNodeStatus
 	var continuity ipc.ConnectionContinuity

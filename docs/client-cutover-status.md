@@ -33,6 +33,14 @@ native adapter/worker и не заменяет платформенную при
 Полная цель не завершена. Релиз v0.6.0 опубликован, но публикация не является
 приёмкой всех требований BA/SA. Текущие изменения после релиза находятся в main.
 
+Native adapter increment от 2026-09-21: добавлены callbacks Apply/Clear/Contain/
+Release с привязкой к durable operation и независимыми наблюдениями, а также
+чтение runtime exit status под общим lock с повторной проверкой прав и контекста.
+Single-family firewall сохраняет обычную политику невыбранной семьи. После
+подтверждённого containment ошибка control authority не блокирует запуск
+локального recovery RPC. Запуск worker в агенте, восстановление сохранённого
+selection, постоянная invalidation и LAN_ALLOW ещё не завершены.
+
 ## Реализовано и остаётся
 
 | Область | Что реализовано | Что ещё требуется |
@@ -40,7 +48,7 @@ native adapter/worker и не заменяет платформенную при
 | IPC и потребители | Protobuf client.v0, generated API, локальный gRPC через pipe/Unix socket; CLI и recovery helper используют v0 | Полный аудит удаления legacy, совместной работы Go/Dart и всех потребителей; приёмка UI относится к внешнему репозиторию |
 | Состояние и операции | Durable операции, идентификаторы запросов, replay, проверки владельца/профиля, конфликты и восстановление; snapshot/events | Проверка каждой мутации и перехода по матрице, включая права, CAS, отмену, рестарт и приватность событий |
 | Enrollment, trust, session | Workers и транспорт enrollment/trust/renewal, сохранение прогресса, ротация credentials, отмена старых запросов и защита от поздних ответов | Полный аудит cleanup/concurrency и контекста; подтверждение producer semantics и реального seamless renewal |
-| Exit | Get/Select/Clear handlers, readiness gate, durable journal, worker с injected executor; checkpoint release и отдельное durable ownership; Linux containment и engine hooks, проверка маршрутов/правил перед открытием | Production native adapter и запуск worker в агенте; native Clear/release с crash recovery, DNS до exit, firewall readback и invalidation, OS/LAN qualification |
+| Exit | Get/Select/Clear handlers, durable journal и ownership, checkpoint release; Linux executor и scoped cleanup после рестарта; readback firewall/routes, runtime status и DNS lease; разделение IP-семей | Запуск worker в агенте, resume сохранённого selection, ongoing invalidation, steady-state status после Clear, capabilities/events, LAN_ALLOW и OS qualification |
 | Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN с проверкой адреса/протокола/порта, наблюдения запретов; retirement/возврат choices при аутентифицированной смене map | Положительное подтверждение доступности route/path/application, полный rollback/restart audit и реальные OS-эффекты |
 | Preferences и lifecycle | Set/Reset inbound/DNS/routes и lifecycle-полей, managed policy/locks/source; Windows power/logoff paths и resume-policy refresh | Полный аудит эффектов каждой настройки, доставка событий на других ОС, восстановление источников событий и native qualification |
 | Networks/profiles | Контекстные проверки, guards переключения, изоляция состояния и защита от устаревших ответов | Полная смена identity/map/routes, recovery и фактическая изоляция при переключении сети/provider |
@@ -63,15 +71,14 @@ native adapter/worker и не заменяет платформенную при
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: internal/client 104.626 s в итоговом запуске
-с restart cleanup и точным владением policy rules; остальные пакеты прошли.
+и `go test -short ./...`: internal/client 103.293 s в итоговом запуске
+с native executor, family-scoped guard и RPC observation; остальные пакеты прошли.
 Локальные native/E2E/installer проверки не запускались.
 
-1. Завершить native exit Apply/Clear/Contain и recovery; связать его с агентом
-   только после реализации необходимых эффектов и наблюдений. После добавленных
-   nft readback, DNS source/dialer, route observations и отзыв соединений нужны
-   полный native executor, подключение scoped cleanup после рестарта к worker и invalidation
-   firewall/routes. Точный
+1. Связать native exit executor с агентом после реализации resume сохранённого
+   selection, lifetime invalidation firewall/routes и наблюдения после Clear.
+   Подключить capabilities/catalog/events, завершить LAN_ALLOW и recovery при
+   изменении настроенного интерфейса с сохранённым старым protection scope. Точный
    combined IPv6 ND readback и socket effects остаются предметом native qualification.
 2. Довести resources, preferences/lifecycle и переключение сетей до реальных
    эффектов с положительными и отрицательными unit assertions.

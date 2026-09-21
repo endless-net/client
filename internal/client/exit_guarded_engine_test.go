@@ -103,7 +103,7 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 					return nil, errors.New("injected firewall failure")
 				}
 				protected.Store(true)
-				open := strings.Contains(batch, "output oifname \""+guardName+"\" accept")
+				open := strings.Contains(batch, "output meta nfproto ipv4 oifname \""+guardName+"\" accept")
 				opened.Store(open)
 				if open && (!engine.configured || !engine.exitFilter.allows(aclTestPacket("8.8.8.8", 6, 443), false, time.Now())) {
 					t.Error("TUN opened before engine/filter commit")
@@ -128,8 +128,9 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 			}
 			engine.mu.Lock()
 			hasDefault := strings.Contains(engine.uapi, "allowed_ip=0.0.0.0/0")
+			hasMark := strings.Contains(engine.uapi, "fwmark=51820\n") && engine.routerCfg.FirewallMark == 51820
 			engine.mu.Unlock()
-			if err != nil || !result.OK || !opened.Load() || !hasDefault {
+			if err != nil || !result.OK || !opened.Load() || !hasDefault || !hasMark {
 				t.Fatal("protected engine did not apply explicit selection", err, result)
 			}
 			if scenario == "replace_ordinary" && created.Load() != 2 {

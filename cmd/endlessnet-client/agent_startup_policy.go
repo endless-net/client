@@ -12,10 +12,14 @@ import (
 )
 
 func initializeAgentStartup(ctx context.Context, engine agentWireGuard, store *client.ConfigStore, timeout time.Duration, offline bool) error {
-	if err := engine.RestoreExitProtection(ctx, store.Read()); err != nil {
-		return err
+	restoreErr := engine.RestoreExitProtection(ctx, store.Read())
+	if restoreErr != nil && !client.ExitProtectionRestoredWithoutAuthority(restoreErr) {
+		return restoreErr
 	}
-	if !offline {
+	if restoreErr != nil {
+		log.Printf("exit protection restored; local recovery remains available without control authority")
+	}
+	if !offline && restoreErr == nil {
 		if err := refreshAgentStartupPolicy(ctx, engine, store, timeout); err != nil {
 			log.Printf("startup policy refresh unavailable; local recovery remains available")
 		}

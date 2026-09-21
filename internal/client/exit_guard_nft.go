@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 // linuxExitGuard owns only its interface-specific inet table. Kernel rules
@@ -47,18 +49,21 @@ func newLinuxExitGuard(interfaceName string, mark uint32, runner commandInputRun
 // host Neighbor Discovery, including physical-default application traffic.
 // It also closes TUN egress while routes, identity or packet filters are changing.
 func (g *linuxExitGuard) Contain(ctx context.Context) error {
-	return g.replace(ctx, false)
+	return g.replace(ctx, false, "")
 }
 
-func (g *linuxExitGuard) OpenTunnel(ctx context.Context) error {
-	return g.replace(ctx, true)
+func (g *linuxExitGuard) OpenTunnel(ctx context.Context, family api.ExitFamilyMode) error {
+	if !exitGuardFamilyValid(family) {
+		return errors.New("invalid exit guard family")
+	}
+	return g.replace(ctx, true, family)
 }
 
-func (g *linuxExitGuard) replace(ctx context.Context, tunnel bool) error {
-	return g.apply(ctx, g.rulesBatch(tunnel), tunnel, false)
+func (g *linuxExitGuard) replace(ctx context.Context, tunnel bool, family api.ExitFamilyMode) error {
+	return g.apply(ctx, g.rulesBatch(tunnel, family), tunnel, false, family)
 }
 
-func (g *linuxExitGuard) rulesBatch(tunnel bool) string {
+func (g *linuxExitGuard) rulesBatch(tunnel bool, family api.ExitFamilyMode) string {
 	// Recreate the exclusively owned table in one netlink transaction. Flushing
 	// rules alone would retain old chain hooks and table flags after restart.
 	// The initial idempotent add also permits first use when the table is absent.
@@ -77,37 +82,100 @@ func (g *linuxExitGuard) rulesBatch(tunnel bool) string {
 	// the guarded TUN, echo traffic, router advertisements or redirects here.
 	fmt.Fprintf(&b, "add rule inet %s output oifname != %q ip6 hoplimit 255 icmpv6 type { nd-router-solicit, nd-neighbor-solicit, nd-neighbor-advert } icmpv6 code 0 accept\n", g.table, g.interfaceName)
 	if tunnel {
-		fmt.Fprintf(&b, "add rule inet %s output oifname %q accept\n", g.table, g.interfaceName)
+		selected, ordinary := exitGuardFamilyProtocols(family)
+		if ordinary != "" {
+			fmt.Fprintf(&b, "add rule inet %s output meta nfproto %s accept\n", g.table, ordinary)
+			fmt.Fprintf(&b, "add rule inet %s forward meta nfproto %s accept\n", g.table, ordinary)
+			fmt.Fprintf(&b, "add rule inet %s output meta nfproto %s oifname %q accept\n", g.table, selected, g.interfaceName)
+		} else {
+			fmt.Fprintf(&b, "add rule inet %s output oifname %q accept\n", g.table, g.interfaceName)
+		}
 	}
-	// Forwarding remains closed: this guard does not implement an exit provider.
+	// Selected-family forwarding remains closed; this is not an exit provider.
 	return b.String()
+}
+
+func exitGuardFamilyValid(family api.ExitFamilyMode) bool {
+	return family == api.ExitFamilyIPv4Only || family == api.ExitFamilyIPv6Only || family == api.ExitFamilyDualStack
+}
+
+func exitGuardFamilyProtocols(family api.ExitFamilyMode) (selected, ordinary string) {
+	switch family {
+	case api.ExitFamilyIPv4Only:
+		return "ipv4", "ipv6"
+	case api.ExitFamilyIPv6Only:
+		return "ipv6", "ipv4"
+	default:
+		return "", ""
+	}
+}
+
+func (g *linuxExitGuard) Observe(ctx context.Context, family api.ExitFamilyMode) error {
+	if !exitGuardFamilyValid(family) {
+		return errors.New("invalid exit guard family")
+	}
+	return g.observe(ctx, true, false, family)
+}
+func (g *linuxExitGuard) ObserveContained(ctx context.Context) error {
+	return g.observe(ctx, false, false, "")
+}
+func (g *linuxExitGuard) ObserveAbsent(ctx context.Context) error {
+	return g.observe(ctx, false, true, "")
+}
+func (g *linuxExitGuard) observe(ctx context.Context, tunnel, absent bool, family api.ExitFamilyMode) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	args := []string{"-j", "-n", "list", "table", "inet", g.table}
+	if absent {
+		args = []string{"-j", "-n", "list", "tables"}
+	}
+	raw, err := g.run(ctx, "", "nft", args...)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil {
+		return errors.New("exit guard readback failed")
+	}
+	if absent {
+		if !exitGuardTableAbsent(raw, g.table) {
+			return errors.New("exit guard release is not confirmed")
+		}
+	} else if !exitGuardRulesObserved(raw, g.table, g.interfaceName, g.mark, tunnel, family) {
+		return errors.New("exit guard enforcement is not confirmed")
+	}
+	return nil
 }
 
 func (g *linuxExitGuard) Release(ctx context.Context) error {
 	// Creating an absent table and deleting it in the same transaction makes
 	// crash/restart cleanup idempotent without parsing localized command errors.
-	return g.apply(ctx, fmt.Sprintf("add table inet %s\ndelete table inet %s\n", g.table, g.table), false, true)
+	return g.apply(ctx, fmt.Sprintf("add table inet %s\ndelete table inet %s\n", g.table, g.table), false, true, "")
 }
 
-func (g *linuxExitGuard) apply(ctx context.Context, batch string, tunnel, release bool) error {
+func (g *linuxExitGuard) apply(ctx context.Context, batch string, tunnel, release bool, family api.ExitFamilyMode) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	err := g.applyObserved(ctx, batch, tunnel, release)
+	err := g.applyObserved(ctx, batch, tunnel, release, family)
 	if err != nil && (tunnel || release) {
 		// Either transaction could have opened traffic before cancellation or a
 		// failed readback. Restore closed protection with a separately bounded
 		// context; never turn an ambiguous result into success.
 		recovery, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		return errors.Join(err, g.applyObserved(recovery, g.rulesBatch(false), false, false))
+		return errors.Join(err, g.applyObserved(recovery, g.rulesBatch(false, ""), false, false, ""))
 	}
 	return err
 }
 
-func (g *linuxExitGuard) applyObserved(ctx context.Context, batch string, tunnel, release bool) error {
+func (g *linuxExitGuard) applyObserved(ctx context.Context, batch string, tunnel, release bool, family api.ExitFamilyMode) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
@@ -138,7 +206,7 @@ func (g *linuxExitGuard) applyObserved(ctx context.Context, batch string, tunnel
 		if !exitGuardTableAbsent(raw, g.table) {
 			return errors.New("exit guard release is not confirmed")
 		}
-	} else if !exitGuardRulesObserved(raw, g.table, g.interfaceName, g.mark, tunnel) {
+	} else if !exitGuardRulesObserved(raw, g.table, g.interfaceName, g.mark, tunnel, family) {
 		return errors.New("exit guard enforcement is not confirmed")
 	}
 	return ctx.Err()

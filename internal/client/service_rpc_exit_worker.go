@@ -31,13 +31,19 @@ func (s *ClientRPCService) startExitWorker(ctx context.Context, executor clientR
 	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	s.exitWorker = w
 	s.exitModes = slices.Clone(executor.Modes)
+	observationCtx, cancelObservation := context.WithCancel(ctx)
+	if executor.Observe != nil {
+		s.exitObservation = &clientRPCExitObservationSource{ctx: observationCtx, lock: executor.Lock, observe: executor.Observe}
+	}
 	done := make(chan error, 1)
 	go func() {
 		var result error
 		defer func() {
+			cancelObservation()
 			s.exitMu.Lock()
 			s.exitWorker = nil
 			s.exitModes = nil
+			s.exitObservation = nil
 			s.exitMu.Unlock()
 			close(w.done)
 			done <- result

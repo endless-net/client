@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 func TestLinuxExitGuardAtomicContainmentAndRelease(t *testing.T) {
@@ -58,7 +60,7 @@ func TestLinuxExitGuardAtomicContainmentAndRelease(t *testing.T) {
 	if strings.Count(closed, " accept\n") != 3 {
 		t.Fatal("unexpected direct-traffic exemption")
 	}
-	if err := guard.OpenTunnel(ctx); err != nil {
+	if err := guard.OpenTunnel(ctx, api.ExitFamilyDualStack); err != nil {
 		t.Fatal(err)
 	}
 	open := batches[1]
@@ -118,7 +120,7 @@ func TestLinuxExitGuardRejectsUnsafeIdentityAndCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	for _, action := range []func(context.Context) error{guard.Contain, guard.OpenTunnel, guard.Release} {
+	for _, action := range []func(context.Context) error{guard.Contain, func(ctx context.Context) error { return guard.OpenTunnel(ctx, api.ExitFamilyDualStack) }, guard.Release} {
 		if !errors.Is(action(ctx), context.Canceled) {
 			t.Fatal("cancelled operation was accepted")
 		}
@@ -132,7 +134,113 @@ func TestLinuxExitGuardRejectsUnsafeIdentityAndCancellation(t *testing.T) {
 		cancel()
 		return nil, nil
 	})
-	if !errors.Is(guard.OpenTunnel(ctx), context.Canceled) || calls != 2 {
+	if !errors.Is(guard.OpenTunnel(ctx, api.ExitFamilyDualStack), context.Canceled) || calls != 2 {
 		t.Fatal("late cancellation must restore closed containment")
+	}
+}
+
+func TestLinuxExitGuardFamilyScopeAndReadOnlyObservation(t *testing.T) {
+	for _, family := range []api.ExitFamilyMode{api.ExitFamilyIPv4Only, api.ExitFamilyIPv6Only, api.ExitFamilyDualStack} {
+		var batches []string
+		guard, err := newLinuxExitGuard("exit0", 51820, exitGuardReadbackRunner(t, "exit0", 51820, func(_ context.Context, input, _ string, _ ...string) ([]byte, error) {
+			batches = append(batches, input)
+			return nil, nil
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := guard.OpenTunnel(t.Context(), family); err != nil {
+			t.Fatal(err)
+		}
+		if err := guard.Observe(t.Context(), family); err != nil {
+			t.Fatal(err)
+		}
+		if len(batches) != 1 {
+			t.Fatal("observation mutated firewall")
+		}
+		if err := guard.ObserveContained(t.Context()); err == nil {
+			t.Fatal("open rule set accepted as containment")
+		}
+		if err := guard.ObserveAbsent(t.Context()); err == nil {
+			t.Fatal("open table accepted as absent")
+		}
+		batch := batches[0]
+		if family != api.ExitFamilyDualStack {
+			selected, ordinary := "ipv4", "ipv6"
+			if family == api.ExitFamilyIPv6Only {
+				selected, ordinary = "ipv6", "ipv4"
+			}
+			for _, part := range []string{"output meta nfproto " + ordinary + " accept", "forward meta nfproto " + ordinary + " accept", "output meta nfproto " + selected + " oifname \"exit0\" accept"} {
+				if !strings.Contains(batch, part) {
+					t.Fatalf("missing %s", part)
+				}
+			}
+			if strings.Contains(batch, "forward meta nfproto "+selected+" accept") {
+				t.Fatal("selected-family forwarding opened")
+			}
+			if guard.Observe(t.Context(), api.ExitFamilyDualStack) == nil {
+				t.Fatal("single family accepted as dual stack")
+			}
+		}
+		if err := guard.Contain(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(batches[1], "meta nfproto") {
+			t.Fatal("containment preserved family exemption")
+		}
+		if err := guard.ObserveContained(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if err := guard.Release(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if err := guard.ObserveAbsent(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestLinuxExitGuardRejectsUnknownFamilyWithoutMutation(t *testing.T) {
+	calls := 0
+	guard, err := newLinuxExitGuard("exit0", 51820, func(context.Context, string, string, ...string) ([]byte, error) { calls++; return nil, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range []api.ExitFamilyMode{"", "unknown"} {
+		if guard.OpenTunnel(t.Context(), family) == nil || guard.Observe(t.Context(), family) == nil {
+			t.Fatal("invalid family accepted")
+		}
+	}
+	if calls != 0 {
+		t.Fatal("invalid family caused command")
+	}
+}
+
+func TestLinuxExitGuardWrongAppliedFamilyRestoresBothFamilyContainment(t *testing.T) {
+	var batches []string
+	base := exitGuardReadbackRunner(t, "exit0", 51820, func(_ context.Context, input, _ string, _ ...string) ([]byte, error) {
+		batches = append(batches, input)
+		return nil, nil
+	})
+	guard, err := newLinuxExitGuard("exit0", 51820, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := true
+	guard.run = func(ctx context.Context, input, name string, args ...string) ([]byte, error) {
+		if input == "" && first {
+			first = false
+			return exitGuardFamilyReadbackFixture(guard.table, "exit0", 51820, true, api.ExitFamilyIPv6Only), nil
+		}
+		return base(ctx, input, name, args...)
+	}
+	if guard.OpenTunnel(t.Context(), api.ExitFamilyIPv4Only) == nil {
+		t.Fatal("wrong applied family accepted")
+	}
+	if len(batches) != 2 || strings.Contains(batches[1], "meta nfproto") || strings.Contains(batches[1], `oifname "exit0" accept`) {
+		t.Fatal("ambiguous apply did not restore closed containment")
+	}
+	if err := guard.ObserveContained(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 }

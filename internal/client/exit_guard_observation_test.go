@@ -8,9 +8,53 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 const exitGuardEmptyTablesFixture = `{"nftables":[{"metainfo":{"version":"1.1.5","release_name":"test fixture","json_schema_version":1}}]}`
+
+func exitGuardFamilyReadbackFixture(table, device string, mark uint32, open bool, family api.ExitFamilyMode) []byte {
+	if !open || family == api.ExitFamilyDualStack {
+		return exitGuardReadbackFixture(table, device, mark, open)
+	}
+	selected, ordinary := 2, 10
+	if family == api.ExitFamilyIPv6Only {
+		selected, ordinary = 10, 2
+	}
+	base := strings.TrimSuffix(string(exitGuardReadbackFixture(table, device, mark, false)), "]}")
+	for _, chain := range []string{"output", "forward"} {
+		base += fmt.Sprintf(`,{"rule":{"family":"inet","table":%q,"chain":%q,"expr":[{"match":{"op":"==","left":{"meta":{"key":"nfproto"}},"right":%d}},{"accept":null}]}}`, table, chain, ordinary)
+	}
+	base += fmt.Sprintf(`,{"rule":{"family":"inet","table":%q,"chain":"output","expr":[{"match":{"op":"==","left":{"meta":{"key":"nfproto"}},"right":%d}},{"match":{"op":"==","left":{"meta":{"key":"oifname"}},"right":%q}},{"accept":null}]}}]}`, table, selected, device)
+	return []byte(base)
+}
+
+func TestExitGuardReadbackRequiresExactSelectedFamilyInBothChains(t *testing.T) {
+	for _, family := range []api.ExitFamilyMode{api.ExitFamilyIPv4Only, api.ExitFamilyIPv6Only} {
+		good := string(exitGuardFamilyReadbackFixture("owned", "exit0", 51820, true, family))
+		if !exitGuardRulesObserved([]byte(good), "owned", "exit0", 51820, true, family) {
+			t.Fatal("family fixture rejected")
+		}
+		other := api.ExitFamilyIPv4Only
+		if family == other {
+			other = api.ExitFamilyIPv6Only
+		}
+		if exitGuardRulesObserved([]byte(good), "owned", "exit0", 51820, true, other) || exitGuardRulesObserved([]byte(good), "owned", "exit0", 51820, false, "") {
+			t.Fatal("incorrect family/state accepted")
+		}
+		for _, bad := range []string{
+			strings.Replace(good, `"chain":"forward"`, `"chain":"output"`, 1),
+			strings.ReplaceAll(good, `"key":"nfproto"`, `"key":"l4proto"`),
+			strings.ReplaceAll(good, `"right":10`, `"right":2`),
+			strings.Replace(good, `"name":"forward"`, `"name":"other"`, 1),
+		} {
+			if exitGuardRulesObserved([]byte(bad), "owned", "exit0", 51820, true, family) {
+				t.Fatal("widened family rule accepted")
+			}
+		}
+	}
+}
 
 // A numeric libnftables-json fixture, independent of the production matcher.
 // Objects follow nft listing order: each chain precedes its own rules.
@@ -38,12 +82,20 @@ func exitGuardReadbackRunner(t *testing.T, device string, mark uint32, mutate co
 	scope := sha256.Sum256([]byte(device))
 	table := fmt.Sprintf("endlessnet_exit_%x", scope[:12])
 	present, open := false, false
+	family := api.ExitFamilyDualStack
 	return func(ctx context.Context, input, name string, args ...string) ([]byte, error) {
 		if name != "nft" || reflect.DeepEqual(args, []string{"-f", "-"}) {
 			raw, err := mutate(ctx, input, name, args...)
 			if name == "nft" && err == nil {
 				present = strings.Contains(input, "add chain inet "+table+" output")
-				open = strings.Contains(input, fmt.Sprintf("output oifname %q accept", device))
+				open = strings.Contains(input, fmt.Sprintf("oifname %q accept", device))
+				family = api.ExitFamilyDualStack
+				if strings.Contains(input, "forward meta nfproto ipv6 accept") {
+					family = api.ExitFamilyIPv4Only
+				}
+				if strings.Contains(input, "forward meta nfproto ipv4 accept") {
+					family = api.ExitFamilyIPv6Only
+				}
 			}
 			return raw, err
 		}
@@ -57,7 +109,7 @@ func exitGuardReadbackRunner(t *testing.T, device string, mark uint32, mutate co
 			if !present {
 				return nil, errors.New("table absent")
 			}
-			return exitGuardReadbackFixture(table, device, mark, open), nil
+			return exitGuardFamilyReadbackFixture(table, device, mark, open, family), nil
 		}
 		if reflect.DeepEqual(args, []string{"-j", "-n", "list", "tables"}) {
 			if present {
@@ -73,7 +125,7 @@ func exitGuardReadbackRunner(t *testing.T, device string, mark uint32, mutate co
 func TestExitGuardReadbackRejectsWideningAndMalformedRules(t *testing.T) {
 	for _, open := range []bool{false, true} {
 		good := string(exitGuardReadbackFixture("owned", "exit0", 51820, open))
-		if !exitGuardRulesObserved([]byte(good), "owned", "exit0", 51820, open) {
+		if !exitGuardRulesObserved([]byte(good), "owned", "exit0", 51820, open, api.ExitFamilyDualStack) {
 			t.Fatal("valid numeric nft readback rejected")
 		}
 		for _, change := range []struct{ name, from, to string }{
@@ -99,17 +151,17 @@ func TestExitGuardReadbackRejectsWideningAndMalformedRules(t *testing.T) {
 				if bad == good {
 					t.Fatal("fixture mutation did not apply")
 				}
-				if exitGuardRulesObserved([]byte(bad), "owned", "exit0", 51820, open) {
+				if exitGuardRulesObserved([]byte(bad), "owned", "exit0", 51820, open, api.ExitFamilyDualStack) {
 					t.Fatal("ambiguous/widened readback accepted")
 				}
 			})
 		}
-		if exitGuardRulesObserved([]byte(good), "owned", "exit0", 51820, !open) {
+		if exitGuardRulesObserved([]byte(good), "owned", "exit0", 51820, !open, api.ExitFamilyDualStack) {
 			t.Fatal("wrong tunnel gate state accepted")
 		}
 	}
 	for _, raw := range []string{"", `null`, `{"nftables":null}`, exitGuardEmptyTablesFixture + `{}`, strings.Repeat(" ", 1<<20) + exitGuardEmptyTablesFixture, `{"nftables":[{"metainfo":{"version":"nft","release_name":"fixture","json_schema_version":2}}]}`} {
-		if exitGuardRulesObserved([]byte(raw), "owned", "exit0", 51820, false) || exitGuardTableAbsent([]byte(raw), "owned") {
+		if exitGuardRulesObserved([]byte(raw), "owned", "exit0", 51820, false, api.ExitFamilyDualStack) || exitGuardTableAbsent([]byte(raw), "owned") {
 			t.Fatal("malformed/unsupported/oversize JSON accepted")
 		}
 	}
@@ -148,7 +200,7 @@ func TestExitGuardReadbackAcceptsOnlyExactRestrictiveNDDependencies(t *testing.T
 		}
 		predicate := fmt.Sprintf(`{"match":{"op":"==","left":%s,"right":%s}},`, left, value)
 		good := strings.Replace(base, needle, predicate+needle, 1)
-		if good == base || !exitGuardRulesObserved([]byte(good), "owned", "exit0", 51820, false) {
+		if good == base || !exitGuardRulesObserved([]byte(good), "owned", "exit0", 51820, false, api.ExitFamilyDualStack) {
 			t.Fatal("exact protocol prerequisite rejected", left)
 		}
 		for _, bad := range []string{
@@ -156,7 +208,7 @@ func TestExitGuardReadbackAcceptsOnlyExactRestrictiveNDDependencies(t *testing.T
 			strings.Replace(base, needle, strings.Replace(predicate, `"op":"=="`, `"op":"!="`, 1)+needle, 1),
 			strings.Replace(base, needle, strings.Replace(predicate, `"right":`+value, `"right":0`, 1)+needle, 1),
 		} {
-			if exitGuardRulesObserved([]byte(bad), "owned", "exit0", 51820, false) {
+			if exitGuardRulesObserved([]byte(bad), "owned", "exit0", 51820, false, api.ExitFamilyDualStack) {
 				t.Fatal("noncanonical prerequisite ignored", left)
 			}
 		}
@@ -226,7 +278,7 @@ func TestExitGuardNativeSuccessRequiresReadbackAndRecoversAmbiguity(t *testing.T
 				case "contain":
 					err = guard.Contain(ctx)
 				case "open":
-					err = guard.OpenTunnel(ctx)
+					err = guard.OpenTunnel(ctx, api.ExitFamilyDualStack)
 				case "release":
 					err = guard.Release(ctx)
 				}

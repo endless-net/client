@@ -35,7 +35,7 @@ func (e *startupOrderEngine) ControlPlaneHTTPClient(client.Config) (*http.Client
 }
 
 func TestAgentStartupRestoresGuardBeforePolicyAndIntent(t *testing.T) {
-	for _, phase := range []string{"ready", "guard_failure", "cancelled"} {
+	for _, phase := range []string{"ready", "guard_failure", "recovery_error_text", "cancelled"} {
 		path := filepath.Join(t.TempDir(), "client.json")
 		cfg := client.Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic", ControlPlaneURLs: []string{"https://control.example"}, ConnectionIntent: &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredConnected, Reason: "user_connect"}}
 		if err := client.SaveConfig(path, cfg); err != nil {
@@ -55,8 +55,12 @@ func TestAgentStartupRestoresGuardBeforePolicyAndIntent(t *testing.T) {
 		if phase == "guard_failure" {
 			engine.failure = errors.New("guard failed")
 		}
+		if phase == "recovery_error_text" {
+			// Text alone is not proof of observed native containment.
+			engine.failure = errors.New("exit protection restored without control authority")
+		}
 		err = initializeAgentStartup(ctx, engine, store, time.Second, false)
-		if phase == "guard_failure" {
+		if phase == "guard_failure" || phase == "recovery_error_text" {
 			if !errors.Is(err, engine.failure) || !reflect.DeepEqual(engine.order, []string{"guard"}) || !reflect.DeepEqual(before, store.Read()) {
 				t.Fatal("failed guard allowed policy or intent effects")
 			}

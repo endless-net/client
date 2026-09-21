@@ -22,6 +22,50 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Native adapter increment (2026-09-21): the Linux executor now binds effects to
+the dispatched durable operation and protection scope, applies through the
+engine, and independently observes firewall/routes and committed packet policy.
+Dispatch rereads the saved RUNNING operation after its transaction commits;
+the callback's earlier snapshot still contains the previous serialized state
+and cannot be used as native authorization evidence. A changed binding during
+that interval starts containment instead of applying the old snapshot.
+Live WireGuard UAPI must match committed peer keys, endpoints, canonical route
+sets and the guard's transport mark; selected defaults cannot belong to another
+peer. The guard supplies the mark even when a platform route projection omits
+it. DNS-dependent application also rechecks the engine's current source lease.
+UAPI comparison is bounded and never returns raw keys or device output. Engine
+path reconciliation updates the committed endpoint; autonomous roaming remains
+unconfirmed until reconciled. This is configuration evidence, not a handshake
+or application-reachability guarantee.
+Clear uses stopped-runtime recovery before its durable release checkpoint;
+Release repeats cleanup and observes absence. Read-only RPC observation is
+serialized with effects and must not promote an old operation result to current
+runtime status. The host worker is not yet enabled: committed-selection resume,
+ongoing firewall/route invalidation and LAN_ALLOW remain required.
+The read path currently observes settled active selections only. Pending changes,
+inactive profiles and the steady state after Clear retain unknown runtime status;
+the Clear operation itself requires observed cleanup/release before success.
+Read capabilities, catalog selectability and snapshot/event integration still
+need to be connected with the host lifecycle.
+The adapter currently requires its configured interface to equal the durable
+protection interface. Host recovery must resolve an interface-option change
+against the original protection scope before enabling Clear; it must not simply
+substitute the newly configured interface or remove the old protection.
+
+The firewall now preserves ordinary output/forward policy for the unselected
+family in IPv4-only/IPv6-only modes and restricts its TUN gate to the selected
+family. Containment still closes both families. Startup distinguishes confirmed
+containment without control authority from unconfirmed protection: only the
+former may continue to authenticated local recovery RPC, without startup policy
+traffic. The final full short run passed (internal/client 103.293 s), alongside
+goimports, vet and lint (0 issues); native qualification remains required.
+Evidence sources for this increment are `native_exit_executor_test.go`
+(all family modes, durable checkpoint and ambiguous release),
+`native_exit_uapi_test.go` (live configuration tampering),
+`service_rpc_exit_observation_test.go` (authorization/context/source races),
+and `exit_startup_recovery_test.go` (confirmed containment without authority).
+Their injected nft/ip responses do not prove native kernel enforcement.
+
 Restart cleanup increment (2026-09-21): stopped-engine recovery first confirms
 containment, revokes control underlay, inspects both route families and removes
 only the direct default tuple belonging to the durable interface/dedicated
@@ -60,11 +104,11 @@ wrappers and a local HTTPS streaming response, not privileged networking.
 The JSON fields (`prefsrc`, IPv6 `from`, `mark`, `cache`, named `dev`) were
 cross-checked against [iproute2's route printer](https://github.com/iproute2/iproute2/blob/main/ip/iproute.c).
 
-Native adapter audit (2026-09-21): restart Clear/Contain now has an exact scoped
+Earlier native adapter audit (2026-09-21): restart Clear/Contain has an exact scoped
 cleanup step for the recovered guard; ordinary Down alone still does not prove
 that all kernel effects from a previous process disappeared. Adapter
-callbacks, host worker startup/shutdown, map-loop reconciliation and live exit
-status remain required before advertising readiness.
+callbacks were added by the later increment above; host worker startup/shutdown,
+map-loop reconciliation and live invalidation remain required before readiness.
 
 Pre-exit DNS increment (2026-09-21): the Linux source provider reads actual
 systemd-resolved Manager/Link properties and native interface addresses, bound

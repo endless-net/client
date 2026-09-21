@@ -24,14 +24,11 @@ func (s *ClientRPCService) GetExitNode(ctx context.Context, request *connect.Req
 
 // Durable request is readable even when its former grant is withdrawn. It is
 // never promoted to effective routing or OS protection without observation.
-func (s *ClientRPCService) exitNodeAs(ctx context.Context, peer local.Peer, request *ipc.GetExitNodeRequest) (*ipc.ExitNodeStatus, error) {
+func (s *ClientRPCService) exitRequestedStatusLocked(ctx context.Context, peer local.Peer, request *ipc.GetExitNodeRequest, cfg Config) (*ipc.ExitNodeStatus, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	m := s.mutations
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	cfg := m.store.Read()
 	if err := authorizeRPCPeer(peer, rpcMethod("/client.v0.ClientService/GetExitNode"), cfg); err != nil {
 		return nil, err
 	}
