@@ -10,6 +10,26 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// A clear journal is sufficient to restore blocking, never control authority.
+// In particular, a restart after Release but before its final durable commit
+// closes the guard again; the release worker must reobserve cleanup and retry.
+func (e *WireGuardEngine) restoreClearProtection(ctx context.Context, guard *linuxExitGuard) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if guard == nil || (e.exitGuard != nil && e.exitGuard != guard) || e.device != nil || e.router != nil || e.tun != nil || e.configured {
+		return errors.New("exit clear recovery requires its owned guard and stopped runtime")
+	}
+	e.exitGuard = guard
+	e.exitConfig = Config{}
+	e.exitRestoreConfig = Config{}
+	e.exitSelection = nil
+	if e.exitFilter == nil {
+		e.exitFilter = &exitPacketFilter{}
+	}
+	e.exitFilter.withdraw()
+	return guard.Contain(ctx)
+}
+
 // restoreExitUnderlay is the native adapter's pre-network recovery step for an
 // existing durable selection. It restores containment and control authority,
 // not exit routes or an applied selection. Call under the shared effect lock.

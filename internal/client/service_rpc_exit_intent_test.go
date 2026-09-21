@@ -21,7 +21,7 @@ func TestExitApplyCannotCommitAfterAcceptedDisconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	executor := clientRPCExitExecutor{Lock: &sync.Mutex{}, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+	executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Lock: &sync.Mutex{}, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 		calls++
 		if _, err := m.disconnectAs(owner, &ipc.DisconnectRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}); err != nil {
 			t.Fatal(err)

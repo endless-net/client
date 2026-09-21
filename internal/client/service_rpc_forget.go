@@ -22,6 +22,9 @@ func (m *ClientRPCMutations) forgetEnrollmentAs(peer local.Peer, request *ipc.Fo
 		if !request.Confirmed {
 			return rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 		}
+		if protection := cfg.RPCState.ExitProtection; protection != nil && protection.ProfileID == request.GetProfile().GetProfileId() {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+		}
 		// A matching enrollment is cancelled durably and drained before cleanup.
 		// Other providers still require their own explicit cancellation protocol.
 		for _, record := range cfg.RPCState.Operations {
@@ -50,6 +53,9 @@ func (m *ClientRPCMutations) forgetInactiveEnrollmentAs(peer local.Peer, request
 	op, _, err := m.acceptInternal(peer, "/client.v0.ClientService/ForgetLocalEnrollment", request, func(cfg *Config, op *ipc.Operation) error {
 		if !request.Confirmed {
 			return rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+		}
+		if protection := cfg.RPCState.ExitProtection; protection != nil && protection.ProfileID == request.GetProfile().GetProfileId() {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 		}
 		profile, err := rpcFindProfile(cfg, request.Profile)
 		if err != nil {

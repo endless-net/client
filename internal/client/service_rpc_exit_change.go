@@ -1,7 +1,9 @@
 package client
 
 import (
+	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -12,22 +14,49 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// OS ownership survives terminal operations and never confers control-plane
+// authority. Only explicit clear with confirmed release removes this record.
+type clientRPCExitProtection struct {
+	OperationID   string `json:"operation_id"`
+	ProfileID     string `json:"profile_id"`
+	OwnerID       string `json:"owner_id"`
+	NodeID        string `json:"node_id"`
+	NetworkID     string `json:"network_id"`
+	InterfaceName string `json:"interface_name"`
+	RouteTable    string `json:"route_table"`
+}
+
+func cloneExitProtection(protection *clientRPCExitProtection) *clientRPCExitProtection {
+	if protection == nil {
+		return nil
+	}
+	copy := *protection
+	return &copy
+}
+
 type clientRPCExitChange struct {
-	OperationID    string               `json:"operation_id"`
-	ProfileID      string               `json:"profile_id"`
-	OwnerID        string               `json:"owner_id"`
-	ControlOrigin  string               `json:"control_origin"`
-	NodeID         string               `json:"node_id"`
-	NetworkID      string               `json:"network_id"`
-	RouteTable     string               `json:"route_table"`
-	MapHash        string               `json:"map_hash,omitempty"`
-	Requested      *ClientExitSelection `json:"requested,omitempty"`
-	Previous       *ClientExitSelection `json:"previous,omitempty"`
-	PreviousIntent *ConnectionIntent    `json:"previous_intent,omitempty"`
-	NextAttemptAt  time.Time            `json:"next_attempt_at,omitempty"`
-	Containing     bool                 `json:"containing,omitempty"`
-	FailureCode    ipc.ErrorCode        `json:"failure_code,omitempty"`
-	FailureReason  string               `json:"failure_reason,omitempty"`
+	OperationID              string                   `json:"operation_id"`
+	ProfileID                string                   `json:"profile_id"`
+	ActiveProfileID          string                   `json:"active_profile_id"`
+	Protection               *clientRPCExitProtection `json:"protection,omitempty"`
+	OwnerID                  string                   `json:"owner_id"`
+	ControlOrigin            string                   `json:"control_origin"`
+	NodeID                   string                   `json:"node_id"`
+	NetworkID                string                   `json:"network_id"`
+	RouteTable               string                   `json:"route_table"`
+	MapHash                  string                   `json:"map_hash,omitempty"`
+	Requested                *ClientExitSelection     `json:"requested,omitempty"`
+	Previous                 *ClientExitSelection     `json:"previous,omitempty"`
+	PreviousProfileSelection *ClientExitSelection     `json:"previous_profile_selection,omitempty"`
+	PreviousIntent           *ConnectionIntent        `json:"previous_intent,omitempty"`
+	NextAttemptAt            time.Time                `json:"next_attempt_at,omitempty"`
+	Containing               bool                     `json:"containing,omitempty"`
+	// Releasing durably authorizes removal of protection only after clear's
+	// route cleanup was observed with both families still blocked. Retain the
+	// journal and previous selection until release is positively confirmed.
+	Releasing     bool          `json:"releasing,omitempty"`
+	FailureCode   ipc.ErrorCode `json:"failure_code,omitempty"`
+	FailureReason string        `json:"failure_reason,omitempty"`
 }
 
 // Trusted executor support is a set of exact pairs, never a Cartesian product
@@ -50,11 +79,28 @@ func (m *ClientRPCMutations) prepareExitChange(cfg *Config, op *ipc.Operation, r
 	if err != nil {
 		return nil, err
 	}
-	if profile.ID != cfg.RPCState.ActiveProfileID {
+	clear := op.Kind == ipc.OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE
+	protection := cfg.RPCState.ExitProtection
+	if protection != nil && (!strings.EqualFold(protection.OwnerID, cfg.LocalOwnerID) || protection.ProfileID != profile.ID) {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	}
-	if cfg.ExitSelection != nil && cfg.ExitSelection.RouteTable != cfg.WireGuardRouteTable {
+	if profile.ID != cfg.RPCState.ActiveProfileID && (!clear || protection == nil || cfg.ExitSelection != nil) {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
+	if protection != nil && !clear && (protection.NodeID != cfg.NodeID || protection.NetworkID != cfg.NetworkID || protection.RouteTable != cfg.WireGuardRouteTable) {
+		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
+	if cfg.ExitSelection != nil && cfg.ExitSelection.RouteTable != cfg.WireGuardRouteTable && (!clear || protection == nil || cfg.ExitSelection.NodeID != protection.NodeID || cfg.ExitSelection.NetworkID != protection.NetworkID || cfg.ExitSelection.RouteTable != protection.RouteTable) {
+		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
+	if clear && protection != nil && cfg.ExitSelection != nil && (cfg.ExitSelection.NodeID != protection.NodeID || cfg.ExitSelection.NetworkID != protection.NetworkID || cfg.ExitSelection.RouteTable != protection.RouteTable) {
+		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
+	if profile.ID != cfg.RPCState.ActiveProfileID && profile.Configuration.ExitSelection != nil {
+		selected := profile.Configuration.ExitSelection
+		if selected.NodeID != protection.NodeID || selected.NetworkID != protection.NetworkID || selected.RouteTable != protection.RouteTable {
+			return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
 	}
 	if cfg.RPCState.ExitChange != nil {
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
@@ -70,12 +116,21 @@ func (m *ClientRPCMutations) prepareExitChange(cfg *Config, op *ipc.Operation, r
 	}
 	op.ProfileId = profile.ID
 	plan := &clientRPCExitChange{OperationID: op.Id, ProfileID: profile.ID, OwnerID: cfg.LocalOwnerID, ControlOrigin: profile.ControlOrigin, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, Previous: cloneExitSelection(cfg.ExitSelection)}
+	plan.ActiveProfileID = cfg.RPCState.ActiveProfileID
+	plan.Protection = cloneExitProtection(protection)
+	if profile.ID != cfg.RPCState.ActiveProfileID {
+		plan.PreviousProfileSelection = cloneExitSelection(profile.Configuration.ExitSelection)
+	}
 	plan.RouteTable = cfg.WireGuardRouteTable
 	if cfg.ConnectionIntent != nil {
 		intent := *cfg.ConnectionIntent
 		plan.PreviousIntent = &intent
 	}
 	return plan, nil
+}
+
+func exitProtectionBound(cfg *Config, plan *clientRPCExitChange) bool {
+	return reflect.DeepEqual(plan.Protection, cfg.RPCState.ExitProtection)
 }
 
 func (m *ClientRPCMutations) selectExitNodeAs(peer local.Peer, request *ipc.SelectExitNodeRequest, supported []clientRPCExitMode) (*ipc.Operation, error) {

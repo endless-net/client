@@ -41,6 +41,9 @@ func (m *ClientRPCMutations) setResourceEnabledAs(peer local.Peer, request *ipc.
 		plan := cfg.RPCState.NetworkPreferenceChange
 		plan.Requested = cloneNetworkPreferences(plan.Previous)
 		plan.ResourceID = request.ResourceId
+		if _, exists := plan.RequestedResources[request.ResourceId]; !exists && len(plan.RequestedResources)+len(cfg.ResourcePreferencesRetired) >= resourcePreferenceLimit {
+			return rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
+		}
 		if plan.RequestedResources == nil {
 			plan.RequestedResources = make(map[string]bool)
 		}

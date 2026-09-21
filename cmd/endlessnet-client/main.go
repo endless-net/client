@@ -1024,6 +1024,9 @@ func enrollConfiguredClient(ctx context.Context, cfg client.Config, options clie
 		if strings.TrimSpace(cfg.NodeCredential) == "" {
 			return errors.New("pending enrollment response is missing node credential")
 		}
+		if cfg.NodeID != strings.TrimSpace(response.Node.ID) || cfg.NetworkID != strings.TrimSpace(response.Network.ID) {
+			cfg.ResourcePreferences, cfg.ResourcePreferencesRetired = nil, nil
+		}
 		cfg.NodeID = strings.TrimSpace(response.Node.ID)
 		cfg.NetworkID = strings.TrimSpace(response.Network.ID)
 		cfg.NodeApprovalState = approvalState
@@ -1759,6 +1762,9 @@ func cacheNetworkMapChecked(cfg *client.Config, response clientapi.RegisterNodeR
 	}
 	if response.Revision.Global < cfg.MapGlobalRevision {
 		return fmt.Errorf("stale global map revision %d is older than local map_global_revision %d", response.Revision.Global, cfg.MapGlobalRevision)
+	}
+	if err := client.ReconcileResourcePreferencesForMap(cfg, response, time.Now()); err != nil {
+		return err
 	}
 	cacheNetworkMap(cfg, response)
 	return nil

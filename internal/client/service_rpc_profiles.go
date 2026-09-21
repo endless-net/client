@@ -196,6 +196,9 @@ func (m *ClientRPCMutations) removeProfileAs(peer local.Peer, request *ipc.Remov
 		if err != nil {
 			return err
 		}
+		if protection := cfg.RPCState.ExitProtection; protection != nil && protection.ProfileID == profile.ID {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+		}
 		if cfg.RPCState.ActiveProfileID == profile.ID {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_PROFILE_ACTIVE)
 		}

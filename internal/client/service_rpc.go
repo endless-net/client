@@ -47,6 +47,7 @@ type ClientRPCState struct {
 	Trust                   *clientRPCTrust                     `json:"trust,omitempty"`
 	SessionRenewal          *clientRPCSessionRenewal            `json:"session_renewal,omitempty"`
 	ExitChange              *clientRPCExitChange                `json:"exit_change,omitempty"`
+	ExitProtection          *clientRPCExitProtection            `json:"exit_protection,omitempty"`
 	NetworkPreferenceChange *clientRPCNetworkPreferenceChange   `json:"network_preference_change,omitempty"`
 	NetworkSelection        *clientRPCNetworkSelection          `json:"network_selection,omitempty"`
 	Bundles                 map[string]clientRPCBundlePlan      `json:"bundles,omitempty"`

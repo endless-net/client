@@ -21,12 +21,12 @@ func TestRPCExitExecutorSerializesConcurrentAttempts(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	var calls atomic.Int32
-	executor := clientRPCExitExecutor{Lock: &sync.Mutex{}, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+	executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Lock: &sync.Mutex{}, Release: releaseExitTestCallback, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 		if calls.Add(1) == 1 {
 			close(entered)
 		}
 		<-release
-		return appliedExitTestStatus(profile.ProfileId, false), ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
+		return preparedExitClearTestStatus(profile.ProfileId), ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
 	}}
 	finished := make(chan error, 2)
 	go func() { finished <- m.reconcileExitChange(t.Context(), executor) }()
@@ -98,7 +98,7 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 			calls := 0
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			executor := clientRPCExitExecutor{Lock: &sync.Mutex{}, Modes: modes, Apply: func(_ context.Context, id string, input Config, selection *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+			executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Lock: &sync.Mutex{}, Release: releaseExitTestCallback, Modes: modes, Apply: func(_ context.Context, id string, input Config, selection *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 				calls++
 				stored, loadErr := loadConfigFile(m.store.path)
 				if loadErr != nil {
@@ -118,6 +118,9 @@ func TestRPCExitExecutorDurabilityAndRevalidation(t *testing.T) {
 					t.Fatal("wrong apply intent")
 				}
 				status := appliedExitTestStatus(profile.ProfileId, scenario != "clear")
+				if scenario == "clear" {
+					status = preparedExitClearTestStatus(profile.ProfileId)
+				}
 				if calls == 1 {
 					switch scenario {
 					case "ambiguous":

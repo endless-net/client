@@ -1,11 +1,60 @@
 package client
 
 import (
+	"context"
+	"errors"
+
 	"connectrpc.com/connect"
 	api "github.com/endless-net/client-api/clientapi/v1"
 	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
+	"google.golang.org/protobuf/proto"
 )
+
+// Snapshot only the original, still-authorized release scope. The callback may
+// not substitute current configuration after this read; final completion checks
+// the binding again because admission can change it during native work.
+func (m *ClientRPCMutations) exitReleaseInput(ctx context.Context, id string) (Config, error) {
+	var input Config
+	_, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		plan := cfg.RPCState.ExitChange
+		if !exitChangeBound(cfg, plan, op) || plan.Protection == nil || plan.Requested != nil || !plan.Releasing || plan.Containing || op.State != ipc.OperationState_OPERATION_STATE_RUNNING {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
+		input = clonePersistentConfig(*cfg)
+		return errRPCNoChange
+	})
+	if errors.Is(err, errRPCNoChange) {
+		err = nil
+	}
+	return input, err
+}
+
+func (m *ClientRPCMutations) checkpointExitRelease(ctx context.Context, id string, observed *ipc.ExitNodeStatus) error {
+	_, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		plan := cfg.RPCState.ExitChange
+		if !exitChangeBound(cfg, plan, op) || plan.Protection == nil || plan.Requested != nil || plan.Containing || plan.Releasing || op.State != ipc.OperationState_OPERATION_STATE_RUNNING || observed == nil || observed.Ipv4 == nil || observed.Ipv6 == nil || !observed.FailClosed || !observed.Ipv4.FailClosed || !observed.Ipv6.FailClosed {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
+		// Clear preparation has no exit routes, but deliberately still blocks
+		// both families. Reuse all remaining final-result validation without
+		// confusing that closed checkpoint with a released final observation.
+		clear := proto.Clone(observed).(*ipc.ExitNodeStatus)
+		clear.FailClosed, clear.Ipv4.FailClosed, clear.Ipv6.FailClosed = false, false, false
+		if !exitAppliedResultMatches(plan, clear) {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
+		plan.Releasing = true
+		return ctx.Err()
+	})
+	return err
+}
 
 func exitAppliedResultMatches(plan *clientRPCExitChange, status *ipc.ExitNodeStatus) bool {
 	if plan == nil || status == nil || status.ProfileId != plan.ProfileID || status.ApplyState != ipc.ApplyState_APPLY_STATE_APPLIED || status.Failure != nil || status.Ipv4 == nil || status.Ipv6 == nil {
@@ -47,7 +96,7 @@ func (m *ClientRPCMutations) completeExitChange(id string, observed *ipc.ExitNod
 		if !exitChangeBound(cfg, plan, op) || op.State != ipc.OperationState_OPERATION_STATE_RUNNING {
 			return stale()
 		}
-		if !exitAppliedResultMatches(plan, observed) {
+		if (plan.Requested == nil && (!plan.Releasing || plan.Protection == nil)) || !exitAppliedResultMatches(plan, observed) {
 			return stale()
 		}
 		if plan.Requested != nil {
@@ -59,6 +108,14 @@ func (m *ClientRPCMutations) completeExitChange(id string, observed *ipc.ExitNod
 			}
 		}
 		cfg.ExitSelection = cloneExitSelection(plan.Requested)
+		if plan.Requested == nil {
+			cfg.RPCState.ExitProtection = nil
+			if plan.ProfileID != cfg.RPCState.ActiveProfileID {
+				profile := cfg.RPCState.Profiles[plan.ProfileID]
+				profile.Configuration.ExitSelection = nil
+				cfg.RPCState.Profiles[plan.ProfileID] = profile
+			}
+		}
 		cfg.RPCState.ExitChange = nil
 		op.State = ipc.OperationState_OPERATION_STATE_SUCCEEDED
 		op.UserAction = nil

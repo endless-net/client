@@ -690,6 +690,29 @@ available. No agent call starts a native exit worker.
 
 Additional partial implementations must not be mistaken for complete domains:
 
+2026-09-21 durable recovery increment: exit dispatch records the original OS
+protection scope independently of operation retention. Clear first checkpoints
+confirmed route cleanup with both families still blocked, then invokes a separate
+repeatable release callback. The journal and protection marker survive ambiguous
+release/cancellation; terminal containment retains the marker. Startup restores
+blocking from the original interface/table without deriving control authority
+from a cleanup marker. The original owner can explicitly clear retained artifacts
+through the original profile, including when inactive; remove/forget is blocked
+until release, and a replacement active selection cannot be cleared this way.
+These state-machine callbacks still require the production native adapter and
+verified firewall/route observations before worker readiness can be advertised.
+
+Resource map transitions now reconcile saved local choices atomically with the
+accepted map. Canonical choices missing from the new authenticated catalog move
+to durable retired storage and return only under the current policy when their
+ID reappears. This explicitly repairs already-orphaned choices without making
+the runtime compiler ignore stale active entries. New-map signature, recipient,
+expiry and revision checks remain required; an expired/old-key/missing previous
+cache does not itself confer or deny new network authority. Active plus retired
+choices are bounded together; full capacity rejects new local choices, not map
+refreshes. Pending operations keep their original map binding and follow existing
+stale-context containment. Retirement is local intent, not positive availability.
+
 | Area | Source evidence | Remaining work |
 | --- | --- | --- |
 | Resources | Public `SetResourceEnabled` uses the durable worker; catalog projects policy, overlap and confirmed TUN denials, with observation events | Complete positive route/path/application observations, stale-choice reconciliation, failure/restart audit and OS effect qualification |

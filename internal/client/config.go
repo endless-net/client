@@ -61,6 +61,7 @@ type Config struct {
 	ExitSelection              *ClientExitSelection            `json:"exit_selection,omitempty"`
 	NetworkPreferences         *ClientNetworkPreferences       `json:"network_preferences,omitempty"`
 	ResourcePreferences        map[string]bool                 `json:"resource_preferences,omitempty"`
+	ResourcePreferencesRetired map[string]bool                 `json:"resource_preferences_retired,omitempty"`
 	WireGuardMTU               int                             `json:"wireguard_mtu,omitempty"`
 	WireGuardRouteTable        string                          `json:"wireguard_route_table,omitempty"`
 	CachedMap                  *clientapi.RegisterNodeResponse `json:"cached_map,omitempty"`

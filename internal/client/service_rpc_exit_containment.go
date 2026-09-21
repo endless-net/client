@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"time"
@@ -34,6 +35,32 @@ func markExitContainment(cfg *Config, plan *clientRPCExitChange, code ipc.ErrorC
 func (m *ClientRPCMutations) containExitChange(ctx context.Context, id string, executor clientRPCExitExecutor) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	// Containment itself installs persistent OS protection. Even a recovery
+	// journal without a previous dispatch marker must record its scope first.
+	_, checkpointErr := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
+		plan := cfg.RPCState.ExitChange
+		if plan == nil || plan.OperationID != id || !plan.Containing || rpcOperationTerminal(op.State) {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if plan.Protection != nil {
+			if !reflect.DeepEqual(plan.Protection, cfg.RPCState.ExitProtection) {
+				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			}
+			return errRPCNoChange
+		}
+		if cfg.RPCState.ExitProtection != nil || !safeWireGuardInterfaceName(executor.InterfaceName) || executor.InterfaceName == "lo" {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
+		plan.Protection = &clientRPCExitProtection{OperationID: id, ProfileID: plan.ProfileID, OwnerID: plan.OwnerID, NodeID: plan.NodeID, NetworkID: plan.NetworkID, InterfaceName: executor.InterfaceName, RouteTable: plan.RouteTable}
+		cfg.RPCState.ExitProtection = cloneExitProtection(plan.Protection)
+		return nil
+	})
+	if checkpointErr != nil && !errors.Is(checkpointErr, errRPCNoChange) {
+		return checkpointErr
 	}
 	cfg := m.store.Read()
 	if cfg.RPCState == nil || cfg.RPCState.ExitChange == nil || cfg.RPCState.ExitChange.OperationID != id {

@@ -17,7 +17,7 @@ func TestExitRequiresSharedEffectLockBeforeCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := clonePersistentConfig(m.store.Read())
-	executor := clientRPCExitExecutor{Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+	executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 		t.Error("dispatched without shared effect lock")
 		return nil, 0, errors.New("unexpected dispatch")
 	}}
@@ -38,7 +38,7 @@ func TestExitWaitsForSharedEffectsAndRechecksCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan error, 1)
-	executor := clientRPCExitExecutor{Lock: shared, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+	executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Lock: shared, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 		t.Error("cancelled exit reached native effects")
 		return nil, 0, errors.New("unexpected dispatch")
 	}}
@@ -78,7 +78,7 @@ func TestExitSharedEffectLockCoversApplyAndContainment(t *testing.T) {
 		}
 	}
 	contained := false
-	executor := clientRPCExitExecutor{Lock: shared,
+	executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Lock: shared,
 		Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 			assertHeld()
 			// Admission remains possible while OS work is serialized. It changes

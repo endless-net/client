@@ -132,6 +132,7 @@ func rpcValidRecoveredConfig(initial Config, next *Config) bool {
 
 func copyRPCRecoveryFields(dst *Config, src Config) {
 	src = clonePersistentConfig(src)
+	dst.ResourcePreferences, dst.ResourcePreferencesRetired = src.ResourcePreferences, src.ResourcePreferencesRetired
 	dst.NodeID, dst.NetworkID, dst.NodeCredential, dst.NodeApprovalState = src.NodeID, src.NetworkID, src.NodeCredential, src.NodeApprovalState
 	dst.MapRevision, dst.MapGlobalRevision, dst.MapHash = src.MapRevision, src.MapGlobalRevision, src.MapHash
 	dst.CachedMap, dst.CachedMapSavedAt = src.CachedMap, src.CachedMapSavedAt

@@ -17,7 +17,7 @@ func (e *WireGuardEngine) restoreStartupExit(ctx context.Context, cfg Config, cr
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if cfg.ExitSelection == nil && (cfg.RPCState == nil || cfg.RPCState.ExitChange == nil) {
+	if cfg.ExitSelection == nil && (cfg.RPCState == nil || (cfg.RPCState.ExitChange == nil && cfg.RPCState.ExitProtection == nil)) {
 		return nil
 	}
 	if queuedExitHasNoEffects(cfg) {
@@ -37,20 +37,26 @@ func (e *WireGuardEngine) restoreStartupExit(ctx context.Context, cfg Config, cr
 			// configuration changed while the process was stopped.
 			table = cfg.RPCState.ExitChange.RouteTable
 		}
+		if cfg.RPCState != nil && cfg.RPCState.ExitProtection != nil {
+			name, table = cfg.RPCState.ExitProtection.InterfaceName, cfg.RPCState.ExitProtection.RouteTable
+		}
 		guard, err = create(name, table)
 		if err != nil {
 			return err
 		}
 	}
+	if cfg.RPCState != nil && ((cfg.RPCState.ExitChange != nil && cfg.RPCState.ExitChange.Requested == nil) || (cfg.RPCState.ExitProtection != nil && cfg.ExitSelection == nil && cfg.RPCState.ExitChange == nil)) {
+		return e.restoreClearProtection(ctx, guard)
+	}
 	return e.restoreExitUnderlay(ctx, cfg, guard)
 }
 
 func queuedExitHasNoEffects(cfg Config) bool {
-	if cfg.ExitSelection != nil || cfg.RPCState == nil || cfg.RPCState.ExitChange == nil {
+	if cfg.ExitSelection != nil || cfg.RPCState == nil || cfg.RPCState.ExitChange == nil || cfg.RPCState.ExitProtection != nil {
 		return false
 	}
 	plan := cfg.RPCState.ExitChange
-	if plan.OperationID == "" || plan.Previous != nil || plan.Containing {
+	if plan.OperationID == "" || plan.Previous != nil || plan.Containing || plan.Releasing {
 		return false
 	}
 	found := false

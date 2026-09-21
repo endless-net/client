@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -15,7 +16,7 @@ import (
 // provide a fully implemented adapter using the shared runtime effect lock.
 // The host must cancel and join this worker before closing its engine.
 func (s *ClientRPCService) startExitWorker(ctx context.Context, executor clientRPCExitExecutor) (<-chan error, error) {
-	if executor.Lock == nil || executor.Apply == nil || executor.Contain == nil {
+	if executor.Lock == nil || executor.Apply == nil || executor.Contain == nil || executor.Release == nil || strings.TrimSpace(executor.InterfaceName) != executor.InterfaceName || !safeWireGuardInterfaceName(executor.InterfaceName) || executor.InterfaceName == "lo" {
 		return nil, rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
 	if err := ctx.Err(); err != nil {

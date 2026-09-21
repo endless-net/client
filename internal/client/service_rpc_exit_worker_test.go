@@ -38,7 +38,7 @@ func testExitWorkerResumesAndRetries(t *testing.T, firstResult string) {
 	ctx, cancel := context.WithCancel(t.Context())
 	var calls atomic.Int32
 	first := make(chan struct{})
-	executor := clientRPCExitExecutor{Lock: &sync.Mutex{},
+	executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Lock: &sync.Mutex{}, Release: releaseExitTestCallback,
 		Apply: func(_ context.Context, id string, cfg Config, _ *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 			if id != op.Id || cfg.RPCState.ExitChange.OperationID != op.Id {
 				t.Error("retry changed durable operation identity")
@@ -49,14 +49,14 @@ func testExitWorkerResumesAndRetries(t *testing.T, firstResult string) {
 				case "missing":
 					return nil, 0, nil
 				case "partial":
-					status := appliedExitTestStatus(profile.ProfileId, false)
+					status := preparedExitClearTestStatus(profile.ProfileId)
 					status.Ipv6.ApplyState = ipc.ApplyState_APPLY_STATE_PENDING
 					return status, 0, nil
 				default:
 					return nil, 0, errors.New("ambiguous native apply")
 				}
 			}
-			return appliedExitTestStatus(profile.ProfileId, false), ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
+			return preparedExitClearTestStatus(profile.ProfileId), ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
 		},
 		Contain: func(context.Context, clientRPCExitChange) (clientRPCExitContainment, error) {
 			t.Error("unexpected containment")
@@ -100,7 +100,7 @@ func TestExitWorkerCancellationRetainsDispatchedWork(t *testing.T) {
 	entered := make(chan struct{})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	executor := clientRPCExitExecutor{Lock: &sync.Mutex{},
+	executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Lock: &sync.Mutex{}, Release: releaseExitTestCallback,
 		Apply: func(ctx context.Context, _ string, _ Config, _ *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 			close(entered)
 			<-ctx.Done()
@@ -162,7 +162,7 @@ func TestExitWorkerRetriesUnconfirmedContainmentAfterRestart(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	var calls atomic.Int32
 	first := make(chan struct{})
-	executor := clientRPCExitExecutor{Lock: &sync.Mutex{},
+	executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Lock: &sync.Mutex{}, Release: releaseExitTestCallback,
 		Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 			t.Error("containment recovery redispatched application")
 			return nil, 0, errors.New("unexpected apply")
@@ -170,6 +170,10 @@ func TestExitWorkerRetriesUnconfirmedContainmentAfterRestart(t *testing.T) {
 		Contain: func(_ context.Context, plan clientRPCExitChange) (clientRPCExitContainment, error) {
 			if plan.OperationID != op.Id || !plan.Containing || plan.FailureCode != ipc.ErrorCode_ERROR_CODE_STALE_STATE {
 				t.Error("containment retry changed its durable cause or identity")
+			}
+			stored := reopenRPCStoreFromDisk(t, m.store).Read()
+			if plan.Protection == nil || stored.RPCState.ExitProtection == nil || stored.RPCState.ExitProtection.OperationID != op.Id {
+				t.Error("containment preceded durable OS ownership")
 			}
 			proof := clientRPCExitContainment{OperationID: plan.OperationID, ProfileID: plan.ProfileID, NodeID: plan.NodeID, NetworkID: plan.NetworkID, IPv4Blocked: true, IPv6Blocked: true, ExitRoutesRemoved: true}
 			if calls.Add(1) == 1 {
@@ -201,12 +205,15 @@ func TestExitWorkerRetriesUnconfirmedContainmentAfterRestart(t *testing.T) {
 	if err != nil || result.State != ipc.OperationState_OPERATION_STATE_FAILED || result.GetFailure().GetCode() != ipc.ErrorCode_ERROR_CODE_STALE_STATE || calls.Load() != 2 || m.store.Read().RPCState.ExitChange != nil {
 		t.Fatal("worker did not retry containment and preserve the original failure", err, result)
 	}
+	if m.store.Read().RPCState.ExitProtection == nil {
+		t.Fatal("terminal containment discarded protection ownership")
+	}
 }
 
 func TestExitWorkerRequiresCompleteAdapter(t *testing.T) {
 	m, _, _ := rpcConnectFixture(t)
 	service := NewClientRPCService(m, nil)
-	for _, executor := range []clientRPCExitExecutor{{}, {Lock: &sync.Mutex{}}, {Lock: &sync.Mutex{}, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+	for _, executor := range []clientRPCExitExecutor{{}, {Lock: &sync.Mutex{}}, {InterfaceName: "endlessnet", Lock: &sync.Mutex{}, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 		return nil, 0, nil
 	}}} {
 		_, err := service.startExitWorker(t.Context(), executor)

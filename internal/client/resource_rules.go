@@ -29,12 +29,20 @@ func resourceDenialsForMap(cfg Config, source api.RegisterNodeResponse, now time
 // Invalid/stale local identities fail compilation instead of silently reopening
 // traffic. A later reconciliation must explicitly resolve stale local choices.
 func compileResourceDenials(cfg Config, now time.Time) ([]resourceDenyRule, error) {
+	if len(cfg.ResourcePreferences)+len(cfg.ResourcePreferencesRetired) > resourcePreferenceLimit {
+		return nil, errors.New("resource preference limit exceeded")
+	}
 	source := cfg.CachedMap
 	if source == nil || source.MapSignature == nil || cfg.MapRevision != source.Network.Revision || cfg.MapGlobalRevision != source.Revision.Global {
 		return nil, errors.New("resource map is unavailable")
 	}
 	if _, err := resolveNetworkAcceptance(cfg, *source, now); err != nil {
 		return nil, err
+	}
+	for id := range cfg.ResourcePreferencesRetired {
+		if _, err := resolveResourceInAuthenticatedMap(source, id); err == nil {
+			return nil, errors.New("resource choice retirement has not been reconciled")
+		}
 	}
 	ids := make(map[string]bool)
 	for id := range cfg.ResourcePreferences {

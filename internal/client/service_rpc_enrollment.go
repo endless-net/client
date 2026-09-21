@@ -1,6 +1,7 @@
 package client
 
 import (
+	"maps"
 	"reflect"
 	"strings"
 	"sync"
@@ -145,6 +146,8 @@ func enrollmentFields(cfg Config) Config {
 // Explicit allowlist: adding a config field does not silently authorize a
 // background enrollment response to overwrite another subsystem's state.
 func copyEnrollmentFields(dst *Config, src Config) {
+	dst.ResourcePreferences = maps.Clone(src.ResourcePreferences)
+	dst.ResourcePreferencesRetired = maps.Clone(src.ResourcePreferencesRetired)
 	dst.Token = src.Token
 	dst.IdentityPrivateKey = src.IdentityPrivateKey
 	dst.PrivateKey = src.PrivateKey

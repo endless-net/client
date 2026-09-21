@@ -19,6 +19,7 @@ import (
 // errors (including cancellation) must retain protection, never fall back to
 // direct routing. No adapter is advertised until these OS effects exist.
 type clientRPCExitExecutor struct {
+	InterfaceName string
 	// The same lock used by connection, profile and map application. Callbacks
 	// run under it and must not acquire it again. Hold through durable completion
 	// or containment so another OS operation cannot invalidate an uncommitted
@@ -27,6 +28,9 @@ type clientRPCExitExecutor struct {
 	Modes   []clientRPCExitMode
 	Apply   func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error)
 	Contain func(context.Context, clientRPCExitChange) (clientRPCExitContainment, error)
+	// Release runs only after the durable clear checkpoint. It must repeat OS
+	// cleanup/readback safely after restart and retain containment on ambiguity.
+	Release func(context.Context, string, Config) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error)
 }
 
 func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) bool {
@@ -34,9 +38,12 @@ func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) 
 		return false
 	}
 	profile, exists := cfg.RPCState.Profiles[plan.ProfileID]
+	if plan.ProfileID != plan.ActiveProfileID && !reflect.DeepEqual(plan.PreviousProfileSelection, profile.Configuration.ExitSelection) {
+		return false
+	}
 	// A still-valid grant in a replacement map does not prove that the OS
 	// applied that map. Clear remains independent of withdrawn map authority.
-	return exists && plan.OperationID == op.Id && plan.ProfileID == op.ProfileId && plan.ProfileID == cfg.RPCState.ActiveProfileID &&
+	return exists && plan.OperationID == op.Id && plan.ProfileID == op.ProfileId && plan.ActiveProfileID == cfg.RPCState.ActiveProfileID && exitProtectionBound(cfg, plan) &&
 		strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) && plan.ControlOrigin == profile.ControlOrigin &&
 		plan.NodeID == cfg.NodeID && plan.NetworkID == cfg.NetworkID && plan.RouteTable == cfg.WireGuardRouteTable && reflect.DeepEqual(plan.Previous, cfg.ExitSelection) &&
 		reflect.DeepEqual(plan.PreviousIntent, cfg.ConnectionIntent) &&
@@ -50,6 +57,9 @@ func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) 
 // they cannot commit selection, claim success, or unblock conflicting changes.
 func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor clientRPCExitExecutor) error {
 	if executor.Lock == nil {
+		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	}
+	if strings.TrimSpace(executor.InterfaceName) != executor.InterfaceName || !safeWireGuardInterfaceName(executor.InterfaceName) || executor.InterfaceName == "lo" {
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
 	m.exitWorker.Lock()
@@ -67,11 +77,12 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 	if cfg.RPCState.ExitChange.Containing {
 		return m.containExitChange(ctx, id, executor)
 	}
-	if executor.Apply == nil {
+	if executor.Apply == nil && !cfg.RPCState.ExitChange.Releasing {
 		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
 	var input Config
 	var selection *ClientExitSelection
+	var releasing bool
 	ready := false
 	contain := false
 	_, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
@@ -80,7 +91,7 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 			return errRPCNoChange
 		}
 		code := ipc.ErrorCode_ERROR_CODE_UNSPECIFIED
-		if !exitChangeBound(cfg, plan, op) {
+		if !exitChangeBound(cfg, plan, op) || (plan.Releasing && plan.Requested != nil) || (plan.Protection != nil && plan.Protection.InterfaceName != executor.InterfaceName) {
 			code = ipc.ErrorCode_ERROR_CODE_STALE_STATE
 		} else if plan.Requested != nil {
 			if !slices.Contains(executor.Modes, clientRPCExitMode{Family: plan.Requested.Family, LAN: plan.Requested.LAN}) {
@@ -108,8 +119,13 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 			return errRPCNoChange
 		}
 		op.State = ipc.OperationState_OPERATION_STATE_RUNNING
+		if plan.Protection == nil {
+			plan.Protection = &clientRPCExitProtection{OperationID: id, ProfileID: plan.ProfileID, OwnerID: plan.OwnerID, NodeID: plan.NodeID, NetworkID: plan.NetworkID, InterfaceName: executor.InterfaceName, RouteTable: plan.RouteTable}
+			cfg.RPCState.ExitProtection = cloneExitProtection(plan.Protection)
+		}
 		plan.NextAttemptAt = m.now().Add(5 * time.Second)
 		selection = cloneExitSelection(plan.Requested)
+		releasing = plan.Releasing
 		input = clonePersistentConfig(*cfg)
 		ready = true
 		return nil
@@ -126,7 +142,11 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	observed, continuity, err := executor.Apply(ctx, id, input, selection)
+	var observed *ipc.ExitNodeStatus
+	var continuity ipc.ConnectionContinuity
+	if !releasing {
+		observed, continuity, err = executor.Apply(ctx, id, input, selection)
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -134,7 +154,32 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 		// Do not disclose native error text or discard possible OS effects.
 		return nil
 	}
-	_, err = m.completeExitChange(id, observed, continuity)
+	if selection == nil {
+		if !releasing {
+			err = m.checkpointExitRelease(ctx, id, observed)
+		}
+		if err == nil {
+			if executor.Release == nil {
+				return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			input, err = m.exitReleaseInput(ctx, id)
+			if err == nil {
+				observed, continuity, err = executor.Release(ctx, id, input)
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				if err != nil {
+					return nil
+				}
+			}
+		}
+	}
+	if err == nil {
+		_, err = m.completeExitChange(id, observed, continuity)
+	}
 	if err != nil {
 		if failure := rpc.FailureFromError(err); failure != nil && failure.Code == ipc.ErrorCode_ERROR_CODE_STALE_STATE {
 			_, checkpointErr := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {

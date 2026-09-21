@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"maps"
 	"reflect"
 	"time"
 
@@ -17,12 +18,15 @@ func StartupPolicyContextEqual(a, b Config) bool {
 		a.MapRevision == b.MapRevision && a.MapGlobalRevision == b.MapGlobalRevision && a.MapHash == b.MapHash && reflect.DeepEqual(a.ControlURLs(), b.ControlURLs()) &&
 		reflect.DeepEqual(a.ConnectionIntent, b.ConnectionIntent) && reflect.DeepEqual(a.RPCState, b.RPCState) &&
 		reflect.DeepEqual(a.EnrollmentRecovery, b.EnrollmentRecovery) &&
+		maps.Equal(a.ResourcePreferences, b.ResourcePreferences) && maps.Equal(a.ResourcePreferencesRetired, b.ResourcePreferencesRetired) &&
 		reflect.DeepEqual(a.MapSigningTrust, b.MapSigningTrust) && reflect.DeepEqual(a.CachedMap, b.CachedMap)
 }
 
 // ApplyStartupPolicyMap copies verified authority only, never credentials,
 // profile/recovery records or a fetched connection intent.
 func ApplyStartupPolicyMap(current *Config, candidate Config) {
+	current.ResourcePreferences = maps.Clone(candidate.ResourcePreferences)
+	current.ResourcePreferencesRetired = maps.Clone(candidate.ResourcePreferencesRetired)
 	current.CachedMap, current.CachedMapSavedAt = candidate.CachedMap, candidate.CachedMapSavedAt
 	current.MapRevision, current.MapGlobalRevision = candidate.MapRevision, candidate.MapGlobalRevision
 	current.MapHash, current.MapSigningTrust = candidate.MapHash, candidate.MapSigningTrust

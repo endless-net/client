@@ -1,5 +1,13 @@
 # Состояние client cutover — 2026-09-15
 
+Дополнение от 2026-09-21: добавлены durable checkpoint перед exit release и
+отдельная запись владения защитой, переживающая terminal containment; native
+adapter/worker всё ещё требуется. Для resources добавлены retirement/возврат
+локальных choices при проверенной смене map, repair orphan state и recovery
+после смены trust или утраты старого cache. Это не подтверждает реальную
+доступность ресурсов. Удалён неиспользуемый HTTP/1 server helper; CI concurrency
+разделяет short push и manual qualification и отменяет устаревшие однотипные runs.
+
 Полная цель не завершена. Релиз v0.6.0 опубликован, но публикация не является
 приёмкой всех требований BA/SA. Текущие изменения после релиза находятся в main.
 
@@ -10,8 +18,8 @@
 | IPC и потребители | Protobuf client.v0, generated API, локальный gRPC через pipe/Unix socket; CLI и recovery helper используют v0 | Полный аудит удаления legacy, совместной работы Go/Dart и всех потребителей; приёмка UI относится к внешнему репозиторию |
 | Состояние и операции | Durable операции, идентификаторы запросов, replay, проверки владельца/профиля, конфликты и восстановление; snapshot/events | Проверка каждой мутации и перехода по матрице, включая права, CAS, отмену, рестарт и приватность событий |
 | Enrollment, trust, session | Workers и транспорт enrollment/trust/renewal, сохранение прогресса, ротация credentials, отмена старых запросов и защита от поздних ответов | Полный аудит cleanup/concurrency и контекста; подтверждение producer semantics и реального seamless renewal |
-| Exit | Get/Select/Clear handlers, readiness gate, durable journal, worker с injected executor; Linux containment и engine hooks, проверка маршрутов/правил перед открытием | Production native adapter и запуск worker в агенте; полноценный Clear с crash recovery, DNS до exit, владение интерфейсами/правилами после рестарта, firewall readback, OS/LAN qualification |
-| Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN с проверкой адреса/протокола/порта, наблюдения запретов | Положительное подтверждение доступности route/path/application, stale choices, полный rollback/restart audit и реальные OS-эффекты |
+| Exit | Get/Select/Clear handlers, readiness gate, durable journal, worker с injected executor; checkpoint release и отдельное durable ownership; Linux containment и engine hooks, проверка маршрутов/правил перед открытием | Production native adapter и запуск worker в агенте; native Clear/release с crash recovery, DNS до exit, firewall readback и invalidation, OS/LAN qualification |
+| Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN с проверкой адреса/протокола/порта, наблюдения запретов; retirement/возврат choices при аутентифицированной смене map | Положительное подтверждение доступности route/path/application, полный rollback/restart audit и реальные OS-эффекты |
 | Preferences и lifecycle | Set/Reset inbound/DNS/routes и lifecycle-полей, managed policy/locks/source; Windows power/logoff paths и resume-policy refresh | Полный аудит эффектов каждой настройки, доставка событий на других ОС, восстановление источников событий и native qualification |
 | Networks/profiles | Контекстные проверки, guards переключения, изоляция состояния и защита от устаревших ответов | Полная смена identity/map/routes, recovery и фактическая изоляция при переключении сети/provider |
 | Diagnostics и updates | Ограниченные диагностические данные/экспорт, честные unavailable-состояния; route samples | Полнота routes/resources и аудит privacy/bounds; согласованный проверяемый distribution source и проверка установленной пары UI/core. Сейчас GetUpdateInfo возвращает SOURCE_UNAVAILABLE |
@@ -31,13 +39,18 @@
 
 ## Следующие работы
 
-Последняя правка прошла `goimports -w .`, `go vet ./...`,
+Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...` (включая internal/client: 110.915 s).
-Локальные native/E2E/installer проверки для неё не запускались.
+и `go test -short ./...`: cmd/endlessnet-client 10.300 s; internal/client
+в итоговом запуске cached после успешного запуска 100.390 s.
+Локальные native/E2E/installer проверки не запускались.
 
 1. Завершить native exit Apply/Clear/Contain и recovery; связать его с агентом
-   только после реализации необходимых эффектов и наблюдений.
+   только после реализации необходимых эффектов и наблюдений. Ближайший шаг:
+   readback собственной nft table (hooks, priorities, drop policy, точные
+   exemptions и TUN accept), затем проверенный pre-exit DNS и native executor.
+   Успех команды установки firewall сам по себе не доказывает его состояние;
+   после Apply требуется invalidation при потере правил или маршрутов.
 2. Довести resources, preferences/lifecycle и переключение сетей до реальных
    эффектов с положительными и отрицательными unit assertions.
 3. Закрыть session/enrollment/trust/diagnostics audit и определить distribution

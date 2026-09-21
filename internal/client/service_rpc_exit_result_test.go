@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -9,6 +10,22 @@ import (
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
 )
+
+func preparedExitClearTestStatus(profile string) *ipc.ExitNodeStatus {
+	status := appliedExitTestStatus(profile, false)
+	status.FailClosed, status.Ipv4.FailClosed, status.Ipv6.FailClosed = true, true, true
+	return status
+}
+
+func releaseExitTestCallback(_ context.Context, _ string, cfg Config) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+	return appliedExitTestStatus(cfg.RPCState.ExitChange.ProfileID, false), ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
+}
+
+func recordExitTestProtection(cfg *Config) {
+	plan := cfg.RPCState.ExitChange
+	plan.Protection = &clientRPCExitProtection{OperationID: plan.OperationID, ProfileID: plan.ProfileID, OwnerID: plan.OwnerID, NodeID: plan.NodeID, NetworkID: plan.NetworkID, InterfaceName: "endlessnet", RouteTable: plan.RouteTable}
+	cfg.RPCState.ExitProtection = cloneExitProtection(plan.Protection)
+}
 
 func appliedExitTestStatus(profile string, selected bool) *ipc.ExitNodeStatus {
 	status := &ipc.ExitNodeStatus{ProfileId: profile, ApplyState: ipc.ApplyState_APPLY_STATE_APPLIED, RequestedFamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_NONE, Ipv4: &ipc.ExitFamilyStatus{ApplyState: ipc.ApplyState_APPLY_STATE_APPLIED}, Ipv6: &ipc.ExitFamilyStatus{ApplyState: ipc.ApplyState_APPLY_STATE_APPLIED}}
@@ -58,8 +75,12 @@ func TestRPCExitResultRejectsPartialOrStaleApplication(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := m.ReconcileOperation(op.Id, func(_ *Config, op *ipc.Operation) error {
+			if _, err := m.ReconcileOperation(op.Id, func(cfg *Config, op *ipc.Operation) error {
 				op.State = ipc.OperationState_OPERATION_STATE_RUNNING
+				recordExitTestProtection(cfg)
+				if scenario == "clear" {
+					cfg.RPCState.ExitChange.Releasing = true
+				}
 				return nil
 			}); err != nil {
 				t.Fatal(err)

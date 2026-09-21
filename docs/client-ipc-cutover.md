@@ -74,6 +74,16 @@ claim a specified capability is implemented.
 
 ## Current source-boundary audit (2026-09-13)
 
+Retirement follow-up (2026-09-21): removed the unused `NewLocalHTTPServer`
+constructor, its HTTP/1 target/body wrappers and their isolated test. A repository
+symbol search found no production callers. Current CLI/helper paths bootstrap
+the generated v0 client over local pipe/Unix sockets; backend JSON recovery is
+not local IPC and remains in scope of its own producer protocol. The generated
+v0 server supports Connect/gRPC/gRPC-Web codecs, while the native listener uses
+HTTP/2. This is not an IPC v2 fallback or an authorization bypass; the reviewed
+documents do not establish a separate binary-gRPC-only requirement. This source
+audit does not qualify installed artifacts or close the full retirement gate.
+
 Inspected client source at `4fd4bb1`:
 
 - `cmd/endlessnet-client/service_rpc_host.go`: `startAgentRPC` binds the native

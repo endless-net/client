@@ -50,7 +50,10 @@ func TestExitReplaySurvivesWorkerShutdownAndRestart(t *testing.T) {
 			}
 			for _, completed := range []bool{false, true} {
 				if completed {
-					executor := clientRPCExitExecutor{Lock: &sync.Mutex{}, Modes: modes, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+					executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Lock: &sync.Mutex{}, Modes: modes, Release: releaseExitTestCallback, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+						if method == "ClearExitNode" {
+							return preparedExitClearTestStatus(profile.ProfileId), ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
+						}
 						return appliedExitTestStatus(profile.ProfileId, method == "SelectExitNode"), ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN, nil
 					}}
 					if err := m.reconcileExitChange(t.Context(), executor); err != nil {
