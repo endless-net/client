@@ -48,6 +48,21 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+LAN BPF units: `TestExitLANBPFProgramDeadline` and
+`TestExitLANBPFProgramDoesNotRenewDeadline` interpret the emitted LE/BE
+instructions for missing, expired, exact-boundary and full-width deadlines.
+`TestExitLANBPFClosedPreparationAndImmutablePublication` verifies the closed
+initial slot, frozen inner publication and FD ownership via a fake syscall.
+`TestExitLANBPFPreparationFailureClosesOnlyOwnedFDs`,
+`TestExitLANBPFPublicationFailureAndLateInvalidation`,
+`TestExitLANBPFFailedRefreshRevokesPreviousLease` and
+`TestExitLANBPFPublicationCancellationDuringContention` cover failed creation,
+late cancellation/expiry, withdrawal of previous leases, propagation of failed
+withdrawal and cancellation behind another publisher. Linux-only units compare
+constants with pinned x/sys and check pre-cancellation before native loading.
+These are not evidence of verifier acceptance, hook attachment or native LAN
+packet enforcement; US-07 and LAN-related requirements remain incomplete.
+
 `TestExitLANBootDeadlineIsAbsoluteAcrossDelaySuspendAndClockChanges` checks
 immutable absolute expiry across delayed publication, suspend and realtime
 changes. `TestExitLANBootDeadlineRejectsInvalidArithmetic` checks saturation,

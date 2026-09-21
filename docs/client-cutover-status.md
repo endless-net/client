@@ -52,11 +52,20 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+LAN BPF increment: реализованы генерация deadline-программы, загрузка закрытых
+неподключённых объектов и атомарная публикация immutable lease через map-in-map.
+Ошибка обновления отзывает прежнее разрешение; отмена при занятом publisher
+не обещает отзыв и требует отдельного containment. Bytecode и ABI проверяются
+интерпретатором и fake syscall. Pinning links, live hook readback, повторное
+использование evidence, recovery и интеграция adapter остаются открытыми;
+реальная загрузка и действие на пакеты ещё не подтверждены.
+
 LAN clock increment: добавлен фиксированный абсолютный срок по CLOCK_BOOTTIME,
 снятый до подготовки плана. Повторная проверка не обновляет срок; задержка,
 сон и скачок realtime вперёд могут только закрыть подготовленное разрешение.
-Ограничение между повторными preparations, recovery и публикация BPF lease
-ещё не реализованы. Native LAN_ALLOW остаётся закрытым.
+Ограничение между повторными preparations и recovery ещё не реализованы.
+Публикация BPF lease реализована отдельно, без live attachments.
+Native LAN_ALLOW остаётся закрытым.
 
 HOST observation lifetime increment: сроки map, handshake и выбранного exit grant
 проверяются после финального readback. Завершение relay во время чтения снимает

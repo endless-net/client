@@ -22,6 +22,26 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN BPF preparation increment (2026-09-21): `exit_lan_bpf*.go` now builds the
+bounded netfilter program, reads layout from fixed kernel sysfs BTF and loads
+initially closed, unattached objects through the pinned x/sys BPF syscall.
+The packet program compares a full unsigned absolute boottime expiry; it drops
+matching LAN marks with a missing or elapsed lease. Publication swaps an outer
+ARRAY_OF_MAPS slot to a frozen, program-read-only inner ARRAY. Delayed writes do
+not renew the deadline. Failed refresh revokes previous authority; ambiguous
+revocation remains an error requiring independent nft containment. Cancellation
+while another publisher owns the mutex returns without claiming revocation.
+Close releases user FDs only. Portable tests use a fake syscall and an instruction
+interpreter; neither demonstrates kernel verifier acceptance or packet effects.
+Pinned live links, current-netns hook readback, shared evidence caps, boot-bound
+recovery and adapter integration remain open. Native LAN_ALLOW stays closed.
+Validation: goimports, vet and configured lint (0 issues) passed; the full local
+short suite passed (internal/client 136.199 s). Linux syscall/BTF entry points
+still require Linux CI compilation and later privileged qualification. The
+preceding installed-recovery budget fix passed all three short CI platforms
+([run 35633546764](https://github.com/endless-net/client/actions/runs/35633546764));
+its Windows installed scenario has not been rerun.
+
 LAN clock preparation increment (2026-09-21): `exit_lan_deadline*.go` captures
 CLOCK_BOOTTIME / CLOCK_REALTIME / CLOCK_BOOTTIME before preparation, converts
 the already-intersected expiry using the first boot sample, and retains a fixed
@@ -32,15 +52,16 @@ wall limit additionally closes forward clock jumps. The native preparation
 wrapper retains the topology and health gates and opens no kernel rule.
 
 This is one-preparation clock evidence only. Shared caps for repeated evidence,
-durable boot-bound recovery, BPF publication and live attachment verification
+durable boot-bound recovery, qualified BPF publication and live attachment verification
 remain mandatory before LAN_ALLOW can be enabled.
 
 `exit_lan_btf.go` resolves `bpf_nf_ctx.skb` and unsigned 32-bit `sk_buff.mark`
 from bounded BTF metadata, including anonymous aggregates and qualified types.
 Pointer width is explicit; no kernel struct offsets are hardcoded. Ambiguous
 layouts, target bitfields, malformed records, cycles and unsupported extensions
-fail closed. This is metadata parsing only: native BTF loading, instruction
-generation, verifier acceptance and attachment ownership are still absent.
+fail closed. Native BTF loading and instruction generation are now implemented
+by the BPF preparation above; verifier acceptance and attachment ownership
+remain unqualified and incomplete respectively.
 Validation: goimports, vet and configured lint (0 issues) passed; the full local
 short suite passed (internal/client 139.047 s, CLI 10.687 s). Sampler tests are
 Linux-specific and require push CI; portable deadline/BTF units ran locally.
@@ -72,7 +93,7 @@ CLOCK_BOOTTIME deadline in the packet path (`bpf_ktime_get_boot_ns`, including
 suspend), optionally intersecting realtime expiry for clock jumps forward.
 Reusing an old handshake/map/grant after rollback or restart must never create
 a later boottime cap. BPF netfilter can access the helper, but this repository
-does not yet implement loader/attachment/readback and durable ownership. Losing
+has an unattached loader but lacks attachment/readback and durable ownership. Losing
 the last attachment handle must not leave nft LAN allowance behind. These are
 implementation requirements, not an enabled fallback or platform qualification
 ([helper](https://kernel.googlesource.com/pub/scm/linux/kernel/git/bpf/bpf/+/refs/tags/v6.17-rc7/kernel/bpf/helpers.c),
@@ -81,15 +102,15 @@ implementation requirements, not an enabled fallback or platform qualification
 Implementation sequence for that adapter: prepare with closed lease under the
 existing BLOCK guard; pin the IPv4/IPv6 links (program/map pins alone do not hold
 attachments); reopen and verify scope and real current-netns hooks; publish one
-immutable lease; revoke by zeroing it while retaining links. Close must only
+immutable lease; revoke by deleting the outer map slot while retaining links. Close must only
 close user FDs. Unpin/detach is allowed only after confirmed BLOCK. Recovery
 starts with BLOCK and a closed lease; unknown pinned objects must not be deleted.
 Link INFO alone can retain family/hook/priority after detach, so it is not live
 hook evidence. Hook dump must also match program ID/family/hook/priority
 ([link lifecycle](https://android.googlesource.com/kernel/common/+/9f5cbdaae5f760c218c82e0a5e0f9c58bac56f0c/net/netfilter/nf_bpf_link.c)).
-The pinned x/sys supplies syscall/constants but no loader: bounded raw BPF ABI,
-instruction construction, BTF field resolution, pin ownership and hook readback
-still need implementation. Missing support must preserve BLOCK, not downgrade.
+The pinned x/sys supplies syscall/constants. Bounded raw BPF loading, instruction
+construction and BTF field resolution are implemented; pin ownership and hook
+readback still need implementation. Missing support must preserve BLOCK.
 
 LAN topology lifetime increment (2026-09-21): native collection subscribes to
 Linux routing notifications before either snapshot. A one-shot receipt closes
