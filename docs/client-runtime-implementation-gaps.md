@@ -22,6 +22,13 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Worker-lock increment validation (2026-09-21): goimports, vet, configured lint
+(0 issues) and full short tests passed; internal/client 126.168 s and CLI
+11.216 s. A follow-up source search found no remaining direct blocking worker or
+driver-effect mutex acquisition in RPC workers. This does not prove cancellation
+of remote effects already dispatched. The retained-exit resource regression
+additionally covers real admission, packet denial/removal, replay and maintenance.
+
 Transition increment (2026-09-21): post-Disconnect offline notification uses the
 engine-owned control transport. Successful local Down remains successful when
 notification authority/transport is unavailable; no ordinary HTTP fallback is
@@ -32,10 +39,15 @@ Saved resume still refuses transaction candidates. Failure/cancellation withdraw
 the attempted exit; cancellation between Start and durable commit additionally
 performs bounded independent Stop under the worker effect lock, retaining the
 journal for retry. Profile/network switches remain separate transitions.
-The remaining worker lifetime audit includes cancellable acquisition of
-`profileWorker` and the shared driver lock: preference/connect/profile/network
-workers still use blocking Lock calls, unlike the exit worker. Shutdown joining
-under a lifecycle-owned effect lock needs coverage before lifetime completion.
+Profile/connect/disconnect/logout/preference/network-selection/trust-adoption
+workers now acquire their serialization and shared runtime mutexes through
+context-aware waiting. The driver contract requires the concrete shared mutex;
+no blocking generic-lock fallback is retained. Cancellation while waiting leaves
+durable work recoverable and cannot dispatch effects after the caller has left.
+Session/enrollment/trust providers and network coordinator/preparation/registration
+now use the same cancellable worker-lock acquisition. Short admission mutexes
+remain unchanged; remote callbacks run outside them. Provider cancellation after
+dispatch, late effects and native OS lifetime still need the full audit.
 
 Changed-interface recovery now keeps original artifact identity separate from
 current engine configuration. Clear and containment use the durable old interface

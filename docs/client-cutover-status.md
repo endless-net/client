@@ -52,6 +52,13 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+Worker lifetime increment от 2026-09-21: ожидание worker/effect mutex теперь
+отменяемо у profile, connection, preferences, enrollment, session, trust и
+network-selection workers. Отмена ожидания сохраняет journal и освобождает уже
+захваченные mutex; host worker завершается даже при занятом внешнем effect lock.
+Отдельная проверка resources проходит через admission, native apply, реальные
+packet-filter запрет/разрешение, replay и maintenance сохранённого exit.
+
 Transition increment от 2026-09-21: Clear после смены имени TUN/route table
 использует исходную durable область защиты; после Clear старые артефакты и новый
 ordinary runtime проверяются независимо. Select/Resume не переносят selection
@@ -124,8 +131,8 @@ Capability теперь включается только публичным nat
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: после transition increment internal/client прошёл
-за 126.442 s, cmd/endlessnet-client — за 11.771 s. Все пакеты прошли.
+и `go test -short ./...`: после worker lifetime increment internal/client прошёл
+за 126.168 s, cmd/endlessnet-client — за 11.216 s. Все пакеты прошли.
 Локальные native/E2E/installer проверки не запускались.
 
 1. Завершить native exit LAN_ALLOW, сочетания exit с profile/network

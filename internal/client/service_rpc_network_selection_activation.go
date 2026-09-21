@@ -16,11 +16,17 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionActivation(ctx context.Con
 	if driver.Lock == nil || driver.Stop == nil {
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
-	m.networkSelectionWorker.Lock()
+	if !lockExitRuntime(ctx, &m.networkSelectionWorker) {
+		return ctx.Err()
+	}
 	defer m.networkSelectionWorker.Unlock()
-	m.profileWorker.Lock()
+	if !lockExitRuntime(ctx, &m.profileWorker) {
+		return ctx.Err()
+	}
 	defer m.profileWorker.Unlock()
-	driver.Lock.Lock()
+	if !lockExitRuntime(ctx, driver.Lock) {
+		return ctx.Err()
+	}
 	defer driver.Lock.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err

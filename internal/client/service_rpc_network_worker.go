@@ -19,7 +19,9 @@ type ClientRPCNetworkSelectionProviders struct {
 // ReconcileNetworkSelection dispatches by durable phase; it never starts
 // registration again after teardown, activation or a recorded abort.
 func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driver ClientRPCProfileDriver, providers ClientRPCNetworkSelectionProviders) (result error) {
-	m.networkCoordinator.Lock()
+	if !lockExitRuntime(ctx, &m.networkCoordinator) {
+		return ctx.Err()
+	}
 	defer m.networkCoordinator.Unlock()
 	// Every durable phase, including resumed compensation and local cleanup,
 	// must retain its journal and serving host on an explicitly temporary error.

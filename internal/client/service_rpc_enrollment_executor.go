@@ -29,7 +29,9 @@ func (m *ClientRPCMutations) ReconcileEnrollment(ctx context.Context, provider C
 	if provider == nil {
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
-	m.enrollmentWorker.Lock()
+	if !lockExitRuntime(ctx, &m.enrollmentWorker) {
+		return ctx.Err()
+	}
 	defer m.enrollmentWorker.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err

@@ -18,11 +18,12 @@ type clientRPCProfileSwitch struct {
 	Activated   bool   `json:"activated"`
 }
 
-// Lock must also serialize the agent's automatic tunnel reconciliation. Stop
+// Lock must also serialize the agent's automatic tunnel reconciliation. Its
+// concrete mutex permits cancellable acquisition during runtime shutdown. Stop
 // must be idempotent and return only after old routes are removed. Start must
 // enforce current platform/policy restrictions and verify the target map.
 type ClientRPCProfileDriver struct {
-	Lock   sync.Locker
+	Lock   *sync.Mutex
 	Stop   func(context.Context) (ipc.ConnectionContinuity, error)
 	Start  func(context.Context, Config) error
 	Logout ClientRPCLogoutProvider
@@ -81,9 +82,13 @@ func (m *ClientRPCMutations) ReconcileProfileSwitch(ctx context.Context, driver 
 	if driver.Lock == nil || driver.Stop == nil || driver.Start == nil {
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
-	m.profileWorker.Lock()
+	if !lockExitRuntime(ctx, &m.profileWorker) {
+		return ctx.Err()
+	}
 	defer m.profileWorker.Unlock()
-	driver.Lock.Lock()
+	if !lockExitRuntime(ctx, driver.Lock) {
+		return ctx.Err()
+	}
 	defer driver.Lock.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err

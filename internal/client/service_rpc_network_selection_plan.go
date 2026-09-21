@@ -99,7 +99,9 @@ func networkSelectionInstallationReady(cfg Config) bool {
 // and an isolated candidate. Source changes invalidate the checkpoint, including
 // intent/owner/profile changes while the provider runs. There are no OS effects.
 func (m *ClientRPCMutations) ReconcileNetworkSelectionPreparation(ctx context.Context, provider ClientRPCNetworksProvider) error {
-	m.networkSelectionWorker.Lock()
+	if !lockExitRuntime(ctx, &m.networkSelectionWorker) {
+		return ctx.Err()
+	}
 	defer m.networkSelectionWorker.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err

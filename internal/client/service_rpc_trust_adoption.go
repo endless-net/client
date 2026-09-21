@@ -25,11 +25,17 @@ func (m *ClientRPCMutations) ReconcileTrustAdoption(ctx context.Context, driver 
 	if initial.RPCState == nil || initial.RPCState.Trust == nil || initial.RPCState.Trust.Adopted {
 		return ctx.Err()
 	}
-	m.trustWorker.Lock()
+	if !lockExitRuntime(ctx, &m.trustWorker) {
+		return ctx.Err()
+	}
 	defer m.trustWorker.Unlock()
-	m.profileWorker.Lock()
+	if !lockExitRuntime(ctx, &m.profileWorker) {
+		return ctx.Err()
+	}
 	defer m.profileWorker.Unlock()
-	driver.Lock.Lock()
+	if !lockExitRuntime(ctx, driver.Lock) {
+		return ctx.Err()
+	}
 	defer driver.Lock.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err

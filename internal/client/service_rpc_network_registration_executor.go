@@ -16,7 +16,9 @@ import (
 // Errors retain the private plan for retry/cleanup; registration readiness does
 // not complete SelectNetwork or permit activation without verified handover.
 func (m *ClientRPCMutations) ReconcileNetworkSelectionRegistration(ctx context.Context, provider ClientRPCNetworkRegistrationProvider) error {
-	m.networkSelectionWorker.Lock()
+	if !lockExitRuntime(ctx, &m.networkSelectionWorker) {
+		return ctx.Err()
+	}
 	defer m.networkSelectionWorker.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err

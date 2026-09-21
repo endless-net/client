@@ -50,9 +50,13 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 	if driver.Lock == nil || driver.Stop == nil {
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
-	m.disconnectWorker.Lock()
+	if !lockExitRuntime(ctx, &m.disconnectWorker) {
+		return ctx.Err()
+	}
 	defer m.disconnectWorker.Unlock()
-	driver.Lock.Lock()
+	if !lockExitRuntime(ctx, driver.Lock) {
+		return ctx.Err()
+	}
 	defer driver.Lock.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
@@ -78,7 +82,9 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 	}
 	resuming := current.State == ipc.OperationState_OPERATION_STATE_RUNNING
 	if current.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT {
-		m.enrollmentWorker.Lock()
+		if !lockExitRuntime(ctx, &m.enrollmentWorker) {
+			return ctx.Err()
+		}
 		defer m.enrollmentWorker.Unlock()
 		if err := ctx.Err(); err != nil {
 			return err
@@ -86,7 +92,9 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 		if err := m.cancelEnrollmentForForget(); err != nil {
 			return err
 		}
-		m.sessionWorker.Lock()
+		if !lockExitRuntime(ctx, &m.sessionWorker) {
+			return ctx.Err()
+		}
 		defer m.sessionWorker.Unlock()
 		if err := ctx.Err(); err != nil {
 			return err

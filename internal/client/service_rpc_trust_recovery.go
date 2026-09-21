@@ -25,7 +25,9 @@ func (m *ClientRPCMutations) ReconcileTrustRecovery(ctx context.Context, provide
 	if provider == nil {
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
-	m.trustWorker.Lock()
+	if !lockExitRuntime(ctx, &m.trustWorker) {
+		return ctx.Err()
+	}
 	defer m.trustWorker.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err

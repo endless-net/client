@@ -44,7 +44,9 @@ func failSessionRenewal(cfg *Config, op *ipc.Operation, code ipc.ErrorCode, reas
 // ReconcileSessionRenewal performs at most one call. Scheduling and RUNNING are
 // durable before dispatch, so restart repeats the same request, never new intent.
 func (m *ClientRPCMutations) ReconcileSessionRenewal(ctx context.Context, provider ClientRPCSessionRenewalProvider) error {
-	m.sessionWorker.Lock()
+	if !lockExitRuntime(ctx, &m.sessionWorker) {
+		return ctx.Err()
+	}
 	defer m.sessionWorker.Unlock()
 	parent := ctx
 	ctx, cancel := context.WithCancel(parent)
