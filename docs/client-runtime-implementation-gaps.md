@@ -22,6 +22,31 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN clock preparation increment (2026-09-21): `exit_lan_deadline*.go` captures
+CLOCK_BOOTTIME / CLOCK_REALTIME / CLOCK_BOOTTIME before preparation, converts
+the already-intersected expiry using the first boot sample, and retains a fixed
+absolute nanosecond deadline. Delayed publication cannot be represented as a
+new TTL. Validation rejects overlapping/regressed samples, elapsed equality,
+overflow and saturated time arithmetic; boottime accounts for suspend and the
+wall limit additionally closes forward clock jumps. The native preparation
+wrapper retains the topology and health gates and opens no kernel rule.
+
+This is one-preparation clock evidence only. Shared caps for repeated evidence,
+durable boot-bound recovery, BPF publication and live attachment verification
+remain mandatory before LAN_ALLOW can be enabled.
+
+`exit_lan_btf.go` resolves `bpf_nf_ctx.skb` and unsigned 32-bit `sk_buff.mark`
+from bounded BTF metadata, including anonymous aggregates and qualified types.
+Pointer width is explicit; no kernel struct offsets are hardcoded. Ambiguous
+layouts, target bitfields, malformed records, cycles and unsupported extensions
+fail closed. This is metadata parsing only: native BTF loading, instruction
+generation, verifier acceptance and attachment ownership are still absent.
+Validation: goimports, vet and configured lint (0 issues) passed; the full local
+short suite passed (internal/client 139.047 s, CLI 10.687 s). Sampler tests are
+Linux-specific and require push CI; portable deadline/BTF units ran locally.
+The preceding HOST lifetime commit `d810473` passed all three short CI platforms
+([run 35630016440](https://github.com/endless-net/client/actions/runs/35630016440)).
+
 HOST observation lifetime increment (2026-09-21): collection and Current recheck
 immutable expiry after the final device/relay readback. A relay generation that
 ends during UAPI inspection cannot retain a valid receipt. Signed selected-exit

@@ -48,6 +48,22 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+`TestExitLANBootDeadlineIsAbsoluteAcrossDelaySuspendAndClockChanges` checks
+immutable absolute expiry across delayed publication, suspend and realtime
+changes. `TestExitLANBootDeadlineRejectsInvalidArithmetic` checks saturation,
+overflow, inverted samples and expiry during capture. Linux sampler units
+inject all three clock reads, including each read failure and late cancellation;
+they do not read the host clocks or prove kernel packet enforcement.
+`TestExitLANBootPreparationRechecksAfterTopology` checks expiry/cancellation at
+the final clock sample after topology readback.
+`TestExitLANBTFMarkLayout`, `TestExitLANBTFRejectsUnsafeLayouts`,
+`TestExitLANBTFTraversalBoundsAndQualifiedPointer`, `TestExitLANBTFHeaderAndBounds`
+and `TestExitLANBTFSkipsKnownRecordsAndPromotesOnlyAnonymous` use synthetic LE/BE
+metadata to verify target offsets and rejection boundaries. They do not prove
+that a generated BPF program loads or enforces traffic on a real kernel.
+`TestExitLANBTFUnnamedPaddingBitfield` accepts legal nonoverlapping padding and
+rejects padding that overlaps the target field.
+
 HOST receipt lifetime assertions: `TestResourceHostCurrentRechecksDeadlineAfterReadback`
 crosses the original expiry during inspection;
 `TestResourceHostCurrentRechecksRelayAfterReadback` ends the original relay

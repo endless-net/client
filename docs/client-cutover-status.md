@@ -52,6 +52,12 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+LAN clock increment: добавлен фиксированный абсолютный срок по CLOCK_BOOTTIME,
+снятый до подготовки плана. Повторная проверка не обновляет срок; задержка,
+сон и скачок realtime вперёд могут только закрыть подготовленное разрешение.
+Ограничение между повторными preparations, recovery и публикация BPF lease
+ещё не реализованы. Native LAN_ALLOW остаётся закрытым.
+
 HOST observation lifetime increment: сроки map, handshake и выбранного exit grant
 проверяются после финального readback. Завершение relay во время чтения снимает
 подтверждение. Это закрывает окна устаревшего HOST AVAILABLE, но не подтверждает
@@ -185,8 +191,8 @@ Capability теперь включается только публичным nat
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: после HOST observation lifetime increment internal/client
-прошёл за 138.087 s, CLI за 12.274 s; остальные пакеты прошли или использовали cache.
+и `go test -short ./...`: после LAN clock/BTF increment internal/client
+прошёл за 139.047 s, CLI за 10.687 s; остальные пакеты прошли или использовали cache.
 Во время предыдущего LAN evidence increment один прогон
 упал в internal/client, но assertion потерялся в усечённом выводе; повтор без
 изменений с полным логом прошёл. Причина этого непостоянного сбоя не установлена.
