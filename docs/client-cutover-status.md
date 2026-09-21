@@ -61,6 +61,22 @@ overlay/resource routes приоритетны. Потеря exit или неп�
 исключены, DHCP/ND обслуживаются отдельно. Семантика согласована, реализация
 и native приёмка ещё не завершены.
 
+LAN preparation increment от 2026-09-21: добавлен Linux collector кандидатов
+по `ip` JSON и фиксированным sysfs attributes. Два снимка сопоставляют link,
+driver/bus, адреса с prefix lengths и direct main routes; gateway/via/ECMP,
+virtual links и неоднозначные attachments исключаются. Сохраняется самый ранний
+срок действия адресов. Отдельный planner проверяет signed exit grant и вычитает
+overlay/resource/sticky application destinations без расширения CIDR, сохраняя
+исходный prefix, interface и source addresses. `/31` и `/32` не теряют адреса
+как обычные broadcast-подсети; пустая выбранная семья не считается ALLOW.
+
+Это подготовка кандидатов, пока не подключённая к native Apply. Sysfs не исключает
+эмуляцию аппаратного NIC в VM; physical classification требует qualification.
+Двойной snapshot не доказывает непрерывность экземпляра интерфейса. Следующий
+datapath должен использовать собственную direct-route table с terminal prohibit,
+защищённую установку по instance, исключения ресурсов и истекающую в kernel lease,
+ограниченную свежим exit-health evidence. LAN_ALLOW остаётся недоступным.
+
 Relay HOST increment от 2026-09-21: observer связывает подписанную map и peer
 с текущим экземпляром relay bridge, его локальным UAPI endpoint и выбранным
 внешним relay. Подтверждение требует полного timestamp handshake строго после
@@ -150,8 +166,10 @@ Capability теперь включается только публичным nat
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: после relay HOST increment internal/client прошёл
-за 130.398 s, cmd/endlessnet-client — за 10.743 s. Все пакеты прошли.
+и `go test -short ./...`: после LAN preparation increment internal/client прошёл
+за 119.773 s; cmd/endlessnet-client повторно использовал успешный результат
+11.343 s. Все пакеты прошли. Дополнительное review исправило reservation CIDR
+приложения без lease и общий work budget до последнего успешного прогона.
 Локальные native/E2E/installer проверки не запускались.
 
 1. Завершить native exit LAN_ALLOW, сочетания exit с profile/network

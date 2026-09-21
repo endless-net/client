@@ -22,6 +22,53 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN preparation (2026-09-21): `exit_lan_source*.go` collects bounded Linux
+link/address/main-route snapshots with fixed sysfs device/driver/bus reads.
+Before/after canonical state must agree. Known virtual topology, gateway/via,
+multipath and ambiguous attachments cannot produce a candidate. Earliest finite
+address validity/preference limits the source deadline; countdown itself is not
+treated as an identity change. Sysfs hardware candidates do not rule out guest
+hardware emulation, so physical-platform qualification remains required.
+The strict route parser currently rejects timed RA route `expires` and
+non-medium router preferences; those variants need bounded expiry-aware support
+before claiming general dynamic IPv6 LAN support. Unknown fields never widen
+the candidate set.
+
+`exit_lan_policy.go` authenticates the map and exact exit grant, preserves all
+non-default peer/resource destinations independently of enablement, includes
+declared application CIDR targets even without route leases, application routes
+and sticky filter reservations, and subtracts them exactly
+from a connected prefix. Application link-local, multicast, unspecified,
+loopback and broadcast addresses are excluded; /31 and /32 are preserved.
+`exit_lan_plan.go` retains original prefix/interface/source bindings, caps expiry
+by topology and policy, and rejects empty selected families. These are native
+transaction inputs only; Apply/capability remains BLOCK-only.
+
+The next enforcement step is an exclusively owned direct-route table with a
+terminal marked prohibit rule, avoiding fallback to main/default. Linux routes
+bind device objects and are removed on unregister, unlike nft oifname/ifindex
+or netdev hooks that may match a replacement. Capture-to-install ABA, changes
+to attachment/prefix, table/mark/rule ownership, expiry without the process,
+fresh exit health and strict readback/recovery remain unimplemented. Wi-Fi
+reassociation can preserve ifindex/address/carrier, so it needs separate
+attachment invalidation rather than treating this snapshot as network identity.
+A repeated
+snapshot or `rt nexthop == destination` is not sufficient: IPv4 via IPv6 gateway
+is a counterexample to that stock nft check. D-034 in architecture (`8719ce7`)
+records the accepted semantics; none of this preparation proves OS acceptance.
+
+Preparation review additionally rejected path-like interface names before sysfs
+access and bounded work across the entire plan, including fully excluded routes.
+The CIDR-without-lease regression prevents a restarted application reservation
+from becoming an unintended LAN fallback. Linux boundary units use only rejected
+input and pre-cancelled contexts; they do not read the host's sysfs or routes.
+
+LAN preparation validation: goimports, vet and configured lint (0 issues) passed.
+The final full short suite passed: internal/client 119.773 s; CLI reused its
+passing 11.343 s result. The preceding relay commit `d4d80e4` passed cross-platform
+short CI ([run 35622423377](https://github.com/endless-net/client/actions/runs/35622423377)).
+No native/system checks were run.
+
 Relay HOST increment (2026-09-21): private bridge observations bind signed-map
 hash/revisions, recipient, peer key, local UAPI endpoint, selected external relay
 and live bridge generation. Confirmation requires a complete authenticated

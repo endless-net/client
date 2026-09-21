@@ -35,7 +35,7 @@ IDs mean all the referenced implementation and unit obligations apply.
 | US-02 | `service_rpc_enrollment_worker.go`, `service_rpc_enrollment_executor.go`, CLI approval/registration drivers | `service_rpc_enrollment_worker_test.go`, `cmd/endlessnet-client/service_rpc_approval_driver_test.go`, `cmd/endlessnet-client/enrollment_workflow_test.go` | Every approval/denial/cancel/expiry/ownership and durable request binding |
 | US-03 | `service_rpc_connect.go`, `service_rpc_disconnect.go`, `service_rpc.go`, events | `service_rpc_connect_test.go`, `service_rpc_disconnect_test.go`, `service_rpc_restart_test.go`, `service_rpc_events_test.go` | All race/restart/failure outcomes; real apply/Down and first-snapshot continuity |
 | US-04 | `service_rpc_networks.go`, `service_rpc_select_network.go`, `service_rpc_peers.go` | `service_rpc_peers_test.go`, `service_rpc_select_network_test.go` | Cross-network selection still missing; identity/map/routes isolation and recovery |
-| US-05 | Public exit handlers, exit change/result/executor and durable protection, `exit_routes.go`, `exit_filter.go`, Linux guard and engine hooks | Exit catalog/change/result/executor units, `service_rpc_exit_release_test.go`, `service_rpc_exit_protection_test.go`, route/filter/guard observations | Production native adapter and worker startup; firewall readback/invalidation, pre-exit DNS, native release recovery, LAN and actual per-family protection |
+| US-05 | Public exit handlers, durable protection, Linux native executor/host/worker, route/filter/guard readback, pre-exit DNS and release recovery; LAN source/policy preparation | Exit catalog/change/result/executor units, release/protection/host/resume and route/filter/guard observations; LAN assertions below | LAN datapath, full transition/recovery audit, physical classification and actual per-family OS qualification |
 | US-06 | `service_rpc_trust_worker.go`, `service_rpc_trust_recovery.go`, recovery helper | `service_rpc_trust_worker_test.go`, `cmd/endlessnet-client/service_rpc_trust_recovery_test.go` | Exact origin/key/announcement, replay/cancellation/privilege audit and real helper execution |
 | US-07 | `service_rpc_diagnostics.go`, bundle create/store/worker/read, `route_observations.go` | `service_rpc_bundle_read_test.go`, `service_rpc_bundle_admin_test.go`, `service_rpc_bundle_archive_test.go`, diagnostics tests | Every bound/privacy/preview/export case; complete route/resource observations |
 | US-08 | Profile/switch/logout/forget handlers and workers | `service_rpc_profiles_test.go`, `service_rpc_switch_test.go`, `service_rpc_logout_worker_test.go`, `service_rpc_forget_test.go` | Cleanup and stale-response audit; actual provider isolation; remote cleanup evidence |
@@ -47,6 +47,26 @@ IDs mean all the referenced implementation and unit obligations apply.
 | US-14 | Typed status/reasons, snapshot/events/log/diagnostics projections | `service_rpc_events_role_test.go`, `service_rpc_session_snapshot_test.go`, diagnostics/privacy tests | Exact observer/private field audit, actionable reasons and full capability distinctions |
 
 ## Assertion audit increment, 2026-09-21
+
+LAN semantic question is resolved by the user's 2026-09-21 decision and
+architecture D-034 (`8719ce7`). The following preparation does not close US-05,
+UF-08, UI-AC-17 or native acceptance:
+
+- `TestExitLANSourceStablePhysicalTopology` and
+  `TestExitLANSourcePublicWiFiAndLifetimeCountdown` preserve actual prefix lengths,
+  two matching snapshots and the earliest finite address deadline. Injected
+  sysfs/IP results do not qualify physical hardware or prove instance continuity.
+- `TestExitLANSourceRejectsAmbiguousAndChangingEvidence` rejects gateway/via,
+  next-hop IDs, changed carrier/routes, cancellation, malformed/bounded data and
+  foreign preferred source. Overlapping physical attachments remain ambiguous
+  regardless of route metric.
+- `TestExitLANReservationRequiresSignedAuthorityAndPreservesResources` checks
+  exact grant/map authority, disabled resource and sticky reservations, address
+  expiry, nonempty selected families and immutable preparation output.
+- `TestExitLANDestinationSubtractionIsExactAcrossFamilies` enumerates every
+  address in bounded IPv4/IPv6 fixtures, including /31 and /32, to reject both
+  scope widening and lost permitted destinations. This is CIDR arithmetic, not
+  OS packet-path evidence. Native Apply still advertises BLOCK only.
 
 The following reviewed assertions refine US-05/08/11 without closing their OS
 or acceptance obligations. They cover committed source `ecd7266`:
