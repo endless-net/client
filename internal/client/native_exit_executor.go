@@ -35,7 +35,7 @@ func newNativeExitExecutorWithGuard(engine *WireGuardEngine, lock *sync.Mutex, c
 	n := &nativeExitExecutor{engine: engine, createGuard: create}
 	return clientRPCExitExecutor{InterfaceName: engine.opts.Interface, Lock: lock,
 		Modes: []clientRPCExitMode{{Family: api.ExitFamilyIPv4Only, LAN: api.ExitLANBlock}, {Family: api.ExitFamilyIPv6Only, LAN: api.ExitLANBlock}, {Family: api.ExitFamilyDualStack, LAN: api.ExitLANBlock}},
-		Apply: n.apply, Contain: n.contain, Release: n.release, Observe: n.observe}, nil
+		Apply: n.apply, Contain: n.contain, Release: n.release, Observe: n.observe, Maintain: n.maintain, ResumeSaved: n.resumeSaved}, nil
 }
 
 func nativeExitOperation(cfg Config, id string, requested *ClientExitSelection, releasing bool) (*clientRPCExitChange, error) {
@@ -274,6 +274,12 @@ func (n *nativeExitExecutor) observeSelection(ctx context.Context, cfg Config, s
 	e := n.engine
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return n.observeSelectionLocked(ctx, cfg, selection, profile, guard)
+}
+
+// Caller holds engine.mu through the observation and any dependent action.
+func (n *nativeExitExecutor) observeSelectionLocked(ctx context.Context, cfg Config, selection *ClientExitSelection, profile string, guard *linuxExitGuard) (*ipc.ExitNodeStatus, error) {
+	e := n.engine
 	if e.exitConfig.RPCState == nil || e.exitConfig.RPCState.ActiveProfileID != profile {
 		return nil, errors.New("native exit runtime profile changed")
 	}

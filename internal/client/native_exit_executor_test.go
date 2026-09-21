@@ -184,8 +184,12 @@ func testNativeExitSelectionObservation(t *testing.T, family api.ExitFamilyMode)
 	}
 	cfg := m.store.Read()
 	executor.Lock.Lock()
+	maintenanceErr := executor.Maintain(t.Context(), cfg)
 	status, err := executor.Observe(t.Context(), cfg)
 	executor.Lock.Unlock()
+	if maintenanceErr != nil {
+		t.Fatal("healthy native enforcement was contained", maintenanceErr)
+	}
 	if err != nil || status.ProfileId != profile.ProfileId || !exitAppliedResultMatches(&clientRPCExitChange{ProfileID: profile.ProfileId, Requested: cfg.ExitSelection}, status) {
 		t.Fatal("complete native observation missing", err, status)
 	}
@@ -216,6 +220,15 @@ func testNativeExitSelectionObservation(t *testing.T, family api.ExitFamilyMode)
 	engine.underlayLease.revoke()
 	if status, err := executor.Observe(t.Context(), cfg); err == nil || status != nil {
 		t.Fatal("revoked DNS source retained applied observation")
+	}
+	executor.Lock.Lock()
+	maintenanceErr = executor.Maintain(t.Context(), cfg)
+	executor.Lock.Unlock()
+	if !errors.Is(maintenanceErr, errNativeExitMaintenance) || !engine.exitFilter.closed || engine.exitGuard == nil {
+		t.Fatal("revoked DNS source was not contained", maintenanceErr)
+	}
+	if err := engine.exitGuard.ObserveContained(t.Context()); err != nil {
+		t.Fatal("maintenance did not close native enforcement", err)
 	}
 }
 
@@ -275,7 +288,7 @@ func TestNativeExitFactoryRequiresPlatformAndOwnedEngine(t *testing.T) {
 		}
 		return
 	}
-	if err != nil || executor.Apply == nil || executor.Contain == nil || executor.Release == nil || executor.Observe == nil || len(executor.Modes) != 3 {
+	if err != nil || executor.Apply == nil || executor.Contain == nil || executor.Release == nil || executor.Observe == nil || executor.Maintain == nil || executor.ResumeSaved == nil || len(executor.Modes) != 3 {
 		t.Fatal("Linux factory did not provide complete callbacks", err)
 	}
 	if engine.exitGuard != nil || engine.configured {

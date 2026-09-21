@@ -33,6 +33,15 @@ native adapter/worker и не заменяет платформенную при
 Полная цель не завершена. Релиз v0.6.0 опубликован, но публикация не является
 приёмкой всех требований BA/SA. Текущие изменения после релиза находятся в main.
 
+Lifetime/resume increment от 2026-09-21: worker получил периодическую проверку
+защиты и отдельный callback восстановления сохранённого selection. Проверяется
+и firewall остановленного runtime; при нарушении сначала закрывается packet
+filter, затем подтверждается containment. Shutdown отменяет ожидание lock и
+дожидается монитора. После resume повторно проверяется сохранённый контекст.
+UAPI readback теперь проверяет также локальную WireGuard identity и PSK.
+Подключение worker к host/map loop, admission при отключённом клиенте,
+восстановление withdrawn live runtime и capabilities/events ещё требуют работы.
+
 Native adapter increment от 2026-09-21: добавлены callbacks Apply/Clear/Contain/
 Release с привязкой к durable operation и независимыми наблюдениями, а также
 чтение runtime exit status под общим lock с повторной проверкой прав и контекста.
@@ -48,7 +57,7 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 | IPC и потребители | Protobuf client.v0, generated API, локальный gRPC через pipe/Unix socket; CLI и recovery helper используют v0 | Полный аудит удаления legacy, совместной работы Go/Dart и всех потребителей; приёмка UI относится к внешнему репозиторию |
 | Состояние и операции | Durable операции, идентификаторы запросов, replay, проверки владельца/профиля, конфликты и восстановление; snapshot/events | Проверка каждой мутации и перехода по матрице, включая права, CAS, отмену, рестарт и приватность событий |
 | Enrollment, trust, session | Workers и транспорт enrollment/trust/renewal, сохранение прогресса, ротация credentials, отмена старых запросов и защита от поздних ответов | Полный аудит cleanup/concurrency и контекста; подтверждение producer semantics и реального seamless renewal |
-| Exit | Get/Select/Clear handlers, durable journal и ownership, checkpoint release; Linux executor и scoped cleanup после рестарта; readback firewall/routes, runtime status и DNS lease; разделение IP-семей | Запуск worker в агенте, resume сохранённого selection, ongoing invalidation, steady-state status после Clear, capabilities/events, LAN_ALLOW и OS qualification |
+| Exit | Get/Select/Clear handlers, durable journal и ownership, checkpoint release; Linux executor, cleanup, family-scoped firewall, UAPI/identity/DNS observations; worker maintenance и saved-resume callback | Host/map-loop integration, disconnected admission и live recovery, steady-state status после Clear, capabilities/events, LAN_ALLOW и OS qualification |
 | Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN с проверкой адреса/протокола/порта, наблюдения запретов; retirement/возврат choices при аутентифицированной смене map | Положительное подтверждение доступности route/path/application, полный rollback/restart audit и реальные OS-эффекты |
 | Preferences и lifecycle | Set/Reset inbound/DNS/routes и lifecycle-полей, managed policy/locks/source; Windows power/logoff paths и resume-policy refresh | Полный аудит эффектов каждой настройки, доставка событий на других ОС, восстановление источников событий и native qualification |
 | Networks/profiles | Контекстные проверки, guards переключения, изоляция состояния и защита от устаревших ответов | Полная смена identity/map/routes, recovery и фактическая изоляция при переключении сети/provider |
@@ -71,12 +80,13 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: internal/client 103.293 s в итоговом запуске
-с native executor, family-scoped guard и RPC observation; остальные пакеты прошли.
+и `go test -short ./...`: internal/client 108.985 s в итоговом запуске
+с maintenance, saved resume и WireGuard identity evidence; остальные пакеты прошли.
 Локальные native/E2E/installer проверки не запускались.
 
-1. Связать native exit executor с агентом после реализации resume сохранённого
-   selection, lifetime invalidation firewall/routes и наблюдения после Clear.
+1. Связать native exit executor, saved resume и maintenance с агентом и map loop;
+   согласовать эффекты Select с disconnected intent, восстановить withdrawn live
+   runtime и завершить наблюдение после Clear.
    Подключить capabilities/catalog/events, завершить LAN_ALLOW и recovery при
    изменении настроенного интерфейса с сохранённым старым protection scope. Точный
    combined IPv6 ND readback и socket effects остаются предметом native qualification.

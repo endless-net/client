@@ -11,8 +11,6 @@ import (
 	"strings"
 )
 
-const defaultWireGuardEngineRouteTable = uint32(51820)
-
 type linuxWireGuardEngineRouter struct {
 	interfaceName    string
 	runner           CommandRunner

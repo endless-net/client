@@ -43,7 +43,7 @@ func (s *ClientRPCService) exitNodeAs(ctx context.Context, peer local.Peer, requ
 	defer cancel()
 	stop := context.AfterFunc(source.ctx, cancel)
 	defer stop()
-	locked := lockExitObservation(check, source.lock)
+	locked := lockExitRuntime(check, source.lock)
 	if locked {
 		defer source.lock.Unlock()
 	}
@@ -88,7 +88,7 @@ func (s *ClientRPCService) exitNodeAs(ctx context.Context, peer local.Peer, requ
 	return proto.Clone(status).(*ipc.ExitNodeStatus), nil
 }
 
-func lockExitObservation(ctx context.Context, lock *sync.Mutex) bool {
+func lockExitRuntime(ctx context.Context, lock *sync.Mutex) bool {
 	for {
 		if ctx.Err() != nil {
 			return false

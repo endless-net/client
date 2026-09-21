@@ -22,6 +22,46 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Lifetime/resume increment (2026-09-21): the exit worker owns a one-second
+maintenance loop, cancelled and joined before worker shutdown. It skips busy
+effects and reads current configuration only after acquiring the shared lock.
+Changes admitted during observation trigger an immediate second check. Native
+maintenance observes the actual engine-owned scope; failed authority or native
+evidence withdraws packet policy before bounded independent containment. A
+stopped runtime still checks and repairs its retained firewall. Failed repair
+remains an error and is retried; no maintenance error proves blocking.
+
+A separate saved-selection callback can resume a stopped protected runtime with
+connected intent, current profile/origin/identity/map and no transition barriers.
+It does not manufacture a Select operation. An already running selection is
+observed without silently reopening withdrawn enforcement. The worker rechecks
+durable context after resume and invokes maintenance before releasing the effect
+lock when admission changed it. Lock acquisition for operation reconciliation is
+now cancellable, including while lifecycle holds the effect lock.
+
+WireGuard evidence additionally compares derived live/committed local public
+keys with the authenticated map, and checks every live peer's PSK against the
+intended value. Comparison models retain only public identity and PSK digests;
+raw keys and UAPI errors are not returned. These are bounded periodic checks,
+not an atomic lease on external routing/firewall state or reachability proof.
+Agent host/map-loop wiring, capability/catalog/snapshot/event integration,
+post-Clear steady-state observations, changed-interface recovery and LAN_ALLOW
+remain open. The production host still does not start the exit worker.
+Before host admission is enabled, reconcile Select with disconnected/default
+connection intent: selecting an exit must not inadvertently create connection
+effects outside the connection/lifecycle contract. The saved-resume gate already
+requires explicit connected intent; mutation admission/application needs the
+same contract audit. Recovery of a withdrawn but still live runtime also needs
+an explicit reconciliation path; a permanently unknown/closed state is not
+completion of connection recovery.
+This increment passed goimports, vet, lint (0 issues) and the full short suite
+(internal/client 108.985 s). `native_exit_maintenance_test.go` covers failed
+evidence, containment ordering, stopped protection and bound pending effects;
+`service_rpc_exit_maintenance_test.go` covers fresh snapshots, retry, cancellation
+and joining. Native/worker resume tests cover stopped application, refused
+transitions and admission changes during effects. These fixtures use injected
+OS command evidence, not native platform qualification.
+
 Native adapter increment (2026-09-21): the Linux executor now binds effects to
 the dispatched durable operation and protection scope, applies through the
 engine, and independently observes firewall/routes and committed packet policy.
@@ -40,8 +80,8 @@ or application-reachability guarantee.
 Clear uses stopped-runtime recovery before its durable release checkpoint;
 Release repeats cleanup and observes absence. Read-only RPC observation is
 serialized with effects and must not promote an old operation result to current
-runtime status. The host worker is not yet enabled: committed-selection resume,
-ongoing firewall/route invalidation and LAN_ALLOW remain required.
+runtime status. The later lifetime/resume increment supplies worker-level
+monitoring and saved resume; host integration and LAN_ALLOW remain required.
 The read path currently observes settled active selections only. Pending changes,
 inactive profiles and the steady state after Clear retain unknown runtime status;
 the Clear operation itself requires observed cleanup/release before success.

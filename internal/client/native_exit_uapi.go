@@ -1,6 +1,10 @@
 package client
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"net/netip"
 	"reflect"
@@ -8,6 +12,7 @@ import (
 	"strings"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	"golang.org/x/crypto/curve25519"
 )
 
 var errNativeExitUAPI = errors.New("native exit WireGuard state is unconfirmed")
@@ -24,21 +29,24 @@ func nativeExitUAPIObserved(e *WireGuardEngine, selection *ClientExitSelection) 
 	if err != nil {
 		return errNativeExitUAPI
 	}
-	return nativeExitUAPITextObserved(e.uapi, raw, selection, e.exitGuard.mark)
+	return nativeExitUAPITextObserved(e.uapi, raw, selection, e.exitGuard.mark, e.pathMap.Node.PublicKey)
 }
 
 type nativeExitUAPIPeer struct {
-	endpoint string
-	routes   map[netip.Prefix]bool
+	endpoint  string
+	routes    map[netip.Prefix]bool
+	pskDigest [sha256.Size]byte
+	pskSeen   bool
 }
 
 type nativeExitUAPIState struct {
-	mark  uint32
-	peers map[string]nativeExitUAPIPeer
+	mark        uint32
+	peers       map[string]nativeExitUAPIPeer
+	localPublic string
 }
 
-func nativeExitUAPITextObserved(expected, actual string, selection *ClientExitSelection, mark uint32) error {
-	if selection == nil || !exitGuardFamilyValid(selection.Family) || mark == 0 {
+func nativeExitUAPITextObserved(expected, actual string, selection *ClientExitSelection, mark uint32, localPublic string) error {
+	if selection == nil || !exitGuardFamilyValid(selection.Family) || mark == 0 || localPublic == "" {
 		return errNativeExitUAPI
 	}
 	want, err := parseNativeExitUAPI(expected)
@@ -49,8 +57,14 @@ func nativeExitUAPITextObserved(expected, actual string, selection *ClientExitSe
 	if err != nil {
 		return errNativeExitUAPI
 	}
-	if want.mark != mark || live.mark != mark || !reflect.DeepEqual(want.peers, live.peers) {
+	if want.mark != mark || live.mark != mark || want.localPublic != localPublic || live.localPublic != localPublic || len(want.peers) != len(live.peers) {
 		return errNativeExitUAPI
+	}
+	for key, expectedPeer := range want.peers {
+		actualPeer, exists := live.peers[key]
+		if !exists || !actualPeer.pskSeen || actualPeer.endpoint != expectedPeer.endpoint || !reflect.DeepEqual(actualPeer.routes, expectedPeer.routes) || subtle.ConstantTimeCompare(actualPeer.pskDigest[:], expectedPeer.pskDigest[:]) != 1 {
+			return errNativeExitUAPI
+		}
 	}
 	selected, exists := live.peers[selection.Host.PublicKey]
 	if !exists || selected.endpoint == "" {
@@ -78,7 +92,8 @@ func nativeExitUAPITextObserved(expected, actual string, selection *ClientExitSe
 
 // This parser deliberately extracts only stable security-relevant fields.
 // Counters and handshakes vary between reads. Expected configuration directives
-// and live private/preshared keys are never retained in the comparison model.
+// and live private/preshared keys are never retained in the comparison model:
+// only the derived local public key and PSK digests survive parsing.
 func parseNativeExitUAPI(raw string) (nativeExitUAPIState, error) {
 	state := nativeExitUAPIState{peers: map[string]nativeExitUAPIPeer{}}
 	if raw == "" || len(raw) > 1<<20 || strings.Count(raw, "\n") > 32768 {
@@ -86,6 +101,7 @@ func parseNativeExitUAPI(raw string) (nativeExitUAPIState, error) {
 	}
 	var peerKey string
 	markSeen := false
+	privateSeen := false
 	endpointSeen := map[string]bool{}
 	routeCount := 0
 	for _, line := range strings.Split(raw, "\n") {
@@ -97,6 +113,41 @@ func parseNativeExitUAPI(raw string) (nativeExitUAPIState, error) {
 			return state, errNativeExitUAPI
 		}
 		switch key {
+		case "private_key":
+			if privateSeen || peerKey != "" {
+				return state, errNativeExitUAPI
+			}
+			privateSeen = true
+			private, err := hex.DecodeString(value)
+			if err != nil || len(private) != 32 {
+				clear(private)
+				return state, errNativeExitUAPI
+			}
+			var zero [32]byte
+			if subtle.ConstantTimeCompare(private, zero[:]) == 1 {
+				clear(private)
+				return state, errNativeExitUAPI
+			}
+			// X25519 clamps the scalar exactly as WireGuard's FromMaybeZeroHex.
+			public, err := curve25519.X25519(private, curve25519.Basepoint)
+			clear(private)
+			if err != nil {
+				return state, errNativeExitUAPI
+			}
+			state.localPublic = base64.StdEncoding.EncodeToString(public)
+		case "preshared_key":
+			peer, exists := state.peers[peerKey]
+			if !exists || peer.pskSeen {
+				return state, errNativeExitUAPI
+			}
+			psk, err := hex.DecodeString(value)
+			if err != nil || len(psk) != 32 {
+				clear(psk)
+				return state, errNativeExitUAPI
+			}
+			peer.pskDigest, peer.pskSeen = sha256.Sum256(psk), true
+			clear(psk)
+			state.peers[peerKey] = peer
 		case "fwmark":
 			if markSeen || peerKey != "" {
 				return state, errNativeExitUAPI
@@ -116,7 +167,8 @@ func parseNativeExitUAPI(raw string) (nativeExitUAPIState, error) {
 				return state, errNativeExitUAPI
 			}
 			peerKey = decoded
-			state.peers[peerKey] = nativeExitUAPIPeer{routes: map[netip.Prefix]bool{}}
+			var zeroPSK [32]byte
+			state.peers[peerKey] = nativeExitUAPIPeer{routes: map[netip.Prefix]bool{}, pskDigest: sha256.Sum256(zeroPSK[:])}
 		case "endpoint":
 			if peerKey == "" || endpointSeen[peerKey] {
 				return state, errNativeExitUAPI
@@ -149,7 +201,7 @@ func parseNativeExitUAPI(raw string) (nativeExitUAPIState, error) {
 			}
 		}
 	}
-	if !markSeen {
+	if !markSeen || !privateSeen {
 		return state, errNativeExitUAPI
 	}
 	return state, nil

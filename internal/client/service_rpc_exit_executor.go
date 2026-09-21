@@ -34,6 +34,12 @@ type clientRPCExitExecutor struct {
 	// Observe runs under Lock and rechecks native enforcement independently of
 	// a previous successful operation. It does not mutate durable intent.
 	Observe func(context.Context, Config) (*ipc.ExitNodeStatus, error)
+	// Maintain rechecks active enforcement without applying or resuming intent.
+	// The caller holds Lock and reads Config only after acquiring it.
+	Maintain func(context.Context, Config) error
+	// ResumeSaved restores only a committed connected selection, without
+	// manufacturing a new mutation. The caller must recheck durable context.
+	ResumeSaved func(context.Context, Config) (*ipc.ExitNodeStatus, error)
 }
 
 func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) bool {
@@ -65,9 +71,13 @@ func (m *ClientRPCMutations) reconcileExitChange(ctx context.Context, executor c
 	if strings.TrimSpace(executor.InterfaceName) != executor.InterfaceName || !safeWireGuardInterfaceName(executor.InterfaceName) || executor.InterfaceName == "lo" {
 		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
 	}
-	m.exitWorker.Lock()
+	if !lockExitRuntime(ctx, &m.exitWorker) {
+		return ctx.Err()
+	}
 	defer m.exitWorker.Unlock()
-	executor.Lock.Lock()
+	if !lockExitRuntime(ctx, executor.Lock) {
+		return ctx.Err()
+	}
 	defer executor.Lock.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err

@@ -15,6 +15,8 @@ import (
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
 )
 
+const defaultWireGuardEngineRouteTable = uint32(51820)
+
 type wireGuardEngineRouter interface {
 	Configure(context.Context, wireGuardEngineRouterConfig) error
 	Down(context.Context) error

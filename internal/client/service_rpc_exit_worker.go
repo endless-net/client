@@ -28,17 +28,21 @@ func (s *ClientRPCService) startExitWorker(ctx context.Context, executor clientR
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 	}
 	executor.Modes = slices.Clone(executor.Modes)
-	w := &clientRPCProfileWorker{ctx: ctx, wake: make(chan struct{}, 1), done: make(chan struct{})}
+	workerCtx, cancelWorker := context.WithCancel(ctx)
+	w := &clientRPCProfileWorker{ctx: workerCtx, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	s.exitWorker = w
 	s.exitModes = slices.Clone(executor.Modes)
-	observationCtx, cancelObservation := context.WithCancel(ctx)
+	observationCtx, cancelObservation := context.WithCancel(workerCtx)
 	if executor.Observe != nil {
 		s.exitObservation = &clientRPCExitObservationSource{ctx: observationCtx, lock: executor.Lock, observe: executor.Observe}
 	}
 	done := make(chan error, 1)
 	go func() {
 		var result error
+		stopMaintenance := s.mutations.startExitMaintenance(workerCtx, executor)
 		defer func() {
+			cancelWorker()
+			stopMaintenance()
 			cancelObservation()
 			s.exitMu.Lock()
 			s.exitWorker = nil
@@ -50,9 +54,12 @@ func (s *ClientRPCService) startExitWorker(ctx context.Context, executor clientR
 			close(done)
 		}()
 		for {
-			result = s.mutations.reconcileExitChange(ctx, executor)
-			if ctx.Err() != nil {
-				result = ctx.Err()
+			result = s.mutations.reconcileExitChange(workerCtx, executor)
+			if result == nil {
+				result = s.mutations.reconcileSavedExit(workerCtx, executor)
+			}
+			if workerCtx.Err() != nil {
+				result = workerCtx.Err()
 				return
 			}
 			if result != nil && !rpcFailureTemporary(result) {
@@ -63,9 +70,9 @@ func (s *ClientRPCService) startExitWorker(ctx context.Context, executor clientR
 			// relying on the original caller (or another worker) to send a wake.
 			timer := time.NewTimer(5 * time.Second)
 			select {
-			case <-ctx.Done():
+			case <-workerCtx.Done():
 				timer.Stop()
-				result = ctx.Err()
+				result = workerCtx.Err()
 				return
 			case <-w.wake:
 			case <-timer.C:
