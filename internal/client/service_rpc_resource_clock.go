@@ -4,38 +4,56 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"reflect"
 	"time"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
 
-func rpcResourceObservationFingerprint(cfg Config, now time.Time, confirmed bool) ([32]byte, error) {
+func rpcResourceObservationFingerprint(cfg Config, now time.Time, confirmed bool, hosts []string) ([32]byte, error) {
 	catalog, err := rpcCatalogFingerprint(cfg, now)
 	if err != nil {
 		return [32]byte{}, err
 	}
-	raw, err := json.Marshal([]any{catalog, cfg.ResourcePreferences, confirmed})
+	raw, err := json.Marshal([]any{catalog, cfg.ResourcePreferences, confirmed, hosts})
 	if err != nil {
 		return [32]byte{}, err
 	}
 	return sha256.Sum256(raw), nil
 }
 
-func (s *ClientRPCService) publishResourceClock() error {
-	if s.ResourceEnforcementProvider == nil {
+func (s *ClientRPCService) publishResourceClock(ctx context.Context) error {
+	if s.ResourceEnforcementProvider == nil && s.ResourceHostProvider == nil {
 		return nil
 	}
 	m := s.mutations
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	cfg := m.store.Read()
-	confirmed := false
+	m.mu.Unlock()
+	var observed *ResourceHostObservation
+	release := func() {}
 	if cfg.RPCState != nil && cfg.RPCState.ActiveProfileID != "" {
+		if _, err := compileResourceDenials(cfg, m.now()); err == nil {
+			observed, release = s.observeResourceHosts(ctx, cfg)
+		}
+	}
+	defer release()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(clonePersistentConfig(cfg), clonePersistentConfig(m.store.Read())) {
+		return nil // A later tick observes the new scope; discard this evidence.
+	}
+	confirmed := false
+	if s.ResourceEnforcementProvider != nil && cfg.RPCState != nil && cfg.RPCState.ActiveProfileID != "" {
 		if _, err := compileResourceDenials(cfg, m.now()); err == nil {
 			confirmed = s.ResourceEnforcementProvider(cfg, m.now())
 		}
 	}
-	fingerprint, err := rpcResourceObservationFingerprint(cfg, m.now(), confirmed)
+	hosts := confirmedResourceHosts(cfg, observed, m.now(), confirmed)
+	fingerprint, err := rpcResourceObservationFingerprint(cfg, m.now(), confirmed, hosts)
 	if err != nil {
 		return err
 	}
@@ -47,7 +65,10 @@ func (s *ClientRPCService) publishResourceClock() error {
 		return nil
 	}
 	if err := m.store.Update(func(next *Config) error {
-		current, err := rpcResourceObservationFingerprint(*next, m.now(), confirmed)
+		if !reflect.DeepEqual(clonePersistentConfig(cfg), clonePersistentConfig(*next)) {
+			return errRPCNoChange
+		}
+		current, err := rpcResourceObservationFingerprint(*next, m.now(), confirmed, hosts)
 		if err != nil {
 			return err
 		}
@@ -68,11 +89,11 @@ func (s *ClientRPCService) publishResourceClock() error {
 }
 
 func (s *ClientRPCService) startResourceClock(ctx context.Context) <-chan error {
-	if s.ResourceEnforcementProvider == nil {
+	if s.ResourceEnforcementProvider == nil && s.ResourceHostProvider == nil {
 		return nil
 	}
 	done := make(chan error, 1)
-	if err := s.publishResourceClock(); err != nil {
+	if err := s.publishResourceClock(ctx); err != nil {
 		done <- err
 		return done
 	}
@@ -85,7 +106,7 @@ func (s *ClientRPCService) startResourceClock(ctx context.Context) <-chan error 
 				done <- ctx.Err()
 				return
 			case <-ticker.C:
-				if err := s.publishResourceClock(); err != nil {
+				if err := s.publishResourceClock(ctx); err != nil {
 					done <- err
 					return
 				}

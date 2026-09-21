@@ -22,6 +22,24 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Resources/probe increment validation (2026-09-21): `goimports -w .`,
+`go vet ./...`, configured golangci-lint (0 issues) and `go test -short ./...`
+passed; internal/client 121.081 s and cmd/endlessnet-client 11.187 s. The positive
+HOST projection/event fixture now applies the same persisted configuration
+representation as ConfigStore. Standalone status without an engine reports cached
+facts without a readiness request. Native OS acceptance remains outstanding.
+
+LAN_ALLOW contract audit (2026-09-21): architecture revision bdb5ba63,
+headless BA Q-07, leaves LAN address/overlap/fallback decisions to the network
+administrator and security owner. UI SA US-05 requires applied family/LAN effects
+but does not define LAN prefixes. Pinned clientapi exposes AllowedLANAccess,
+without address prefixes or an interface classifier. At the user's request,
+the architecture Codex project owns a separate task to define directly connected
+physical subnets versus explicit administrator CIDRs and any producer contract
+changes. Link-local/discovery and containment
+semantics must also be fixed before advertising LAN_ALLOW. No RFC1918/ULA-only
+or blanket physical-route interpretation is implied by the current enum.
+
 Native host/restart increment (2026-09-21): the agent now constructs an opaque
 Linux exit runtime from its actual engine, store and shared operation mutex. The
 exit worker starts on the same service as RPC, independently of whether a local
@@ -68,18 +86,28 @@ its successful 118.000 s run. Earlier failures exposed one incomplete exit
 fixture and automatic control probes without a connection request; both were
 fixed while retaining the original assertions. No native/system run was made.
 
-Follow-up observation audit: background status probes must remain suppressed
-while disconnected/offline. The remaining active control probe uses its own
-transport; unify it with the engine-scoped protected control transport and add
-exit/DNS revocation evidence before considering the status transport audit done.
+Active readiness probes now request the engine's control HTTP transport. Missing
+engine, factory refusal, nil transport, cancellation or body-read failure cannot
+fall back to ordinary networking or report readiness. The copied client has no
+cookie jar, refuses redirects and closes idle connections. Disconnected/offline
+background observations remain passive. This is transport wiring with unit
+assertions; native DNS/exit revocation still needs platform acceptance.
 
-Next bounded resources gap: permitted HOST resources have no positive native
-route proof. Engine inspection currently copies `routerCfg.Routes`, which cannot
-detect an externally removed OS route. Add fresh /32 and /128 route lookup plus
-live UAPI ownership and path evidence, bound to recipient/map/interface, with
-post-observation context checks. Route/path loss must invalidate DOMAIN_RESOURCES
-even when the denial-filter fingerprint is unchanged. SUBNET/SERVICE/APPLICATION
-need separate evidence and must not inherit HOST confirmation.
+HOST observation increment: the native Linux observer reads assigned interface
+addresses, policy rules and unforced unmarked /32 or /128 route lookups, then
+rechecks interface/rules. Live UAPI identity, PSK/routes/endpoints and a fresh
+direct peer path are distinct requirements. The engine's saved routerCfg list
+does not count as OS route evidence. Unknown policy-routing selectors, relay
+paths and ambiguous native results remain unknown. HOST confirmation does not
+establish remote application health, and never promotes SUBNET/SERVICE/APPLICATION.
+
+ListResources performs native reads outside the RPC mutation mutex under the
+shared effect lock, then rechecks owner, profile worker, persistent context and
+map expiry. Applied packet restrictions take precedence over positive evidence.
+The resource clock fingerprints confirmed host identities as well as denial
+state; path/route loss can invalidate DOMAIN_RESOURCES without a filter change.
+Full relay/subnet/service/application observations, rollback/restart audit and
+native traffic qualification remain open.
 
 Read-model increment (2026-09-21): post-Clear observations retain an in-process
 scope receipt after verified Release and bind it to terminal Clear before first

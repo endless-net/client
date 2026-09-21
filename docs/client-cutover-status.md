@@ -52,6 +52,17 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+Resources/probe increment от 2026-09-21: Linux HOST observer проверяет реальные
+route lookup, адрес интерфейса, routing rules, live UAPI и свежий direct path.
+Смена scope, просроченная map и ограничения ACL/application/sharing исключают
+положительный результат; resource denials сохраняют приоритет. Чтение ОС идёт
+вне RPC mutex, а изменения host evidence инвалидируют resources. Relay и другие
+виды ресурсов пока требуют отдельных наблюдений. Readyz теперь использует
+транспорт engine и не переходит на обычный HTTP при отказе защищённого транспорта.
+Локальный standalone status без runtime transport показывает сохранённые факты
+без readiness-запроса. Проработка семантики LAN_ALLOW передана отдельной задаче
+в проекте архитектуры по указанию пользователя.
+
 Host/restart increment от 2026-09-21: Linux agent запускает native exit-worker
 независимо от включённого IPC listener; supervisor отменяет runtime и дожидается
 workers до закрытия engine. Capability принадлежит живому native worker.
@@ -82,7 +93,7 @@ Capability теперь включается только публичным nat
 | Состояние и операции | Durable операции, идентификаторы запросов, replay, проверки владельца/профиля, конфликты и восстановление; snapshot/events | Проверка каждой мутации и перехода по матрице, включая права, CAS, отмену, рестарт и приватность событий |
 | Enrollment, trust, session | Workers и транспорт enrollment/trust/renewal, сохранение прогресса, ротация credentials, отмена старых запросов и защита от поздних ответов | Полный аудит cleanup/concurrency и контекста; подтверждение producer semantics и реального seamless renewal |
 | Exit | Linux native host/worker независимо от IPC, durable Select/Clear/ownership, защищённый saved resume, fresh UAPI/routes/firewall/DNS observations, catalog/control/events/capability; durable cleared scope через restart | LAN_ALLOW, recovery при смене интерфейса, полная совместная работа с profile/network/preference transitions, проверка live recovery и OS qualification; Select-before-Connect сейчас отклоняется |
-| Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN с проверкой адреса/протокола/порта, наблюдения запретов; retirement/возврат choices при аутентифицированной смене map | Положительное подтверждение доступности route/path/application, полный rollback/restart audit и реальные OS-эффекты |
+| Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN и наблюдения запретов; retirement/возврат choices; Linux HOST route/UAPI/direct-path observer, fresh publication и invalidation | Relay/subnet/service/application observations, полный rollback/restart audit и приёмка реальных OS-эффектов |
 | Preferences и lifecycle | Set/Reset inbound/DNS/routes и lifecycle-полей, managed policy/locks/source; Windows power/logoff paths и resume-policy refresh | Полный аудит эффектов каждой настройки, доставка событий на других ОС, восстановление источников событий и native qualification |
 | Networks/profiles | Контекстные проверки, guards переключения, изоляция состояния и защита от устаревших ответов | Полная смена identity/map/routes, recovery и фактическая изоляция при переключении сети/provider |
 | Diagnostics и updates | Ограниченные диагностические данные/экспорт, честные unavailable-состояния; route samples | Полнота routes/resources и аудит privacy/bounds; согласованный проверяемый distribution source и проверка установленной пары UI/core. Сейчас GetUpdateInfo возвращает SOURCE_UNAVAILABLE |
@@ -104,9 +115,8 @@ Capability теперь включается только публичным nat
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: после host/restart increment internal/client прошёл
-за 118.000 s, итоговый запуск использовал этот cache; cmd/endlessnet-client прошёл
-за 10.563 s с исправлениями startup и background status probes. Все пакеты прошли.
+и `go test -short ./...`: после resources/probe increment internal/client прошёл
+за 121.081 s, cmd/endlessnet-client — за 11.187 s. Все пакеты прошли.
 Локальные native/E2E/installer проверки не запускались.
 
 1. Завершить native exit LAN_ALLOW, сочетания exit с profile/network/preference

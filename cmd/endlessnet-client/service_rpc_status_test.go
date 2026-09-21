@@ -153,7 +153,7 @@ func TestRPCStatusLoadsOnlyBoundSnapshotsWithoutReplacingMap(t *testing.T) {
 			if err := os.WriteFile(path, raw, 0o600); err != nil {
 				t.Fatal(err)
 			}
-			status := buildAgentRPCStatus(t.Context(), agentIPCOptions{StateOutput: path}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED)
+			status := buildAgentRPCStatus(t.Context(), agentIPCOptions{StateOutput: path, WireGuard: &rpcProbeTestEngine{}}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED)
 			if status.MapRevision != 7 || status.PeerCount != uint32(len(networkMap.Peers)) || !status.GetStoredState().GetCachedMapValid() {
 				t.Fatal("snapshot replaced authoritative map projection", mode)
 			}
@@ -215,11 +215,12 @@ func TestRPCControlProbeDoesNotFollowRedirectsOrSendCredentials(t *testing.T) {
 		w.WriteHeader(http.StatusFound)
 	}))
 	defer server.Close()
-	probe := probeAgentRPCControl(t.Context(), []string{server.URL})
+	opts := agentIPCOptions{WireGuard: &rpcProbeTestEngine{}}
+	probe := probeAgentRPCControl(t.Context(), opts, client.Config{ControlPlaneURLs: []string{server.URL}})
 	if probe.Ok || probe.HttpStatus != 302 || probe.Failure.Code != ipc.ErrorCode_ERROR_CODE_UNAVAILABLE {
 		t.Fatal("redirect probe was accepted")
 	}
-	probe = probeAgentRPCControl(t.Context(), []string{"https://user:secret@control.test"})
+	probe = probeAgentRPCControl(t.Context(), opts, client.Config{ControlPlaneURLs: []string{"https://user:secret@control.test"}})
 	if probe.Origin != "" || probe.Failure.Code != ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
 		t.Fatal("credential-bearing origin was disclosed/probed")
 	}
@@ -294,7 +295,7 @@ func TestRPCBackgroundObservationControlAdmission(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := mutations.Metadata().Revision
-			if err := observeAgentRPCStatus(t.Context(), mutations, agentIPCOptions{ConfigStore: store, Offline: scenario == "offline"}, phase); err != nil {
+			if err := observeAgentRPCStatus(t.Context(), mutations, agentIPCOptions{ConfigStore: store, Offline: scenario == "offline", WireGuard: &rpcProbeTestEngine{}}, phase); err != nil {
 				t.Fatal(err)
 			}
 			var wantRequests int32

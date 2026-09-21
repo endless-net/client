@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/netip"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -35,7 +36,8 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 	}
 	m := s.mutations
 	s.profileMu.Lock()
-	ready := s.profileWorker != nil && s.profileWorker.ctx.Err() == nil
+	worker := s.profileWorker
+	ready := worker != nil && worker.ctx.Err() == nil
 	s.profileMu.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -148,6 +150,28 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 		}
 		resource.Enabled = rpcResourceSetting(cfg, resource.Id, identity, ready, conflicting)
 	}
+	// Native commands may block; no authentication/configuration mutex is held
+	// during them. Keep the effect lock until the projection has been validated.
+	m.mu.Unlock()
+	observed, release := s.observeResourceHosts(ctx, cfg)
+	defer release()
+	s.profileMu.Lock()
+	m.mu.Lock()
+	sameWorker := s.profileWorker == worker && (worker == nil || worker.ctx.Err() == nil)
+	s.profileMu.Unlock()
+	current := m.store.Read()
+	if err := authorizeRPCPeer(peer, rpcMethod("/client.v0.ClientService/ListResources"), current); err != nil {
+		return nil, err
+	}
+	if !sameWorker || !reflect.DeepEqual(clonePersistentConfig(cfg), clonePersistentConfig(current)) {
+		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !m.now().Before(state.MapSignature.ExpiresAt) {
+		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+	}
 	if s.ResourceEnforcementProvider != nil && s.ResourceEnforcementProvider(cfg, m.now()) {
 		if err := projectAppliedResourceDenials(ctx, cfg, items, m.now()); err != nil {
 			if ctx.Err() != nil {
@@ -157,6 +181,13 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 				return nil, err
 			}
 			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+		}
+		if observed != nil && observed.Current(cfg, m.now()) {
+			for _, item := range items {
+				if item.Kind == ipc.ResourceKind_RESOURCE_KIND_HOST && item.Enabled.GetEffective() && item.Availability.ReasonKey == "resource_runtime_observation_unavailable" && observed.HostConfirmed(item.Id) {
+					item.Availability = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE}
+				}
+			}
 		}
 	}
 	items = slices.DeleteFunc(items, func(resource *ipc.Resource) bool {

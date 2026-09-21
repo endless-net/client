@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -15,7 +16,9 @@ import (
 func TestHeadlessStatusUsesNativeJSONWithoutInferringConnection(t *testing.T) {
 	for _, available := range []bool{true, false} {
 		t.Run(map[bool]string{true: "ready", false: "unavailable"}[available], func(t *testing.T) {
+			var requests atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
 				if !available {
 					w.WriteHeader(http.StatusServiceUnavailable)
 				}
@@ -43,12 +46,8 @@ func TestHeadlessStatusUsesNativeJSONWithoutInferringConnection(t *testing.T) {
 			if err := protojson.Unmarshal(envelope["status"], status); err != nil {
 				t.Fatal("headless status is not native protobuf JSON", err)
 			}
-			wantControl := ipc.ControlState_CONTROL_STATE_READY
-			if !available {
-				wantControl = ipc.ControlState_CONTROL_STATE_DEGRADED
-			}
 			if status.NodeId != cfg.NodeID || status.MapRevision != cfg.MapRevision || !status.GetStoredState().GetCachedMapValid() ||
-				status.ControlState != wantControl || status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED ||
+				status.ControlState != ipc.ControlState_CONTROL_STATE_OFFLINE_CACHE || status.Control != nil || requests.Load() != 0 || status.ConnectionPhase != ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED ||
 				status.ServiceState == ipc.ServiceState_SERVICE_STATE_CONNECTED || envelope["route_conflicts"] == nil || envelope["node_id"] != nil {
 				t.Fatal("headless native status lost diagnostic facts or inferred connection")
 			}

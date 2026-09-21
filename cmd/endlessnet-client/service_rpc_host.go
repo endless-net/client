@@ -71,6 +71,10 @@ func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agent
 	service.DiagnosticsProvider = agentRPCDiagnostics(opts)
 	service.PeersProvider = agentRPCPeers(opts)
 	service.ResourceEnforcementProvider = opts.WireGuard.TryResourceEnforcement
+	if engine, ok := opts.WireGuard.(*client.WireGuardEngine); ok {
+		service.ResourceHostProvider = engine.ObserveResourceHosts
+		service.ResourceObservationLock = opts.OperationMu
+	}
 	hostCtx, cancel := context.WithCancel(ctx)
 	var exitDone <-chan error
 	if opts.ExitRuntime != nil {

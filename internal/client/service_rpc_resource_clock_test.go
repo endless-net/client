@@ -14,7 +14,7 @@ func TestResourceObservationClockInvalidatesTransitions(t *testing.T) {
 	confirmed := false
 	calls := 0
 	s.ResourceEnforcementProvider = func(Config, time.Time) bool { calls++; return confirmed }
-	if err := s.publishResourceClock(); err != nil {
+	if err := s.publishResourceClock(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	sub, err := m.subscribe(owner, nil, nil)
@@ -30,7 +30,7 @@ func TestResourceObservationClockInvalidatesTransitions(t *testing.T) {
 	for _, next := range []bool{true, false} {
 		before := m.Metadata().Revision
 		confirmed = next
-		if err := s.publishResourceClock(); err != nil {
+		if err := s.publishResourceClock(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 		if m.Metadata().Revision != before+1 {
@@ -48,7 +48,7 @@ func TestResourceObservationClockInvalidatesTransitions(t *testing.T) {
 				break
 			}
 		}
-		if err := s.publishResourceClock(); err != nil {
+		if err := s.publishResourceClock(t.Context()); err != nil {
 			t.Fatal(err)
 		}
 		if m.Metadata().Revision != before+1 {
@@ -59,7 +59,7 @@ func TestResourceObservationClockInvalidatesTransitions(t *testing.T) {
 	if err := m.store.Update(func(cfg *Config) error { cfg.CachedMap.Network.Name = "tampered"; return nil }); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.publishResourceClock(); err != nil {
+	if err := s.publishResourceClock(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if calls != beforeCalls {

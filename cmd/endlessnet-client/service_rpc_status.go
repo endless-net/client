@@ -163,7 +163,7 @@ func buildAgentRPCStatusWithProbe(ctx context.Context, opts agentIPCOptions, cfg
 	if status.NodeId != "" {
 		if probeControl {
 			probeCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
-			status.Control = probeAgentRPCControl(probeCtx, cfg.ControlURLs())
+			status.Control = probeAgentRPCControl(probeCtx, opts, cfg)
 			cancel()
 		}
 		if status.Control != nil {
@@ -191,9 +191,30 @@ func buildAgentRPCStatusWithProbe(ctx context.Context, opts agentIPCOptions, cfg
 	return status
 }
 
-func probeAgentRPCControl(ctx context.Context, origins []string) *ipc.ControlProbe {
+func probeAgentRPCControl(ctx context.Context, opts agentIPCOptions, cfg client.Config) *ipc.ControlProbe {
+	origins := cfg.ControlURLs()
+	if len(origins) == 0 {
+		return nil
+	}
+	unavailable := func() *ipc.ControlProbe {
+		return &ipc.ControlProbe{Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "control_probe_failed", Retryable: true}}
+	}
+	if ctx.Err() != nil || opts.WireGuard == nil {
+		return unavailable()
+	}
+	owned, err := opts.WireGuard.ControlPlaneHTTPClient(cfg)
+	if owned != nil {
+		defer owned.CloseIdleConnections()
+	}
+	if err != nil || owned == nil || owned.Transport == nil {
+		return unavailable()
+	}
+	// Retain the engine's protected transport and deadlines, but never send
+	// cookies or follow redirects for this unauthenticated readiness request.
+	client := *owned
+	client.Jar = nil
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	var attempts []*ipc.ControlProbe
-	client := &http.Client{Transport: http.DefaultTransport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	for _, origin := range origins {
 		probe := &ipc.ControlProbe{}
 		parsed, err := url.Parse(origin)
@@ -205,10 +226,10 @@ func probeAgentRPCControl(ctx context.Context, origins []string) *ipc.ControlPro
 			if err == nil {
 				response, requestErr := client.Do(request)
 				if requestErr == nil {
-					_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1024))
+					_, readErr := io.Copy(io.Discard, io.LimitReader(response.Body, 1024))
 					_ = response.Body.Close()
 					probe.HttpStatus = uint32(response.StatusCode)
-					probe.Ok = response.StatusCode >= 200 && response.StatusCode < 300
+					probe.Ok = readErr == nil && ctx.Err() == nil && response.StatusCode >= 200 && response.StatusCode < 300
 				}
 			}
 			if !probe.Ok {

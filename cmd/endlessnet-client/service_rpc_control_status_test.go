@@ -41,7 +41,7 @@ func TestNativeStatusControlAvailabilityAndFailover(t *testing.T) {
 			if mode != "unavailable" {
 				cfg.ControlPlaneURLs = append(cfg.ControlPlaneURLs, secondary.URL)
 			}
-			status := buildAgentRPCStatus(t.Context(), agentIPCOptions{}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED)
+			status := buildAgentRPCStatus(t.Context(), agentIPCOptions{WireGuard: &rpcProbeTestEngine{}}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED)
 			ready := mode != "unavailable"
 			if status.GetControl().GetOk() != ready || status.GetStoredState().GetCachedMapValid() != true || primaryCalls.Load() != 1 {
 				t.Fatal("native control status lost probe or verified-cache evidence")

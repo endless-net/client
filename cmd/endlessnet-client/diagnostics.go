@@ -150,7 +150,9 @@ func cmdStatus(args []string) error {
 			return err
 		}
 	}
-	nativeStatus := buildAgentRPCStatus(context.Background(), agentIPCOptions{}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED)
+	// A standalone config diagnostic has no runtime-owned control transport.
+	// Report stored facts without treating an unattempted probe as a failure.
+	nativeStatus := buildAgentRPCStatusWithProbe(context.Background(), agentIPCOptions{}, cfg, ipc.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED, false)
 	status := map[string]any{}
 	attachLocalRouteConflicts(status, cfg, false, *wgInterface)
 	if *controlMetrics {

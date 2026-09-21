@@ -33,6 +33,10 @@ type ClientRPCService struct {
 	// Configure before serving. Must be nonblocking and must not call RPC/store
 	// mutations: invoked under the configuration read lock after authentication.
 	ResourceEnforcementProvider func(Config, time.Time) bool
+	// Native host observations run outside mutations.mu under the host's shared
+	// effect lock. Configure these together before serving.
+	ResourceObservationLock     *sync.Mutex
+	ResourceHostProvider        func(context.Context, Config) (*ResourceHostObservation, error)
 	observedResourceEnforcement *[32]byte // guarded by mutations.mu
 	SessionProvider             ClientRPCSessionProvider
 	SessionRenewalProvider      ClientRPCSessionRenewalProvider
