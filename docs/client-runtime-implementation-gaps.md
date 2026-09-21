@@ -22,6 +22,50 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+HOST observation lifetime increment (2026-09-21): collection and Current recheck
+immutable expiry after the final device/relay readback. A relay generation that
+ends during UAPI inspection cannot retain a valid receipt. Signed selected-exit
+grant expiry also caps HOST evidence alongside map, handshake, path freshness
+and the original five-second collection deadline. This fixes publication of
+stale transport evidence, not SERVICE/application reachability or an OS lease.
+Validation: goimports, vet and configured lint (0 issues) passed; the full short
+suite passed (internal/client 138.087 s, CLI 12.274 s). Independent review found
+no blocking defects. The preceding topology watcher commit `d1d914b` passed all
+three short CI platforms, including Linux datagram units
+([run 35628903554](https://github.com/endless-net/client/actions/runs/35628903554)).
+
+Absolute LAN lease research (2026-09-21): do not implement evidence expiry as a
+renewable nft set timeout. `NFTA_SET_ELEM_EXPIRATION` is a remaining duration;
+the kernel adds current jiffies during insertion/update. Delayed installation
+can therefore move expiration beyond the original evidence deadline
+([kernel set implementation](https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git/+/7dd38d9dd7a05329825fe2324d4d8e27ad4b3cec/net/netfilter/nf_tables_api.c)).
+`NFT_META_TIME_NS` uses realtime, so it alone is vulnerable to clock rollback
+([kernel meta implementation](https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/80119a77e5b03747b8886505df1b3cb26f49168d/net/netfilter/nft_meta.c)).
+
+A candidate adapter must compare an immutable, conservatively captured absolute
+CLOCK_BOOTTIME deadline in the packet path (`bpf_ktime_get_boot_ns`, including
+suspend), optionally intersecting realtime expiry for clock jumps forward.
+Reusing an old handshake/map/grant after rollback or restart must never create
+a later boottime cap. BPF netfilter can access the helper, but this repository
+does not yet implement loader/attachment/readback and durable ownership. Losing
+the last attachment handle must not leave nft LAN allowance behind. These are
+implementation requirements, not an enabled fallback or platform qualification
+([helper](https://kernel.googlesource.com/pub/scm/linux/kernel/git/bpf/bpf/+/refs/tags/v6.17-rc7/kernel/bpf/helpers.c),
+[netfilter verifier](https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/80119a77e5b03747b8886505df1b3cb26f49168d/net/netfilter/nf_bpf_link.c)).
+
+Implementation sequence for that adapter: prepare with closed lease under the
+existing BLOCK guard; pin the IPv4/IPv6 links (program/map pins alone do not hold
+attachments); reopen and verify scope and real current-netns hooks; publish one
+immutable lease; revoke by zeroing it while retaining links. Close must only
+close user FDs. Unpin/detach is allowed only after confirmed BLOCK. Recovery
+starts with BLOCK and a closed lease; unknown pinned objects must not be deleted.
+Link INFO alone can retain family/hook/priority after detach, so it is not live
+hook evidence. Hook dump must also match program ID/family/hook/priority
+([link lifecycle](https://android.googlesource.com/kernel/common/+/9f5cbdaae5f760c218c82e0a5e0f9c58bac56f0c/net/netfilter/nf_bpf_link.c)).
+The pinned x/sys supplies syscall/constants but no loader: bounded raw BPF ABI,
+instruction construction, BTF field resolution, pin ownership and hook readback
+still need implementation. Missing support must preserve BLOCK, not downgrade.
+
 LAN topology lifetime increment (2026-09-21): native collection subscribes to
 Linux routing notifications before either snapshot. A one-shot receipt closes
 on link/address/route/rule events, receive loss, cancellation or shutdown. Copies

@@ -48,6 +48,16 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+HOST receipt lifetime assertions: `TestResourceHostCurrentRechecksDeadlineAfterReadback`
+crosses the original expiry during inspection;
+`TestResourceHostCurrentRechecksRelayAfterReadback` ends the original relay
+generation inside the same read;
+`TestResourceHostCollectorRejectsLateReadbackExpiryAndCancellation` checks final
+inspection success, failure, cancellation and expiry. Synthetic timestamps and
+injected route commands establish these races, not native resource reachability.
+`TestResourceHostCurrentCannotCrossCommittedExitGrantDeadline` keeps map and
+receipt alive while final readback crosses the earlier signed grant deadline.
+
 LAN semantic question is resolved by the user's 2026-09-21 decision and
 architecture D-034 (`8719ce7`). The following preparation does not close US-05,
 UF-08, UI-AC-17 or native acceptance:

@@ -52,6 +52,11 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+HOST observation lifetime increment: сроки map, handshake и выбранного exit grant
+проверяются после финального readback. Завершение relay во время чтения снимает
+подтверждение. Это закрывает окна устаревшего HOST AVAILABLE, но не подтверждает
+доступность приложений/SERVICE и не заменяет native приёмку.
+
 Решение LAN_ALLOW от пользователя (2026-09-21): непосредственно подключённые
 подсети физических Ethernet/Wi-Fi интерфейсов, включая публичные; без ручных CIDR.
 RFC1918/ULA сами по себе ничего не разрешают. Gateway/VPN/bridge/container
@@ -180,8 +185,8 @@ Capability теперь включается только публичным nat
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: после LAN topology lifetime increment internal/client
-прошёл за 128.992 s, CLI за 11.173 s; остальные пакеты прошли или использовали cache.
+и `go test -short ./...`: после HOST observation lifetime increment internal/client
+прошёл за 138.087 s, CLI за 12.274 s; остальные пакеты прошли или использовали cache.
 Во время предыдущего LAN evidence increment один прогон
 упал в internal/client, но assertion потерялся в усечённом выводе; повтор без
 изменений с полным логом прошёл. Причина этого непостоянного сбоя не установлена.

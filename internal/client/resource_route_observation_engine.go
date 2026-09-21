@@ -51,7 +51,14 @@ func resourceObservationPaths(e *WireGuardEngine) [32]byte {
 }
 
 func (o *ResourceHostObservation) Current(cfg Config, now time.Time) bool {
-	if o == nil || o.engine == nil || now.Before(o.observedAt) || !now.Before(o.expires) || resourceObservationConfig(cfg) != o.configuration {
+	return o.currentWithInspection(cfg, now, resourceObservedUAPI)
+}
+
+// The production entry point always reads the live device. This private seam
+// makes changes during the final readback reproducible without native traffic.
+func (o *ResourceHostObservation) currentWithInspection(cfg Config, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error)) bool {
+	started := time.Now()
+	if o == nil || o.engine == nil || inspect == nil || now.Before(o.observedAt) || !now.Before(o.expires) || resourceObservationConfig(cfg) != o.configuration {
 		return false
 	}
 	e := o.engine
@@ -62,6 +69,7 @@ func (o *ResourceHostObservation) Current(cfg Config, now time.Time) bool {
 	if !e.configured || e.runtimeSuspended || e.device != o.device || e.relayPaths != o.pathManager || sha256.Sum256([]byte(e.uapi)) != o.uapi || resourceObservationPaths(e) != o.paths || cfg.CachedMap == nil || e.runtimeIdentity != nativeExitAppliedIdentity(cfg, *cfg.CachedMap, e.interface_) || !resourceHostExitFilterCurrent(e, cfg, now) {
 		return false
 	}
+	expires := resourceHostReceiptDeadline(e, cfg, o.expires)
 	if len(o.relays) != 0 {
 		if e.relayBridge != o.relayBridge || e.relayBridge == nil {
 			return false
@@ -81,8 +89,43 @@ func (o *ResourceHostObservation) Current(cfg Config, now time.Time) bool {
 			return false
 		}
 	}
-	_, err = resourceObservedUAPI(e)
-	return err == nil
+	if _, err = inspect(e); err != nil {
+		return false
+	}
+	// The bridge can end independently of engine.mu while filters or device
+	// readback are in progress. A successful earlier check is not a lease.
+	for _, relay := range o.relays {
+		if e.relayBridge != o.relayBridge || !o.relayBridge.ObservationCurrent(relay) {
+			return false
+		}
+	}
+	return now.Add(time.Since(started)).Before(expires)
+}
+
+// Caller holds engine.mu and has verified resourceHostExitFilterCurrent. The
+// committed policy supplies the authenticated grant deadline even when a HOST
+// is otherwise ordinary traffic. No read may extend the original receipt.
+func resourceHostReceiptDeadline(e *WireGuardEngine, cfg Config, expires time.Time) time.Time {
+	if cfg.CachedMap == nil || cfg.CachedMap.MapSignature == nil {
+		return time.Time{}
+	}
+	if cfg.CachedMap.MapSignature.ExpiresAt.Before(expires) {
+		expires = cfg.CachedMap.MapSignature.ExpiresAt
+	}
+	if cfg.ExitSelection != nil {
+		if e.exitFilter == nil {
+			return time.Time{}
+		}
+		e.exitFilter.mu.RLock()
+		defer e.exitFilter.mu.RUnlock()
+		if e.exitFilter.current == nil {
+			return time.Time{}
+		}
+		if e.exitFilter.current.grantExpires.Before(expires) {
+			expires = e.exitFilter.current.grantExpires
+		}
+	}
+	return expires
 }
 
 // The caller holds the shared effect lock and performs a fresh store check
@@ -99,6 +142,7 @@ func (e *WireGuardEngine) observeResourceHosts(ctx context.Context, cfg Config, 
 // The private inspection seam permits deterministic captured-handshake fixtures;
 // every production call fixes it to actual authenticated device readback above.
 func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context, cfg Config, runner CommandRunner, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error)) (*ResourceHostObservation, error) {
+	started := time.Now()
 	if e == nil || inspect == nil {
 		return nil, errResourceHostObservation
 	}
@@ -146,9 +190,7 @@ func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context
 		return nil, err
 	}
 	proof := &ResourceHostObservation{engine: e, device: e.device, configuration: resourceObservationConfig(cfg), uapi: sha256.Sum256([]byte(e.uapi)), paths: resourceObservationPaths(e), pathManager: e.relayPaths, observedAt: now, expires: now.Add(5 * time.Second), hosts: map[string]bool{}}
-	if cfg.CachedMap.MapSignature.ExpiresAt.Before(proof.expires) {
-		proof.expires = cfg.CachedMap.MapSignature.ExpiresAt
-	}
+	proof.expires = resourceHostReceiptDeadline(e, cfg, proof.expires)
 	paths := e.relayPaths.Statuses()
 	count := 0
 	for _, peer := range cfg.CachedMap.Peers {
@@ -242,13 +284,19 @@ func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context
 	if err != nil || afterRules != rules {
 		return nil, errResourceHostObservation
 	}
-	if _, err := resourceObservedUAPI(e); err != nil {
+	if _, err := inspect(e); err != nil {
 		return nil, err
 	}
 	for _, relay := range proof.relays {
 		if !e.relayBridge.ObservationCurrent(relay) {
 			return nil, errResourceHostObservation
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !now.Add(time.Since(started)).Before(proof.expires) {
+		return nil, errResourceHostObservation
 	}
 	return proof, nil
 }
