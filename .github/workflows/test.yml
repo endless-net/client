@@ -215,7 +215,7 @@ jobs:
             ENDLESSNET_TEST_DEB="${ENDLESSNET_TEST_DEB:-}" \
             ENDLESSNET_TEST_UPGRADE_DEB="${ENDLESSNET_TEST_UPGRADE_DEB:-}" \
             "$RUNNER_TEMP/install-test/installation.test.exe" \
-            -test.run '^TestInstalledClient$' -test.v -test.timeout 8m \
+            -test.run '^TestInstalledClient$' -test.v -test.timeout 14m \
             2>&1 | tee "$RUNNER_TEMP/install-test/results.log"
       - name: Install, exercise IPC, restart and uninstall (Windows)
         if: runner.os == 'Windows'
@@ -225,7 +225,7 @@ jobs:
         run: |
           $env:ENDLESSNET_TEST_BINARY = Join-Path $env:RUNNER_TEMP 'install-test/endlessnet-client.exe'
           $env:ENDLESSNET_PACKET_PROBE = Join-Path $env:RUNNER_TEMP 'install-test/packetprobe.exe'
-          & "$env:RUNNER_TEMP/install-test/installation.test.exe" '-test.run=^TestInstalledClient$' '-test.v' '-test.timeout=8m' 2>&1 |
+          & "$env:RUNNER_TEMP/install-test/installation.test.exe" '-test.run=^TestInstalledClient$' '-test.v' '-test.timeout=14m' 2>&1 |
             Tee-Object -FilePath "$env:RUNNER_TEMP/install-test/results.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve installation test report

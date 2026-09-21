@@ -177,9 +177,20 @@ func exerciseInstalledReinstall(t *testing.T, s *testcontrol.Server, binary, con
 	if err := s.UpdatePeers(initial.NodeId, []api.Peer{peer}); err != nil {
 		t.Fatal(err)
 	}
-	waitInstalledCondition(t, binary, "control recovery after service startup", func(v *ipc.Status) bool {
-		return sameIdentity(v) && v.MapRevision > offline.MapRevision && v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.MapRevision == v.MapRevision && v.Agent.LastFailure == nil
-	})
+	func() {
+		t.Log("installed native phase: control recovery after service startup")
+		before := len(s.Events())
+		defer func() {
+			if t.Failed() {
+				t.Logf("control recovery evidence: server_events_before=%d server_events_after=%d", before, len(s.Events()))
+			}
+		}()
+		response := &ipc.GetStatusResponse{}
+		awaitInstalledNativeWithin(t, binary, "status", installedControlRecoveryTimeout, response, func() bool {
+			v := response.GetStatus()
+			return v != nil && sameIdentity(v) && v.MapRevision > offline.MapRevision && v.Agent != nil && v.Agent.SnapshotState == ipc.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && v.Agent.MapRevision == v.MapRevision && v.Agent.LastFailure == nil
+		})
+	}()
 	connected("traffic after late control recovery")
 
 	runInstalledNativeMutation(t, binary, "disconnect", "6b110000-0000-4000-8000-000000000002")

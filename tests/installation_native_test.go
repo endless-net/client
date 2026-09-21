@@ -16,7 +16,16 @@ import (
 
 func awaitInstalledNative(t *testing.T, binary, operation string, target proto.Message, ready func() bool, options ...string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	awaitInstalledNativeWithin(t, binary, operation, 45*time.Second, target, ready, options...)
+}
+
+// Installed services retain their production retry policy: up to five minutes
+// between attempts, including jitter. Leave another minute for the sync and IPC.
+const installedControlRecoveryTimeout = 6 * time.Minute
+
+func awaitInstalledNativeWithin(t *testing.T, binary, operation string, timeout time.Duration, target proto.Message, ready func() bool, options ...string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	defer cancel()
 	err := testclient.Await(ctx, func() bool {
 		args := append([]string{"service", operation, "--timeout", "2s"}, options...)
@@ -45,9 +54,13 @@ func installedNativeObservation(target proto.Message) string {
 	}
 	s := response.Status
 	a := s.GetAgent()
-	return fmt.Sprintf("service=%d control=%d connection=%d desired=%d disconnected=%t map=%d agent_present=%t agent_state=%d agent_map=%d agent_failure=%t",
+	var generatedAt int64
+	if stamp := a.GetGeneratedAt(); stamp != nil && stamp.IsValid() {
+		generatedAt = stamp.GetSeconds()
+	}
+	return fmt.Sprintf("service=%d control=%d connection=%d desired=%d disconnected=%t map=%d agent_present=%t agent_state=%d agent_map=%d agent_failure=%t agent_generated_unix=%d",
 		s.ServiceState, s.ControlState, s.ConnectionPhase, s.GetIntent().GetDesiredState(), s.UserDisconnected,
-		s.MapRevision, a != nil, a.GetSnapshotState(), a.GetMapRevision(), a.GetLastFailure() != nil)
+		s.MapRevision, a != nil, a.GetSnapshotState(), a.GetMapRevision(), a.GetLastFailure() != nil, generatedAt)
 }
 
 func waitInstalledNativeCondition(t *testing.T, binary string, predicate func(*ipc.Status) bool) *ipc.Status {
