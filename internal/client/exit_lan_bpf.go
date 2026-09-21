@@ -34,6 +34,7 @@ type exitLANBPFCall func(command int, attr []byte, buffers ...[]byte) (int, erro
 type exitLANBPFPreparation struct {
 	mu             sync.Mutex
 	outer, program int
+	links          []exitLANBPFLink
 	call           exitLANBPFCall
 	closeFD        func(int) error
 	order          binary.ByteOrder
@@ -259,6 +260,10 @@ func (p *exitLANBPFPreparation) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	var err error
+	for _, link := range p.links {
+		err = errors.Join(err, p.closeFD(link.fd))
+	}
+	p.links = nil
 	for _, fd := range []*int{&p.program, &p.outer} {
 		if *fd >= 0 {
 			err = errors.Join(err, p.closeFD(*fd))

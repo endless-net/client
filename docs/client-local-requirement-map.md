@@ -48,6 +48,17 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+`TestExitLANBPFLinksAttachClosedAndRetainIdentity` checks lease withdrawal,
+both family bindings, signed priority, duplicate rejection and owned-FD cleanup
+in LE and BE fake UAPI calls. `TestExitLANBPFLinkFailureAndCancellationCleanup`
+covers syscall failure and late cancellation at each of six attachment steps;
+`TestExitLANBPFLinkRejectsMismatchedReadback` rejects each corrupted metadata
+field and short info. `TestExitLANBPFLinkRejectsUnsafeInputs` checks reserved
+priorities, unknown hook and pre-cancellation. None proves native attachment,
+pin lifetime or live-hook membership; those OS assertions remain open.
+`TestExitLANBPFLinksRejectDuplicateAndForeignProgramIdentity` rejects duplicate
+link IDs, a different program type, zero program ID and truncated program info.
+
 LAN BPF units: `TestExitLANBPFProgramDeadline` and
 `TestExitLANBPFProgramDoesNotRenewDeadline` interpret the emitted LE/BE
 instructions for missing, expired, exact-boundary and full-width deadlines.

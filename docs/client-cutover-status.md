@@ -52,6 +52,11 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+LAN link increment: добавлены создание закрытых IPv4/IPv6 netfilter links,
+проверка object identity и cleanup частично созданной пары. Это ещё не pinning
+и не подтверждение активных hooks: metadata сохраняется после detach.
+Native adapter пока не использует этот primitive для открытия LAN.
+
 LAN BPF increment: реализованы генерация deadline-программы, загрузка закрытых
 неподключённых объектов и атомарная публикация immutable lease через map-in-map.
 Ошибка обновления отзывает прежнее разрешение; отмена при занятом publisher

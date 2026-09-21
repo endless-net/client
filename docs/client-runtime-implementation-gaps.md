@@ -22,6 +22,32 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN closed-link increment (2026-09-21): `exit_lan_bpf_link.go` creates IPv4
+and IPv6 netfilter links only after withdrawing the lease. It verifies the
+program ID and each returned link's type, nonzero ID, program, family, hook,
+signed priority and zero flags. Partial failure/cancellation closes only newly
+created links; duplicate attachment is rejected. Preparation Close releases
+owned link FDs before program/map FDs and does not issue explicit detach.
+These are object identities, not live-hook receipts: metadata remains after
+detach. Link pins, current-netns hook dump and adapter integration are still
+missing; no LAN capability is enabled by this private primitive.
+ABI and detach semantics were checked against
+[Linux UAPI](https://raw.githubusercontent.com/torvalds/linux/v6.12/include/uapi/linux/bpf.h)
+and the [netfilter implementation](https://raw.githubusercontent.com/torvalds/linux/v6.12/net/netfilter/nf_bpf_link.c).
+The next ownership step should use `BPF_F_PATH_FD` (already in pinned x/sys)
+with a trusted, open bpffs directory and a single relative basename. It is
+openat-style path resolution, not a no-symlink guarantee. Directory ownership,
+cross-process exclusion, full object binding and exclusive pin creation must
+precede recovery or cleanup; unknown pins must not be replaced or unlinked.
+Pins hold object references across process death, not reboot. This ownership
+scheme is researched but not implemented
+([pin/lookup implementation](https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/bpf/inode.c)).
+Validation: goimports, vet, configured lint (0 issues) and the full local short
+suite passed (internal/client 137.679 s, CLI 10.486 s). Review caught and fixed
+link cleanup being outside Close; the ownership regression now passes. The
+preceding immutable-loader commit `1cee3d1` passed all three short CI platforms
+([run 35634231298](https://github.com/endless-net/client/actions/runs/35634231298)).
+
 LAN BPF preparation increment (2026-09-21): `exit_lan_bpf*.go` now builds the
 bounded netfilter program, reads layout from fixed kernel sysfs BTF and loads
 initially closed, unattached objects through the pinned x/sys BPF syscall.
@@ -93,7 +119,7 @@ CLOCK_BOOTTIME deadline in the packet path (`bpf_ktime_get_boot_ns`, including
 suspend), optionally intersecting realtime expiry for clock jumps forward.
 Reusing an old handshake/map/grant after rollback or restart must never create
 a later boottime cap. BPF netfilter can access the helper, but this repository
-has an unattached loader but lacks attachment/readback and durable ownership. Losing
+has a loader and closed-link creation but lacks live readback and durable ownership. Losing
 the last attachment handle must not leave nft LAN allowance behind. These are
 implementation requirements, not an enabled fallback or platform qualification
 ([helper](https://kernel.googlesource.com/pub/scm/linux/kernel/git/bpf/bpf/+/refs/tags/v6.17-rc7/kernel/bpf/helpers.c),
