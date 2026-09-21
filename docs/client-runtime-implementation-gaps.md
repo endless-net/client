@@ -22,6 +22,24 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN topology lifetime increment (2026-09-21): native collection subscribes to
+Linux routing notifications before either snapshot. A one-shot receipt closes
+on link/address/route/rule events, receive loss, cancellation or shutdown. Copies
+and compiled plans share that same lifetime; final health readback cannot return
+a plan whose receipt was invalidated. A replacement receipt cannot revive an
+older plan. Native preparation requires a receipt; pure CIDR compilation alone
+does not grant runtime authority.
+
+This bounds reuse of reported topology evidence, not notification delivery time
+or packet-time device identity. Wi-Fi association events, capture/install ABA,
+kernel-expiring leases and actual route/firewall installation remain open. Local
+units inject change sources/datagrams and do not open native netlink sockets.
+Validation: goimports, vet and configured lint (0 issues) passed; the full local
+short suite passed (internal/client 128.992 s, CLI 11.173 s). Linux-specific
+datagram tests run in push CI; local Windows execution does not cover them.
+The previous evidence commit `578e40e` passed all three short CI platforms
+([run 35627901524](https://github.com/endless-net/client/actions/runs/35627901524)).
+
 LAN preparation (2026-09-21): `exit_lan_source*.go` collects bounded Linux
 link/address/main-route snapshots with fixed sysfs device/driver/bus reads.
 Before/after canonical state must agree. Known virtual topology, gateway/via,

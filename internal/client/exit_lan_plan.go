@@ -25,8 +25,16 @@ type exitLANPlan struct {
 	expires  time.Time
 }
 
+func (p *exitLANPlan) topologyCurrent(now time.Time) bool {
+	started := time.Now()
+	return p != nil && p.topology != nil && p.topology.lifetime.current() && now.Add(time.Since(started)).Before(p.expires)
+}
+
 func compileExitLANPlan(cfg Config, source api.RegisterNodeResponse, selection *ClientExitSelection, topology *exitLANSource, retained []netip.Prefix, now time.Time) (*exitLANPlan, error) {
 	if topology == nil || !exitLANInterfaceName(topology.OwnInterface) || topology.OwnInterface == "lo" || len(topology.Links) == 0 || len(topology.Links) > 128 || !topology.ValidUntil.IsZero() && !now.Before(topology.ValidUntil) {
+		return nil, errExitLANPolicy
+	}
+	if topology.lifetime != nil && !topology.lifetime.current() {
 		return nil, errExitLANPolicy
 	}
 	reservation, err := compileExitLANReservation(cfg, source, selection, retained, now)
@@ -104,6 +112,9 @@ func compileExitLANPlan(cfg Config, source api.RegisterNodeResponse, selection *
 		}
 	}
 	if selection.Family != api.ExitFamilyIPv6Only && !ipv4 || selection.Family != api.ExitFamilyIPv4Only && !ipv6 {
+		return nil, errExitLANPolicy
+	}
+	if topology.lifetime != nil && !topology.lifetime.current() {
 		return nil, errExitLANPolicy
 	}
 	return plan, nil

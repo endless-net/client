@@ -170,6 +170,7 @@ func TestExitLANPreparationIntersectsHealthTopologyAndPolicy(t *testing.T) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	topology := &exitLANSource{OwnInterface: e.interface_, ValidUntil: now.Add(10 * time.Second), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
+	topology.lifetime = exitLANTestLifetime(t)
 	plan, health, err := e.prepareExitLANWithInspection(t.Context(), cfg, topology, now, inspect)
 	if err != nil || !plan.expires.Equal(topology.ValidUntil) || !health.expires.Equal(now.Add(20*time.Second)) {
 		t.Fatal("topology and handshake deadlines not intersected", err)
@@ -215,6 +216,7 @@ func TestExitLANReadbackCannotCrossEvidenceDeadline(t *testing.T) {
 		}
 		if preparation {
 			topology := &exitLANSource{OwnInterface: e.interface_, ValidUntil: deadline, Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
+			topology.lifetime = exitLANTestLifetime(t)
 			_, _, err = e.prepareExitLANWithInspection(t.Context(), cfg, topology, time.Now(), delayed)
 			if err == nil || calls != 2 {
 				e.mu.Unlock()

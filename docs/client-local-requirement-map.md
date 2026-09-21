@@ -52,6 +52,17 @@ LAN semantic question is resolved by the user's 2026-09-21 decision and
 architecture D-034 (`8719ce7`). The following preparation does not close US-05,
 UF-08, UI-AC-17 or native acceptance:
 
+- `TestExitLANWatchCaptureOwnershipAndInvalidation` verifies subscription before
+  snapshot, failure cleanup, cancellation/loss and irreversible shared receipt
+  invalidation. `TestExitLANPreparationRejectsTopologyLossInsideReadback` closes
+  the receipt inside the last UAPI readback and checks that no plan survives;
+  cloned plans cannot be revived by caller replacement. These assertions do not
+  establish kernel event delivery latency or packet-time interface binding.
+- `TestExitLANRouteDatagramKernelChanges` recognizes the subscribed event
+  families and batches; `TestExitLANRouteDatagramRejectsLossAndMalformedEvidence`
+  rejects foreign senders, truncation, overrun, malformed lengths and control
+  messages. These are parser units, not native socket shutdown qualification.
+
 - `TestExitLANHealthCannotRenewAnOldHandshake` rejects renewal by repeated reads
   and configuration-only health. Context/path/device/relay changes and incomplete
   handshakes are rejected by `TestExitLANHealthRejectsChangedContextPathAndIncompleteEvidence`.

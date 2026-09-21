@@ -24,6 +24,7 @@ var errExitLANSource = errors.New("physical LAN source is unavailable")
 // ValidUntil is the earliest finite address validity/preference or route deadline,
 // conservatively measured from before its command. It is not a renewable lease.
 type exitLANSource struct {
+	lifetime     *exitLANSourceLifetime
 	OwnInterface string
 	Links        []exitLANLink
 	ValidUntil   time.Time

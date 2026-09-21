@@ -84,6 +84,13 @@ handshake выбранного exit peer и текущим direct path либо 
 router preference входит в сравнение снимков. Это подтверждение peer transport,
 не Internet forwarding и не завершённая реализация native LAN_ALLOW.
 
+LAN topology lifetime increment: подписка на Linux link/address/route/rule
+запускается до снимков. Событие, потеря уведомлений или остановка подписки
+необратимо снимает подтверждение; копии и готовый план сохраняют исходный
+lifetime. Финальный readback повторно проверяет его. Это ещё не packet-time
+привязка к экземпляру NIC и не отслеживание Wi-Fi association; native Apply
+по-прежнему не разрешает LAN_ALLOW.
+
 Relay HOST increment от 2026-09-21: observer связывает подписанную map и peer
 с текущим экземпляром relay bridge, его локальным UAPI endpoint и выбранным
 внешним relay. Подтверждение требует полного timestamp handshake строго после
@@ -173,8 +180,9 @@ Capability теперь включается только публичным nat
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: после LAN evidence increment internal/client прошёл
-за 128.730 s; остальные пакеты прошли или использовали cache. Предыдущий прогон
+и `go test -short ./...`: после LAN topology lifetime increment internal/client
+прошёл за 128.992 s, CLI за 11.173 s; остальные пакеты прошли или использовали cache.
+Во время предыдущего LAN evidence increment один прогон
 упал в internal/client, но assertion потерялся в усечённом выводе; повтор без
 изменений с полным логом прошёл. Причина этого непостоянного сбоя не установлена.
 Review исправило проверку deadline после финального UAPI/relay readback.

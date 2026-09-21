@@ -12,9 +12,11 @@ import (
 )
 
 func captureNativeExitLANSource(ctx context.Context, own string) (*exitLANSource, error) {
-	return captureExitLANSource(ctx, own, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		return runExitCommand(ctx, "", name, args...)
-	}, inspectExitLANPhysical)
+	return captureWatchedExitLANSource(ctx, own, openExitLANRouteWatch, func(ctx context.Context, own string) (*exitLANSource, error) {
+		return captureExitLANSource(ctx, own, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+			return runExitCommand(ctx, "", name, args...)
+		}, inspectExitLANPhysical)
+	})
 }
 
 // Only these kernel-owned sysfs scalars/symlinks are read; there is no directory
