@@ -33,6 +33,10 @@ func TestLinuxExitGuardAtomicContainmentAndRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	closed := batches[0]
+	reset := "add table inet " + guard.table + "\ndelete table inet " + guard.table + "\nadd table inet " + guard.table + "\n"
+	if !strings.HasPrefix(closed, reset) || strings.Count(closed, "delete table") != 1 || strings.Contains(closed, "flush chain") {
+		t.Fatal("restart must replace the owned table structure within the same protection transaction")
+	}
 	for _, want := range []string{
 		"add table inet " + guard.table,
 		"hook output priority 0; policy drop;",
@@ -45,7 +49,7 @@ func TestLinuxExitGuardAtomicContainmentAndRelease(t *testing.T) {
 			t.Fatalf("missing guard constraint: %s", want)
 		}
 	}
-	for _, forbidden := range []string{"flush ruleset", "delete table", "ct state", "ip daddr", "ip6 daddr", "oifname \"endlessnet\"", "echo-request", "echo-reply", "nd-router-advert", "nd-redirect"} {
+	for _, forbidden := range []string{"flush ruleset", "ct state", "ip daddr", "ip6 daddr", "oifname \"endlessnet\"", "echo-request", "echo-reply", "nd-router-advert", "nd-redirect"} {
 		if strings.Contains(closed, forbidden) {
 			t.Fatalf("unexpected containment bypass: %s", forbidden)
 		}

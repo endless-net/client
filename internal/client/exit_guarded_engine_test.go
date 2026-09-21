@@ -96,7 +96,7 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 					}
 					return []byte(fmt.Sprintf(`[{"dst":"default","dev":%q,"flags":[]}]`, guardName)), nil
 				}
-				if strings.Contains(batch, "delete table") {
+				if strings.Contains(batch, "delete table") && !strings.Contains(batch, "policy drop;") {
 					t.Error("engine automatically released protection")
 				}
 				if scenario == "guard_failure" {
@@ -177,7 +177,7 @@ func TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease(t *testing.T
 			return []byte(`[]`), nil
 		}
 		commands++
-		if strings.Contains(batch, "delete table") {
+		if strings.Contains(batch, "delete table") && !strings.Contains(batch, "policy drop;") {
 			releases++
 			released = true
 			if releases == 1 {

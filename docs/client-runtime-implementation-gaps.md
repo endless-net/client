@@ -318,6 +318,13 @@ and `TestLinuxExitGuardRejectsUnsafeIdentityAndCancellation` check command-bound
 ordering, scope, restart, rejection and cancellation. They do not execute Linux
 netfilter. Transaction semantics follow the upstream [nftables documentation](https://wiki.iptables.org/wiki-nftables/index.php/Atomic_rule_replacement).
 This component is not wired into the native exit worker and adds no capability.
+The 2026-09-21 restart increment reconstructs its exclusively owned table in the
+same transaction instead of flushing only rule lists. This removes retained
+table flags and chain structure before recreating the expected output/forward
+hooks with drop policies. The initial add handles an absent table; deletion is
+never submitted alone during containment or opening. Unit assertions distinguish
+atomic replacement from explicit release and preserve the no-cleanup-on-error
+contract. Native transaction execution and firewall readback remain unqualified.
 Integration still needs engine/route serialization, durable startup containment,
 underlay control/relay/DNS and IPv6 neighbor discovery requirements, family/LAN
 modes, kernel observations, packaging dependency checks and privileged CI.

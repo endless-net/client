@@ -55,14 +55,15 @@ func (g *linuxExitGuard) OpenTunnel(ctx context.Context) error {
 }
 
 func (g *linuxExitGuard) replace(ctx context.Context, tunnel bool) error {
-	// nft -f submits the entire batch as one netlink transaction. In particular,
-	// flushing existing rules is never issued as a separate command. "add" is
-	// idempotent for an existing table/chain, unlike "create".
+	// Recreate the exclusively owned table in one netlink transaction. Flushing
+	// rules alone would retain old chain hooks and table flags after restart.
+	// The initial idempotent add also permits first use when the table is absent.
+	// Never submit deletion separately: failure must preserve the prior table.
 	var b strings.Builder
 	fmt.Fprintf(&b, "add table inet %s\n", g.table)
+	fmt.Fprintf(&b, "delete table inet %s\nadd table inet %s\n", g.table, g.table)
 	fmt.Fprintf(&b, "add chain inet %s output { type filter hook output priority 0; policy drop; }\n", g.table)
 	fmt.Fprintf(&b, "add chain inet %s forward { type filter hook forward priority 0; policy drop; }\n", g.table)
-	fmt.Fprintf(&b, "flush chain inet %s output\nflush chain inet %s forward\n", g.table, g.table)
 	fmt.Fprintf(&b, "add rule inet %s output oifname \"lo\" accept\n", g.table)
 	// Never allow all established traffic: pre-existing direct connections must
 	// be blocked too. SO_MARK is reserved for the privileged tunnel transport.
