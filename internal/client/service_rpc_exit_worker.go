@@ -36,18 +36,31 @@ func (s *ClientRPCService) startExitWorker(ctx context.Context, executor clientR
 	if executor.Observe != nil {
 		s.exitObservation = &clientRPCExitObservationSource{ctx: observationCtx, lock: executor.Lock, observe: executor.Observe}
 	}
+	observationSource := s.exitObservation
+	// Catalog/control readiness changed independently of enforcement evidence.
+	// Rebootstrap existing streams without claiming a production capability.
+	s.mutations.mu.Lock()
+	s.mutations.invalidateStreamsLocked()
+	s.mutations.mu.Unlock()
 	done := make(chan error, 1)
 	go func() {
 		var result error
 		stopMaintenance := s.mutations.startExitMaintenance(workerCtx, executor)
+		stopObservationEvents := s.startExitObservationEvents(workerCtx, observationSource)
 		defer func() {
 			cancelWorker()
 			stopMaintenance()
 			cancelObservation()
+			stopObservationEvents()
 			s.exitMu.Lock()
-			s.exitWorker = nil
-			s.exitModes = nil
-			s.exitObservation = nil
+			if s.exitWorker == w {
+				s.exitWorker = nil
+				s.exitModes = nil
+				s.exitObservation = nil
+				s.mutations.mu.Lock()
+				s.mutations.invalidateStreamsLocked()
+				s.mutations.mu.Unlock()
+			}
 			s.exitMu.Unlock()
 			close(w.done)
 			done <- result

@@ -77,6 +77,12 @@ func (m *ClientRPCMutations) setWorkerCapabilities(worker *clientRPCProfileWorke
 	if !changed {
 		return
 	}
+	m.invalidateStreamsLocked()
+}
+
+// Caller holds m.mu. Read-model provider lifetime changes require a fresh
+// opening snapshot even when they do not advertise a platform capability.
+func (m *ClientRPCMutations) invalidateStreamsLocked() {
 	for subscriber := range m.subscribers {
 		subscriber.mu.Lock()
 		if !subscriber.closed {

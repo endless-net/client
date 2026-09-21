@@ -22,6 +22,50 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Read-model increment (2026-09-21): post-Clear observations retain an in-process
+scope receipt after verified Release and bind it to terminal Clear before first
+publication. Every read independently checks nft/rule/default-route absence;
+an ordinary live engine must also have no exit projection and matching actual
+UAPI without defaults or transport mark. Operation pruning after the first
+confirmed commit does not erase that scope. Restart without the receipt remains
+unavailable; durable recovery of this observation scope is still required.
+
+Catalog modes now intersect authenticated grants and exact worker-supported
+pairs without widening the two wire lists into unsupported Cartesian choices.
+Aggregate mutation control reflects Clear admission, including offline Clear;
+it does not promise that every Select is available. Readiness is rechecked after
+native observation. Worker install/removal invalidates existing event streams
+with STALE_STATE for rebootstrap, without advertising the unfinished capability.
+A separate cancellable/joined observation loop publishes DOMAIN_EXIT_NODE on
+normalized changes (including first confirmed evidence), not repeated timestamps
+or private command errors. Its digest is never used as evidence by GetExitNode.
+This increment passed goimports, vet, lint (0 issues) and the full short suite
+(internal/client 104.634 s). The first short run caught an invalid comparison
+between caller-attached store metadata and the persistent update document;
+the revision CAS now compares persistent snapshots while retaining the full
+configuration/source checks around native observation. Platform qualification
+was not run. Specific assertion links are in the local requirement matrix.
+
+Host integration audit (2026-09-21): the effect lock must be shared by the
+native exit adapter, profile driver and ordinary map loop. The map-loop recovery
+barrier now includes `ExitChange`, preventing the main loop from applying cached
+or refreshed maps between native dispatch and durable selection commit. Connect
+after restart also needs protected saved-selection resume rather than ordinary
+Configure with an empty in-memory selection. Runtime maintenance must outlive
+the optional local listener: the IPC-disabled startup currently skips Serve and
+its workers. These are implementation gaps, not reasons to advertise readiness.
+
+The pinned architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`
+(client UI BA BP-UI-02/BP-UI-09; headless SA SR-12/F-07/IT-30) requires that
+Disconnect stop local access without removing enrollment, and that exit failure
+never silently fall back to ordinary routing. It does not specify whether Select
+while disconnected is rejected or deferred until Connect. Admission, dispatch
+and completion must preserve that independent connection intent. The UI's
+prohibition on automatic command retries is not a prohibition on runtime
+recovery of the same authorized connected intent. Existing guarded Configure
+already recontains before reapplying a matching live selection; host integration
+must distinguish this path from restoring a stopped selection.
+
 Lifetime/resume increment (2026-09-21): the exit worker owns a one-second
 maintenance loop, cancelled and joined before worker shutdown. It skips busy
 effects and reads current configuration only after acquiring the shared lock.
@@ -44,9 +88,10 @@ keys with the authenticated map, and checks every live peer's PSK against the
 intended value. Comparison models retain only public identity and PSK digests;
 raw keys and UAPI errors are not returned. These are bounded periodic checks,
 not an atomic lease on external routing/firewall state or reachability proof.
-Agent host/map-loop wiring, capability/catalog/snapshot/event integration,
-post-Clear steady-state observations, changed-interface recovery and LAN_ALLOW
-remain open. The production host still does not start the exit worker.
+The later read-model increment adds catalog/control/events, a main-loop pending
+barrier and in-process post-Clear observations. Agent host wiring, capability,
+post-restart cleared scope, changed-interface recovery and LAN_ALLOW remain open.
+The production host still does not start the exit worker.
 Before host admission is enabled, reconcile Select with disconnected/default
 connection intent: selecting an exit must not inadvertently create connection
 effects outside the connection/lifecycle contract. The saved-resume gate already
@@ -82,11 +127,12 @@ Release repeats cleanup and observes absence. Read-only RPC observation is
 serialized with effects and must not promote an old operation result to current
 runtime status. The later lifetime/resume increment supplies worker-level
 monitoring and saved resume; host integration and LAN_ALLOW remain required.
-The read path currently observes settled active selections only. Pending changes,
-inactive profiles and the steady state after Clear retain unknown runtime status;
-the Clear operation itself requires observed cleanup/release before success.
-Read capabilities, catalog selectability and snapshot/event integration still
-need to be connected with the host lifecycle.
+The read path observes settled active selections and, after the later read-model
+increment, independently verified in-process Clear. Pending changes, inactive
+profiles and post-restart Clear without its original scope remain unknown.
+The Clear operation itself requires observed cleanup/release before success.
+The catalog and events remain subject to production host lifecycle integration;
+the exit capability is still not advertised.
 The adapter currently requires its configured interface to equal the durable
 protection interface. Host recovery must resolve an interface-option change
 against the original protection scope before enabling Clear; it must not simply

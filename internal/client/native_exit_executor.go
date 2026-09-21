@@ -17,6 +17,7 @@ import (
 type nativeExitExecutor struct {
 	engine      *WireGuardEngine
 	createGuard func(string, string) (*linuxExitGuard, error)
+	cleared     *nativeExitClearedScope // guarded by the shared executor effect lock
 }
 
 // This factory supplies effects and evidence, not host readiness. Its callbacks
@@ -183,6 +184,7 @@ func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, s
 	if err != nil {
 		return nil, continuity, err
 	}
+	n.cleared = nil
 	if err = ctx.Err(); err != nil {
 		return nil, continuity, err
 	}
@@ -220,6 +222,7 @@ func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, s
 }
 
 func (n *nativeExitExecutor) release(ctx context.Context, id string, cfg Config) (status *ipc.ExitNodeStatus, continuity ipc.ConnectionContinuity, err error) {
+	n.cleared = nil
 	continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED
 	plan, err := nativeExitOperation(cfg, id, nil, true)
 	if err != nil {
@@ -250,6 +253,7 @@ func (n *nativeExitExecutor) release(ctx context.Context, id string, cfg Config)
 	if err = ctx.Err(); err != nil {
 		return nil, continuity, err
 	}
+	n.cleared = newNativeExitClearedScope(cfg, plan, guard)
 	return nativeExitClearStatus(plan.ProfileID, false), continuity, nil
 }
 
@@ -324,6 +328,9 @@ func (n *nativeExitExecutor) observeSelectionLocked(ctx context.Context, cfg Con
 }
 
 func (n *nativeExitExecutor) observe(ctx context.Context, cfg Config) (*ipc.ExitNodeStatus, error) {
+	if cfg.ExitSelection == nil {
+		return n.observeCleared(ctx, cfg)
+	}
 	if cfg.RPCState == nil || cfg.RPCState.ExitChange != nil || cfg.ExitSelection == nil || cfg.RPCState.ExitProtection == nil {
 		return nil, errors.New("native exit has no settled observed selection")
 	}

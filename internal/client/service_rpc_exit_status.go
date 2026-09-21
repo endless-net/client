@@ -24,7 +24,7 @@ func (s *ClientRPCService) GetExitNode(ctx context.Context, request *connect.Req
 
 // Durable request is readable even when its former grant is withdrawn. It is
 // never promoted to effective routing or OS protection without observation.
-func (s *ClientRPCService) exitRequestedStatusLocked(ctx context.Context, peer local.Peer, request *ipc.GetExitNodeRequest, cfg Config) (*ipc.ExitNodeStatus, error) {
+func (s *ClientRPCService) exitRequestedStatusLocked(ctx context.Context, peer local.Peer, request *ipc.GetExitNodeRequest, cfg Config, workerReady bool) (*ipc.ExitNodeStatus, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -51,6 +51,9 @@ func (s *ClientRPCService) exitRequestedStatusLocked(ctx context.Context, peer l
 		return &ipc.ExitFamilyStatus{Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "exit_runtime_observation_unavailable"}}
 	}
 	status := &ipc.ExitNodeStatus{ProfileId: profile.ID, RequestedFamilyMode: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_NONE, Ipv4: unknown(), Ipv6: unknown(), Failure: &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "exit_runtime_observation_unavailable"}, Control: &ipc.SettingControl{Source: ipc.SettingSource_SETTING_SOURCE_DEFAULT, Mutation: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_UNSUPPORTED, ReasonKey: "exit_executor_unavailable"}}}
+	// The aggregate control includes Clear, which intentionally remains possible
+	// without a current grant. Per-node selection support belongs to the catalog.
+	status.Control.Mutation = m.exitMutationRestriction(cfg, request.GetProfile(), ipc.OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE, workerReady)
 	if selection != nil {
 		family := map[api.ExitFamilyMode]ipc.ExitFamilyMode{api.ExitFamilyIPv4Only: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY, api.ExitFamilyIPv6Only: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV6_ONLY, api.ExitFamilyDualStack: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK}[selection.Family]
 		lan := map[api.ExitLANAccess]ipc.LanAccess{api.ExitLANBlock: ipc.LanAccess_LAN_ACCESS_BLOCK, api.ExitLANAllow: ipc.LanAccess_LAN_ACCESS_ALLOW}[selection.LAN]
@@ -79,4 +82,33 @@ func (s *ClientRPCService) exitRequestedStatusLocked(ctx context.Context, peer l
 	}
 	status.Metadata = &ipc.SnapshotMetadata{InstanceId: m.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(m.now())}
 	return status, ctx.Err()
+}
+
+// Reuse admission's scope and pending-operation checks on a disposable snapshot.
+// This projects ability to accept work, never evidence of applied OS effects or
+// a promise that a later request with stale CAS metadata will be accepted.
+func (m *ClientRPCMutations) exitMutationRestriction(cfg Config, ref *ipc.ProfileRef, kind ipc.OperationKind, workerReady bool) *ipc.Restriction {
+	unavailable := func(reason string) *ipc.Restriction {
+		return &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: reason}
+	}
+	if !workerReady {
+		return unavailable("exit_executor_unavailable")
+	}
+	if cfg.RPCState == nil {
+		return unavailable("exit_context_unavailable")
+	}
+	retained := 0
+	for _, record := range cfg.RPCState.Operations {
+		if record.CompletedAt == nil || m.now().Before(record.CompletedAt.Add(rpcOperationRetention)) {
+			retained++
+		}
+	}
+	if retained >= rpcMaxOperationRecords {
+		return unavailable("exit_operation_capacity")
+	}
+	copy := clonePersistentConfig(cfg)
+	if _, err := m.prepareExitChange(&copy, &ipc.Operation{Kind: kind}, ref); err != nil {
+		return unavailable("exit_context_unavailable")
+	}
+	return &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE}
 }

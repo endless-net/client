@@ -25,12 +25,13 @@ type clientRPCExitObservationSource struct {
 func (s *ClientRPCService) exitNodeAs(ctx context.Context, peer local.Peer, request *ipc.GetExitNodeRequest) (*ipc.ExitNodeStatus, error) {
 	s.exitMu.Lock()
 	source := s.exitObservation
-	s.exitMu.Unlock()
+	workerReady := s.exitWorker != nil && s.exitWorker.ctx.Err() == nil
 	m := s.mutations
 	m.mu.Lock()
 	cfg := m.store.Read()
-	status, err := s.exitRequestedStatusLocked(ctx, peer, request, cfg)
+	status, err := s.exitRequestedStatusLocked(ctx, peer, request, cfg, workerReady)
 	m.mu.Unlock()
+	s.exitMu.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -55,9 +56,9 @@ func (s *ClientRPCService) exitNodeAs(ctx context.Context, peer local.Peer, requ
 	// Respect exitMu -> mutations.mu ordering. The effect lock remains held
 	// through reauthorization and publication, never acquired under mutations.mu.
 	s.exitMu.Lock()
+	defer s.exitMu.Unlock()
 	live := s.exitObservation == source && source.ctx.Err() == nil && check.Err() == nil
 	m.mu.Lock()
-	s.exitMu.Unlock()
 	defer m.mu.Unlock()
 	current := m.store.Read()
 	if err := authorizeRPCPeer(peer, rpcMethod("/client.v0.ClientService/GetExitNode"), current); err != nil {
@@ -70,6 +71,10 @@ func (s *ClientRPCService) exitNodeAs(ctx context.Context, peer local.Peer, requ
 		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 	}
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	status, err = s.exitRequestedStatusLocked(ctx, peer, request, current, s.exitWorker != nil && s.exitWorker.ctx.Err() == nil)
+	if err != nil {
 		return nil, err
 	}
 	if !live || observationErr != nil || !exitAppliedResultMatches(&clientRPCExitChange{ProfileID: status.ProfileId, Requested: cfg.ExitSelection}, observed) {

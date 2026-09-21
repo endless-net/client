@@ -590,7 +590,7 @@ func cmdAgent(args []string) error {
 			}
 			if err == nil && !skipForDisconnected {
 				cfg := configStore.Read()
-				if cfg.RPCState != nil && (cfg.RPCState.Trust != nil || (cfg.RPCState.NetworkSelection != nil && cfg.RPCState.NetworkSelection.DownStarted)) {
+				if cfg.RPCState != nil && (cfg.RPCState.ExitChange != nil || cfg.RPCState.Trust != nil || (cfg.RPCState.NetworkSelection != nil && cfg.RPCState.NetworkSelection.DownStarted)) {
 					// Native context transitions own recovery and tunnel resumption. The
 					// automatic loop must not bypass its durable operation journal.
 					skipForRecovery = true

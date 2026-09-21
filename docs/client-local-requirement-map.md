@@ -64,6 +64,17 @@ state in the exit change/executor/result paths and `resource_reconciliation.go`
 called by CLI `cacheNetworkMapChecked`. The older row entry-point lists above
 are discovery aids, not assertions that these paths are absent.
 
+## Exit read-model assertion increment, 2026-09-21
+
+These additional assertions do not close US-05 or native qualification:
+
+| Scope | Assertion inspected | Evidence boundary |
+| --- | --- | --- |
+| US-05 after Clear | `TestNativeExitClearedObservationRechecksReleasedScopeAndOrdinaryRuntime` executes durable Clear, reads fresh native state, configures an ordinary userspace runtime, and rejects changed scope, firewall, routes, rules or UAPI; retained operation pruning remains readable | Real userspace WireGuard with channel TUN and injected OS commands; restarted executor still lacks the original cleared scope |
+| US-05 selectable modes | `TestExitReadProjectionTracksWorkerAndAdmission` compares signed catalog modes with actual admission; `TestExitCatalogModesNeverWidenPairs` rejects widening diagonal family/LAN support into Cartesian combinations | Trusted worker modes and signed unit map; host readiness remains unadvertised |
+| US-05 change events | `TestExitObservationEventsInvalidateOnlyNormalizedTransitions` and `TestExitObservationEventsPublishInitialConfirmedAndAfterPending` assert first confirmed evidence, loss/recovery, no repeated metadata noise and fresh Get independent of the event digest | Injected native observer, durable revision and subscriber queue; no OS atomic observation guarantee |
+| US-05 worker lifetime | `TestExitWorkerReadinessRebootstrapsStreamsWithoutCapability` asserts STALE_STATE at install and stop, including unavailable native evidence; `TestExitReadControlRechecksWorkerAfterObservation` rejects the former observer after stop/replacement | Service worker lifetime only; production host and IPC-disabled runtime orchestration remain open |
+
 ## External dependency register
 
 Owner labels describe responsibilities, not authorization to change repositories.

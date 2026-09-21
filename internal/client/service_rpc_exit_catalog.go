@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
 	"sort"
 
 	"connectrpc.com/connect"
@@ -29,6 +30,8 @@ func (s *ClientRPCService) exitNodesAs(ctx context.Context, peer local.Peer, req
 		return nil, err
 	}
 	m := s.mutations
+	s.exitMu.Lock()
+	defer s.exitMu.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	cfg := m.store.Read()
@@ -53,6 +56,8 @@ func (s *ClientRPCService) exitNodesAs(ctx context.Context, peer local.Peer, req
 		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
 	items := []*ipc.ExitNode{}
+	ready := s.exitWorker != nil && s.exitWorker.ctx.Err() == nil
+	restriction := m.exitMutationRestriction(cfg, request.GetProfile(), ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE, ready)
 	if policy := mapState.Network.ClientPolicy; policy != nil {
 		if len(policy.ExitNodes) > 4096 {
 			return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
@@ -61,9 +66,18 @@ func (s *ClientRPCService) exitNodesAs(ctx context.Context, peer local.Peer, req
 			if !m.now().Before(grant.ExpiresAt) {
 				continue
 			}
-			// Policy grants alone do not prove platform apply support. Selectable
-			// modes remain empty until the exit executor supplies that evidence.
-			items = append(items, &ipc.ExitNode{Id: grant.ID, DisplayName: grant.Name, PeerId: grant.Host.NodeID, Selection: &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "exit_executor_unavailable"}})
+			item := &ipc.ExitNode{Id: grant.ID, DisplayName: grant.Name, PeerId: grant.Host.NodeID, Selection: proto.Clone(restriction).(*ipc.Restriction)}
+			if restriction.Availability == ipc.Availability_AVAILABILITY_AVAILABLE {
+				exitCatalogModes(item, s.exitModes, func(mode clientRPCExitMode) bool {
+					selection := &ClientExitSelection{ID: grant.ID, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, RouteTable: cfg.WireGuardRouteTable, Host: grant.Host, Family: mode.Family, LAN: mode.LAN}
+					_, err := exitRoutePeers(cfg, *mapState, selection, m.now())
+					return err == nil
+				})
+				if len(item.AllowedFamilyModes) == 0 {
+					item.Selection = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_UNSUPPORTED, ReasonKey: "exit_mode_unsupported"}
+				}
+			}
+			items = append(items, item)
 		}
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Id < items[j].Id })
@@ -86,4 +100,33 @@ func (s *ClientRPCService) exitNodesAs(ctx context.Context, peer local.Peer, req
 	response.ExitNodes = items[start:end]
 	response.Page = &ipc.PageResponse{NextPageToken: next, Metadata: &ipc.SnapshotMetadata{InstanceId: m.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(m.now())}}
 	return response, nil
+}
+
+// The wire catalog has two independent lists, not pairs. Expose a safe rectangle:
+// prefer all BLOCK-capable families, and include ALLOW only when every exposed
+// family supports it. Never advertise an unsupported Cartesian combination.
+func exitCatalogModes(item *ipc.ExitNode, supported []clientRPCExitMode, authorized func(clientRPCExitMode) bool) {
+	families := []api.ExitFamilyMode{api.ExitFamilyIPv4Only, api.ExitFamilyIPv6Only, api.ExitFamilyDualStack}
+	allowed := func(family api.ExitFamilyMode, lan api.ExitLANAccess) bool {
+		mode := clientRPCExitMode{Family: family, LAN: lan}
+		return slices.Contains(supported, mode) && authorized(mode)
+	}
+	for _, lan := range []api.ExitLANAccess{api.ExitLANBlock, api.ExitLANAllow} {
+		allAllow := true
+		for i, family := range families {
+			if allowed(family, lan) {
+				item.AllowedFamilyModes = append(item.AllowedFamilyModes, []ipc.ExitFamilyMode{ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY, ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV6_ONLY, ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK}[i])
+				allAllow = allAllow && allowed(family, api.ExitLANAllow)
+			}
+		}
+		if len(item.AllowedFamilyModes) != 0 {
+			if lan == api.ExitLANBlock {
+				item.AllowedLanAccess = append(item.AllowedLanAccess, ipc.LanAccess_LAN_ACCESS_BLOCK)
+			}
+			if allAllow {
+				item.AllowedLanAccess = append(item.AllowedLanAccess, ipc.LanAccess_LAN_ACCESS_ALLOW)
+			}
+			return
+		}
+	}
 }
