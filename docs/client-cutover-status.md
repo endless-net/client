@@ -52,6 +52,11 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+LAN pin increment: добавлены exclusive pins карты, программы и обеих links
+относительно открытого bpffs-каталога, повторное открытие и сверка object ID.
+Частичные pins сохраняются закрытыми; чужие объекты не заменяются/не удаляются.
+Startup recovery, durable ownership и live hook readback ещё не завершены.
+
 LAN link increment: добавлены создание закрытых IPv4/IPv6 netfilter links,
 проверка object identity и cleanup частично созданной пары. Это ещё не pinning
 и не подтверждение активных hooks: metadata сохраняется после detach.

@@ -22,6 +22,29 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN pinning increment (2026-09-21): `exit_lan_bpf_pin.go` uses the directory-FD
+OBJ_PIN/GET ABI with fixed bounded relative basenames. It closes the lease,
+rejects any pre-existing pin, creates map/program/IPv4/IPv6 pins exclusively,
+then reopens each pin and compares its kernel identity with the held original
+object. Failure returns successfully created names and leaves partial pins
+closed for recovery; it never unlinks or replaces existing objects. Close
+releases descriptors without unpinning. This is not startup recovery: persistent
+ownership records, adopting a previous process's objects and validating live
+hooks are still required before native LAN can open.
+`exit_lan_bpf_directory_linux.go` opens the fixed bpffs path one directory at a
+time with O_NOFOLLOW, checks root ownership, safe parent modes, exact 0700 for
+the owned directory and BPF_FS_MAGIC. It creates only a missing owned directory;
+existing paths are never chmod'ed, replaced or removed. Nonblocking directory
+flock remains held until Close. Retained ancestor FDs allow subsequent path,
+inode, permission and filesystem revalidation. Unsupported or busy locking
+fails closed. These checks trust administrators able to change root-owned paths
+or mounts and have only injected-syscall tests so far.
+Validation: goimports, vet and configured lint (0 issues) passed; full local
+short suite passed (internal/client 140.084 s, CLI 11.318 s). Linux-only directory
+units await Linux CI; native filesystem/locking effects remain unqualified.
+The preceding closed-link commit `6569be2` passed all three short CI platforms
+([run 35635277246](https://github.com/endless-net/client/actions/runs/35635277246)).
+
 LAN closed-link increment (2026-09-21): `exit_lan_bpf_link.go` creates IPv4
 and IPv6 netfilter links only after withdrawing the lease. It verifies the
 program ID and each returned link's type, nonzero ID, program, family, hook,
@@ -29,8 +52,9 @@ signed priority and zero flags. Partial failure/cancellation closes only newly
 created links; duplicate attachment is rejected. Preparation Close releases
 owned link FDs before program/map FDs and does not issue explicit detach.
 These are object identities, not live-hook receipts: metadata remains after
-detach. Link pins, current-netns hook dump and adapter integration are still
-missing; no LAN capability is enabled by this private primitive.
+detach. Link pins are now created by the pinning primitive above; current-netns
+hook dump and adapter integration are still missing. No LAN capability is
+enabled by either private primitive.
 ABI and detach semantics were checked against
 [Linux UAPI](https://raw.githubusercontent.com/torvalds/linux/v6.12/include/uapi/linux/bpf.h)
 and the [netfilter implementation](https://raw.githubusercontent.com/torvalds/linux/v6.12/net/netfilter/nf_bpf_link.c).
@@ -39,8 +63,8 @@ with a trusted, open bpffs directory and a single relative basename. It is
 openat-style path resolution, not a no-symlink guarantee. Directory ownership,
 cross-process exclusion, full object binding and exclusive pin creation must
 precede recovery or cleanup; unknown pins must not be replaced or unlinked.
-Pins hold object references across process death, not reboot. This ownership
-scheme is researched but not implemented
+Pins hold object references across process death, not reboot. Pin creation is
+implemented above; adopting old pins and guarded cleanup still need implementation
 ([pin/lookup implementation](https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/bpf/inode.c)).
 Validation: goimports, vet, configured lint (0 issues) and the full local short
 suite passed (internal/client 137.679 s, CLI 10.486 s). Review caught and fixed

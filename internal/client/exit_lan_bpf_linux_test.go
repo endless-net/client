@@ -33,3 +33,11 @@ func TestExitLANBPFLinkUAPIConstants(t *testing.T) {
 		}
 	}
 }
+
+func TestExitLANBPFPinUAPIConstants(t *testing.T) {
+	for _, pair := range [][2]int{{exitLANBPFObjectPin, unix.BPF_OBJ_PIN}, {exitLANBPFObjectGet, unix.BPF_OBJ_GET}, {exitLANBPFPathFD, unix.BPF_F_PATH_FD}} {
+		if pair[0] != pair[1] {
+			t.Fatal("pinned object UAPI mismatch", pair)
+		}
+	}
+}

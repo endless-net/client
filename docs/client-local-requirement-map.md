@@ -48,6 +48,24 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+`TestExitLANBPFPinsRetainExactObjectsAfterClose` checks FD-relative pin/get
+encoding, both byte orders, reopened identity and pin references after Close
+using a fake kernel. `TestExitLANBPFPinFailurePreservesClosedPartialOwnership`
+injects syscall failure and late cancellation at each of 21 steps.
+`TestExitLANBPFPinConflictAndReadbackMismatch` checks foreign pin conflicts,
+swapped readback and final directory invalidation without deleting pins.
+`TestExitLANBPFPinsRejectUnsafeNamesAndDirectory` checks path traversal, NUL,
+oversize names and closed directory rejection. Native bpffs and live hook
+qualification are still absent; pins alone are not LAN authority.
+Linux-only directory tests (`TestExitLANBPFDirectoryAcquireAndValidate`,
+`TestExitLANBPFDirectoryRejectsUntrustedPaths`,
+`TestExitLANBPFDirectoryFailureAndCancellationCleanup`,
+`TestExitLANBPFDirectoryReceiptInvalidation`) inject filesystem/lock calls.
+They check nofollow opens, root ownership and modes, bpffs identity, missing
+directory/EEXIST race, lock contention, all call failures and late cancellation,
+and path replacement after acquisition. They do not operate on the CI host's
+bpffs or prove native flock support.
+
 `TestExitLANBPFLinksAttachClosedAndRetainIdentity` checks lease withdrawal,
 both family bindings, signed priority, duplicate rejection and owned-FD cleanup
 in LE and BE fake UAPI calls. `TestExitLANBPFLinkFailureAndCancellationCleanup`
