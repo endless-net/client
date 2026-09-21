@@ -247,3 +247,70 @@ func TestExitLANSourcePublicWiFiAndLifetimeCountdown(t *testing.T) {
 		t.Fatal("public physical topology or conservative countdown failed", err)
 	}
 }
+
+func TestExitLANSourceTimedIPv6RAPreferences(t *testing.T) {
+	for _, preference := range []string{"low", "medium", "high"} {
+		t.Run(preference, func(t *testing.T) {
+			f := newExitLANFixture()
+			f.ipv6 = strings.ReplaceAll(strings.ReplaceAll(f.ipv6, `"protocol":"2"`, `"protocol":"9","expires":60`), `"pref":"medium"`, `"pref":"`+preference+`"`)
+			run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				if f.calls == 4 {
+					f.ipv6 = strings.ReplaceAll(f.ipv6, `"expires":60`, `"expires":59`)
+				}
+				return f.run(ctx, name, args...)
+			}
+			started := time.Now()
+			source, err := captureExitLANSource(t.Context(), "endlessnet", run, f.inspect)
+			if err != nil {
+				t.Fatal("RA countdown was treated as topology change", err)
+			}
+			route := source.Links[0].Routes[1]
+			if !route.Timed || route.Protocol != 9 || route.Preference != preference || source.ValidUntil.IsZero() || source.ValidUntil.Before(started.Add(59*time.Second)) || source.ValidUntil.After(time.Now().Add(59*time.Second)) {
+				t.Fatal("RA route did not cap candidate lifetime or preserve preference")
+			}
+		})
+	}
+}
+
+func TestExitLANSourceRejectsInvalidOrChangedRARouteMetadata(t *testing.T) {
+	for _, scenario := range []string{"missing_expiry", "zero", "negative", "fraction", "string", "null", "overflow", "missing_pref", "numeric_pref", "invalid_pref", "changed_pref", "changed_timed", "gateway", "via", "nhid", "multipath"} {
+		t.Run(scenario, func(t *testing.T) {
+			f := newExitLANFixture()
+			f.ipv6 = strings.ReplaceAll(f.ipv6, `"protocol":"2"`, `"protocol":"9","expires":60`)
+			switch scenario {
+			case "missing_expiry":
+				f.ipv6 = strings.ReplaceAll(f.ipv6, `,"expires":60`, "")
+			case "zero", "negative", "fraction", "string", "null", "overflow":
+				value := map[string]string{"zero": "0", "negative": "-1", "fraction": "1.5", "string": `"60"`, "null": "null", "overflow": "2147483648"}[scenario]
+				f.ipv6 = strings.ReplaceAll(f.ipv6, `"expires":60`, `"expires":`+value)
+			case "missing_pref":
+				f.ipv6 = strings.ReplaceAll(f.ipv6, `,"pref":"medium"`, "")
+			case "numeric_pref":
+				f.ipv6 = strings.ReplaceAll(f.ipv6, `"pref":"medium"`, `"pref":0`)
+			case "invalid_pref":
+				f.ipv6 = strings.ReplaceAll(f.ipv6, `"pref":"medium"`, `"pref":"unknown"`)
+			case "changed_timed":
+				f.ipv6 = strings.ReplaceAll(f.ipv6, `"protocol":"9"`, `"protocol":"2"`)
+			case "gateway", "via", "nhid", "multipath":
+				// Keep a legitimate overlapping direct route: the extra timed
+				// indirect route must not disappear from the safety assessment.
+				field := map[string]string{"gateway": `"gateway":"2001:db8:10::1"`, "via": `"via":{"family":"inet","host":"192.168.10.1"}`, "nhid": `"nhid":7`, "multipath": `"multipath":[]`}[scenario]
+				f.ipv6 = strings.TrimSuffix(f.ipv6, "]") + `,{"dst":"2001:db8:10::/65","dev":"eth0","protocol":"9","expires":60,"pref":"medium",` + field + `}]`
+			}
+			run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				if f.calls == 4 {
+					if scenario == "changed_pref" {
+						f.ipv6 = strings.ReplaceAll(f.ipv6, `"pref":"medium"`, `"pref":"high"`)
+					}
+					if scenario == "changed_timed" {
+						f.ipv6 = strings.ReplaceAll(f.ipv6, `,"expires":60`, "")
+					}
+				}
+				return f.run(ctx, name, args...)
+			}
+			if source, err := captureExitLANSource(t.Context(), "endlessnet", run, f.inspect); err == nil || source != nil {
+				t.Fatal("unsafe RA metadata accepted")
+			}
+		})
+	}
+}

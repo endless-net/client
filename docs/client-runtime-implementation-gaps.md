@@ -29,10 +29,18 @@ multipath and ambiguous attachments cannot produce a candidate. Earliest finite
 address validity/preference limits the source deadline; countdown itself is not
 treated as an identity change. Sysfs hardware candidates do not rule out guest
 hardware emulation, so physical-platform qualification remains required.
-The strict route parser currently rejects timed RA route `expires` and
-non-medium router preferences; those variants need bounded expiry-aware support
-before claiming general dynamic IPv6 LAN support. Unknown fields never widen
-the candidate set.
+IPv6 RA routes require a positive bounded integer `expires` and an explicit
+low/medium/high router preference. Route expiry also caps the source deadline;
+countdown is not identity, but preference and timed/permanent transitions are.
+Unknown fields never widen the candidate set.
+
+`exit_lan_health.go` binds preparation to authenticated selected-peer handshake,
+signed authority, engine/device/path generation and direct check or live relay
+generation. Repeated reads cannot extend the original evidence deadline.
+Preparation intersects this deadline with topology/map/grant expiry and checks
+it again after final readback. This is peer transport evidence, not proof of
+Internet forwarding; kernel lease enforcement and native LAN admission remain
+unimplemented.
 
 `exit_lan_policy.go` authenticates the map and exact exit grant, preserves all
 non-default peer/resource destinations independently of enablement, includes
@@ -63,10 +71,13 @@ The CIDR-without-lease regression prevents a restarted application reservation
 from becoming an unintended LAN fallback. Linux boundary units use only rejected
 input and pre-cancelled contexts; they do not read the host's sysfs or routes.
 
-LAN preparation validation: goimports, vet and configured lint (0 issues) passed.
-The final full short suite passed: internal/client 119.773 s; CLI reused its
-passing 11.343 s result. The preceding relay commit `d4d80e4` passed cross-platform
-short CI ([run 35622423377](https://github.com/endless-net/client/actions/runs/35622423377)).
+LAN evidence validation: goimports, vet and configured lint (0 issues) passed.
+The final full short suite passed: internal/client 128.730 s; other packages
+passed or reused cached results. An earlier run failed in internal/client with
+the failing assertion lost in truncated tool output; the unchanged repeat with
+a retained full log passed. This intermittent failure remains undiagnosed.
+The preceding LAN preparation commit `62113c9` passed cross-platform short CI
+([run 35625058266](https://github.com/endless-net/client/actions/runs/35625058266)).
 No native/system checks were run.
 
 Relay HOST increment (2026-09-21): private bridge observations bind signed-map

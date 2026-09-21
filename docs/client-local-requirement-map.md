@@ -52,6 +52,19 @@ LAN semantic question is resolved by the user's 2026-09-21 decision and
 architecture D-034 (`8719ce7`). The following preparation does not close US-05,
 UF-08, UI-AC-17 or native acceptance:
 
+- `TestExitLANHealthCannotRenewAnOldHandshake` rejects renewal by repeated reads
+  and configuration-only health. Context/path/device/relay changes and incomplete
+  handshakes are rejected by `TestExitLANHealthRejectsChangedContextPathAndIncompleteEvidence`.
+- `TestExitLANPreparationIntersectsHealthTopologyAndPolicy` caps preparation by
+  the earliest topology, handshake and direct-check deadline;
+  `TestExitLANReadbackCannotCrossEvidenceDeadline` expires topology or the original
+  receipt inside the final inspection. Synthetic timestamps verify logic only;
+  production inspection still requires actual authenticated UAPI evidence.
+- `TestExitLANSourceTimedIPv6RAPreferences` preserves all three router
+  preferences and caps expiry across countdown snapshots;
+  `TestExitLANSourceRejectsInvalidOrChangedRARouteMetadata` rejects missing,
+  malformed or changed authority, including overlapping indirect routes.
+
 - `TestExitLANSourceStablePhysicalTopology` and
   `TestExitLANSourcePublicWiFiAndLifetimeCountdown` preserve actual prefix lengths,
   two matching snapshots and the earliest finite address deadline. Injected

@@ -77,6 +77,13 @@ datapath должен использовать собственную direct-rou
 защищённую установку по instance, исключения ресурсов и истекающую в kernel lease,
 ограниченную свежим exit-health evidence. LAN_ALLOW остаётся недоступным.
 
+LAN evidence increment от 2026-09-21: подготовка связывается с authenticated
+handshake выбранного exit peer и текущим direct path либо поколением relay.
+Повторное чтение не продлевает исходный срок; проверка после последнего readback
+отклоняет уже истёкшие данные. IPv6 RA expiry ограничивает срок topology, а
+router preference входит в сравнение снимков. Это подтверждение peer transport,
+не Internet forwarding и не завершённая реализация native LAN_ALLOW.
+
 Relay HOST increment от 2026-09-21: observer связывает подписанную map и peer
 с текущим экземпляром relay bridge, его локальным UAPI endpoint и выбранным
 внешним relay. Подтверждение требует полного timestamp handshake строго после
@@ -166,10 +173,11 @@ Capability теперь включается только публичным nat
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: после LAN preparation increment internal/client прошёл
-за 119.773 s; cmd/endlessnet-client повторно использовал успешный результат
-11.343 s. Все пакеты прошли. Дополнительное review исправило reservation CIDR
-приложения без lease и общий work budget до последнего успешного прогона.
+и `go test -short ./...`: после LAN evidence increment internal/client прошёл
+за 128.730 s; остальные пакеты прошли или использовали cache. Предыдущий прогон
+упал в internal/client, но assertion потерялся в усечённом выводе; повтор без
+изменений с полным логом прошёл. Причина этого непостоянного сбоя не установлена.
+Review исправило проверку deadline после финального UAPI/relay readback.
 Локальные native/E2E/installer проверки не запускались.
 
 1. Завершить native exit LAN_ALLOW, сочетания exit с profile/network

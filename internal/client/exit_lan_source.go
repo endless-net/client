@@ -21,7 +21,7 @@ var errExitLANSource = errors.New("physical LAN source is unavailable")
 // Nonvirtual sysfs topology cannot rule out emulated hardware in a guest;
 // platform qualification is required before treating candidates as physical.
 // No LAN_ALLOW capability may be inferred from successful collection alone.
-// ValidUntil is the earliest finite address validity/preference deadline,
+// ValidUntil is the earliest finite address validity/preference or route deadline,
 // conservatively measured from before its command. It is not a renewable lease.
 type exitLANSource struct {
 	OwnInterface string
@@ -38,6 +38,8 @@ type exitLANLink struct {
 type exitLANDirectRoute struct {
 	Prefix                  netip.Prefix
 	Protocol, Metric, Scope uint32
+	Preference              string
+	Timed                   bool
 }
 type exitLANPhysical struct {
 	Index, LinkIndex, Type                         int
@@ -277,6 +279,7 @@ func readExitLANSource(ctx context.Context, own string, run CommandRunner, inspe
 	}
 	var indirect []netip.Prefix
 	for _, family := range []string{"-4", "-6"} {
+		routeReadStarted := time.Now()
 		rows, err = exitLANRows(ctx, run, "-j", "-N", family, "route", "show", "table", "main")
 		if err != nil {
 			return nil, err
@@ -371,8 +374,23 @@ func readExitLANSource(ctx context.Context, own string, run CommandRunner, inspe
 						return nil, errExitLANSource
 					}
 				case "pref":
-					if value != "medium" {
+					if family != "-6" || (value != "low" && value != "medium" && value != "high") {
 						return nil, errExitLANSource
+					}
+					route.Preference = value.(string)
+				case "expires":
+					// iproute2 print_rta_cacheinfo emits signed integer seconds,
+					// truncating the remaining kernel ticks. Never round upward or
+					// treat an omitted/zero RA deadline as permanent authority.
+					number, numeric := value.(json.Number)
+					seconds, parseErr := strconv.ParseInt(string(number), 10, 32)
+					if family != "-6" || !numeric || parseErr != nil || seconds <= 0 {
+						return nil, errExitLANSource
+					}
+					route.Timed = true
+					deadline := routeReadStarted.Add(time.Duration(seconds) * time.Second)
+					if source.ValidUntil.IsZero() || deadline.Before(source.ValidUntil) {
+						source.ValidUntil = deadline
 					}
 				case "flags":
 					flags, ok := value.([]any)
@@ -384,6 +402,11 @@ func readExitLANSource(ctx context.Context, own string, run CommandRunner, inspe
 				}
 			}
 			if route.Scope != 0 && route.Scope != 253 {
+				return nil, errExitLANSource
+			}
+			// RTPROT_RA (9) is accepted only with explicit IPv6 preference and
+			// lifetime. Missing metadata cannot grant an unbounded candidate.
+			if route.Protocol == 9 && (family != "-6" || !route.Timed || route.Preference == "") {
 				return nil, errExitLANSource
 			}
 			link.Routes = append(link.Routes, route)
