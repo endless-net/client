@@ -22,6 +22,33 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN live-hook readback increment (2026-09-21): `exit_lan_bpf_hook*.go` collects
+a bounded NFNL_SUBSYS_HOOK dump from a fresh NETLINK_NETFILTER socket in the
+current network namespace. Completion requires one exact BPF program/family/
+hook/priority match and a successful DONE. Kernel sender, sequence, the distinct
+data/DONE header PID rules, native framing and BE payloads are checked. Loss,
+interrupted dumps, malformed/duplicate evidence and work/time limits reject
+confirmation. Cancellation closes the pollable socket and joins its callback.
+Ordinary, nft and other non-BPF hook metadata cannot grant BPF authority.
+This is a point-in-time primitive; both-family validation, retained link/pin
+ownership, lifecycle synchronization and adapter integration remain open.
+Kernel dump consistency uses the hook-array pointer, not a durable generation;
+IPv4 and IPv6 observations are not atomic together
+([hook dump implementation](https://raw.githubusercontent.com/torvalds/linux/v6.12/net/netfilter/nfnetlink_hook.c),
+[hook attributes](https://raw.githubusercontent.com/torvalds/linux/v6.12/include/uapi/linux/netfilter/nfnetlink_hook.h)).
+Integration audit: the standalone link/pin primitives currently require both
+families. That is not a policy requirement: `exit_lan_plan.go` compiles only
+selected families, and native exit leaves an unselected family ordinary. Before
+integration, create and pin the explicit selected family set, naming links by
+their family rather than slice position. Failure of a selected family must not
+downgrade dual-stack. Route collection currently reads both families and needs
+the same audit; unsupported unselected AF must not fabricate selected evidence.
+Validation: goimports, vet and configured lint (0 issues) passed; full local
+short suite passed (internal/client 136.552 s, CLI 10.278 s). Linux transport
+units require Linux CI, and real netlink/poller behavior remains unqualified.
+The preceding pinning commit `075d5b1` passed all three short CI platforms
+([run 35636421689](https://github.com/endless-net/client/actions/runs/35636421689)).
+
 LAN pinning increment (2026-09-21): `exit_lan_bpf_pin.go` uses the directory-FD
 OBJ_PIN/GET ABI with fixed bounded relative basenames. It closes the lease,
 rejects any pre-existing pin, creates map/program/IPv4/IPv6 pins exclusively,
@@ -29,8 +56,8 @@ then reopens each pin and compares its kernel identity with the held original
 object. Failure returns successfully created names and leaves partial pins
 closed for recovery; it never unlinks or replaces existing objects. Close
 releases descriptors without unpinning. This is not startup recovery: persistent
-ownership records, adopting a previous process's objects and validating live
-hooks are still required before native LAN can open.
+ownership records, adopting a previous process's objects and integrating the
+live-hook readback above are still required before native LAN can open.
 `exit_lan_bpf_directory_linux.go` opens the fixed bpffs path one directory at a
 time with O_NOFOLLOW, checks root ownership, safe parent modes, exact 0700 for
 the owned directory and BPF_FS_MAGIC. It creates only a missing owned directory;
@@ -53,7 +80,7 @@ created links; duplicate attachment is rejected. Preparation Close releases
 owned link FDs before program/map FDs and does not issue explicit detach.
 These are object identities, not live-hook receipts: metadata remains after
 detach. Link pins are now created by the pinning primitive above; current-netns
-hook dump and adapter integration are still missing. No LAN capability is
+hook dump is implemented separately, but adapter integration is still missing. No LAN capability is
 enabled by either private primitive.
 ABI and detach semantics were checked against
 [Linux UAPI](https://raw.githubusercontent.com/torvalds/linux/v6.12/include/uapi/linux/bpf.h)

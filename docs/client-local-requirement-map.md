@@ -48,6 +48,17 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+Hook dump assertions: `TestExitLANHookDumpExactIdentityAndCompletion` checks
+LE/BE requests and exact BPF evidence alongside ordinary/nft hooks, waiting for
+DONE. `TestExitLANHookDumpRejectsIncompleteAndDuplicateEvidence`,
+`TestExitLANHookDumpRejectsMalformedAndLostData` and
+`TestExitLANHookDumpWorkBounds` reject incomplete, duplicate, interrupted,
+malformed and over-budget observations. Linux collector units inject transport
+for successful completion, missing DONE, sender/truncation/receive failures,
+pre/late cancellation, blocked receive and setup cleanup. Native sender tests
+separately reject nonkernel PID, groups and wrong sockaddr family. These units
+do not prove real socket/poller behavior or atomic two-family attachment.
+
 `TestExitLANBPFPinsRetainExactObjectsAfterClose` checks FD-relative pin/get
 encoding, both byte orders, reopened identity and pin references after Close
 using a fake kernel. `TestExitLANBPFPinFailurePreservesClosedPartialOwnership`

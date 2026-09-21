@@ -52,6 +52,11 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+LAN hook increment: добавлен native netlink dump с проверкой kernel sender,
+полного завершения и точного BPF program/family/hook/priority. Потеря сообщений,
+прерванный dump, повторные совпадения и отмена не дают подтверждения. Это readback
+на момент запроса, пока без интеграции в LAN adapter и без нативной приёмки.
+
 LAN pin increment: добавлены exclusive pins карты, программы и обеих links
 относительно открытого bpffs-каталога, повторное открытие и сверка object ID.
 Частичные pins сохраняются закрытыми; чужие объекты не заменяются/не удаляются.
