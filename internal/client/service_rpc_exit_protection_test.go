@@ -74,7 +74,7 @@ func TestExitReleaseLateContextRetainsOwnershipForExplicitClear(t *testing.T) {
 		if name != original.InterfaceName || table != original.RouteTable {
 			t.Fatal("restart changed ownership scope")
 		}
-		return newLinuxExitGuard(name, 51820, func(context.Context, string, string, ...string) ([]byte, error) { contained++; return nil, nil })
+		return newLinuxExitGuard(name, 51820, exitGuardReadbackRunner(t, name, 51820, func(context.Context, string, string, ...string) ([]byte, error) { contained++; return nil, nil }))
 	}); err != nil {
 		t.Fatal(err)
 	}

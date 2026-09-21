@@ -55,6 +55,10 @@ func (g *linuxExitGuard) OpenTunnel(ctx context.Context) error {
 }
 
 func (g *linuxExitGuard) replace(ctx context.Context, tunnel bool) error {
+	return g.apply(ctx, g.rulesBatch(tunnel), tunnel, false)
+}
+
+func (g *linuxExitGuard) rulesBatch(tunnel bool) string {
 	// Recreate the exclusively owned table in one netlink transaction. Flushing
 	// rules alone would retain old chain hooks and table flags after restart.
 	// The initial idempotent add also permits first use when the table is absent.
@@ -76,18 +80,34 @@ func (g *linuxExitGuard) replace(ctx context.Context, tunnel bool) error {
 		fmt.Fprintf(&b, "add rule inet %s output oifname %q accept\n", g.table, g.interfaceName)
 	}
 	// Forwarding remains closed: this guard does not implement an exit provider.
-	return g.apply(ctx, b.String())
+	return b.String()
 }
 
 func (g *linuxExitGuard) Release(ctx context.Context) error {
 	// Creating an absent table and deleting it in the same transaction makes
 	// crash/restart cleanup idempotent without parsing localized command errors.
-	return g.apply(ctx, fmt.Sprintf("add table inet %s\ndelete table inet %s\n", g.table, g.table))
+	return g.apply(ctx, fmt.Sprintf("add table inet %s\ndelete table inet %s\n", g.table, g.table), false, true)
 }
 
-func (g *linuxExitGuard) apply(ctx context.Context, batch string) error {
+func (g *linuxExitGuard) apply(ctx context.Context, batch string, tunnel, release bool) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	err := g.applyObserved(ctx, batch, tunnel, release)
+	if err != nil && (tunnel || release) {
+		// Either transaction could have opened traffic before cancellation or a
+		// failed readback. Restore closed protection with a separately bounded
+		// context; never turn an ambiguous result into success.
+		recovery, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		return errors.Join(err, g.applyObserved(recovery, g.rulesBatch(false), false, false))
+	}
+	return err
+}
+
+func (g *linuxExitGuard) applyObserved(ctx context.Context, batch string, tunnel, release bool) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
@@ -102,5 +122,24 @@ func (g *linuxExitGuard) apply(ctx context.Context, batch string) error {
 		// operation and guard on any error; neither absence nor cleanup is inferred.
 		return errors.New("exit guard transaction failed")
 	}
-	return nil
+	var raw []byte
+	if release {
+		raw, err = g.run(ctx, "", "nft", "-j", "-n", "list", "tables")
+	} else {
+		raw, err = g.run(ctx, "", "nft", "-j", "-n", "list", "table", "inet", g.table)
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil {
+		return errors.New("exit guard readback failed")
+	}
+	if release {
+		if !exitGuardTableAbsent(raw, g.table) {
+			return errors.New("exit guard release is not confirmed")
+		}
+	} else if !exitGuardRulesObserved(raw, g.table, g.interfaceName, g.mark, tunnel) {
+		return errors.New("exit guard enforcement is not confirmed")
+	}
+	return ctx.Err()
 }

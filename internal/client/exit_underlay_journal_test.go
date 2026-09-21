@@ -61,7 +61,7 @@ func TestFirstExitRecoveryRequiresBoundRunningJournal(t *testing.T) {
 				t.Fatal("unrestored exit journal entered ordinary runtime configuration")
 			}
 			calls := 0
-			guard, err := newLinuxExitGuard("endlessnet", 51999, func(context.Context, string, string, ...string) ([]byte, error) { calls++; return nil, nil })
+			guard, err := newLinuxExitGuard("endlessnet", 51999, exitGuardReadbackRunner(t, "endlessnet", 51999, func(context.Context, string, string, ...string) ([]byte, error) { calls++; return nil, nil }))
 			if err != nil {
 				t.Fatal(err)
 			}

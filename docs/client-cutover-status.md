@@ -8,6 +8,12 @@ adapter/worker всё ещё требуется. Для resources добавле
 доступность ресурсов. Удалён неиспользуемый HTTP/1 server helper; CI concurrency
 разделяет short push и manual qualification и отменяет устаревшие однотипные runs.
 
+Следующий increment от 2026-09-21 добавляет строгий readback nft после установки
+и удаления защиты, а также ограниченную повторную блокировку при неоднозначном
+Open/Release. Проверяются собственные цепочки, policy/drop, exemptions и TUN
+gate; отсутствие таблицы подтверждается успешным чтением. Production adapter,
+ongoing invalidation и реальные platform evidence по-прежнему не завершены.
+
 Полная цель не завершена. Релиз v0.6.0 опубликован, но публикация не является
 приёмкой всех требований BA/SA. Текущие изменения после релиза находятся в main.
 
@@ -41,16 +47,15 @@ adapter/worker всё ещё требуется. Для resources добавле
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: cmd/endlessnet-client 10.300 s; internal/client
-в итоговом запуске cached после успешного запуска 100.390 s.
+и `go test -short ./...`: cmd/endlessnet-client 10.454 s; internal/client
+97.614 s в итоговом запуске с firewall readback.
 Локальные native/E2E/installer проверки не запускались.
 
 1. Завершить native exit Apply/Clear/Contain и recovery; связать его с агентом
-   только после реализации необходимых эффектов и наблюдений. Ближайший шаг:
-   readback собственной nft table (hooks, priorities, drop policy, точные
-   exemptions и TUN accept), затем проверенный pre-exit DNS и native executor.
-   Успех команды установки firewall сам по себе не доказывает его состояние;
-   после Apply требуется invalidation при потере правил или маршрутов.
+   только после реализации необходимых эффектов и наблюдений. После добавленного
+   nft readback нужны проверенный pre-exit DNS и native executor. Точный combined
+   IPv6 ND readback остаётся предметом native qualification; после Apply требуется
+   invalidation при потере правил или маршрутов.
 2. Довести resources, preferences/lifecycle и переключение сетей до реальных
    эффектов с положительными и отрицательными unit assertions.
 3. Закрыть session/enrollment/trust/diagnostics audit и определить distribution

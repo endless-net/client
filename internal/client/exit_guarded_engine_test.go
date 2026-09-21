@@ -74,7 +74,7 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 			if scenario == "wrong_interface" {
 				guardName = "other-tun"
 			}
-			guard, err := newLinuxExitGuard(guardName, 51820, func(_ context.Context, batch, command string, args ...string) ([]byte, error) {
+			guard, err := newLinuxExitGuard(guardName, 51820, exitGuardReadbackRunner(t, guardName, 51820, func(_ context.Context, batch, command string, args ...string) ([]byte, error) {
 				if command == "ip" {
 					if args[0] == "-6" || (args[0] == "-j" && args[2] == "-6") {
 						if scenario == "disabled_family_remains" {
@@ -109,7 +109,7 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 					t.Error("TUN opened before engine/filter commit")
 				}
 				return nil, nil
-			})
+			}))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -163,7 +163,7 @@ func TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease(t *testing.T
 	var observationFailure bool
 	var remainingRoutes bool
 	var remainingRules bool
-	guard, err := newLinuxExitGuard("endlessnet", 51820, func(_ context.Context, batch, name string, args ...string) ([]byte, error) {
+	guard, err := newLinuxExitGuard("endlessnet", 51820, exitGuardReadbackRunner(t, "endlessnet", 51820, func(_ context.Context, batch, name string, args ...string) ([]byte, error) {
 		if name == "ip" {
 			if remainingRules && strings.Contains(strings.Join(args, " "), "rule show") {
 				return []byte(`[{"priority":32764,"table":"51820","suppress_prefixlen":0}]`), nil
@@ -188,7 +188,7 @@ func TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease(t *testing.T
 			released = false
 		}
 		return nil, nil
-	})
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}

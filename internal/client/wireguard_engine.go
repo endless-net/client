@@ -253,7 +253,8 @@ func (e *WireGuardEngine) releaseClearedExit(ctx context.Context, guard *linuxEx
 		return errors.New("exit clear still has OS policy rules")
 	}
 	if err := guard.Release(ctx); err != nil {
-		return errors.Join(err, guard.Contain(context.WithoutCancel(ctx)))
+		// Release owns bounded recontainment after ambiguous native effects.
+		return err
 	}
 	e.exitGuard = nil
 	e.exitRestoreConfig = Config{}

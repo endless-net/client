@@ -17,7 +17,7 @@ func TestExitUnderlayRestoreBindsOnlyAfterContainment(t *testing.T) {
 			defer cancel()
 			fail, cancelContain := scenario == "failure", scenario == "cancellation"
 			calls := 0
-			guard, err := newLinuxExitGuard("endlessnet", 51820, func(_ context.Context, batch, _ string, _ ...string) ([]byte, error) {
+			guard, err := newLinuxExitGuard("endlessnet", 51820, exitGuardReadbackRunner(t, "endlessnet", 51820, func(_ context.Context, batch, _ string, _ ...string) ([]byte, error) {
 				calls++
 				if engine.exitConfig.NodeID != "" {
 					t.Error("control identity bound before containment completed")
@@ -32,7 +32,7 @@ func TestExitUnderlayRestoreBindsOnlyAfterContainment(t *testing.T) {
 					return nil, errors.New("injected containment failure")
 				}
 				return nil, nil
-			})
+			}))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -86,13 +86,13 @@ func TestExitRecoveryRetainsTableBindingAcrossRetry(t *testing.T) {
 			cfg.ExitSelection.RouteTable = cfg.WireGuardRouteTable
 			engine := &WireGuardEngine{}
 			calls := 0
-			guard, err := newLinuxExitGuard("endlessnet", 51999, func(context.Context, string, string, ...string) ([]byte, error) {
+			guard, err := newLinuxExitGuard("endlessnet", 51999, exitGuardReadbackRunner(t, "endlessnet", 51999, func(context.Context, string, string, ...string) ([]byte, error) {
 				calls++
 				if failed && calls == 1 {
 					return nil, errors.New("containment failed")
 				}
 				return nil, nil
-			})
+			}))
 			if err != nil {
 				t.Fatal(err)
 			}

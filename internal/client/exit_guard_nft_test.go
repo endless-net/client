@@ -24,7 +24,8 @@ func TestLinuxExitGuardAtomicContainmentAndRelease(t *testing.T) {
 		}
 		return nil, nil
 	}
-	guard, err := newLinuxExitGuard("endlessnet", 51820, runner)
+	observedRunner := exitGuardReadbackRunner(t, "endlessnet", 51820, runner)
+	guard, err := newLinuxExitGuard("endlessnet", 51820, observedRunner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +74,7 @@ func TestLinuxExitGuardAtomicContainmentAndRelease(t *testing.T) {
 	}
 	fail = false
 	// No in-memory success flag may suppress kernel reconciliation after restart.
-	reopened, err := newLinuxExitGuard("endlessnet", 51820, runner)
+	reopened, err := newLinuxExitGuard("endlessnet", 51820, observedRunner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,12 +125,12 @@ func TestLinuxExitGuardRejectsUnsafeIdentityAndCancellation(t *testing.T) {
 		t.Fatal("pre-cancelled command had native effects")
 	}
 	ctx, cancel = context.WithCancel(context.Background())
-	guard.run = func(context.Context, string, string, ...string) ([]byte, error) {
+	guard.run = exitGuardReadbackRunner(t, "endlessnet", 51820, func(context.Context, string, string, ...string) ([]byte, error) {
 		calls++
 		cancel()
 		return nil, nil
-	}
-	if !errors.Is(guard.OpenTunnel(ctx), context.Canceled) || calls != 1 {
-		t.Fatal("late cancellation must retain ambiguous effects without cleanup")
+	})
+	if !errors.Is(guard.OpenTunnel(ctx), context.Canceled) || calls != 2 {
+		t.Fatal("late cancellation must restore closed containment")
 	}
 }

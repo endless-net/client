@@ -26,7 +26,7 @@ func TestExitStartupRestoresContainmentBeforeControlAccess(t *testing.T) {
 		if table != "51999" {
 			t.Fatal("startup lost the configured route table")
 		}
-		return newLinuxExitGuard(name, 51999, func(context.Context, string, string, ...string) ([]byte, error) { contained++; return nil, nil })
+		return newLinuxExitGuard(name, 51999, exitGuardReadbackRunner(t, name, 51999, func(context.Context, string, string, ...string) ([]byte, error) { contained++; return nil, nil }))
 	}
 	if err := engine.restoreStartupExit(t.Context(), cfg, create); err != nil {
 		t.Fatal(err)

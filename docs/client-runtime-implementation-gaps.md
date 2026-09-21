@@ -22,6 +22,23 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Firewall observation increment (2026-09-21): `exit_guard_observation.go`
+validates numeric nft JSON after Contain/OpenTunnel, including the owned inet
+table, both drop base chains, exact output exemptions and requested TUN gate.
+Duplicate keys, malformed/oversized JSON, extra objects and widened predicates
+are rejected. Release requires a successful table listing without the owned
+table; command failure is not absence. Ambiguous Open/Release attempts bounded
+containment with an independent cancellation context and still returns failure.
+The engine retains ownership for retry. Stateful runner fixtures and
+`TestExitGuardNativeSuccessRequiresReadbackAndRecoversAmbiguity` cover these
+ordering/error/cancellation branches. The schema was checked against upstream
+[nftables](https://www.netfilter.org/projects/nftables/manpage.html) and its
+[1.1.5 source](https://www.netfilter.org/projects/nftables/files/nftables-1.1.5.tar.xz).
+Only exact additional IPv6 protocol prerequisites are normalized. Combined
+Neighbor Discovery kernel readback, actual packet enforcement and ongoing
+invalidation still require native qualification/implementation; this does not
+enable the production exit worker or close IT-30/US-05.
+
 Release CI scenario migration (2026-09-15): the old HC-036/HC-038 fixtures
 expected a peer's signed default route to activate consumer exit routing without
 SelectExitNode. That contradicts the current no-selection projection. The native
@@ -435,6 +452,21 @@ the reference relay before and after a mark change with an injected socket sette
 Native SO_MARK/routing/firewall evidence, a pre-exit DNS source (including system
 stub forwarding), complete control-plane transport marking and startup restoration remain
 open. These changes do not yet advertise an operational native exit adapter.
+
+The 2026-09-21 DNS source audit confirms that the resolver in
+`underlay_dialer.go` still receives the current system resolver address. A marked
+socket to a local stub does not mark the stub's forwarded query;
+`dnsproxy.go` forwards with ordinary dialers. Marking the whole proxy would
+incorrectly grant user DNS the privileged underlay path. Linux needs a bound
+snapshot of non-Client per-link resolver endpoints and domain/default routing,
+captured before DNS changes, then direct marked resolution only for authorized
+control/relay names. Aggregate resolv.conf loses split-domain/link information.
+Recovery must revalidate the snapshot against current link/DNS state and cancel
+old requests on a source change. The pinned exit grant has no bootstrap DNS
+source; signed network DNS is overlay authority, not underlay evidence.
+Native OS discovery is client-owned; a product-managed bootstrap/DoH/DoT source
+would additionally require producer transport/security semantics. The relevant
+OS contract is [systemd resolve1](https://www.freedesktop.org/software/systemd/man/247/org.freedesktop.resolve1.html).
 
 Startup guard creation now receives `WireGuardRouteTable` and derives its mark
 using the same Linux router selection as route application. This fixes recovery
