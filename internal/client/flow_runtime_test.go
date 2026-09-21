@@ -61,3 +61,30 @@ func TestFlowConfigurationRestartsWorkerAfterStorageFailure(t *testing.T) {
 		}
 	}
 }
+
+func TestFlowDNSReplacementKeepsWorkerAndConsentScope(t *testing.T) {
+	e := &WireGuardEngine{flows: &flowCollector{}}
+	cfg := Config{NodeCredential: "synthetic", ControlPlaneURLs: []string{"https://127.0.0.1:1"}}
+	var network clientapi.RegisterNodeResponse
+	network.Node.ID = "node"
+	e.underlayDNS, _ = testUnderlayDNSCapture(t.Context(), "endlessnet")
+	e.configureFlowLocked(cfg, network)
+	defer func() {
+		if e.flowCancel != nil {
+			e.flowCancel()
+			<-e.flowDone
+		}
+	}()
+	done, scope := e.flowDone, e.flowKey
+	e.flowTransport.mu.RLock()
+	previous := e.flowTransport.client
+	e.flowTransport.mu.RUnlock()
+	e.underlayDNS.Owner = ":1.43"
+	e.configureFlowLocked(cfg, network)
+	e.flowTransport.mu.RLock()
+	replaced := e.flowTransport.client != previous
+	e.flowTransport.mu.RUnlock()
+	if !replaced || e.flowDone != done || e.flowKey != scope || e.flowDNS != underlayDNSSourceIdentity(e.underlayDNS) {
+		t.Fatal("DNS replacement retained old transport or changed consent worker")
+	}
+}

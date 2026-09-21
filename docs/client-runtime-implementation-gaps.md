@@ -22,6 +22,40 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Pre-exit DNS increment (2026-09-21): the Linux source provider reads actual
+systemd-resolved Manager/Link properties and native interface addresses, bound
+to one unique D-Bus owner, and requires two equal observations. It excludes the
+owned Client link and local/stub endpoints, preserves routing domains and link
+scope, and rejects unsupported DNSSEC/DoT instead of downgrading them. Source
+capture after containment is safe from Client stub recursion because the Linux
+router changes only its own link; no stale DNS cache is restored after crash.
+Literal authorized IP endpoints do not require a DNS source.
+
+The marked dialer resolves only exact authorized control/relay names, uses
+longest-domain selection, direct marked UDP/TCP with truncation retry and a
+bound interface index, and never consults the default resolver/hosts/search
+path. Engine capture/recovery, control HTTP, flow transport and relay reuse now
+carry immutable source identity. Source change rejects lookup/connection and
+HTTP pre/post-header checks; relay Ensure stops an invalid source. Flow transport
+replacement retains the same consent/spool worker identity. Application discovery
+and the general DNS proxy do not receive this privileged path.
+
+CNAME-only replies continue through the captured routing domains with cycle and
+depth bounds. A/AAAA queries share a four-second budget; connection attempts
+interleave families, use at most two sockets and a two-second per-attempt bound,
+and close/join losing attempts before returning. The caller retains the total
+deadline. `underlay_connect_test.go` covers cancellation, late success, family
+ordering, source replacement and preservation of socket-mark error identity.
+
+`underlay_dns_source_test.go`, `underlay_dns_resolver_test.go`,
+`underlay_dns_engine_test.go`, control transport and relay recovery tests cover
+these injected boundaries. They do not prove native busctl/SO_MARK/interface
+effects. Continuous invalidation of established connections and the whole HTTP
+body lifetime, encrypted DNS modes, full native adapter and platform acceptance
+remain open. Explicit global DNS has no per-link binding: its marked route must
+also be observed outside the owned tunnel before the native adapter can claim
+pre-exit DNS effectiveness. This increment does not advertise a ready exit worker.
+
 Firewall observation increment (2026-09-21): `exit_guard_observation.go`
 validates numeric nft JSON after Contain/OpenTunnel, including the owned inet
 table, both drop base chains, exact output exemptions and requested TUN gate.

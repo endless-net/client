@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,7 +36,7 @@ func newWireGuardRelayBridge(timeout time.Duration, tlsConfig *tls.Config) *wire
 	return &wireGuardRelayBridge{timeout: timeout, tlsConfig: tlsConfig}
 }
 
-func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.RegisterNodeResponse, wireGuardListenAddr string, mark uint32) error {
+func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.RegisterNodeResponse, wireGuardListenAddr string, mark uint32, source *underlayDNSSource, current func(context.Context) error) error {
 	if b == nil {
 		return nil
 	}
@@ -47,6 +48,15 @@ func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.
 		return errors.New("wireguard-go relay bridge requires a live UDP endpoint")
 	}
 	key := wireGuardRelayBridgeKey(networkMap, wireGuardListenAddr, mark)
+	if mark != 0 {
+		key += "\x00" + underlayDNSSourceIdentity(source)
+		if current != nil {
+			if err := current(ctx); err != nil {
+				b.Stop()
+				return err
+			}
+		}
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.reapLocked()
@@ -60,13 +70,24 @@ func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.
 	bridgeCtx, cancel := context.WithCancel(context.Background())
 	ready := make(chan RelayDataplaneBridgeStatus, 1)
 	done := make(chan error, 1)
+	hosts := make([]string, 0, len(networkMap.Relays))
+	for _, relay := range networkMap.Relays {
+		host, _, err := net.SplitHostPort(relay.Addr)
+		if err != nil {
+			cancel()
+			return errors.New("invalid relay underlay endpoint")
+		}
+		hosts = append(hosts, host)
+	}
+	dialer := markedUnderlayDialer(mark, b.markSocket, source, hosts)
+	dialer.current = current
 	go func() {
 		done <- RunRelayDataplaneBridge(bridgeCtx, RelayDataplaneBridgeOptions{
 			NetworkMap:          networkMap,
 			WireGuardListenAddr: wireGuardListenAddr,
 			Timeout:             b.timeout,
 			TLSConfig:           b.tlsConfig,
-			Dialer:              markedUnderlayDialer(mark, b.markSocket),
+			Dialer:              dialer,
 			Ready: func(status RelayDataplaneBridgeStatus) {
 				select {
 				case ready <- status:

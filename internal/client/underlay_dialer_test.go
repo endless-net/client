@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"runtime"
 	"syscall"
 	"testing"
@@ -35,7 +36,7 @@ func TestMarkedUnderlayCoversTransportAndResolverWithoutFallback(t *testing.T) {
 						return markError
 					}
 					return nil
-				})
+				}, nil, []string{"127.0.0.1"})
 				ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 				defer cancel()
 				var conn net.Conn
@@ -44,14 +45,14 @@ func TestMarkedUnderlayCoversTransportAndResolverWithoutFallback(t *testing.T) {
 				case "transport":
 					conn, err = dialer.DialContext(ctx, "tcp4", tcp.Addr().String())
 				case "dns_tcp":
-					conn, err = dialer.Resolver.Dial(ctx, "tcp4", tcp.Addr().String())
+					conn, err = dialer.resolver.socketDial(ctx, "tcp4", netip.MustParseAddrPort(tcp.Addr().String()), underlayDNSLink{})
 				case "dns_udp":
-					conn, err = dialer.Resolver.Dial(ctx, "udp4", udp.LocalAddr().String())
+					conn, err = dialer.resolver.socketDial(ctx, "udp4", netip.MustParseAddrPort(udp.LocalAddr().String()), underlayDNSLink{})
 				}
 				if conn != nil {
 					defer func() { _ = conn.Close() }()
 				}
-				if calls != 1 || !dialer.Resolver.PreferGo {
+				if calls != 1 || dialer.direct.Control == nil {
 					t.Fatal("underlay bypassed its marked socket path")
 				}
 				if fail {
@@ -70,14 +71,14 @@ func TestUnderlayMarkIsExplicitAndUnsupportedPlatformsRejectIt(t *testing.T) {
 	dialer := markedUnderlayDialer(0, func(syscall.RawConn, uint32) error {
 		t.Fatal("ordinary connection attempted privileged socket marking")
 		return nil
-	})
-	if dialer.Control != nil || dialer.Resolver != nil {
+	}, nil, nil)
+	if dialer.direct.Control != nil || dialer.resolver != nil {
 		t.Fatal("ordinary connections changed resolver or socket policy")
 	}
 	if runtime.GOOS != "linux" {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
-		conn, err := markedUnderlayDialer(51820, nil).DialContext(ctx, "udp4", "127.0.0.1:9")
+		conn, err := markedUnderlayDialer(51820, nil, nil, []string{"127.0.0.1"}).DialContext(ctx, "udp4", "127.0.0.1:9")
 		if conn != nil {
 			_ = conn.Close()
 		}

@@ -12,7 +12,7 @@ func TestExitUnderlayRestoreBindsOnlyAfterContainment(t *testing.T) {
 	for _, scenario := range []string{"success", "failure", "cancellation"} {
 		t.Run(scenario, func(t *testing.T) {
 			cfg := Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic-credential", ControlPlaneURLs: []string{"https://control.example"}, ExitSelection: &ClientExitSelection{ID: "exit", NodeID: "node", NetworkID: "network"}}
-			engine := &WireGuardEngine{}
+			engine := &WireGuardEngine{opts: WireGuardEngineOptions{underlayDNSCapture: testUnderlayDNSCapture}}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			fail, cancelContain := scenario == "failure", scenario == "cancellation"
@@ -84,7 +84,7 @@ func TestExitRecoveryRetainsTableBindingAcrossRetry(t *testing.T) {
 		t.Run(fmt.Sprint(failed), func(t *testing.T) {
 			cfg := Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic", ControlPlaneURLs: []string{"https://control.example"}, WireGuardRouteTable: "51999", ExitSelection: &ClientExitSelection{ID: "exit", NodeID: "node", NetworkID: "network"}}
 			cfg.ExitSelection.RouteTable = cfg.WireGuardRouteTable
-			engine := &WireGuardEngine{}
+			engine := &WireGuardEngine{opts: WireGuardEngineOptions{underlayDNSCapture: testUnderlayDNSCapture}}
 			calls := 0
 			guard, err := newLinuxExitGuard("endlessnet", 51999, exitGuardReadbackRunner(t, "endlessnet", 51999, func(context.Context, string, string, ...string) ([]byte, error) {
 				calls++

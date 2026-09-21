@@ -20,10 +20,14 @@ import (
 
 const DefaultRelayDialTimeout = 2 * time.Second
 
+type ContextDialer interface {
+	DialContext(context.Context, string, string) (net.Conn, error)
+}
+
 type RelayDialOptions struct {
 	Timeout           time.Duration
 	TLSConfig         *tls.Config
-	Dialer            *net.Dialer
+	Dialer            ContextDialer
 	HeartbeatInterval time.Duration
 }
 
@@ -161,7 +165,7 @@ type measuredRelayCandidate struct {
 	err      error
 }
 
-func measureRelayTLSGroup(ctx context.Context, dialer *net.Dialer, endpoints []relay.Endpoint, timeout time.Duration, tlsConfig *tls.Config) []measuredRelayCandidate {
+func measureRelayTLSGroup(ctx context.Context, dialer ContextDialer, endpoints []relay.Endpoint, timeout time.Duration, tlsConfig *tls.Config) []measuredRelayCandidate {
 	results := make(chan struct {
 		index     int
 		candidate measuredRelayCandidate
@@ -244,7 +248,7 @@ func relayRendezvousScore(nodeID, relayID string) uint64 {
 	return binary.BigEndian.Uint64(sum[:8])
 }
 
-func dialTLSRelayEndpoint(ctx context.Context, dialer *net.Dialer, addr string, tlsConfig *tls.Config) (net.Conn, error) {
+func dialTLSRelayEndpoint(ctx context.Context, dialer ContextDialer, addr string, tlsConfig *tls.Config) (net.Conn, error) {
 	cfg := &tls.Config{MinVersion: tls.VersionTLS13}
 	if tlsConfig != nil {
 		cfg = tlsConfig.Clone()

@@ -14,6 +14,13 @@ Open/Release. Проверяются собственные цепочки, poli
 gate; отсутствие таблицы подтверждается успешным чтением. Production adapter,
 ongoing invalidation и реальные platform evidence по-прежнему не завершены.
 
+DNS increment от 2026-09-21: добавлены захват независимого Linux DNS source,
+прямое разрешение разрешённых control/relay имён и передача immutable snapshot
+через engine/transport/recovery. Смена owner, DNS или адресов внешних интерфейсов
+отклоняет старый источник. Работающие соединения и весь lifetime HTTP body ещё
+требуют постоянной invalidation; global DNS route вне TUN и native socket effects
+не подтверждены. DNSSEC/DoT режимы пока отклоняются без downgrade.
+
 Полная цель не завершена. Релиз v0.6.0 опубликован, но публикация не является
 приёмкой всех требований BA/SA. Текущие изменения после релиза находятся в main.
 
@@ -47,15 +54,15 @@ ongoing invalidation и реальные platform evidence по-прежнему
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: cmd/endlessnet-client 10.454 s; internal/client
-97.614 s в итоговом запуске с firewall readback.
+и `go test -short ./...`: internal/client 102.671 s в итоговом запуске
+с DNS source/resolver и параллельным подключением; остальные пакеты прошли.
 Локальные native/E2E/installer проверки не запускались.
 
 1. Завершить native exit Apply/Clear/Contain и recovery; связать его с агентом
-   только после реализации необходимых эффектов и наблюдений. После добавленного
-   nft readback нужны проверенный pre-exit DNS и native executor. Точный combined
-   IPv6 ND readback остаётся предметом native qualification; после Apply требуется
-   invalidation при потере правил или маршрутов.
+   только после реализации необходимых эффектов и наблюдений. После добавленных
+   nft readback и DNS source/dialer нужны полный native executor, DNS route
+   observations и постоянная invalidation соединений/firewall/routes. Точный
+   combined IPv6 ND readback и socket effects остаются предметом native qualification.
 2. Довести resources, preferences/lifecycle и переключение сетей до реальных
    эффектов с положительными и отрицательными unit assertions.
 3. Закрыть session/enrollment/trust/diagnostics audit и определить distribution

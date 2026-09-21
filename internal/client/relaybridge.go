@@ -26,7 +26,7 @@ type RelayDataplaneBridgeOptions struct {
 	WireGuardListenAddr    string
 	Timeout                time.Duration
 	TLSConfig              *tls.Config
-	Dialer                 *net.Dialer
+	Dialer                 ContextDialer
 	HeartbeatInterval      time.Duration
 	Ready                  func(RelayDataplaneBridgeStatus)
 	MaxDatagramPayloadSize int

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -10,16 +11,20 @@ import (
 type controlUnderlayTransport struct {
 	base    *http.Transport
 	origins map[string]struct{}
+	current func(context.Context) error
 }
 
-func newControlUnderlayHTTPClient(origins []string, mark uint32, setMark func(syscall.RawConn, uint32) error) (*http.Client, error) {
+func newControlUnderlayHTTPClient(origins []string, mark uint32, setMark func(syscall.RawConn, uint32) error, source *underlayDNSSource, current func(context.Context) error) (*http.Client, error) {
 	allowed := make(map[string]struct{}, len(origins))
+	hosts := make([]string, 0, len(origins))
 	for _, raw := range origins {
 		origin, err := rpcProfileOrigin(raw)
 		if err != nil {
 			return nil, errors.New("control underlay requires HTTPS origins")
 		}
 		allowed[origin] = struct{}{}
+		u, _ := url.Parse(origin)
+		hosts = append(hosts, u.Hostname())
 	}
 	if len(allowed) == 0 {
 		return nil, errors.New("control underlay has no authorized origin")
@@ -33,9 +38,14 @@ func newControlUnderlayHTTPClient(origins []string, mark uint32, setMark func(sy
 		// TLS-specific hooks bypass DialContext and therefore its socket mark.
 		transport.DialTLSContext = nil
 		transport.DialTLS = nil //nolint:staticcheck // Disable the inherited deprecated hook rather than allowing it to bypass marking.
-		transport.DialContext = markedUnderlayDialer(mark, setMark).DialContext
+		dialer := markedUnderlayDialer(mark, setMark, source, hosts)
+		dialer.current = current
+		transport.DialContext = dialer.DialContext
 	}
-	client.Transport = &controlUnderlayTransport{base: transport, origins: allowed}
+	if mark == 0 {
+		current = nil
+	}
+	client.Transport = &controlUnderlayTransport{base: transport, origins: allowed, current: current}
 	return client, nil
 }
 
@@ -59,7 +69,26 @@ func (t *controlUnderlayTransport) RoundTrip(request *http.Request) (*http.Respo
 		}
 		return nil, errors.New("control underlay request is outside its authorized origins")
 	}
-	return t.base.RoundTrip(request)
+	if t.current != nil {
+		if err := t.current(request.Context()); err != nil {
+			if request.Body != nil {
+				_ = request.Body.Close()
+			}
+			t.base.CloseIdleConnections()
+			return nil, err
+		}
+	}
+	response, err := t.base.RoundTrip(request)
+	if err == nil && t.current != nil {
+		if currentErr := t.current(request.Context()); currentErr != nil {
+			if response != nil && response.Body != nil {
+				_ = response.Body.Close()
+			}
+			t.base.CloseIdleConnections()
+			return nil, currentErr
+		}
+	}
+	return response, err
 }
 
 func (t *controlUnderlayTransport) CloseIdleConnections() {

@@ -39,7 +39,7 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 			guarded := false
 			router := &testWireGuardEngineRouter{}
 			engine, err := NewWireGuardEngine(WireGuardEngineOptions{
-				Interface: "endlessnet", router: router,
+				Interface: "endlessnet", router: router, underlayDNSCapture: testUnderlayDNSCapture,
 				tunFactory: func(string, int) (tun.Device, error) {
 					if guarded && !protected.Load() {
 						t.Error("TUN creation preceded protection")

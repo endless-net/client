@@ -53,7 +53,7 @@ func TestFirstExitRecoveryRequiresBoundRunningJournal(t *testing.T) {
 				t.Fatal(err)
 			}
 			cfg.RPCState.Operations = map[string]clientRPCOperationRecord{"request": record}
-			engine := &WireGuardEngine{}
+			engine := &WireGuardEngine{opts: WireGuardEngineOptions{underlayDNSCapture: testUnderlayDNSCapture}}
 			if control, err := engine.ControlPlaneHTTPClient(cfg); err == nil || control != nil {
 				t.Fatal("unrestored exit journal acquired ordinary transport")
 			}

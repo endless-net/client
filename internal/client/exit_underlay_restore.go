@@ -22,6 +22,7 @@ func (e *WireGuardEngine) restoreClearProtection(ctx context.Context, guard *lin
 	e.exitGuard = guard
 	e.exitConfig = Config{}
 	e.exitRestoreConfig = Config{}
+	e.underlayDNS = nil
 	e.exitSelection = nil
 	if e.exitFilter == nil {
 		e.exitFilter = &exitPacketFilter{}
@@ -67,6 +68,9 @@ func (e *WireGuardEngine) restoreExitUnderlay(ctx context.Context, cfg Config, g
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := e.captureUnderlayDNSLocked(ctx, underlayDNSRequired(cfg, nil)); err != nil {
+		return err
+	}
 	e.exitConfig = clonePersistentConfig(cfg)
 	e.exitRestoreConfig = Config{}
 	return nil
@@ -83,7 +87,7 @@ func (e *WireGuardEngine) validateExitRecoveryAuthority(cfg Config, guard *linux
 	if err := ValidateConfigCurrentDevice(cfg); err != nil {
 		return err
 	}
-	control, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), guard.mark, nil)
+	control, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), guard.mark, nil, nil, nil)
 	if err != nil {
 		return err
 	}

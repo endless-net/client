@@ -21,13 +21,14 @@ func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.Regi
 		case <-e.flowDone:
 			// A terminated worker cannot service a transport replacement.
 		default:
-			if e.flowMark != e.routerCfg.FirewallMark {
-				client, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), e.routerCfg.FirewallMark, nil)
+			if e.flowMark != e.routerCfg.FirewallMark || e.flowDNS != underlayDNSSourceIdentity(e.underlayDNS) {
+				client, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), e.routerCfg.FirewallMark, nil, e.underlayDNS, e.underlayDNSCurrentLocked())
 				if err != nil {
 					return
 				}
 				e.flowTransport.replace(client)
 				e.flowMark = e.routerCfg.FirewallMark
+				e.flowDNS = underlayDNSSourceIdentity(e.underlayDNS)
 			}
 			return
 		}
@@ -42,7 +43,7 @@ func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.Regi
 		e.discardFlowSpoolLocked()
 		return
 	}
-	httpClient, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), e.routerCfg.FirewallMark, nil)
+	httpClient, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), e.routerCfg.FirewallMark, nil, e.underlayDNS, e.underlayDNSCurrentLocked())
 	if err != nil {
 		e.discardFlowSpoolLocked()
 		return
@@ -66,6 +67,7 @@ func (e *WireGuardEngine) configureFlowLocked(cfg Config, network clientapi.Regi
 	e.flowCancel = cancel
 	e.flowKey = key
 	e.flowMark = e.routerCfg.FirewallMark
+	e.flowDNS = underlayDNSSourceIdentity(e.underlayDNS)
 	e.flowTransport = transport
 	e.flowDone = make(chan struct{})
 	done := e.flowDone

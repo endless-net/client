@@ -49,10 +49,11 @@ type WireGuardEngineOptions struct {
 	RelayDirectRetry time.Duration
 	inputRunner      commandInputRunner
 
-	tunFactory    func(string, int) (tun.Device, error)
-	router        wireGuardEngineRouter
-	stageHook     func(wireGuardEngineApplyStage) error
-	setSocketMark func(*net.UDPConn, uint32) error
+	tunFactory         func(string, int) (tun.Device, error)
+	router             wireGuardEngineRouter
+	stageHook          func(wireGuardEngineApplyStage) error
+	setSocketMark      func(*net.UDPConn, uint32) error
+	underlayDNSCapture func(context.Context, string) (*underlayDNSSource, error)
 }
 
 // WireGuardEngine embeds wireguard-go and supplies MagicBind as its UDP
@@ -87,6 +88,7 @@ type WireGuardEngine struct {
 	exitSelection     *ClientExitSelection
 	exitConfig        Config
 	exitRestoreConfig Config
+	underlayDNS       *underlayDNSSource
 	peerACLFilter     *peerACLFilter
 	sharingFilter     *sharingPacketFilter
 	applicationCancel context.CancelFunc
@@ -95,6 +97,7 @@ type WireGuardEngine struct {
 	flowCancel        context.CancelFunc
 	flowKey           string
 	flowMark          uint32
+	flowDNS           string
 	flowTransport     *rotatingControlClient
 	flowDone          chan struct{}
 }
@@ -257,6 +260,7 @@ func (e *WireGuardEngine) releaseClearedExit(ctx context.Context, guard *linuxEx
 		return err
 	}
 	e.exitGuard = nil
+	e.underlayDNS = nil
 	e.exitRestoreConfig = Config{}
 	e.exitSelection = nil
 	e.exitFilter = nil
@@ -275,6 +279,9 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 		}
 		e.exitFilter.withdraw()
 		if err := guard.Contain(ctx); err != nil {
+			return WireGuardApplyResult{}, err
+		}
+		if err := e.captureUnderlayDNSLocked(ctx, underlayDNSRequired(cfg, &networkMap)); err != nil {
 			return WireGuardApplyResult{}, err
 		}
 		// Existing ordinary TUN wrappers do not contain an exit filter. Replace
@@ -880,7 +887,7 @@ func (e *WireGuardEngine) restoreRelayBridgeLocked(previous wireGuardEngineSnaps
 	if e.bind == nil {
 		return errors.New("restore wireguard-go relay bridge: UDP bind is unavailable")
 	}
-	if err := e.relayBridge.Ensure(context.Background(), previous.pathMap, e.bind.LoopbackEndpoint(), previous.routerCfg.FirewallMark); err != nil {
+	if err := e.relayBridge.Ensure(context.Background(), previous.pathMap, e.bind.LoopbackEndpoint(), previous.routerCfg.FirewallMark, e.underlayDNS, e.underlayDNSCurrentLocked()); err != nil {
 		return fmt.Errorf("restore wireguard-go relay bridge: %w", err)
 	}
 	return nil
@@ -1318,7 +1325,7 @@ func (e *WireGuardEngine) relayEndpointOverridesLocked(ctx context.Context, netw
 	if e.relayBridge == nil || e.relayPaths == nil || e.bind == nil {
 		return nil, RelayDialResult{}, nil
 	}
-	if err := e.relayBridge.Ensure(ctx, networkMap, e.bind.LoopbackEndpoint(), mark); err != nil {
+	if err := e.relayBridge.Ensure(ctx, networkMap, e.bind.LoopbackEndpoint(), mark, e.underlayDNS, e.underlayDNSCurrentLocked()); err != nil {
 		log.Printf("wireguard-go relay bridge unavailable: %v", err)
 		return nil, RelayDialResult{}, err
 	}

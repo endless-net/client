@@ -10,7 +10,7 @@ import (
 )
 
 func TestExitStartupRestoresContainmentBeforeControlAccess(t *testing.T) {
-	engine, err := NewWireGuardEngine(WireGuardEngineOptions{Interface: "endlessnet"})
+	engine, err := NewWireGuardEngine(WireGuardEngineOptions{Interface: "endlessnet", underlayDNSCapture: testUnderlayDNSCapture})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestExitStartupRestoresContainmentBeforeControlAccess(t *testing.T) {
 		t.Fatal("startup retry replaced guard ownership")
 	}
 	// No operation journal remains for a completed selection.
-	fresh, err := NewWireGuardEngine(WireGuardEngineOptions{Interface: "endlessnet"})
+	fresh, err := NewWireGuardEngine(WireGuardEngineOptions{Interface: "endlessnet", underlayDNSCapture: testUnderlayDNSCapture})
 	if err != nil {
 		t.Fatal(err)
 	}

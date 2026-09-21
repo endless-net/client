@@ -41,7 +41,7 @@ func (e *WireGuardEngine) configureApplicationsLocked(cfg Config, m clientapi.Re
 	if !selected {
 		return
 	}
-	httpClient, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), e.routerCfg.FirewallMark, nil)
+	httpClient, err := newControlUnderlayHTTPClient(cfg.ControlURLs(), e.routerCfg.FirewallMark, nil, e.underlayDNS, e.underlayDNSCurrentLocked())
 	if err != nil {
 		return
 	}

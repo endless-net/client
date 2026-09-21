@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"net"
 	"sync/atomic"
 	"syscall"
@@ -45,7 +46,7 @@ func TestWireGuardRelayReplacesConnectionsWhenUnderlayMarkChanges(t *testing.T) 
 	}
 	for _, mark := range []uint32{51820, 51821} {
 		before, _, _ := server.Counts()
-		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), mark); err != nil {
+		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), mark, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 		after, _, _ := server.Counts()
@@ -53,9 +54,30 @@ func TestWireGuardRelayReplacesConnectionsWhenUnderlayMarkChanges(t *testing.T) 
 			t.Fatal("relay retained a connection with the previous socket policy")
 		}
 		calls := marked.Load()
-		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), mark); err != nil || marked.Load() != calls {
+		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), mark, nil, nil); err != nil || marked.Load() != calls {
 			t.Fatal("unchanged relay policy unnecessarily reconnected", err)
 		}
+	}
+	source, _ := testUnderlayDNSCapture(t.Context(), "endlessnet")
+	for _, owner := range []string{":1.42", ":1.43"} {
+		source.Owner = owner
+		before, _, _ := server.Counts()
+		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), 51821, source, nil); err != nil {
+			t.Fatal(err)
+		}
+		after, _, _ := server.Counts()
+		if after <= before {
+			t.Fatal("same-mark DNS source replacement retained previous relay")
+		}
+	}
+	if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), 51821, source, func(context.Context) error { return errors.New("source changed") }); err == nil {
+		t.Fatal("stale relay source accepted")
+	}
+	bridge.mu.Lock()
+	running := bridge.cancel != nil
+	bridge.mu.Unlock()
+	if running {
+		t.Fatal("stale source retained old relay worker")
 	}
 }
 

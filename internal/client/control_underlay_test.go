@@ -23,7 +23,7 @@ func (b *controlUnderlayBody) Close() error           { b.closed = true; return 
 
 func TestControlUnderlayRejectsUnauthorizedRequestsBeforeDial(t *testing.T) {
 	origins := []string{"https://control.example"}
-	client, err := newControlUnderlayHTTPClient(origins, 51820, nil)
+	client, err := newControlUnderlayHTTPClient(origins, 51820, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestControlUnderlayUsesMarkedTLSAndDoesNotFollowRedirects(t *testing.T) {
 		}
 		marks.Add(1)
 		return nil
-	})
+	}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestControlUnderlayMarkFailureHasNoFallback(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { requests.Add(1) }))
 	defer server.Close()
 	markErr := errors.New("mark rejected")
-	client, err := newControlUnderlayHTTPClient([]string{server.URL}, 51820, func(syscall.RawConn, uint32) error { return markErr })
+	client, err := newControlUnderlayHTTPClient([]string{server.URL}, 51820, func(syscall.RawConn, uint32) error { return markErr }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,9 +132,42 @@ func TestControlUnderlayMarkFailureHasNoFallback(t *testing.T) {
 
 func TestControlUnderlayRequiresValidOrigins(t *testing.T) {
 	for _, origins := range [][]string{nil, {"http://control.example"}, {"https://control.example/path"}, {"https://control.example", "https://other.example?query"}} {
-		client, err := newControlUnderlayHTTPClient(origins, 0, nil)
+		client, err := newControlUnderlayHTTPClient(origins, 0, nil, nil, nil)
 		if err == nil || client != nil {
 			t.Fatalf("accepted invalid origins: %v", origins)
+		}
+	}
+}
+
+func TestControlUnderlayRejectsDNSChangeBeforeRequestAndAfterResponse(t *testing.T) {
+	for _, before := range []bool{false, true} {
+		var changed atomic.Bool
+		changed.Store(before)
+		var requests atomic.Int32
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requests.Add(1)
+			changed.Store(true)
+			_, _ = w.Write([]byte("late result"))
+		}))
+		current := func(context.Context) error {
+			if changed.Load() {
+				return errors.New("source changed")
+			}
+			return nil
+		}
+		client, err := newControlUnderlayHTTPClient([]string{server.URL}, 51820, func(syscall.RawConn, uint32) error { return nil }, nil, current)
+		if err != nil {
+			server.Close()
+			t.Fatal(err)
+		}
+		pool := x509.NewCertPool()
+		pool.AddCert(server.Certificate())
+		client.Transport.(*controlUnderlayTransport).base.TLSClientConfig.RootCAs = pool
+		response, err := client.Get(server.URL)
+		client.CloseIdleConnections()
+		server.Close()
+		if err == nil || response != nil || (before && requests.Load() != 0) || (!before && requests.Load() != 1) {
+			t.Fatal("changed DNS source accepted request/result", err, requests.Load())
 		}
 	}
 }
