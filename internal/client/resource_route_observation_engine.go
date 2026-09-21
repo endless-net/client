@@ -28,6 +28,8 @@ type ResourceHostObservation struct {
 	observedAt    time.Time
 	expires       time.Time
 	hosts         map[string]bool
+	relayBridge   *wireGuardRelayBridge
+	relays        []wireGuardRelayPeerObservation
 }
 
 func (o *ResourceHostObservation) HostConfirmed(id string) bool { return o != nil && o.hosts[id] }
@@ -59,6 +61,16 @@ func (o *ResourceHostObservation) Current(cfg Config, now time.Time) bool {
 	defer e.mu.Unlock()
 	if !e.configured || e.runtimeSuspended || e.device != o.device || e.relayPaths != o.pathManager || sha256.Sum256([]byte(e.uapi)) != o.uapi || resourceObservationPaths(e) != o.paths || cfg.CachedMap == nil || e.runtimeIdentity != nativeExitAppliedIdentity(cfg, *cfg.CachedMap, e.interface_) || !resourceHostExitFilterCurrent(e, cfg, now) {
 		return false
+	}
+	if len(o.relays) != 0 {
+		if e.relayBridge != o.relayBridge || e.relayBridge == nil {
+			return false
+		}
+		for _, relay := range o.relays {
+			if !e.relayBridge.ObservationCurrent(relay) {
+				return false
+			}
+		}
 	}
 	eligible, err := resourceHostFilterEligibility(e, cfg, now)
 	if err != nil {
@@ -147,8 +159,20 @@ func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context
 			continue
 		}
 		live, ok := wireGuardPeerForMapPeer(inspection, peer)
-		if !ok || !resourceHostPathObserved(paths, peer.ID, live, now) {
+		if !ok {
 			continue
+		}
+		var relayProof wireGuardRelayPeerObservation
+		relayConfirmed := false
+		if !resourceHostPathObserved(paths, peer.ID, live, now) {
+			if e.relayBridge == nil {
+				continue
+			}
+			relayProof, ok = e.relayBridge.ObservePeer(*cfg.CachedMap, peer.ID)
+			if !ok || !resourceHostRelayPathObserved(paths, peer, live, relayProof, now) {
+				continue
+			}
+			relayConfirmed = true
 		}
 		addresses := []netip.Addr{}
 		for _, raw := range peer.AllowedIPs {
@@ -180,7 +204,12 @@ func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context
 		}
 		if confirmed {
 			proof.hosts[rpcResourceID(ipc.ResourceKind_RESOURCE_KIND_HOST, peer.ID)] = true
-			expires := time.Unix(live.LatestHandshakeUnix, 0).Add(device.RejectAfterTime)
+			if relayConfirmed {
+				proof.relayBridge = e.relayBridge
+				proof.relays = append(proof.relays, relayProof)
+			}
+			handshake, _ := live.authenticatedHandshakeTime()
+			expires := handshake.Add(device.RejectAfterTime)
 			if expires.Before(proof.expires) {
 				proof.expires = expires
 			}
@@ -216,6 +245,11 @@ func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context
 	if _, err := resourceObservedUAPI(e); err != nil {
 		return nil, err
 	}
+	for _, relay := range proof.relays {
+		if !e.relayBridge.ObservationCurrent(relay) {
+			return nil, errResourceHostObservation
+		}
+	}
 	return proof, nil
 }
 
@@ -236,16 +270,19 @@ func resourceHostExitFilterCurrent(e *WireGuardEngine, cfg Config, now time.Time
 }
 
 func resourceHostPathObserved(paths []PeerPathStatus, id string, peer WireGuardPeerInspection, now time.Time) bool {
-	handshake := time.Unix(peer.LatestHandshakeUnix, 0)
-	if peer.LatestHandshakeUnix <= 0 || handshake.After(now) || !now.Before(handshake.Add(device.RejectAfterTime)) {
+	handshake, complete := peer.authenticatedHandshakeTime()
+	if !complete || handshake.After(now) || !now.Before(handshake.Add(device.RejectAfterTime)) {
 		return false
 	}
 	for _, path := range paths {
 		if path.PeerID != id || path.SelectedEndpoint == "" || path.SelectedEndpoint != peer.Endpoint {
 			continue
 		}
-		// Relay status names the external relay, while UAPI points to the local
-		// bridge. That relationship needs separate evidence; leave it unknown.
+		transition, err := time.Parse(time.RFC3339Nano, path.LastTransitionAt)
+		if err != nil || !handshake.After(transition) {
+			continue
+		}
+		// Relay proof uses the separate bridge-generation binding above.
 		if path.SelectedPath == "direct" {
 			for _, candidate := range append([]PathCandidateStatus{path.Direct}, path.Candidates...) {
 				checked, err := time.Parse(time.RFC3339Nano, candidate.CheckedAt)

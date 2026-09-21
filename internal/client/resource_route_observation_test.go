@@ -74,12 +74,12 @@ func TestResourceHostRouteCommandIsUnforcedAndCancellable(t *testing.T) {
 
 func TestResourceHostPathRequiresFreshAuthenticatedDirectEvidence(t *testing.T) {
 	now := time.Now().UTC()
-	peer := WireGuardPeerInspection{Endpoint: "192.0.2.1:51820", LatestHandshakeUnix: now.Unix()}
-	path := PeerPathStatus{PeerID: "peer", SelectedPath: "direct", SelectedEndpoint: peer.Endpoint, Direct: PathCandidateStatus{Endpoint: peer.Endpoint, State: "reachable", CheckedAt: now.Format(time.RFC3339Nano)}}
+	peer := WireGuardPeerInspection{Endpoint: "192.0.2.1:51820", LatestHandshakeUnix: now.Unix(), latestHandshakeNanos: int64(now.Nanosecond()), handshakeTimeComplete: true}
+	path := PeerPathStatus{PeerID: "peer", SelectedPath: "direct", LastTransitionAt: now.Add(-time.Second).Format(time.RFC3339Nano), SelectedEndpoint: peer.Endpoint, Direct: PathCandidateStatus{Endpoint: peer.Endpoint, State: "reachable", CheckedAt: now.Format(time.RFC3339Nano)}}
 	if !resourceHostPathObserved([]PeerPathStatus{path}, "peer", peer, now) {
 		t.Fatal("fresh direct path rejected")
 	}
-	for _, scenario := range []string{"old_handshake", "future_handshake", "old_probe", "endpoint", "relay"} {
+	for _, scenario := range []string{"old_handshake", "future_handshake", "old_probe", "endpoint", "relay", "missing_transition", "handshake_before_transition", "incomplete_handshake"} {
 		t.Run(scenario, func(t *testing.T) {
 			p, s := peer, path
 			switch scenario {
@@ -94,6 +94,12 @@ func TestResourceHostPathRequiresFreshAuthenticatedDirectEvidence(t *testing.T) 
 			case "relay":
 				s.SelectedPath = "relay"
 				s.Relay.State = "reachable"
+			case "missing_transition":
+				s.LastTransitionAt = ""
+			case "handshake_before_transition":
+				s.LastTransitionAt = now.Add(time.Nanosecond).Format(time.RFC3339Nano)
+			case "incomplete_handshake":
+				p.handshakeTimeComplete = false
 			}
 			if resourceHostPathObserved([]PeerPathStatus{s}, "peer", p, now) {
 				t.Fatal("unsupported or stale path accepted")
@@ -223,7 +229,7 @@ func TestResourceHostCollectorBindsNativeRulesRoutesAndPeerPath(t *testing.T) {
 				e.mu.Unlock()
 				t.Fatal("missing fixture peer")
 			}
-			e.relayPaths.statuses = []PeerPathStatus{{PeerID: mapPeer.ID, SelectedPath: "direct", SelectedEndpoint: live.Endpoint, Direct: PathCandidateStatus{Endpoint: live.Endpoint, State: "reachable", CheckedAt: now.Format(time.RFC3339Nano)}}}
+			e.relayPaths.statuses = []PeerPathStatus{{PeerID: mapPeer.ID, SelectedPath: "direct", LastTransitionAt: now.Add(-time.Second).Format(time.RFC3339Nano), SelectedEndpoint: live.Endpoint, Direct: PathCandidateStatus{Endpoint: live.Endpoint, State: "reachable", CheckedAt: now.Format(time.RFC3339Nano)}}}
 			iface, local := e.interface_, e.routerCfg.Addresses[0].Addr().String()
 			e.mu.Unlock()
 			if scenario == "wrong_owner" {
@@ -261,6 +267,8 @@ func TestResourceHostCollectorBindsNativeRulesRoutesAndPeerPath(t *testing.T) {
 				value, err := resourceObservedUAPI(engine)
 				for i := range value.Peers {
 					value.Peers[i].LatestHandshakeUnix = now.Unix()
+					value.Peers[i].latestHandshakeNanos = int64(now.Nanosecond())
+					value.Peers[i].handshakeTimeComplete = true
 				}
 				return value, err
 			}

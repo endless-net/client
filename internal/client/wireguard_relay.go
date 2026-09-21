@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ type wireGuardRelayBridge struct {
 	lastErr    error
 	cancel     context.CancelFunc
 	done       chan error
+	generation *wireGuardRelayGeneration
 	markSocket func(syscall.RawConn, uint32) error // configured before use; nil uses the native setter
 }
 
@@ -71,6 +73,7 @@ func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.
 	bridgeCtx, cancel := context.WithCancel(context.Background())
 	ready := make(chan RelayDataplaneBridgeStatus, 1)
 	done := make(chan error, 1)
+	generation := newWireGuardRelayGeneration(networkMap)
 	hosts := make([]string, 0, len(networkMap.Relays))
 	for _, relay := range networkMap.Relays {
 		host, _, err := net.SplitHostPort(relay.Addr)
@@ -84,6 +87,7 @@ func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.
 	dialer.current = current
 	dialer.lease = lease
 	go func() {
+		defer close(generation.ended)
 		done <- RunRelayDataplaneBridge(bridgeCtx, RelayDataplaneBridgeOptions{
 			NetworkMap:          networkMap,
 			WireGuardListenAddr: wireGuardListenAddr,
@@ -106,13 +110,19 @@ func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.
 	defer timer.Stop()
 	select {
 	case status := <-ready:
+		if ctx.Err() != nil {
+			cancel()
+			return ctx.Err()
+		}
 		b.key = key
 		b.lease = lease
-		b.status = status
+		b.status = cloneWireGuardRelayStatus(status)
 		b.statusOK = true
 		b.lastErr = nil
 		b.cancel = cancel
 		b.done = done
+		generation.readyAt = time.Now().UTC()
+		b.generation = generation
 		return nil
 	case err := <-done:
 		cancel()
@@ -152,7 +162,7 @@ func (b *wireGuardRelayBridge) Status() (RelayDataplaneBridgeStatus, bool, error
 	if b.cancel == nil || !b.statusOK {
 		return RelayDataplaneBridgeStatus{}, false, b.lastErr
 	}
-	return b.status, true, nil
+	return cloneWireGuardRelayStatus(b.status), true, nil
 }
 
 func (b *wireGuardRelayBridge) reapLocked() {
@@ -166,6 +176,7 @@ func (b *wireGuardRelayBridge) reapLocked() {
 		}
 		b.cancel = nil
 		b.done = nil
+		b.generation = nil
 		b.key = ""
 		b.lease = nil
 		b.status = RelayDataplaneBridgeStatus{}
@@ -183,6 +194,7 @@ func (b *wireGuardRelayBridge) stopLocked() {
 	done := b.done
 	b.cancel = nil
 	b.done = nil
+	b.generation = nil
 	b.key = ""
 	b.lease = nil
 	b.status = RelayDataplaneBridgeStatus{}
@@ -205,17 +217,154 @@ func wireGuardRelayBridgeKey(networkMap clientapi.RegisterNodeResponse, wireGuar
 	parts := []string{
 		strings.TrimSpace(networkMap.Network.ID),
 		strconv.FormatUint(networkMap.Network.Revision, 10),
+		strconv.FormatUint(networkMap.Revision.Global, 10),
 		strings.TrimSpace(networkMap.Node.ID),
+		networkMap.Node.PublicKey,
 		strings.TrimSpace(wireGuardListenAddr),
 		strconv.FormatUint(uint64(mark), 10),
+	}
+	if networkMap.MapSignature != nil {
+		parts = append(parts, networkMap.MapSignature.PayloadHash)
 	}
 	for _, relay := range networkMap.Relays {
 		parts = append(parts, strings.TrimSpace(relay.ID), strings.TrimSpace(relay.Addr), strings.TrimSpace(relay.Protocol))
 	}
 	for _, peer := range networkMap.Peers {
-		parts = append(parts, strings.TrimSpace(peer.ID), strings.TrimSpace(peer.Hostname))
+		parts = append(parts, strings.TrimSpace(peer.ID), strings.TrimSpace(peer.Hostname), peer.PublicKey, peer.NetworkID)
 	}
 	return strings.Join(parts, "\x00")
+}
+
+// Private immutable evidence of the bridge that owns a peer's local UDP port.
+// It is not a connectivity proof: callers must also observe a newer WireGuard
+// handshake, the selected runtime path, and their current signed map authority.
+type wireGuardRelayPeerObservation struct {
+	ReadyAt                                        time.Time
+	Endpoint, RelayID, RelayAddress, RelayProtocol string
+	PeerID, PublicKey                              string
+	MapHash, NodeID, NodePublicKey, NetworkID      string
+	GlobalRevision, NetworkRevision                uint64
+	generation                                     *wireGuardRelayGeneration
+}
+
+type wireGuardRelayGeneration struct {
+	ended   chan struct{}
+	readyAt time.Time
+	binding wireGuardRelayPeerObservation
+	peers   map[string]wireGuardRelayPeerIdentity
+	relays  map[string]bool
+}
+
+type wireGuardRelayPeerIdentity struct{ publicKey, networkID string }
+
+func relayObservationBinding(networkMap clientapi.RegisterNodeResponse) wireGuardRelayPeerObservation {
+	result := wireGuardRelayPeerObservation{NodeID: networkMap.Node.ID, NodePublicKey: networkMap.Node.PublicKey, NetworkID: networkMap.Network.ID, GlobalRevision: networkMap.Revision.Global, NetworkRevision: networkMap.Network.Revision}
+	if networkMap.MapSignature != nil {
+		result.MapHash = networkMap.MapSignature.PayloadHash
+	}
+	return result
+}
+
+func newWireGuardRelayGeneration(networkMap clientapi.RegisterNodeResponse) *wireGuardRelayGeneration {
+	g := &wireGuardRelayGeneration{ended: make(chan struct{}), binding: relayObservationBinding(networkMap), peers: map[string]wireGuardRelayPeerIdentity{}, relays: map[string]bool{}}
+	for _, peer := range networkMap.Peers {
+		if _, duplicate := g.peers[peer.ID]; duplicate {
+			g.peers[peer.ID] = wireGuardRelayPeerIdentity{}
+			continue
+		}
+		g.peers[peer.ID] = wireGuardRelayPeerIdentity{peer.PublicKey, peer.NetworkID}
+	}
+	for _, relay := range networkMap.Relays {
+		g.relays[relay.ID+"\x00"+relay.Addr+"\x00"+relay.Protocol] = true
+	}
+	return g
+}
+
+func cloneWireGuardRelayStatus(status RelayDataplaneBridgeStatus) RelayDataplaneBridgeStatus {
+	clone := status
+	clone.PeerEndpoints = make(map[string]string, len(status.PeerEndpoints))
+	for peer, endpoint := range status.PeerEndpoints {
+		clone.PeerEndpoints[peer] = endpoint
+	}
+	if status.Relay.Selected != nil {
+		selected := *status.Relay.Selected
+		clone.Relay.Selected = &selected
+	}
+	clone.Relay.Attempts = append([]RelayDialAttempt(nil), status.Relay.Attempts...)
+	return clone
+}
+
+func (b *wireGuardRelayBridge) peerObservationLocked(peerID string) (wireGuardRelayPeerObservation, bool) {
+	b.reapLocked()
+	g := b.generation
+	if g == nil || b.cancel == nil || !b.statusOK || g.readyAt.IsZero() || b.status.Relay.Selected == nil || (b.lease != nil && b.lease.Context().Err() != nil) {
+		return wireGuardRelayPeerObservation{}, false
+	}
+	select {
+	case <-g.ended:
+		return wireGuardRelayPeerObservation{}, false
+	default:
+	}
+	result := g.binding
+	if result.MapHash == "" || result.NodeID == "" || result.NodePublicKey == "" || result.NetworkID == "" || g.peers[peerID].publicKey == "" {
+		return wireGuardRelayPeerObservation{}, false
+	}
+	selected := b.status.Relay.Selected
+	if !g.relays[selected.ID+"\x00"+selected.Addr+"\x00"+selected.Protocol] {
+		return wireGuardRelayPeerObservation{}, false
+	}
+	endpoint, err := netip.ParseAddrPort(b.status.PeerEndpoints[peerID])
+	if err != nil || !endpoint.Addr().IsLoopback() || endpoint.Port() == 0 {
+		return wireGuardRelayPeerObservation{}, false
+	}
+	result.ReadyAt, result.generation = g.readyAt, g
+	result.PeerID, result.PublicKey, result.Endpoint = peerID, g.peers[peerID].publicKey, endpoint.String()
+	result.RelayID, result.RelayAddress, result.RelayProtocol = selected.ID, selected.Addr, selected.Protocol
+	return result, true
+}
+
+// Callers serialize runtime state with engine.mu; bridge.mu protects generation
+// publication. A stopped/replaced generation can never validate an old receipt.
+func (b *wireGuardRelayBridge) ObservePeer(networkMap clientapi.RegisterNodeResponse, peerID string) (wireGuardRelayPeerObservation, bool) {
+	if b == nil {
+		return wireGuardRelayPeerObservation{}, false
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.generation == nil || b.generation.binding != relayObservationBinding(networkMap) {
+		return wireGuardRelayPeerObservation{}, false
+	}
+	identity, count := (wireGuardRelayPeerIdentity{}), 0
+	for _, peer := range networkMap.Peers {
+		if peer.ID == peerID {
+			identity = wireGuardRelayPeerIdentity{peer.PublicKey, peer.NetworkID}
+			count++
+		}
+	}
+	if count != 1 || identity.publicKey == "" || identity != b.generation.peers[peerID] {
+		return wireGuardRelayPeerObservation{}, false
+	}
+	observation, ok := b.peerObservationLocked(peerID)
+	if !ok {
+		return wireGuardRelayPeerObservation{}, false
+	}
+	relays := 0
+	for _, relay := range networkMap.Relays {
+		if relay.ID == observation.RelayID && relay.Addr == observation.RelayAddress && relay.Protocol == observation.RelayProtocol {
+			relays++
+		}
+	}
+	return observation, relays == 1
+}
+
+func (b *wireGuardRelayBridge) ObservationCurrent(observation wireGuardRelayPeerObservation) bool {
+	if b == nil {
+		return false
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	current, ok := b.peerObservationLocked(observation.PeerID)
+	return ok && current == observation
 }
 
 type wireGuardRelayPathManager struct {

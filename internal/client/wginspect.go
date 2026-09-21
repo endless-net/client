@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type CommandRunner func(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -38,6 +39,17 @@ type WireGuardPeerInspection struct {
 	TransferRXBytes            uint64   `json:"transfer_rx_bytes"`
 	TransferTXBytes            uint64   `json:"transfer_tx_bytes"`
 	PersistentKeepaliveSeconds int      `json:"persistent_keepalive_seconds,omitempty"`
+	// Private evidence from the engine's full UAPI timestamp. Public diagnostic
+	// seconds alone cannot order a handshake against a subsecond path switch.
+	latestHandshakeNanos  int64
+	handshakeTimeComplete bool
+}
+
+func (p WireGuardPeerInspection) authenticatedHandshakeTime() (time.Time, bool) {
+	if !p.handshakeTimeComplete || p.LatestHandshakeUnix <= 0 || p.latestHandshakeNanos < 0 || p.latestHandshakeNanos >= int64(time.Second) {
+		return time.Time{}, false
+	}
+	return time.Unix(p.LatestHandshakeUnix, p.latestHandshakeNanos).UTC(), true
 }
 
 type WireGuardRouteInspection struct {

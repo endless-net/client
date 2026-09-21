@@ -52,6 +52,25 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+Решение LAN_ALLOW от пользователя (2026-09-21): непосредственно подключённые
+подсети физических Ethernet/Wi-Fi интерфейсов, включая публичные; без ручных CIDR.
+RFC1918/ULA сами по себе ничего не разрешают. Gateway/VPN/bridge/container
+исключены, разрешение связано с точным prefix и экземпляром интерфейса;
+overlay/resource routes приоритетны. Потеря exit или неподтверждённое состояние
+закрывает LAN. Application link-local и broadcast/multicast discovery пока
+исключены, DHCP/ND обслуживаются отдельно. Семантика согласована, реализация
+и native приёмка ещё не завершены.
+
+Relay HOST increment от 2026-09-21: observer связывает подписанную map и peer
+с текущим экземпляром relay bridge, его локальным UAPI endpoint и выбранным
+внешним relay. Подтверждение требует полного timestamp handshake строго после
+готовности bridge и перехода пути; точность наносекунд остаётся приватной и не
+меняет wire/JSON контракт. Остановка, замена bridge или отзыв DNS lease снимают
+подтверждение. Native route/rule/filter проверки сохраняются. Direct path также
+требует handshake после перехода; продолжающаяся старая сессия без нового
+handshake пока не даёт положительного результата. Это transport evidence HOST,
+а не проверка приложения; native relay traffic ещё требует приёмки.
+
 Worker lifetime increment от 2026-09-21: ожидание worker/effect mutex теперь
 отменяемо у profile, connection, preferences, enrollment, session, trust и
 network-selection workers. Отмена ожидания сохраняет journal и освобождает уже
@@ -72,8 +91,8 @@ Resources/probe increment от 2026-09-21: Linux HOST observer проверяе�
 route lookup, адрес интерфейса, routing rules, live UAPI и свежий direct path.
 Смена scope, просроченная map и ограничения ACL/application/sharing исключают
 положительный результат; resource denials сохраняют приоритет. Чтение ОС идёт
-вне RPC mutex, а изменения host evidence инвалидируют resources. Relay и другие
-виды ресурсов пока требуют отдельных наблюдений. Readyz теперь использует
+вне RPC mutex, а изменения host evidence инвалидируют resources. Последующий
+relay increment описан выше; другие виды ресурсов требуют отдельных наблюдений. Readyz теперь использует
 транспорт engine и не переходит на обычный HTTP при отказе защищённого транспорта.
 Локальный standalone status без runtime transport показывает сохранённые факты
 без readiness-запроса. Проработка семантики LAN_ALLOW передана отдельной задаче
@@ -109,7 +128,7 @@ Capability теперь включается только публичным nat
 | Состояние и операции | Durable операции, идентификаторы запросов, replay, проверки владельца/профиля, конфликты и восстановление; snapshot/events | Проверка каждой мутации и перехода по матрице, включая права, CAS, отмену, рестарт и приватность событий |
 | Enrollment, trust, session | Workers и транспорт enrollment/trust/renewal, сохранение прогресса, ротация credentials, отмена старых запросов и защита от поздних ответов | Полный аудит cleanup/concurrency и контекста; подтверждение producer semantics и реального seamless renewal |
 | Exit | Linux native host/worker независимо от IPC, durable Select/Clear/ownership, защищённый saved resume, fresh UAPI/routes/firewall/DNS observations, catalog/control/events/capability; Clear/restart по исходному scope после смены интерфейса; guarded preference/resource candidate | LAN_ALLOW, полная совместная работа с profile/network transitions, автоматическая миграция интерфейса, проверка live recovery и OS qualification; Select-before-Connect сейчас отклоняется |
-| Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN и наблюдения запретов; retirement/возврат choices; Linux HOST route/UAPI/direct-path observer, fresh publication и invalidation | Relay/subnet/service/application observations, полный rollback/restart audit и приёмка реальных OS-эффектов |
+| Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN и наблюдения запретов; retirement/возврат choices; Linux HOST route/UAPI/direct/relay-path observer, fresh publication и invalidation | Subnet/service/application observations, полный rollback/restart audit и приёмка реальных OS/relay-эффектов |
 | Preferences и lifecycle | Set/Reset inbound/DNS/routes и lifecycle-полей, managed policy/locks/source; Windows power/logoff paths и resume-policy refresh | Полный аудит эффектов каждой настройки, доставка событий на других ОС, восстановление источников событий и native qualification |
 | Networks/profiles | Контекстные проверки, guards переключения, изоляция состояния и защита от устаревших ответов | Полная смена identity/map/routes, recovery и фактическая изоляция при переключении сети/provider |
 | Diagnostics и updates | Ограниченные диагностические данные/экспорт, честные unavailable-состояния; route samples | Полнота routes/resources и аудит privacy/bounds; согласованный проверяемый distribution source и проверка установленной пары UI/core. Сейчас GetUpdateInfo возвращает SOURCE_UNAVAILABLE |
@@ -131,8 +150,8 @@ Capability теперь включается только публичным nat
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: после worker lifetime increment internal/client прошёл
-за 126.168 s, cmd/endlessnet-client — за 11.216 s. Все пакеты прошли.
+и `go test -short ./...`: после relay HOST increment internal/client прошёл
+за 130.398 s, cmd/endlessnet-client — за 10.743 s. Все пакеты прошли.
 Локальные native/E2E/installer проверки не запускались.
 
 1. Завершить native exit LAN_ALLOW, сочетания exit с profile/network

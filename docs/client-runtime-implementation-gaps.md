@@ -22,6 +22,24 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Relay HOST increment (2026-09-21): private bridge observations bind signed-map
+hash/revisions, recipient, peer key, local UAPI endpoint, selected external relay
+and live bridge generation. Confirmation requires a complete authenticated
+handshake timestamp strictly after bridge readiness and path transition, while
+retaining native route/rule/filter checks. Ended/replaced bridges and revoked DNS
+leases invalidate receipts. Bridge reuse includes authority and peer keys; public
+status copies cannot mutate private evidence. Nanoseconds remain private engine
+evidence and do not change the wire/JSON contract. Direct paths also require a
+post-transition handshake; an existing session without a new handshake stays
+unknown. Tests cover collector route/filter rejection, binding, lifetime and
+subsecond ordering using injected OS/handshake evidence, not live relay traffic.
+
+Relay validation: goimports, vet, configured lint (0 issues) and the full short
+suite passed; internal/client 130.398 s and cmd/endlessnet-client 10.743 s.
+The preceding worker-lock commit also passed cross-platform short CI
+([run 35621070454](https://github.com/endless-net/client/actions/runs/35621070454)).
+Native/system qualification remains outstanding.
+
 Worker-lock increment validation (2026-09-21): goimports, vet, configured lint
 (0 issues) and full short tests passed; internal/client 126.168 s and CLI
 11.216 s. A follow-up source search found no remaining direct blocking worker or
@@ -74,16 +92,20 @@ HOST projection/event fixture now applies the same persisted configuration
 representation as ConfigStore. Standalone status without an engine reports cached
 facts without a readiness request. Native OS acceptance remains outstanding.
 
-LAN_ALLOW contract audit (2026-09-21): architecture revision bdb5ba63,
-headless BA Q-07, leaves LAN address/overlap/fallback decisions to the network
-administrator and security owner. UI SA US-05 requires applied family/LAN effects
-but does not define LAN prefixes. Pinned clientapi exposes AllowedLANAccess,
-without address prefixes or an interface classifier. At the user's request,
-the architecture Codex project owns a separate task to define directly connected
-physical subnets versus explicit administrator CIDRs and any producer contract
-changes. Link-local/discovery and containment
-semantics must also be fixed before advertising LAN_ALLOW. No RFC1918/ULA-only
-or blanket physical-route interpretation is implied by the current enum.
+LAN_ALLOW decision (user-approved, 2026-09-21): permit only directly connected
+subnets of physical Ethernet/Wi-Fi interfaces, including public subnets. No manual
+CIDR list is required. RFC1918/ULA classification grants nothing by itself.
+Gateway-routed networks, other VPNs, bridges and container networks are excluded.
+Each permission binds the exact prefix and interface instance; route changes must
+not open a gateway bypass. Overlay/resource routes take priority. Exit loss or
+unconfirmed enforcement closes LAN access. Application link-local and broadcast/
+multicast discovery are excluded for now; DHCP/ND are handled separately.
+
+This explicit decision resolves the semantic question left open by pinned BA
+Q-07 and UI SA US-05. Pinned clientapi already supplies AllowedLANAccess; do not
+invent a CIDR extension or treat the enum alone as OS evidence. Architecture
+follow-up records the accepted semantics; native classification, bound rules,
+readback, invalidation and acceptance remain client implementation work.
 
 Native host/restart increment (2026-09-21): the agent now constructs an opaque
 Linux exit runtime from its actual engine, store and shared operation mutex. The
@@ -142,8 +164,9 @@ HOST observation increment: the native Linux observer reads assigned interface
 addresses, policy rules and unforced unmarked /32 or /128 route lookups, then
 rechecks interface/rules. Live UAPI identity, PSK/routes/endpoints and a fresh
 direct peer path are distinct requirements. The engine's saved routerCfg list
-does not count as OS route evidence. Unknown policy-routing selectors, relay
-paths and ambiguous native results remain unknown. HOST confirmation does not
+does not count as OS route evidence. Unknown policy-routing selectors and
+ambiguous native results remain unknown. Relay paths now use the separate bound
+bridge evidence described above. HOST confirmation does not
 establish remote application health, and never promotes SUBNET/SERVICE/APPLICATION.
 
 ListResources performs native reads outside the RPC mutation mutex under the
@@ -151,7 +174,7 @@ shared effect lock, then rechecks owner, profile worker, persistent context and
 map expiry. Applied packet restrictions take precedence over positive evidence.
 The resource clock fingerprints confirmed host identities as well as denial
 state; path/route loss can invalidate DOMAIN_RESOURCES without a filter change.
-Full relay/subnet/service/application observations, rollback/restart audit and
+Full subnet/service/application observations, rollback/restart audit and
 native traffic qualification remain open.
 
 Read-model increment (2026-09-21): post-Clear observations retain an in-process

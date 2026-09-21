@@ -1669,6 +1669,7 @@ func wireGuardHexToKey(value string) (string, error) {
 
 func parseWireGuardEngineIPC(inspection *WireGuardInspection, raw string) error {
 	var peer *WireGuardPeerInspection
+	var handshakeFields uint8
 	for _, line := range strings.Split(strings.TrimSpace(raw), "\n") {
 		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
 		if !ok {
@@ -1684,6 +1685,7 @@ func parseWireGuardEngineIPC(inspection *WireGuardInspection, raw string) error 
 			}
 			inspection.Peers = append(inspection.Peers, WireGuardPeerInspection{PublicKey: encoded, AllowedIPs: []string{}})
 			peer = &inspection.Peers[len(inspection.Peers)-1]
+			handshakeFields = 0
 		case "endpoint":
 			if peer != nil {
 				peer.Endpoint = value
@@ -1694,7 +1696,23 @@ func parseWireGuardEngineIPC(inspection *WireGuardInspection, raw string) error 
 			}
 		case "last_handshake_time_sec":
 			if peer != nil {
-				peer.LatestHandshakeUnix, _ = strconv.ParseInt(value, 10, 64)
+				seconds, err := strconv.ParseInt(value, 10, 64)
+				if err != nil || seconds < 0 || handshakeFields&1 != 0 {
+					return errors.New("invalid WireGuard handshake timestamp")
+				}
+				peer.LatestHandshakeUnix = seconds
+				handshakeFields |= 1
+				peer.handshakeTimeComplete = handshakeFields == 3
+			}
+		case "last_handshake_time_nsec":
+			if peer != nil {
+				nanos, err := strconv.ParseInt(value, 10, 64)
+				if err != nil || nanos < 0 || nanos >= int64(time.Second) || handshakeFields&2 != 0 {
+					return errors.New("invalid WireGuard handshake timestamp")
+				}
+				peer.latestHandshakeNanos = nanos
+				handshakeFields |= 2
+				peer.handshakeTimeComplete = handshakeFields == 3
 			}
 		case "rx_bytes":
 			if peer != nil {
