@@ -121,6 +121,7 @@ func TestNativeExitMaintenanceDoesNotActivateStoppedRuntime(t *testing.T) {
 func TestNativeExitMaintenanceAcceptsOnlyBoundDispatchedEffect(t *testing.T) {
 	m, owner, profile := rpcConnectFixture(t)
 	if err := m.store.Update(func(cfg *Config) error {
+		cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
 		cfg.NetworkID = "network"
 		cfg.CachedMap.MapSignature = &api.MapSignature{PayloadHash: "signed-hash"}
 		return nil

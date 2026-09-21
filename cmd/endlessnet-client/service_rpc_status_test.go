@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	clientapi "github.com/endless-net/client-api/clientapi/v1"
@@ -254,5 +255,55 @@ func TestRPCObservationUsesNativeProjection(t *testing.T) {
 	}
 	if mutations.Metadata().Revision != 2 {
 		t.Fatal("native observation was not published")
+	}
+}
+
+func TestRPCBackgroundObservationControlAdmission(t *testing.T) {
+	for _, scenario := range []string{"missing", "disconnected", "blocked", "offline", "connected_down", "connected"} {
+		t.Run(scenario, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+			path := filepath.Join(t.TempDir(), "client.json")
+			cfg := client.Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic-credential", ControlPlaneURLs: []string{server.URL}}
+			phase := ipc.ConnectionPhase_CONNECTION_PHASE_CONNECTED
+			switch scenario {
+			case "disconnected", "blocked":
+				cfg.ConnectionIntent = &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredDisconnected}
+				if scenario == "blocked" {
+					cfg.ConnectionIntent.Reason = "runtime_start_policy_unavailable"
+				}
+			case "offline", "connected_down", "connected":
+				cfg.ConnectionIntent = &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredConnected}
+				if scenario == "connected_down" {
+					phase = ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED
+				}
+			}
+			if err := client.SaveConfig(path, cfg); err != nil {
+				t.Fatal(err)
+			}
+			store, err := client.OpenConfigStore(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutations, err := client.NewClientRPCMutations(store)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := mutations.Metadata().Revision
+			if err := observeAgentRPCStatus(t.Context(), mutations, agentIPCOptions{ConfigStore: store, Offline: scenario == "offline"}, phase); err != nil {
+				t.Fatal(err)
+			}
+			var wantRequests int32
+			if scenario == "connected" {
+				wantRequests = 1
+			}
+			if requests.Load() != wantRequests || mutations.Metadata().Revision <= before {
+				t.Fatal("background observation violated control admission or did not publish native status")
+			}
+		})
 	}
 }

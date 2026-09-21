@@ -19,7 +19,7 @@ func TestExitWorkerResumesAndRetriesWithoutRequestReplay(t *testing.T) {
 
 func testExitWorkerResumesAndRetries(t *testing.T, firstResult string) {
 	t.Helper()
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	if err := m.store.Update(func(cfg *Config) error {
 		cfg.ExitSelection = &ClientExitSelection{ID: "previous", NodeID: cfg.NodeID, NetworkID: cfg.NetworkID}
 		return nil
@@ -92,7 +92,7 @@ func testExitWorkerResumesAndRetries(t *testing.T, firstResult string) {
 }
 
 func TestExitWorkerCancellationRetainsDispatchedWork(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	if _, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}); err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestExitWorkerCancellationRetainsDispatchedWork(t *testing.T) {
 }
 
 func TestExitWorkerRetriesUnconfirmedContainmentAfterRestart(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	op, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
 	if err != nil {
 		t.Fatal(err)
@@ -211,7 +211,7 @@ func TestExitWorkerRetriesUnconfirmedContainmentAfterRestart(t *testing.T) {
 }
 
 func TestExitWorkerRequiresCompleteAdapter(t *testing.T) {
-	m, _, _ := rpcConnectFixture(t)
+	m, _, _ := rpcExitFixture(t)
 	service := NewClientRPCService(m, nil)
 	for _, executor := range []clientRPCExitExecutor{{}, {Lock: &sync.Mutex{}}, {InterfaceName: "endlessnet", Lock: &sync.Mutex{}, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
 		return nil, 0, nil

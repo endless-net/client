@@ -17,7 +17,6 @@ import (
 type nativeExitExecutor struct {
 	engine      *WireGuardEngine
 	createGuard func(string, string) (*linuxExitGuard, error)
-	cleared     *nativeExitClearedScope // guarded by the shared executor effect lock
 }
 
 // This factory supplies effects and evidence, not host readiness. Its callbacks
@@ -41,6 +40,9 @@ func newNativeExitExecutorWithGuard(engine *WireGuardEngine, lock *sync.Mutex, c
 
 func nativeExitOperation(cfg Config, id string, requested *ClientExitSelection, releasing bool) (*clientRPCExitChange, error) {
 	invalid := errors.New("native exit operation is not durably bound")
+	if requested != nil && !exitSelectionConnectionReady(cfg) {
+		return nil, invalid
+	}
 	if cfg.RPCState == nil || cfg.RPCState.ExitChange == nil || id == "" {
 		return nil, invalid
 	}
@@ -113,10 +115,21 @@ func (n *nativeExitExecutor) containFailure(ctx context.Context, guard *linuxExi
 	return guard.Contain(recovery)
 }
 
-func (n *nativeExitExecutor) stopOwned(ctx context.Context, scope *clientRPCExitProtection, guard *linuxExitGuard) error {
+func (n *nativeExitExecutor) stopOwned(ctx context.Context, scope *clientRPCExitProtection, guard *linuxExitGuard, controlOrigin string) error {
 	e := n.engine
 	e.mu.Lock()
 	live := e.device != nil || e.router != nil || e.tun != nil || e.configured
+	if live && e.exitGuard == nil && e.ordinaryExitClearOwnedLocked(scope, controlOrigin) {
+		// Binding was proven against the committed ordinary runtime, not merely
+		// the caller's current Config. This projection intentionally grants no
+		// protected control-plane authority while Clear tears down the device.
+		e.exitGuard = guard
+		e.exitConfig = Config{NodeID: scope.NodeID, NetworkID: scope.NetworkID, LocalOwnerID: scope.OwnerID, RPCState: &ClientRPCState{ActiveProfileID: scope.ProfileID}}
+		if e.exitFilter == nil {
+			e.exitFilter = &exitPacketFilter{}
+		}
+		e.exitFilter.withdraw()
+	}
 	if live && (e.exitGuard != guard || e.exitConfig.NodeID != scope.NodeID || e.exitConfig.NetworkID != scope.NetworkID || !strings.EqualFold(e.exitConfig.LocalOwnerID, scope.OwnerID) || e.exitConfig.RPCState == nil || e.exitConfig.RPCState.ActiveProfileID != scope.ProfileID) {
 		e.mu.Unlock()
 		return errors.New("native cleanup cannot stop another runtime identity")
@@ -184,7 +197,6 @@ func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, s
 	if err != nil {
 		return nil, continuity, err
 	}
-	n.cleared = nil
 	if err = ctx.Err(); err != nil {
 		return nil, continuity, err
 	}
@@ -194,7 +206,7 @@ func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, s
 	}
 	if selection == nil {
 		// Validate a live identity before installing any new guard in its place.
-		err = n.stopOwned(ctx, plan.Protection, guard)
+		err = n.stopOwned(ctx, plan.Protection, guard, plan.ControlOrigin)
 		if err != nil {
 			return nil, continuity, err
 		}
@@ -222,7 +234,6 @@ func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, s
 }
 
 func (n *nativeExitExecutor) release(ctx context.Context, id string, cfg Config) (status *ipc.ExitNodeStatus, continuity ipc.ConnectionContinuity, err error) {
-	n.cleared = nil
 	continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED
 	plan, err := nativeExitOperation(cfg, id, nil, true)
 	if err != nil {
@@ -235,7 +246,7 @@ func (n *nativeExitExecutor) release(ctx context.Context, id string, cfg Config)
 	if err != nil {
 		return nil, continuity, err
 	}
-	if err = n.stopOwned(ctx, plan.Protection, guard); err != nil {
+	if err = n.stopOwned(ctx, plan.Protection, guard, plan.ControlOrigin); err != nil {
 		return nil, continuity, err
 	}
 	defer func() {
@@ -253,7 +264,6 @@ func (n *nativeExitExecutor) release(ctx context.Context, id string, cfg Config)
 	if err = ctx.Err(); err != nil {
 		return nil, continuity, err
 	}
-	n.cleared = newNativeExitClearedScope(cfg, plan, guard)
 	return nativeExitClearStatus(plan.ProfileID, false), continuity, nil
 }
 
@@ -268,7 +278,7 @@ func (n *nativeExitExecutor) contain(ctx context.Context, plan clientRPCExitChan
 	if err != nil {
 		return clientRPCExitContainment{}, err
 	}
-	if err = n.stopOwned(ctx, plan.Protection, guard); err != nil {
+	if err = n.stopOwned(ctx, plan.Protection, guard, plan.ControlOrigin); err != nil {
 		return clientRPCExitContainment{}, err
 	}
 	return clientRPCExitContainment{OperationID: plan.OperationID, ProfileID: plan.ProfileID, NodeID: plan.NodeID, NetworkID: plan.NetworkID, IPv4Blocked: true, IPv6Blocked: true, ExitRoutesRemoved: true}, nil

@@ -69,6 +69,7 @@ type WireGuardEngine struct {
 	router                wireGuardEngineRouter
 	interface_            string
 	configured            bool
+	runtimeIdentity       nativeExitRuntimeIdentity
 	runtimeSuspended      bool
 	routerCfg             wireGuardEngineRouterConfig
 	uapi                  string
@@ -114,6 +115,7 @@ type WireGuardEngineEndpointDiscovery struct {
 
 type wireGuardEngineSnapshot struct {
 	configured        bool
+	runtimeIdentity   nativeExitRuntimeIdentity
 	mtu               int
 	device            *device.Device
 	bind              *MagicBind
@@ -274,6 +276,11 @@ func (e *WireGuardEngine) releaseClearedExit(ctx context.Context, guard *linuxEx
 }
 
 func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Config, networkMap clientapi.RegisterNodeResponse, selection *ClientExitSelection, guard *linuxExitGuard) (result WireGuardApplyResult, applyErr error) {
+	defer func() {
+		if applyErr == nil && result.OK {
+			e.runtimeIdentity = nativeExitAppliedIdentity(cfg, networkMap, e.interface_)
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
@@ -694,6 +701,7 @@ func (e *WireGuardEngine) restoreLocked(previous wireGuardEngineSnapshot, progre
 		return errors.Join(rollbackErr, e.closeLocked(context.Background()))
 	}
 	e.uapi = restoredUAPI
+	e.runtimeIdentity = previous.runtimeIdentity
 	return nil
 }
 
@@ -739,6 +747,7 @@ func (e *WireGuardEngine) restoreRecreatedLocked(previous wireGuardEngineSnapsho
 	e.uapi = restoredUAPI
 	e.pathMap = cloneRegisterNodeResponse(previous.pathMap)
 	e.pathKey = previous.pathKey
+	e.runtimeIdentity = previous.runtimeIdentity
 	e.relayPaths = cloneWireGuardRelayPathManager(previous.relayPaths)
 	e.configured = true
 	if previous.pathMonitorActive {
@@ -823,6 +832,7 @@ func (e *WireGuardEngine) snapshotLocked() wireGuardEngineSnapshot {
 	}
 	return wireGuardEngineSnapshot{
 		configured:        e.configured,
+		runtimeIdentity:   e.runtimeIdentity,
 		mtu:               e.opts.MTU,
 		device:            e.device,
 		bind:              e.bind,
@@ -1158,6 +1168,11 @@ func (e *WireGuardEngine) Down(ctx context.Context) (WireGuardApplyResult, error
 }
 
 func (e *WireGuardEngine) downLocked(ctx context.Context) (WireGuardApplyResult, error) {
+	defer func() {
+		if !e.configured && e.device == nil && e.tun == nil {
+			e.runtimeIdentity = nativeExitRuntimeIdentity{}
+		}
+	}()
 	result := WireGuardApplyResult{Method: "wireguard-go", Interface: e.interface_}
 	if e.device == nil && e.router == nil {
 		if e.exitGuard != nil {
@@ -1231,6 +1246,7 @@ func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
 	}
 	e.interface_ = ""
 	e.configured = false
+	e.runtimeIdentity = nativeExitRuntimeIdentity{}
 	e.routerCfg = wireGuardEngineRouterConfig{}
 	e.uapi = ""
 	e.discovery = WireGuardEngineEndpointDiscovery{}

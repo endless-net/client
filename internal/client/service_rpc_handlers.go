@@ -19,6 +19,9 @@ import (
 // ClientRPCService serves the native v0 runtime. Domain/consumer cutover is
 // ongoing; unimplemented methods never forward to the retired HTTP v2 handler.
 type ClientRPCService struct {
+	// Configure before Serve. Called before joining failed workers so the host
+	// can cancel lifecycle owners of their shared effect lock. Must not block.
+	RuntimeFailure func(error)
 	// Configure before serving; reads public signing authority only.
 	ServerIdentityProvider    ClientRPCServerIdentityProvider
 	TrustRecoveryProvider     ClientRPCTrustRecoveryProvider

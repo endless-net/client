@@ -13,7 +13,7 @@ import (
 func TestExitClearReleaseCheckpointSurvivesRestart(t *testing.T) {
 	for _, outcome := range []string{"error", "partial", "cancel_after_release"} {
 		t.Run(outcome, func(t *testing.T) {
-			m, owner, profile := rpcConnectFixture(t)
+			m, owner, profile := rpcExitFixture(t)
 			if err := m.store.Update(func(cfg *Config) error {
 				cfg.ExitSelection = &ClientExitSelection{ID: "previous", NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, RouteTable: cfg.WireGuardRouteTable}
 				return nil
@@ -92,7 +92,7 @@ func TestExitClearReleaseCheckpointSurvivesRestart(t *testing.T) {
 func TestExitClearCannotReleaseWithoutClosedCheckpoint(t *testing.T) {
 	for _, outcome := range []string{"already_open", "ipv4_open", "ipv6_open", "wrong_profile", "cancelled"} {
 		t.Run(outcome, func(t *testing.T) {
-			m, owner, profile := rpcConnectFixture(t)
+			m, owner, profile := rpcExitFixture(t)
 			op, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
 			if err != nil {
 				t.Fatal(err)
@@ -140,7 +140,7 @@ func TestExitClearCannotReleaseWithoutClosedCheckpoint(t *testing.T) {
 }
 
 func TestExitClearReleaseRejectsChangedCheckpointScope(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	op, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
 	if err != nil {
 		t.Fatal(err)

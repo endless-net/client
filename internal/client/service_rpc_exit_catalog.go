@@ -58,6 +58,9 @@ func (s *ClientRPCService) exitNodesAs(ctx context.Context, peer local.Peer, req
 	items := []*ipc.ExitNode{}
 	ready := s.exitWorker != nil && s.exitWorker.ctx.Err() == nil
 	restriction := m.exitMutationRestriction(cfg, request.GetProfile(), ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE, ready)
+	if restriction.Availability == ipc.Availability_AVAILABILITY_AVAILABLE && !exitSelectionConnectionReady(cfg) {
+		restriction = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "exit_connection_required"}
+	}
 	if policy := mapState.Network.ClientPolicy; policy != nil {
 		if len(policy.ExitNodes) > 4096 {
 			return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)

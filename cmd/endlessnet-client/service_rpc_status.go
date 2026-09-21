@@ -46,7 +46,10 @@ func publishAgentRPCObservation(ctx context.Context, mutations *client.ClientRPC
 // stored enrollment, cached-map presence and intent alone cannot establish it.
 func observeAgentRPCStatus(ctx context.Context, mutations *client.ClientRPCMutations, opts agentIPCOptions, phase ipc.ConnectionPhase) error {
 	return mutations.ObserveStatus(func(cfg client.Config) (*ipc.Status, error) {
-		return buildAgentRPCStatus(ctx, opts, cfg, phase), nil
+		// Background publication must not initiate control traffic while offline
+		// or without an actual connected intent, including blocked recovery.
+		probeControl := !opts.Offline && cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == client.ConnectionIntentDesiredConnected && phase != ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED
+		return buildAgentRPCStatusWithProbe(ctx, opts, cfg, phase, probeControl), nil
 	})
 }
 

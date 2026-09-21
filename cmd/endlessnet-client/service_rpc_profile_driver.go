@@ -56,9 +56,18 @@ func agentRPCProfileDriver(opts agentIPCOptions) client.ClientRPCProfileDriver {
 			if err := nativeApprovalFailure(networkMap.Node.ApprovalState); err != nil {
 				return err
 			}
-			result, err := opts.WireGuard.Configure(ctx, cfg, networkMap)
-			if err != nil || !result.OK {
-				return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED)
+			if cfg.ExitSelection != nil {
+				if opts.ExitRuntime == nil {
+					return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+				}
+				if err := opts.ExitRuntime.ResumeSavedLocked(ctx, opts.OperationMu, cfg); err != nil {
+					return err
+				}
+			} else {
+				result, err := opts.WireGuard.Configure(ctx, cfg, networkMap)
+				if err != nil || !result.OK {
+					return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED)
+				}
 			}
 			invalidateAgentSnapshot(opts)
 			requestAgentSync(opts)

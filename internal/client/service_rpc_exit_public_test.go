@@ -17,7 +17,7 @@ import (
 func TestExitReplaySurvivesWorkerShutdownAndRestart(t *testing.T) {
 	for _, method := range []string{"SelectExitNode", "ClearExitNode"} {
 		t.Run(method, func(t *testing.T) {
-			m, owner, profile := rpcConnectFixture(t)
+			m, owner, profile := rpcExitFixture(t)
 			trusted, networkMap, key := signedApplicationFixture(t, false)
 			host := api.ServiceHost{NodeID: networkMap.Peers[0].ID, PublicKey: networkMap.Peers[0].PublicKey}
 			networkMap.Peers[0].AllowedIPs = append(networkMap.Peers[0].AllowedIPs, "0.0.0.0/0")
@@ -26,6 +26,7 @@ func TestExitReplaySurvivesWorkerShutdownAndRestart(t *testing.T) {
 			resignApplicationMap(t, &networkMap, key)
 			if err := m.store.Update(func(cfg *Config) error {
 				cfg.NodeID, cfg.NetworkID = networkMap.Node.ID, networkMap.Network.ID
+				cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
 				cfg.MapRevision, cfg.MapGlobalRevision = networkMap.Network.Revision, networkMap.Revision.Global
 				cfg.CachedMap, cfg.MapSigningTrust = &networkMap, trusted.MapSigningTrust
 				return nil
@@ -116,7 +117,7 @@ func TestExitReplaySurvivesWorkerShutdownAndRestart(t *testing.T) {
 }
 
 func TestExitPublicMethodsAuthenticateWithoutWorker(t *testing.T) {
-	m, _, profile := rpcConnectFixture(t)
+	m, _, profile := rpcExitFixture(t)
 	s := NewClientRPCService(m, nil)
 	_, err := s.ClearExitNode(t.Context(), connect.NewRequest(&ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}))
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNAUTHENTICATED)
@@ -125,7 +126,7 @@ func TestExitPublicMethodsAuthenticateWithoutWorker(t *testing.T) {
 }
 
 func TestExitAcceptanceQueuesWakeAfterDurableAdmission(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	s := NewClientRPCService(m, nil)
 	w := &clientRPCProfileWorker{ctx: t.Context(), wake: make(chan struct{}, 1)}
 	s.exitWorker = w

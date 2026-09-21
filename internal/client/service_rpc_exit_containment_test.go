@@ -10,7 +10,7 @@ import (
 )
 
 func TestExitContainmentRequiresBoundProofAndRecovers(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	op, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
 	if err != nil {
 		t.Fatal(err)

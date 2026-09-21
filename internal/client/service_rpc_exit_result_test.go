@@ -53,6 +53,7 @@ func TestRPCExitResultRejectsPartialOrStaleApplication(t *testing.T) {
 			resignApplicationMap(t, &networkMap, key)
 			if err := m.store.Update(func(cfg *Config) error {
 				cfg.NodeID, cfg.NetworkID = networkMap.Node.ID, networkMap.Network.ID
+				cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
 				cfg.MapRevision, cfg.MapGlobalRevision = networkMap.Network.Revision, networkMap.Revision.Global
 				cfg.CachedMap, cfg.MapSigningTrust = &networkMap, trusted.MapSigningTrust
 				if scenario == "clear" {

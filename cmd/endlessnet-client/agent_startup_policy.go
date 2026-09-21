@@ -49,7 +49,11 @@ func refreshAgentStartupPolicy(ctx context.Context, engine agentWireGuard, store
 
 func refreshAgentStartupPolicyWith(ctx context.Context, engine agentWireGuard, store *client.ConfigStore, timeout time.Duration, commit func(client.Config, client.Config) error) error {
 	before := store.Read()
-	wanted := before.ConnectionIntent != nil && (before.ConnectionIntent.DesiredState == client.ConnectionIntentDesiredConnected || before.ConnectionIntent.Reason == "runtime_start_policy_unavailable")
+	// A missing policy also blocks startup with no saved connection request.
+	// Only a connected intent or its context-bound recovery checkpoint requests
+	// a fetch; the unavailable reason alone must not initiate control traffic.
+	requested := client.RequestedConnectionIntent(before)
+	wanted := requested != nil && requested.DesiredState == client.ConnectionIntentDesiredConnected
 	if before.RPCState != nil {
 		profile := before.RPCState.Profiles[before.RPCState.ActiveProfileID]
 		wanted = wanted || profile.RuntimeStart != nil && *profile.RuntimeStart == ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT

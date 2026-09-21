@@ -56,7 +56,7 @@ func exitChangeBound(cfg *Config, plan *clientRPCExitChange, op *ipc.Operation) 
 		strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) && plan.ControlOrigin == profile.ControlOrigin &&
 		plan.NodeID == cfg.NodeID && plan.NetworkID == cfg.NetworkID && plan.RouteTable == cfg.WireGuardRouteTable && reflect.DeepEqual(plan.Previous, cfg.ExitSelection) &&
 		reflect.DeepEqual(plan.PreviousIntent, cfg.ConnectionIntent) &&
-		(plan.Requested == nil || (plan.MapHash != "" && cfg.CachedMap != nil && cfg.CachedMap.MapSignature != nil && plan.MapHash == cfg.CachedMap.MapSignature.PayloadHash)) &&
+		(plan.Requested == nil || (exitSelectionConnectionReady(*cfg) && plan.MapHash != "" && cfg.CachedMap != nil && cfg.CachedMap.MapSignature != nil && plan.MapHash == cfg.CachedMap.MapSignature.PayloadHash)) &&
 		((plan.Requested == nil && op.Kind == ipc.OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE) ||
 			(plan.Requested != nil && op.Kind == ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE))
 }

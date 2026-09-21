@@ -79,6 +79,10 @@ func TestNativeExitClearedObservationRechecksReleasedScopeAndOrdinaryRuntime(t *
 		t.Fatal(err)
 	}
 	cfg := m.store.Read()
+	persisted := reopenRPCStoreFromDisk(t, m.store).Read()
+	if persisted.RPCState.ExitCleared == nil || persisted.RPCState.ExitCleared.Protection == nil || persisted.RPCState.ExitProtection != nil || persisted.RPCState.ExitChange != nil {
+		t.Fatal("clear did not atomically persist observation scope")
+	}
 	before := mutations
 	for _, ordinary := range []bool{false, true} {
 		if ordinary {
@@ -103,13 +107,22 @@ func TestNativeExitClearedObservationRechecksReleasedScopeAndOrdinaryRuntime(t *
 		t.Fatal("receipt depended on retained terminal operation after commit", err)
 	}
 	restarted := &nativeExitExecutor{engine: engine, createGuard: n.createGuard}
-	if _, err := restarted.observe(t.Context(), cfg); err == nil {
-		t.Fatal("restart fabricated original clear scope")
+	if _, err := restarted.observe(t.Context(), pruned); err != nil {
+		t.Fatal("restarted observer could not verify durable scope without operation records", err)
+	}
+	withoutScope := clonePersistentConfig(cfg)
+	withoutScope.RPCState.ExitCleared = nil
+	if _, err := restarted.observe(t.Context(), withoutScope); err == nil {
+		t.Fatal("missing durable scope fabricated clear evidence")
+	}
+	rotated := clonePersistentConfig(cfg)
+	rotated.NodeCredential = "rotated-synthetic"
+	if _, err := restarted.observe(t.Context(), rotated); err != nil {
+		t.Fatal("credential rotation invalidated read-only artifact address", err)
 	}
 	for _, change := range []func(*Config){
 		func(c *Config) { c.NodeID = "replacement" },
 		func(c *Config) { c.NetworkID = "replacement" },
-		func(c *Config) { c.NodeCredential = "replacement" },
 		func(c *Config) { c.RPCState.ActiveProfileID = "replacement" },
 		func(c *Config) { c.WireGuardRouteTable = "51999" },
 		func(c *Config) { c.ExitSelection = &ClientExitSelection{ID: "replacement"} },

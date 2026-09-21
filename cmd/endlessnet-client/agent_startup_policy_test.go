@@ -11,8 +11,72 @@ import (
 	"testing"
 	"time"
 
+	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/endless-net/client/internal/client"
 )
+
+func TestStartupPolicyFetchRequiresRequestedConnection(t *testing.T) {
+	for _, scenario := range []string{"missing", "blocked_without_request", "connected", "recovery", "stale_recovery", "explicit_connect", "disconnected"} {
+		t.Run(scenario, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "client.json")
+			cfg := client.Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic", ControlPlaneURLs: []string{"https://control.example"}}
+			switch scenario {
+			case "connected", "recovery", "stale_recovery":
+				cfg.ConnectionIntent = &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredConnected, Reason: "user_connect"}
+			case "disconnected":
+				cfg.ConnectionIntent = &client.ConnectionIntent{DesiredState: client.ConnectionIntentDesiredDisconnected, Reason: "user_disconnect"}
+			}
+			if err := client.SaveConfig(path, cfg); err != nil {
+				t.Fatal(err)
+			}
+			store, err := client.OpenConfigStore(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutations, err := client.NewClientRPCMutations(store)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := mutations.AdoptInitialProfile(); err != nil {
+				t.Fatal(err)
+			}
+			if scenario == "blocked_without_request" || scenario == "recovery" || scenario == "stale_recovery" {
+				if err := client.NewConnectionIntentStore(store).InitializeRuntimeIntent(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if scenario == "stale_recovery" || scenario == "explicit_connect" {
+				if err := store.Update(func(current *client.Config) error {
+					if scenario == "stale_recovery" {
+						current.NodeID = "replacement-node"
+					} else {
+						profile := current.RPCState.Profiles[current.RPCState.ActiveProfileID]
+						behavior := ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_CONNECT
+						profile.RuntimeStart = &behavior
+						current.RPCState.Profiles[current.RPCState.ActiveProfileID] = profile
+					}
+					return nil
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := store.Read()
+			engine := &startupOrderEngine{}
+			err = refreshAgentStartupPolicy(t.Context(), engine, store, time.Second)
+			wantFetch := scenario == "connected" || scenario == "recovery" || scenario == "explicit_connect"
+			if wantFetch {
+				if err == nil || !reflect.DeepEqual(engine.order, []string{"policy"}) {
+					t.Fatalf("requested connection did not consult the policy source: order=%v err=%v", engine.order, err)
+				}
+			} else if err != nil || len(engine.order) != 0 {
+				t.Fatalf("startup without a connection request consulted control: order=%v err=%v", engine.order, err)
+			}
+			if !reflect.DeepEqual(before, store.Read()) {
+				t.Fatal("unavailable policy fetch changed durable state")
+			}
+		})
+	}
+}
 
 type startupOrderEngine struct {
 	testAgentWireGuard

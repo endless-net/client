@@ -25,13 +25,19 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	}
 	workerCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	stopFailed := func(err error) {
+		if ctx.Err() == nil && err != nil && s.RuntimeFailure != nil {
+			s.RuntimeFailure(err)
+		}
+		cancel()
+	}
 	profileDone, err := s.StartProfileWorker(workerCtx, driver)
 	if err != nil {
 		return err
 	}
 	enrollmentDone, err := s.StartEnrollmentWorker(workerCtx, enrollment)
 	if err != nil {
-		cancel()
+		stopFailed(err)
 		<-profileDone
 		return err
 	}
@@ -39,7 +45,7 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	if cfg := s.mutations.store.Read(); s.ServerIdentityProvider != nil || s.TrustRecoveryProvider != nil || (cfg.RPCState != nil && cfg.RPCState.Trust != nil) {
 		trustDone, err = s.StartTrustWorker(workerCtx, driver)
 		if err != nil {
-			cancel()
+			stopFailed(err)
 			<-profileDone
 			<-enrollmentDone
 			return err
@@ -47,7 +53,7 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	}
 	bundleDone, err := s.startBundleWorker(workerCtx)
 	if err != nil {
-		cancel()
+		stopFailed(err)
 		<-profileDone
 		<-enrollmentDone
 		if trustDone != nil {
@@ -59,7 +65,7 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	if cfg := s.mutations.store.Read(); s.SessionRenewalProvider.Renew != nil || s.SessionRenewalProvider.Poll != nil || (cfg.RPCState != nil && cfg.RPCState.SessionRenewal != nil) {
 		sessionDone, err = s.StartSessionWorker(workerCtx)
 		if err != nil {
-			cancel()
+			stopFailed(err)
 			<-profileDone
 			<-enrollmentDone
 			if trustDone != nil {
@@ -73,7 +79,7 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	if cfg := s.mutations.store.Read(); s.NetworkSelectionProviders.Networks != nil || s.NetworkSelectionProviders.Register != nil || s.NetworkSelectionProviders.Cleanup != nil || (cfg.RPCState != nil && cfg.RPCState.NetworkSelection != nil) {
 		networkDone, err = s.StartNetworkSelectionWorker(workerCtx, driver)
 		if err != nil {
-			cancel()
+			stopFailed(err)
 			<-profileDone
 			<-enrollmentDone
 			if trustDone != nil {
@@ -118,7 +124,10 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	case err = <-serverDone:
 		serverDone = nil
 	}
-	cancel()
+	if err == nil {
+		err = errors.New("client RPC host stopped unexpectedly")
+	}
+	stopFailed(err)
 	_ = server.Close()
 	if profileDone != nil {
 		<-profileDone
@@ -149,9 +158,6 @@ func (s *ClientRPCService) Serve(ctx context.Context, listener net.Listener, dri
 	}
 	if serverDone != nil {
 		<-serverDone
-	}
-	if err == nil {
-		return errors.New("client RPC host stopped unexpectedly")
 	}
 	return err
 }

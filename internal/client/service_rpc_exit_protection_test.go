@@ -29,7 +29,7 @@ func TestStandaloneExitProtectionBlocksOrdinaryRuntime(t *testing.T) {
 }
 
 func TestExitReleaseLateContextRetainsOwnershipForExplicitClear(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	op, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
 	if err != nil {
 		t.Fatal(err)
@@ -127,7 +127,7 @@ func TestExitReleaseLateContextRetainsOwnershipForExplicitClear(t *testing.T) {
 func TestExitProtectionRejectsOtherOwnerAndActiveSelection(t *testing.T) {
 	for _, changed := range []string{"owner", "selection"} {
 		t.Run(changed, func(t *testing.T) {
-			m, owner, profile := rpcConnectFixture(t)
+			m, owner, profile := rpcExitFixture(t)
 			if err := m.store.Update(func(cfg *Config) error {
 				cfg.RPCState.ExitProtection = &clientRPCExitProtection{OperationID: "original", ProfileID: profile.ProfileId, OwnerID: cfg.LocalOwnerID, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, InterfaceName: "endlessnet", RouteTable: cfg.WireGuardRouteTable}
 				if changed == "owner" {

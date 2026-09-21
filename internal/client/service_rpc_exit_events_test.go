@@ -9,7 +9,7 @@ import (
 )
 
 func TestExitEventsAndContainmentReadShareCommittedRevision(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	sub, err := m.subscribe(owner, nil, nil)
 	if err != nil {
 		t.Fatal(err)

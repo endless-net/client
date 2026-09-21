@@ -290,6 +290,7 @@ type agentIPCOptions struct {
 	WGInterface    string
 	Timeout        time.Duration
 	WireGuard      agentWireGuard
+	ExitRuntime    *client.NativeExitRuntime
 	SyncWake       chan struct{}
 	ObserveRoutes  func(context.Context, string, []string) []client.WireGuardRouteInspection
 }

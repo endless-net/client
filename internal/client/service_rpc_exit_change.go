@@ -114,6 +114,30 @@ func (m *ClientRPCMutations) prepareExitChange(cfg *Config, op *ipc.Operation, r
 			return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 		}
 	}
+	table := cfg.WireGuardRouteTable
+	if clear {
+		node, network := cfg.NodeID, cfg.NetworkID
+		if protection != nil {
+			// Cleanup belongs to the retained scope, even after enrollment or
+			// the active profile has changed. Current credentials are irrelevant.
+			node, network, table = protection.NodeID, protection.NetworkID, protection.RouteTable
+			if protection.OperationID == "" || !safeWireGuardInterfaceName(protection.InterfaceName) || protection.InterfaceName == "lo" || strings.TrimSpace(protection.InterfaceName) != protection.InterfaceName {
+				return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+			}
+		}
+		if strings.TrimSpace(node) == "" || strings.TrimSpace(network) == "" {
+			return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+		}
+	}
+	// Both selection and cleanup must be executable in a dedicated route scope.
+	// Clear uses retained ownership above; selection uses the current context.
+	normalized, err := NormalizeWireGuardRouteTable(table)
+	if err != nil || normalized != table {
+		return nil, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+	}
+	if table == "off" || table == "253" || table == "254" || table == "255" {
+		return nil, rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	}
 	op.ProfileId = profile.ID
 	plan := &clientRPCExitChange{OperationID: op.Id, ProfileID: profile.ID, OwnerID: cfg.LocalOwnerID, ControlOrigin: profile.ControlOrigin, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, Previous: cloneExitSelection(cfg.ExitSelection)}
 	plan.ActiveProfileID = cfg.RPCState.ActiveProfileID
@@ -133,11 +157,20 @@ func exitProtectionBound(cfg *Config, plan *clientRPCExitChange) bool {
 	return reflect.DeepEqual(plan.Protection, cfg.RPCState.ExitProtection)
 }
 
+// Selecting an exit changes routing for an already connected runtime. It must
+// never act as Connect or replace a missing/disconnected local intent.
+func exitSelectionConnectionReady(cfg Config) bool {
+	return cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == ConnectionIntentDesiredConnected
+}
+
 func (m *ClientRPCMutations) selectExitNodeAs(peer local.Peer, request *ipc.SelectExitNodeRequest, supported []clientRPCExitMode) (*ipc.Operation, error) {
 	op, _, err := m.acceptAs(peer, "/client.v0.ClientService/SelectExitNode", request, func(cfg *Config, op *ipc.Operation) error {
 		plan, err := m.prepareExitChange(cfg, op, request.Profile)
 		if err != nil {
 			return err
+		}
+		if !exitSelectionConnectionReady(*cfg) {
+			return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 		}
 		mode := clientRPCExitMode{}
 		switch request.FamilyMode {

@@ -126,6 +126,7 @@ func testNativeExitSelectionObservation(t *testing.T, family api.ExitFamilyMode)
 	resignApplicationMap(t, &source, key)
 	if err := m.store.Update(func(cfg *Config) error {
 		cfg.NodeID, cfg.NetworkID = source.Node.ID, source.Network.ID
+		cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
 		cfg.NodeCredential = "synthetic"
 		cfg.ControlPlaneURLs = []string{"https://control.test"}
 		cfg.PrivateKey = testWireGuardEngineKey(1)
@@ -233,7 +234,7 @@ func testNativeExitSelectionObservation(t *testing.T, family api.ExitFamilyMode)
 }
 
 func TestExitApplyReceivesCommittedRunningOperation(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	op, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
 	if err != nil {
 		t.Fatal(err)

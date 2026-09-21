@@ -109,12 +109,15 @@ func (m *ClientRPCMutations) completeExitChange(id string, observed *ipc.ExitNod
 		}
 		cfg.ExitSelection = cloneExitSelection(plan.Requested)
 		if plan.Requested == nil {
+			recordClearedExitScope(cfg, plan)
 			cfg.RPCState.ExitProtection = nil
 			if plan.ProfileID != cfg.RPCState.ActiveProfileID {
 				profile := cfg.RPCState.Profiles[plan.ProfileID]
 				profile.Configuration.ExitSelection = nil
 				cfg.RPCState.Profiles[plan.ProfileID] = profile
 			}
+		} else {
+			cfg.RPCState.ExitCleared = nil
 		}
 		cfg.RPCState.ExitChange = nil
 		op.State = ipc.OperationState_OPERATION_STATE_SUCCEEDED

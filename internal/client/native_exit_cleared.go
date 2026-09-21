@@ -13,62 +13,18 @@ import (
 	"time"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
-	"google.golang.org/protobuf/proto"
 )
 
 var errNativeExitCleared = errors.New("cleared native exit scope is not observed")
 
-// An in-process receipt identifies what must be observed; it is never evidence
-// that those effects remain absent. Restart deliberately loses this receipt.
-type nativeExitClearedScope struct {
-	guard                                                     *linuxExitGuard
-	identity                                                  Config
-	activeProfile, profileOrigin, operation, operationProfile string
-	committed                                                 bool
-	committedRevision                                         uint64
-}
-
-func newNativeExitClearedScope(cfg Config, plan *clientRPCExitChange, guard *linuxExitGuard) *nativeExitClearedScope {
-	return &nativeExitClearedScope{guard: guard,
-		identity:      Config{NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, NodeCredential: cfg.NodeCredential, LocalOwnerID: cfg.LocalOwnerID, WireGuardRouteTable: cfg.WireGuardRouteTable, ControlPlaneURLs: append([]string(nil), cfg.ControlURLs()...)},
-		activeProfile: cfg.RPCState.ActiveProfileID, profileOrigin: cfg.RPCState.Profiles[cfg.RPCState.ActiveProfileID].ControlOrigin,
-		operation: plan.OperationID, operationProfile: plan.ProfileID}
-}
-
-func (r *nativeExitClearedScope) bound(cfg Config) bool {
-	if r == nil || r.guard == nil || cfg.RPCState == nil || cfg.ExitSelection != nil || cfg.RPCState.ExitChange != nil || cfg.RPCState.ExitProtection != nil || cfg.RPCState.ActiveProfileID != r.activeProfile || !sameExitControlIdentity(cfg, r.identity) || !strings.EqualFold(cfg.LocalOwnerID, r.identity.LocalOwnerID) {
-		return false
-	}
-	profile, exists := cfg.RPCState.Profiles[r.activeProfile]
-	if !exists || profile.ControlOrigin != r.profileOrigin {
-		return false
-	}
-	if r.committed {
-		return cfg.RPCState.Revision >= r.committedRevision
-	}
-	matched := false
-	for _, record := range cfg.RPCState.Operations {
-		op := new(ipc.Operation)
-		if proto.Unmarshal(record.Operation, op) != nil {
-			return false
-		}
-		if op.Id != r.operation {
-			continue
-		}
-		if matched || record.CompletedAt == nil || !strings.EqualFold(record.Owner, cfg.LocalOwnerID) || op.Kind != ipc.OperationKind_OPERATION_KIND_CLEAR_EXIT_NODE || op.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || op.ProfileId != r.operationProfile {
-			return false
-		}
-		matched = true
-	}
-	if matched {
-		r.committed, r.committedRevision = true, cfg.RPCState.Revision
-	}
-	return matched
-}
-
 func (n *nativeExitExecutor) observeCleared(ctx context.Context, cfg Config) (*ipc.ExitNodeStatus, error) {
-	r := n.cleared
-	if !r.bound(cfg) {
+	if cfg.RPCState == nil || !cfg.RPCState.ExitCleared.bound(cfg, n.engine.opts.Interface) {
+		return nil, errNativeExitCleared
+	}
+	r := cfg.RPCState.ExitCleared
+	// Reconstruct only the durable address; this does not mutate native state.
+	guard, err := n.guard(r.Protection)
+	if err != nil {
 		return nil, errNativeExitCleared
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -76,12 +32,12 @@ func (n *nativeExitExecutor) observeCleared(ctx context.Context, cfg Config) (*i
 	e := n.engine
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.opts.Interface != r.guard.interfaceName || e.exitGuard != nil || e.exitSelection != nil || e.exitFilter != nil {
+	if e.opts.Interface != guard.interfaceName || e.exitGuard != nil || e.exitSelection != nil || e.exitFilter != nil {
 		return nil, errNativeExitCleared
 	}
 	live := e.configured || e.device != nil || e.router != nil || e.tun != nil
 	if live {
-		if !e.configured || e.device == nil || e.router == nil || e.tun == nil || e.interface_ != r.guard.interfaceName || e.pathMap.Node.ID != cfg.NodeID || e.pathMap.Network.ID != cfg.NetworkID || cfg.CachedMap == nil || cfg.CachedMap.MapSignature == nil || e.pathMap.MapSignature == nil || cfg.CachedMap.MapSignature.PayloadHash != e.pathMap.MapSignature.PayloadHash || e.routerCfg.Interface != r.guard.interfaceName || e.routerCfg.RouteTable != cfg.WireGuardRouteTable || e.routerCfg.FirewallMark != 0 {
+		if !e.configured || e.device == nil || e.router == nil || e.tun == nil || e.interface_ != guard.interfaceName || e.pathMap.Node.ID != cfg.NodeID || e.pathMap.Network.ID != cfg.NetworkID || cfg.CachedMap == nil || cfg.CachedMap.MapSignature == nil || e.pathMap.MapSignature == nil || cfg.CachedMap.MapSignature.PayloadHash != e.pathMap.MapSignature.PayloadHash || e.routerCfg.Interface != guard.interfaceName || e.routerCfg.RouteTable != cfg.WireGuardRouteTable || e.routerCfg.FirewallMark != 0 {
 			return nil, errNativeExitCleared
 		}
 		for _, route := range e.routerCfg.Routes {
@@ -94,13 +50,13 @@ func (n *nativeExitExecutor) observeCleared(ctx context.Context, cfg Config) (*i
 			return nil, errNativeExitCleared
 		}
 	}
-	if err := r.guard.ObserveAbsent(ctx); err != nil {
+	if err := guard.ObserveAbsent(ctx); err != nil {
 		return nil, errors.Join(errNativeExitCleared, ctx.Err())
 	}
 	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		return r.guard.run(ctx, "", name, args...)
+		return guard.run(ctx, "", name, args...)
 	}
-	absent, err := exitPolicyRulesAbsent(ctx, r.guard.mark, run)
+	absent, err := exitPolicyRulesAbsent(ctx, guard.mark, run)
 	if err != nil || !absent {
 		return nil, errors.Join(errNativeExitCleared, ctx.Err())
 	}
@@ -109,14 +65,14 @@ func (n *nativeExitExecutor) observeCleared(ctx context.Context, cfg Config) (*i
 			return nil, err
 		}
 		raw, err := run(ctx, "ip", "-j", "-N", family, "route", "show", "table", "all")
-		if err != nil || !nativeExitDefaultsAbsent(raw, r.guard.mark, r.guard.interfaceName) {
+		if err != nil || !nativeExitDefaultsAbsent(raw, guard.mark, guard.interfaceName) {
 			return nil, errors.Join(errNativeExitCleared, ctx.Err())
 		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return nativeExitClearStatus(r.activeProfile, false), nil
+	return nativeExitClearStatus(r.ActiveProfileID, false), nil
 }
 
 func nativeExitDefaultsAbsent(raw []byte, table uint32, device string) bool {

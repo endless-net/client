@@ -1,7 +1,9 @@
 package client
 
 import (
+	"context"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,7 +14,7 @@ import (
 )
 
 func TestRPCExitSelectionAdmissionBindingAndRestart(t *testing.T) {
-	for _, scenario := range []string{"valid", "observer", "expired", "tampered", "stale_map", "unsupported_pair", "policy_denied", "clear_offline"} {
+	for _, scenario := range []string{"valid", "observer", "expired", "tampered", "stale_map", "unsupported_pair", "policy_denied", "clear_offline", "missing_intent", "empty_intent", "disconnected"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, owner, profile := rpcConnectFixture(t)
 			trusted, networkMap, key := signedApplicationFixture(t, false)
@@ -29,6 +31,15 @@ func TestRPCExitSelectionAdmissionBindingAndRestart(t *testing.T) {
 			}
 			if err := m.store.Update(func(cfg *Config) error {
 				cfg.NodeID, cfg.NetworkID = networkMap.Node.ID, networkMap.Network.ID
+				cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
+				switch scenario {
+				case "missing_intent":
+					cfg.ConnectionIntent = nil
+				case "empty_intent":
+					cfg.ConnectionIntent = &ConnectionIntent{}
+				case "disconnected", "clear_offline":
+					cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected}
+				}
 				cfg.CachedMap, cfg.MapSigningTrust = &networkMap, trusted.MapSigningTrust
 				cfg.MapRevision, cfg.MapGlobalRevision = networkMap.Network.Revision, networkMap.Revision.Global
 				if scenario == "stale_map" {
@@ -67,6 +78,17 @@ func TestRPCExitSelectionAdmissionBindingAndRestart(t *testing.T) {
 				if err == nil || !reflect.DeepEqual(before, m.store.Read()) {
 					t.Fatal("invalid exit admission changed durable state")
 				}
+				if scenario == "missing_intent" || scenario == "empty_intent" || scenario == "disconnected" {
+					assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+					calls := 0
+					executor := clientRPCExitExecutor{InterfaceName: "endlessnet", Lock: &sync.Mutex{}, Apply: func(context.Context, string, Config, *ClientExitSelection) (*ipc.ExitNodeStatus, ipc.ConnectionContinuity, error) {
+						calls++
+						return nil, 0, nil
+					}}
+					if err := m.reconcileExitChange(t.Context(), executor); err != nil || calls != 0 {
+						t.Fatal("rejected Select dispatched effects", err)
+					}
+				}
 				return
 			}
 			if err != nil {
@@ -98,6 +120,12 @@ func TestRPCExitSelectionAdmissionBindingAndRestart(t *testing.T) {
 					t.Fatal("clear replay changed", err)
 				}
 			} else {
+				if err := m.store.Update(func(cfg *Config) error {
+					cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected}
+					return nil
+				}); err != nil {
+					t.Fatal(err)
+				}
 				replay, err := m.selectExitNodeAs(owner, request, nil)
 				if err != nil || !proto.Equal(op, replay) {
 					t.Fatal("accepted selection replay reevaluated support", err)

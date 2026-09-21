@@ -22,13 +22,73 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Native host/restart increment (2026-09-21): the agent now constructs an opaque
+Linux exit runtime from its actual engine, store and shared operation mutex. The
+exit worker starts on the same service as RPC, independently of whether a local
+listener is enabled. One supervisor cancels the agent before joining a failed
+worker's siblings; Serve also reports failure before waiting for external
+lifecycle lock owners. Normal stop joins exit maintenance/observation and RPC
+workers before engine teardown. A public native worker advertises CAPABILITY_EXIT_NODE
+only for its own live token; cleanup cannot revoke a replacement worker.
+
+The profile driver's saved-selection path now uses protected resume with fresh
+persistent-context checks before and after effects. Select requires explicit
+connected intent at admission, durable dispatch/completion and the native
+boundary. Missing/empty/disconnected intent is unavailable, never an implicit
+Connect; durable replay and Clear remain available independently. Deferred
+Select-before-Connect remains a product decision rather than implemented behavior.
+
+Successful Clear atomically replaces retained protection with a nonsecret durable
+observation scope. After restart and operation pruning, the native observer
+reconstructs only the original artifact address and repeats all absence checks.
+Inactive-profile cleanup keeps original artifacts distinct from current active
+identity. Credential rotation does not erase this read-only scope or grant it
+control authority. New Select success discards it. Changed interface recovery,
+LAN_ALLOW, complete profile/network/preference transitions with retained exit,
+and native/system qualification remain open; host wiring is not acceptance.
+
+Clear can adopt a committed ordinary runtime only after matching its owner,
+profile, control origin, node/network, interface/table and actual UAPI. Adoption
+withdraws the packet filter and grants no control-plane authority; ambiguous
+containment retains ownership for retry. Engine rollback restores the bounded
+runtime identity along with the previous device. Select and Clear reject invalid
+or reserved route tables before journaling; retained Clear validates its original
+scope independently of current enrollment. Unit assertions cover foreign owners
+with the same node, failed containment retry and device-recreation rollback.
+
+Startup policy fetch now uses requested intent, including only a context-bound
+connected recovery checkpoint, or explicit runtime_start CONNECT. An unavailable
+policy reason alone no longer initiates control traffic on repeated startup.
+The existing no-saved-intent command regression and seven source-admission
+scenarios cover this distinction without changing lifecycle defaults.
+
+Host/restart validation: goimports, vet and lint (0 issues) passed. The final
+full short suite passed: cmd/endlessnet-client 10.563 s, internal/client reused
+its successful 118.000 s run. Earlier failures exposed one incomplete exit
+fixture and automatic control probes without a connection request; both were
+fixed while retaining the original assertions. No native/system run was made.
+
+Follow-up observation audit: background status probes must remain suppressed
+while disconnected/offline. The remaining active control probe uses its own
+transport; unify it with the engine-scoped protected control transport and add
+exit/DNS revocation evidence before considering the status transport audit done.
+
+Next bounded resources gap: permitted HOST resources have no positive native
+route proof. Engine inspection currently copies `routerCfg.Routes`, which cannot
+detect an externally removed OS route. Add fresh /32 and /128 route lookup plus
+live UAPI ownership and path evidence, bound to recipient/map/interface, with
+post-observation context checks. Route/path loss must invalidate DOMAIN_RESOURCES
+even when the denial-filter fingerprint is unchanged. SUBNET/SERVICE/APPLICATION
+need separate evidence and must not inherit HOST confirmation.
+
 Read-model increment (2026-09-21): post-Clear observations retain an in-process
 scope receipt after verified Release and bind it to terminal Clear before first
 publication. Every read independently checks nft/rule/default-route absence;
 an ordinary live engine must also have no exit projection and matching actual
 UAPI without defaults or transport mark. Operation pruning after the first
 confirmed commit does not erase that scope. Restart without the receipt remains
-unavailable; durable recovery of this observation scope is still required.
+unavailable in that earlier increment; the native host/restart increment above
+replaces this receipt with an atomically committed durable scope.
 
 Catalog modes now intersect authenticated grants and exact worker-supported
 pairs without widening the two wire lists into unsupported Cartesian choices.
@@ -50,10 +110,9 @@ Host integration audit (2026-09-21): the effect lock must be shared by the
 native exit adapter, profile driver and ordinary map loop. The map-loop recovery
 barrier now includes `ExitChange`, preventing the main loop from applying cached
 or refreshed maps between native dispatch and durable selection commit. Connect
-after restart also needs protected saved-selection resume rather than ordinary
-Configure with an empty in-memory selection. Runtime maintenance must outlive
-the optional local listener: the IPC-disabled startup currently skips Serve and
-its workers. These are implementation gaps, not reasons to advertise readiness.
+after restart now uses protected saved-selection resume rather than ordinary
+Configure with an empty in-memory selection. The native worker is supervised
+outside Serve, so disabling the optional local listener does not skip it.
 
 The pinned architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`
 (client UI BA BP-UI-02/BP-UI-09; headless SA SR-12/F-07/IT-30) requires that
@@ -89,15 +148,12 @@ intended value. Comparison models retain only public identity and PSK digests;
 raw keys and UAPI errors are not returned. These are bounded periodic checks,
 not an atomic lease on external routing/firewall state or reachability proof.
 The later read-model increment adds catalog/control/events, a main-loop pending
-barrier and in-process post-Clear observations. Agent host wiring, capability,
-post-restart cleared scope, changed-interface recovery and LAN_ALLOW remain open.
-The production host still does not start the exit worker.
-Before host admission is enabled, reconcile Select with disconnected/default
-connection intent: selecting an exit must not inadvertently create connection
-effects outside the connection/lifecycle contract. The saved-resume gate already
-requires explicit connected intent; mutation admission/application needs the
-same contract audit. Recovery of a withdrawn but still live runtime also needs
-an explicit reconciliation path; a permanently unknown/closed state is not
+barrier and in-process post-Clear observations. The host/restart increment adds
+native worker lifetime, capability and durable cleared scope. Changed-interface
+recovery and LAN_ALLOW remain open. Select admission/application now require
+explicit connected intent, as does saved resume. Recovery of a withdrawn but
+still live runtime needs full guarded map-loop assertions; a permanently
+unknown/closed state is not
 completion of connection recovery.
 This increment passed goimports, vet, lint (0 issues) and the full short suite
 (internal/client 108.985 s). `native_exit_maintenance_test.go` covers failed
@@ -126,13 +182,13 @@ Clear uses stopped-runtime recovery before its durable release checkpoint;
 Release repeats cleanup and observes absence. Read-only RPC observation is
 serialized with effects and must not promote an old operation result to current
 runtime status. The later lifetime/resume increment supplies worker-level
-monitoring and saved resume; host integration and LAN_ALLOW remain required.
+monitoring and saved resume; host wiring is now implemented, LAN_ALLOW remains open.
 The read path observes settled active selections and, after the later read-model
-increment, independently verified in-process Clear. Pending changes, inactive
-profiles and post-restart Clear without its original scope remain unknown.
+increment, independently verified Clear using a durable observation address.
+Pending changes, inactive profiles and Clear without its original scope remain unknown.
 The Clear operation itself requires observed cleanup/release before success.
-The catalog and events remain subject to production host lifecycle integration;
-the exit capability is still not advertised.
+The production host owns catalog/events lifetime and advertises exit capability
+through the public native handle, not through arbitrary injected callbacks.
 The adapter currently requires its configured interface to equal the durable
 protection interface. Host recovery must resolve an interface-option change
 against the original protection scope before enabling Clear; it must not simply

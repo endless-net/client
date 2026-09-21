@@ -13,9 +13,9 @@ import (
 )
 
 func TestExitReadProjectionTracksWorkerAndAdmission(t *testing.T) {
-	for _, scenario := range []string{"ready", "absent", "stopped", "unsupported", "pending", "offline_clear", "stale_scope"} {
+	for _, scenario := range []string{"ready", "absent", "stopped", "unsupported", "pending", "offline_clear", "stale_scope", "missing_intent", "empty_intent", "disconnected"} {
 		t.Run(scenario, func(t *testing.T) {
-			m, owner, profile := rpcConnectFixture(t)
+			m, owner, profile := rpcExitFixture(t)
 			trusted, networkMap, key := signedApplicationFixture(t, false)
 			networkMap.Peers[0].AllowedIPs = append(networkMap.Peers[0].AllowedIPs, "0.0.0.0/0")
 			host := api.ServiceHost{NodeID: networkMap.Peers[0].ID, PublicKey: networkMap.Peers[0].PublicKey}
@@ -23,6 +23,15 @@ func TestExitReadProjectionTracksWorkerAndAdmission(t *testing.T) {
 			resignApplicationMap(t, &networkMap, key)
 			if err := m.store.Update(func(cfg *Config) error {
 				cfg.NodeID, cfg.NetworkID = networkMap.Node.ID, networkMap.Network.ID
+				cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
+				switch scenario {
+				case "missing_intent":
+					cfg.ConnectionIntent = nil
+				case "empty_intent":
+					cfg.ConnectionIntent = &ConnectionIntent{}
+				case "disconnected":
+					cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected}
+				}
 				cfg.MapRevision, cfg.MapGlobalRevision = networkMap.Network.Revision, networkMap.Revision.Global
 				cfg.CachedMap, cfg.MapSigningTrust = &networkMap, trusted.MapSigningTrust
 				if scenario == "pending" {
@@ -56,7 +65,7 @@ func TestExitReadProjectionTracksWorkerAndAdmission(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantControl := scenario == "ready" || scenario == "unsupported" || scenario == "offline_clear"
+			wantControl := scenario == "ready" || scenario == "unsupported" || scenario == "offline_clear" || scenario == "missing_intent" || scenario == "empty_intent" || scenario == "disconnected"
 			if (status.Control.Mutation.Availability == ipc.Availability_AVAILABILITY_AVAILABLE) != wantControl {
 				t.Fatalf("control availability does not match admission: %v", status.Control)
 			}
@@ -73,6 +82,9 @@ func TestExitReadProjectionTracksWorkerAndAdmission(t *testing.T) {
 					t.Fatal("catalog unavailable", err)
 				}
 				item := catalog.ExitNodes[0]
+				if (scenario == "missing_intent" || scenario == "empty_intent" || scenario == "disconnected") && item.Selection.ReasonKey != "exit_connection_required" {
+					t.Fatal("catalog did not explain connection prerequisite")
+				}
 				if (item.Selection.Availability == ipc.Availability_AVAILABILITY_AVAILABLE) != (scenario == "ready") {
 					t.Fatalf("invalid selection projection: %v", item)
 				}
@@ -99,7 +111,7 @@ func TestExitReadProjectionTracksWorkerAndAdmission(t *testing.T) {
 }
 
 func TestExitWorkerReadinessRebootstrapsStreamsWithoutCapability(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	s := NewClientRPCService(m, nil)
 	old, err := m.subscribe(owner, nil, nil)
 	if err != nil {
@@ -163,7 +175,7 @@ func TestExitWorkerReadinessRebootstrapsStreamsWithoutCapability(t *testing.T) {
 
 func TestExitReadControlRechecksWorkerAfterObservation(t *testing.T) {
 	for _, replace := range []bool{false, true} {
-		m, owner, profile := rpcConnectFixture(t)
+		m, owner, profile := rpcExitFixture(t)
 		s := NewClientRPCService(m, nil)
 		ctx, cancel := context.WithCancel(t.Context())
 		s.exitWorker = &clientRPCProfileWorker{ctx: ctx}

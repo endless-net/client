@@ -12,7 +12,7 @@ import (
 )
 
 func TestExitRequiresSharedEffectLockBeforeCheckpoint(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	if _, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}); err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestExitRequiresSharedEffectLockBeforeCheckpoint(t *testing.T) {
 }
 
 func TestExitWaitsForSharedEffectsAndRechecksCancellation(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	if _, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile}); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestExitWaitsForSharedEffectsAndRechecksCancellation(t *testing.T) {
 }
 
 func TestExitSharedEffectLockCoversApplyAndContainment(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	op, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
 	if err != nil {
 		t.Fatal(err)

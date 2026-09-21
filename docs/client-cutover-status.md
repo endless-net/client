@@ -52,14 +52,28 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+Host/restart increment от 2026-09-21: Linux agent запускает native exit-worker
+независимо от включённого IPC listener; supervisor отменяет runtime и дожидается
+workers до закрытия engine. Capability принадлежит живому native worker.
+Connect с сохранённым exit использует защищённый resume. Select требует явного
+connected intent и не выполняет Connect; Clear и replay сохраняются отдельно.
+Область проверки после Clear теперь сохраняется атомарно с завершением операции
+и восстанавливается после рестарта без credentials и без доверия старому success:
+каждое наблюдение заново проверяет ОС.
+
+Clear обычного работающего туннеля проверяет сохранённую engine identity и
+actual UAPI до принятия защиты; чужой owner/profile с тем же node не затрагивается.
+Rollback восстанавливает эту identity вместе с устройством. Непригодная route
+table отклоняется до создания Select/Clear journal.
+
 Read-model increment от 2026-09-21: после Clear native observer заново проверяет
 отсутствие exit firewall/rules/default routes и actual UAPI обычного runtime.
 Приватная запись определяет только область проверки и не заменяет свежие
-наблюдения; её восстановление после рестарта ещё требуется. Каталог показывает
+наблюдения; более поздний host/restart increment сохраняет область на диск. Каталог показывает
 только разрешённые policy и поддержанные worker комбинации family/LAN, а control
 отражает admission для Clear. Worker отдельно публикует изменения наблюдаемого
 состояния; при смене готовности подписчики получают STALE_STATE для rebootstrap.
-Capability пока не включена: production host ещё не запускает exit-worker.
+Capability теперь включается только публичным native host adapter.
 Основной map loop теперь пропускает apply при незавершённом ExitChange.
 
 | Область | Что реализовано | Что ещё требуется |
@@ -67,7 +81,7 @@ Capability пока не включена: production host ещё не запу�
 | IPC и потребители | Protobuf client.v0, generated API, локальный gRPC через pipe/Unix socket; CLI и recovery helper используют v0 | Полный аудит удаления legacy, совместной работы Go/Dart и всех потребителей; приёмка UI относится к внешнему репозиторию |
 | Состояние и операции | Durable операции, идентификаторы запросов, replay, проверки владельца/профиля, конфликты и восстановление; snapshot/events | Проверка каждой мутации и перехода по матрице, включая права, CAS, отмену, рестарт и приватность событий |
 | Enrollment, trust, session | Workers и транспорт enrollment/trust/renewal, сохранение прогресса, ротация credentials, отмена старых запросов и защита от поздних ответов | Полный аудит cleanup/concurrency и контекста; подтверждение producer semantics и реального seamless renewal |
-| Exit | Get/Select/Clear handlers, durable journal и ownership, checkpoint release; Linux executor, cleanup, family-scoped firewall, UAPI/identity/DNS observations; worker maintenance, saved-resume, catalog/control и события; свежий status после Clear в текущем процессе | Host integration, disconnected admission и live recovery, восстановление cleared observation scope после рестарта, capability, LAN_ALLOW и OS qualification |
+| Exit | Linux native host/worker независимо от IPC, durable Select/Clear/ownership, защищённый saved resume, fresh UAPI/routes/firewall/DNS observations, catalog/control/events/capability; durable cleared scope через restart | LAN_ALLOW, recovery при смене интерфейса, полная совместная работа с profile/network/preference transitions, проверка live recovery и OS qualification; Select-before-Connect сейчас отклоняется |
 | Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN с проверкой адреса/протокола/порта, наблюдения запретов; retirement/возврат choices при аутентифицированной смене map | Положительное подтверждение доступности route/path/application, полный rollback/restart audit и реальные OS-эффекты |
 | Preferences и lifecycle | Set/Reset inbound/DNS/routes и lifecycle-полей, managed policy/locks/source; Windows power/logoff paths и resume-policy refresh | Полный аудит эффектов каждой настройки, доставка событий на других ОС, восстановление источников событий и native qualification |
 | Networks/profiles | Контекстные проверки, guards переключения, изоляция состояния и защита от устаревших ответов | Полная смена identity/map/routes, recovery и фактическая изоляция при переключении сети/provider |
@@ -90,14 +104,13 @@ Capability пока не включена: production host ещё не запу�
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: internal/client 104.634 s в итоговом запуске
-с post-Clear readback, catalog/control и observation events; остальные пакеты прошли.
+и `go test -short ./...`: после host/restart increment internal/client прошёл
+за 118.000 s, итоговый запуск использовал этот cache; cmd/endlessnet-client прошёл
+за 10.563 s с исправлениями startup и background status probes. Все пакеты прошли.
 Локальные native/E2E/installer проверки не запускались.
 
-1. Связать native exit executor, saved resume и maintenance с агентом и map loop;
-   согласовать эффекты Select с disconnected intent, восстановить withdrawn live
-   runtime и восстановление области наблюдения после Clear через рестарт.
-   Подключить capability и lifetime независимо от IPC listener, завершить LAN_ALLOW и recovery при
+1. Завершить native exit LAN_ALLOW, сочетания exit с profile/network/preference
+   transitions, аудит withdrawn live recovery и recovery при
    изменении настроенного интерфейса с сохранённым старым protection scope. Точный
    combined IPv6 ND readback и socket effects остаются предметом native qualification.
 2. Довести resources, preferences/lifecycle и переключение сетей до реальных

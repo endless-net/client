@@ -9,7 +9,7 @@ import (
 )
 
 func TestExitApplyCannotCommitAfterAcceptedDisconnect(t *testing.T) {
-	m, owner, profile := rpcConnectFixture(t)
+	m, owner, profile := rpcExitFixture(t)
 	if err := m.store.Update(func(cfg *Config) error {
 		cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected}
 		return nil
