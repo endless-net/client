@@ -62,44 +62,47 @@ type WireGuardEngineOptions struct {
 type WireGuardEngine struct {
 	mu sync.Mutex
 
-	opts              WireGuardEngineOptions
-	tun               tun.Device
-	device            *device.Device
-	bind              *MagicBind
-	router            wireGuardEngineRouter
-	interface_        string
-	configured        bool
-	runtimeSuspended  bool
-	routerCfg         wireGuardEngineRouterConfig
-	uapi              string
-	discovery         WireGuardEngineEndpointDiscovery
-	relayBridge       *wireGuardRelayBridge
-	relayPaths        *wireGuardRelayPathManager
-	portMapping       automaticPortMappingState
-	pathMap           clientapi.RegisterNodeResponse
-	pathKey           string
-	pathWake          chan struct{}
-	pathCancel        context.CancelFunc
-	applicationFilter *applicationPacketFilter
-	inboundFilter     *inboundPacketFilter
-	resourceFilter    *resourcePacketFilter
-	exitFilter        *exitPacketFilter
-	exitGuard         *linuxExitGuard
-	exitSelection     *ClientExitSelection
-	exitConfig        Config
-	exitRestoreConfig Config
-	underlayDNS       *underlayDNSSource
-	peerACLFilter     *peerACLFilter
-	sharingFilter     *sharingPacketFilter
-	applicationCancel context.CancelFunc
-	applicationDone   chan struct{}
-	flows             *flowCollector
-	flowCancel        context.CancelFunc
-	flowKey           string
-	flowMark          uint32
-	flowDNS           string
-	flowTransport     *rotatingControlClient
-	flowDone          chan struct{}
+	opts                  WireGuardEngineOptions
+	tun                   tun.Device
+	device                *device.Device
+	bind                  *MagicBind
+	router                wireGuardEngineRouter
+	interface_            string
+	configured            bool
+	runtimeSuspended      bool
+	routerCfg             wireGuardEngineRouterConfig
+	uapi                  string
+	discovery             WireGuardEngineEndpointDiscovery
+	relayBridge           *wireGuardRelayBridge
+	relayPaths            *wireGuardRelayPathManager
+	portMapping           automaticPortMappingState
+	pathMap               clientapi.RegisterNodeResponse
+	pathKey               string
+	pathWake              chan struct{}
+	pathCancel            context.CancelFunc
+	applicationFilter     *applicationPacketFilter
+	inboundFilter         *inboundPacketFilter
+	resourceFilter        *resourcePacketFilter
+	exitFilter            *exitPacketFilter
+	exitGuard             *linuxExitGuard
+	exitSelection         *ClientExitSelection
+	exitConfig            Config
+	exitRestoreConfig     Config
+	underlayDNS           *underlayDNSSource
+	underlayLease         *underlayDNSLease
+	underlayLeaseIdentity string
+	peerACLFilter         *peerACLFilter
+	sharingFilter         *sharingPacketFilter
+	applicationCancel     context.CancelFunc
+	applicationDone       chan struct{}
+	flows                 *flowCollector
+	flowCancel            context.CancelFunc
+	flowKey               string
+	flowMark              uint32
+	flowDNS               string
+	flowLease             *underlayDNSLease
+	flowTransport         *rotatingControlClient
+	flowDone              chan struct{}
 }
 
 type WireGuardEngineEndpointDiscovery struct {
@@ -260,7 +263,7 @@ func (e *WireGuardEngine) releaseClearedExit(ctx context.Context, guard *linuxEx
 		return err
 	}
 	e.exitGuard = nil
-	e.underlayDNS = nil
+	e.clearUnderlayDNSLocked()
 	e.exitRestoreConfig = Config{}
 	e.exitSelection = nil
 	e.exitFilter = nil
@@ -887,7 +890,8 @@ func (e *WireGuardEngine) restoreRelayBridgeLocked(previous wireGuardEngineSnaps
 	if e.bind == nil {
 		return errors.New("restore wireguard-go relay bridge: UDP bind is unavailable")
 	}
-	if err := e.relayBridge.Ensure(context.Background(), previous.pathMap, e.bind.LoopbackEndpoint(), previous.routerCfg.FirewallMark, e.underlayDNS, e.underlayDNSCurrentLocked()); err != nil {
+	current := e.underlayDNSCurrentLocked()
+	if err := e.relayBridge.Ensure(context.Background(), previous.pathMap, e.bind.LoopbackEndpoint(), previous.routerCfg.FirewallMark, e.underlayDNS, current, e.underlayLease); err != nil {
 		return fmt.Errorf("restore wireguard-go relay bridge: %w", err)
 	}
 	return nil
@@ -1173,6 +1177,7 @@ func (e *WireGuardEngine) downLocked(ctx context.Context) (WireGuardApplyResult,
 func (e *WireGuardEngine) Close() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.clearUnderlayDNSLocked()
 	return e.closeLocked(context.Background())
 }
 
@@ -1325,7 +1330,8 @@ func (e *WireGuardEngine) relayEndpointOverridesLocked(ctx context.Context, netw
 	if e.relayBridge == nil || e.relayPaths == nil || e.bind == nil {
 		return nil, RelayDialResult{}, nil
 	}
-	if err := e.relayBridge.Ensure(ctx, networkMap, e.bind.LoopbackEndpoint(), mark, e.underlayDNS, e.underlayDNSCurrentLocked()); err != nil {
+	current := e.underlayDNSCurrentLocked()
+	if err := e.relayBridge.Ensure(ctx, networkMap, e.bind.LoopbackEndpoint(), mark, e.underlayDNS, current, e.underlayLease); err != nil {
 		log.Printf("wireguard-go relay bridge unavailable: %v", err)
 		return nil, RelayDialResult{}, err
 	}

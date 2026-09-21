@@ -46,7 +46,7 @@ func TestWireGuardRelayReplacesConnectionsWhenUnderlayMarkChanges(t *testing.T) 
 	}
 	for _, mark := range []uint32{51820, 51821} {
 		before, _, _ := server.Counts()
-		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), mark, nil, nil); err != nil {
+		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), mark, nil, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 		after, _, _ := server.Counts()
@@ -54,7 +54,7 @@ func TestWireGuardRelayReplacesConnectionsWhenUnderlayMarkChanges(t *testing.T) 
 			t.Fatal("relay retained a connection with the previous socket policy")
 		}
 		calls := marked.Load()
-		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), mark, nil, nil); err != nil || marked.Load() != calls {
+		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), mark, nil, nil, nil); err != nil || marked.Load() != calls {
 			t.Fatal("unchanged relay policy unnecessarily reconnected", err)
 		}
 	}
@@ -62,7 +62,7 @@ func TestWireGuardRelayReplacesConnectionsWhenUnderlayMarkChanges(t *testing.T) 
 	for _, owner := range []string{":1.42", ":1.43"} {
 		source.Owner = owner
 		before, _, _ := server.Counts()
-		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), 51821, source, nil); err != nil {
+		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), 51821, source, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 		after, _, _ := server.Counts()
@@ -70,7 +70,23 @@ func TestWireGuardRelayReplacesConnectionsWhenUnderlayMarkChanges(t *testing.T) 
 			t.Fatal("same-mark DNS source replacement retained previous relay")
 		}
 	}
-	if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), 51821, source, func(context.Context) error { return errors.New("source changed") }); err == nil {
+	for range 2 {
+		lease := newUnderlayDNSLeaseWithTicks(func(context.Context) error { return nil }, nil, nil)
+		t.Cleanup(lease.Close)
+		before, _, _ := server.Counts()
+		if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), 51821, source, lease.Current, lease); err != nil {
+			t.Fatal(err)
+		}
+		after, _, _ := server.Counts()
+		lease.mu.Lock()
+		registered := len(lease.connections)
+		lease.mu.Unlock()
+		if after <= before || registered == 0 {
+			t.Fatal("new lease did not replace/register live relay")
+		}
+		lease.Close()
+	}
+	if err := bridge.Ensure(t.Context(), m, peer.LocalAddr().String(), 51821, source, func(context.Context) error { return errors.New("source changed") }, nil); err == nil {
 		t.Fatal("stale relay source accepted")
 	}
 	bridge.mu.Lock()

@@ -22,6 +22,34 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+DNS lifetime/route increment (2026-09-21): a single engine-owned, lazily started
+source lease serializes explicit checks and one-second monitor ticks; an
+observation has a five-second bound. Source failure permanently revokes the
+lease, cancels HTTP requests through body lifetime and closes its bounded socket
+registry, including late successful dials. Read/write guards use cancellation
+state rather than spawning native commands. Explicit recapture replaces the
+lease; protected Down retains it for recovery, final Close/release revokes it.
+Flow and relay compare lease identity as well as DNS snapshot identity.
+
+DNS socket creation observes `ip route get` with the socket mark, family,
+protocol, destination port and optional bound interface before and after
+connect. The selected interface and preferred source must match captured
+non-owned, up interface state. This includes configured global DNS servers.
+These are bounded point-in-time checks, not an atomic kernel routing lease;
+route/firewall changes between observations, native socket enforcement and
+platform acceptance remain open. Tests use injected command output, socket
+wrappers and a local HTTPS streaming response, not privileged networking.
+The JSON fields (`prefsrc`, IPv6 `from`, `mark`, `cache`, named `dev`) were
+cross-checked against [iproute2's route printer](https://github.com/iproute2/iproute2/blob/main/ip/iproute.c).
+
+Native adapter audit (2026-09-21): restart Clear/Contain still needs exact scoped
+cleanup from durable ExitProtection. A new process has no router.current;
+Down can report already stopped while policy rules survive, then release
+readback correctly refuses to open the firewall. Do not substitute a broad
+table flush or active config identity for the owned interface/table. Adapter
+callbacks, host worker startup/shutdown, map-loop reconciliation and live exit
+status remain required before advertising readiness.
+
 Pre-exit DNS increment (2026-09-21): the Linux source provider reads actual
 systemd-resolved Manager/Link properties and native interface addresses, bound
 to one unique D-Bus owner, and requires two equal observations. It excludes the
@@ -50,11 +78,10 @@ ordering, source replacement and preservation of socket-mark error identity.
 `underlay_dns_source_test.go`, `underlay_dns_resolver_test.go`,
 `underlay_dns_engine_test.go`, control transport and relay recovery tests cover
 these injected boundaries. They do not prove native busctl/SO_MARK/interface
-effects. Continuous invalidation of established connections and the whole HTTP
-body lifetime, encrypted DNS modes, full native adapter and platform acceptance
-remain open. Explicit global DNS has no per-link binding: its marked route must
-also be observed outside the owned tunnel before the native adapter can claim
-pre-exit DNS effectiveness. This increment does not advertise a ready exit worker.
+effects. The later lifetime/route increment above adds lease revocation and
+global DNS route observations. Encrypted DNS modes, atomic route/firewall
+invalidation, full native adapter and platform acceptance remain open. Neither
+increment advertises a ready exit worker.
 
 Firewall observation increment (2026-09-21): `exit_guard_observation.go`
 validates numeric nft JSON after Contain/OpenTunnel, including the owned inet

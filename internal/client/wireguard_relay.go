@@ -21,6 +21,7 @@ type wireGuardRelayBridge struct {
 	timeout    time.Duration
 	tlsConfig  *tls.Config
 	key        string
+	lease      *underlayDNSLease
 	status     RelayDataplaneBridgeStatus
 	statusOK   bool
 	lastErr    error
@@ -36,7 +37,7 @@ func newWireGuardRelayBridge(timeout time.Duration, tlsConfig *tls.Config) *wire
 	return &wireGuardRelayBridge{timeout: timeout, tlsConfig: tlsConfig}
 }
 
-func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.RegisterNodeResponse, wireGuardListenAddr string, mark uint32, source *underlayDNSSource, current func(context.Context) error) error {
+func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.RegisterNodeResponse, wireGuardListenAddr string, mark uint32, source *underlayDNSSource, current func(context.Context) error, lease *underlayDNSLease) error {
 	if b == nil {
 		return nil
 	}
@@ -60,7 +61,7 @@ func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.reapLocked()
-	if b.cancel != nil && b.key == key {
+	if b.cancel != nil && b.key == key && b.lease == lease {
 		return nil
 	}
 	b.stopLocked()
@@ -81,6 +82,7 @@ func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.
 	}
 	dialer := markedUnderlayDialer(mark, b.markSocket, source, hosts)
 	dialer.current = current
+	dialer.lease = lease
 	go func() {
 		done <- RunRelayDataplaneBridge(bridgeCtx, RelayDataplaneBridgeOptions{
 			NetworkMap:          networkMap,
@@ -105,6 +107,7 @@ func (b *wireGuardRelayBridge) Ensure(ctx context.Context, networkMap clientapi.
 	select {
 	case status := <-ready:
 		b.key = key
+		b.lease = lease
 		b.status = status
 		b.statusOK = true
 		b.lastErr = nil
@@ -164,6 +167,7 @@ func (b *wireGuardRelayBridge) reapLocked() {
 		b.cancel = nil
 		b.done = nil
 		b.key = ""
+		b.lease = nil
 		b.status = RelayDataplaneBridgeStatus{}
 		b.statusOK = false
 		b.lastErr = err
@@ -180,6 +184,7 @@ func (b *wireGuardRelayBridge) stopLocked() {
 	b.cancel = nil
 	b.done = nil
 	b.key = ""
+	b.lease = nil
 	b.status = RelayDataplaneBridgeStatus{}
 	b.statusOK = false
 	cancel()

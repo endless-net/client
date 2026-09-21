@@ -22,7 +22,12 @@ func (e *WireGuardEngine) ControlPlaneHTTPClient(cfg Config) (*http.Client, erro
 	} else if cfg.ExitSelection != nil || (cfg.RPCState != nil && (cfg.RPCState.ExitChange != nil || cfg.RPCState.ExitProtection != nil)) {
 		return nil, errors.New("control underlay requires protected exit recovery")
 	}
-	return newControlUnderlayHTTPClient(cfg.ControlURLs(), mark, nil, e.underlayDNS, e.underlayDNSCurrentLocked())
+	return e.newUnderlayHTTPClientLocked(cfg.ControlURLs(), mark)
+}
+
+func (e *WireGuardEngine) newUnderlayHTTPClientLocked(origins []string, mark uint32) (*http.Client, error) {
+	current := e.underlayDNSCurrentLocked()
+	return newControlUnderlayHTTPClient(origins, mark, nil, e.underlayDNS, current, e.underlayLease)
 }
 
 func sameExitControlIdentity(a, b Config) bool {

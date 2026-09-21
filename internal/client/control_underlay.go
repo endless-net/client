@@ -12,9 +12,10 @@ type controlUnderlayTransport struct {
 	base    *http.Transport
 	origins map[string]struct{}
 	current func(context.Context) error
+	lease   *underlayDNSLease
 }
 
-func newControlUnderlayHTTPClient(origins []string, mark uint32, setMark func(syscall.RawConn, uint32) error, source *underlayDNSSource, current func(context.Context) error) (*http.Client, error) {
+func newControlUnderlayHTTPClient(origins []string, mark uint32, setMark func(syscall.RawConn, uint32) error, source *underlayDNSSource, current func(context.Context) error, lease *underlayDNSLease) (*http.Client, error) {
 	allowed := make(map[string]struct{}, len(origins))
 	hosts := make([]string, 0, len(origins))
 	for _, raw := range origins {
@@ -40,12 +41,14 @@ func newControlUnderlayHTTPClient(origins []string, mark uint32, setMark func(sy
 		transport.DialTLS = nil //nolint:staticcheck // Disable the inherited deprecated hook rather than allowing it to bypass marking.
 		dialer := markedUnderlayDialer(mark, setMark, source, hosts)
 		dialer.current = current
+		dialer.lease = lease
 		transport.DialContext = dialer.DialContext
 	}
 	if mark == 0 {
 		current = nil
+		lease = nil
 	}
-	client.Transport = &controlUnderlayTransport{base: transport, origins: allowed, current: current}
+	client.Transport = &controlUnderlayTransport{base: transport, origins: allowed, current: current, lease: lease}
 	return client, nil
 }
 
@@ -78,15 +81,32 @@ func (t *controlUnderlayTransport) RoundTrip(request *http.Request) (*http.Respo
 			return nil, err
 		}
 	}
-	response, err := t.base.RoundTrip(request)
+	bound, cleanup, err := bindUnderlayHTTPRequest(request, t.lease)
+	if err != nil {
+		if request.Body != nil {
+			_ = request.Body.Close()
+		}
+		return nil, err
+	}
+	response, err := t.base.RoundTrip(bound)
+	if err != nil {
+		cleanup()
+		return response, err
+	}
 	if err == nil && t.current != nil {
 		if currentErr := t.current(request.Context()); currentErr != nil {
+			cleanup()
 			if response != nil && response.Body != nil {
 				_ = response.Body.Close()
 			}
 			t.base.CloseIdleConnections()
 			return nil, currentErr
 		}
+	}
+	if response != nil && response.Body != nil {
+		response.Body = wrapUnderlayHTTPBody(response.Body, t.lease, cleanup)
+	} else {
+		cleanup()
 	}
 	return response, err
 }

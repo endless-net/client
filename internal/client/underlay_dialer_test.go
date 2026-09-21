@@ -37,6 +37,7 @@ func TestMarkedUnderlayCoversTransportAndResolverWithoutFallback(t *testing.T) {
 					}
 					return nil
 				}, nil, []string{"127.0.0.1"})
+				dialer.observeRoute = func(context.Context, string, netip.AddrPort, underlayDNSLink) error { return nil }
 				ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 				defer cancel()
 				var conn net.Conn

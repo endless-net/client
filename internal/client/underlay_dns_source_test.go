@@ -121,6 +121,7 @@ func TestUnderlayDNSSourceCapturesOnlyBoundNonClientLinks(t *testing.T) {
 		{Index: 1, Name: "lo", Up: true, Loopback: true, Addresses: []netip.Addr{netip.MustParseAddr("127.0.0.1")}},
 		{Index: 2, Name: "eth0", Up: true, Addresses: []netip.Addr{netip.MustParseAddr("192.0.2.2")}},
 	}
+	want.OwnInterface = "endlessnet"
 	if !reflect.DeepEqual(source, want) || f.pass != 2 || f.owners != 2 {
 		t.Fatal("wrong normalized source", source)
 	}

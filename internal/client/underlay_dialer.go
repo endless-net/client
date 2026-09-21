@@ -18,7 +18,9 @@ type underlayDialer struct {
 	resolver *underlayDNSResolver
 	invalid  error
 	// Set before publication; revalidate identity without replacing the source.
-	current func(context.Context) error
+	current      func(context.Context) error
+	lease        *underlayDNSLease
+	observeRoute func(context.Context, string, netip.AddrPort, underlayDNSLink) error
 }
 
 func markedUnderlayDialer(mark uint32, setMark func(syscall.RawConn, uint32) error, source *underlayDNSSource, hosts []string) *underlayDialer {
@@ -43,6 +45,11 @@ func markedUnderlayDialer(mark uint32, setMark func(syscall.RawConn, uint32) err
 		d.hosts[canonical] = struct{}{}
 	}
 	d.resolver = newUnderlayDNSResolver(source, func(ctx context.Context, network string, server netip.AddrPort, link underlayDNSLink) (net.Conn, error) {
+		if d.observeRoute != nil {
+			if err := d.observeRoute(ctx, network, server, link); err != nil {
+				return nil, err
+			}
+		}
 		dnsDialer := net.Dialer{Control: func(_, _ string, raw syscall.RawConn) error {
 			if err := setMark(raw, mark); err != nil {
 				return err
@@ -52,8 +59,29 @@ func markedUnderlayDialer(mark uint32, setMark func(syscall.RawConn, uint32) err
 			}
 			return nil
 		}}
-		return dnsDialer.DialContext(ctx, network, server.String())
+		conn, err := dnsDialer.DialContext(ctx, network, server.String())
+		if err != nil {
+			return nil, err
+		}
+		if d.observeRoute != nil {
+			if err := d.observeRoute(ctx, network, server, link); err != nil {
+				_ = conn.Close()
+				return nil, err
+			}
+		}
+		if d.lease != nil {
+			return d.lease.Wrap(conn)
+		}
+		return conn, nil
 	})
+	snapshot := cloneUnderlayDNSSource(source)
+	d.observeRoute = func(ctx context.Context, network string, server netip.AddrPort, link underlayDNSLink) error {
+		if snapshot == nil {
+			return errUnderlayDNSRoute
+		}
+		_, err := observeUnderlayDNSRoute(ctx, snapshot.OwnInterface, mark, network, server, link, snapshot, nil)
+		return err
+	}
 	return d
 }
 
@@ -111,7 +139,11 @@ func (d *underlayDialer) DialContext(ctx context.Context, network, address strin
 	if err := d.checkCurrent(ctx); err != nil {
 		return nil, err
 	}
-	return dialUnderlayAddresses(ctx, network, port, addresses, d.direct.DialContext, d.checkCurrent)
+	conn, err := dialUnderlayAddresses(ctx, network, port, addresses, d.direct.DialContext, d.checkCurrent)
+	if err != nil || d.lease == nil {
+		return conn, err
+	}
+	return d.lease.Wrap(conn)
 }
 
 func underlayHost(host string) (string, error) {

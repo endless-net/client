@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -86,5 +87,15 @@ func TestFlowDNSReplacementKeepsWorkerAndConsentScope(t *testing.T) {
 	e.flowTransport.mu.RUnlock()
 	if !replaced || e.flowDone != done || e.flowKey != scope || e.flowDNS != underlayDNSSourceIdentity(e.underlayDNS) {
 		t.Fatal("DNS replacement retained old transport or changed consent worker")
+	}
+	previous = e.flowTransport.client
+	e.underlayLease = newUnderlayDNSLeaseWithTicks(func(context.Context) error { return nil }, nil, nil)
+	defer e.underlayLease.Close()
+	e.configureFlowLocked(cfg, network)
+	e.flowTransport.mu.RLock()
+	replaced = e.flowTransport.client != previous
+	e.flowTransport.mu.RUnlock()
+	if !replaced || e.flowDone != done || e.flowKey != scope || e.flowLease != e.underlayLease {
+		t.Fatal("same-source lease replacement retained transport or changed worker")
 	}
 }

@@ -17,9 +17,11 @@ ongoing invalidation и реальные platform evidence по-прежнему
 DNS increment от 2026-09-21: добавлены захват независимого Linux DNS source,
 прямое разрешение разрешённых control/relay имён и передача immutable snapshot
 через engine/transport/recovery. Смена owner, DNS или адресов внешних интерфейсов
-отклоняет старый источник. Работающие соединения и весь lifetime HTTP body ещё
-требуют постоянной invalidation; global DNS route вне TUN и native socket effects
-не подтверждены. DNSSEC/DoT режимы пока отклоняются без downgrade.
+отклоняет старый источник. Общая отзываемая DNS-сессия теперь закрывает живые
+соединения и отменяет HTTP body; global/per-link DNS route проверяется до/после
+connect. Это периодические наблюдения: изменения только маршрутов/firewall ещё
+требуют отдельной invalidation, а native socket effects — приёмки.
+DNSSEC/DoT режимы пока отклоняются без downgrade.
 
 Полная цель не завершена. Релиз v0.6.0 опубликован, но публикация не является
 приёмкой всех требований BA/SA. Текущие изменения после релиза находятся в main.
@@ -54,14 +56,15 @@ DNS increment от 2026-09-21: добавлены захват независи�
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: internal/client 102.671 s в итоговом запуске
-с DNS source/resolver и параллельным подключением; остальные пакеты прошли.
+и `go test -short ./...`: internal/client 106.805 s в итоговом запуске
+с DNS lifetime/route observations; остальные пакеты прошли.
 Локальные native/E2E/installer проверки не запускались.
 
 1. Завершить native exit Apply/Clear/Contain и recovery; связать его с агентом
    только после реализации необходимых эффектов и наблюдений. После добавленных
-   nft readback и DNS source/dialer нужны полный native executor, DNS route
-   observations и постоянная invalidation соединений/firewall/routes. Точный
+   nft readback, DNS source/dialer, route observations и отзыв соединений нужны
+   полный native executor, scoped cleanup после рестарта и invalidation
+   firewall/routes. Точный
    combined IPv6 ND readback и socket effects остаются предметом native qualification.
 2. Довести resources, preferences/lifecycle и переключение сетей до реальных
    эффектов с положительными и отрицательными unit assertions.

@@ -14,16 +14,61 @@ import (
 	"sync/atomic"
 	"syscall"
 	"testing"
+	"time"
 )
 
 type controlUnderlayBody struct{ closed bool }
+
+func TestControlUnderlayLeaseRevokesStreamingBody(t *testing.T) {
+	var stale atomic.Bool
+	lease := newUnderlayDNSLease(func(context.Context) error {
+		if stale.Load() {
+			return errors.New("changed")
+		}
+		return nil
+	})
+	defer lease.Close()
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	client, err := newControlUnderlayHTTPClient([]string{server.URL}, 51820, func(syscall.RawConn, uint32) error { return nil }, nil, lease.Current, lease)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.CloseIdleConnections()
+	roots := x509.NewCertPool()
+	roots.AddCert(server.Certificate())
+	client.Transport.(*controlUnderlayTransport).base.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots}
+	response, err := client.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	read := make(chan error, 1)
+	go func() { _, err := io.ReadAll(response.Body); read <- err }()
+	stale.Store(true)
+	if lease.Current(t.Context()) == nil {
+		t.Fatal("stale lease accepted")
+	}
+	select {
+	case err := <-read:
+		if err == nil {
+			t.Fatal("revoked body reported success")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("revocation did not interrupt body")
+	}
+}
 
 func (*controlUnderlayBody) Read([]byte) (int, error) { return 0, io.EOF }
 func (b *controlUnderlayBody) Close() error           { b.closed = true; return nil }
 
 func TestControlUnderlayRejectsUnauthorizedRequestsBeforeDial(t *testing.T) {
 	origins := []string{"https://control.example"}
-	client, err := newControlUnderlayHTTPClient(origins, 51820, nil, nil, nil)
+	client, err := newControlUnderlayHTTPClient(origins, 51820, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +137,7 @@ func TestControlUnderlayUsesMarkedTLSAndDoesNotFollowRedirects(t *testing.T) {
 		}
 		marks.Add(1)
 		return nil
-	}, nil, nil)
+	}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +164,7 @@ func TestControlUnderlayMarkFailureHasNoFallback(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { requests.Add(1) }))
 	defer server.Close()
 	markErr := errors.New("mark rejected")
-	client, err := newControlUnderlayHTTPClient([]string{server.URL}, 51820, func(syscall.RawConn, uint32) error { return markErr }, nil, nil)
+	client, err := newControlUnderlayHTTPClient([]string{server.URL}, 51820, func(syscall.RawConn, uint32) error { return markErr }, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +177,7 @@ func TestControlUnderlayMarkFailureHasNoFallback(t *testing.T) {
 
 func TestControlUnderlayRequiresValidOrigins(t *testing.T) {
 	for _, origins := range [][]string{nil, {"http://control.example"}, {"https://control.example/path"}, {"https://control.example", "https://other.example?query"}} {
-		client, err := newControlUnderlayHTTPClient(origins, 0, nil, nil, nil)
+		client, err := newControlUnderlayHTTPClient(origins, 0, nil, nil, nil, nil)
 		if err == nil || client != nil {
 			t.Fatalf("accepted invalid origins: %v", origins)
 		}
@@ -155,7 +200,7 @@ func TestControlUnderlayRejectsDNSChangeBeforeRequestAndAfterResponse(t *testing
 			}
 			return nil
 		}
-		client, err := newControlUnderlayHTTPClient([]string{server.URL}, 51820, func(syscall.RawConn, uint32) error { return nil }, nil, current)
+		client, err := newControlUnderlayHTTPClient([]string{server.URL}, 51820, func(syscall.RawConn, uint32) error { return nil }, nil, current, nil)
 		if err != nil {
 			server.Close()
 			t.Fatal(err)

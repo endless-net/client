@@ -145,7 +145,7 @@ func TestTUNFlowProducerRetriesThroughTLSProtobuf(t *testing.T) {
 				first = request
 				// A network-only transport replacement must retain the same worker,
 				// durable consent scope and immutable unacknowledged window.
-				replacement, replaceErr := newControlUnderlayHTTPClient([]string{endpoint.URL}, 51820, func(syscall.RawConn, uint32) error { return nil }, nil, nil)
+				replacement, replaceErr := newControlUnderlayHTTPClient([]string{endpoint.URL}, 51820, func(syscall.RawConn, uint32) error { return nil }, nil, nil, nil)
 				if replaceErr != nil {
 					t.Fatal(replaceErr)
 				}

@@ -20,8 +20,9 @@ import (
 // to resolve arbitrary names or proof of their current network reachability.
 // Callers bind it to their runtime identity and revalidate before reusing it.
 type underlayDNSSource struct {
-	Owner string
-	Links []underlayDNSLink
+	OwnInterface string
+	Owner        string
+	Links        []underlayDNSLink
 	// Non-owned interface identity/address state also invalidates a source when
 	// DHCP or uplink changes leave the resolver's numeric address unchanged.
 	Interfaces []underlayDNSInterface

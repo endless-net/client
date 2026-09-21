@@ -42,7 +42,7 @@ func underlayDNSCaptureLinks(owner, ownInterface string, interfaces []underlayDN
 		indices = append(indices, index)
 	}
 	sort.Ints(indices)
-	source := &underlayDNSSource{Owner: owner}
+	source := &underlayDNSSource{Owner: owner, OwnInterface: ownInterface}
 	for _, iface := range interfaces {
 		if iface.Name != ownInterface {
 			copy := iface

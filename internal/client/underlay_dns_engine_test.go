@@ -46,6 +46,16 @@ func TestExitDNSRecoveryRequiresContainmentAndFreshSource(t *testing.T) {
 		t.Fatal("source alias changed immutable binding or stale source accepted")
 	}
 	source.Links[0].Servers[0] = netip.MustParseAddrPort("192.0.2.53:53")
+	if current(t.Context()) == nil {
+		t.Fatal("revoked source silently recovered")
+	}
+	if err := e.captureUnderlayDNSLocked(t.Context(), true); err != nil {
+		t.Fatal(err)
+	}
+	current = e.underlayDNSCurrentLocked()
+	if current(t.Context()) != nil {
+		t.Fatal("explicit recapture did not create fresh lease")
+	}
 	source.Interfaces[0].Addresses[0] = netip.MustParseAddr("192.0.2.11")
 	if underlayDNSSourceIdentity(e.underlayDNS) != identity || current(t.Context()) == nil {
 		t.Fatal("unchanged DNS address hid DHCP source change")
@@ -57,5 +67,27 @@ func TestExitDNSRecoveryRequiresContainmentAndFreshSource(t *testing.T) {
 	cfg.ControlPlaneURLs = []string{"https://192.0.2.1"}
 	if err := e.restoreExitUnderlay(t.Context(), cfg, guard); err != nil || e.underlayDNS != nil || e.exitConfig.NodeID != cfg.NodeID {
 		t.Fatal("literal control endpoint unnecessarily required DNS", err)
+	}
+}
+
+func TestExitDNSLeaseSurvivesDownButNotFinalClose(t *testing.T) {
+	guard, err := newLinuxExitGuard("endlessnet", 51820, exitGuardReadbackRunner(t, "endlessnet", 51820, func(context.Context, string, string, ...string) ([]byte, error) { return nil, nil }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease := newUnderlayDNSLeaseWithTicks(func(context.Context) error { return nil }, nil, nil)
+	defer lease.Close()
+	e := &WireGuardEngine{exitGuard: guard, exitFilter: &exitPacketFilter{}, underlayLease: lease}
+	if _, err := e.Down(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if lease.Context().Err() != nil {
+		t.Fatal("protected Down revoked recovery underlay")
+	}
+	if err := e.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if lease.Context().Err() == nil || e.underlayLease != nil {
+		t.Fatal("final Close retained source lease")
 	}
 }

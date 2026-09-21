@@ -53,7 +53,7 @@ func (e *WireGuardEngine) captureUnderlayDNSLocked(ctx context.Context, required
 		return errors.New("underlay DNS capture requires owned protection")
 	}
 	if !required {
-		e.underlayDNS = nil
+		e.clearUnderlayDNSLocked()
 		return ctx.Err()
 	}
 	capture := e.opts.underlayDNSCapture
@@ -64,19 +64,30 @@ func (e *WireGuardEngine) captureUnderlayDNSLocked(ctx context.Context, required
 	}
 	source, err := capture(ctx, e.exitGuard.interfaceName)
 	if ctx.Err() != nil {
-		e.underlayDNS = nil
+		e.clearUnderlayDNSLocked()
 		return ctx.Err()
 	}
 	if err != nil || source == nil {
-		e.underlayDNS = nil
+		e.clearUnderlayDNSLocked()
 		return errors.New("underlay DNS source is unavailable")
 	}
 	if err := ctx.Err(); err != nil {
-		e.underlayDNS = nil
+		e.clearUnderlayDNSLocked()
 		return err
 	}
+	// An explicit capture replaces even a revoked lease with the same source.
+	e.clearUnderlayDNSLocked()
 	e.underlayDNS = cloneUnderlayDNSSource(source)
 	return nil
+}
+
+func (e *WireGuardEngine) clearUnderlayDNSLocked() {
+	if e.underlayLease != nil {
+		e.underlayLease.Close()
+	}
+	e.underlayLease = nil
+	e.underlayLeaseIdentity = ""
+	e.underlayDNS = nil
 }
 
 // A client keeps an immutable source and rechecks it without taking engine.mu.
@@ -88,6 +99,12 @@ func (e *WireGuardEngine) underlayDNSCurrentLocked() func(context.Context) error
 		return nil
 	}
 	identity := underlayDNSSourceIdentity(e.underlayDNS)
+	if e.underlayLease != nil && e.underlayLeaseIdentity == identity {
+		return e.underlayLease.Current
+	}
+	if e.underlayLease != nil {
+		e.underlayLease.Close()
+	}
 	name := e.exitGuard.interfaceName
 	capture := e.opts.underlayDNSCapture
 	if capture == nil {
@@ -95,7 +112,7 @@ func (e *WireGuardEngine) underlayDNSCurrentLocked() func(context.Context) error
 			return captureUnderlayDNSSource(ctx, name, nil)
 		}
 	}
-	return func(ctx context.Context) error {
+	current := func(ctx context.Context) error {
 		source, err := capture(ctx, name)
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -105,4 +122,7 @@ func (e *WireGuardEngine) underlayDNSCurrentLocked() func(context.Context) error
 		}
 		return ctx.Err()
 	}
+	e.underlayLease = newUnderlayDNSLease(current)
+	e.underlayLeaseIdentity = identity
+	return e.underlayLease.Current
 }
