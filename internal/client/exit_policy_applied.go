@@ -32,11 +32,11 @@ func confirmExitPolicyRules(ctx context.Context, guard *linuxExitGuard, family s
 }
 
 func exitPolicyRuleObserved(raw []byte, mark uint32, suppress bool, exitPriority uint32) (uint32, bool) {
-	if len(raw) > 1<<20 {
+	if !validExitPolicyTable(mark) {
 		return 0, false
 	}
-	var rules []map[string]json.RawMessage
-	if json.Unmarshal(raw, &rules) != nil || rules == nil || len(rules) > 4096 {
+	rules, err := decodeLinuxPolicyRules(raw)
+	if err != nil {
 		return 0, false
 	}
 	var selected uint32
@@ -66,33 +66,9 @@ func exitPolicyRuleObserved(raw []byte, mark uint32, suppress bool, exitPriority
 			if string(rule["suppress_prefixlen"]) != "0" {
 				return 0, false
 			}
-		} else {
-			var value string
-			if string(rule["not"]) != "null" || json.Unmarshal(rule["fwmark"], &value) != nil {
-				return 0, false
-			}
-			parsed, err := strconv.ParseUint(value, 0, 32)
-			if err != nil || parsed != uint64(mark) {
-				return 0, false
-			}
 		}
-		if src != "all" || found {
+		if src != "all" || found || !linuxPolicyRuleExact(rule, mark, suppress) {
 			return 0, false
-		}
-		for key := range rule {
-			switch key {
-			case "priority", "src", "table", "protocol":
-			case "not", "fwmark":
-				if suppress {
-					return 0, false
-				}
-			case "suppress_prefixlen":
-				if !suppress {
-					return 0, false
-				}
-			default:
-				return 0, false
-			}
 		}
 		selected, found = priority, true
 	}

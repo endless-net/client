@@ -23,6 +23,13 @@ connect. Это периодические наблюдения: изменен�
 требуют отдельной invalidation, а native socket effects — приёмки.
 DNSSEC/DoT режимы пока отклоняются без downgrade.
 
+Restart cleanup increment от 2026-09-21: остановленный engine восстанавливает
+containment и очищает подтверждённые default routes и policy rules по durable
+interface/table. Main suppression теперь привязан к mark; чужие/неоднозначные
+правила не удаляются. Частичный результат повторяется после рестарта без
+router.current. Reserved tables отклоняются до изменений ОС. Это не завершает
+native adapter/worker и не заменяет платформенную приёмку.
+
 Полная цель не завершена. Релиз v0.6.0 опубликован, но публикация не является
 приёмкой всех требований BA/SA. Текущие изменения после релиза находятся в main.
 
@@ -56,14 +63,14 @@ DNSSEC/DoT режимы пока отклоняются без downgrade.
 
 Изменения от 2026-09-21 прошли `goimports -w .`, `go vet ./...`,
 `golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` (0 issues)
-и `go test -short ./...`: internal/client 106.805 s в итоговом запуске
-с DNS lifetime/route observations; остальные пакеты прошли.
+и `go test -short ./...`: internal/client 104.626 s в итоговом запуске
+с restart cleanup и точным владением policy rules; остальные пакеты прошли.
 Локальные native/E2E/installer проверки не запускались.
 
 1. Завершить native exit Apply/Clear/Contain и recovery; связать его с агентом
    только после реализации необходимых эффектов и наблюдений. После добавленных
    nft readback, DNS source/dialer, route observations и отзыв соединений нужны
-   полный native executor, scoped cleanup после рестарта и invalidation
+   полный native executor, подключение scoped cleanup после рестарта к worker и invalidation
    firewall/routes. Точный
    combined IPv6 ND readback и socket effects остаются предметом native qualification.
 2. Довести resources, preferences/lifecycle и переключение сетей до реальных

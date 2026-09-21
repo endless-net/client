@@ -29,7 +29,7 @@ type linuxExitGuard struct {
 }
 
 func newLinuxExitGuard(interfaceName string, mark uint32, runner commandInputRunner) (*linuxExitGuard, error) {
-	if strings.TrimSpace(interfaceName) != interfaceName || !safeWireGuardInterfaceName(interfaceName) || interfaceName == "lo" || mark == 0 {
+	if strings.TrimSpace(interfaceName) != interfaceName || !safeWireGuardInterfaceName(interfaceName) || interfaceName == "lo" || mark == 0 || mark == 253 || mark == 254 || mark == 255 {
 		return nil, errors.New("invalid Linux exit guard identity")
 	}
 	if runner == nil {

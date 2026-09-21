@@ -85,7 +85,7 @@ func TestExitPolicyCleanupRequiresEveryRuleObservation(t *testing.T) {
 					if calls == target {
 						switch outcome {
 						case "remaining":
-							return []byte(fmt.Sprintf(`[{"priority":32764,"table":%q,"suppress_prefixlen":0}]`, table)), nil
+							return ownedPolicyRuleFixture(51820, table == "254"), nil
 						case "failed":
 							return nil, errors.New("synthetic-private-error")
 						case "malformed":

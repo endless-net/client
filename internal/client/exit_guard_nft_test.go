@@ -103,8 +103,10 @@ func TestLinuxExitGuardRejectsUnsafeIdentityAndCancellation(t *testing.T) {
 			t.Fatalf("accepted invalid interface %q", name)
 		}
 	}
-	if _, err := newLinuxExitGuard("endlessnet", 0, runner); err == nil {
-		t.Fatal("zero mark exempts ordinary unmarked traffic")
+	for _, mark := range []uint32{0, 253, 254, 255} {
+		if _, err := newLinuxExitGuard("endlessnet", mark, runner); err == nil {
+			t.Fatalf("accepted reserved exit table %d", mark)
+		}
 	}
 	guard, err := newLinuxExitGuard("endlessnet", 51820, runner)
 	if err != nil {

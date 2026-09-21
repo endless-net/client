@@ -155,7 +155,7 @@ func (r *linuxWireGuardEngineRouter) addRoute(ctx context.Context, cfg wireGuard
 		if err := r.run(ctx, "ip", family, "rule", "add", "not", "fwmark", table, "table", table); err != nil {
 			return err
 		}
-		return r.run(ctx, "ip", family, "rule", "add", "table", "main", "suppress_prefixlength", "0")
+		return r.run(ctx, "ip", family, "rule", "add", "not", "fwmark", table, "table", "main", "suppress_prefixlength", "0")
 	}
 	args := []string{family, "route", "replace", route.String(), "dev", cfg.Interface}
 	if table := linuxUserspaceRouteTable(cfg.RouteTable); table != "" {

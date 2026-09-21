@@ -11,7 +11,7 @@ import (
 
 func exitAppliedRuleFixture(table string) []byte {
 	if table == "254" {
-		return []byte(`[{"priority":32764,"src":"all","table":"254","suppress_prefixlen":0},{"priority":32766,"src":"all","table":"254"}]`)
+		return []byte(`[{"priority":32764,"src":"all","table":"254","not":null,"fwmark":"51999","suppress_prefixlen":0},{"priority":32766,"src":"all","table":"254"}]`)
 	}
 	return []byte(fmt.Sprintf(`[{"priority":32765,"src":"all","table":%q,"not":null,"fwmark":%q}]`, table, table))
 }
@@ -95,8 +95,8 @@ func TestExitPolicySuppressionRejectsChangedOrDuplicateRules(t *testing.T) {
 	for _, raw := range []string{
 		strings.ReplaceAll(valid, `"suppress_prefixlen":0`, `"suppress_prefixlen":null`),
 		strings.ReplaceAll(valid, `"suppress_prefixlen":0`, `"suppress_prefixlen":1`),
-		strings.ReplaceAll(valid, `"suppress_prefixlen":0`, `"suppress_prefixlen":0,"not":null`),
-		strings.ReplaceAll(valid, `"suppress_prefixlen":0`, `"suppress_prefixlen":0,"fwmark":"0xcb1f"`),
+		strings.ReplaceAll(valid, `"not":null,`, ``),
+		strings.ReplaceAll(valid, `"fwmark":"51999"`, `"fwmark":"51820"`),
 		strings.ReplaceAll(valid, `"suppress_prefixlen":0`, `"suppress_prefixlen":0,"dst":"192.0.2.0","dstlen":24`),
 		strings.ReplaceAll(valid, `"priority":32766,"src":"all","table":"254"`, `"priority":32763,"src":"all","table":"254","suppress_prefixlen":0`),
 	} {

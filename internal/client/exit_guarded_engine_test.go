@@ -87,9 +87,9 @@ func TestGuardedExitEngineOrdersProtectionAndRetainsItOnFailure(t *testing.T) {
 							return []byte(`[]`), nil
 						}
 						if scenario == "main_rule_preempts" && args[len(args)-1] == "254" {
-							return []byte(strings.ReplaceAll(string(exitAppliedRuleFixture("254")), "32766", "100")), nil
+							return []byte(strings.ReplaceAll(strings.ReplaceAll(string(exitAppliedRuleFixture("254")), "51999", "51820"), "32766", "100")), nil
 						}
-						return exitAppliedRuleFixture(args[len(args)-1]), nil
+						return []byte(strings.ReplaceAll(string(exitAppliedRuleFixture(args[len(args)-1])), "51999", "51820")), nil
 					}
 					if scenario == "route_unobserved" {
 						return []byte(`[]`), nil
@@ -166,7 +166,7 @@ func TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease(t *testing.T
 	guard, err := newLinuxExitGuard("endlessnet", 51820, exitGuardReadbackRunner(t, "endlessnet", 51820, func(_ context.Context, batch, name string, args ...string) ([]byte, error) {
 		if name == "ip" {
 			if remainingRules && strings.Contains(strings.Join(args, " "), "rule show") {
-				return []byte(`[{"priority":32764,"table":"51820","suppress_prefixlen":0}]`), nil
+				return ownedPolicyRuleFixture(51820, args[len(args)-1] == "254"), nil
 			}
 			if observationFailure {
 				return nil, errors.New("route observation failed")
@@ -230,7 +230,7 @@ func TestExitGuardReleaseRequiresCleanupAndRecoversUncertainRelease(t *testing.T
 		t.Fatal("remaining policy rules allowed protection release")
 	}
 	remainingRules = false
-	if err := engine.releaseClearedExit(t.Context(), guard); err == nil || releases != 1 || commands != before+2 || released || engine.exitGuard != guard || engine.exitSelection == nil {
+	if err := engine.releaseClearedExit(t.Context(), guard); err == nil || releases != 1 || released || engine.exitGuard != guard || engine.exitSelection == nil {
 		t.Fatal("uncertain release lost ownership or did not restore containment", err)
 	}
 	if err := engine.releaseClearedExit(t.Context(), guard); err != nil || !released || engine.exitGuard != nil || engine.exitSelection != nil || engine.exitFilter != nil {

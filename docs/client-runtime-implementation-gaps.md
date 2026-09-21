@@ -22,6 +22,24 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+Restart cleanup increment (2026-09-21): stopped-engine recovery first confirms
+containment, revokes control underlay, inspects both route families and removes
+only the direct default tuple belonging to the durable interface/dedicated
+table. Each deletion is followed by readback, so partial progress can be retried
+by a new process without router.current. Release repeats recovery before its
+final absence checks and never treats command failure as proof of absence.
+Reserved tables 0/253/254/255 are rejected before guard construction.
+
+Both exit policy rules now bind explicitly to the owned mark, including main
+suppression. Cleanup preobserves the whole target-table dump, requires an exact
+rule with a unique priority, deletes with priority/full mark mask and confirms
+absence. Generic main suppression and rules belonging to other marks are not
+deletion grants. No generic-rule compatibility deletion is retained. The global
+src_valid_mark sysctl is not reset: its previous value is not journaled and it
+may be shared with another VPN. Exact tuple ownership cannot distinguish an
+external administrator replacing the same tuple between dump and delete;
+iproute2 does not provide an atomic compare-and-delete operation.
+
 DNS lifetime/route increment (2026-09-21): a single engine-owned, lazily started
 source lease serializes explicit checks and one-second monitor ticks; an
 observation has a five-second bound. Source failure permanently revokes the
@@ -42,11 +60,9 @@ wrappers and a local HTTPS streaming response, not privileged networking.
 The JSON fields (`prefsrc`, IPv6 `from`, `mark`, `cache`, named `dev`) were
 cross-checked against [iproute2's route printer](https://github.com/iproute2/iproute2/blob/main/ip/iproute.c).
 
-Native adapter audit (2026-09-21): restart Clear/Contain still needs exact scoped
-cleanup from durable ExitProtection. A new process has no router.current;
-Down can report already stopped while policy rules survive, then release
-readback correctly refuses to open the firewall. Do not substitute a broad
-table flush or active config identity for the owned interface/table. Adapter
+Native adapter audit (2026-09-21): restart Clear/Contain now has an exact scoped
+cleanup step for the recovered guard; ordinary Down alone still does not prove
+that all kernel effects from a previous process disappeared. Adapter
 callbacks, host worker startup/shutdown, map-loop reconciliation and live exit
 status remain required before advertising readiness.
 

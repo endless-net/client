@@ -88,7 +88,7 @@ func exitRouteTableAbsent(raw []byte, table uint32) (bool, error) {
 // survived. Table references are checked without a mark filter so altered or
 // duplicate rules cannot be mistaken for a cleared dedicated table.
 func exitPolicyRulesAbsent(ctx context.Context, table uint32, runner CommandRunner) (bool, error) {
-	if table == 0 || runner == nil {
+	if !validExitPolicyTable(table) || runner == nil {
 		return false, errors.New("invalid exit policy rule observation target")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -107,7 +107,7 @@ func exitPolicyRulesAbsent(ctx context.Context, table uint32, runner CommandRunn
 			if err != nil {
 				return false, errors.New("exit policy rule observation failed")
 			}
-			clear, err := linuxPolicyRuleAbsent(raw, suppress)
+			clear, err := linuxPolicyRuleAbsent(raw, table, suppress)
 			if err != nil {
 				return false, err
 			}

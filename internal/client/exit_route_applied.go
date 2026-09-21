@@ -73,7 +73,7 @@ func confirmExitFamilyAbsent(ctx context.Context, guard *linuxExitGuard, family 
 		if err != nil {
 			return errors.New("disabled exit family rule observation failed")
 		}
-		absent, err := linuxPolicyRuleAbsent(raw, suppress)
+		absent, err := linuxPolicyRuleAbsent(raw, guard.mark, suppress)
 		if err != nil || !absent {
 			return errors.New("disabled exit family rules remain unconfirmed")
 		}

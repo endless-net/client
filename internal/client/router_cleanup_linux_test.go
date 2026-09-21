@@ -76,6 +76,9 @@ func TestLinuxExitRouteRequiresObservedRuleRemovalBeforeAddingRules(t *testing.T
 					r := &linuxWireGuardEngineRouter{runner: func(_ context.Context, name string, args ...string) ([]byte, error) {
 						command := name + " " + strings.Join(args, " ")
 						if strings.Contains(command, "rule add") {
+							if strings.Contains(command, "suppress_prefixlength") && !strings.Contains(command, "not fwmark 51820 table main suppress_prefixlength 0") {
+								t.Fatal("suppression rule lacks ownership", command)
+							}
 							added++
 						}
 						if strings.Contains(command, "rule del") {
@@ -86,12 +89,13 @@ func TestLinuxExitRouteRequiresObservedRuleRemovalBeforeAddingRules(t *testing.T
 							if args[0] != family {
 								t.Fatal("rule observation changed IP family")
 							}
-							if (stage == "dedicated" && inspected == 1) || (stage == "suppression" && inspected == 2) {
+							target := args[len(args)-1]
+							if (stage == "dedicated" && target == "51820") || (stage == "suppression" && target == "254") {
 								switch outcome {
 								case "failed":
 									return nil, errors.New("observation failed")
 								case "remaining":
-									return []byte(`[{"priority":32764,"table":"51820","suppress_prefixlen":0}]`), nil
+									return ownedPolicyRuleFixture(51820, target == "254"), nil
 								}
 							}
 							return []byte(`[]`), nil
