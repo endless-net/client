@@ -33,7 +33,9 @@ const (
 // restores a snapshot taken before a newer Disconnect. This method does not
 // establish that any OS effect has completed.
 func (m *ClientRPCMutations) ApplyRuntimeLifecycleIntent(ctx context.Context, event RuntimeLifecycleEvent, sessionOwner string) error {
-	m.mu.Lock()
+	if !lockExitRuntime(ctx, &m.mu) {
+		return ctx.Err()
+	}
 	defer m.mu.Unlock()
 	changed := false
 	disconnect := false

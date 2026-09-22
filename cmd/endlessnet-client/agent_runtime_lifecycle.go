@@ -62,8 +62,8 @@ func startAgentRuntimeLifecycle(ctx context.Context, cancel context.CancelCauseF
 		}
 		return nil
 	}
-	executor, err := client.NewRuntimeLifecycleExecutor(ctx, mutations, engine, opts.OperationMu, func() { requestAgentSync(opts) }, refresh, func(stopped bool, failure error) error {
-		return observeAgentRuntimeLifecycle(ctx, mutations, opts, stopped, failure)
+	executor, err := client.NewRuntimeLifecycleExecutor(ctx, mutations, engine, opts.OperationMu, func() { requestAgentSync(opts) }, refresh, func(transition context.Context, stopped bool, failure error) error {
+		return observeAgentRuntimeLifecycle(transition, mutations, opts, stopped, failure)
 	})
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func startAgentRuntimeLifecycle(ctx context.Context, cancel context.CancelCauseF
 				return
 			}
 			var pending *client.RuntimeLifecycleNotification
-			if err := executor.Handle(event.Event, event.SessionOwner); err != nil && ctx.Err() == nil {
+			if err := executor.Handle(ctx, event.Event, event.SessionOwner); err != nil && ctx.Err() == nil {
 				log.Print("runtime lifecycle transition pending")
 				var effectErr *client.RuntimeLifecycleEffectError
 				if event.Event != client.RuntimeUserLogoff || !errors.As(err, &effectErr) {

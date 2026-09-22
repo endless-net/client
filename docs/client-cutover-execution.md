@@ -36,6 +36,22 @@ making ignored test-only Close results explicit. Full local short suite passed
 (internal/client 145.651 s, CLI 12.447 s); its run began before that test-only
 errcheck correction. No native/system execution was performed.
 
+Package 2 transition increment (2026-09-22): lifecycle Handle now requires a
+transition context, linked to runtime lifetime. Executor/effect/intent-mutation
+lock acquisition is cancellable; callbacks receive the transition context.
+Cancellation during resume retains an already-held suspend gate. Tests cover
+both contended locks, transition expiry during policy refresh, independent
+transition cancellation by runtime shutdown and safe shutdown release.
+This does not connect Linux events or establish a hard real-time teardown bound:
+callbacks and storage must still finish cooperatively. Linux logind integration
+needs actual delay-inhibitor FD ownership and completion acknowledgement before
+release, plus source generation/recovery. A request to add the pinned D-Bus client
+`github.com/godbus/dbus/v5 v5.2.2` and permit its Go-cache writes is pending;
+no dependency or existing version has been changed.
+Validation: goimports, vet, configured lint (0 issues) and full local short suite
+passed (internal/client 142.623 s, CLI 11.119 s). The preceding HOST topology
+commit passed short CI [35718905260](https://github.com/endless-net/client/actions/runs/35718905260).
+
 ## Corrected network-selection evidence
 
 `cmd/endlessnet-client/service_rpc_host.go` installs the network catalog,

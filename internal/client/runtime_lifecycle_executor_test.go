@@ -58,7 +58,7 @@ func TestRuntimeLifecycleExecutorHoldsWorkersUntilVerifiedResume(t *testing.T) {
 			lock := &sync.Mutex{}
 			engine := &testRuntimeLifecycleEngine{lock: lock, t: t, fail: scenario == "suspend_failure"}
 			wakes := 0
-			executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() { wakes++ }, func(context.Context) error { return nil }, func(bool, error) error { return nil })
+			executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() { wakes++ }, func(context.Context) error { return nil }, func(context.Context, bool, error) error { return nil })
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -68,7 +68,7 @@ func TestRuntimeLifecycleExecutorHoldsWorkersUntilVerifiedResume(t *testing.T) {
 					t.Fatal(err)
 				}
 			}()
-			err = executor.Handle(RuntimeSuspend, "")
+			err = executor.Handle(ctx, RuntimeSuspend, "")
 			if (err != nil) != (scenario == "suspend_failure") {
 				t.Fatal(err)
 			}
@@ -91,7 +91,7 @@ func TestRuntimeLifecycleExecutorHoldsWorkersUntilVerifiedResume(t *testing.T) {
 				}
 			}
 			engine.fail = scenario == "resume_failure"
-			err = executor.Handle(RuntimeResume, "")
+			err = executor.Handle(ctx, RuntimeResume, "")
 			if scenario == "resume_failure" || scenario == "source_failure" {
 				if err == nil || wakes != 0 {
 					t.Fatal("failed resume woke workers", err)
@@ -106,7 +106,7 @@ func TestRuntimeLifecycleExecutorHoldsWorkersUntilVerifiedResume(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				if err := executor.Handle(RuntimeResume, ""); err != nil {
+				if err := executor.Handle(ctx, RuntimeResume, ""); err != nil {
 					t.Fatal(err)
 				}
 			} else if err != nil {
@@ -131,14 +131,14 @@ func TestRuntimeLifecycleExecutorRejectsForeignLogoffAndUnsafeClose(t *testing.T
 	ctx, cancel := context.WithCancel(t.Context())
 	lock := &sync.Mutex{}
 	engine := &testRuntimeLifecycleEngine{lock: lock, t: t}
-	executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() {}, func(context.Context) error { return nil }, func(bool, error) error { return nil })
+	executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() {}, func(context.Context) error { return nil }, func(context.Context, bool, error) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := executor.Handle(RuntimeUserLogoff, "other"); err == nil || engine.stops != 0 {
+	if err := executor.Handle(ctx, RuntimeUserLogoff, "other"); err == nil || engine.stops != 0 {
 		t.Fatal("foreign logoff affected engine", err)
 	}
-	if err := executor.Handle(RuntimeSuspend, ""); err != nil {
+	if err := executor.Handle(ctx, RuntimeSuspend, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := executor.Close(); err == nil {
@@ -155,7 +155,7 @@ func TestRuntimeLifecycleExecutorRejectsForeignLogoffAndUnsafeClose(t *testing.T
 	if !engine.suspended || engine.resumes != 0 {
 		t.Fatal("shutdown resumed networking")
 	}
-	if err := executor.Handle(RuntimeResume, ""); err == nil {
+	if err := executor.Handle(ctx, RuntimeResume, ""); err == nil {
 		t.Fatal("closed executor accepted event")
 	}
 }
@@ -179,7 +179,7 @@ func TestRuntimeResumeRefreshRunsInsideClosedGateAndRetries(t *testing.T) {
 			cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "newer_user_disconnect"}
 			return nil
 		})
-	}, func(bool, error) error { return nil })
+	}, func(context.Context, bool, error) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestRuntimeResumeRefreshRunsInsideClosedGateAndRetries(t *testing.T) {
 			t.Error(err)
 		}
 	}()
-	if err := executor.Handle(RuntimeResume, ""); err == nil || wakes != 0 || engine.resumes != 0 {
+	if err := executor.Handle(ctx, RuntimeResume, ""); err == nil || wakes != 0 || engine.resumes != 0 {
 		t.Fatal("unavailable source released an unsolicited resume", err)
 	}
 	if lock.TryLock() {
@@ -197,7 +197,7 @@ func TestRuntimeResumeRefreshRunsInsideClosedGateAndRetries(t *testing.T) {
 		t.Fatal("source failure released worker gate")
 	}
 	available = true
-	if err := executor.Handle(RuntimeResume, ""); err != nil {
+	if err := executor.Handle(ctx, RuntimeResume, ""); err != nil {
 		t.Fatal(err)
 	}
 	if wakes != 1 || engine.resumes != 1 || m.store.Read().ConnectionIntent.Reason != "newer_user_disconnect" {
@@ -213,7 +213,7 @@ func TestRuntimeLifecycleObservationPrecedesWorkerRelease(t *testing.T) {
 	wakes := 0
 	observations := 0
 	reject := false
-	executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() { wakes++ }, func(context.Context) error { return nil }, func(stopped bool, failure error) error {
+	executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() { wakes++ }, func(context.Context) error { return nil }, func(_ context.Context, stopped bool, failure error) error {
 		engine.assertLocked()
 		observations++
 		if stopped == engine.fail || (failure != nil) != engine.fail {
@@ -233,15 +233,15 @@ func TestRuntimeLifecycleObservationPrecedesWorkerRelease(t *testing.T) {
 			t.Error(err)
 		}
 	}()
-	if err := executor.Handle(RuntimeSuspend, ""); err == nil || observations != 1 {
+	if err := executor.Handle(ctx, RuntimeSuspend, ""); err == nil || observations != 1 {
 		t.Fatal("failed teardown not observed")
 	}
 	engine.fail = false
-	if err := executor.Handle(RuntimeSuspend, ""); err != nil || observations != 2 {
+	if err := executor.Handle(ctx, RuntimeSuspend, ""); err != nil || observations != 2 {
 		t.Fatal("successful teardown not observed", err)
 	}
 	reject = true
-	if err := executor.Handle(RuntimeResume, ""); err == nil || wakes != 0 {
+	if err := executor.Handle(ctx, RuntimeResume, ""); err == nil || wakes != 0 {
 		t.Fatal("failed observation released resume")
 	}
 	if lock.TryLock() {
@@ -249,7 +249,7 @@ func TestRuntimeLifecycleObservationPrecedesWorkerRelease(t *testing.T) {
 		t.Fatal("failed observation released workers")
 	}
 	reject = false
-	if err := executor.Handle(RuntimeResume, ""); err != nil || wakes != 1 || observations != 4 {
+	if err := executor.Handle(ctx, RuntimeResume, ""); err != nil || wakes != 1 || observations != 4 {
 		t.Fatal("observation recovery did not wake runtime", err)
 	}
 }

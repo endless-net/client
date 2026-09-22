@@ -37,7 +37,7 @@ func TestRuntimeLifecycleSnapshotEventsReattachAndRestart(t *testing.T) {
 	lock := &sync.Mutex{}
 	engine := &testRuntimeLifecycleEngine{lock: lock, t: t, fail: true}
 	wakes := 0
-	executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() { wakes++ }, func(context.Context) error { return nil }, func(stopped bool, failure error) error {
+	executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() { wakes++ }, func(context.Context) error { return nil }, func(_ context.Context, stopped bool, failure error) error {
 		engine.assertLocked()
 		return m.ObserveStatus(func(cfg Config) (*ipc.Status, error) {
 			phase := ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTING
@@ -93,17 +93,17 @@ func TestRuntimeLifecycleSnapshotEventsReattachAndRestart(t *testing.T) {
 			}
 		}
 	}
-	if err := executor.Handle(RuntimeSuspend, ""); err == nil {
+	if err := executor.Handle(ctx, RuntimeSuspend, ""); err == nil {
 		t.Fatal("unconfirmed teardown accepted")
 	}
 	assertUpdate(ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTING, true)
 	engine.fail = false
-	if err := executor.Handle(RuntimeSuspend, ""); err != nil {
+	if err := executor.Handle(ctx, RuntimeSuspend, ""); err != nil {
 		t.Fatal(err)
 	}
 	assertUpdate(ipc.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED, false)
 	beforeResume := m.Metadata().Revision
-	if err := executor.Handle(RuntimeResume, ""); err != nil || wakes != 1 {
+	if err := executor.Handle(ctx, RuntimeResume, ""); err != nil || wakes != 1 {
 		t.Fatal("resume failed", err)
 	}
 	if m.Metadata().Revision != beforeResume {

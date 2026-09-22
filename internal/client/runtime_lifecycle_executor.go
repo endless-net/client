@@ -31,30 +31,41 @@ type RuntimeLifecycleExecutor struct {
 	lifetime             context.Context
 	mutations            *ClientRPCMutations
 	engine               runtimeLifecycleEngine
-	operationLock        sync.Locker
+	operationLock        *sync.Mutex
 	wake                 func()
 	refreshPolicy        func(context.Context) error
-	observe              func(bool, error) error
+	observe              func(context.Context, bool, error) error
 	held                 bool
 	closed               bool
 	powerEvent           RuntimeLifecycleEvent
 	powerIntentCommitted bool
 }
 
-func NewRuntimeLifecycleExecutor(lifetime context.Context, mutations *ClientRPCMutations, engine runtimeLifecycleEngine, operationLock sync.Locker, wake func(), refreshPolicy func(context.Context) error, observe func(bool, error) error) (*RuntimeLifecycleExecutor, error) {
+func NewRuntimeLifecycleExecutor(lifetime context.Context, mutations *ClientRPCMutations, engine runtimeLifecycleEngine, operationLock *sync.Mutex, wake func(), refreshPolicy func(context.Context) error, observe func(context.Context, bool, error) error) (*RuntimeLifecycleExecutor, error) {
 	if lifetime == nil || mutations == nil || engine == nil || operationLock == nil || wake == nil || refreshPolicy == nil || observe == nil {
 		return nil, errors.New("runtime lifecycle requires lifetime, mutations, engine, operation lock, wake, policy refresh and observation")
 	}
 	return &RuntimeLifecycleExecutor{lifetime: lifetime, mutations: mutations, engine: engine, operationLock: operationLock, wake: wake, refreshPolicy: refreshPolicy, observe: observe}, nil
 }
 
-func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOwner string) error {
-	e.mu.Lock()
+func (e *RuntimeLifecycleExecutor) Handle(ctx context.Context, event RuntimeLifecycleEvent, sessionOwner string) error {
+	if ctx == nil {
+		return errors.New("runtime lifecycle requires transition context")
+	}
+	if err := e.lifetime.Err(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(e.lifetime, cancel)
+	defer func() { stop(); cancel() }()
+	if !lockExitRuntime(ctx, &e.mu) {
+		return ctx.Err()
+	}
 	defer e.mu.Unlock()
 	if e.closed {
 		return errors.New("runtime lifecycle executor is closed")
 	}
-	if err := e.lifetime.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if event != RuntimeSuspend && event != RuntimeResume && event != RuntimeUserLogoff {
@@ -68,7 +79,7 @@ func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOw
 	// its committed cancellation allows that apply to yield to teardown.
 	var policyErr error
 	if event == RuntimeUserLogoff || (event == RuntimeSuspend && !e.powerIntentCommitted) {
-		policyErr = e.mutations.ApplyRuntimeLifecycleIntent(e.lifetime, event, sessionOwner)
+		policyErr = e.mutations.ApplyRuntimeLifecycleIntent(ctx, event, sessionOwner)
 		if event == RuntimeSuspend && policyErr == nil {
 			e.powerIntentCommitted = true
 		}
@@ -76,7 +87,7 @@ func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOw
 	if event == RuntimeUserLogoff && policyErr != nil {
 		return policyErr
 	}
-	if err := e.lifetime.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return errors.Join(policyErr, err)
 	}
 	if event == RuntimeUserLogoff {
@@ -87,10 +98,12 @@ func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOw
 	}
 	previouslyHeld := e.held
 	if !e.held {
-		e.operationLock.Lock()
+		if !lockExitRuntime(ctx, e.operationLock) {
+			return errors.Join(policyErr, ctx.Err())
+		}
 		e.held = true
 	}
-	if err := e.lifetime.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		if !previouslyHeld {
 			e.release()
 		}
@@ -98,41 +111,41 @@ func (e *RuntimeLifecycleExecutor) Handle(event RuntimeLifecycleEvent, sessionOw
 	}
 	switch event {
 	case RuntimeSuspend:
-		result, err := e.engine.Suspend(e.lifetime)
-		downErr := runtimeLifecycleDownError(result, err)
+		result, err := e.engine.Suspend(ctx)
+		downErr := errors.Join(runtimeLifecycleDownError(result, err), ctx.Err())
 		failure := errors.Join(policyErr, downErr)
-		return errors.Join(failure, e.observe(downErr == nil, failure))
+		return errors.Join(failure, e.observe(ctx, downErr == nil, failure), ctx.Err())
 	case RuntimeResume:
 		// Close the gate even for an unsolicited resume. Fetch current authority
 		// before deciding intent; stale policy must not first commit Disconnect.
-		result, err := e.engine.Suspend(e.lifetime)
-		if err := runtimeLifecycleDownError(result, err); err != nil {
-			return errors.Join(err, e.observe(false, err))
+		result, err := e.engine.Suspend(ctx)
+		if err := errors.Join(runtimeLifecycleDownError(result, err), ctx.Err()); err != nil {
+			return errors.Join(err, e.observe(ctx, false, err))
 		}
-		if err := e.refreshPolicy(e.lifetime); err != nil {
-			return errors.Join(err, e.observe(true, err))
+		if err := errors.Join(e.refreshPolicy(ctx), ctx.Err()); err != nil {
+			return errors.Join(err, e.observe(ctx, true, err))
 		}
 		if !e.powerIntentCommitted {
-			policyErr = e.mutations.ApplyRuntimeLifecycleIntent(e.lifetime, event, sessionOwner)
+			policyErr = e.mutations.ApplyRuntimeLifecycleIntent(ctx, event, sessionOwner)
 			if policyErr != nil {
-				return errors.Join(policyErr, e.observe(true, policyErr))
+				return errors.Join(policyErr, e.observe(ctx, true, policyErr))
 			}
 			e.powerIntentCommitted = true
 		}
 		// Resume only opens the engine gate. No new tunnel has been applied.
-		if err := e.observe(true, nil); err != nil {
+		if err := errors.Join(e.observe(ctx, true, nil), ctx.Err()); err != nil {
 			return err
 		}
-		if err := e.engine.Resume(e.lifetime); err != nil {
-			return errors.Join(err, e.observe(true, err))
+		if err := errors.Join(e.engine.Resume(ctx), ctx.Err()); err != nil {
+			return errors.Join(err, e.observe(ctx, true, err))
 		}
 		e.release()
 		e.wake()
 		return nil
 	case RuntimeUserLogoff:
-		result, err := e.engine.Down(e.lifetime)
-		downErr := runtimeLifecycleDownError(result, err)
-		observationErr := e.observe(downErr == nil, downErr)
+		result, err := e.engine.Down(ctx)
+		downErr := errors.Join(runtimeLifecycleDownError(result, err), ctx.Err())
+		observationErr := errors.Join(e.observe(ctx, downErr == nil, downErr), ctx.Err())
 		if !previouslyHeld {
 			e.release()
 			e.wake() // Ordinary disconnected reconciliation retries a failed Down.

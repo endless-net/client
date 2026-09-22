@@ -34,7 +34,7 @@ func TestPowerRetryPreservesNewIntentAfterDecisionCommitted(t *testing.T) {
 			lock := &sync.Mutex{}
 			engine := &testRuntimeLifecycleEngine{lock: lock, t: t, fail: scenario == "suspend_down"}
 			observationFailed := false
-			executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() {}, func(context.Context) error { return nil }, func(bool, error) error {
+			executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() {}, func(context.Context) error { return nil }, func(context.Context, bool, error) error {
 				if scenario != "suspend_down" && !observationFailed {
 					observationFailed = true
 					return errors.New("observation temporarily unavailable")
@@ -51,7 +51,7 @@ func TestPowerRetryPreservesNewIntentAfterDecisionCommitted(t *testing.T) {
 					t.Error(err)
 				}
 			}()
-			if err := executor.Handle(event, ""); err == nil {
+			if err := executor.Handle(ctx, event, ""); err == nil {
 				t.Fatal("missing initial effect failure")
 			}
 			if m.store.Read().ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
@@ -68,17 +68,17 @@ func TestPowerRetryPreservesNewIntentAfterDecisionCommitted(t *testing.T) {
 				t.Fatal(err)
 			}
 			engine.fail = false
-			if err := executor.Handle(event, ""); err != nil {
+			if err := executor.Handle(ctx, event, ""); err != nil {
 				t.Fatal(err)
 			}
 			if intent := m.store.Read().ConnectionIntent; intent.DesiredState != ConnectionIntentDesiredConnected || intent.Reason != "new_user_connect" {
 				t.Fatal("power retry replayed committed decision over newer intent")
 			}
 			// A completed cycle must not suppress policy for the next OS event.
-			if err := executor.Handle(opposite, ""); err != nil {
+			if err := executor.Handle(ctx, opposite, ""); err != nil {
 				t.Fatal(err)
 			}
-			if err := executor.Handle(event, ""); err != nil {
+			if err := executor.Handle(ctx, event, ""); err != nil {
 				t.Fatal(err)
 			}
 			if m.store.Read().ConnectionIntent.DesiredState != ConnectionIntentDesiredDisconnected {
