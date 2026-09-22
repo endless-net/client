@@ -464,7 +464,7 @@ func cmdAgent(args []string) error {
 		syncWake := make(chan struct{}, 1)
 		ipcOpts := agentIPCOptions{
 			LifecycleSourcesKnown: true,
-			LifecycleLogoffSource: runtime.GOOS == "windows" && lifecycleEvents != nil,
+			LifecycleLogoffSource: lifecycleEvents != nil && (runtime.GOOS == "windows" || runtime.GOOS == "linux"),
 			LifecyclePowerSource:  lifecycleEvents != nil && (runtime.GOOS == "windows" || runtime.GOOS == "linux"),
 			Offline:               *offline,
 			Pipe:                  *ipcPipe,

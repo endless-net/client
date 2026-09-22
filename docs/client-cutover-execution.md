@@ -63,11 +63,20 @@ terminates the agent without changing saved intent solely for source health.
 The source uses `github.com/godbus/dbus/v5 v5.2.2`, explicitly approved for
 this dependency and Go-cache access. This is bounded logind sleep-cycle
 coordination, not an arbitrary kernel-suspend guarantee or native acceptance.
-Linux logoff delivery remains unimplemented; Windows SCM logoff and power paths
-remain synthetic-unit verified pending platform qualification.
+Linux logoff now subscribes to logind `SessionNew`/`SessionRemoved` on the pinned
+owner, binds session ID and object path to the UID from a bounded `ListSessions`
+snapshot, and forwards only a matching removal as `uid:<n>`. A reconnect
+compares the last bound sessions with the fresh inventory and queues a missing
+owner logoff before opening the source gate. The agent rechecks the current
+local owner and applies the signed policy. Unknown, malformed, replaced or
+overflowed session events cause source recovery instead of guessed intent.
+Events while both agent and source are stopped cannot be reconstructed from a
+fresh logind snapshot alone; runtime startup intent and later native acceptance
+remain separate. Windows SCM logoff and power paths remain synthetic-unit
+verified pending platform qualification.
 Production IPC now marks logoff/suspend/resume preferences unsupported when its
-runtime has no corresponding trusted event source. Linux exposes the logind
-power source only; macOS currently exposes none of these OS-event preferences.
+runtime has no corresponding trusted event source. Linux exposes logind power
+and logoff; macOS currently exposes none of these OS-event preferences.
 UI_QUIT and runtime_start remain independent settings. Source loss uses
 source-health gate events, so a configured DISCONNECT for real suspend/resume
 is never applied merely because D-Bus delivery failed.

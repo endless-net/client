@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/client"
+	"github.com/godbus/dbus/v5"
 )
 
 func TestLogindInhibitorClosesOnlyAfterSuspendConfirmation(t *testing.T) {
@@ -73,6 +74,7 @@ type testLogindSession struct {
 	preparingValue bool
 	listenResult   error
 	entered        chan struct{}
+	sessions       map[string]logindSessionIdentity
 }
 
 func (s *testLogindSession) preparing(context.Context) (bool, error) { return s.preparingValue, nil }
@@ -95,6 +97,61 @@ func (s *testLogindSession) suspendFailed() bool { return false }
 func (s *testLogindSession) markSleeping()       {}
 func (s *testLogindSession) isSleeping() bool    { return false }
 func (s *testLogindSession) hasResumed() bool    { return false }
+func (s *testLogindSession) sessionSnapshot() map[string]logindSessionIdentity {
+	return cloneLogindSessions(s.sessions)
+}
+
+func TestLogindSessionIdentityAndRemoval(t *testing.T) {
+	path := dbus.ObjectPath("/org/freedesktop/login1/session/_42")
+	sessions, err := decodeLogindSessions([][]any{{"42", uint32(1001), "owner", "seat0", path}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range [][][]any{{{"42", "1001", "owner", "seat0", path}}, {{"42", uint32(1001), "owner", "seat0", path}, {"42", uint32(1002), "other", "seat0", path}}, {{"", uint32(1001), "owner", "seat0", path}}} {
+		if _, err := decodeLogindSessions(invalid); err == nil {
+			t.Fatal("malformed or duplicate session inventory accepted", invalid)
+		}
+	}
+	events := make(chan client.RuntimeLifecycleNotification, 1)
+	if err := removeLogindSession(t.Context(), events, sessions, "42", dbus.ObjectPath("/wrong")); err == nil || len(events) != 0 || len(sessions) != 1 {
+		t.Fatal("wrong session path altered owner binding", err)
+	}
+	if err := removeLogindSession(t.Context(), events, sessions, "42", path); err != nil {
+		t.Fatal(err)
+	}
+	event := <-events
+	if event.Event != client.RuntimeUserLogoff || event.SessionOwner != "uid:1001" || len(sessions) != 0 {
+		t.Fatal("logoff did not bind the trusted UID", event)
+	}
+	if err := removeLogindSession(t.Context(), events, sessions, "42", path); err == nil {
+		t.Fatal("duplicate logoff reused an expired session binding")
+	}
+}
+
+func TestLogindReconnectionReplaysOnlyMissingBoundSessions(t *testing.T) {
+	previous := map[string]logindSessionIdentity{
+		"old":  {uid: 1001, path: dbus.ObjectPath("/session/old")},
+		"same": {uid: 1002, path: dbus.ObjectPath("/session/same")},
+	}
+	current := map[string]logindSessionIdentity{"same": previous["same"]}
+	events := make(chan client.RuntimeLifecycleNotification, 2)
+	if err := deliverMissedLogoffs(t.Context(), events, previous, current); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || (<-events).SessionOwner != "uid:1001" {
+		t.Fatal("reconnect missed or invented owner logoff")
+	}
+	current["renumbered"] = logindSessionIdentity{uid: 1001, path: dbus.ObjectPath("/session/new")}
+	if err := deliverMissedLogoffs(t.Context(), events, previous, current); err != nil || len(events) != 0 {
+		t.Fatal("renumbered active UID was mistaken for logoff", err)
+	}
+	delete(current, "renumbered")
+	full := make(chan client.RuntimeLifecycleNotification, 1)
+	full <- client.RuntimeLifecycleNotification{Event: client.RuntimeSuspend}
+	if err := deliverMissedLogoffs(t.Context(), full, previous, current); err == nil {
+		t.Fatal("overflow silently lost a logoff event")
+	}
+}
 
 func TestLogindSourceLossClosesGateBeforeRecoveredResume(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())

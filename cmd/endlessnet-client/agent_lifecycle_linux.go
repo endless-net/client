@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/endless-net/client/internal/client"
@@ -30,7 +31,7 @@ func runAgentPlatformLifecycle(ctx context.Context, run func(context.Context, <-
 	if err != nil {
 		return fmt.Errorf("initialize logind lifecycle source: %w", err)
 	}
-	events := make(chan client.RuntimeLifecycleNotification, 1)
+	events := make(chan client.RuntimeLifecycleNotification, 64)
 	sourceResult := make(chan error, 1)
 	go func() {
 		sourceResult <- runLogindSource(ctx, events, initial)
@@ -61,11 +62,13 @@ type logindLifecycleSession interface {
 	close()
 	suspendFailed() bool
 	markSleeping()
+	sessionSnapshot() map[string]logindSessionIdentity
 }
 
 func runLogindSourceWith(ctx context.Context, events chan<- client.RuntimeLifecycleNotification, initial logindLifecycleSession, open func(context.Context) (logindLifecycleSession, error)) error {
 	var recovering bool
 	var missedResume bool
+	var known map[string]logindSessionIdentity
 	for attempt := 0; ctx.Err() == nil; attempt++ {
 		session := initial
 		initial = nil
@@ -97,6 +100,14 @@ func runLogindSourceWith(ctx context.Context, events chan<- client.RuntimeLifecy
 				continue
 			}
 		}
+		current := session.sessionSnapshot()
+		if attempt > 0 {
+			if err := deliverMissedLogoffs(ctx, events, known, current); err != nil {
+				session.close()
+				return err
+			}
+		}
+		known = current
 		preparing, err := session.preparing(ctx)
 		if err == nil && recovering && !preparing {
 			resumeEvent := client.RuntimeSourceRecovered
@@ -123,6 +134,7 @@ func runLogindSourceWith(ctx context.Context, events chan<- client.RuntimeLifecy
 		} else if session.isSleeping() {
 			missedResume = true
 		}
+		known = session.sessionSnapshot()
 		session.close()
 		if ctx.Err() != nil {
 			return nil
@@ -139,6 +151,52 @@ func (s *logindSession) suspendFailed() bool { return s.failedSuspend }
 func (s *logindSession) markSleeping()       { s.sleeping, s.resumed = true, false }
 func (s *logindSession) isSleeping() bool    { return s.sleeping }
 func (s *logindSession) hasResumed() bool    { return s.resumed }
+func (s *logindSession) sessionSnapshot() map[string]logindSessionIdentity {
+	return cloneLogindSessions(s.sessions)
+}
+
+type logindSessionIdentity struct {
+	uid  uint32
+	path dbus.ObjectPath
+}
+
+func cloneLogindSessions(source map[string]logindSessionIdentity) map[string]logindSessionIdentity {
+	copy := make(map[string]logindSessionIdentity, len(source))
+	for id, identity := range source {
+		copy[id] = identity
+	}
+	return copy
+}
+
+func deliverLogindLogoff(ctx context.Context, events chan<- client.RuntimeLifecycleNotification, uid uint32) error {
+	notification := client.RuntimeLifecycleNotification{Event: client.RuntimeUserLogoff, SessionOwner: "uid:" + strconv.FormatUint(uint64(uid), 10)}
+	select {
+	case events <- notification:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return errors.New("logind lifecycle event queue overflow")
+	}
+}
+
+func deliverMissedLogoffs(ctx context.Context, events chan<- client.RuntimeLifecycleNotification, previous, current map[string]logindSessionIdentity) error {
+	seen := make(map[uint32]bool)
+	currentUsers := make(map[uint32]bool)
+	for _, identity := range current {
+		currentUsers[identity.uid] = true
+	}
+	for id, identity := range previous {
+		if now, exists := current[id]; exists && now == identity || seen[identity.uid] || currentUsers[identity.uid] {
+			continue
+		}
+		if err := deliverLogindLogoff(ctx, events, identity.uid); err != nil {
+			return err
+		}
+		seen[identity.uid] = true
+	}
+	return nil
+}
 
 type logindSession struct {
 	conn          *dbus.Conn
@@ -151,6 +209,7 @@ type logindSession struct {
 	resumed       bool
 	failedSuspend bool
 	stopOnCancel  func() bool
+	sessions      map[string]logindSessionIdentity
 }
 
 type logindSignalHandler struct {
@@ -198,6 +257,11 @@ func openLogindSession(ctx context.Context) (_ *logindSession, resultErr error) 
 	if err := conn.AddMatchSignalContext(ctx, dbus.WithMatchInterface(loginInterface), dbus.WithMatchMember("PrepareForSleep"), dbus.WithMatchObjectPath(loginPath)); err != nil {
 		return nil, err
 	}
+	for _, member := range []string{"SessionNew", "SessionRemoved"} {
+		if err := conn.AddMatchSignalContext(ctx, dbus.WithMatchInterface(loginInterface), dbus.WithMatchMember(member), dbus.WithMatchObjectPath(loginPath)); err != nil {
+			return nil, err
+		}
+	}
 	if err := conn.BusObject().CallWithContext(ctx, busInterface+".GetNameOwner", 0, loginName).Store(&s.owner); err != nil || s.owner == "" {
 		return nil, errors.New("logind owner unavailable")
 	}
@@ -217,7 +281,57 @@ func openLogindSession(ctx context.Context) (_ *logindSession, resultErr error) 
 	if err := conn.BusObject().CallWithContext(ctx, busInterface+".GetNameOwner", 0, loginName).Store(&current); err != nil || current != s.owner {
 		return nil, errors.New("logind owner changed during subscription")
 	}
+	s.sessions, err = s.listSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	current = ""
+	if err := conn.BusObject().CallWithContext(ctx, busInterface+".GetNameOwner", 0, loginName).Store(&current); err != nil || current != s.owner {
+		return nil, errors.New("logind owner changed during session inventory")
+	}
 	return s, nil
+}
+
+func (s *logindSession) listSessions(ctx context.Context) (map[string]logindSessionIdentity, error) {
+	var rows [][]any
+	if err := s.conn.Object(loginName, loginPath).CallWithContext(ctx, loginInterface+".ListSessions", 0).Store(&rows); err != nil {
+		return nil, err
+	}
+	return decodeLogindSessions(rows)
+}
+
+func decodeLogindSessions(rows [][]any) (map[string]logindSessionIdentity, error) {
+	if len(rows) > 4096 {
+		return nil, errors.New("logind session inventory exceeds bound")
+	}
+	result := make(map[string]logindSessionIdentity, len(rows))
+	for _, row := range rows {
+		if len(row) != 5 {
+			return nil, errors.New("invalid logind session inventory")
+		}
+		id, idOK := row[0].(string)
+		uid, uidOK := row[1].(uint32)
+		_, userOK := row[2].(string)
+		_, seatOK := row[3].(string)
+		path, pathOK := row[4].(dbus.ObjectPath)
+		if !idOK || id == "" || !uidOK || !userOK || !seatOK || !pathOK || !path.IsValid() || result[id].path != "" {
+			return nil, errors.New("invalid logind session identity")
+		}
+		result[id] = logindSessionIdentity{uid: uid, path: path}
+	}
+	return result, nil
+}
+
+func removeLogindSession(ctx context.Context, events chan<- client.RuntimeLifecycleNotification, sessions map[string]logindSessionIdentity, id string, path dbus.ObjectPath) error {
+	identity, exists := sessions[id]
+	if !exists || identity.path != path {
+		return errors.New("unbound logind session removal")
+	}
+	if err := deliverLogindLogoff(ctx, events, identity.uid); err != nil {
+		return err
+	}
+	delete(sessions, id)
+	return nil
 }
 
 func (s *logindSession) acquire(ctx context.Context) error {
@@ -331,6 +445,33 @@ func (s *logindSession) listen(ctx context.Context, events chan<- client.Runtime
 					}
 					s.sleeping = false
 					s.resumed = true
+				}
+			case loginInterface + ".SessionNew", loginInterface + ".SessionRemoved":
+				if signal.Sender != s.owner || signal.Path != loginPath || len(signal.Body) != 2 {
+					return errors.New("logind session signal mismatch")
+				}
+				id, idOK := signal.Body[0].(string)
+				path, pathOK := signal.Body[1].(dbus.ObjectPath)
+				if !idOK || id == "" || !pathOK || !path.IsValid() {
+					return errors.New("invalid logind session signal")
+				}
+				if signal.Name == loginInterface+".SessionNew" {
+					current, err := s.listSessions(ctx)
+					if err != nil {
+						return err
+					}
+					identity, exists := current[id]
+					if !exists || identity.path != path {
+						return errors.New("logind session creation not confirmed")
+					}
+					if prior, exists := s.sessions[id]; exists && prior != identity {
+						return errors.New("logind session identity replaced")
+					}
+					s.sessions[id] = identity
+				} else {
+					if err := removeLogindSession(ctx, events, s.sessions, id, path); err != nil {
+						return err
+					}
 				}
 			}
 		}
