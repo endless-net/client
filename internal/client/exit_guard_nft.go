@@ -123,10 +123,12 @@ func (g *linuxExitGuard) ObserveAbsent(ctx context.Context) error {
 	return g.observe(ctx, false, true, "")
 }
 func (g *linuxExitGuard) observe(ctx context.Context, tunnel, absent bool, family api.ExitFamilyMode) error {
-	g.mu.Lock()
-	defer g.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	if !lockExitRuntime(ctx, &g.mu) {
+		return ctx.Err()
+	}
+	defer g.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
 	}

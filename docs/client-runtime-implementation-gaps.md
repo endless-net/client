@@ -22,6 +22,27 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN closed-session increment (2026-09-22): a native factory now composes boot/
+namespace capture, confirmed nft BLOCK, the locked bpffs directory, BPF load
+and selected-family attach, durable checkpoint/pins and live hook readback.
+All namespace-sensitive operations run inside the retained thread-bound check;
+BLOCK and namespace are checked again before returning the closed session.
+The LAN mark cannot equal the WireGuard underlay exemption. The session exposes
+no publication method; Close revokes the lease and releases descriptors while
+retaining pins and the full manifest for recovery. Every failed preparation
+closes its acquired handles. A failed guard/namespace check does not itself
+restore nft protection; the caller must perform independent containment and
+recover retained ownership before attempting another scope.
+Guard observation now starts its timeout before cancellable mutex acquisition.
+The native factory is not yet invoked by the production LAN_ALLOW adapter:
+packet-time physical-interface/route binding, shared evidence caps, pin recovery
+and the open/refresh lifecycle remain required before that mode can be enabled.
+Validation: goimports, vet and configured lint (0 issues) passed; full local
+short suite passed (internal/client 141.872 s, CLI 10.704 s). The preceding
+namespace commit passed all three short CI platforms
+([run 35709092513](https://github.com/endless-net/client/actions/runs/35709092513)).
+The native closed-session factory still needs Linux CI and later OS acceptance.
+
 LAN namespace increment (2026-09-22): a retained boot/netns handle serializes
 inspection, synchronous effects and post-inspection while the calling goroutine
 is locked to its OS thread. Any uncertain inspection permanently invalidates

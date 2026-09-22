@@ -52,6 +52,10 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+Native factory объединяет закрытую подготовку LAN: namespace → nft BLOCK →
+attach → durable checkpoint/pins → readback. Сессия удерживает ресурсы и при
+Close отзывает lease, сохраняя pins для recovery. LAN_ALLOW ещё не включён.
+
 Добавлена граница boot/netns: удерживаемый FD, проверка до/после callback на
 закреплённом OS-потоке, запрет повторного использования после потери наблюдения.
 Журнал другого boot/namespace отклоняется до операций восстановления.

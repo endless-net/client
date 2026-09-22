@@ -48,6 +48,15 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+Closed-session audit (2026-09-22):
+`TestExitLANBPFSessionOwnsClosedSelectedArtifacts` checks all family modes,
+BLOCK-before-effects, checkpoint-before-pins, hook readback and ownership until
+Close. `TestExitLANBPFSessionFailureKeepsClosedRecoveryArtifacts` covers every
+preparation stage, including cancellation, an unreported created pin, late
+guard loss and namespace mismatch. Close revokes a test-injected lease while
+retaining recovery artifacts. Guard observation lock tests verify cancellation
+before and during contention never reaches the command runner.
+
 Namespace audit (2026-09-22): `TestExitLANNamespaceConstructorOwnsFailedHandles`
 checks capture consistency and failure cleanup. `TestExitLANNamespaceCurrentChecksAndLatchesInvalidity`
 checks pre/post observations and permanent rejection after uncertain identity;
