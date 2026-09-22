@@ -22,6 +22,24 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN ownership journal increment (2026-09-22): the retained exit protection can
+store an exact bounded BPF manifest: derived pin scope, boot and namespace
+identity, selected family, map/program IDs and link identities. The descriptor
+is captured from held closed objects, not caller-supplied kernel IDs. A bound
+RUNNING LAN_ALLOW selection can checkpoint it with compare-and-swap against
+the expected protection; both operation and retained protection copies change
+atomically and are deep-cloned. Different manifests cannot replace an existing
+record. Clear checkpoint, release input, native release and final completion
+refuse to discard protection while this journal remains.
+This is preparation for recovery, not completed recovery: native boot/namespace
+capture, checkpoint-before-pin orchestration, exact object adoption/cleanup and
+confirmed journal removal remain required. Stored identities never grant LAN
+access and no version or generation number changes.
+Validation: goimports and vet passed, configured lint reported 0 issues, and
+the full local short suite passed (internal/client 137.838 s, CLI 10.728 s).
+The preceding publication commit passed all three short CI platforms
+([run 35706491236](https://github.com/endless-net/client/actions/runs/35706491236)).
+
 LAN publication increment (2026-09-22): publication now requires the expected
 family/hook/priority and a live hook observer. The preparation mutex stays held
 through fresh program/link identity reads, selected-family hook observations,

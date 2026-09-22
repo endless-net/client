@@ -21,7 +21,7 @@ func (m *ClientRPCMutations) exitReleaseInput(ctx context.Context, id string) (C
 			return err
 		}
 		plan := cfg.RPCState.ExitChange
-		if !exitChangeBound(cfg, plan, op) || plan.Protection == nil || plan.Requested != nil || !plan.Releasing || plan.Containing || op.State != ipc.OperationState_OPERATION_STATE_RUNNING {
+		if !exitChangeBound(cfg, plan, op) || plan.Protection == nil || plan.Protection.LAN != nil || plan.Requested != nil || !plan.Releasing || plan.Containing || op.State != ipc.OperationState_OPERATION_STATE_RUNNING {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		input = clonePersistentConfig(*cfg)
@@ -39,7 +39,7 @@ func (m *ClientRPCMutations) checkpointExitRelease(ctx context.Context, id strin
 			return err
 		}
 		plan := cfg.RPCState.ExitChange
-		if !exitChangeBound(cfg, plan, op) || plan.Protection == nil || plan.Requested != nil || plan.Containing || plan.Releasing || op.State != ipc.OperationState_OPERATION_STATE_RUNNING || observed == nil || observed.Ipv4 == nil || observed.Ipv6 == nil || !observed.FailClosed || !observed.Ipv4.FailClosed || !observed.Ipv6.FailClosed {
+		if !exitChangeBound(cfg, plan, op) || plan.Protection == nil || plan.Protection.LAN != nil || plan.Requested != nil || plan.Containing || plan.Releasing || op.State != ipc.OperationState_OPERATION_STATE_RUNNING || observed == nil || observed.Ipv4 == nil || observed.Ipv6 == nil || !observed.FailClosed || !observed.Ipv4.FailClosed || !observed.Ipv6.FailClosed {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		// Clear preparation has no exit routes, but deliberately still blocks
@@ -96,7 +96,7 @@ func (m *ClientRPCMutations) completeExitChange(id string, observed *ipc.ExitNod
 		if !exitChangeBound(cfg, plan, op) || op.State != ipc.OperationState_OPERATION_STATE_RUNNING {
 			return stale()
 		}
-		if (plan.Requested == nil && (!plan.Releasing || plan.Protection == nil)) || !exitAppliedResultMatches(plan, observed) {
+		if (plan.Requested == nil && (!plan.Releasing || plan.Protection == nil || plan.Protection.LAN != nil)) || !exitAppliedResultMatches(plan, observed) {
 			return stale()
 		}
 		if plan.Requested != nil {

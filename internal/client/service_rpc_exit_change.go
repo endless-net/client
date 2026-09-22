@@ -17,13 +17,14 @@ import (
 // OS ownership survives terminal operations and never confers control-plane
 // authority. Only explicit clear with confirmed release removes this record.
 type clientRPCExitProtection struct {
-	OperationID   string `json:"operation_id"`
-	ProfileID     string `json:"profile_id"`
-	OwnerID       string `json:"owner_id"`
-	NodeID        string `json:"node_id"`
-	NetworkID     string `json:"network_id"`
-	InterfaceName string `json:"interface_name"`
-	RouteTable    string `json:"route_table"`
+	OperationID   string            `json:"operation_id"`
+	ProfileID     string            `json:"profile_id"`
+	OwnerID       string            `json:"owner_id"`
+	NodeID        string            `json:"node_id"`
+	NetworkID     string            `json:"network_id"`
+	InterfaceName string            `json:"interface_name"`
+	RouteTable    string            `json:"route_table"`
+	LAN           *exitLANOwnership `json:"lan,omitempty"`
 }
 
 func cloneExitProtection(protection *clientRPCExitProtection) *clientRPCExitProtection {
@@ -31,6 +32,7 @@ func cloneExitProtection(protection *clientRPCExitProtection) *clientRPCExitProt
 		return nil
 	}
 	copy := *protection
+	copy.LAN = cloneExitLANOwnership(protection.LAN)
 	return &copy
 }
 

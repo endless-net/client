@@ -50,6 +50,11 @@ func nativeExitOperation(cfg Config, id string, requested *ClientExitSelection, 
 	if plan.OperationID != id || plan.Containing || plan.Releasing != releasing || !reflect.DeepEqual(plan.Requested, requested) || plan.Protection == nil || !reflect.DeepEqual(plan.Protection, cfg.RPCState.ExitProtection) {
 		return nil, invalid
 	}
+	// nft protection cannot be released while a BPF pin journal still needs
+	// native cleanup. The record must survive even an interrupted pin syscall.
+	if releasing && plan.Protection.LAN != nil {
+		return nil, invalid
+	}
 	found := false
 	for _, record := range cfg.RPCState.Operations {
 		op := new(ipc.Operation)

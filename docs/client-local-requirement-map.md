@@ -48,6 +48,17 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+Ownership audit (2026-09-22): `TestExitLANOwnershipCanonicalFamilyAndJSON`
+and `TestExitLANOwnershipRejectsMalformedIdentity` validate bounded persistent
+identities, including separate map/program ID namespaces.
+`TestExitLANBPFDescribeOwnershipUsesHeldObjectsAndRevokes` and
+`TestExitLANBPFDescribeOwnershipFailsWithoutReceipt` tie the description to
+held kernel objects and reject interrupted or changed observations.
+`TestExitLANOwnershipCheckpointPersistsBothScopesAndClones` checks the durable
+checkpoint and clone isolation; admission tests reject stale expected state.
+`TestExitClearCannotReleaseRetainedLANManifest` ensures cleanup cannot discard
+an outstanding manifest. Native recovery and confirmed pin deletion remain open.
+
 Publication audit (2026-09-22):
 `TestExitLANBPFPublicationRequiresLiveSelectedHooks` checks mandatory pre/post
 hook observations for all family modes. `TestExitLANBPFPublicationObservationFailureRevokes`
