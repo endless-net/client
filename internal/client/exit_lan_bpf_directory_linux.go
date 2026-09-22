@@ -153,7 +153,9 @@ func openExitLANBPFDirectoryWith(ctx context.Context, ops exitLANBPFDirectoryOps
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return &exitLANBPFDirectory{fd: owned, check: check, closeFD: func(fd int) error {
+	return &exitLANBPFDirectory{fd: owned, check: check, unlink: func(fd int, name string) error {
+		return unix.Unlinkat(fd, name, 0)
+	}, closeFD: func(fd int) error {
 		if fd != owned {
 			return errExitLANBPF
 		}

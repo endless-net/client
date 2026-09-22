@@ -83,7 +83,17 @@ func (m *ClientRPCMutations) containExitChange(ctx context.Context, id string, e
 		return rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
 	_, err = m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
-		if !reflect.DeepEqual(cfg.RPCState.ExitChange, &plan) || rpcOperationTerminal(op.State) {
+		expected := plan
+		// Native containment may retire the BPF journal after confirmed detach
+		// and absence. No other operation or protection field may change.
+		if expected.Protection != nil && expected.Protection.LAN != nil && cfg.RPCState.ExitProtection != nil && cfg.RPCState.ExitProtection.LAN == nil {
+			expected.Protection = cloneExitProtection(expected.Protection)
+			expected.Protection.LAN = nil
+			if !reflect.DeepEqual(expected.Protection, cfg.RPCState.ExitProtection) {
+				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			}
+		}
+		if !reflect.DeepEqual(cfg.RPCState.ExitChange, &expected) || rpcOperationTerminal(op.State) {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		cfg.RPCState.ExitChange = nil

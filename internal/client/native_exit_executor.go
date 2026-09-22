@@ -15,8 +15,10 @@ import (
 )
 
 type nativeExitExecutor struct {
-	engine      *WireGuardEngine
-	createGuard func(string, string) (*linuxExitGuard, error)
+	engine            *WireGuardEngine
+	createGuard       func(string, string) (*linuxExitGuard, error)
+	store             *ConfigStore
+	cleanupLANObjects func(context.Context, *linuxExitGuard, *exitLANOwnership) error
 }
 
 // This factory supplies effects and evidence, not host readiness. Its callbacks
@@ -29,10 +31,14 @@ func newNativeExitExecutor(engine *WireGuardEngine, lock *sync.Mutex) (clientRPC
 }
 
 func newNativeExitExecutorWithGuard(engine *WireGuardEngine, lock *sync.Mutex, create func(string, string) (*linuxExitGuard, error)) (clientRPCExitExecutor, error) {
+	return newNativeExitExecutorWithStore(engine, lock, create, nil)
+}
+
+func newNativeExitExecutorWithStore(engine *WireGuardEngine, lock *sync.Mutex, create func(string, string) (*linuxExitGuard, error), store *ConfigStore) (clientRPCExitExecutor, error) {
 	if engine == nil || lock == nil || create == nil || !safeWireGuardInterfaceName(engine.opts.Interface) || engine.opts.Interface == "lo" || strings.TrimSpace(engine.opts.Interface) != engine.opts.Interface {
 		return clientRPCExitExecutor{}, errors.New("native exit executor requires owned runtime scope")
 	}
-	n := &nativeExitExecutor{engine: engine, createGuard: create}
+	n := &nativeExitExecutor{engine: engine, createGuard: create, store: store, cleanupLANObjects: cleanupNativeExitLAN}
 	return clientRPCExitExecutor{InterfaceName: engine.opts.Interface, Lock: lock,
 		Modes: []clientRPCExitMode{{Family: api.ExitFamilyIPv4Only, LAN: api.ExitLANBlock}, {Family: api.ExitFamilyIPv6Only, LAN: api.ExitLANBlock}, {Family: api.ExitFamilyDualStack, LAN: api.ExitLANBlock}},
 		Apply: n.apply, Contain: n.contain, Release: n.release, Observe: n.observe, Maintain: n.maintain, ResumeSaved: n.resumeSaved}, nil
@@ -163,7 +169,10 @@ func (n *nativeExitExecutor) stopOwned(ctx context.Context, scope *clientRPCExit
 	if err := e.recoverStoppedExit(ctx, guard); err != nil {
 		return err
 	}
-	return n.observeStopped(ctx, guard)
+	if err := n.observeStopped(ctx, guard); err != nil {
+		return err
+	}
+	return n.cleanupLAN(ctx, scope, guard)
 }
 
 func (n *nativeExitExecutor) observeStopped(ctx context.Context, guard *linuxExitGuard) error {

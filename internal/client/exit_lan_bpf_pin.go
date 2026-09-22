@@ -23,6 +23,7 @@ type exitLANBPFDirectory struct {
 	fd      int
 	closeFD func(int) error
 	check   func(int) error
+	unlink  func(int, string) error
 }
 
 func (d *exitLANBPFDirectory) Close() error {

@@ -147,6 +147,27 @@ producer behavior or provider switching. Those remain open in package 4.
 
 ## External results to obtain
 
+Block 2 recovery increment (2026-09-22): the production native executor now
+binds its store to cleanup after observed Stop. Clear and containment retire a
+LAN manifest only after exact pin revalidation, BPF link detach, hook absence,
+unpin and final scoped-pin absence under retained namespace/directory handles.
+Old-boot recovery never looks up or detaches old numeric IDs; a current pin-name
+collision prevents retirement. Errors/cancellation preserve the journal. Store
+retirement checks both protection copies and survives reopen. Containment's
+final commit permits only this verified metadata retirement, retaining all
+other operation/context checks. LAN_ALLOW datapath remains in progress.
+
+`TestExitLANBPFCleanupDetachesBeforeUnpinAndRetainsRetry` asserts full/partial/
+empty inventory, failed detach/absence/unlink, cancellation, replacement and
+reappearing pins. `TestNativeExitLANCleanupRetiresOnlyConfirmedMatchingJournal`
+checks native-error/cancellation/CAS failures and both durable copies after
+reopen. These are injected kernel/store assertions, not native acceptance.
+Local recovery validation: goimports, vet and configured lint (0 issues) passed;
+full short suite passed, internal/client 146.635 s. The new packet compiler work
+is separate and was not part of that test run. Baseline block 1 short CI
+[35736466574](https://github.com/endless-net/client/actions/runs/35736466574)
+completed successfully.
+
 | Owner | Required authoritative result | Requirements |
 | --- | --- | --- |
 | Distribution/product and client-ui release owners; client packaging owns core integration | Approved verifiable release discovery and UI/core compatibility data, trust source, exact build/artifact binding, platform/channel/expiry rules and approved download/support destinations. Existing core hash manifests alone do not attest a UI/core pair. Establish whether an existing producer contract supplies this before designing another format; no version increase is authorized. | IT-33, US-01/13, BR/AC-19, UI-AC-10/11/25 |

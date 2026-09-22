@@ -31,6 +31,10 @@ func newNativeExitLANHookObservation(ctx context.Context, identity exitLANBPFLin
 }
 
 func observeExitLANHookWith(ctx context.Context, identity exitLANBPFLinkIdentity, order binary.ByteOrder, open func(context.Context) (exitLANHookTransport, error)) (result error) {
+	return observeExitLANHookStateWith(ctx, identity, order, open, true)
+}
+
+func observeExitLANHookStateWith(ctx context.Context, identity exitLANBPFLinkIdentity, order binary.ByteOrder, open func(context.Context) (exitLANHookTransport, error), present bool) (result error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -90,7 +94,7 @@ func observeExitLANHookWith(ctx context.Context, identity exitLANBPFLinkIdentity
 			return errExitLANBPF
 		}
 		if dump.done {
-			if !dump.confirmed() {
+			if dump.failed || (present && !dump.confirmed()) || (!present && dump.found != 0) {
 				return errExitLANBPF
 			}
 			return ctx.Err()

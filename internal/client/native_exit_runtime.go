@@ -35,7 +35,7 @@ func NewNativeExitRuntime(engine *WireGuardEngine, lock *sync.Mutex, store *Conf
 	if store == nil {
 		return nil, errors.New("native exit runtime requires a config store")
 	}
-	executor, err := newNativeExitExecutor(engine, lock)
+	executor, err := newNativeExitExecutorWithStore(engine, lock, newPlatformExitGuard, store)
 	if err != nil {
 		return nil, err
 	}

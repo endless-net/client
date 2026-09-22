@@ -27,7 +27,7 @@ func TestNativeExitLANBPFPrecancelDoesNotReadOrLoad(t *testing.T) {
 }
 
 func TestExitLANBPFLinkUAPIConstants(t *testing.T) {
-	for _, pair := range [][2]int{{exitLANBPFInfo, unix.BPF_OBJ_GET_INFO_BY_FD}, {exitLANBPFLinkCreate, unix.BPF_LINK_CREATE}, {exitLANBPFNetfilterLink, unix.BPF_LINK_TYPE_NETFILTER}} {
+	for _, pair := range [][2]int{{exitLANBPFInfo, unix.BPF_OBJ_GET_INFO_BY_FD}, {exitLANBPFLinkCreate, unix.BPF_LINK_CREATE}, {exitLANBPFNetfilterLink, unix.BPF_LINK_TYPE_NETFILTER}, {exitLANBPFLinkDetach, unix.BPF_LINK_DETACH}} {
 		if pair[0] != pair[1] {
 			t.Fatal("pinned link UAPI mismatch", pair)
 		}
