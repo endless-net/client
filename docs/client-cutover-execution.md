@@ -66,6 +66,57 @@ must compile/test these OS-specific collectors before later native qualification
 Local validation: goimports, vet, configured lint (0 issues) and full short suite
 passed on Windows (internal/client 141.091 s); Unix-only uname tests await CI.
 
+Package 6 logout/session audit, delegated block 1 (2026-09-22): Logout and active
+Forget require a confirmed Stop before deleting credentials. PRESERVED and
+unrecognized enum values fail even with nil error, before restart continuity
+normalization. UNKNOWN and NOT_APPLICABLE remain confirmed by the existing
+driver contract. Logout admission now persists NetworkID and the original
+authority digest; dispatch, remote checkpoints, Stop and final cleanup validate
+that binding. Retained remote confirmation and cleanup request correlation check
+NetworkID separately. The shared `logoutAuthority` digest is unchanged, so a
+network change cannot make Connect accept already-revoked credentials.
+
+Inspected and extended assertions:
+
+- `TestRPCLogoutRequiresConfirmedStopAcrossRestart`: persisted plan binding,
+  resumed Down with invalid/PRESERVED continuity, retained active/profile
+  credentials and remote progress, explicit retry and durable cleanup.
+- `TestRPCLogoutRejectsChangedDispatchContext`: changed network/authority after
+  reopen and a deterministic network change after RUNNING admission reject remote
+  dispatch and Stop. `TestRPCLogoutRejectsNetworkChangeBeforeStop` rejects a change
+  after remote checkpoints. `TestRPCCleanupRejectsContextChangeDuringStop` rejects
+  late Logout/Forget results after network/profile/owner/authority changes.
+- `TestRPCLogoutConfirmationCannotCrossNetworks`: reopened confirmation retains
+  correlation only for its original network, new-network logout starts without
+  foreign progress, old callbacks cannot modify its plan, and Connect still
+  rejects the revoked credentials. The journal-retention correlation test also
+  covers a changed network. `TestRPCLogoutAndForgetStopContract` checks all three
+  confirmed continuity values and both rejected values after reopen.
+- `TestRPCForgetCancelsSessionRenewalAndDrainsBeforeCleanup`: rejected Forget does
+  not cancel renewal; accepted Forget drains the provider and rejects its late
+  success; queued/browser-waiting cancellation survives reopen and replays as
+  CANCELLED. Logout/renewal conflict tests check both admission orders;
+  independent Disconnect preserves disconnected intent through rotation.
+- Renewal plans now persist NetworkID. Executor restart/polling assertions reject
+  changed-network dispatch and late poll results without replacing the retained
+  token. Atomic result assertions reject changed owner/token/profile/network,
+  foreign user/request and expired result/replay without partial writes; success
+  and request replay retain the rotated session after reopen.
+
+These are bounded client/store/provider assertions. Native driver behavior and
+producer/browser end-to-end logout/renewal acceptance remain platform/CI work;
+no native, E2E, system or release run was performed for this block. Versions are
+unchanged. Other cutover packages remain outside this delegated block.
+Validation: `goimports -w .`, `go vet ./...` and configured golangci-lint passed
+(0 issues). The final `go test -short ./...` completed all block assertions
+without a reported failure, but the full suite is **not green**: internal/client
+failed after 143.501 s in `TestResourceHostCurrentRechecksRelayAfterReadback`
+(`resource_route_observation_lifetime_test.go:62`, WireGuard fwmark update on a
+closed network connection). Resources are outside this block and were not edited.
+The preceding push CI [35720342020](https://github.com/endless-net/client/actions/runs/35720342020)
+was already completed/failed in the macOS resource-filter test with the same
+closed-connection error class; no running workflow needed cancellation.
+
 ## Corrected network-selection evidence
 
 `cmd/endlessnet-client/service_rpc_host.go` installs the network catalog,

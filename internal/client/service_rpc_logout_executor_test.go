@@ -11,7 +11,7 @@ import (
 )
 
 func TestRPCForgetRetainsLogoutCorrelationBeyondJournalRetention(t *testing.T) {
-	for _, scenario := range []string{"active", "inactive", "changed authority"} {
+	for _, scenario := range []string{"active", "inactive", "changed authority", "changed network"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, peer, enroll := enrollmentAdmissionTest(t)
 			if err := m.store.Update(func(cfg *Config) error { cfg.Token = "synthetic-session"; return nil }); err != nil {
@@ -52,6 +52,11 @@ func TestRPCForgetRetainsLogoutCorrelationBeyondJournalRetention(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			if scenario == "changed network" {
+				if err := m.store.Update(func(cfg *Config) error { cfg.NetworkID = "other-network"; return nil }); err != nil {
+					t.Fatal(err)
+				}
+			}
 			peer.Administrator = true
 			forgotten, err := m.forgetEnrollmentAs(peer, &ipc.ForgetLocalEnrollmentRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: enroll.Profile, Confirmed: true})
 			if err != nil {
@@ -62,7 +67,7 @@ func TestRPCForgetRetainsLogoutCorrelationBeyondJournalRetention(t *testing.T) {
 			}
 			result, err := m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: forgotten.Id}})
 			want := "cleanup-request-123"
-			if scenario == "changed authority" {
+			if scenario == "changed authority" || scenario == "changed network" {
 				want = ""
 			}
 			if err != nil || result.GetCleanup().ControlRequestId != want {

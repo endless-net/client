@@ -13,10 +13,11 @@ import (
 )
 
 func TestRPCSessionRenewalResultAtomicRotationAndBinding(t *testing.T) {
-	for _, scenario := range []string{"success", "foreign_user", "foreign_request", "expired_result", "expired_replay", "owner_changed", "token_changed"} {
+	for _, scenario := range []string{"success", "foreign_user", "foreign_request", "expired_result", "expired_replay", "owner_changed", "token_changed", "profile_changed", "network_changed"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, owner, profile := rpcConnectFixture(t)
 			if err := m.store.Update(func(cfg *Config) error {
+				cfg.NetworkID = "original-network"
 				cfg.Token = strings.Repeat("old-token-", 4)
 				cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected}
 				response := &backend.GetSessionResponse{Session: &backend.UserSession{SessionId: "old-session", UserId: "user", State: backend.UserSessionState_USER_SESSION_STATE_ACTIVE, RenewalSupported: true}, RenewalAuthorization: &backend.SessionRenewalAuthorization{Bearer: strings.Repeat("grant-", 8), ExpiresAt: timestamppb.New(m.now().Add(time.Hour))}}
@@ -46,12 +47,17 @@ func TestRPCSessionRenewalResultAtomicRotationAndBinding(t *testing.T) {
 				result.GetResult().Session.ExpiresAt = timestamppb.New(m.now().Add(-time.Minute))
 			case "expired_replay":
 				result.ReplayExpiresAt = timestamppb.New(m.now().Add(-time.Minute))
-			case "owner_changed", "token_changed":
+			case "owner_changed", "token_changed", "profile_changed", "network_changed":
 				if err := m.store.Update(func(cfg *Config) error {
-					if scenario == "owner_changed" {
+					switch scenario {
+					case "owner_changed":
 						cfg.LocalOwnerID = "uid:2000"
-					} else {
+					case "token_changed":
 						cfg.Token = "replaced"
+					case "profile_changed":
+						cfg.RPCState.ActiveProfileID = "other-profile"
+					case "network_changed":
+						cfg.NetworkID = "other-network"
 					}
 					return nil
 				}); err != nil {

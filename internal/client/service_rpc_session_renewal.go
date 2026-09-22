@@ -17,6 +17,7 @@ import (
 type clientRPCSessionRenewal struct {
 	OperationID        string                               `json:"operation_id"`
 	ProfileID          string                               `json:"profile_id"`
+	NetworkID          string                               `json:"network_id"`
 	ControlOrigin      string                               `json:"control_origin"`
 	TokenBinding       string                               `json:"token_binding"`
 	UserID             string                               `json:"user_id"`
@@ -66,7 +67,7 @@ func (m *ClientRPCMutations) renewSessionAs(peer local.Peer, request *ipc.RenewS
 		if api.ValidateSessionRenewalRequest(backendRequest) != nil {
 			return rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 		}
-		cfg.RPCState.SessionRenewal = &clientRPCSessionRenewal{OperationID: op.Id, ProfileID: profile.ID, ControlOrigin: profile.ControlOrigin, TokenBinding: stored.TokenBinding, UserID: stored.Response.Session.UserId, OwnerID: cfg.LocalOwnerID, Request: backendRequest, Authorization: proto.Clone(authority).(*backend.SessionRenewalAuthorization)}
+		cfg.RPCState.SessionRenewal = &clientRPCSessionRenewal{OperationID: op.Id, ProfileID: profile.ID, NetworkID: cfg.NetworkID, ControlOrigin: profile.ControlOrigin, TokenBinding: stored.TokenBinding, UserID: stored.Response.Session.UserId, OwnerID: cfg.LocalOwnerID, Request: backendRequest, Authorization: proto.Clone(authority).(*backend.SessionRenewalAuthorization)}
 		op.ProfileId = profile.ID
 		op.Continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED
 		return nil

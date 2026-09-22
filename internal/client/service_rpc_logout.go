@@ -41,11 +41,14 @@ type ClientRPCLogoutProgress struct {
 
 type clientRPCLogout struct {
 	OperationID string                  `json:"operation_id"`
+	NetworkID   string                  `json:"network_id,omitempty"`
+	Authority   []byte                  `json:"authority"`
 	Progress    ClientRPCLogoutProgress `json:"progress"`
 	DownStarted bool                    `json:"down_started,omitempty"`
 }
 
 type clientRPCLogoutConfirmation struct {
+	NetworkID string                  `json:"network_id,omitempty"`
 	Authority []byte                  `json:"authority"`
 	Progress  ClientRPCLogoutProgress `json:"progress"`
 	RequestID string                  `json:"request_id,omitempty"`
@@ -62,7 +65,7 @@ func rpcLocalCleanupRequestID(cfg Config, profileID string) string {
 		registration.PrivateKey, registration.IdentityPrivateKey = cfg.PrivateKey, cfg.IdentityPrivateKey
 		registration.RPCState = &ClientRPCState{ActiveProfileID: profileID, DigestKey: cfg.RPCState.DigestKey}
 	}
-	if confirmed := profile.LogoutConfirmation; confirmed != nil && hmac.Equal(confirmed.Authority, logoutAuthority(registration)) {
+	if confirmed := profile.LogoutConfirmation; confirmed != nil && confirmed.NetworkID == registration.NetworkID && hmac.Equal(confirmed.Authority, logoutAuthority(registration)) {
 		return confirmed.RequestID
 	}
 	if registration.EnrollmentRecovery != nil {
@@ -108,8 +111,8 @@ func (m *ClientRPCMutations) logoutAs(peer local.Peer, request *ipc.LogoutReques
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT)
 		}
 		op.ProfileId = profile.ID
-		cfg.RPCState.Logout = &clientRPCLogout{OperationID: op.Id}
-		if previous := profile.LogoutConfirmation; previous != nil && hmac.Equal(previous.Authority, logoutAuthority(*cfg)) {
+		cfg.RPCState.Logout = &clientRPCLogout{OperationID: op.Id, NetworkID: cfg.NetworkID, Authority: logoutAuthority(*cfg)}
+		if previous := profile.LogoutConfirmation; previous != nil && previous.NetworkID == cfg.NetworkID && hmac.Equal(previous.Authority, logoutAuthority(*cfg)) {
 			cfg.RPCState.Logout.Progress = previous.Progress
 		}
 		return nil
@@ -124,7 +127,8 @@ func (m *ClientRPCMutations) LogoutProgressCallback(operationID string, initial 
 	return func(progress ClientRPCLogoutProgress) error {
 		_, err := m.ReconcileOperation(operationID, func(cfg *Config, op *ipc.Operation) error {
 			plan := cfg.RPCState.Logout
-			if plan == nil || plan.OperationID != operationID || op.Kind != ipc.OperationKind_OPERATION_KIND_LOGOUT || op.State != ipc.OperationState_OPERATION_STATE_RUNNING ||
+			if !logoutPlanBound(*cfg, plan) || plan.OperationID != operationID || op.Kind != ipc.OperationKind_OPERATION_KIND_LOGOUT || op.State != ipc.OperationState_OPERATION_STATE_RUNNING ||
+				plan.NetworkID != cfg.NetworkID || cfg.NetworkID != expected.NetworkID ||
 				expected.RPCState == nil || cfg.RPCState.ActiveProfileID != op.ProfileId || expected.RPCState.ActiveProfileID != op.ProfileId ||
 				!hmac.Equal(logoutAuthority(*cfg), logoutAuthority(expected)) {
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
@@ -134,10 +138,16 @@ func (m *ClientRPCMutations) LogoutProgressCallback(operationID string, initial 
 			}
 			plan.Progress = progress
 			profile := cfg.RPCState.Profiles[op.ProfileId]
-			profile.LogoutConfirmation = &clientRPCLogoutConfirmation{Authority: logoutAuthority(*cfg), Progress: progress}
+			profile.LogoutConfirmation = &clientRPCLogoutConfirmation{NetworkID: cfg.NetworkID, Authority: logoutAuthority(*cfg), Progress: progress}
 			cfg.RPCState.Profiles[profile.ID] = profile
 			return nil
 		})
 		return err
 	}
+}
+
+func logoutPlanBound(cfg Config, plan *clientRPCLogout) bool {
+	return cfg.RPCState != nil && plan != nil && cfg.RPCState.Logout != nil &&
+		cfg.RPCState.Logout.OperationID == plan.OperationID && cfg.NetworkID == plan.NetworkID &&
+		hmac.Equal(plan.Authority, logoutAuthority(cfg))
 }

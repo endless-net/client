@@ -22,7 +22,7 @@ type ClientRPCSessionRenewalProvider struct {
 
 func sessionRenewalBound(cfg *Config, plan *clientRPCSessionRenewal) bool {
 	if cfg.RPCState == nil || plan == nil || plan.CancelRequested || plan.Request == nil || plan.Authorization == nil ||
-		plan.ProfileID != cfg.RPCState.ActiveProfileID || !strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) ||
+		plan.ProfileID != cfg.RPCState.ActiveProfileID || plan.NetworkID != cfg.NetworkID || !strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) ||
 		plan.TokenBinding != sessionTokenBinding(cfg.Token) || plan.ControlOrigin != cfg.RPCState.Profiles[plan.ProfileID].ControlOrigin {
 		return false
 	}
@@ -111,6 +111,10 @@ func (m *ClientRPCMutations) ReconcileSessionRenewal(ctx context.Context, provid
 			return m.cancelSessionRenewalForForget()
 		}
 		return err
+	}
+	current := m.store.Read()
+	if !sessionRenewalBound(&current, plan) {
+		return m.rejectSessionRenewal(id, ipc.ErrorCode_ERROR_CODE_STALE_STATE, "session_renewal_context_changed")
 	}
 	var response *backend.RenewSessionResponse
 	if plan.BackendOperationID == "" {

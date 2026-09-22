@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"crypto/hmac"
 	"time"
 
 	"connectrpc.com/connect"
@@ -113,9 +114,18 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 	} else if current.State != ipc.OperationState_OPERATION_STATE_RUNNING {
 		return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
 	}
+	if current.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT {
+		latest := m.store.Read()
+		if latest.RPCState.ActiveProfileID != current.ProfileId || latest.NetworkID != cfg.NetworkID || !hmac.Equal(logoutAuthority(latest), logoutAuthority(cfg)) {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
+	}
 	continuity, stopErr := driver.Stop(ctx)
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if current.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT && stopErr == nil && !profileStopConfirmed(continuity) {
+		stopErr = rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED)
 	}
 	if continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED && continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_NOT_APPLICABLE {
 		continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN
@@ -125,7 +135,12 @@ func (m *ClientRPCMutations) ReconcileDisconnect(ctx context.Context, driver Cli
 		// outcome. An absent tunnel now cannot prove no earlier interruption.
 		continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN
 	}
+	expected := cfg
 	_, err := m.ReconcileOperation(id, func(cfg *Config, op *ipc.Operation) error {
+		if op.Kind == ipc.OperationKind_OPERATION_KIND_FORGET_LOCAL_ENROLLMENT &&
+			(op.ProfileId != cfg.RPCState.ActiveProfileID || cfg.NetworkID != expected.NetworkID || !hmac.Equal(logoutAuthority(*cfg), logoutAuthority(expected))) {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		}
 		cfg.RPCState.DisconnectOperationID = ""
 		op.State = ipc.OperationState_OPERATION_STATE_SUCCEEDED
 		op.Continuity = continuity

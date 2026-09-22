@@ -33,7 +33,7 @@ func (m *ClientRPCMutations) ReconcileLogout(ctx context.Context, driver ClientR
 	}
 	plan := *cfg.RPCState.Logout
 	_, err := m.ReconcileOperation(plan.OperationID, func(cfg *Config, op *ipc.Operation) error {
-		if op.Kind != ipc.OperationKind_OPERATION_KIND_LOGOUT || op.ProfileId != cfg.RPCState.ActiveProfileID {
+		if !logoutPlanBound(*cfg, &plan) || op.Kind != ipc.OperationKind_OPERATION_KIND_LOGOUT || op.ProfileId != cfg.RPCState.ActiveProfileID {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		op.State = ipc.OperationState_OPERATION_STATE_RUNNING
@@ -43,14 +43,21 @@ func (m *ClientRPCMutations) ReconcileLogout(ctx context.Context, driver ClientR
 		return err
 	}
 	cfg = m.store.Read()
+	if !logoutPlanBound(cfg, &plan) {
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
 	logoutCtx, cancel := context.WithCancel(ctx)
 	m.mu.Lock()
 	m.cancelLogout = cancel
-	if current := m.store.Read(); current.RPCState.DisconnectOperationID != "" {
+	current := m.store.Read()
+	if current.RPCState.DisconnectOperationID != "" {
 		cancel()
 	}
 	m.mu.Unlock()
 	defer func() { m.mu.Lock(); m.cancelLogout = nil; m.mu.Unlock(); cancel() }()
+	if !logoutPlanBound(current, &plan) {
+		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
 	if logoutCtx.Err() != nil {
 		return ctx.Err()
 	}
@@ -75,11 +82,11 @@ func (m *ClientRPCMutations) ReconcileLogout(ctx context.Context, driver ClientR
 	var stopErr error
 	if remoteErr == nil {
 		current := m.store.Read()
-		if current.RPCState.Logout == nil || !current.RPCState.Logout.Progress.NodeRevoked || !current.RPCState.Logout.Progress.SessionRevoked {
+		if !logoutPlanBound(current, &plan) || !current.RPCState.Logout.Progress.NodeRevoked || !current.RPCState.Logout.Progress.SessionRevoked {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		if _, err := m.ReconcileOperation(plan.OperationID, func(current *Config, _ *ipc.Operation) error {
-			if !hmac.Equal(logoutAuthority(*current), logoutAuthority(cfg)) {
+			if !logoutPlanBound(*current, &plan) || !hmac.Equal(logoutAuthority(*current), logoutAuthority(cfg)) {
 				return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 			}
 			current.RPCState.Logout.DownStarted = true
@@ -94,6 +101,9 @@ func (m *ClientRPCMutations) ReconcileLogout(ctx context.Context, driver ClientR
 		if logoutCtx.Err() != nil {
 			return nil
 		}
+		if stopErr == nil && !profileStopConfirmed(continuity) {
+			stopErr = rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
+		}
 		if plan.DownStarted && continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED {
 			continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_UNKNOWN
 		}
@@ -102,13 +112,13 @@ func (m *ClientRPCMutations) ReconcileLogout(ctx context.Context, driver ClientR
 		if err := logoutCtx.Err(); err != nil {
 			return err
 		}
-		if op.ProfileId != current.RPCState.ActiveProfileID || !hmac.Equal(logoutAuthority(*current), logoutAuthority(cfg)) {
+		if !logoutPlanBound(*current, &plan) || op.ProfileId != current.RPCState.ActiveProfileID || !hmac.Equal(logoutAuthority(*current), logoutAuthority(cfg)) {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
 		}
 		if remoteErr != nil || stopErr != nil {
 			if remoteErr != nil {
 				profile := current.RPCState.Profiles[op.ProfileId]
-				profile.LogoutConfirmation = &clientRPCLogoutConfirmation{Authority: logoutAuthority(*current), Progress: current.RPCState.Logout.Progress, RequestID: requestID}
+				profile.LogoutConfirmation = &clientRPCLogoutConfirmation{NetworkID: current.NetworkID, Authority: logoutAuthority(*current), Progress: current.RPCState.Logout.Progress, RequestID: requestID}
 				current.RPCState.Profiles[profile.ID] = profile
 			}
 			failure := &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_REMOTE_CLEANUP_REQUIRED, ReasonKey: "remote_cleanup_unconfirmed", ControlRequestId: requestID}

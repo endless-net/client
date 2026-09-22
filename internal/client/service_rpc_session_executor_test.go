@@ -14,13 +14,14 @@ import (
 )
 
 func TestRPCSessionRenewalExecutorRestartPollingAndFailure(t *testing.T) {
-	for _, scenario := range []string{"success", "rejected", "expired", "foreign_operation", "token_changed", "token_changed_during_poll", "malformed", "cancelled"} {
+	for _, scenario := range []string{"success", "rejected", "expired", "foreign_operation", "token_changed", "token_changed_during_poll", "network_changed", "network_changed_during_poll", "malformed", "cancelled"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, owner, profile := rpcConnectFixture(t)
 			now := time.Now()
 			m.now = func() time.Time { return now }
 			grant := strings.Repeat("grant-", 8)
 			if err := m.store.Update(func(cfg *Config) error {
+				cfg.NetworkID = "original-network"
 				cfg.Token = strings.Repeat("access-", 8)
 				response := &backend.GetSessionResponse{Session: &backend.UserSession{SessionId: "session", UserId: "user", State: backend.UserSessionState_USER_SESSION_STATE_ACTIVE, RenewalSupported: true}, RenewalAuthorization: &backend.SessionRenewalAuthorization{Bearer: grant, ExpiresAt: timestamppb.New(now.Add(time.Hour))}}
 				cfg.UserSession = &StoredUserSession{ControlOrigin: "https://control.test", TokenBinding: sessionTokenBinding(cfg.Token), Response: response, RenewalGrant: proto.Clone(response).(*backend.GetSessionResponse)}
@@ -72,6 +73,11 @@ func TestRPCSessionRenewalExecutorRestartPollingAndFailure(t *testing.T) {
 							t.Fatal(err)
 						}
 					}
+					if scenario == "network_changed_during_poll" {
+						if err := m.store.Update(func(cfg *Config) error { cfg.NetworkID = "other-network"; return nil }); err != nil {
+							t.Fatal(err)
+						}
+					}
 					if scenario == "malformed" {
 						return nil, nil
 					}
@@ -94,6 +100,9 @@ func TestRPCSessionRenewalExecutorRestartPollingAndFailure(t *testing.T) {
 				t.Fatal(err)
 			}
 			m.now = func() time.Time { return now }
+			if m.store.Read().RPCState.SessionRenewal.NetworkID != "original-network" {
+				t.Fatal("restart lost renewal network binding")
+			}
 			now = now.Add(5 * time.Second)
 			run()
 			run()
@@ -106,6 +115,10 @@ func TestRPCSessionRenewalExecutorRestartPollingAndFailure(t *testing.T) {
 				now = now.Add(2 * time.Hour)
 			case "token_changed":
 				if err := m.store.Update(func(cfg *Config) error { cfg.Token = "replacement"; return nil }); err != nil {
+					t.Fatal(err)
+				}
+			case "network_changed":
+				if err := m.store.Update(func(cfg *Config) error { cfg.NetworkID = "other-network"; return nil }); err != nil {
 					t.Fatal(err)
 				}
 			case "cancelled":
@@ -132,11 +145,14 @@ func TestRPCSessionRenewalExecutorRestartPollingAndFailure(t *testing.T) {
 			} else if completed.State != ipc.OperationState_OPERATION_STATE_FAILED || completed.GetFailure() == nil {
 				t.Fatal("failure not durable")
 			}
-			if (scenario == "expired" || scenario == "token_changed") && polls != 0 {
+			if (scenario == "expired" || scenario == "token_changed" || scenario == "network_changed") && polls != 0 {
 				t.Fatal("invalid context reached backend")
 			}
 			if scenario == "token_changed_during_poll" && (cfg.Token != "replacement" || completed.GetFailure().Code != ipc.ErrorCode_ERROR_CODE_STALE_STATE) {
 				t.Fatal("late response overwrote new session context")
+			}
+			if (scenario == "network_changed" || scenario == "network_changed_during_poll") && (cfg.Token != strings.Repeat("access-", 8) || cfg.NetworkID != "other-network" || completed.GetFailure().Code != ipc.ErrorCode_ERROR_CODE_STALE_STATE) {
+				t.Fatal("network change applied foreign renewal result")
 			}
 			run()
 		})
