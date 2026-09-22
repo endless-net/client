@@ -4,6 +4,12 @@ Status: incomplete implementation; current blocking-path audit, 2026-09-15.
 Scope: `client` and its producer contracts only. No changes to UI, backend
 services or infrastructure are authorized by this implementation plan.
 
+Current execution queue: [source review, 2026-09-22](client-cutover-execution.md).
+Increment entries below are historical and can describe gaps closed by later
+commits. Use the current source review and requirement matrices together; neither
+is acceptance evidence. In particular, network selection and native exit host
+wiring exist, while LAN_ALLOW production behavior remains unfinished.
+
 ## Execution order
 
 1. Map every applicable BA/SA requirement to runtime code, unit tests and external
