@@ -206,3 +206,104 @@ jobs:
               --notes "Automated release artifacts for $GITHUB_REF_NAME." \
               "$OUTPUT_DIR"/*
           fi
+
+  publish-macos:
+    needs: publish
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: amd64
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build native macOS core artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          build_date="$(git show -s --format=%cI "$GITHUB_SHA")"
+          output_dir="$RUNNER_TEMP/client-core-macos"
+          mkdir -p "$output_dir"
+          name="endlessnet-client_darwin_${{ matrix.arch }}"
+          helper="endlessnet-client-recovery-helper_darwin_${{ matrix.arch }}"
+          manifest="${name}.manifest.json"
+          CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.arch }} go build -trimpath \
+            -ldflags "-s -w -X main.version=$version -X main.commit=$GITHUB_SHA -X main.buildDate=$build_date" \
+            -o "$output_dir/$name" ./cmd/endlessnet-client
+          CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.arch }} go build -trimpath \
+            -ldflags "-s -w" \
+            -o "$output_dir/$helper" ./cmd/endlessnet-client-recovery-helper
+          client_sha="$(shasum -a 256 "$output_dir/$name" | awk '{print $1}')"
+          helper_sha="$(shasum -a 256 "$output_dir/$helper" | awk '{print $1}')"
+          base_url="https://github.com/endless-net/client/releases/download/$GITHUB_REF_NAME"
+          cat > "$output_dir/$manifest" <<EOF
+          {
+            "schema_version": 2,
+            "repository": "endless-net/client",
+            "version": "$version",
+            "commit": "$GITHUB_SHA",
+            "target": "darwin/${{ matrix.arch }}",
+            "artifacts": {
+              "client": {
+                "name": "$name",
+                "installed_name": "endlessnet-client",
+                "url": "$base_url/$name",
+                "sha256": "$client_sha"
+              },
+              "recovery_helper": {
+                "name": "$helper",
+                "installed_name": "endlessnet-client-recovery-helper",
+                "url": "$base_url/$helper",
+                "sha256": "$helper_sha"
+              }
+            }
+          }
+          EOF
+          printf '%s  %s\n' "$client_sha" "$name" > "$output_dir/$name.sha256"
+          printf '%s  %s\n' "$helper_sha" "$helper" > "$output_dir/$helper.sha256"
+          manifest_sha="$(shasum -a 256 "$output_dir/$manifest" | awk '{print $1}')"
+          printf '%s  %s\n' "$manifest_sha" "$manifest" > "$output_dir/$manifest.sha256"
+      - uses: actions/attest-build-provenance@v4
+        if: ${{ github.event.repository.visibility == 'public' }}
+        with:
+          subject-path: |
+            ${{ runner.temp }}/client-core-macos/endlessnet-client_darwin_*
+            ${{ runner.temp }}/client-core-macos/endlessnet-client-recovery-helper_darwin_*
+      - name: Publish or verify immutable macOS assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          output_dir="$RUNNER_TEMP/client-core-macos"
+          release_target="$(gh api "/repos/endless-net/client/releases/tags/$GITHUB_REF_NAME" --jq '.target_commitish')"
+          [ "$release_target" = "$GITHUB_SHA" ] || {
+            echo "::error::release targets $release_target instead of $GITHUB_SHA"
+            exit 1
+          }
+          existing="$RUNNER_TEMP/existing-macos"
+          mkdir -p "$existing"
+          gh release view "$GITHUB_REF_NAME" --repo endless-net/client \
+            --json assets --jq '.assets[].name' > "$existing/assets.txt"
+          for asset_path in "$output_dir"/*; do
+            asset_name="$(basename "$asset_path")"
+            if grep -Fx "$asset_name" "$existing/assets.txt" >/dev/null; then
+              gh release download "$GITHUB_REF_NAME" --repo endless-net/client \
+                --pattern "$asset_name" --dir "$existing"
+              if ! cmp -s "$asset_path" "$existing/$asset_name"; then
+                echo "::error::immutable release asset conflict: $asset_name"
+                exit 1
+              fi
+            else
+              gh release upload "$GITHUB_REF_NAME" --repo endless-net/client "$asset_path"
+            fi
+          done

@@ -78,18 +78,22 @@ documented 30-second service callback limit. Error, timeout or queue loss
 cancels the service instead of reporting a confirmed transition. This is
 synthetic-unit verified; actual SCM timing and sleep behavior still need native
 qualification.
-Production IPC now marks logoff/suspend/resume preferences unsupported when its
-runtime has no corresponding trusted event source. Linux exposes logind power
-and logoff; macOS currently exposes none of these OS-event preferences.
-The macOS gap is a platform and distribution boundary: this repository has no
-Darwin core artifact or daemon lifecycle adapter. AppKit workspace session
-notifications belong to a logged-in application session and do not prove a
-daemon's UID-bound logout; the console-user API describes only the active
-console user. Native IOKit power callbacks require a daemon run loop and
-explicit sleep acknowledgement within the OS deadline. A complete macOS source
-would need that adapter, an owner-binding strategy across fast user switching,
-release packaging and native acceptance. A short macOS CI test alone does not
-establish these guarantees, so the source flags remain unsupported.
+Production IPC marks lifecycle preferences unsupported when its runtime has no
+corresponding trusted event source. Linux exposes logind power and logoff. The
+macOS daemon now registers IOKit system power callbacks on a dedicated run loop
+before starting the runtime. It waits for the same executor completion before
+acknowledging `kIOMessageSystemWillSleep`, with a 25-second deadline below
+IOKit's 30-second limit, and forwards `kIOMessageSystemHasPoweredOn` through
+the resume gate. Source errors terminate the agent. This is built with cgo;
+Darwin builds without cgo retain unsupported power preferences. Release CI
+builds separate native Darwin arm64 and amd64 core artifacts at the current
+manifest schema. Native sleep/wake and release qualification remain open.
+macOS logoff remains unsupported: AppKit workspace session notifications
+describe a session switch, not logout, and the console-user API omits
+switched-out sessions. The system daemon requires a trusted per-session
+termination source that binds the exact UID across fast user switching.
+Neither a console-user change nor a client-reported logout can be treated as
+that source without risking mutation of the wrong owner's saved intent.
 UI_QUIT and runtime_start remain independent settings. Source loss uses
 source-health gate events, so a configured DISCONNECT for real suspend/resume
 is never applied merely because D-Bus delivery failed.

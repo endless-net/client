@@ -465,7 +465,7 @@ func cmdAgent(args []string) error {
 		ipcOpts := agentIPCOptions{
 			LifecycleSourcesKnown: true,
 			LifecycleLogoffSource: lifecycleEvents != nil && (runtime.GOOS == "windows" || runtime.GOOS == "linux"),
-			LifecyclePowerSource:  lifecycleEvents != nil && (runtime.GOOS == "windows" || runtime.GOOS == "linux"),
+			LifecyclePowerSource:  lifecycleEvents != nil && (runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "darwin"),
 			Offline:               *offline,
 			Pipe:                  *ipcPipe,
 			UnixSocket:            *ipcSocket,
