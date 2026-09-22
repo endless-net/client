@@ -20,12 +20,19 @@ type RuntimeLifecycleEvent uint8
 type RuntimeLifecycleNotification struct {
 	Event        RuntimeLifecycleEvent
 	SessionOwner string
+	// Completion is owned by an OS source that must retain its sleep inhibitor
+	// until the runtime has confirmed the transition. It is never persisted.
+	Completion chan<- error
+	Deadline   time.Time
 }
 
 const (
 	RuntimeUserLogoff RuntimeLifecycleEvent = iota + 1
 	RuntimeSuspend
 	RuntimeResume
+	// Source health gates have no user-intent policy effect.
+	RuntimeSourceLost
+	RuntimeSourceRecovered
 )
 
 // ApplyRuntimeLifecycleIntent commits the policy decision before the platform

@@ -68,10 +68,10 @@ func (e *RuntimeLifecycleExecutor) Handle(ctx context.Context, event RuntimeLife
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if event != RuntimeSuspend && event != RuntimeResume && event != RuntimeUserLogoff {
+	if event != RuntimeSuspend && event != RuntimeResume && event != RuntimeUserLogoff && event != RuntimeSourceLost && event != RuntimeSourceRecovered {
 		return errors.New("invalid runtime lifecycle event")
 	}
-	if event != RuntimeUserLogoff && event != e.powerEvent {
+	if (event == RuntimeSuspend || event == RuntimeResume) && event != e.powerEvent {
 		e.powerEvent = event
 		e.powerIntentCommitted = false
 	}
@@ -110,12 +110,12 @@ func (e *RuntimeLifecycleExecutor) Handle(ctx context.Context, event RuntimeLife
 		return errors.Join(policyErr, err)
 	}
 	switch event {
-	case RuntimeSuspend:
+	case RuntimeSuspend, RuntimeSourceLost:
 		result, err := e.engine.Suspend(ctx)
 		downErr := errors.Join(runtimeLifecycleDownError(result, err), ctx.Err())
 		failure := errors.Join(policyErr, downErr)
 		return errors.Join(failure, e.observe(ctx, downErr == nil, failure), ctx.Err())
-	case RuntimeResume:
+	case RuntimeResume, RuntimeSourceRecovered:
 		// Close the gate even for an unsolicited resume. Fetch current authority
 		// before deciding intent; stale policy must not first commit Disconnect.
 		result, err := e.engine.Suspend(ctx)
@@ -125,7 +125,7 @@ func (e *RuntimeLifecycleExecutor) Handle(ctx context.Context, event RuntimeLife
 		if err := errors.Join(e.refreshPolicy(ctx), ctx.Err()); err != nil {
 			return errors.Join(err, e.observe(ctx, true, err))
 		}
-		if !e.powerIntentCommitted {
+		if event == RuntimeResume && !e.powerIntentCommitted {
 			policyErr = e.mutations.ApplyRuntimeLifecycleIntent(ctx, event, sessionOwner)
 			if policyErr != nil {
 				return errors.Join(policyErr, e.observe(ctx, true, policyErr))

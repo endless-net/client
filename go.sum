@@ -8,6 +8,8 @@ github.com/endless-net/client-api/clientapi v1.12.1-0.20260913120316-e4fb0a95d2a
 github.com/endless-net/client-api/clientapi v1.12.1-0.20260913120316-e4fb0a95d2af/go.mod h1:8rTVG/hfC5vTyLju9zfQM26cyY8y9FNtJiBk8AuHhQQ=
 github.com/endless-net/relay v1.2.0 h1:vI38d54ywoF4GJMCsd+rL332VrgfXNKlM8Y6/9wDkEA=
 github.com/endless-net/relay v1.2.0/go.mod h1:y9fLHJ2cNiRSMHZfzJ8A/2I8bZggkN9BmFsPF6wfDos=
+github.com/godbus/dbus/v5 v5.2.2 h1:TUR3TgtSVDmjiXOgAAyaZbYmIeP3DPkld3jgKGV8mXQ=
+github.com/godbus/dbus/v5 v5.2.2/go.mod h1:3AAv2+hPq5rdnr5txxxRwiGjPXamgoIHgz9FPBfOp3c=
 github.com/google/btree v1.0.1 h1:gK4Kx5IaGY9CD5sPJ36FHiBJ6ZXl0kilRiiCj+jdYp4=
 github.com/google/btree v1.0.1/go.mod h1:xXMiIv4Fb/0kKde4SpL7qlzvu5cMJDRkFDxJfI9uaxA=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=

@@ -730,7 +730,7 @@ func cmdAgent(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return run(ctx, nil)
+	return runAgentPlatformLifecycle(ctx, run)
 }
 
 func runAgentCachedBootstrap(ctx context.Context, opts agentIterationOptions) (client.AgentSnapshot, error) {

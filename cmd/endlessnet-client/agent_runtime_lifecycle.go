@@ -79,6 +79,12 @@ func startAgentRuntimeLifecycle(ctx context.Context, cancel context.CancelCauseF
 		var retry <-chan time.Time
 		var pendingPower *client.RuntimeLifecycleNotification
 		handle := func(event client.RuntimeLifecycleNotification) {
+			var result error
+			defer func() {
+				if event.Completion != nil {
+					event.Completion <- result
+				}
+			}()
 			if event.Event == client.RuntimeUserLogoff {
 				owner := opts.ConfigStore.Read().LocalOwnerID
 				if event.SessionOwner == "" || owner == "" || !strings.EqualFold(event.SessionOwner, owner) {
@@ -87,16 +93,25 @@ func startAgentRuntimeLifecycle(ctx context.Context, cancel context.CancelCauseF
 					}
 					return
 				}
-			} else if event.Event != client.RuntimeSuspend && event.Event != client.RuntimeResume {
+			} else if event.Event != client.RuntimeSuspend && event.Event != client.RuntimeResume && event.Event != client.RuntimeSourceLost && event.Event != client.RuntimeSourceRecovered {
 				cancel(errors.New("invalid runtime lifecycle notification"))
 				return
 			}
 			var pending *client.RuntimeLifecycleNotification
-			if err := executor.Handle(ctx, event.Event, event.SessionOwner); err != nil && ctx.Err() == nil {
+			transition := ctx
+			if !event.Deadline.IsZero() {
+				var cancel context.CancelFunc
+				transition, cancel = context.WithDeadline(ctx, event.Deadline)
+				defer cancel()
+			}
+			result = executor.Handle(transition, event.Event, event.SessionOwner)
+			if err := result; err != nil && ctx.Err() == nil {
 				log.Print("runtime lifecycle transition pending")
 				var effectErr *client.RuntimeLifecycleEffectError
 				if event.Event != client.RuntimeUserLogoff || !errors.As(err, &effectErr) {
 					pending = &event
+					pending.Completion = nil
+					pending.Deadline = time.Time{}
 				}
 			}
 			if event.Event == client.RuntimeUserLogoff {

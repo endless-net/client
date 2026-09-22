@@ -160,6 +160,49 @@ func TestRuntimeLifecycleExecutorRejectsForeignLogoffAndUnsafeClose(t *testing.T
 	}
 }
 
+func TestRuntimeLifecycleSourceLossGatesWithoutChangingIntent(t *testing.T) {
+	m, _, _ := rpcPreferenceFixture(t)
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredConnected, Reason: "user_connect"}
+		profile := cfg.RPCState.Profiles[cfg.RPCState.ActiveProfileID]
+		profile.Suspend = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()
+		profile.Resume = ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()
+		cfg.RPCState.Profiles[profile.ID] = profile
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	lock := &sync.Mutex{}
+	engine := &testRuntimeLifecycleEngine{lock: lock, t: t}
+	executor, err := NewRuntimeLifecycleExecutor(ctx, m, engine, lock, func() {}, func(context.Context) error { return nil }, func(context.Context, bool, error) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { cancel(); _ = executor.Close() }()
+	if err := executor.Handle(ctx, RuntimeSourceLost, ""); err != nil {
+		t.Fatal(err)
+	}
+	if lock.TryLock() {
+		lock.Unlock()
+		t.Fatal("source loss opened worker gate")
+	}
+	if intent := m.store.Read().ConnectionIntent; intent.DesiredState != ConnectionIntentDesiredConnected || intent.Reason != "user_connect" {
+		t.Fatal("source health applied suspend preference", intent)
+	}
+	if err := executor.Handle(ctx, RuntimeSourceRecovered, ""); err != nil {
+		t.Fatal(err)
+	}
+	if intent := m.store.Read().ConnectionIntent; intent.DesiredState != ConnectionIntentDesiredConnected || intent.Reason != "user_connect" {
+		t.Fatal("source recovery applied resume preference", intent)
+	}
+	if !lock.TryLock() {
+		t.Fatal("verified recovery did not release worker gate")
+	}
+	lock.Unlock()
+}
+
 func TestRuntimeResumeRefreshRunsInsideClosedGateAndRetries(t *testing.T) {
 	m, _, _ := rpcPreferenceFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())

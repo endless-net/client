@@ -48,6 +48,23 @@ needs actual delay-inhibitor FD ownership and completion acknowledgement before
 release, plus source generation/recovery. A request to add the pinned D-Bus client
 `github.com/godbus/dbus/v5 v5.2.2` and permit its Go-cache writes is pending;
 no dependency or existing version has been changed.
+
+Package 2 Linux source increment (2026-09-22): the non-SCM Linux agent now
+requires a private native system D-Bus subscription before runtime launch.
+It pins the logind unique owner, subscribes to `PrepareForSleep` and
+`NameOwnerChanged`, obtains `Inhibit("sleep", ..., "delay")` with a Unix FD on
+that connection, checks `PreparingForSleep`, and reads the actual
+`InhibitDelayMaxUSec`. A source-owned completion waits for the shared lifecycle
+executor's durable intent, teardown and observation before closing the delay FD;
+expiry or an unconfirmed transition fails the runtime. Wake reacquires the FD
+before the resume gate can open. Source loss first closes the runtime gate,
+then uses bounded reconnect and owner/state reconciliation; exhausted recovery
+terminates the agent without changing saved intent solely for source health.
+The source uses `github.com/godbus/dbus/v5 v5.2.2`, explicitly approved for
+this dependency and Go-cache access. This is bounded logind sleep-cycle
+coordination, not an arbitrary kernel-suspend guarantee or native acceptance.
+Linux logoff delivery remains unimplemented; Windows SCM logoff and power paths
+remain synthetic-unit verified pending platform qualification.
 Validation: goimports, vet, configured lint (0 issues) and full local short suite
 passed (internal/client 142.623 s, CLI 11.119 s). The preceding HOST topology
 commit passed short CI [35718905260](https://github.com/endless-net/client/actions/runs/35718905260).
