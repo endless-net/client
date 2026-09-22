@@ -48,6 +48,15 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+Recovery inventory audit (2026-09-22): `TestExitLANRecoveryPinsAllPartialSubsets`
+checks all selected pin subsets and both byte orders without treating a missing
+map as revoked. `TestExitLANRecoveryPinsForeignOrChangingNeverMutates` rejects
+foreign identities and changed presence/bindings between snapshots before map
+mutation. Cancellation/read/revoke error tests check descriptor ownership.
+`TestExitLANBPFRecoveryScopesAndHandleOwnership` checks boot/netns and BLOCK
+gates, complete/partial/empty inventories and cleanup of partial factory results.
+These assertions do not establish safe detach/unpin or completed recovery.
+
 Closed-session audit (2026-09-22):
 `TestExitLANBPFSessionOwnsClosedSelectedArtifacts` checks all family modes,
 BLOCK-before-effects, checkpoint-before-pins, hook readback and ownership until

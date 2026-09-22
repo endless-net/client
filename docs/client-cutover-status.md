@@ -52,6 +52,10 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+Восстановление сверяет оставшиеся pins с журналом и удерживает найденные FD.
+Неполный набор допустим; чужие объекты не изменяются. Lease отзывается только
+через подтверждённую map. Detach, удаление pins и завершение recovery ещё нужны.
+
 Native factory объединяет закрытую подготовку LAN: namespace → nft BLOCK →
 attach → durable checkpoint/pins → readback. Сессия удерживает ресурсы и при
 Close отзывает lease, сохраняя pins для recovery. LAN_ALLOW ещё не включён.

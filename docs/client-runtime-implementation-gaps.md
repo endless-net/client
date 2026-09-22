@@ -22,6 +22,25 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN recovery inventory increment (2026-09-22): recovery opens only the four
+derived manifest names after boot/netns matching and confirmed nft BLOCK.
+Missing selected pins are accepted as interrupted creation; an unexpected
+unselected pin or a different object identity rejects the inventory without
+modifying that object. The complete surviving set is retained and reopened for
+comparison before any map mutation. Only a present, verified owned outer map
+is revoked. A missing map pin does not prove the map is gone: a pinned program
+may retain it, so the inventory records no successful lease revocation then.
+The native wrapper retains namespace, directory and object handles; failure
+releases handles while leaving pins and the durable journal intact. This is
+inventory and containment preparation, not completed cleanup or adoption:
+explicit link detach, safe unpin, absence evidence and journal removal remain
+required, as does a separately justified old-boot recovery path.
+Validation: goimports and vet passed; configured lint reported 0 issues after
+a test-only map lookup allocation correction. Full local short suite passed
+(internal/client 142.325 s, CLI 11.021 s). The preceding session commit passed
+all three short CI platforms
+([run 35710027364](https://github.com/endless-net/client/actions/runs/35710027364)).
+
 LAN closed-session increment (2026-09-22): a native factory now composes boot/
 namespace capture, confirmed nft BLOCK, the locked bpffs directory, BPF load
 and selected-family attach, durable checkpoint/pins and live hook readback.
