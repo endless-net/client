@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
-func captureNativeExitLANSource(ctx context.Context, own string) (*exitLANSource, error) {
-	return captureWatchedExitLANSource(ctx, own, openExitLANRouteWatch, func(ctx context.Context, own string) (*exitLANSource, error) {
-		return captureExitLANSource(ctx, own, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+func captureNativeExitLANSource(ctx context.Context, own string, family api.ExitFamilyMode) (*exitLANSource, error) {
+	return captureWatchedExitLANSource(ctx, own, family, openExitLANRouteWatch, func(ctx context.Context, own string, family api.ExitFamilyMode) (*exitLANSource, error) {
+		return captureExitLANSource(ctx, own, family, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return runExitCommand(ctx, "", name, args...)
 		}, inspectExitLANPhysical)
 	})

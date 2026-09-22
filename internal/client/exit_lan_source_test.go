@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 type exitLANFixture struct {
@@ -38,7 +40,7 @@ func (f *exitLANFixture) run(ctx context.Context, name string, args ...string) (
 	switch command {
 	case "-j -d link show":
 		return []byte(f.links), nil
-	case "-j address show":
+	case "-j address show", "-j -4 address show", "-j -6 address show":
 		return []byte(f.addresses), nil
 	case "-j -N -4 route show table main":
 		return []byte(f.ipv4), nil
@@ -52,10 +54,116 @@ func (f *exitLANFixture) inspect(context.Context, string) (exitLANPhysical, bool
 	return f.physical, f.eligible, nil
 }
 
+func TestExitLANSourceSelectedFamilyIgnoresOtherFamily(t *testing.T) {
+	for _, family := range []api.ExitFamilyMode{api.ExitFamilyIPv4Only, api.ExitFamilyIPv6Only} {
+		t.Run(string(family), func(t *testing.T) {
+			f := newExitLANFixture()
+			selected, other := "-4", "-6"
+			if family == api.ExitFamilyIPv4Only {
+				f.addresses = strings.ReplaceAll(f.addresses, `"valid_life_time":5000`, `"valid_life_time":"invalid"`)
+				f.addresses = strings.ReplaceAll(f.addresses, "2001:db8:10::2", "invalid-unselected")
+				f.ipv6 = "not JSON"
+			} else {
+				selected, other = "-6", "-4"
+				f.addresses = strings.ReplaceAll(f.addresses, "4294967295", `"invalid"`)
+				f.addresses = strings.ReplaceAll(f.addresses, "192.168.10.2", "invalid-unselected")
+				f.ipv4 = "not JSON"
+			}
+			queries := []string{}
+			run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				query := strings.Join(args, " ")
+				queries = append(queries, query)
+				if strings.Contains(query, other) {
+					return nil, errors.New("unselected family unavailable")
+				}
+				if strings.Contains(query, "address") && query != "-j "+selected+" address show" {
+					t.Fatal("address query not family scoped")
+				}
+				if f.calls == 3 {
+					f.addresses = strings.ReplaceAll(f.addresses, "invalid-unselected", "changed-unselected")
+				}
+				return f.run(ctx, name, args...)
+			}
+			source, err := captureExitLANSource(t.Context(), "endlessnet", family, run, f.inspect)
+			if err != nil || source == nil {
+				t.Fatal("unselected family blocked observation", err, queries)
+			}
+			if source.Family != family || len(queries) != 6 || len(source.Links) != 1 || len(source.Links[0].Routes) != 1 || len(source.Links[0].Addresses) != 1 {
+				t.Fatal("family identity or bounded query set lost")
+			}
+			if source.Links[0].Routes[0].Prefix.Addr().Is4() != (family == api.ExitFamilyIPv4Only) {
+				t.Fatal("unselected route retained")
+			}
+			if family == api.ExitFamilyIPv4Only && !source.ValidUntil.IsZero() {
+				t.Fatal("IPv6 lifetime capped IPv4 observation")
+			}
+			if family == api.ExitFamilyIPv6Only && (source.ValidUntil.IsZero() || source.ValidUntil.Before(time.Now().Add(3990*time.Second))) {
+				t.Fatal("selected IPv6 lifetime missing or foreign cap retained")
+			}
+		})
+	}
+}
+
+func TestExitLANSourceSelectedFamilyErrorsFailClosed(t *testing.T) {
+	for _, family := range []api.ExitFamilyMode{api.ExitFamilyIPv4Only, api.ExitFamilyIPv6Only, api.ExitFamilyDualStack} {
+		for _, failedFamily := range []string{"-4", "-6"} {
+			f := newExitLANFixture()
+			run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				if strings.Join(args, " ") == "-j -N "+failedFamily+" route show table main" {
+					return nil, errors.New("selected route query failed")
+				}
+				return f.run(ctx, name, args...)
+			}
+			source, err := captureExitLANSource(t.Context(), "endlessnet", family, run, f.inspect)
+			wantFailure := family == api.ExitFamilyDualStack || family == api.ExitFamilyIPv4Only && failedFamily == "-4" || family == api.ExitFamilyIPv6Only && failedFamily == "-6"
+			if wantFailure && (err == nil || source != nil) || !wantFailure && (err != nil || source == nil) {
+				t.Fatalf("family=%s failed=%s error=%v", family, failedFamily, err)
+			}
+		}
+	}
+}
+
+func TestExitLANSourceInvalidFamilyDoesNotRead(t *testing.T) {
+	f := newExitLANFixture()
+	for _, family := range []api.ExitFamilyMode{"", "unknown"} {
+		if source, err := captureExitLANSource(t.Context(), "endlessnet", family, f.run, f.inspect); err == nil || source != nil || f.calls != 0 {
+			t.Fatal("unknown family reached OS")
+		}
+	}
+}
+
+func TestExitLANSourceFamilyFilteredAddressAbsence(t *testing.T) {
+	for _, family := range []api.ExitFamilyMode{api.ExitFamilyIPv4Only, api.ExitFamilyIPv6Only} {
+		f := newExitLANFixture()
+		f.addresses = `[]` // ip -4/-6 omits links with no address in that family.
+		source, err := captureExitLANSource(t.Context(), "endlessnet", family, f.run, f.inspect)
+		if err != nil || source == nil || len(source.Links) != 1 {
+			t.Fatal("valid filtered absence rejected", err)
+		}
+		if len(source.Links[0].Addresses) != 0 || len(source.Links[0].Routes) != 0 || !source.ValidUntil.IsZero() {
+			t.Fatal("addressless link gained LAN authority")
+		}
+	}
+}
+
+func TestExitLANSourceRejectsSelectedAddressLifetime(t *testing.T) {
+	for _, family := range []api.ExitFamilyMode{api.ExitFamilyIPv4Only, api.ExitFamilyIPv6Only} {
+		f := newExitLANFixture()
+		if family == api.ExitFamilyIPv4Only {
+			f.addresses = strings.ReplaceAll(f.addresses, "4294967295", `"invalid"`)
+		} else {
+			f.addresses = strings.ReplaceAll(f.addresses, `"valid_life_time":5000`, `"valid_life_time":"invalid"`)
+		}
+		if source, err := captureExitLANSource(t.Context(), "endlessnet", family, f.run, f.inspect); err == nil || source != nil {
+			t.Fatal("malformed selected lifetime accepted", family)
+		}
+	}
+}
+
 func TestExitLANSourceRejectsPathLikeNamesBeforeRead(t *testing.T) {
 	for _, name := range []string{"", ".", "..", "../eth0", "eth0/..", "/eth0", " eth0", "eth0 ", "lo"} {
 		f := newExitLANFixture()
-		if _, err := captureExitLANSource(t.Context(), name, f.run, f.inspect); err == nil || f.calls != 0 {
+		if _, err := captureExitLANSource(t.Context(), name, api.ExitFamilyDualStack, f.run, f.inspect); err == nil || f.calls != 0 {
 			t.Fatal("invalid scope reached command/inspection boundary", name, err)
 		}
 	}
@@ -63,7 +171,7 @@ func TestExitLANSourceRejectsPathLikeNamesBeforeRead(t *testing.T) {
 
 func TestExitLANSourceStablePhysicalTopology(t *testing.T) {
 	f := newExitLANFixture()
-	source, err := captureExitLANSource(t.Context(), "endlessnet", f.run, f.inspect)
+	source, err := captureExitLANSource(t.Context(), "endlessnet", api.ExitFamilyDualStack, f.run, f.inspect)
 	if err != nil || len(source.Links) != 1 || len(source.Links[0].Routes) != 2 || f.calls != 8 {
 		t.Fatal("stable physical topology missing", err)
 	}
@@ -124,7 +232,7 @@ func TestExitLANSourceRejectsAmbiguousAndChangingEvidence(t *testing.T) {
 				}
 				return f.run(ctx, name, args...)
 			}
-			source, err := captureExitLANSource(ctx, "endlessnet", run, inspect)
+			source, err := captureExitLANSource(ctx, "endlessnet", api.ExitFamilyDualStack, run, inspect)
 			if err == nil || source != nil {
 				t.Fatal("ambiguous source accepted")
 			}
@@ -164,7 +272,7 @@ func TestExitLANSourceExcludesUnsupportedLinksAndAddresses(t *testing.T) {
 				f.ipv4 = `[]`
 				f.ipv6 = `[]`
 			}
-			source, err := captureExitLANSource(t.Context(), own, f.run, f.inspect)
+			source, err := captureExitLANSource(t.Context(), own, api.ExitFamilyDualStack, f.run, f.inspect)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -211,7 +319,7 @@ func TestExitLANSourceRejectsOverlappingPhysicalAttachments(t *testing.T) {
 		}
 		return p, ok, err
 	}
-	if _, err := captureExitLANSource(t.Context(), "endlessnet", f.run, inspect); err == nil {
+	if _, err := captureExitLANSource(t.Context(), "endlessnet", api.ExitFamilyDualStack, f.run, inspect); err == nil {
 		t.Fatal("metrics resolved ambiguous physical overlap")
 	}
 }
@@ -242,7 +350,7 @@ func TestExitLANSourcePublicWiFiAndLifetimeCountdown(t *testing.T) {
 		}
 		return f.run(ctx, name, args...)
 	}
-	source, err := captureExitLANSource(t.Context(), "endlessnet", run, f.inspect)
+	source, err := captureExitLANSource(t.Context(), "endlessnet", api.ExitFamilyDualStack, run, f.inspect)
 	if err != nil || len(source.Links) != 1 || source.Links[0].Name != "wlan0" || source.Links[0].Routes[1].Prefix != netip.MustParsePrefix("8.8.8.0/24") || source.ValidUntil.IsZero() || source.ValidUntil.After(time.Now().Add(3999*time.Second)) {
 		t.Fatal("public physical topology or conservative countdown failed", err)
 	}
@@ -260,7 +368,7 @@ func TestExitLANSourceTimedIPv6RAPreferences(t *testing.T) {
 				return f.run(ctx, name, args...)
 			}
 			started := time.Now()
-			source, err := captureExitLANSource(t.Context(), "endlessnet", run, f.inspect)
+			source, err := captureExitLANSource(t.Context(), "endlessnet", api.ExitFamilyDualStack, run, f.inspect)
 			if err != nil {
 				t.Fatal("RA countdown was treated as topology change", err)
 			}
@@ -308,7 +416,7 @@ func TestExitLANSourceRejectsInvalidOrChangedRARouteMetadata(t *testing.T) {
 				}
 				return f.run(ctx, name, args...)
 			}
-			if source, err := captureExitLANSource(t.Context(), "endlessnet", run, f.inspect); err == nil || source != nil {
+			if source, err := captureExitLANSource(t.Context(), "endlessnet", api.ExitFamilyDualStack, run, f.inspect); err == nil || source != nil {
 				t.Fatal("unsafe RA metadata accepted")
 			}
 		})

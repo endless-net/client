@@ -22,6 +22,24 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN family selection increment (2026-09-21): BPF attachment now takes the
+explicit exit family mode and creates only its selected links. The mode is
+committed only after every selected link passes readback. Pin creation validates
+that exact set and derives `_ipv4`/`_ipv6` from family identity, not link position.
+Single-family operation does not require the unused family's hook support;
+failure of either selected family never downgrades dual-stack. All reserved pin
+names are still checked for conflicts so stale unselected objects are not
+silently adopted or deleted. Topology evidence is now family-bound and cannot
+be reused to compile a different family mode.
+Address and route capture queries only the selected families. A physical
+interface omitted by a family-filtered address dump retains no eligible LAN
+routes; unselected address payloads and lifetimes grant no authority. The
+topology watcher still invalidates conservatively on changes to either family.
+Validation on 2026-09-22: goimports and vet passed, configured lint reported
+0 issues, and the full local short suite passed (internal/client 141.233 s).
+Linux-only source tests and native effects still require their CI evidence;
+this increment does not enable LAN_ALLOW in the production adapter.
+
 LAN live-hook readback increment (2026-09-21): `exit_lan_bpf_hook*.go` collects
 a bounded NFNL_SUBSYS_HOOK dump from a fresh NETLINK_NETFILTER socket in the
 current network namespace. Completion requires one exact BPF program/family/
@@ -36,13 +54,9 @@ Kernel dump consistency uses the hook-array pointer, not a durable generation;
 IPv4 and IPv6 observations are not atomic together
 ([hook dump implementation](https://raw.githubusercontent.com/torvalds/linux/v6.12/net/netfilter/nfnetlink_hook.c),
 [hook attributes](https://raw.githubusercontent.com/torvalds/linux/v6.12/include/uapi/linux/netfilter/nfnetlink_hook.h)).
-Integration audit: the standalone link/pin primitives currently require both
-families. That is not a policy requirement: `exit_lan_plan.go` compiles only
-selected families, and native exit leaves an unselected family ordinary. Before
-integration, create and pin the explicit selected family set, naming links by
-their family rather than slice position. Failure of a selected family must not
-downgrade dual-stack. Route collection currently reads both families and needs
-the same audit; unsupported unselected AF must not fabricate selected evidence.
+The selected-family mismatch identified in the preceding integration audit is
+addressed by the family-bound preparation above. Native exit still leaves an
+unselected family ordinary; future LAN marking must obey the same selection.
 Validation: goimports, vet and configured lint (0 issues) passed; full local
 short suite passed (internal/client 136.552 s, CLI 10.278 s). Linux transport
 units require Linux CI, and real netlink/poller behavior remains unqualified.

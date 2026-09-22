@@ -48,6 +48,22 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+`TestExitLANBPFLinksUseOnlySelectedFamilies` verifies single-family success
+when the other family cannot attach, failure of a selected family, and no
+dual-stack downgrade. `TestExitLANBPFPinsFollowFamilyIdentity` checks stable
+family names, the absence of unselected pins, malformed selected sets and old
+unselected pin conflicts without deletion. The plan assertion rejects topology
+captured for IPv4-only when dual-stack was requested. These remain preparation
+assertions; native requested/effective LAN effects still need integration.
+
+`TestExitLANSourceSelectedFamilyIgnoresOtherFamily` and
+`TestExitLANSourceSelectedFamilyErrorsFailClosed` separate unused-family
+payloads from selected-family failures. `TestExitLANSourceFamilyFilteredAddressAbsence`
+checks that an omitted address row cannot grant routes;
+`TestExitLANSourceRejectsSelectedAddressLifetime` rejects invalid selected
+lifetimes. `TestExitLANHealthRejectsDifferentTopologyFamily` rejects reuse
+before peer inspection, and watched capture rejects a mismatched source family.
+
 Hook dump assertions: `TestExitLANHookDumpExactIdentityAndCompletion` checks
 LE/BE requests and exact BPF evidence alongside ordinary/nft hooks, waiting for
 DONE. `TestExitLANHookDumpRejectsIncompleteAndDuplicateEvidence`,

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"math"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 const (
@@ -55,11 +57,28 @@ func (p *exitLANBPFPreparation) netfilterLinkIdentity(fd int) (exitLANBPFLinkIde
 	return exitLANBPFLinkIdentity{u32(4), u32(8), u32(16), u32(20), int32(u32(24))}, nil
 }
 
-// attachClosed attaches both IP families with an empty lease. It neither pins
+func exitLANBPFFamilies(mode api.ExitFamilyMode) ([]uint32, error) {
+	switch mode {
+	case api.ExitFamilyIPv4Only:
+		return []uint32{2}, nil
+	case api.ExitFamilyIPv6Only:
+		return []uint32{10}, nil
+	case api.ExitFamilyDualStack:
+		return []uint32{2, 10}, nil
+	default:
+		return nil, errExitLANBPF
+	}
+}
+
+// attachClosed attaches exactly the selected families with an empty lease. It neither pins
 // links nor grants runtime authority to publish/open LAN. Before calling, the
 // adapter must independently confirm nft BLOCK and retain that guard through
 // pinning and live readback. This primitive owns only links it just created.
-func (p *exitLANBPFPreparation) attachClosed(ctx context.Context, hook uint32, priority int32) (result error) {
+func (p *exitLANBPFPreparation) attachClosed(ctx context.Context, mode api.ExitFamilyMode, hook uint32, priority int32) (result error) {
+	families, err := exitLANBPFFamilies(mode)
+	if err != nil {
+		return err
+	}
 	if p == nil || hook >= 5 || priority == math.MinInt32 || priority == math.MaxInt32 {
 		return errExitLANBPF
 	}
@@ -92,7 +111,7 @@ func (p *exitLANBPFPreparation) attachClosed(ctx context.Context, hook uint32, p
 	if p.order.Uint32(program) != 32 || programID == 0 {
 		return errExitLANBPF
 	}
-	for _, family := range []uint32{2, 10} {
+	for _, family := range families {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -129,5 +148,6 @@ func (p *exitLANBPFPreparation) attachClosed(ctx context.Context, hook uint32, p
 		return err
 	}
 	p.links = created
+	p.family = mode
 	return nil
 }

@@ -102,8 +102,22 @@ func (p *exitLANBPFPreparation) pinClosed(ctx context.Context, directory *exitLA
 		return nil, ctx.Err()
 	}
 	defer p.mu.Unlock()
-	if p.outer < 0 || p.program < 0 || len(p.links) != 2 {
+	families, familyErr := exitLANBPFFamilies(p.family)
+	if p.outer < 0 || p.program < 0 || familyErr != nil || len(p.links) != len(families) {
 		return nil, errExitLANBPF
+	}
+	selectedNames := append([]string(nil), names[:2]...)
+	fds := []int{p.outer, p.program}
+	for i, family := range families {
+		if p.links[i].identity.family != family {
+			return nil, errExitLANBPF
+		}
+		name := names[2]
+		if family == 10 {
+			name = names[3]
+		}
+		selectedNames = append(selectedNames, name)
+		fds = append(fds, p.links[i].fd)
 	}
 	if err := p.revokeLocked(); err != nil {
 		return nil, err
@@ -124,7 +138,6 @@ func (p *exitLANBPFPreparation) pinClosed(ctx context.Context, directory *exitLA
 			return nil, err
 		}
 	}
-	fds := []int{p.outer, p.program, p.links[0].fd, p.links[1].fd}
 	for i, fd := range fds {
 		if err := ctx.Err(); err != nil {
 			return created, err
@@ -136,14 +149,14 @@ func (p *exitLANBPFPreparation) pinClosed(ctx context.Context, directory *exitLA
 		if err := ctx.Err(); err != nil {
 			return created, err
 		}
-		if _, err = p.pinCommand(exitLANBPFObjectPin, directory.fd, fd, names[i]); err != nil {
+		if _, err = p.pinCommand(exitLANBPFObjectPin, directory.fd, fd, selectedNames[i]); err != nil {
 			return created, err
 		}
-		created = append(created, names[i])
+		created = append(created, selectedNames[i])
 		if err := ctx.Err(); err != nil {
 			return created, err
 		}
-		opened, err := p.pinCommand(exitLANBPFObjectGet, directory.fd, 0, names[i])
+		opened, err := p.pinCommand(exitLANBPFObjectGet, directory.fd, 0, selectedNames[i])
 		if err != nil {
 			return created, err
 		}
@@ -166,6 +179,9 @@ func (p *exitLANBPFPreparation) pinClosed(ctx context.Context, directory *exitLA
 }
 
 func (p *exitLANBPFPreparation) pinObjectIdentity(fd, index int) (exitLANBPFLinkIdentity, error) {
+	if index < 0 || index >= 2+len(p.links) {
+		return exitLANBPFLinkIdentity{}, errExitLANBPF
+	}
 	if index >= 2 {
 		identity, err := p.netfilterLinkIdentity(fd)
 		if err != nil {

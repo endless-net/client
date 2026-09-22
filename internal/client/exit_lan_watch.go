@@ -1,6 +1,10 @@
 package client
 
-import "context"
+import (
+	"context"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
+)
 
 // A one-shot change source. Loss, cancellation and closure must invalidate it;
 // reconnecting must create a new stream and a new topology snapshot.
@@ -34,11 +38,11 @@ func (l *exitLANSourceLifetime) current() bool {
 // both snapshots look identical (delete/recreate, or route away and back).
 // Notification delivery is asynchronous: this is not packet-time instance
 // binding or Wi-Fi association evidence, and cannot authorize a LAN exception.
-func captureWatchedExitLANSource(ctx context.Context, own string, open func(context.Context) (exitLANChangeStream, error), capture func(context.Context, string) (*exitLANSource, error)) (*exitLANSource, error) {
+func captureWatchedExitLANSource(ctx context.Context, own string, family api.ExitFamilyMode, open func(context.Context) (exitLANChangeStream, error), capture func(context.Context, string, api.ExitFamilyMode) (*exitLANSource, error)) (*exitLANSource, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if !exitLANInterfaceName(own) || own == "lo" || open == nil || capture == nil {
+	if !exitLANSourceFamilyValid(family) || !exitLANInterfaceName(own) || own == "lo" || open == nil || capture == nil {
 		return nil, errExitLANSource
 	}
 	stream, err := open(ctx)
@@ -58,11 +62,11 @@ func captureWatchedExitLANSource(ctx context.Context, own string, open func(cont
 	if !lifetime.current() {
 		return nil, errExitLANSource
 	}
-	source, err := capture(ctx, own)
+	source, err := capture(ctx, own, family)
 	if err != nil {
 		return nil, err
 	}
-	if source == nil || source.OwnInterface != own || !lifetime.current() {
+	if source == nil || source.OwnInterface != own || source.Family != family || !lifetime.current() {
 		return nil, errExitLANSource
 	}
 	source.lifetime = lifetime

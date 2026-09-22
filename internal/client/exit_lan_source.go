@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 var errExitLANSource = errors.New("physical LAN source is unavailable")
@@ -26,6 +28,7 @@ var errExitLANSource = errors.New("physical LAN source is unavailable")
 type exitLANSource struct {
 	lifetime     *exitLANSourceLifetime
 	OwnInterface string
+	Family       api.ExitFamilyMode
 	Links        []exitLANLink
 	ValidUntil   time.Time
 }
@@ -57,17 +60,17 @@ func exitLANInterfaceName(name string) bool {
 	return name != "." && name != ".." && strings.TrimSpace(name) == name && safeWireGuardInterfaceName(name)
 }
 
-func captureExitLANSource(ctx context.Context, own string, run CommandRunner, inspect exitLANPhysicalInspector) (*exitLANSource, error) {
-	if !exitLANInterfaceName(own) || own == "lo" || run == nil || inspect == nil {
+func captureExitLANSource(ctx context.Context, own string, family api.ExitFamilyMode, run CommandRunner, inspect exitLANPhysicalInspector) (*exitLANSource, error) {
+	if !exitLANSourceFamilyValid(family) || !exitLANInterfaceName(own) || own == "lo" || run == nil || inspect == nil {
 		return nil, errExitLANSource
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	before, err := readExitLANSource(ctx, own, run, inspect)
+	before, err := readExitLANSource(ctx, own, family, run, inspect)
 	if err != nil {
 		return nil, err
 	}
-	after, err := readExitLANSource(ctx, own, run, inspect)
+	after, err := readExitLANSource(ctx, own, family, run, inspect)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +108,14 @@ func exitLANRows(ctx context.Context, run CommandRunner, args ...string) ([]any,
 	return rows, nil
 }
 
-func readExitLANSource(ctx context.Context, own string, run CommandRunner, inspect exitLANPhysicalInspector) (*exitLANSource, error) {
+func exitLANSourceFamilyValid(family api.ExitFamilyMode) bool {
+	return family == api.ExitFamilyIPv4Only || family == api.ExitFamilyIPv6Only || family == api.ExitFamilyDualStack
+}
+
+func readExitLANSource(ctx context.Context, own string, family api.ExitFamilyMode, run CommandRunner, inspect exitLANPhysicalInspector) (*exitLANSource, error) {
+	if !exitLANSourceFamilyValid(family) {
+		return nil, errExitLANSource
+	}
 	rows, err := exitLANRows(ctx, run, "-j", "-d", "link", "show")
 	if err != nil {
 		return nil, err
@@ -113,7 +123,7 @@ func readExitLANSource(ctx context.Context, own string, run CommandRunner, inspe
 	if len(rows) > 128 {
 		return nil, errExitLANSource
 	}
-	source := &exitLANSource{OwnInterface: own}
+	source := &exitLANSource{OwnInterface: own, Family: family}
 	byName := map[string]int{}
 	indices := map[int]bool{}
 	for _, raw := range rows {
@@ -185,7 +195,18 @@ func readExitLANSource(ctx context.Context, own string, run CommandRunner, inspe
 		source.Links = append(source.Links, exitLANLink{Index: index, LinkIndex: physical.LinkIndex, Name: name, DevicePath: physical.DevicePath, HardwareAddress: physical.HardwareAddress, Driver: physical.Driver, Subsystem: physical.Subsystem, CarrierChanges: physical.CarrierChanges})
 	}
 	addressReadStarted := time.Now()
-	rows, err = exitLANRows(ctx, run, "-j", "address", "show")
+	addressArgs := []string{"-j"}
+	routeFamilies := []string{"-4", "-6"}
+	switch family {
+	case api.ExitFamilyIPv4Only:
+		addressArgs = append(addressArgs, "-4")
+		routeFamilies = []string{"-4"}
+	case api.ExitFamilyIPv6Only:
+		addressArgs = append(addressArgs, "-6")
+		routeFamilies = []string{"-6"}
+	}
+	addressArgs = append(addressArgs, "address", "show")
+	rows, err = exitLANRows(ctx, run, addressArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -220,6 +241,12 @@ func readExitLANSource(ctx context.Context, own string, run CommandRunner, inspe
 			a, ok := value.(map[string]any)
 			if !ok {
 				return nil, errExitLANSource
+			}
+			// An unselected address contributes neither identity nor a lifetime.
+			// The native query is family-filtered; retain this boundary for
+			// injected snapshots without parsing the other family's payload.
+			if family == api.ExitFamilyIPv4Only && a["family"] == "inet6" || family == api.ExitFamilyIPv6Only && a["family"] == "inet" {
+				continue
 			}
 			local, ok := a["local"].(string)
 			ip, parseErr := netip.ParseAddr(local)
@@ -274,12 +301,15 @@ func readExitLANSource(ctx context.Context, own string, run CommandRunner, inspe
 		}
 	}
 	for _, link := range source.Links {
-		if !seen[link.Name] {
+		// iproute2's family filter omits interfaces with no address in that
+		// family. Keep their physical identity, but no addresses or routes can
+		// become eligible without a selected-family address record.
+		if family == api.ExitFamilyDualStack && !seen[link.Name] {
 			return nil, errExitLANSource
 		}
 	}
 	var indirect []netip.Prefix
-	for _, family := range []string{"-4", "-6"} {
+	for _, family := range routeFamilies {
 		routeReadStarted := time.Now()
 		rows, err = exitLANRows(ctx, run, "-j", "-N", family, "route", "show", "table", "main")
 		if err != nil {

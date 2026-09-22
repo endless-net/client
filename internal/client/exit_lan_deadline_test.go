@@ -72,7 +72,7 @@ func TestExitLANBootPreparationRechecksAfterTopology(t *testing.T) {
 			e, cfg, now, inspect := exitLANHealthFixture(t, false)
 			e.mu.Lock()
 			defer e.mu.Unlock()
-			topology := &exitLANSource{lifetime: exitLANTestLifetime(t), OwnInterface: e.interface_, ValidUntil: now.Add(10 * time.Second), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
+			topology := &exitLANSource{lifetime: exitLANTestLifetime(t), OwnInterface: e.interface_, Family: cfg.ExitSelection.Family, ValidUntil: now.Add(10 * time.Second), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			calls := 0

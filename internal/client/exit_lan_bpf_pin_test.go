@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"strings"
 	"testing"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 const exitLANBPFTestScope = "0123456789abcdef01234567"
@@ -78,10 +80,10 @@ func (k *exitLANBPFPinTestKernel) call(command int, attr []byte, buffers ...[]by
 	return fd, nil
 }
 
-func newExitLANBPFPinFixture(t *testing.T, order binary.ByteOrder) (*exitLANBPFPreparation, *exitLANBPFDirectory, *exitLANBPFPinTestKernel) {
+func newExitLANBPFPinFixture(t *testing.T, order binary.ByteOrder, mode api.ExitFamilyMode) (*exitLANBPFPreparation, *exitLANBPFDirectory, *exitLANBPFPinTestKernel) {
 	t.Helper()
 	p, link := newExitLANBPFLinkFixture(t, order)
-	if err := p.attachClosed(t.Context(), 4, 10); err != nil {
+	if err := p.attachClosed(t.Context(), mode, 4, 10); err != nil {
 		t.Fatal(err)
 	}
 	k := &exitLANBPFPinTestKernel{link: link, pins: map[string]int{}}
@@ -92,7 +94,7 @@ func newExitLANBPFPinFixture(t *testing.T, order binary.ByteOrder) (*exitLANBPFP
 
 func TestExitLANBPFPinsRetainExactObjectsAfterClose(t *testing.T) {
 	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
-		p, d, k := newExitLANBPFPinFixture(t, order)
+		p, d, k := newExitLANBPFPinFixture(t, order, api.ExitFamilyDualStack)
 		deadline, clock := exitLANBPFTestDeadline(t)
 		if err := p.publishBootDeadline(t.Context(), deadline, clock); err != nil {
 			t.Fatal(err)
@@ -130,7 +132,7 @@ func TestExitLANBPFPinsRetainExactObjectsAfterClose(t *testing.T) {
 func TestExitLANBPFPinFailurePreservesClosedPartialOwnership(t *testing.T) {
 	for step := 1; step <= 21; step++ {
 		for _, lateCancel := range []bool{false, true} {
-			p, d, k := newExitLANBPFPinFixture(t, binary.LittleEndian)
+			p, d, k := newExitLANBPFPinFixture(t, binary.LittleEndian, api.ExitFamilyDualStack)
 			ctx, cancel := context.WithCancel(t.Context())
 			if lateCancel {
 				k.after = func(int) {
@@ -159,7 +161,7 @@ func TestExitLANBPFPinFailurePreservesClosedPartialOwnership(t *testing.T) {
 
 func TestExitLANBPFPinConflictAndReadbackMismatch(t *testing.T) {
 	for _, scenario := range []string{"existing", "swapped", "same_type", "directory_lost"} {
-		p, d, k := newExitLANBPFPinFixture(t, binary.LittleEndian)
+		p, d, k := newExitLANBPFPinFixture(t, binary.LittleEndian, api.ExitFamilyDualStack)
 		names, _ := exitLANBPFPinNames(exitLANBPFTestScope)
 		switch scenario {
 		case "existing":
@@ -207,7 +209,7 @@ func TestExitLANBPFPinConflictAndReadbackMismatch(t *testing.T) {
 }
 
 func TestExitLANBPFPinsRejectUnsafeNamesAndDirectory(t *testing.T) {
-	p, d, k := newExitLANBPFPinFixture(t, binary.LittleEndian)
+	p, d, k := newExitLANBPFPinFixture(t, binary.LittleEndian, api.ExitFamilyDualStack)
 	defer func() { _ = p.Close() }()
 	for _, scope := range []string{"", "../" + exitLANBPFTestScope, strings.ToUpper(exitLANBPFTestScope), strings.Repeat("g", 24)} {
 		if _, err := p.pinClosed(t.Context(), d, scope); err == nil || k.steps != 0 {
@@ -224,5 +226,57 @@ func TestExitLANBPFPinsRejectUnsafeNamesAndDirectory(t *testing.T) {
 	}
 	if _, err := p.pinClosed(t.Context(), d, exitLANBPFTestScope); err == nil || k.steps != 0 {
 		t.Fatal("closed directory reached kernel")
+	}
+}
+
+func TestExitLANBPFPinsFollowFamilyIdentity(t *testing.T) {
+	for _, mode := range []api.ExitFamilyMode{api.ExitFamilyIPv4Only, api.ExitFamilyIPv6Only} {
+		p, d, k := newExitLANBPFPinFixture(t, binary.LittleEndian, mode)
+		created, err := p.pinClosed(t.Context(), d, exitLANBPFTestScope)
+		if err != nil || len(created) != 3 || len(k.pins) != 3 {
+			t.Fatal("single-family pins rejected", mode, err)
+		}
+		suffix, absent := "_ipv4", "_ipv6"
+		if mode == api.ExitFamilyIPv6Only {
+			suffix, absent = absent, suffix
+		}
+		if created[2] != exitLANBPFTestScope+suffix || k.pins[created[2]] != p.links[0].fd {
+			t.Fatal("link name used slice position instead of family")
+		}
+		if _, exists := k.pins[exitLANBPFTestScope+absent]; exists {
+			t.Fatal("unselected family was pinned")
+		}
+		if err := p.Close(); err != nil {
+			t.Fatal(err)
+		}
+		k.link.k.assertClosed()
+	}
+	for _, scenario := range []string{"wrong_family", "missing_link", "duplicate_link", "unknown_mode", "foreign_unselected_pin"} {
+		p, d, k := newExitLANBPFPinFixture(t, binary.LittleEndian, api.ExitFamilyIPv6Only)
+		saved := append([]exitLANBPFLink(nil), p.links...)
+		switch scenario {
+		case "wrong_family":
+			p.links[0].identity.family = 2
+		case "missing_link":
+			p.links = nil
+		case "duplicate_link":
+			p.links = append(p.links, p.links[0])
+		case "unknown_mode":
+			p.family = ""
+		case "foreign_unselected_pin":
+			k.pins[exitLANBPFTestScope+"_ipv4"] = p.program
+		}
+		created, err := p.pinClosed(t.Context(), d, exitLANBPFTestScope)
+		if err == nil || len(created) != 0 {
+			t.Fatal("unbound family pins accepted", scenario)
+		}
+		if scenario == "foreign_unselected_pin" && (len(k.pins) != 1 || k.pins[exitLANBPFTestScope+"_ipv4"] != p.program) {
+			t.Fatal("old family pin changed")
+		}
+		p.links = saved
+		if err := p.Close(); err != nil {
+			t.Fatal(err)
+		}
+		k.link.k.assertClosed()
 	}
 }

@@ -160,7 +160,7 @@ func (e *WireGuardEngine) prepareExitLANWithHealthLocked(ctx context.Context, cf
 
 func (e *WireGuardEngine) prepareExitLANWithInspection(ctx context.Context, cfg Config, topology *exitLANSource, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error)) (*exitLANPlan, *exitLANPeerHealth, error) {
 	started := time.Now()
-	if e == nil || topology == nil || topology.OwnInterface != e.interface_ || !topology.lifetime.current() {
+	if e == nil || topology == nil || cfg.ExitSelection == nil || topology.Family != cfg.ExitSelection.Family || topology.OwnInterface != e.interface_ || !topology.lifetime.current() {
 		return nil, nil, errExitLANPolicy
 	}
 	health, err := e.observeExitLANPeerHealthWithInspection(ctx, cfg, cfg.ExitSelection, now, inspect)

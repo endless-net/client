@@ -6,6 +6,8 @@ import (
 	"errors"
 	"math"
 	"testing"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 type exitLANBPFLinkTestKernel struct {
@@ -93,7 +95,7 @@ func TestExitLANBPFLinksAttachClosedAndRetainIdentity(t *testing.T) {
 		if err := p.publishBootDeadline(t.Context(), d, clock); err != nil {
 			t.Fatal(err)
 		}
-		if err := p.attachClosed(t.Context(), 4, -100); err != nil {
+		if err := p.attachClosed(t.Context(), api.ExitFamilyDualStack, 4, -100); err != nil {
 			t.Fatal(err)
 		}
 		if len(p.links) != 2 || k.k.objects[p.outer].slot != 0 {
@@ -106,7 +108,7 @@ func TestExitLANBPFLinksAttachClosedAndRetainIdentity(t *testing.T) {
 			}
 		}
 		before := k.steps
-		if err := p.attachClosed(t.Context(), 4, -100); err == nil || k.steps != before {
+		if err := p.attachClosed(t.Context(), api.ExitFamilyDualStack, 4, -100); err == nil || k.steps != before {
 			t.Fatal("duplicate attach mutated owned links")
 		}
 		if err := p.Close(); err != nil {
@@ -133,7 +135,7 @@ func TestExitLANBPFLinkFailureAndCancellationCleanup(t *testing.T) {
 			} else {
 				k.fail = step
 			}
-			err := p.attachClosed(ctx, 4, 10)
+			err := p.attachClosed(ctx, api.ExitFamilyDualStack, 4, 10)
 			cancel()
 			if err == nil || (cancelAfter && !errors.Is(err, context.Canceled)) || len(p.links) != 0 {
 				t.Fatal("failed attach retained links", step, cancelAfter, err)
@@ -168,7 +170,7 @@ func TestExitLANBPFLinkRejectsMismatchedReadback(t *testing.T) {
 			}
 			p.order.PutUint32(info[field:], value)
 		}
-		if err := p.attachClosed(t.Context(), 4, 10); err == nil || len(p.links) != 0 {
+		if err := p.attachClosed(t.Context(), api.ExitFamilyDualStack, 4, 10); err == nil || len(p.links) != 0 {
 			t.Fatal("bad link identity accepted", field)
 		}
 		if err := p.Close(); err != nil {
@@ -185,13 +187,13 @@ func TestExitLANBPFLinkRejectsUnsafeInputs(t *testing.T) {
 		hook     uint32
 		priority int32
 	}{{5, 0}, {4, math.MinInt32}, {4, math.MaxInt32}} {
-		if err := p.attachClosed(t.Context(), args.hook, args.priority); err == nil || k.steps != 0 {
+		if err := p.attachClosed(t.Context(), api.ExitFamilyDualStack, args.hook, args.priority); err == nil || k.steps != 0 {
 			t.Fatal("invalid hook reached syscall")
 		}
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := p.attachClosed(ctx, 4, 0); !errors.Is(err, context.Canceled) || k.steps != 0 {
+	if err := p.attachClosed(ctx, api.ExitFamilyDualStack, 4, 0); !errors.Is(err, context.Canceled) || k.steps != 0 {
 		t.Fatal("pre-cancel touched objects")
 	}
 }
@@ -217,7 +219,7 @@ func TestExitLANBPFLinksRejectDuplicateAndForeignProgramIdentity(t *testing.T) {
 				}
 			}
 		}
-		if err := p.attachClosed(t.Context(), 4, 10); err == nil || len(p.links) != 0 {
+		if err := p.attachClosed(t.Context(), api.ExitFamilyDualStack, 4, 10); err == nil || len(p.links) != 0 {
 			t.Fatal("bad object identity accepted", scenario)
 		}
 		if err := p.Close(); err != nil {
@@ -225,4 +227,55 @@ func TestExitLANBPFLinksRejectDuplicateAndForeignProgramIdentity(t *testing.T) {
 		}
 		k.k.assertClosed()
 	}
+}
+
+func TestExitLANBPFLinksUseOnlySelectedFamilies(t *testing.T) {
+	for _, tc := range []struct {
+		mode        api.ExitFamilyMode
+		unavailable uint32
+		want        []uint32
+	}{
+		{api.ExitFamilyIPv4Only, 10, []uint32{2}},
+		{api.ExitFamilyIPv6Only, 2, []uint32{10}},
+		{api.ExitFamilyDualStack, 0, []uint32{2, 10}},
+		{api.ExitFamilyDualStack, 10, nil},
+		{api.ExitFamilyIPv4Only, 2, nil},
+		{api.ExitFamilyIPv6Only, 10, nil},
+	} {
+		p, k := newExitLANBPFLinkFixture(t, binary.LittleEndian)
+		original := p.call
+		p.call = func(command int, attr []byte, buffers ...[]byte) (int, error) {
+			if command == exitLANBPFLinkCreate && p.order.Uint32(attr[16:]) == tc.unavailable {
+				return -1, errExitLANBPF
+			}
+			return original(command, attr, buffers...)
+		}
+		err := p.attachClosed(t.Context(), tc.mode, 4, 10)
+		if len(tc.want) == 0 {
+			if err == nil || len(p.links) != 0 || p.family != "" {
+				t.Fatal("selected-family failure downgraded mode", tc.mode)
+			}
+		} else {
+			if err != nil || len(p.links) != len(tc.want) || p.family != tc.mode {
+				t.Fatal("unselected family blocked attachment", tc.mode, err)
+			}
+			for i, family := range tc.want {
+				if p.links[i].identity.family != family {
+					t.Fatal("wrong attached family")
+				}
+			}
+		}
+		if err := p.Close(); err != nil {
+			t.Fatal(err)
+		}
+		k.k.assertClosed()
+	}
+	p, k := newExitLANBPFLinkFixture(t, binary.LittleEndian)
+	if err := p.attachClosed(t.Context(), "", 4, 10); err == nil || k.steps != 0 {
+		t.Fatal("unspecified family reached kernel")
+	}
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	k.k.assertClosed()
 }

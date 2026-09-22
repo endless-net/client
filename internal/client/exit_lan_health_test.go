@@ -61,6 +61,22 @@ func exitLANHealthFixture(t *testing.T, relayed bool) (*WireGuardEngine, Config,
 	return e, cfg, now, inspect
 }
 
+func TestExitLANHealthRejectsDifferentTopologyFamily(t *testing.T) {
+	e, cfg, now, inspect := exitLANHealthFixture(t, false)
+	other := api.ExitFamilyIPv4Only
+	if cfg.ExitSelection.Family == other {
+		other = api.ExitFamilyIPv6Only
+	}
+	topology := &exitLANSource{lifetime: exitLANTestLifetime(t), OwnInterface: e.interface_, Family: other}
+	called := false
+	e.mu.Lock()
+	_, _, err := e.prepareExitLANWithInspection(t.Context(), cfg, topology, now, func(e *WireGuardEngine) (WireGuardInspection, error) { called = true; return inspect(e) })
+	e.mu.Unlock()
+	if err == nil || called {
+		t.Fatal("foreign-family topology reached live observation")
+	}
+}
+
 func TestExitLANHealthCannotRenewAnOldHandshake(t *testing.T) {
 	for _, relayed := range []bool{false, true} {
 		e, cfg, now, inspect := exitLANHealthFixture(t, relayed)
@@ -169,7 +185,7 @@ func TestExitLANPreparationIntersectsHealthTopologyAndPolicy(t *testing.T) {
 	e, cfg, now, inspect := exitLANHealthFixture(t, false)
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	topology := &exitLANSource{OwnInterface: e.interface_, ValidUntil: now.Add(10 * time.Second), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
+	topology := &exitLANSource{OwnInterface: e.interface_, Family: cfg.ExitSelection.Family, ValidUntil: now.Add(10 * time.Second), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
 	topology.lifetime = exitLANTestLifetime(t)
 	plan, health, err := e.prepareExitLANWithInspection(t.Context(), cfg, topology, now, inspect)
 	if err != nil || !plan.expires.Equal(topology.ValidUntil) || !health.expires.Equal(now.Add(20*time.Second)) {
@@ -215,7 +231,7 @@ func TestExitLANReadbackCannotCrossEvidenceDeadline(t *testing.T) {
 			return inspect(e)
 		}
 		if preparation {
-			topology := &exitLANSource{OwnInterface: e.interface_, ValidUntil: deadline, Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
+			topology := &exitLANSource{OwnInterface: e.interface_, Family: cfg.ExitSelection.Family, ValidUntil: deadline, Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
 			topology.lifetime = exitLANTestLifetime(t)
 			_, _, err = e.prepareExitLANWithInspection(t.Context(), cfg, topology, time.Now(), delayed)
 			if err == nil || calls != 2 {

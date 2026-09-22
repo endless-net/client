@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 type exitLANTestStream struct {
@@ -32,7 +34,7 @@ func exitLANTestLifetime(t *testing.T) *exitLANSourceLifetime {
 }
 
 func TestExitLANWatchCaptureOwnershipAndInvalidation(t *testing.T) {
-	for _, scenario := range []string{"stable", "before", "during", "lost", "capture_error", "wrong_scope", "cancelled", "open_error", "no_stream"} {
+	for _, scenario := range []string{"stable", "before", "during", "lost", "capture_error", "wrong_scope", "wrong_family", "cancelled", "open_error", "no_stream"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -51,7 +53,7 @@ func TestExitLANWatchCaptureOwnershipAndInvalidation(t *testing.T) {
 				}
 				return stream, nil
 			}
-			capture := func(_ context.Context, own string) (*exitLANSource, error) {
+			capture := func(_ context.Context, own string, family api.ExitFamilyMode) (*exitLANSource, error) {
 				if !opened {
 					t.Fatal("snapshot preceded subscription")
 				}
@@ -65,12 +67,14 @@ func TestExitLANWatchCaptureOwnershipAndInvalidation(t *testing.T) {
 					return nil, errExitLANSource
 				case "wrong_scope":
 					own = "foreign"
+				case "wrong_family":
+					family = api.ExitFamilyIPv4Only
 				case "cancelled":
 					cancel()
 				}
-				return &exitLANSource{OwnInterface: own}, nil
+				return &exitLANSource{OwnInterface: own, Family: family}, nil
 			}
-			source, err := captureWatchedExitLANSource(ctx, "endlessnet", open, capture)
+			source, err := captureWatchedExitLANSource(ctx, "endlessnet", api.ExitFamilyDualStack, open, capture)
 			if scenario != "stable" {
 				if err == nil || source != nil {
 					t.Fatal("invalid observation survived", err)
@@ -104,7 +108,7 @@ func TestExitLANPreparationRejectsTopologyLossInsideReadback(t *testing.T) {
 			e, cfg, now, inspect := exitLANHealthFixture(t, false)
 			e.mu.Lock()
 			defer e.mu.Unlock()
-			topology := &exitLANSource{OwnInterface: e.interface_, ValidUntil: now.Add(time.Minute), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
+			topology := &exitLANSource{OwnInterface: e.interface_, Family: cfg.ExitSelection.Family, ValidUntil: now.Add(time.Minute), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
 			if scenario != "absent" {
 				topology.lifetime = exitLANTestLifetime(t)
 			}

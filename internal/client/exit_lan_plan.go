@@ -31,6 +31,9 @@ func (p *exitLANPlan) topologyCurrent(now time.Time) bool {
 }
 
 func compileExitLANPlan(cfg Config, source api.RegisterNodeResponse, selection *ClientExitSelection, topology *exitLANSource, retained []netip.Prefix, now time.Time) (*exitLANPlan, error) {
+	if selection == nil || topology == nil || topology.Family != selection.Family {
+		return nil, errExitLANPolicy
+	}
 	if topology == nil || !exitLANInterfaceName(topology.OwnInterface) || topology.OwnInterface == "lo" || len(topology.Links) == 0 || len(topology.Links) > 128 || !topology.ValidUntil.IsZero() && !now.Before(topology.ValidUntil) {
 		return nil, errExitLANPolicy
 	}

@@ -24,7 +24,7 @@ func TestExitLANReservationRequiresSignedAuthorityAndPreservesResources(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	topology := &exitLANSource{OwnInterface: "endlessnet", ValidUntil: now.Add(20 * time.Second), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", DevicePath: "/sys/devices/pci0000:00/0000:00:01.0", Driver: "igc", Subsystem: "pci", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24"), netip.MustParsePrefix("fd19::2/64")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}, {Prefix: netip.MustParsePrefix("fd19::/64")}}}}}
+	topology := &exitLANSource{Family: selection.Family, OwnInterface: "endlessnet", ValidUntil: now.Add(20 * time.Second), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", DevicePath: "/sys/devices/pci0000:00/0000:00:01.0", Driver: "igc", Subsystem: "pci", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24"), netip.MustParsePrefix("fd19::2/64")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}, {Prefix: netip.MustParsePrefix("fd19::/64")}}}}}
 	plan, err := compileExitLANPlan(cfg, source, selection, topology, retained, now)
 	if err != nil || len(plan.bindings) != 2 || !plan.expires.Equal(topology.ValidUntil) || plan.bindings[0].connected != topology.Links[0].Routes[0].Prefix || !slices.Equal(plan.bindings[0].sources, []netip.Addr{netip.MustParseAddr("192.0.2.2")}) {
 		t.Fatal("plan lost exact connected/source binding or address deadline", err)
@@ -32,6 +32,11 @@ func TestExitLANReservationRequiresSignedAuthorityAndPreservesResources(t *testi
 	if _, err := compileExitLANPlan(cfg, source, selection, topology, retained, topology.ValidUntil); err == nil {
 		t.Fatal("expired address scope produced plan")
 	}
+	topology.Family = api.ExitFamilyIPv4Only
+	if _, err := compileExitLANPlan(cfg, source, selection, topology, retained, now); err == nil {
+		t.Fatal("partial-family observation became dual-stack authority")
+	}
+	topology.Family = selection.Family
 	topology.Links[0].Routes = topology.Links[0].Routes[:1]
 	if _, err := compileExitLANPlan(cfg, source, selection, topology, retained, now); err == nil {
 		t.Fatal("empty selected IPv6 family became successful dual-stack ALLOW")

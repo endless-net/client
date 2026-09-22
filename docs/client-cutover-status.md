@@ -52,6 +52,11 @@ selection, постоянная invalidation и LAN_ALLOW ещё не завер
 
 ## Реализовано и остаётся
 
+LAN family increment: links и pins создаются только для выбранных IP-семейств;
+ошибка выбранной семьи не понижает dual-stack. IPv6-only получает `_ipv6` pin
+независимо от позиции в массиве. Topology evidence привязано к режиму семейства.
+Открытие LAN в native adapter пока не включено.
+
 LAN hook increment: добавлен native netlink dump с проверкой kernel sender,
 полного завершения и точного BPF program/family/hook/priority. Потеря сообщений,
 прерванный dump, повторные совпадения и отмена не дают подтверждения. Это readback

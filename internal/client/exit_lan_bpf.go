@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"sync"
 	"unsafe"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 var errExitLANBPF = errors.New("LAN BPF preparation is unavailable")
@@ -35,6 +37,7 @@ type exitLANBPFPreparation struct {
 	mu             sync.Mutex
 	outer, program int
 	links          []exitLANBPFLink
+	family         api.ExitFamilyMode
 	call           exitLANBPFCall
 	closeFD        func(int) error
 	order          binary.ByteOrder
@@ -264,6 +267,7 @@ func (p *exitLANBPFPreparation) Close() error {
 		err = errors.Join(err, p.closeFD(link.fd))
 	}
 	p.links = nil
+	p.family = ""
 	for _, fd := range []*int{&p.program, &p.outer} {
 		if *fd >= 0 {
 			err = errors.Join(err, p.closeFD(*fd))
