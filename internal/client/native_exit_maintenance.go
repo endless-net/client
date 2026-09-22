@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	api "github.com/endless-net/client-api/clientapi/v1"
 )
 
 var errNativeExitMaintenance = errors.New("native exit enforcement requires containment")
@@ -35,6 +37,9 @@ func (n *nativeExitExecutor) maintain(ctx context.Context, cfg Config) error {
 	} else {
 		var profile string
 		profile, err = nativeExitMaintenanceProfile(cfg, e.exitSelection, guard)
+		if err == nil && e.exitSelection.LAN == api.ExitLANAllow {
+			err = e.exitLAN.refresh(ctx, e, guard, cfg, e.exitSelection)
+		}
 		if err == nil {
 			_, err = n.observeSelectionLocked(ctx, cfg, e.exitSelection, profile, guard)
 		}
@@ -55,6 +60,7 @@ func (n *nativeExitExecutor) maintain(ctx context.Context, cfg Config) error {
 	recovery, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	containErr := guard.Contain(recovery)
+	containErr = errors.Join(containErr, e.exitLAN.stop())
 	// Native output is private; preserve failure and cancellation without making
 	// successful containment appear to repair the original failed observation.
 	if containErr != nil {

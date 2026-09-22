@@ -21,13 +21,14 @@ import (
 // must serialize it with engine changes, install Contain before changing routes,
 // and call OpenTunnel only after the authenticated TUN filters are installed.
 // Release is permitted only after an explicit clear and confirmed route cleanup.
-// LAN bypass is not supported by this component.
+// LAN exceptions require the separately observed, leased BPF packet gate.
 type linuxExitGuard struct {
 	mu            sync.Mutex
 	interfaceName string
 	mark          uint32
 	table         string
 	run           commandInputRunner
+	lan           *exitLANFirewallState
 }
 
 func newLinuxExitGuard(interfaceName string, mark uint32, runner commandInputRunner) (*linuxExitGuard, error) {
@@ -56,6 +57,9 @@ func (g *linuxExitGuard) OpenTunnel(ctx context.Context, family api.ExitFamilyMo
 	if !exitGuardFamilyValid(family) {
 		return errors.New("invalid exit guard family")
 	}
+	g.mu.Lock()
+	g.lan = nil
+	g.mu.Unlock()
 	return g.replace(ctx, true, family)
 }
 
@@ -81,6 +85,7 @@ func (g *linuxExitGuard) rulesBatch(tunnel bool, family api.ExitFamilyMode) stri
 	// solicitation. RFC 4861 requires hop limit 255 and ICMP code 0. Do not open
 	// the guarded TUN, echo traffic, router advertisements or redirects here.
 	fmt.Fprintf(&b, "add rule inet %s output oifname != %q ip6 hoplimit 255 icmpv6 type { nd-router-solicit, nd-neighbor-solicit, nd-neighbor-advert } icmpv6 code 0 accept\n", g.table, g.interfaceName)
+	b.WriteString(exitGuardDHCPBatch(g.table, g.interfaceName))
 	if tunnel {
 		selected, ordinary := exitGuardFamilyProtocols(family)
 		if ordinary != "" {
@@ -89,6 +94,14 @@ func (g *linuxExitGuard) rulesBatch(tunnel bool, family api.ExitFamilyMode) stri
 			fmt.Fprintf(&b, "add rule inet %s output meta nfproto %s oifname %q accept\n", g.table, selected, g.interfaceName)
 		} else {
 			fmt.Fprintf(&b, "add rule inet %s output oifname %q accept\n", g.table, g.interfaceName)
+		}
+	}
+	if tunnel && g.lan != nil {
+		batch, _, _, err := g.lan.rules(g.table, g.mark)
+		if err == nil {
+			fmt.Fprintf(&b, "add chain inet %s lanroute { type route hook output priority -150; policy accept; }\n", g.table)
+			fmt.Fprintf(&b, "add chain inet %s lanfinal { type filter hook postrouting priority 2147483645; policy accept; }\n", g.table)
+			b.WriteString(batch)
 		}
 	}
 	// Selected-family forwarding remains closed; this is not an exit provider.
@@ -147,7 +160,7 @@ func (g *linuxExitGuard) observe(ctx context.Context, tunnel, absent bool, famil
 		if !exitGuardTableAbsent(raw, g.table) {
 			return errors.New("exit guard release is not confirmed")
 		}
-	} else if !exitGuardRulesObserved(raw, g.table, g.interfaceName, g.mark, tunnel, family) {
+	} else if !exitGuardRulesObserved(raw, g.table, g.interfaceName, g.mark, tunnel, family, g.lan) {
 		return errors.New("exit guard enforcement is not confirmed")
 	}
 	return nil
@@ -208,7 +221,7 @@ func (g *linuxExitGuard) applyObserved(ctx context.Context, batch string, tunnel
 		if !exitGuardTableAbsent(raw, g.table) {
 			return errors.New("exit guard release is not confirmed")
 		}
-	} else if !exitGuardRulesObserved(raw, g.table, g.interfaceName, g.mark, tunnel, family) {
+	} else if !exitGuardRulesObserved(raw, g.table, g.interfaceName, g.mark, tunnel, family, g.lan) {
 		return errors.New("exit guard enforcement is not confirmed")
 	}
 	return ctx.Err()

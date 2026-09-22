@@ -38,6 +38,7 @@ func (n *nativeExitExecutor) resumeSaved(ctx context.Context, cfg Config) (statu
 	e := n.engine
 	e.mu.Lock()
 	live := e.configured || e.device != nil || e.tun != nil
+	awaitingPeer := selection.LAN == api.ExitLANAllow && e.exitLAN != nil && e.exitLAN.awaitingPeer
 	if e.runtimeSuspended || (live && (e.exitGuard != guard || !reflect.DeepEqual(e.exitSelection, selection) || !sameExitControlIdentity(cfg, e.exitConfig))) {
 		e.mu.Unlock()
 		return nil, errNativeExitResume
@@ -49,11 +50,14 @@ func (n *nativeExitExecutor) resumeSaved(ctx context.Context, cfg Config) (statu
 			err = errors.Join(err, n.containFailure(ctx, guard))
 		}
 	}()
-	if live {
+	if live && !awaitingPeer {
 		// A failed observation never silently repairs or reopens a running
 		// selection. Reapplication after a failure needs an explicit transition.
 		return n.observeSelection(ctx, cfg, selection, cfg.RPCState.ActiveProfileID, guard)
 	}
+	// A cold LAN start may need a handshake/path observation after the engine
+	// lock is released. Retry only that unfinished application under BLOCK;
+	// a previously applied runtime with lost evidence is never reopened here.
 	result, err := e.configureExit(ctx, cfg, *cfg.CachedMap, selection, guard)
 	if err != nil {
 		return nil, err
@@ -89,5 +93,5 @@ func nativeExitResumeContext(cfg Config, iface string) bool {
 		return false
 	}
 	scope, selection := state.ExitProtection, cfg.ExitSelection
-	return scope.OperationID != "" && scope.ProfileID == profile.ID && strings.EqualFold(scope.OwnerID, cfg.LocalOwnerID) && scope.NodeID == cfg.NodeID && scope.NetworkID == cfg.NetworkID && scope.InterfaceName == iface && scope.RouteTable == cfg.WireGuardRouteTable && selection.NodeID == cfg.NodeID && selection.NetworkID == cfg.NetworkID && selection.RouteTable == cfg.WireGuardRouteTable && exitGuardFamilyValid(selection.Family) && selection.LAN == api.ExitLANBlock && cfg.MapRevision == cfg.CachedMap.Network.Revision && cfg.MapGlobalRevision == cfg.CachedMap.Revision.Global
+	return scope.OperationID != "" && scope.ProfileID == profile.ID && strings.EqualFold(scope.OwnerID, cfg.LocalOwnerID) && scope.NodeID == cfg.NodeID && scope.NetworkID == cfg.NetworkID && scope.InterfaceName == iface && scope.RouteTable == cfg.WireGuardRouteTable && selection.NodeID == cfg.NodeID && selection.NetworkID == cfg.NetworkID && selection.RouteTable == cfg.WireGuardRouteTable && exitGuardFamilyValid(selection.Family) && (selection.LAN == api.ExitLANBlock || selection.LAN == api.ExitLANAllow) && cfg.MapRevision == cfg.CachedMap.Network.Revision && cfg.MapGlobalRevision == cfg.CachedMap.Revision.Global
 }

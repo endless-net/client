@@ -18,7 +18,7 @@ func exitLANHealthFixture(t *testing.T, relayed bool) (*WireGuardEngine, Config,
 	signing, _, key := signedApplicationFixture(t, false)
 	cfg.MapSigningTrust = signing.MapSigningTrust
 	cfg.ExitSelection.LAN = api.ExitLANAllow
-	cfg.CachedMap.Network.ClientPolicy.ExitNodes[0].AllowedLANAccess = []api.ExitLANAccess{api.ExitLANAllow}
+	cfg.CachedMap.Network.ClientPolicy.ExitNodes[0].AllowedLANAccess = []api.ExitLANAccess{api.ExitLANAllow, api.ExitLANBlock}
 	if relayed {
 		cfg.CachedMap.Relays = []relay.Endpoint{{ID: "relay", Addr: "192.0.2.10:443", Protocol: relay.EndpointProtocolTLS}}
 		cfg.CachedMap.RelayCredential = nil
@@ -29,13 +29,24 @@ func exitLANHealthFixture(t *testing.T, relayed bool) (*WireGuardEngine, Config,
 	e.pathCancel = func() {}
 	// The private engine stages the signed policy with the physical guard still
 	// BLOCK-only. This bypasses no public admission and installs no LAN exception.
-	if result, err := e.configureExit(t.Context(), cfg, *cfg.CachedMap, cfg.ExitSelection, e.exitGuard); err != nil || !result.OK {
+	staged := clonePersistentConfig(cfg)
+	staged.ExitSelection.LAN = api.ExitLANBlock
+	if result, err := e.configureExit(t.Context(), staged, *staged.CachedMap, staged.ExitSelection, e.exitGuard); err != nil || !result.OK {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
 	handshake := now.Add(-device.RejectAfterTime + 20*time.Second)
 	peer := cfg.CachedMap.Peers[0]
 	e.mu.Lock()
+	// Only the private packet-policy projection is changed here. Native LAN
+	// remains closed; runtime/application assertions use the integrated adapter.
+	e.exitConfig = clonePersistentConfig(cfg)
+	e.exitSelection = cloneExitSelection(cfg.ExitSelection)
+	if err := e.exitFilter.suspend(cfg, *cfg.CachedMap, cfg.ExitSelection, time.Now()); err != nil {
+		e.mu.Unlock()
+		t.Fatal(err)
+	}
+	e.exitFilter.commit()
 	path := PeerPathStatus{PeerID: peer.ID, SelectedPath: "direct", SelectedEndpoint: peer.Endpoint, LastTransitionAt: handshake.Add(-time.Second).Format(time.RFC3339Nano), Direct: PathCandidateStatus{Endpoint: peer.Endpoint, State: "reachable", CheckedAt: now.Add(-time.Second).Format(time.RFC3339Nano)}}
 	if relayed {
 		selected := cfg.CachedMap.Relays[0]

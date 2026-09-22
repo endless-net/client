@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -63,6 +64,19 @@ func exitGuardReadbackFixture(table, device string, mark uint32, open bool) []by
 	if open {
 		extra = fmt.Sprintf(`,{"rule":{"family":"inet","table":%q,"chain":"output","handle":8,"expr":[{"match":{"op":"==","left":{"meta":{"key":"oifname"}},"right":%q}},{"accept":null}]}}`, table, device)
 	}
+	dhcp := ""
+	for _, ports := range []struct{ family, source, destination, sport, dport string }{{"2", "", "", "68", "67"}, {"10", `{"prefix":{"addr":"fe80::","len":10}}`, `"ff02::1:2"`, "546", "547"}, {"10", `{"prefix":{"addr":"fe80::","len":10}}`, `{"prefix":{"addr":"fe80::","len":10}}`, "546", "547"}} {
+		address := ""
+		if ports.source != "" {
+			address = fmt.Sprintf(`,{"match":{"op":"==","left":{"payload":{"protocol":"ip6","field":"saddr"}},"right":%s}},{"match":{"op":"==","left":{"payload":{"protocol":"ip6","field":"daddr"}},"right":%s}}`, ports.source, ports.destination)
+		}
+		expr := fmt.Sprintf(`[{"match":{"op":"!=","left":{"meta":{"key":"oifname"}},"right":%q}},{"match":{"op":"==","left":{"meta":{"key":"nfproto"}},"right":%s}},{"match":{"op":"==","left":{"meta":{"key":"l4proto"}},"right":17}}%s,{"match":{"op":"==","left":{"payload":{"protocol":"udp","field":"sport"}},"right":%s}},{"match":{"op":"==","left":{"payload":{"protocol":"udp","field":"dport"}},"right":%s}},{"accept":null}]`, device, ports.family, address, ports.sport, ports.dport)
+		if !json.Valid([]byte(expr)) {
+			panic("invalid DHCP fixture")
+		}
+		dhcp += fmt.Sprintf(`,{"rule":{"family":"inet","table":%q,"chain":"output","expr":%s}}`, table, expr)
+	}
+	extra = dhcp + extra
 	return []byte(fmt.Sprintf(`{"nftables":[
 {"metainfo":{"version":"1.1.5","release_name":"test fixture","json_schema_version":1}},
 {"table":{"family":"inet","name":%[1]q,"handle":1}},

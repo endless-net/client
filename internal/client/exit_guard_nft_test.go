@@ -52,12 +52,12 @@ func TestLinuxExitGuardAtomicContainmentAndRelease(t *testing.T) {
 			t.Fatalf("missing guard constraint: %s", want)
 		}
 	}
-	for _, forbidden := range []string{"flush ruleset", "ct state", "ip daddr", "ip6 daddr", "oifname \"endlessnet\"", "echo-request", "echo-reply", "nd-router-advert", "nd-redirect"} {
+	for _, forbidden := range []string{"flush ruleset", "ct state", "ip daddr", "oifname \"endlessnet\"", "echo-request", "echo-reply", "nd-router-advert", "nd-redirect"} {
 		if strings.Contains(closed, forbidden) {
 			t.Fatalf("unexpected containment bypass: %s", forbidden)
 		}
 	}
-	if strings.Count(closed, " accept\n") != 3 {
+	if strings.Count(closed, " accept\n") != 6 {
 		t.Fatal("unexpected direct-traffic exemption")
 	}
 	if err := guard.OpenTunnel(ctx, api.ExitFamilyDualStack); err != nil {
@@ -185,7 +185,7 @@ func TestLinuxExitGuardFamilyScopeAndReadOnlyObservation(t *testing.T) {
 		if err := guard.Contain(t.Context()); err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(batches[1], "meta nfproto") {
+		if strings.Contains(batches[1], "meta nfproto ipv4 accept") || strings.Contains(batches[1], "meta nfproto ipv6 accept") {
 			t.Fatal("containment preserved family exemption")
 		}
 		if err := guard.ObserveContained(t.Context()); err != nil {
@@ -237,7 +237,7 @@ func TestLinuxExitGuardWrongAppliedFamilyRestoresBothFamilyContainment(t *testin
 	if guard.OpenTunnel(t.Context(), api.ExitFamilyIPv4Only) == nil {
 		t.Fatal("wrong applied family accepted")
 	}
-	if len(batches) != 2 || strings.Contains(batches[1], "meta nfproto") || strings.Contains(batches[1], `oifname "exit0" accept`) {
+	if len(batches) != 2 || strings.Contains(batches[1], "meta nfproto ipv4 accept") || strings.Contains(batches[1], "meta nfproto ipv6 accept") || strings.Contains(batches[1], `oifname "exit0" accept`) {
 		t.Fatal("ambiguous apply did not restore closed containment")
 	}
 	if err := guard.ObserveContained(t.Context()); err != nil {

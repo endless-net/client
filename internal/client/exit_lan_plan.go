@@ -51,7 +51,6 @@ func compileExitLANPlan(cfg Config, source api.RegisterNodeResponse, selection *
 		plan.expires = topology.ValidUntil
 	}
 	seen := map[int]bool{}
-	ipv4, ipv6 := false, false
 	totalFragments := 0
 	work := 0
 	for i, link := range topology.Links {
@@ -109,12 +108,12 @@ func compileExitLANPlan(cfg Config, source api.RegisterNodeResponse, selection *
 			if totalFragments > exitLANPrefixLimit {
 				return nil, errExitLANPolicy
 			}
-			ipv4 = ipv4 || prefix.Addr().Is4()
-			ipv6 = ipv6 || prefix.Addr().Is6()
 			plan.bindings = append(plan.bindings, binding)
 		}
 	}
-	if selection.Family != api.ExitFamilyIPv6Only && !ipv4 || selection.Family != api.ExitFamilyIPv4Only && !ipv6 {
+	// A complete dual-family observation can find LAN addresses in only one
+	// family. The other gets no exception and remains behind its terminal route.
+	if len(plan.bindings) == 0 {
 		return nil, errExitLANPolicy
 	}
 	if topology.lifetime != nil && !topology.lifetime.current() {

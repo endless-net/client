@@ -113,11 +113,17 @@ func (r *NativeExitRuntime) ResumeSavedLocked(ctx context.Context, lock *sync.Mu
 	applyContextErr := apply.Err()
 	cancel()
 	after := clonePersistentConfig(r.store.Read())
-	changed := !reflect.DeepEqual(before, after)
+	changed := !reflect.DeepEqual(exitConfigWithoutLANJournal(before), exitConfigWithoutLANJournal(after))
 	confirmed := applyErr == nil && applyContextErr == nil && exitAppliedResultMatches(&clientRPCExitChange{ProfileID: before.RPCState.ActiveProfileID, Requested: before.ExitSelection}, observed)
 	if changed || !confirmed || ctx.Err() != nil {
-		// Admission can change durable intent while effects run. Maintenance uses
-		// the latest context and an independent deadline even after cancellation.
+		// A late cancellation must close even an otherwise valid application.
+		// Maintenance could successfully observe it and leave LAN open.
+		r.engine.mu.Lock()
+		guard := r.engine.exitGuard
+		r.engine.mu.Unlock()
+		if guard != nil {
+			_ = (&nativeExitExecutor{engine: r.engine}).containFailure(ctx, guard)
+		}
 		recovery, finish := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		_ = r.executor.Maintain(recovery, after)
 		finish()

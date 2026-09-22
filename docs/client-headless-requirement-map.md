@@ -1,5 +1,11 @@
 # Headless requirements: client implementation and unit audit
 
+2026-09-22 block 2: exit/LAN rows now join to the integrated Linux runtime,
+packet-time BPF gate, nft final binding and durable routing/pin cleanup described
+in [the current increment](client-runtime-implementation-gaps.md#integrated-lan_allow-increment--2026-09-22).
+Assertions are mapped there by scenario. Kernel verifier, real traffic and
+cross-worker/system acceptance remain open; no row is closed by injected tests.
+
 Status: open implementation audit, not integration execution or acceptance.
 
 The [local v0 matrix](client-local-requirement-map.md) explicitly traces the

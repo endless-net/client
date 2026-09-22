@@ -39,8 +39,26 @@ func newNativeExitExecutorWithStore(engine *WireGuardEngine, lock *sync.Mutex, c
 		return clientRPCExitExecutor{}, errors.New("native exit executor requires owned runtime scope")
 	}
 	n := &nativeExitExecutor{engine: engine, createGuard: create, store: store, cleanupLANObjects: cleanupNativeExitLAN}
+	modes := []clientRPCExitMode{{Family: api.ExitFamilyIPv4Only, LAN: api.ExitLANBlock}, {Family: api.ExitFamilyIPv6Only, LAN: api.ExitLANBlock}, {Family: api.ExitFamilyDualStack, LAN: api.ExitLANBlock}}
+	if store != nil {
+		engine.mu.Lock()
+		if engine.exitLAN != nil && engine.exitLAN.store != store {
+			engine.mu.Unlock()
+			return clientRPCExitExecutor{}, errors.New("native LAN runtime is already bound to another store")
+		}
+		if engine.exitLAN == nil {
+			engine.exitLAN = newPlatformExitLANRuntime(store)
+		}
+		supported := engine.exitLAN != nil
+		engine.mu.Unlock()
+		if supported {
+			for _, family := range []api.ExitFamilyMode{api.ExitFamilyIPv4Only, api.ExitFamilyIPv6Only, api.ExitFamilyDualStack} {
+				modes = append(modes, clientRPCExitMode{Family: family, LAN: api.ExitLANAllow})
+			}
+		}
+	}
 	return clientRPCExitExecutor{InterfaceName: engine.opts.Interface, Lock: lock,
-		Modes: []clientRPCExitMode{{Family: api.ExitFamilyIPv4Only, LAN: api.ExitLANBlock}, {Family: api.ExitFamilyIPv6Only, LAN: api.ExitLANBlock}, {Family: api.ExitFamilyDualStack, LAN: api.ExitLANBlock}},
+		Modes: modes,
 		Apply: n.apply, Contain: n.contain, Release: n.release, Observe: n.observe, Maintain: n.maintain, ResumeSaved: n.resumeSaved}, nil
 }
 
@@ -129,7 +147,7 @@ func (n *nativeExitExecutor) containFailure(ctx context.Context, guard *linuxExi
 		e.exitFilter = &exitPacketFilter{}
 	}
 	e.exitFilter.withdraw()
-	return guard.Contain(recovery)
+	return errors.Join(guard.Contain(recovery), e.exitLAN.stop())
 }
 
 func (n *nativeExitExecutor) stopOwned(ctx context.Context, scope *clientRPCExitProtection, guard *linuxExitGuard, controlOrigin string) error {
@@ -233,7 +251,7 @@ func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, s
 		return nativeExitClearStatus(plan.ProfileID, true), continuity, nil
 	}
 	validFamily := selection.Family == api.ExitFamilyIPv4Only || selection.Family == api.ExitFamilyIPv6Only || selection.Family == api.ExitFamilyDualStack
-	if !validFamily || selection.LAN != api.ExitLANBlock || cfg.CachedMap == nil || selection.NodeID != plan.Protection.NodeID || selection.NetworkID != plan.Protection.NetworkID || selection.RouteTable != plan.Protection.RouteTable || plan.Protection.InterfaceName != n.engine.opts.Interface {
+	if !validFamily || (selection.LAN != api.ExitLANBlock && (selection.LAN != api.ExitLANAllow || n.engine.exitLAN == nil)) || cfg.CachedMap == nil || selection.NodeID != plan.Protection.NodeID || selection.NetworkID != plan.Protection.NetworkID || selection.RouteTable != plan.Protection.RouteTable || plan.Protection.InterfaceName != n.engine.opts.Interface {
 		return nil, continuity, errors.New("native exit selection is unsupported or unbound")
 	}
 	defer func() {
@@ -329,6 +347,11 @@ func (n *nativeExitExecutor) observeSelectionLocked(ctx context.Context, cfg Con
 	if err := nativeExitUAPIObserved(e, selection); err != nil {
 		return nil, err
 	}
+	if selection.LAN == api.ExitLANAllow {
+		if err := e.exitLAN.observe(ctx, e, guard, cfg, selection); err != nil {
+			return nil, err
+		}
+	}
 	if underlayDNSRequired(cfg, cfg.CachedMap) {
 		current := e.underlayDNSCurrentLocked()
 		if current == nil || e.underlayDNS == nil || e.underlayLease == nil {
@@ -383,6 +406,10 @@ func nativeExitClearStatus(profile string, contained bool) *ipc.ExitNodeStatus {
 func nativeExitSelectedStatus(profile string, selection *ClientExitSelection) *ipc.ExitNodeStatus {
 	family := map[api.ExitFamilyMode]ipc.ExitFamilyMode{api.ExitFamilyIPv4Only: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV4_ONLY, api.ExitFamilyIPv6Only: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_IPV6_ONLY, api.ExitFamilyDualStack: ipc.ExitFamilyMode_EXIT_FAMILY_MODE_DUAL_STACK}[selection.Family]
 	status := &ipc.ExitNodeStatus{ProfileId: profile, RequestedExitNodeId: proto.String(selection.ID), EffectiveExitNodeId: proto.String(selection.ID), RequestedFamilyMode: family, RequestedLanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK, EffectiveLanAccess: ipc.LanAccess_LAN_ACCESS_BLOCK, ApplyState: ipc.ApplyState_APPLY_STATE_APPLIED, FailClosed: true}
+	if selection.LAN == api.ExitLANAllow {
+		status.RequestedLanAccess = ipc.LanAccess_LAN_ACCESS_ALLOW
+		status.EffectiveLanAccess = ipc.LanAccess_LAN_ACCESS_ALLOW
+	}
 	member := func(enabled bool) *ipc.ExitFamilyStatus {
 		value := &ipc.ExitFamilyStatus{ApplyState: ipc.ApplyState_APPLY_STATE_APPLIED}
 		if enabled {

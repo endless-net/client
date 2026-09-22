@@ -57,7 +57,7 @@ func (r *NativeExitRuntime) ApplyPreferenceCandidateLocked(ctx context.Context, 
 	}
 	timedOut := apply.Err()
 	cancel()
-	changed := !reflect.DeepEqual(before, clonePersistentConfig(r.store.Read()))
+	changed := !reflect.DeepEqual(exitConfigWithoutLANJournal(before), exitConfigWithoutLANJournal(r.store.Read()))
 	if applyErr != nil || timedOut != nil || changed || ctx.Err() != nil {
 		// Always withdraw the attempted runtime, even when the latest durable
 		// selection still matches. Maintenance alone could observe that selection

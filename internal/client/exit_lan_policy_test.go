@@ -38,8 +38,8 @@ func TestExitLANReservationRequiresSignedAuthorityAndPreservesResources(t *testi
 	}
 	topology.Family = selection.Family
 	topology.Links[0].Routes = topology.Links[0].Routes[:1]
-	if _, err := compileExitLANPlan(cfg, source, selection, topology, retained, now); err == nil {
-		t.Fatal("empty selected IPv6 family became successful dual-stack ALLOW")
+	if partial, err := compileExitLANPlan(cfg, source, selection, topology, retained, now); err != nil || len(partial.bindings) != 1 || !partial.bindings[0].connected.Addr().Is4() {
+		t.Fatal("fully observed IPv4-only LAN could not accompany dual-stack exit", err)
 	}
 	topology.Links[0].Addresses[0] = netip.MustParsePrefix("198.51.100.2/24")
 	if plan.topology.Links[0].Addresses[0].String() != "192.0.2.2/24" || len(plan.topology.Links[0].Routes) != 2 {

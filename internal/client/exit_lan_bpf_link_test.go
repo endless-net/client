@@ -44,10 +44,13 @@ func (k *exitLANBPFLinkTestKernel) call(command int, attr []byte, buffers ...[]b
 			o.PutUint32(info[4:], 100)
 		} else {
 			identity, ok := k.links[int(u32(0))]
-			if !ok || len(info) != 32 {
+			if !ok || (len(info) != 32 && len(info) != 8) {
 				k.k.t.Fatal("wrong link identity prefix")
 			}
 			for i, value := range []uint32{10, identity.id, identity.programID, 0, identity.family, identity.hook, uint32(identity.priority), 0} {
+				if i*4 >= len(info) {
+					break
+				}
 				o.PutUint32(info[4*i:], value)
 			}
 		}

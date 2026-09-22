@@ -15,6 +15,9 @@ func cleanupNativeExitLAN(ctx context.Context, guard *linuxExitGuard, owned *exi
 	if guard == nil || validateExitLANOwnership(owned) != nil {
 		return errExitLANBPF
 	}
+	if owned.Routing != nil && (owned.Routing.Table != guard.mark^0x40000000 || owned.Routing.Mark != guard.mark^0x80000000) {
+		return errExitLANPolicy
+	}
 	var order binary.ByteOrder = binary.LittleEndian
 	if binary.NativeEndian.Uint16([]byte{1, 0}) != 1 {
 		order = binary.BigEndian
@@ -39,7 +42,30 @@ func cleanupNativeExitLAN(ctx context.Context, guard *linuxExitGuard, owned *exi
 			return err
 		}
 		defer func() { _ = d.Close() }()
-		return confirmOldBootExitLANAbsent(ctx, d, owned, order, callExitLANBPF, unix.Close)
+		if err := confirmOldBootExitLANAbsent(ctx, d, owned, order, callExitLANBPF, unix.Close); err != nil {
+			return err
+		}
+		if owned.Routing != nil {
+			for _, family := range owned.Routing.families() {
+				rows, err := owned.Routing.routesPresent(ctx, guard, family)
+				if err != nil {
+					return err
+				}
+				for _, present := range rows {
+					if present {
+						return errExitLANPolicy
+					}
+				}
+				present, err := owned.Routing.rulePresent(ctx, guard, family)
+				if err != nil {
+					return err
+				}
+				if present {
+					return errExitLANPolicy
+				}
+			}
+		}
+		return nil
 	})
 	err = errors.Join(err, n.Close())
 	if err != nil || oldBoot {
@@ -52,6 +78,9 @@ func cleanupNativeExitLAN(ctx context.Context, guard *linuxExitGuard, owned *exi
 	err = r.cleanup(ctx, guard.ObserveContained, order, callExitLANBPF, func(ctx context.Context, id exitLANBPFLinkIdentity) error {
 		return observeExitLANHookStateWith(ctx, id, order, openNativeExitLANHookTransport, false)
 	})
+	if err == nil {
+		err = r.namespace.withOwnership(ctx, owned, func(ctx context.Context) error { return cleanupExitLANRouting(ctx, guard, owned.Routing) })
+	}
 	return errors.Join(err, r.Close())
 }
 

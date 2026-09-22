@@ -90,14 +90,20 @@ func (p *exitLANBPFPreparation) update(fd int, value []byte) error {
 }
 
 func newExitLANBPFPreparation(ctx context.Context, mark, ctxOffset, markOffset, programType, attachType uint32, order binary.ByteOrder, call exitLANBPFCall, closeFD func(int) error) (*exitLANBPFPreparation, error) {
+	return newExitLANBPFPreparationWithProgram(ctx, programType, attachType, order, call, closeFD, func(fd int) ([]byte, error) {
+		return buildExitLANBPFProgram(ctxOffset, markOffset, mark, fd, order)
+	})
+}
+
+func newExitLANBPFPreparationWithProgram(ctx context.Context, programType, attachType uint32, order binary.ByteOrder, call exitLANBPFCall, closeFD func(int) error, build func(int) ([]byte, error)) (*exitLANBPFPreparation, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if call == nil || closeFD == nil || unsafe.Sizeof(uintptr(0)) != 8 || (order != binary.LittleEndian && order != binary.BigEndian) || programType == 0 || attachType == 0 {
+	if call == nil || closeFD == nil || build == nil || unsafe.Sizeof(uintptr(0)) != 8 || (order != binary.LittleEndian && order != binary.BigEndian) || programType == 0 || attachType == 0 {
 		return nil, errExitLANBPF
 	}
 	// Validate instruction parameters before creating any kernel object.
-	if _, err := buildExitLANBPFProgram(ctxOffset, markOffset, mark, 0, order); err != nil {
+	if _, err := build(0); err != nil {
 		return nil, err
 	}
 	p := &exitLANBPFPreparation{outer: -1, program: -1, call: call, closeFD: closeFD, order: order}
@@ -132,7 +138,7 @@ func newExitLANBPFPreparation(ctx context.Context, mark, ctxOffset, markOffset, 
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	program, err := buildExitLANBPFProgram(ctxOffset, markOffset, mark, p.outer, order)
+	program, err := build(p.outer)
 	if err != nil {
 		return nil, err
 	}

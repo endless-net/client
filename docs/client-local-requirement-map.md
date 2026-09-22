@@ -1,5 +1,10 @@
 # Local v0 requirements: producer implementation and unit audit
 
+2026-09-22 block 2: native Select/Clear, saved resume, maintenance and fail-closed
+LAN effects now share the existing store/effect lock; see the implementation,
+exact unit scenarios and remaining platform evidence in [the current increment](client-runtime-implementation-gaps.md#integrated-lan_allow-increment--2026-09-22).
+This does not establish UI acceptance or close the full transition audit.
+
 Status: open. This inventory complements the [headless BR/AC/RULE/IT
 matrix](client-headless-requirement-map.md); neither document accepts a feature.
 Every row requires assertion-level review, implemented effects and later evidence.

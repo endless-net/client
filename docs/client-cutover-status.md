@@ -1,5 +1,17 @@
 # Состояние client cutover — 2026-09-15
 
+Актуальное дополнение 2026-09-22, block 2: LAN_ALLOW интегрирован в Linux
+native exit через существующие host/worker и durable store. Финальные NIC,
+маршрут без gateway и абсолютный срок проверяет BPF; точные адреса и output
+interface повторно проверяет nft после routing/NAT. Добавлены LAN routes/rule
+с terminal prohibit, проверка pins/health/topology/journal, закрытие при потере
+подтверждений и точная очистка перед удалением journal. Saved resume, reapply,
+Stop/Clear используют общий lifecycle. DHCP/ND отделены от LAN приложений.
+Подробности и границы evidence: [runtime gaps](client-runtime-implementation-gaps.md#integrated-lan_allow-increment--2026-09-22).
+Старые BLOCK-only/preparation-only записи ниже исторические. Native verifier,
+traffic и полный system acceptance ещё не подтверждены; координатор и общая
+цель cutover этим не завершаются.
+
 Дополнение от 2026-09-21: добавлены durable checkpoint перед exit release и
 отдельная запись владения защитой, переживающая terminal containment; native
 adapter/worker всё ещё требуется. Для resources добавлены retirement/возврат
@@ -222,7 +234,7 @@ Capability теперь включается только публичным nat
 | IPC и потребители | Protobuf client.v0, generated API, локальный gRPC через pipe/Unix socket; CLI и recovery helper используют v0 | Полный аудит удаления legacy, совместной работы Go/Dart и всех потребителей; приёмка UI относится к внешнему репозиторию |
 | Состояние и операции | Durable операции, идентификаторы запросов, replay, проверки владельца/профиля, конфликты и восстановление; snapshot/events | Проверка каждой мутации и перехода по матрице, включая права, CAS, отмену, рестарт и приватность событий |
 | Enrollment, trust, session | Workers и транспорт enrollment/trust/renewal, сохранение прогресса, ротация credentials, отмена старых запросов и защита от поздних ответов | Полный аудит cleanup/concurrency и контекста; подтверждение producer semantics и реального seamless renewal |
-| Exit | Linux native host/worker независимо от IPC, durable Select/Clear/ownership, защищённый saved resume, fresh UAPI/routes/firewall/DNS observations, catalog/control/events/capability; Clear/restart по исходному scope после смены интерфейса; guarded preference/resource candidate | LAN_ALLOW, полная совместная работа с profile/network transitions, автоматическая миграция интерфейса, проверка live recovery и OS qualification; Select-before-Connect сейчас отклоняется |
+| Exit | Linux native host/worker независимо от IPC, durable Select/Clear/ownership, защищённый saved resume, fresh UAPI/routes/firewall/DNS observations, catalog/control/events/capability; Clear/restart по исходному scope после смены интерфейса; guarded preference/resource candidate; интегрированный LAN_ALLOW с BPF/nft/route lease и cleanup | Приёмка LAN_ALLOW, полная совместная работа с profile/network transitions, автоматическая миграция интерфейса, проверка live recovery и OS qualification; Select-before-Connect сейчас отклоняется |
 | Resources | SetResourceEnabled с durable worker, policy/overlap, фильтрация TUN и наблюдения запретов; retirement/возврат choices; Linux HOST route/UAPI/direct/relay-path observer, fresh publication и invalidation | Subnet/service/application observations, полный rollback/restart audit и приёмка реальных OS/relay-эффектов |
 | Preferences и lifecycle | Set/Reset inbound/DNS/routes и lifecycle-полей, managed policy/locks/source; Windows power/logoff paths и resume-policy refresh | Полный аудит эффектов каждой настройки, доставка событий на других ОС, восстановление источников событий и native qualification |
 | Networks/profiles | Контекстные проверки, guards переключения, изоляция состояния и защита от устаревших ответов | Полная смена identity/map/routes, recovery и фактическая изоляция при переключении сети/provider |
@@ -258,7 +270,7 @@ Capability теперь включается только публичным nat
 Review исправило проверку deadline после финального UAPI/relay readback.
 Локальные native/E2E/installer проверки не запускались.
 
-1. Завершить native exit LAN_ALLOW, сочетания exit с profile/network
+1. Провести native acceptance LAN_ALLOW; завершить сочетания exit с profile/network
    transitions, аудит withdrawn live recovery и автоматическую миграцию
    интерфейса с сохранённым exit. Explicit Clear уже очищает исходный scope. Точный
    combined IPv6 ND readback и socket effects остаются предметом native qualification.

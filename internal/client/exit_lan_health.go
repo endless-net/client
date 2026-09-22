@@ -81,7 +81,7 @@ func (e *WireGuardEngine) observeExitLANPeerHealthWithInspection(ctx context.Con
 	if count != 1 {
 		return nil, errExitLANPolicy
 	}
-	proof := &exitLANPeerHealth{engine: e, device: e.device, configuration: resourceObservationConfig(cfg), uapi: sha256.Sum256([]byte(e.uapi)), paths: resourceObservationPaths(e), pathManager: e.relayPaths, selection: *selection, observedAt: now, handshake: handshake, expires: handshake.Add(device.RejectAfterTime)}
+	proof := &exitLANPeerHealth{engine: e, device: e.device, configuration: exitLANHealthConfig(cfg, selection), uapi: sha256.Sum256([]byte(e.uapi)), paths: resourceObservationPaths(e), pathManager: e.relayPaths, selection: *selection, observedAt: now, handshake: handshake, expires: handshake.Add(device.RejectAfterTime)}
 	if resourceHostPathObserved(paths, peer.ID, live, now) {
 		// The matching reachable path candidate has its own freshness limit.
 		// Multiple matching observations can supply only the latest real check,
@@ -134,7 +134,7 @@ func (p *exitLANPeerHealth) currentLocked(ctx context.Context, cfg Config, now t
 
 func (p *exitLANPeerHealth) currentWithInspection(ctx context.Context, cfg Config, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error)) bool {
 	started := time.Now()
-	if p == nil || p.engine == nil || now.Before(p.observedAt) || !now.Before(p.expires) || resourceObservationConfig(cfg) != p.configuration {
+	if p == nil || p.engine == nil || now.Before(p.observedAt) || !now.Before(p.expires) || exitLANHealthConfig(cfg, &p.selection) != p.configuration {
 		return false
 	}
 	e := p.engine

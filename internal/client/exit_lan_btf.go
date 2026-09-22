@@ -342,7 +342,8 @@ func (b *exitLANBTF) member(id uint32, name string, visiting map[uint32]bool, de
 			if b.types[resolved].kind == 2 {
 				width = b.pointerBytes
 			}
-			if b.types[resolved].kind != 1 && b.types[resolved].kind != 2 || width == 0 || at%width != 0 || uint64(at)+uint64(width) > uint64(t.size) {
+			kind := b.types[resolved].kind
+			if kind != 1 && kind != 2 && kind != 4 && kind != 5 || width == 0 || (kind == 1 || kind == 2) && at%width != 0 || uint64(at)+uint64(width) > uint64(t.size) {
 				return 0, 0, errExitLANBTF
 			}
 		}

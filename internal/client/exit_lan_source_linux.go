@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unsafe"
+
+	"golang.org/x/sys/unix"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 )
@@ -47,6 +50,13 @@ func inspectExitLANPhysical(ctx context.Context, name string) (exitLANPhysical, 
 	}
 	if !validPath(netPath) {
 		return exitLANPhysical{}, false, nil
+	}
+	// On a 64-bit kernel kernfs uses its full unique 64-bit ID as st_ino.
+	// BPF checks that same ID on the packet's actual net_device, not its name.
+	var initial unix.Stat_t
+	var filesystem unix.Statfs_t
+	if unsafe.Sizeof(uintptr(0)) != 8 || unix.Stat(netPath, &initial) != nil || initial.Ino == 0 || unix.Statfs(netPath, &filesystem) != nil || uint64(filesystem.Type) != unix.SYSFS_MAGIC {
+		return fail()
 	}
 	devicePath, err := filepath.EvalSymlinks(filepath.Join(netPath, "device"))
 	if os.IsNotExist(err) {
@@ -147,5 +157,9 @@ func inspectExitLANPhysical(ctx context.Context, name string) (exitLANPhysical, 
 	if ctx.Err() != nil {
 		return exitLANPhysical{}, false, ctx.Err()
 	}
-	return exitLANPhysical{Index: int(index), LinkIndex: int(link), Type: int(typ), DevicePath: devicePath, HardwareAddress: address, Driver: driver, Subsystem: subsystem, CarrierChanges: changes, Up: carrier == 1 && state == "up"}, true, nil
+	var final unix.Stat_t
+	if unix.Stat(netPath, &final) != nil || initial.Dev != final.Dev || initial.Ino != final.Ino {
+		return fail()
+	}
+	return exitLANPhysical{Instance: initial.Ino, Index: int(index), LinkIndex: int(link), Type: int(typ), DevicePath: devicePath, HardwareAddress: address, Driver: driver, Subsystem: subsystem, CarrierChanges: changes, Up: carrier == 1 && state == "up"}, true, nil
 }

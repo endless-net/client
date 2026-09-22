@@ -8,7 +8,51 @@ Current execution queue: [source review, 2026-09-22](client-cutover-execution.md
 Increment entries below are historical and can describe gaps closed by later
 commits. Use the current source review and requirement matrices together; neither
 is acceptance evidence. In particular, network selection and native exit host
-wiring exist, while LAN_ALLOW production behavior remains unfinished.
+wiring exist. The LAN_ALLOW increment below supersedes earlier preparation-only
+entries; native/system qualification and the full cutover remain incomplete.
+
+## Integrated LAN_ALLOW increment — 2026-09-22
+
+The Linux native adapter now binds LAN to its durable store and existing effect
+lock. Apply, saved resume, preference/map reapplication, Observe, Maintain,
+containment, Stop and Clear use this lifecycle. Cold resume can retry an
+unfinished peer-health check; loss after confirmed application stays contained.
+Late resume cancellation explicitly withdraws attempted effects.
+
+The production BPF program resolves running-kernel BTF offsets and checks the
+absolute CLOCK_BOOTTIME deadline, final output ifindex plus full kernfs ID,
+route device and absence of an IPv4/IPv6 gateway. nft checks exact physical
+source/destination fragments and output index before and after routing/NAT.
+The dedicated marked routing table ends in prohibit. Overlay, resource and
+retained destination reservations are subtracted before rules are generated.
+There is no blanket private-address exemption or application discovery bypass.
+DHCP client/server UDP pairs and IPv6 ND are separate infrastructure rules;
+DHCPv6 is restricted to link-local source and server/multicast destinations.
+
+Frozen inner BPF maps supply leases. Repeated reads cannot extend the same
+handshake/path evidence; one process clock anchor spans reapplications. Pins,
+hooks, routes, topology, journal and peer health are rechecked. Loss withdraws
+the TUN filter and LAN lease under nft BLOCK. Recovery detaches/unpins exactly
+owned objects, removes exact route/rule tuples, proves absence, then retires
+both durable copies. Old-boot IDs never detach current objects; collisions
+retain the journal.
+
+Assertions: `exit_lan_runtime_test.go` covers application, durable Select/Clear,
+maintenance, topology/pin/health/intent loss and unfinished saved-resume health.
+`exit_lan_routing_test.go` covers selected families, prohibit, foreign tuples
+and partial installation cleanup. Packet-program tests execute emitted bytes,
+including helper clobbers, expiry, missing maps, gateway and NIC replacement.
+Firewall/BTF and existing pin/session/recovery/clock/health suites cover their
+exact boundaries. Injected syscalls and interpreted bytes are not kernel or
+traffic acceptance.
+
+Block 6 still needs real per-family LAN/exit traffic, public/private connected
+prefixes, VPN/bridge/container exclusions, overlapping reservations, NIC
+replacement/ifindex reuse, route/gateway changes, process death and suspend
+expiry, protected pre-exit DNS/DHCP/ND, and restart/cancellation at every
+pin/route/store boundary including profile/network/preferences/shutdown.
+No native/system run, release, version increase or whole-cutover completion is
+claimed by this increment.
 
 ## Execution order
 

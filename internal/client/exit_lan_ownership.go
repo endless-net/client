@@ -10,14 +10,15 @@ import (
 // neither permission to adopt matching pins nor evidence of live attachment,
 // current authority, or a valid lease. Pin names are derived from Scope only.
 type exitLANOwnership struct {
-	Scope           string             `json:"scope"`
-	BootID          string             `json:"boot_id"`
-	NamespaceDevice uint64             `json:"namespace_device"`
-	NamespaceInode  uint64             `json:"namespace_inode"`
-	Family          api.ExitFamilyMode `json:"family"`
-	MapID           uint32             `json:"map_id"`
-	ProgramID       uint32             `json:"program_id"`
-	Links           []exitLANOwnedLink `json:"links"`
+	Scope           string                   `json:"scope"`
+	BootID          string                   `json:"boot_id"`
+	NamespaceDevice uint64                   `json:"namespace_device"`
+	NamespaceInode  uint64                   `json:"namespace_inode"`
+	Family          api.ExitFamilyMode       `json:"family"`
+	MapID           uint32                   `json:"map_id"`
+	ProgramID       uint32                   `json:"program_id"`
+	Links           []exitLANOwnedLink       `json:"links"`
+	Routing         *exitLANRoutingOwnership `json:"routing,omitempty"`
 }
 
 type exitLANOwnedLink struct {
@@ -36,6 +37,9 @@ func validateExitLANOwnership(owned *exitLANOwnership) error {
 		return errExitLANBPF
 	}
 	if !exitLANOwnershipBootID(owned.BootID) || owned.NamespaceDevice == 0 || owned.NamespaceInode == 0 || owned.MapID == 0 || owned.ProgramID == 0 {
+		return errExitLANBPF
+	}
+	if owned.Routing != nil && (validateExitLANRouting(owned.Routing) != nil || owned.Routing.Family != owned.Family) {
 		return errExitLANBPF
 	}
 	families, err := exitLANBPFFamilies(owned.Family)
@@ -80,6 +84,11 @@ func cloneExitLANOwnership(owned *exitLANOwnership) *exitLANOwnership {
 	copy := *owned
 	if owned.Links != nil {
 		copy.Links = append([]exitLANOwnedLink{}, owned.Links...)
+	}
+	if owned.Routing != nil {
+		routing := *owned.Routing
+		routing.Routes = append([]exitLANOwnedRoute(nil), owned.Routing.Routes...)
+		copy.Routing = &routing
 	}
 	return &copy
 }

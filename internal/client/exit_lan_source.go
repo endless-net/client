@@ -33,6 +33,7 @@ type exitLANSource struct {
 	ValidUntil   time.Time
 }
 type exitLANLink struct {
+	Instance                                             uint64
 	Index, LinkIndex                                     int
 	Name, DevicePath, HardwareAddress, Driver, Subsystem string
 	CarrierChanges                                       uint32
@@ -46,6 +47,7 @@ type exitLANDirectRoute struct {
 	Timed                   bool
 }
 type exitLANPhysical struct {
+	Instance                                       uint64
 	Index, LinkIndex, Type                         int
 	DevicePath, HardwareAddress, Driver, Subsystem string
 	CarrierChanges                                 uint32
@@ -192,7 +194,7 @@ func readExitLANSource(ctx context.Context, own string, family api.ExitFamilyMod
 			return nil, errExitLANSource
 		}
 		byName[name] = len(source.Links)
-		source.Links = append(source.Links, exitLANLink{Index: index, LinkIndex: physical.LinkIndex, Name: name, DevicePath: physical.DevicePath, HardwareAddress: physical.HardwareAddress, Driver: physical.Driver, Subsystem: physical.Subsystem, CarrierChanges: physical.CarrierChanges})
+		source.Links = append(source.Links, exitLANLink{Instance: physical.Instance, Index: index, LinkIndex: physical.LinkIndex, Name: name, DevicePath: physical.DevicePath, HardwareAddress: physical.HardwareAddress, Driver: physical.Driver, Subsystem: physical.Subsystem, CarrierChanges: physical.CarrierChanges})
 	}
 	addressReadStarted := time.Now()
 	addressArgs := []string{"-j"}

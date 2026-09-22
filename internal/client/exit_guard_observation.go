@@ -14,7 +14,7 @@ import (
 // nft -j -n emits libnftables-json objects, with numeric protocol values and
 // priorities. Only the exact owned ruleset is evidence: unrecognised objects,
 // table flags, chain hooks and additional statements cannot widen its scope.
-func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunnel bool, family api.ExitFamilyMode) bool {
+func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunnel bool, family api.ExitFamilyMode, lanStates ...*exitLANFirewallState) bool {
 	if tunnel && !exitGuardFamilyValid(family) {
 		return false
 	}
@@ -26,6 +26,15 @@ func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunne
 	chains := map[string]bool{}
 	var rules []any
 	var forwarding []any
+	var marking []any
+	var final []any
+	var lan *exitLANFirewallState
+	if len(lanStates) > 1 {
+		return false
+	}
+	if tunnel && len(lanStates) == 1 {
+		lan = lanStates[0]
+	}
 	for _, object := range objects {
 		if len(object) != 1 {
 			return false
@@ -43,20 +52,35 @@ func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunne
 				tables++
 			case "chain":
 				name, ok := body["name"].(string)
-				if !ok || (name != "output" && name != "forward") || chains[name] {
+				if !ok || (name != "output" && name != "forward" && ((name != "lanroute" && name != "lanfinal") || lan == nil)) || chains[name] {
 					return false
 				}
 				want := map[string]any{"family": "inet", "table": table, "name": name, "type": "filter", "hook": name, "prio": json.Number("0"), "policy": "drop"}
+				if name == "lanroute" {
+					want["type"] = "route"
+					want["hook"] = "output"
+					want["prio"] = json.Number("-150")
+					want["policy"] = "accept"
+				}
+				if name == "lanfinal" {
+					want["hook"] = "postrouting"
+					want["prio"] = json.Number("2147483645")
+					want["policy"] = "accept"
+				}
 				if !reflect.DeepEqual(body, want) {
 					return false
 				}
 				chains[name] = true
 			case "rule":
-				if len(body) != 4 || body["family"] != "inet" || body["table"] != table || (body["chain"] != "output" && body["chain"] != "forward") {
+				if len(body) != 4 || body["family"] != "inet" || body["table"] != table || (body["chain"] != "output" && body["chain"] != "forward" && ((body["chain"] != "lanroute" && body["chain"] != "lanfinal") || lan == nil)) {
 					return false
 				}
 				if body["chain"] == "output" {
 					rules = append(rules, body["expr"])
+				} else if body["chain"] == "lanroute" {
+					marking = append(marking, body["expr"])
+				} else if body["chain"] == "lanfinal" {
+					final = append(final, body["expr"])
 				} else {
 					forwarding = append(forwarding, body["expr"])
 				}
@@ -65,7 +89,11 @@ func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunne
 			}
 		}
 	}
-	if tables != 1 || len(chains) != 2 {
+	wantChains := 2
+	if lan != nil {
+		wantChains = 4
+	}
+	if tables != 1 || len(chains) != wantChains {
 		return false
 	}
 	if len(rules) >= 3 {
@@ -88,6 +116,7 @@ func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunne
 	if decoder.Decode(&want) != nil {
 		return false
 	}
+	want = append(want, exitGuardDHCPRules(device)...)
 	if tunnel {
 		selected, ordinary := exitGuardFamilyProtocols(family)
 		tunRule := []any{map[string]any{"match": map[string]any{"op": "==", "left": map[string]any{"meta": map[string]any{"key": "oifname"}}, "right": device}}, map[string]any{"accept": nil}}
@@ -105,7 +134,89 @@ func exitGuardRulesObserved(raw []byte, table, device string, mark uint32, tunne
 	} else if len(forwarding) != 0 {
 		return false
 	}
+	if lan != nil {
+		_, extra, markers, err := lan.rules(table, mark)
+		if err != nil || !exitGuardLANRulesEqual(marking, markers) || !exitGuardLANRulesEqual(final, lan.finalRules(extra)) || len(rules) != len(want)+len(extra) || !exitGuardLANRulesEqual(rules[len(want):], extra) {
+			return false
+		}
+		rules = rules[:len(want)]
+	} else if len(marking) != 0 {
+		return false
+	}
 	return reflect.DeepEqual(rules, want)
+}
+
+func exitGuardDHCPRules(device string) []any {
+	match := func(left, right any) any {
+		return map[string]any{"match": map[string]any{"op": "==", "left": left, "right": right}}
+	}
+	meta := func(key string) any { return map[string]any{"meta": map[string]any{"key": key}} }
+	payload := func(protocol, field string) any {
+		return map[string]any{"payload": map[string]any{"protocol": protocol, "field": field}}
+	}
+	prefix := map[string]any{"prefix": map[string]any{"addr": "fe80::", "len": json.Number("10")}}
+	base := func(family string) []any {
+		return []any{map[string]any{"match": map[string]any{"op": "!=", "left": meta("oifname"), "right": device}}, exitGuardNFProtoMatch(family), match(meta("l4proto"), json.Number("17"))}
+	}
+	v4 := append(base("ipv4"), match(payload("udp", "sport"), json.Number("68")), match(payload("udp", "dport"), json.Number("67")), map[string]any{"accept": nil})
+	rules := []any{v4}
+	for _, dst := range []any{"ff02::1:2", prefix} {
+		rules = append(rules, append(base("ipv6"), match(payload("ip6", "saddr"), prefix), match(payload("ip6", "daddr"), dst), match(payload("udp", "sport"), json.Number("546")), match(payload("udp", "dport"), json.Number("547")), map[string]any{"accept": nil}))
+	}
+	return rules
+}
+
+// libnftables may emit the exact inet family dependency inferred by an ip/ip6
+// payload expression. It is an additional restriction; no other expression is
+// discarded, and the dependency must precede the first matching payload read.
+func exitGuardLANRulesEqual(actual, expected []any) bool {
+	if len(actual) != len(expected) {
+		return false
+	}
+	for i, value := range actual {
+		statements, ok := value.([]any)
+		if !ok {
+			return false
+		}
+		family := ""
+		for _, item := range expected[i].([]any) {
+			match, ok := item.(map[string]any)["match"].(map[string]any)
+			if !ok {
+				continue
+			}
+			left, ok := match["left"].(map[string]any)
+			if !ok {
+				continue
+			}
+			payload, ok := left["payload"].(map[string]any)
+			if !ok {
+				continue
+			}
+			switch payload["protocol"] {
+			case "ip":
+				family = "ipv4"
+			case "ip6":
+				family = "ipv6"
+			}
+		}
+		if reflect.DeepEqual(value, expected[i]) {
+			continue
+		}
+		matched := false
+		if family != "" {
+			for at, statement := range statements {
+				if reflect.DeepEqual(statement, exitGuardNFProtoMatch(family)) {
+					trimmed := append(append([]any(nil), statements[:at]...), statements[at+1:]...)
+					matched = reflect.DeepEqual(trimmed, expected[i])
+					break
+				}
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
 }
 
 func exitGuardNFProtoMatch(protocol string) any {

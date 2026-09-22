@@ -86,6 +86,7 @@ type WireGuardEngine struct {
 	resourceFilter        *resourcePacketFilter
 	exitFilter            *exitPacketFilter
 	exitGuard             *linuxExitGuard
+	exitLAN               *exitLANRuntime
 	exitSelection         *ClientExitSelection
 	exitConfig            Config
 	exitRestoreConfig     Config
@@ -294,6 +295,11 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 		if err := guard.Contain(ctx); err != nil {
 			return WireGuardApplyResult{}, err
 		}
+		if e.exitLAN != nil {
+			if err := e.exitLAN.cleanup(ctx, e, guard, cfg); err != nil {
+				return WireGuardApplyResult{}, err
+			}
+		}
 		if err := e.captureUnderlayDNSLocked(ctx, underlayDNSRequired(cfg, &networkMap)); err != nil {
 			return WireGuardApplyResult{}, err
 		}
@@ -426,7 +432,14 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 				result.OK = false
 				return result, err
 			}
-			if err := guard.OpenTunnel(ctx, selection.Family); err != nil {
+			e.runtimeIdentity = nativeExitAppliedIdentity(cfg, networkMap, e.interface_)
+			var openErr error
+			if selection.LAN == clientapi.ExitLANAllow {
+				openErr = e.exitLAN.apply(ctx, e, guard, cfg, selection)
+			} else {
+				openErr = guard.OpenTunnel(ctx, selection.Family)
+			}
+			if err := openErr; err != nil {
 				result.OK = false
 				return result, err
 			}
@@ -1180,6 +1193,9 @@ func (e *WireGuardEngine) downLocked(ctx context.Context) (WireGuardApplyResult,
 			if err := e.exitGuard.Contain(ctx); err != nil {
 				return result, err
 			}
+			if err := e.exitLAN.stop(); err != nil {
+				return result, err
+			}
 		}
 		result.OK = true
 		result.Skipped = true
@@ -1210,6 +1226,7 @@ func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
 		e.exitFilter.withdraw()
 		guardErr = e.exitGuard.Contain(ctx)
 	}
+	guardErr = errors.Join(guardErr, e.exitLAN.stop())
 	if e.flowCancel != nil {
 		e.flowCancel()
 		<-e.flowDone

@@ -32,6 +32,45 @@ func callExitLANBPF(command int, attr []byte, buffers ...[]byte) (int, error) {
 // Only the kernel's fixed sysfs BTF source is accepted. Objects are loaded but
 // never attached or pinned here; ordinary process teardown cannot open LAN.
 func newNativeExitLANBPFPreparation(ctx context.Context, mark uint32) (*exitLANBPFPreparation, error) {
+	raw, err := readExitLANKernelBTF(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctxOffset, markOffset, err := exitLANBTFMarkLayout(raw, 8)
+	if err != nil {
+		return nil, err
+	}
+	var order binary.ByteOrder = binary.LittleEndian
+	if binary.NativeEndian.Uint16([]byte{1, 0}) != 1 {
+		order = binary.BigEndian
+	}
+	return newExitLANBPFPreparation(ctx, mark, ctxOffset, markOffset, unix.BPF_PROG_TYPE_NETFILTER, unix.BPF_NETFILTER, order, callExitLANBPF, unix.Close)
+}
+
+func newNativeExitLANPacketPreparation(ctx context.Context, mark uint32, plan *exitLANPlan) (*exitLANBPFPreparation, error) {
+	if plan == nil || plan.topology == nil {
+		return nil, errExitLANBPF
+	}
+	raw, err := readExitLANKernelBTF(ctx)
+	if err != nil {
+		return nil, err
+	}
+	layout, err := exitLANBTFPacketLayout(raw)
+	if err != nil {
+		return nil, err
+	}
+	devices := make([]exitLANPacketDevice, 0, len(plan.topology.Links))
+	for _, link := range plan.topology.Links {
+		devices = append(devices, exitLANPacketDevice{uint32(link.Index), link.Instance})
+	}
+	var order binary.ByteOrder = binary.LittleEndian
+	if binary.NativeEndian.Uint16([]byte{1, 0}) != 1 {
+		order = binary.BigEndian
+	}
+	return newExitLANBPFPreparationWithProgram(ctx, unix.BPF_PROG_TYPE_NETFILTER, unix.BPF_NETFILTER, order, callExitLANBPF, unix.Close, func(fd int) ([]byte, error) { return buildExitLANPacketProgram(layout, devices, mark, fd, order) })
+}
+
+func readExitLANKernelBTF(ctx context.Context) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -59,15 +98,5 @@ func newNativeExitLANBPFPreparation(ctx context.Context, mark uint32) (*exitLANB
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	ctxOffset, markOffset, err := exitLANBTFMarkLayout(raw, 8)
-	if err != nil {
-		return nil, err
-	}
-	// binary.NativeEndian is not a canonical ByteOrder identity for the
-	// portable encoder. Select its exact host order explicitly.
-	var order binary.ByteOrder = binary.LittleEndian
-	if binary.NativeEndian.Uint16([]byte{1, 0}) != 1 {
-		order = binary.BigEndian
-	}
-	return newExitLANBPFPreparation(ctx, mark, ctxOffset, markOffset, unix.BPF_PROG_TYPE_NETFILTER, unix.BPF_NETFILTER, order, callExitLANBPF, unix.Close)
+	return raw, nil
 }
