@@ -22,6 +22,29 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN namespace increment (2026-09-22): a retained boot/netns handle serializes
+inspection, synchronous effects and post-inspection while the calling goroutine
+is locked to its OS thread. Any uncertain inspection permanently invalidates
+that handle; Close waits for in-flight callbacks. Recovery rejects a manifest
+from another boot or namespace before its callback can inspect/delete objects.
+The Linux constructor retains a namespace FD, verifies procfs/nsfs and network
+namespace type, and reads the fixed bounded boot ID source. It captures the
+calling thread's namespace, not the thread-group leader's namespace. No setns
+or implicit namespace migration is performed.
+The thread path uses procfs `thread-self`, whose kernel resolution uses that
+procfs mount's PID namespace; a numeric Gettid path could address a different
+task when the mount and caller use different PID namespaces
+([kernel resolution](https://raw.githubusercontent.com/torvalds/linux/v6.12/fs/proc/thread_self.c),
+[thread-self documentation](https://man7.org/linux/man-pages/man5/proc_thread-self.5.html)).
+This supplies an observation boundary for future attach/readback/recovery
+orchestration; the production LAN_ALLOW adapter and exact pin cleanup remain
+unimplemented. A namespace match alone never establishes pin ownership.
+Validation: goimports, vet and configured lint (0 issues) passed; full local
+short suite passed (internal/client 137.425 s, CLI 10.462 s). Linux-only syscall
+units await CI and real native behavior remains unqualified. The preceding
+checkpoint commit passed all three short CI platforms
+([run 35708129070](https://github.com/endless-net/client/actions/runs/35708129070)).
+
 LAN pin checkpoint increment (2026-09-22): production pin creation requires a
 durable checkpoint callback. Under directory then preparation locks it checks
 all reserved names for conflicts, describes held closed objects, persists a

@@ -48,6 +48,15 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+Namespace audit (2026-09-22): `TestExitLANNamespaceConstructorOwnsFailedHandles`
+checks capture consistency and failure cleanup. `TestExitLANNamespaceCurrentChecksAndLatchesInvalidity`
+checks pre/post observations and permanent rejection after uncertain identity;
+`TestExitLANNamespaceCloseSerializesCallback` checks lifetime serialization.
+`TestExitLANNamespaceOwnershipBindingBeforeCleanup` rejects another boot/netns
+before cleanup. Linux injected syscall tests cover the exact thread-self path,
+procfs/nsfs/type validation, bounded boot ID reads, changed identities, failure
+and cancellation cleanup. Actual native runtime behavior remains unqualified.
+
 Pin checkpoint audit (2026-09-22):
 `TestExitLANBPFPinRequiresFullCheckpointBeforeEffects` checks the complete
 record precedes every pin. `TestExitLANBPFCheckpointFailurePreventsPins`
