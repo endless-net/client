@@ -29,7 +29,7 @@ func observeOSRoutes(ctx context.Context, goos, iface string, targets []string, 
 		if err != nil || len(out) > routeOutputLimit {
 			return "", errors.New("OS route observation unavailable")
 		}
-		return routeObservationInterface(goos, string(out)), nil
+		return routeObservationInterface(goos, addr, string(out)), nil
 	})
 }
 
@@ -69,7 +69,15 @@ func observeRouteTargets(ctx context.Context, iface string, targets []string, lo
 func routeObservationCommand(goos, target string) (string, []string) {
 	switch goos {
 	case "linux":
-		return "ip", []string{"route", "get", target}
+		addr, err := netip.ParseAddr(target)
+		if err != nil {
+			return "", nil
+		}
+		family := "-6"
+		if addr.Is4() {
+			family = "-4"
+		}
+		return "ip", []string{"-j", family, "route", "get", target}
 	case "darwin":
 		return "route", []string{"-n", "get", target}
 	default:
@@ -77,10 +85,36 @@ func routeObservationCommand(goos, target string) (string, []string) {
 	}
 }
 
-func routeObservationInterface(goos, output string) string {
+func routeObservationInterface(goos string, target netip.Addr, output string) string {
 	switch goos {
 	case "linux":
-		return parseRouteInterface(output)
+		// A stray dev token in warnings or a different destination must never
+		// become an observed route. The shared JSON parser rejects duplicates.
+		value, err := underlayDNSJSON([]byte(output))
+		if err != nil {
+			return ""
+		}
+		rows, ok := value.([]any)
+		if !ok || len(rows) != 1 {
+			return ""
+		}
+		row, ok := rows[0].(map[string]any)
+		if !ok {
+			return ""
+		}
+		dst, _ := row["dst"].(string)
+		address, err := netip.ParseAddr(dst)
+		if err != nil || address != target {
+			return ""
+		}
+		if kind, exists := row["type"]; exists && kind != "unicast" && kind != "local" {
+			return ""
+		}
+		if _, failed := row["error"]; failed {
+			return ""
+		}
+		dev, _ := row["dev"].(string)
+		return dev
 	case "darwin":
 		for _, line := range strings.Split(output, "\n") {
 			if key, value, ok := strings.Cut(strings.TrimSpace(line), ":"); ok && key == "interface" {

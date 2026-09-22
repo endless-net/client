@@ -52,6 +52,20 @@ Validation: goimports, vet, configured lint (0 issues) and full local short suit
 passed (internal/client 142.623 s, CLI 11.119 s). The preceding HOST topology
 commit passed short CI [35718905260](https://github.com/endless-net/client/actions/runs/35718905260).
 
+Package 5 diagnostic observation increment (2026-09-22): Linux address lookups
+use explicit family and [JSON output](https://man7.org/linux/man-pages/man8/ip.8.html).
+Only one result for the requested address with a usable interface and a local/
+unicast route type can supply interface evidence; duplicate keys, unrelated
+destinations, multiple rows, errors and text output are rejected. This does not
+turn address samples into full table/rule coverage: `RouteInspection` currently
+describes an address lookup and diagnostics remains incomplete. Linux and Darwin
+now report a bounded kernel release from uname, labelled as a kernel version;
+hostname, build description and raw inspection errors are excluded. Darwin
+kernel release is not represented as a macOS product version. Platform short CI
+must compile/test these OS-specific collectors before later native qualification.
+Local validation: goimports, vet, configured lint (0 issues) and full short suite
+passed on Windows (internal/client 141.091 s); Unix-only uname tests await CI.
+
 ## Corrected network-selection evidence
 
 `cmd/endlessnet-client/service_rpc_host.go` installs the network catalog,
@@ -90,6 +104,17 @@ producer behavior or provider switching. Those remain open in package 4.
 | User/acceptance owners after implementation and unit audit | Agreed system/platform run and observed results on the final artifacts. | All acceptance gates |
 
 No external dependency above authorizes changes outside this repository.
+Distribution source clarification from read-only source review: Windows pairing
+provenance already exists in client-ui at `1a51f7960ef013abd757317247c71fa0e08aab6f`.
+[write-release-provenance.ps1](https://github.com/endless-net/client-ui/blob/1a51f7960ef013abd757317247c71fa0e08aab6f/scripts/write-release-provenance.ps1)
+binds UI/core commits, manifest/lock/IPC descriptor hashes and signed/unsigned
+artifact hashes. Reuse that producer evidence rather than inventing a second
+pairing format. Its [release workflow](https://github.com/endless-net/client-ui/blob/1a51f7960ef013abd757317247c71fa0e08aab6f/.github/workflows/release.yml)
+publishes the JSON, but the standalone JSON is not among attestation subjects
+(MSI, ZIP and SBOM are). Publication alone therefore does not establish a trusted
+discovery manifest. The remaining distribution/product/UI-owner result is the
+authoritative index/API, trust bootstrap/rotation, channel/platform and expiry/
+replay/classification rules, and cryptographic binding to that existing pairing.
 No requirement is closed by this review. Baseline push short CI
 [35711096789](https://github.com/endless-net/client/actions/runs/35711096789)
 succeeded; native/system acceptance remains outstanding.
