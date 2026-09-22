@@ -86,7 +86,7 @@ func TestResourceHostRelayCollectorKeepsNativeRouteAndFilterGates(t *testing.T) 
 				}
 				return result, err
 			}
-			proof, err := e.observeResourceHostsWithInspection(t.Context(), cfg, runner, now, inspect)
+			proof, err := observeResourceHostsTest(t, e, t.Context(), cfg, runner, now, inspect)
 			id := rpcResourceID(ipc.ResourceKind_RESOURCE_KIND_HOST, peer.ID)
 			confirmed := err == nil && proof.HostConfirmed(id) && proof.Current(cfg, time.Now())
 			if confirmed != (scenario == "confirmed") {

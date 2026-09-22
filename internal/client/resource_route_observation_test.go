@@ -128,7 +128,21 @@ func resourceHostProjectionFixture(t *testing.T) (Config, *WireGuardEngine, *Res
 	defer e.mu.Unlock()
 	id := rpcResourceID(ipc.ResourceKind_RESOURCE_KIND_HOST, cfg.CachedMap.Peers[0].ID)
 	proof := &ResourceHostObservation{engine: e, device: e.device, configuration: resourceObservationConfig(cfg), uapi: sha256.Sum256([]byte(e.uapi)), paths: resourceObservationPaths(e), pathManager: e.relayPaths, expires: time.Now().Add(time.Minute), hosts: map[string]bool{id: true}}
+	proof.lifetime = exitLANTestLifetime(t)
 	return cfg, e, proof
+}
+
+// Parser/path units inject a stable stream, never native networking. Dedicated
+// topology tests cover changes and lifetime ownership through publication.
+func observeResourceHostsTest(t *testing.T, e *WireGuardEngine, ctx context.Context, cfg Config, runner CommandRunner, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error)) (*ResourceHostObservation, error) {
+	t.Helper()
+	proof, err := e.observeResourceHostsWithTopology(ctx, cfg, runner, now, inspect, func(context.Context) (exitLANChangeStream, error) {
+		return &exitLANTestStream{changed: make(chan struct{})}, nil
+	})
+	if proof != nil {
+		t.Cleanup(func() { _ = proof.Close() })
+	}
+	return proof, err
 }
 
 func TestResourceHostProofRejectsChangedBindingAndExpiredRuntime(t *testing.T) {
@@ -272,7 +286,7 @@ func TestResourceHostCollectorBindsNativeRulesRoutesAndPeerPath(t *testing.T) {
 				}
 				return value, err
 			}
-			proof, err := e.observeResourceHostsWithInspection(t.Context(), cfg, runner, now, inspect)
+			proof, err := observeResourceHostsTest(t, e, t.Context(), cfg, runner, now, inspect)
 			id := rpcResourceID(ipc.ResourceKind_RESOURCE_KIND_HOST, mapPeer.ID)
 			confirmed := err == nil && proof.HostConfirmed(id) && proof.Current(cfg, time.Now())
 			if confirmed != (scenario == "confirmed") {

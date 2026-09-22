@@ -21,6 +21,21 @@ design, not another user decision about LAN semantics. Its substeps must finish
 the integrated scenario; adding isolated preparation primitives is not closure.
 Packages 4–6 preserve the full objective rather than becoming an optional backlog.
 
+Package 1 implementation increment (2026-09-22): the production HOST observer
+now subscribes to Linux link/address/route/rule notifications before collecting
+its batch. A one-shot lifetime survives collection through final list/event
+publication checks. Notification loss, change, cancellation or expiry rejects
+positive evidence; release cancels and closes the observer before unlocking
+runtime effects. Copies share one close operation. Tests exercise invalidation
+during collection and readback, partial factory errors, receipt copies, provider
+cleanup and resource availability/event withdrawal. Native delivery remains
+asynchronous and needs later Linux qualification; application observations and
+the rest of package 4 remain open.
+Validation: goimports and vet passed; configured lint reports 0 issues after
+making ignored test-only Close results explicit. Full local short suite passed
+(internal/client 145.651 s, CLI 12.447 s); its run began before that test-only
+errcheck correction. No native/system execution was performed.
+
 ## Corrected network-selection evidence
 
 `cmd/endlessnet-client/service_rpc_host.go` installs the network catalog,

@@ -172,6 +172,7 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 	if !m.now().Before(state.MapSignature.ExpiresAt) {
 		return nil, rpc.Error(connect.CodeUnavailable, ipc.ErrorCode_ERROR_CODE_UNAVAILABLE)
 	}
+	positiveHost := false
 	if s.ResourceEnforcementProvider != nil && s.ResourceEnforcementProvider(cfg, m.now()) {
 		if err := projectAppliedResourceDenials(ctx, cfg, items, m.now()); err != nil {
 			if ctx.Err() != nil {
@@ -186,6 +187,7 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 			for _, item := range items {
 				if item.Kind == ipc.ResourceKind_RESOURCE_KIND_HOST && item.Enabled.GetEffective() && item.Availability.ReasonKey == "resource_runtime_observation_unavailable" && observed.HostConfirmed(item.Id) {
 					item.Availability = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_AVAILABLE}
+					positiveHost = true
 				}
 			}
 		}
@@ -217,5 +219,8 @@ func (s *ClientRPCService) resourcesAs(ctx context.Context, peer local.Peer, req
 	}
 	response.Resources = items[start:end]
 	response.Page = &ipc.PageResponse{NextPageToken: next, Metadata: &ipc.SnapshotMetadata{InstanceId: m.instanceID, Revision: cfg.RPCState.Revision, GeneratedAt: timestamppb.New(m.now())}}
+	if positiveHost && !observed.Current(cfg, m.now()) {
+		return nil, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	}
 	return response, nil
 }

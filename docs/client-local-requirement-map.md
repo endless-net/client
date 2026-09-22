@@ -48,6 +48,21 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+HOST topology follow-up, 2026-09-22 (US-07/11, IT-32): production collection
+subscribes before route/rule/interface reads and holds its one-shot subscription
+through list/event publication. `TestResourceHostTopologyCollectorRejectsLostObservation`
+rejects preclosed/failed watchers and changes during the batch/final readback;
+an individual missing route yields no positive HOST claim.
+`TestResourceHostTopologyCurrentRejectsChangesAndCancellation` covers cancellation,
+pre/post-readback change and shared exactly-once cleanup across receipt copies.
+`TestResourceObservationOwnsProviderLifetimeThroughPublication` checks context
+retention and cancellation/close before effect-lock release, including partial
+provider failures. `TestResourceHostProjectionAndEventsRequireFreshEvidence`
+now withdraws affirmative HOST evidence by invalidating its topology lifetime
+and checks resource events/revision changes without duplicate invalidation.
+Native notification latency and real routes remain platform acceptance work;
+these assertions do not establish application/service availability.
+
 Recovery inventory audit (2026-09-22): `TestExitLANRecoveryPinsAllPartialSubsets`
 checks all selected pin subsets and both byte orders without treating a missing
 map as revoked. `TestExitLANRecoveryPinsForeignOrChangingNeverMutates` rejects

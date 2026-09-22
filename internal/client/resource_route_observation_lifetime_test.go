@@ -146,7 +146,7 @@ func TestResourceHostCollectorRejectsLateReadbackExpiryAndCancellation(t *testin
 				}
 				return value, err
 			}
-			proof, err := e.observeResourceHostsWithInspection(ctx, cfg, runner, now, inspect)
+			proof, err := observeResourceHostsTest(t, e, ctx, cfg, runner, now, inspect)
 			if calls != 2 {
 				t.Fatal("final inspection was not reached", calls, err)
 			}

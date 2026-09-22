@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"sort"
+	"sync"
 	"time"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -16,12 +17,17 @@ func (s *ClientRPCService) observeResourceHosts(ctx context.Context, cfg Config)
 		return nil, noop
 	}
 	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	observed, err := s.ResourceHostProvider(bounded, clonePersistentConfig(cfg))
+	owned := observed
+	release := sync.OnceFunc(func() {
+		cancel()
+		_ = owned.Close()
+		s.ResourceObservationLock.Unlock()
+	})
 	if err != nil || bounded.Err() != nil {
 		observed = nil
 	}
-	return observed, s.ResourceObservationLock.Unlock
+	return observed, release
 }
 
 func confirmedResourceHosts(cfg Config, observed *ResourceHostObservation, now time.Time, enforced bool) []string {

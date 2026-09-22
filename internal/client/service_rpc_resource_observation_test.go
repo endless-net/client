@@ -100,6 +100,58 @@ func TestResourceNativeObservationRunsOutsideMutationLockAndRechecksScope(t *tes
 	}
 }
 
+func TestResourceObservationOwnsProviderLifetimeThroughPublication(t *testing.T) {
+	for _, scenario := range []string{"success", "partial_error", "cancel"} {
+		t.Run(scenario, func(t *testing.T) {
+			m := newRPCStoreTest(t)
+			s := NewClientRPCService(m, nil)
+			lock := &sync.Mutex{}
+			s.ResourceObservationLock = lock
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			var providerCtx context.Context
+			closed := 0
+			s.ResourceHostProvider = func(ctx context.Context, _ Config) (*ResourceHostObservation, error) {
+				providerCtx = ctx
+				proof := &ResourceHostObservation{close: func() error {
+					closed++
+					if ctx.Err() == nil {
+						t.Error("provider not cancelled before close")
+					}
+					if lock.TryLock() {
+						lock.Unlock()
+						t.Error("effect lock released before observer cleanup")
+					}
+					return nil
+				}}
+				if scenario == "partial_error" {
+					return proof, errors.New("partial collection")
+				}
+				if scenario == "cancel" {
+					cancel()
+				}
+				return proof, nil
+			}
+			proof, release := s.observeResourceHosts(ctx, m.store.Read())
+			if (proof != nil) != (scenario == "success") || providerCtx == nil {
+				t.Fatal("unexpected receipt")
+			}
+			if scenario != "cancel" && providerCtx.Err() != nil {
+				t.Fatal("provider lifetime ended before publication")
+			}
+			if closed != 0 {
+				t.Fatal("observer closed before publication")
+			}
+			release()
+			release()
+			if closed != 1 || providerCtx.Err() == nil || !lock.TryLock() {
+				t.Fatal("cleanup not exactly once or lock leaked", closed)
+			}
+			lock.Unlock()
+		})
+	}
+}
+
 func TestResourceHostProjectionAndEventsRequireFreshEvidence(t *testing.T) {
 	cfg, engine, template := resourceHostProjectionFixture(t)
 	m := newRPCStoreTest(t)
@@ -116,13 +168,21 @@ func TestResourceHostProjectionAndEventsRequireFreshEvidence(t *testing.T) {
 	confirmed := false
 	// Inject only the trusted observer result. Native command/path proof is
 	// covered separately; this verifies service projection and event semantics.
-	s.ResourceHostProvider = func(_ context.Context, current Config) (*ResourceHostObservation, error) {
+	s.ResourceHostProvider = func(ctx context.Context, current Config) (*ResourceHostObservation, error) {
 		proof := *template
 		proof.configuration = resourceObservationConfig(current)
 		engine.mu.Lock()
 		proof.paths = resourceObservationPaths(engine)
 		engine.mu.Unlock()
-		proof.hosts = map[string]bool{id: confirmed}
+		// A previously positive route batch loses authority when its topology
+		// stream changes; the host list itself remains affirmative.
+		proof.hosts = map[string]bool{id: true}
+		stream := &exitLANTestStream{changed: make(chan struct{})}
+		proof.lifetime = &exitLANSourceLifetime{ctx: ctx, stream: stream}
+		proof.close = sync.OnceValue(stream.Close)
+		if !confirmed {
+			_ = stream.Close()
+		}
 		return &proof, nil
 	}
 	owner := local.Peer{Identity: cfg.LocalOwnerID}

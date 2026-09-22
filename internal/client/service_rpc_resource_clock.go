@@ -68,6 +68,9 @@ func (s *ClientRPCService) publishResourceClock(ctx context.Context) error {
 		if !reflect.DeepEqual(clonePersistentConfig(cfg), clonePersistentConfig(*next)) {
 			return errRPCNoChange
 		}
+		if len(hosts) != 0 && !observed.Current(*next, m.now()) {
+			return errRPCNoChange // Retry with fresh evidence on the next tick.
+		}
 		current, err := rpcResourceObservationFingerprint(*next, m.now(), confirmed, hosts)
 		if err != nil {
 			return err

@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -17,7 +18,8 @@ import (
 
 // ResourceHostObservation is immutable transport evidence for HOST entries.
 // It says nothing about a remote application or service. Native routes remain
-// point-in-time observations: Current checks runtime binding, not an OS lease.
+// point-in-time observations: route notifications invalidate the receipt, but
+// asynchronous delivery is not an OS lease or packet-time enforcement.
 type ResourceHostObservation struct {
 	engine        *WireGuardEngine
 	device        *device.Device
@@ -30,6 +32,17 @@ type ResourceHostObservation struct {
 	hosts         map[string]bool
 	relayBridge   *wireGuardRelayBridge
 	relays        []wireGuardRelayPeerObservation
+	lifetime      *exitLANSourceLifetime
+	close         func() error
+}
+
+// Close releases the one-shot topology subscription and permanently revokes
+// the receipt. Callers must retain it through their final publication check.
+func (o *ResourceHostObservation) Close() error {
+	if o == nil || o.close == nil {
+		return nil
+	}
+	return o.close()
 }
 
 func (o *ResourceHostObservation) HostConfirmed(id string) bool { return o != nil && o.hosts[id] }
@@ -58,7 +71,7 @@ func (o *ResourceHostObservation) Current(cfg Config, now time.Time) bool {
 // makes changes during the final readback reproducible without native traffic.
 func (o *ResourceHostObservation) currentWithInspection(cfg Config, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error)) bool {
 	started := time.Now()
-	if o == nil || o.engine == nil || inspect == nil || now.Before(o.observedAt) || !now.Before(o.expires) || resourceObservationConfig(cfg) != o.configuration {
+	if o == nil || o.engine == nil || inspect == nil || !o.lifetime.current() || now.Before(o.observedAt) || !now.Before(o.expires) || resourceObservationConfig(cfg) != o.configuration {
 		return false
 	}
 	e := o.engine
@@ -99,7 +112,7 @@ func (o *ResourceHostObservation) currentWithInspection(cfg Config, now time.Tim
 			return false
 		}
 	}
-	return now.Add(time.Since(started)).Before(expires)
+	return o.lifetime.current() && now.Add(time.Since(started)).Before(expires)
 }
 
 // Caller holds engine.mu and has verified resourceHostExitFilterCurrent. The
@@ -142,8 +155,12 @@ func (e *WireGuardEngine) observeResourceHosts(ctx context.Context, cfg Config, 
 // The private inspection seam permits deterministic captured-handshake fixtures;
 // every production call fixes it to actual authenticated device readback above.
 func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context, cfg Config, runner CommandRunner, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error)) (*ResourceHostObservation, error) {
+	return e.observeResourceHostsWithTopology(ctx, cfg, runner, now, inspect, openResourceHostRouteWatch)
+}
+
+func (e *WireGuardEngine) observeResourceHostsWithTopology(ctx context.Context, cfg Config, runner CommandRunner, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error), open func(context.Context) (exitLANChangeStream, error)) (*ResourceHostObservation, error) {
 	started := time.Now()
-	if e == nil || inspect == nil {
+	if e == nil || inspect == nil || open == nil {
 		return nil, errResourceHostObservation
 	}
 	runner, err := resourceRouteRunner(runner)
@@ -151,7 +168,20 @@ func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
+	keep := false
+	var stream exitLANChangeStream
+	closeObservation := sync.OnceValue(func() error {
+		cancel()
+		if stream != nil {
+			return stream.Close()
+		}
+		return nil
+	})
+	defer func() {
+		if !keep {
+			_ = closeObservation()
+		}
+	}()
 	if _, err := compileResourceDenials(cfg, now); err != nil {
 		return nil, errResourceHostObservation
 	}
@@ -166,6 +196,16 @@ func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context
 		return nil, errResourceHostObservation
 	}
 	if e.runtimeIdentity != nativeExitAppliedIdentity(cfg, *cfg.CachedMap, e.interface_) || !resourceHostExitFilterCurrent(e, cfg, now) {
+		return nil, errResourceHostObservation
+	}
+	// Subscribe before any route/interface/rule collection. A change followed by
+	// restoration must invalidate the whole batch, even if final dumps match.
+	stream, err = open(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lifetime := &exitLANSourceLifetime{ctx: ctx, stream: stream}
+	if !lifetime.current() {
 		return nil, errResourceHostObservation
 	}
 	if cfg.ExitSelection != nil {
@@ -191,6 +231,7 @@ func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context
 	}
 	proof := &ResourceHostObservation{engine: e, device: e.device, configuration: resourceObservationConfig(cfg), uapi: sha256.Sum256([]byte(e.uapi)), paths: resourceObservationPaths(e), pathManager: e.relayPaths, observedAt: now, expires: now.Add(5 * time.Second), hosts: map[string]bool{}}
 	proof.expires = resourceHostReceiptDeadline(e, cfg, proof.expires)
+	proof.lifetime, proof.close = lifetime, closeObservation
 	paths := e.relayPaths.Statuses()
 	count := 0
 	for _, peer := range cfg.CachedMap.Peers {
@@ -295,9 +336,10 @@ func (e *WireGuardEngine) observeResourceHostsWithInspection(ctx context.Context
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if !now.Add(time.Since(started)).Before(proof.expires) {
+	if !lifetime.current() || !now.Add(time.Since(started)).Before(proof.expires) {
 		return nil, errResourceHostObservation
 	}
+	keep = true
 	return proof, nil
 }
 
