@@ -63,11 +63,3 @@ func captureExitLANClockWithRead(ctx context.Context, read func(int32, *unix.Tim
 	}
 	return sample, nil
 }
-
-// No kernel rule is opened by this preparation. Before publication an adapter
-// still needs persistent evidence caps (including across restart), exact route
-// ownership, live pinned attachment readback and interface-instance binding.
-// Caller holds engine.mu and owns the topology stream for the full lifetime.
-func (e *WireGuardEngine) prepareNativeExitLANDeadlineLocked(ctx context.Context, cfg Config, topology *exitLANSource) (*exitLANPlan, *exitLANPeerHealth, *exitLANBootDeadline, error) {
-	return e.prepareExitLANDeadlineWithClock(ctx, cfg, topology, captureExitLANClock, resourceObservedUAPI)
-}

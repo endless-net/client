@@ -3,10 +3,8 @@ package client
 import (
 	"context"
 	"errors"
-	"net/netip"
 	"sync"
 	"testing"
-	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
 )
@@ -97,58 +95,6 @@ func TestExitLANWatchCaptureOwnershipAndInvalidation(t *testing.T) {
 			source.lifetime = exitLANTestLifetime(t)
 			if copy.lifetime.current() {
 				t.Fatal("replacement revived original receipt")
-			}
-		})
-	}
-}
-
-func TestExitLANPreparationRejectsTopologyLossInsideReadback(t *testing.T) {
-	for _, scenario := range []string{"absent", "during", "after", "expiry"} {
-		t.Run(scenario, func(t *testing.T) {
-			e, cfg, now, inspect := exitLANHealthFixture(t, false)
-			e.mu.Lock()
-			defer e.mu.Unlock()
-			topology := &exitLANSource{OwnInterface: e.interface_, Family: cfg.ExitSelection.Family, ValidUntil: now.Add(time.Minute), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
-			if scenario != "absent" {
-				topology.lifetime = exitLANTestLifetime(t)
-			}
-			calls := 0
-			modified := func(e *WireGuardEngine) (WireGuardInspection, error) {
-				calls++
-				if scenario == "during" && calls == 2 {
-					_ = topology.close()
-				}
-				return inspect(e)
-			}
-			plan, _, err := e.prepareExitLANWithInspection(t.Context(), cfg, topology, now, modified)
-			if scenario == "absent" || scenario == "during" {
-				if err == nil || plan != nil {
-					t.Fatal("unconfirmed topology produced plan")
-				}
-				if scenario == "during" && calls != 2 {
-					t.Fatal("final readback not reached")
-				}
-				return
-			}
-			if err != nil || !plan.topologyCurrent(now) {
-				t.Fatal("live plan rejected", err)
-			}
-			if scenario == "expiry" {
-				if plan.topologyCurrent(plan.expires) {
-					t.Fatal("expired plan survived")
-				}
-				return
-			}
-			_ = topology.close()
-			if plan.topologyCurrent(now) {
-				t.Fatal("cloned plan survived topology loss")
-			}
-			if _, err := compileExitLANPlan(cfg, *cfg.CachedMap, cfg.ExitSelection, topology, nil, now); err == nil {
-				t.Fatal("closed topology recompiled")
-			}
-			topology.lifetime = exitLANTestLifetime(t)
-			if plan.topologyCurrent(now) {
-				t.Fatal("caller replacement revived old plan")
 			}
 		})
 	}

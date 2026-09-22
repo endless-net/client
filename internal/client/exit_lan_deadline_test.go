@@ -1,10 +1,7 @@
 package client
 
 import (
-	"context"
-	"errors"
 	"math"
-	"net/netip"
 	"testing"
 	"time"
 )
@@ -61,48 +58,6 @@ func TestExitLANBootDeadlineRejectsInvalidArithmetic(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			if d, err := newExitLANBootDeadline(scenario.anchor, scenario.expires); err == nil || d != nil {
 				t.Fatal("invalid clock produced deadline")
-			}
-		})
-	}
-}
-
-func TestExitLANBootPreparationRechecksAfterTopology(t *testing.T) {
-	for _, scenario := range []string{"current", "expired", "cancelled"} {
-		t.Run(scenario, func(t *testing.T) {
-			e, cfg, now, inspect := exitLANHealthFixture(t, false)
-			e.mu.Lock()
-			defer e.mu.Unlock()
-			topology := &exitLANSource{lifetime: exitLANTestLifetime(t), OwnInterface: e.interface_, Family: cfg.ExitSelection.Family, ValidUntil: now.Add(10 * time.Second), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			calls := 0
-			clock := func(context.Context) (exitLANClockSample, error) {
-				calls++
-				sample := exitLANClockSample{bootBefore: 1e9 + uint64(calls)*100, bootAfter: 1e9 + uint64(calls)*100 + 10, wall: now}
-				if calls == 3 {
-					if scenario == "expired" {
-						sample.bootBefore = 12e9
-						sample.bootAfter = 12e9 + 10
-					}
-					if scenario == "cancelled" {
-						cancel()
-					}
-				}
-				return sample, nil
-			}
-			plan, health, deadline, err := e.prepareExitLANDeadlineWithClock(ctx, cfg, topology, clock, inspect)
-			if calls != 3 {
-				t.Fatal("final clock not sampled", calls, err)
-			}
-			if scenario == "current" {
-				if err != nil || plan == nil || health == nil || deadline == nil || deadline.bootExpires != 11e9+100 {
-					t.Fatal("incorrect prepared absolute deadline", err)
-				}
-			} else if err == nil || plan != nil || health != nil || deadline != nil {
-				t.Fatal("late invalidation returned preparation")
-			}
-			if scenario == "cancelled" && !errors.Is(err, context.Canceled) {
-				t.Fatal("late cancellation lost", err)
 			}
 		})
 	}

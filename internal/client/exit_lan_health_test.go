@@ -2,8 +2,6 @@ package client
 
 import (
 	"context"
-	"errors"
-	"net/netip"
 	"testing"
 	"time"
 
@@ -72,22 +70,6 @@ func exitLANHealthFixture(t *testing.T, relayed bool) (*WireGuardEngine, Config,
 	return e, cfg, now, inspect
 }
 
-func TestExitLANHealthRejectsDifferentTopologyFamily(t *testing.T) {
-	e, cfg, now, inspect := exitLANHealthFixture(t, false)
-	other := api.ExitFamilyIPv4Only
-	if cfg.ExitSelection.Family == other {
-		other = api.ExitFamilyIPv6Only
-	}
-	topology := &exitLANSource{lifetime: exitLANTestLifetime(t), OwnInterface: e.interface_, Family: other}
-	called := false
-	e.mu.Lock()
-	_, _, err := e.prepareExitLANWithInspection(t.Context(), cfg, topology, now, func(e *WireGuardEngine) (WireGuardInspection, error) { called = true; return inspect(e) })
-	e.mu.Unlock()
-	if err == nil || called {
-		t.Fatal("foreign-family topology reached live observation")
-	}
-}
-
 func TestExitLANHealthCannotRenewAnOldHandshake(t *testing.T) {
 	for _, relayed := range []bool{false, true} {
 		e, cfg, now, inspect := exitLANHealthFixture(t, relayed)
@@ -105,16 +87,6 @@ func TestExitLANHealthCannotRenewAnOldHandshake(t *testing.T) {
 		if proof.currentWithInspection(t.Context(), cfg, proof.expires, inspect) || proof.currentWithInspection(t.Context(), cfg, now.Add(-time.Nanosecond), inspect) {
 			e.mu.Unlock()
 			t.Fatal("receipt survived expiry or clock rollback")
-		}
-		// A synthetic unit receipt cannot replace the production device's missing
-		// handshake. APPLIED configuration and getter calls are insufficient.
-		if proof.currentLocked(t.Context(), cfg, now) {
-			e.mu.Unlock()
-			t.Fatal("configuration alone counted as live native health")
-		}
-		if _, err := e.observeExitLANPeerHealthLocked(t.Context(), cfg, cfg.ExitSelection, now); err == nil {
-			e.mu.Unlock()
-			t.Fatal("native preparation manufactured peer health")
 		}
 		e.mu.Unlock()
 	}
@@ -192,67 +164,21 @@ func TestExitLANHealthRejectsChangedContextPathAndIncompleteEvidence(t *testing.
 	}
 }
 
-func TestExitLANPreparationIntersectsHealthTopologyAndPolicy(t *testing.T) {
+func TestExitLANHealthReadbackCannotCrossEvidenceDeadline(t *testing.T) {
 	e, cfg, now, inspect := exitLANHealthFixture(t, false)
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	topology := &exitLANSource{OwnInterface: e.interface_, Family: cfg.ExitSelection.Family, ValidUntil: now.Add(10 * time.Second), Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
-	topology.lifetime = exitLANTestLifetime(t)
-	plan, health, err := e.prepareExitLANWithInspection(t.Context(), cfg, topology, now, inspect)
-	if err != nil || !plan.expires.Equal(topology.ValidUntil) || !health.expires.Equal(now.Add(20*time.Second)) {
-		t.Fatal("topology and handshake deadlines not intersected", err)
+	proof, err := e.observeExitLANPeerHealthWithInspection(t.Context(), cfg, cfg.ExitSelection, now, inspect)
+	if err != nil {
+		t.Fatal(err)
 	}
-	topology.ValidUntil = now.Add(time.Hour)
-	plan, _, err = e.prepareExitLANWithInspection(t.Context(), cfg, topology, now, inspect)
-	if err != nil || !plan.expires.Equal(health.expires) {
-		t.Fatal("long topology lifetime extended old handshake", err)
+	deadline := time.Now().Add(time.Second)
+	proof.expires = deadline
+	delayed := func(e *WireGuardEngine) (WireGuardInspection, error) {
+		time.Sleep(time.Until(deadline) + time.Millisecond)
+		return inspect(e)
 	}
-	e.relayPaths.statuses[0].Direct.CheckedAt = now.Add(-device.RejectAfterTime + 5*time.Second).Format(time.RFC3339Nano)
-	plan, _, err = e.prepareExitLANWithInspection(t.Context(), cfg, topology, now, inspect)
-	if err != nil || !plan.expires.Equal(now.Add(5*time.Second)) {
-		t.Fatal("direct check deadline was not preserved", err)
-	}
-	if _, _, err := e.prepareExitLANWithHealthLocked(t.Context(), cfg, topology, now); err == nil {
-		t.Fatal("production preparation accepted absent actual handshake")
-	}
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	if _, _, err := e.prepareExitLANWithInspection(ctx, cfg, topology, now, inspect); !errors.Is(err, context.Canceled) {
-		t.Fatal("preparation ignored cancellation", err)
-	}
-}
-
-func TestExitLANReadbackCannotCrossEvidenceDeadline(t *testing.T) {
-	for _, preparation := range []bool{false, true} {
-		e, cfg, now, inspect := exitLANHealthFixture(t, false)
-		e.mu.Lock()
-		proof, err := e.observeExitLANPeerHealthWithInspection(t.Context(), cfg, cfg.ExitSelection, now, inspect)
-		if err != nil {
-			e.mu.Unlock()
-			t.Fatal(err)
-		}
-		deadline := time.Now().Add(time.Second)
-		proof.expires = deadline
-		calls := 0
-		delayed := func(e *WireGuardEngine) (WireGuardInspection, error) {
-			calls++
-			if !preparation || calls == 2 {
-				time.Sleep(time.Until(deadline) + time.Millisecond)
-			}
-			return inspect(e)
-		}
-		if preparation {
-			topology := &exitLANSource{OwnInterface: e.interface_, Family: cfg.ExitSelection.Family, ValidUntil: deadline, Links: []exitLANLink{{Index: 2, LinkIndex: 2, Name: "eth0", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.2/24")}, Routes: []exitLANDirectRoute{{Prefix: netip.MustParsePrefix("192.0.2.0/24")}}}}}
-			topology.lifetime = exitLANTestLifetime(t)
-			_, _, err = e.prepareExitLANWithInspection(t.Context(), cfg, topology, time.Now(), delayed)
-			if err == nil || calls != 2 {
-				e.mu.Unlock()
-				t.Fatal("final readback did not reject expired topology", err, calls)
-			}
-		} else if proof.currentWithInspection(t.Context(), cfg, time.Now(), delayed) {
-			e.mu.Unlock()
-			t.Fatal("readback extended original receipt deadline")
-		}
-		e.mu.Unlock()
+	if proof.currentWithInspection(t.Context(), cfg, time.Now(), delayed) {
+		t.Fatal("readback extended original receipt deadline")
 	}
 }

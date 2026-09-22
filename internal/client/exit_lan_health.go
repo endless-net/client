@@ -11,8 +11,8 @@ import (
 )
 
 // A receipt of authenticated transport to the selected exit peer, not proof of
-// Internet forwarding. It can limit a future LAN kernel lease; it cannot open
-// LAN by itself. Deadlines derive from evidence, never from repeated reads.
+// Internet forwarding. It limits the LAN kernel lease but cannot open LAN by
+// itself. Deadlines derive from evidence, never from repeated reads.
 type exitLANPeerHealth struct {
 	engine        *WireGuardEngine
 	device        *device.Device
@@ -26,12 +26,6 @@ type exitLANPeerHealth struct {
 	expires       time.Time
 	relayBridge   *wireGuardRelayBridge
 	relay         *wireGuardRelayPeerObservation
-}
-
-// Caller holds engine.mu. Production inspection is fixed to authenticated live
-// UAPI readback; the private seam only supplies deterministic unit timestamps.
-func (e *WireGuardEngine) observeExitLANPeerHealthLocked(ctx context.Context, cfg Config, selection *ClientExitSelection, now time.Time) (*exitLANPeerHealth, error) {
-	return e.observeExitLANPeerHealthWithInspection(ctx, cfg, selection, now, resourceObservedUAPI)
 }
 
 func (e *WireGuardEngine) observeExitLANPeerHealthWithInspection(ctx context.Context, cfg Config, selection *ClientExitSelection, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error)) (*exitLANPeerHealth, error) {
@@ -126,12 +120,8 @@ func earliestExitLANDeadline(first time.Time, deadlines ...time.Time) time.Time 
 	return first
 }
 
-// A new observation may confirm continuing transport, but cannot extend this
-// receipt's original absolute deadline. Caller holds the same engine.mu.
-func (p *exitLANPeerHealth) currentLocked(ctx context.Context, cfg Config, now time.Time) bool {
-	return p.currentWithInspection(ctx, cfg, now, resourceObservedUAPI)
-}
-
+// A new observation cannot extend the receipt's original absolute deadline.
+// Caller holds the same engine.mu.
 func (p *exitLANPeerHealth) currentWithInspection(ctx context.Context, cfg Config, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error)) bool {
 	started := time.Now()
 	if p == nil || p.engine == nil || now.Before(p.observedAt) || !now.Before(p.expires) || exitLANHealthConfig(cfg, &p.selection) != p.configuration {
@@ -150,44 +140,4 @@ func (p *exitLANPeerHealth) currentWithInspection(ctx context.Context, cfg Confi
 	}
 	relayCurrent := p.relay == nil || (e.relayBridge == p.relayBridge && p.relayBridge.ObservationCurrent(*p.relay))
 	return relayCurrent && ctx.Err() == nil && now.Add(time.Since(started)).Before(p.expires)
-}
-
-// Preparation still needs independent native route/firewall readback and a
-// topology lifetime guard before any kernel exception can be installed.
-func (e *WireGuardEngine) prepareExitLANWithHealthLocked(ctx context.Context, cfg Config, topology *exitLANSource, now time.Time) (*exitLANPlan, *exitLANPeerHealth, error) {
-	return e.prepareExitLANWithInspection(ctx, cfg, topology, now, resourceObservedUAPI)
-}
-
-func (e *WireGuardEngine) prepareExitLANWithInspection(ctx context.Context, cfg Config, topology *exitLANSource, now time.Time, inspect func(*WireGuardEngine) (WireGuardInspection, error)) (*exitLANPlan, *exitLANPeerHealth, error) {
-	started := time.Now()
-	if e == nil || topology == nil || cfg.ExitSelection == nil || topology.Family != cfg.ExitSelection.Family || topology.OwnInterface != e.interface_ || !topology.lifetime.current() {
-		return nil, nil, errExitLANPolicy
-	}
-	health, err := e.observeExitLANPeerHealthWithInspection(ctx, cfg, cfg.ExitSelection, now, inspect)
-	if err != nil {
-		return nil, nil, err
-	}
-	retained, err := e.retainedExitLANDestinationsLocked()
-	if err != nil {
-		return nil, nil, err
-	}
-	plan, err := compileExitLANPlan(cfg, *cfg.CachedMap, cfg.ExitSelection, topology, retained, now)
-	if err != nil {
-		return nil, nil, err
-	}
-	plan.expires = earliestExitLANDeadline(plan.expires, health.expires)
-	if err := ctx.Err(); err != nil {
-		return nil, nil, err
-	}
-	finished := now.Add(time.Since(started))
-	if !finished.Before(plan.expires) || !health.currentWithInspection(ctx, cfg, finished, inspect) {
-		return nil, nil, errExitLANPolicy
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, nil, err
-	}
-	if !plan.topologyCurrent(now.Add(time.Since(started))) {
-		return nil, nil, errExitLANPolicy
-	}
-	return plan, health, nil
 }
