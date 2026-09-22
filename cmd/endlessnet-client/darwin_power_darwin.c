@@ -7,6 +7,7 @@
 #include <stdlib.h>
 
 extern void goDarwinPowerEvent(uint32_t message);
+extern void goDarwinPowerAckFailure(void);
 
 struct darwin_power_source {
     io_connect_t root;
@@ -27,7 +28,9 @@ static void darwin_power_callback(void *refcon, io_service_t service,
     case kIOMessageSystemWillSleep:
         // The Go callback waits for the runtime teardown or its bounded deadline.
         goDarwinPowerEvent((uint32_t)message);
-        IOAllowPowerChange(source->root, (long)argument);
+        if (IOAllowPowerChange(source->root, (long)argument) != kIOReturnSuccess) {
+            goDarwinPowerAckFailure();
+        }
         break;
     case kIOMessageSystemHasPoweredOn:
         goDarwinPowerEvent((uint32_t)message);

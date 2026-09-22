@@ -81,6 +81,13 @@ func goDarwinPowerEvent(message C.uint32_t) {
 	}
 }
 
+//export goDarwinPowerAckFailure
+func goDarwinPowerAckFailure() {
+	if source := activeDarwinPower.Load(); source != nil && source.ctx.Err() == nil {
+		source.fail(errors.New("IOKit sleep acknowledgement failed"))
+	}
+}
+
 func runAgentPlatformLifecycle(parent context.Context, run func(context.Context, <-chan client.RuntimeLifecycleNotification) error) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
