@@ -48,6 +48,16 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+Pin checkpoint audit (2026-09-22):
+`TestExitLANBPFPinRequiresFullCheckpointBeforeEffects` checks the complete
+record precedes every pin. `TestExitLANBPFCheckpointFailurePreventsPins`
+rejects failed/cancelled persistence and changed objects or directory.
+`TestExitLANBPFPartialPinFailureRetainsFullCheckpoint` injects failures after
+checkpoint and ambiguous errors after each actual pin creation.
+`TestExitLANBPFAmbiguousPinRetainsDurableServiceOwnership` connects the real
+service checkpoint to pin creation, reopens the store after an unreported
+created pin, and verifies the complete manifest survives in both records.
+
 Ownership audit (2026-09-22): `TestExitLANOwnershipCanonicalFamilyAndJSON`
 and `TestExitLANOwnershipRejectsMalformedIdentity` validate bounded persistent
 identities, including separate map/program ID namespaces.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"math"
+	"reflect"
 	"sync"
 )
 
@@ -76,16 +77,48 @@ func (p *exitLANBPFPreparation) pinCommand(command, directory, fd int, name stri
 
 // pinClosed creates pins exclusively and returns the names successfully created,
 // including on partial failure. It never replaces or unlinks a pin. The caller
-// must keep nft BLOCK, persist ownership, and verify live hooks before opening
+// must keep nft BLOCK and verify live hooks before opening
 // LAN. After successful revocation, errors leave the lease closed and any
 // created pins intact for recovery. Earlier errors make no revocation promise;
 // nft BLOCK remains mandatory. Object bindings do not establish live attachment.
-func (p *exitLANBPFPreparation) pinClosed(ctx context.Context, directory *exitLANBPFDirectory, scope string) (created []string, result error) {
+// checkpoint must commit the full ownership record durably before returning;
+// supplied boot/namespace values require a retained native observation.
+func (p *exitLANBPFPreparation) pinClosed(ctx context.Context, directory *exitLANBPFDirectory, scope, bootID string, namespaceDevice, namespaceInode uint64, checkpoint func(context.Context, *exitLANOwnership) error) ([]string, error) {
+	if checkpoint == nil || !exitLANOwnershipBootID(bootID) || namespaceDevice == 0 || namespaceInode == 0 {
+		return nil, errExitLANBPF
+	}
+	return p.pinClosedWithCheckpoint(ctx, directory, scope, func() error {
+		owned, err := p.describeOwnershipLocked(ctx, scope, bootID, namespaceDevice, namespaceInode)
+		if err != nil {
+			return err
+		}
+		// The callback must durably commit the full manifest before returning.
+		// It runs under directory.mu -> p.mu and must not reacquire either lock.
+		if err := checkpoint(ctx, cloneExitLANOwnership(owned)); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		current, err := p.describeOwnershipLocked(ctx, scope, bootID, namespaceDevice, namespaceInode)
+		if err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(owned, current) {
+			return errExitLANBPF
+		}
+		return nil
+	})
+}
+
+// All locks and the absence preflight precede checkpoint; no pin syscall can
+// run until it succeeds. Partial/ambiguous failures never remove the manifest.
+func (p *exitLANBPFPreparation) pinClosedWithCheckpoint(ctx context.Context, directory *exitLANBPFDirectory, scope string, checkpoint func() error) (created []string, result error) {
 	names, err := exitLANBPFPinNames(scope)
 	if err != nil {
 		return nil, err
 	}
-	if p == nil || directory == nil {
+	if p == nil || directory == nil || checkpoint == nil {
 		return nil, errExitLANBPF
 	}
 	if !lockExitRuntime(ctx, &directory.mu) {
@@ -137,6 +170,15 @@ func (p *exitLANBPFPreparation) pinClosed(ctx context.Context, directory *exitLA
 		if !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
 		}
+	}
+	if err := checkpoint(); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := directory.check(directory.fd); err != nil {
+		return nil, err
 	}
 	for i, fd := range fds {
 		if err := ctx.Err(); err != nil {

@@ -22,6 +22,26 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN pin checkpoint increment (2026-09-22): production pin creation requires a
+durable checkpoint callback. Under directory then preparation locks it checks
+all reserved names for conflicts, describes held closed objects, persists a
+full independent manifest, and rechecks identities and directory before the
+first pin syscall. Failure or cancellation during checkpoint creates no pins;
+partial/ambiguous pin failure leaves the full manifest for recovery. The callback
+must not reacquire these locks and must return only after durable commit.
+Native orchestration still needs a held boot/netns observation: BPF attach and
+netlink socket creation use the calling thread's namespace, so capture/check,
+all attach calls and socket opens must share a `runtime.LockOSThread` interval.
+Holding a namespace FD alone does not bind later syscalls
+([BPF attach](https://raw.githubusercontent.com/torvalds/linux/v6.12/net/netfilter/nf_bpf_link.c),
+[socket creation](https://raw.githubusercontent.com/torvalds/linux/v6.12/net/socket.c),
+[Go thread binding](https://pkg.go.dev/runtime#LockOSThread)).
+No namespace switching or recovery adoption is implemented by this increment.
+Validation: goimports, vet and configured lint (0 issues) passed; full local
+short suite passed (internal/client 140.347 s). The preceding ownership journal
+commit passed all three short CI platforms
+([run 35707367265](https://github.com/endless-net/client/actions/runs/35707367265)).
+
 LAN ownership journal increment (2026-09-22): the retained exit protection can
 store an exact bounded BPF manifest: derived pin scope, boot and namespace
 identity, selected family, map/program IDs and link identities. The descriptor

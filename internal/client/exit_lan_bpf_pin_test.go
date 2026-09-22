@@ -80,6 +80,11 @@ func (k *exitLANBPFPinTestKernel) call(command int, attr []byte, buffers ...[]by
 	return fd, nil
 }
 
+// ABI tests isolate pin creation from the durable checkpoint tested separately.
+func pinExitLANBPFTestClosed(p *exitLANBPFPreparation, ctx context.Context, directory *exitLANBPFDirectory, scope string) ([]string, error) {
+	return p.pinClosedWithCheckpoint(ctx, directory, scope, func() error { return nil })
+}
+
 func newExitLANBPFPinFixture(t *testing.T, order binary.ByteOrder, mode api.ExitFamilyMode) (*exitLANBPFPreparation, *exitLANBPFDirectory, *exitLANBPFPinTestKernel) {
 	t.Helper()
 	p, link := newExitLANBPFLinkFixture(t, order)
@@ -102,7 +107,7 @@ func TestExitLANBPFPinsRetainExactObjectsAfterClose(t *testing.T) {
 		if k.link.k.objects[p.outer].slot == 0 {
 			t.Fatal("missing initial lease")
 		}
-		created, err := p.pinClosed(t.Context(), d, exitLANBPFTestScope)
+		created, err := pinExitLANBPFTestClosed(p, t.Context(), d, exitLANBPFTestScope)
 		if err != nil || len(created) != 4 || len(k.pins) != 4 || k.link.k.objects[p.outer].slot != 0 {
 			t.Fatal("closed pin publication failed", err)
 		}
@@ -143,7 +148,7 @@ func TestExitLANBPFPinFailurePreservesClosedPartialOwnership(t *testing.T) {
 			} else {
 				k.fail = step
 			}
-			created, err := p.pinClosed(ctx, d, exitLANBPFTestScope)
+			created, err := pinExitLANBPFTestClosed(p, ctx, d, exitLANBPFTestScope)
 			cancel()
 			if err == nil || (lateCancel && !errors.Is(err, context.Canceled)) {
 				t.Fatal("pin failure not propagated", step, lateCancel, err)
@@ -185,13 +190,13 @@ func TestExitLANBPFPinConflictAndReadbackMismatch(t *testing.T) {
 			checks := 0
 			d.check = func(int) error {
 				checks++
-				if checks > 1 {
+				if checks > 2 {
 					return errExitLANBPF
 				}
 				return nil
 			}
 		}
-		_, err := p.pinClosed(t.Context(), d, exitLANBPFTestScope)
+		_, err := pinExitLANBPFTestClosed(p, t.Context(), d, exitLANBPFTestScope)
 		if err == nil {
 			t.Fatal("invalid pins accepted", scenario)
 		}
@@ -212,7 +217,7 @@ func TestExitLANBPFPinsRejectUnsafeNamesAndDirectory(t *testing.T) {
 	p, d, k := newExitLANBPFPinFixture(t, binary.LittleEndian, api.ExitFamilyDualStack)
 	defer func() { _ = p.Close() }()
 	for _, scope := range []string{"", "../" + exitLANBPFTestScope, strings.ToUpper(exitLANBPFTestScope), strings.Repeat("g", 24)} {
-		if _, err := p.pinClosed(t.Context(), d, scope); err == nil || k.steps != 0 {
+		if _, err := pinExitLANBPFTestClosed(p, t.Context(), d, scope); err == nil || k.steps != 0 {
 			t.Fatal("unsafe scope reached kernel")
 		}
 	}
@@ -224,7 +229,7 @@ func TestExitLANBPFPinsRejectUnsafeNamesAndDirectory(t *testing.T) {
 	if err := d.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.pinClosed(t.Context(), d, exitLANBPFTestScope); err == nil || k.steps != 0 {
+	if _, err := pinExitLANBPFTestClosed(p, t.Context(), d, exitLANBPFTestScope); err == nil || k.steps != 0 {
 		t.Fatal("closed directory reached kernel")
 	}
 }
@@ -232,7 +237,7 @@ func TestExitLANBPFPinsRejectUnsafeNamesAndDirectory(t *testing.T) {
 func TestExitLANBPFPinsFollowFamilyIdentity(t *testing.T) {
 	for _, mode := range []api.ExitFamilyMode{api.ExitFamilyIPv4Only, api.ExitFamilyIPv6Only} {
 		p, d, k := newExitLANBPFPinFixture(t, binary.LittleEndian, mode)
-		created, err := p.pinClosed(t.Context(), d, exitLANBPFTestScope)
+		created, err := pinExitLANBPFTestClosed(p, t.Context(), d, exitLANBPFTestScope)
 		if err != nil || len(created) != 3 || len(k.pins) != 3 {
 			t.Fatal("single-family pins rejected", mode, err)
 		}
@@ -266,7 +271,7 @@ func TestExitLANBPFPinsFollowFamilyIdentity(t *testing.T) {
 		case "foreign_unselected_pin":
 			k.pins[exitLANBPFTestScope+"_ipv4"] = p.program
 		}
-		created, err := p.pinClosed(t.Context(), d, exitLANBPFTestScope)
+		created, err := pinExitLANBPFTestClosed(p, t.Context(), d, exitLANBPFTestScope)
 		if err == nil || len(created) != 0 {
 			t.Fatal("unbound family pins accepted", scenario)
 		}

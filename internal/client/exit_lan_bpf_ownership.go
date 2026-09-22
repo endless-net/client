@@ -23,6 +23,11 @@ func (p *exitLANBPFPreparation) describeOwnership(ctx context.Context, scope, bo
 		return nil, ctx.Err()
 	}
 	defer p.mu.Unlock()
+	return p.describeOwnershipLocked(ctx, scope, bootID, namespaceDevice, namespaceInode)
+}
+
+// Caller holds p.mu and has validated scope, boot and namespace inputs.
+func (p *exitLANBPFPreparation) describeOwnershipLocked(ctx context.Context, scope, bootID string, namespaceDevice, namespaceInode uint64) (*exitLANOwnership, error) {
 	if p.call == nil || p.order == nil || p.outer < 0 || p.outer > math.MaxInt32 || p.program < 0 || p.program > math.MaxInt32 || p.outer == p.program {
 		return nil, errExitLANBPF
 	}
