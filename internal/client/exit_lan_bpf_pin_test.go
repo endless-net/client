@@ -96,7 +96,7 @@ func TestExitLANBPFPinsRetainExactObjectsAfterClose(t *testing.T) {
 	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
 		p, d, k := newExitLANBPFPinFixture(t, order, api.ExitFamilyDualStack)
 		deadline, clock := exitLANBPFTestDeadline(t)
-		if err := p.publishBootDeadline(t.Context(), deadline, clock); err != nil {
+		if err := publishExitLANBPFTestDeadline(p, t.Context(), deadline, clock); err != nil {
 			t.Fatal(err)
 		}
 		if k.link.k.objects[p.outer].slot == 0 {

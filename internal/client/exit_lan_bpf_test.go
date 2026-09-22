@@ -154,6 +154,16 @@ func exitLANBPFTestDeadline(t *testing.T) (*exitLANBootDeadline, func(context.Co
 	}
 }
 
+// Low-level map tests isolate immutable publication from attachment checks.
+// Production publication must use publishBootDeadline's required live observer.
+func publishExitLANBPFTestDeadline(p *exitLANBPFPreparation, ctx context.Context, deadline *exitLANBootDeadline, clock func(context.Context) (exitLANClockSample, error)) error {
+	if !p.mu.TryLock() && !lockExitRuntime(ctx, &p.mu) {
+		return ctx.Err()
+	}
+	defer p.mu.Unlock()
+	return p.publishBootDeadlineLocked(ctx, deadline, clock, func() error { return nil })
+}
+
 func TestExitLANBPFClosedPreparationAndImmutablePublication(t *testing.T) {
 	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
 		k := newExitLANBPFTestKernel(t, order)
@@ -165,7 +175,7 @@ func TestExitLANBPFClosedPreparationAndImmutablePublication(t *testing.T) {
 			k.t.Fatal("initial preparation not closed or template leaked")
 		}
 		d, clock := exitLANBPFTestDeadline(t)
-		if err = p.publishBootDeadline(t.Context(), d, clock); err != nil {
+		if err = publishExitLANBPFTestDeadline(p, t.Context(), d, clock); err != nil {
 			t.Fatal(err)
 		}
 		inner := k.objects[k.objects[p.outer].slot]
@@ -185,7 +195,7 @@ func TestExitLANBPFClosedPreparationAndImmutablePublication(t *testing.T) {
 			t.Fatal(err)
 		}
 		k.assertClosed()
-		if err = p.publishBootDeadline(t.Context(), d, clock); err == nil {
+		if err = publishExitLANBPFTestDeadline(p, t.Context(), d, clock); err == nil {
 			t.Fatal("closed objects republished")
 		}
 	}
@@ -259,7 +269,7 @@ func TestExitLANBPFPublicationFailureAndLateInvalidation(t *testing.T) {
 				}
 				return sample, err
 			}
-			if err = p.publishBootDeadline(ctx, d, read); err == nil {
+			if err = publishExitLANBPFTestDeadline(p, ctx, d, read); err == nil {
 				t.Fatal("invalid publication succeeded")
 			}
 			if k.objects[p.outer].slot != 0 {
@@ -286,7 +296,7 @@ func TestExitLANBPFFailedRefreshRevokesPreviousLease(t *testing.T) {
 			}
 			defer func() { _ = p.Close() }()
 			d, clock := exitLANBPFTestDeadline(t)
-			if err := p.publishBootDeadline(t.Context(), d, clock); err != nil {
+			if err := publishExitLANBPFTestDeadline(p, t.Context(), d, clock); err != nil {
 				t.Fatal(err)
 			}
 			previous := k.objects[p.outer].slot
@@ -325,7 +335,7 @@ func TestExitLANBPFFailedRefreshRevokesPreviousLease(t *testing.T) {
 					return original(command, attr, buffers...)
 				}
 			}
-			err = p.publishBootDeadline(ctx, d, clock)
+			err = publishExitLANBPFTestDeadline(p, ctx, d, clock)
 			if err == nil {
 				t.Fatal("invalid refresh succeeded")
 			}
@@ -353,7 +363,7 @@ func TestExitLANBPFPublicationCancellationDuringContention(t *testing.T) {
 	p.mu.Lock()
 	before := k.calls
 	done := make(chan error, 1)
-	go func() { done <- p.publishBootDeadline(ctx, d, clock) }()
+	go func() { done <- publishExitLANBPFTestDeadline(p, ctx, d, clock) }()
 	cancel()
 	select {
 	case err := <-done:

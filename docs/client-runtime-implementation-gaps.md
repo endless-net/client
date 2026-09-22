@@ -22,6 +22,22 @@ does not close the remaining assertion audit or implementation gaps below.
 
 ## Confirmed source gaps
 
+LAN publication increment (2026-09-22): publication now requires the expected
+family/hook/priority and a live hook observer. The preparation mutex stays held
+through fresh program/link identity reads, selected-family hook observations,
+and the immutable deadline swap. Both pre-swap and post-swap checks must pass;
+deadline expiry, cancellation or missing hooks revoke the lease. No reusable
+observation receipt escapes the lock. This still does not prove durable pin
+ownership, namespace binding or packet-time interface/route identity, and the
+production adapter continues to advertise LAN_BLOCK only.
+Validation: goimports, vet and configured lint (0 issues) passed; full local
+short suite passed (internal/client 137.947 s, CLI 10.821 s).
+The preceding family commit's Linux CI passed internal/client but failed the
+CLI cancellation fixture because its streaming response omitted mandatory
+protocol headers. The fixture now uses the existing valid-header helper so
+protocol rejection cannot race the intended cancellation assertion. CI rerun
+and native platform acceptance remain separate evidence.
+
 LAN family selection increment (2026-09-21): BPF attachment now takes the
 explicit exit family mode and creates only its selected links. The mode is
 committed only after every selected link passes readback. Pin creation validates

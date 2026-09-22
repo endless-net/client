@@ -48,6 +48,15 @@ IDs mean all the referenced implementation and unit obligations apply.
 
 ## Assertion audit increment, 2026-09-21
 
+Publication audit (2026-09-22):
+`TestExitLANBPFPublicationRequiresLiveSelectedHooks` checks mandatory pre/post
+hook observations for all family modes. `TestExitLANBPFPublicationObservationFailureRevokes`
+checks failed refresh revocation, including post-swap failure and expiry during
+observation; `TestExitLANBPFPublicationSerializesClose` checks the publication
+lock retains descriptors through readback. The observation tests reject
+duplicate/foreign held objects, stale metadata, detached hooks and cancellation.
+These assertions do not establish persistent pin ownership or native acceptance.
+
 `TestExitLANBPFLinksUseOnlySelectedFamilies` verifies single-family success
 when the other family cannot attach, failure of a selected family, and no
 dual-stack downgrade. `TestExitLANBPFPinsFollowFamilyIdentity` checks stable

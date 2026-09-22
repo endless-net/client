@@ -92,7 +92,7 @@ func TestExitLANBPFLinksAttachClosedAndRetainIdentity(t *testing.T) {
 		p, k := newExitLANBPFLinkFixture(t, order)
 		// Existing lease is withdrawn before either family is attached.
 		d, clock := exitLANBPFTestDeadline(t)
-		if err := p.publishBootDeadline(t.Context(), d, clock); err != nil {
+		if err := publishExitLANBPFTestDeadline(p, t.Context(), d, clock); err != nil {
 			t.Fatal(err)
 		}
 		if err := p.attachClosed(t.Context(), api.ExitFamilyDualStack, 4, -100); err != nil {

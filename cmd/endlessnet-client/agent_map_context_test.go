@@ -56,6 +56,7 @@ func TestAgentIterationCancellationStopsControlResponseBody(t *testing.T) {
 						w.Header().Set("Content-Type", "application/json")
 					} else {
 						w.Header().Set("Content-Type", "application/x-ndjson")
+						setTestMapStreamResponseHeaders(w)
 					}
 					w.WriteHeader(http.StatusOK)
 					w.(http.Flusher).Flush()

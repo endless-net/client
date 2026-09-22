@@ -162,7 +162,7 @@ func newExitLANBPFPreparation(ctx context.Context, mark, ctxOffset, markOffset, 
 // Publication swaps one pointer to a frozen inner map; a packet can only see
 // the complete old or complete new deadline. In-flight RCU readers may finish
 // using the old lease. Revoke therefore does not replace nft containment.
-func (p *exitLANBPFPreparation) publishBootDeadline(ctx context.Context, deadline *exitLANBootDeadline, clock func(context.Context) (exitLANClockSample, error)) (result error) {
+func (p *exitLANBPFPreparation) publishBootDeadline(ctx context.Context, deadline *exitLANBootDeadline, clock func(context.Context) (exitLANClockSample, error), mode api.ExitFamilyMode, hook uint32, priority int32, observe func(context.Context, exitLANBPFLinkIdentity) error) error {
 	if p == nil {
 		return errExitLANBPF
 	}
@@ -172,6 +172,15 @@ func (p *exitLANBPFPreparation) publishBootDeadline(ctx context.Context, deadlin
 		return ctx.Err()
 	}
 	defer p.mu.Unlock()
+	return p.publishBootDeadlineLocked(ctx, deadline, clock, func() error {
+		return p.observeHeldLinksLocked(ctx, mode, hook, priority, observe)
+	})
+}
+
+// Caller holds p.mu through both observation and publication. This primitive
+// does not establish pin ownership or namespace binding; nft containment must
+// remain until the adapter has independently established those conditions.
+func (p *exitLANBPFPreparation) publishBootDeadlineLocked(ctx context.Context, deadline *exitLANBootDeadline, clock func(context.Context) (exitLANClockSample, error), observe func() error) (result error) {
 	// A failed refresh cannot keep earlier authority alive. This includes
 	// failures before the outer pointer swap, not just ambiguous publication.
 	defer func() {
@@ -179,7 +188,7 @@ func (p *exitLANBPFPreparation) publishBootDeadline(ctx context.Context, deadlin
 			result = errors.Join(result, p.revokeLocked())
 		}
 	}()
-	if clock == nil || deadline == nil {
+	if clock == nil || deadline == nil || observe == nil {
 		return errExitLANBPF
 	}
 	if p.outer < 0 || p.program < 0 {
@@ -217,6 +226,9 @@ func (p *exitLANBPFPreparation) publishBootDeadline(ctx context.Context, deadlin
 	if err = p.freeze(inner); err != nil {
 		return err
 	}
+	if err = observe(); err != nil {
+		return err
+	}
 	if err = check(); err != nil {
 		return err
 	}
@@ -225,6 +237,9 @@ func (p *exitLANBPFPreparation) publishBootDeadline(ctx context.Context, deadlin
 	// An ambiguous outer update must be revoked, including cancellation or
 	// expiry discovered after the kernel accepted the update.
 	if err = p.update(p.outer, fd); err != nil {
+		return err
+	}
+	if err = observe(); err != nil {
 		return err
 	}
 	if err = check(); err != nil {
