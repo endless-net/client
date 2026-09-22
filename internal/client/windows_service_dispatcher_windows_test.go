@@ -34,11 +34,52 @@ func TestWindowsSCMCopiesSessionBeforeCallbackReturns(t *testing.T) {
 	if _, err := copyWindowsServiceControl(uint32(svc.SessionChange), windows.WTS_SESSION_LOGOFF, nil); err == nil {
 		t.Fatal("null notification accepted")
 	}
-	if code := enqueueWindowsServiceControl(ctx, cancel, controls, uint32(svc.PowerEvent), 0x4, nil); code != 0 {
+	acknowledged := make(chan uintptr, 1)
+	go func() {
+		acknowledged <- enqueueWindowsServiceControl(ctx, cancel, controls, uint32(svc.PowerEvent), 0x4, nil)
+	}()
+	suspend := <-controls
+	if suspend.Completion == nil || suspend.Deadline.IsZero() {
+		t.Fatal("SCM suspend callback lacks runtime completion")
+	}
+	select {
+	case <-acknowledged:
+		t.Fatal("SCM callback returned before teardown confirmation")
+	default:
+	}
+	suspend.Completion <- nil
+	if code := <-acknowledged; code != 0 {
 		t.Fatal(code)
 	}
+	controls <- suspend
 	if code := enqueueWindowsServiceControl(ctx, cancel, controls, uint32(svc.PowerEvent), 0x12, nil); code != uintptr(windows.ERROR_NOT_ENOUGH_QUOTA) || ctx.Err() == nil {
 		t.Fatal("overflow failed to cancel runtime")
+	}
+}
+
+func TestWindowsSCMSuspendFailureCancelsService(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	controls := make(chan windowsServiceControl, 1)
+	result := make(chan uintptr, 1)
+	go func() {
+		result <- enqueueWindowsServiceControl(ctx, cancel, controls, uint32(svc.PowerEvent), 0x4, nil)
+	}()
+	suspend := <-controls
+	suspend.Completion <- errors.New("teardown unavailable")
+	if code := <-result; code != uintptr(windows.ERROR_GEN_FAILURE) || ctx.Err() == nil {
+		t.Fatal("unconfirmed teardown acknowledged sleep", code)
+	}
+}
+
+func TestWindowsSCMSuspendExpiredCompletionFails(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	completion := make(chan error, 1)
+	completion <- nil
+	control := windowsServiceControl{Completion: completion, Deadline: time.Now().Add(-time.Second)}
+	if code := awaitWindowsSuspendCompletion(ctx, cancel, control); code != uintptr(windows.ERROR_SERVICE_REQUEST_TIMEOUT) || ctx.Err() == nil {
+		t.Fatal("late teardown completion acknowledged sleep", code)
 	}
 }
 

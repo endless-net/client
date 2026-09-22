@@ -105,6 +105,8 @@ func (s *windowsService) execute(parent context.Context, requests <-chan windows
 					switch request.EventType {
 					case 0x4: // PBT_APMSUSPEND
 						event.Event = RuntimeSuspend
+						event.Completion = request.Completion
+						event.Deadline = request.Deadline
 					case 0x12: // PBT_APMRESUMEAUTOMATIC, including unattended wake
 						event.Event = RuntimeResume
 					default:

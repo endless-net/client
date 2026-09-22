@@ -72,11 +72,24 @@ local owner and applies the signed policy. Unknown, malformed, replaced or
 overflowed session events cause source recovery instead of guessed intent.
 Events while both agent and source are stopped cannot be reconstructed from a
 fresh logind snapshot alone; runtime startup intent and later native acceptance
-remain separate. Windows SCM logoff and power paths remain synthetic-unit
-verified pending platform qualification.
+remain separate. Windows SCM suspend now keeps its control callback pending
+until the executor confirms teardown, with a 25-second deadline below the
+documented 30-second service callback limit. Error, timeout or queue loss
+cancels the service instead of reporting a confirmed transition. This is
+synthetic-unit verified; actual SCM timing and sleep behavior still need native
+qualification.
 Production IPC now marks logoff/suspend/resume preferences unsupported when its
 runtime has no corresponding trusted event source. Linux exposes logind power
 and logoff; macOS currently exposes none of these OS-event preferences.
+The macOS gap is a platform and distribution boundary: this repository has no
+Darwin core artifact or daemon lifecycle adapter. AppKit workspace session
+notifications belong to a logged-in application session and do not prove a
+daemon's UID-bound logout; the console-user API describes only the active
+console user. Native IOKit power callbacks require a daemon run loop and
+explicit sleep acknowledgement within the OS deadline. A complete macOS source
+would need that adapter, an owner-binding strategy across fast user switching,
+release packaging and native acceptance. A short macOS CI test alone does not
+establish these guarantees, so the source flags remain unsupported.
 UI_QUIT and runtime_start remain independent settings. Source loss uses
 source-health gate events, so a configured DISCONNECT for real suspend/resume
 is never applied merely because D-Bus delivery failed.

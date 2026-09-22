@@ -35,13 +35,18 @@ func TestWindowsServicePowerDelivery(t *testing.T) {
 	if running.State != svc.Running || running.Accepts&svc.AcceptPowerEvent == 0 {
 		t.Fatal("power notifications not accepted")
 	}
-	requests <- windowsServiceControl{Cmd: svc.PowerEvent, EventType: 0x4}
+	completion := make(chan error, 1)
+	deadline := time.Now().Add(25 * time.Second)
+	requests <- windowsServiceControl{Cmd: svc.PowerEvent, EventType: 0x4, Completion: completion, Deadline: deadline}
 	requests <- windowsServiceControl{Cmd: svc.PowerEvent, EventType: 0x12}
 	for _, expected := range []RuntimeLifecycleEvent{RuntimeSuspend, RuntimeResume} {
 		select {
 		case got := <-observed:
 			if got.Event != expected || got.SessionOwner != "" {
 				t.Fatalf("event %v, want %v", got, expected)
+			}
+			if expected == RuntimeSuspend && (got.Completion != completion || !got.Deadline.Equal(deadline)) {
+				t.Fatal("SCM deadline/completion not delivered to executor")
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatal("power event not delivered")

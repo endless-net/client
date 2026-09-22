@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -18,6 +19,8 @@ type windowsServiceControl struct {
 	EventType    uint32
 	SessionID    uint32
 	SessionValid bool
+	Completion   chan error
+	Deadline     time.Time
 }
 
 func copyWindowsServiceControl(command, eventType uint32, data *windows.WTSSESSION_NOTIFICATION) (windowsServiceControl, error) {
@@ -41,14 +44,45 @@ func enqueueWindowsServiceControl(ctx context.Context, cancel context.CancelFunc
 		cancel()
 		return uintptr(windows.ERROR_INVALID_DATA)
 	}
+	if control.Cmd == svc.PowerEvent && control.EventType == 0x4 {
+		// Windows permits a bounded service suspend callback. The callback
+		// remains pending until the agent confirms teardown, with margin below
+		// the OS's per-service timeout.
+		control.Completion = make(chan error, 1)
+		control.Deadline = time.Now().Add(25 * time.Second)
+	}
 	select {
 	case <-ctx.Done():
 		return uintptr(windows.ERROR_SERVICE_CANNOT_ACCEPT_CTRL)
 	case controls <- control:
-		return 0
 	default:
 		cancel()
 		return uintptr(windows.ERROR_NOT_ENOUGH_QUOTA)
+	}
+	if control.Completion == nil {
+		return 0
+	}
+	return awaitWindowsSuspendCompletion(ctx, cancel, control)
+}
+
+func awaitWindowsSuspendCompletion(ctx context.Context, cancel context.CancelFunc, control windowsServiceControl) uintptr {
+	timer := time.NewTimer(time.Until(control.Deadline))
+	defer timer.Stop()
+	select {
+	case err := <-control.Completion:
+		if err == nil && time.Now().Before(control.Deadline) {
+			return 0
+		}
+		cancel()
+		if !time.Now().Before(control.Deadline) {
+			return uintptr(windows.ERROR_SERVICE_REQUEST_TIMEOUT)
+		}
+		return uintptr(windows.ERROR_GEN_FAILURE)
+	case <-timer.C:
+		cancel()
+		return uintptr(windows.ERROR_SERVICE_REQUEST_TIMEOUT)
+	case <-ctx.Done():
+		return uintptr(windows.ERROR_SERVICE_CANNOT_ACCEPT_CTRL)
 	}
 }
 
