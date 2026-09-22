@@ -117,6 +117,33 @@ func TestDesktopLifecyclePreferencesPolicyPersistenceAndReset(t *testing.T) {
 	}
 }
 
+func TestUnavailableLifecycleSourcesDoNotAdvertiseOrAcceptEventPreferences(t *testing.T) {
+	m, owner, profile := rpcPreferenceFixture(t)
+	m.SetRuntimeLifecycleSources(false, false)
+	response, err := NewClientRPCService(m, nil).preferencesAs(owner, &ipc.GetPreferencesRequest{Profile: profile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, setting := range []*ipc.LifecycleSetting{response.Msg.Preferences.Lifecycle.UserLogoff, response.Msg.Preferences.Lifecycle.Suspend, response.Msg.Preferences.Lifecycle.Resume} {
+		if setting.Control.Mutation.Availability != ipc.Availability_AVAILABILITY_UNSUPPORTED || setting.Control.Mutation.ReasonKey != "lifecycle_source_unsupported" || len(setting.AllowedValues) != 0 {
+			t.Fatal("preference advertised an absent OS event source", setting)
+		}
+	}
+	for _, setting := range []*ipc.LifecycleSetting{response.Msg.Preferences.Lifecycle.UiQuit, response.Msg.Preferences.Lifecycle.RuntimeStart} {
+		if setting.Control.Mutation.Availability != ipc.Availability_AVAILABILITY_AVAILABLE {
+			t.Fatal("source gating disabled an independent lifecycle preference", setting)
+		}
+	}
+	before := m.store.Read()
+	_, err = m.setPreferencesAs(owner, &ipc.SetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Patch: &ipc.PreferencesPatch{UiQuit: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum(), Suspend: ipc.LifecycleBehavior_LIFECYCLE_BEHAVIOR_DISCONNECT.Enum()}})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	_, err = m.resetPreferencesAs(owner, &ipc.ResetPreferencesRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile, Keys: []ipc.PreferenceKey{ipc.PreferenceKey_PREFERENCE_KEY_USER_LOGOFF}})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	if !reflect.DeepEqual(before, m.store.Read()) {
+		t.Fatal("unsupported lifecycle source partially changed profile")
+	}
+}
+
 func TestDesktopLifecyclePreferencesRejectUnknownPolicyAndUnauthorizedMutation(t *testing.T) {
 	for _, scenario := range []string{"tampered", "expired", "missing", "owner", "unsupported"} {
 		t.Run(scenario, func(t *testing.T) {

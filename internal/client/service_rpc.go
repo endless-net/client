@@ -86,6 +86,8 @@ type ClientRPCMutations struct {
 	subscribers            map[*rpcSubscriber]struct{}
 	recentLogs             []clientRPCScopedLog
 	capabilityWorkers      map[ipc.Capability]*clientRPCProfileWorker // Volatile readiness, never persisted.
+	lifecycleLogoffSource  bool
+	lifecyclePowerSource   bool
 }
 
 func NewClientRPCMutations(store *ConfigStore) (*ClientRPCMutations, error) {
@@ -96,7 +98,13 @@ func NewClientRPCMutations(store *ConfigStore) (*ClientRPCMutations, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ClientRPCMutations{store: store, instanceID: instance, now: time.Now}, nil
+	return &ClientRPCMutations{store: store, instanceID: instance, now: time.Now, lifecycleLogoffSource: true, lifecyclePowerSource: true}, nil
+}
+
+// SetRuntimeLifecycleSources is called once before publishing the production
+// service. Tests using injected event sources retain the constructor defaults.
+func (m *ClientRPCMutations) SetRuntimeLifecycleSources(logoff, power bool) {
+	m.lifecycleLogoffSource, m.lifecyclePowerSource = logoff, power
 }
 
 func newRPCUUID() (string, error) {

@@ -66,6 +66,9 @@ func (m *ClientRPCMutations) prepareLifecyclePreferences(cfg *Config, op *ipc.Op
 
 // Mutates a candidate only. The caller commits all keys in one transaction.
 func (m *ClientRPCMutations) patchLifecyclePreference(cfg Config, profile *clientRPCProfile, key ipc.PreferenceKey, patch *ipc.PreferencesPatch) error {
+	if (key == ipc.PreferenceKey_PREFERENCE_KEY_USER_LOGOFF && !m.lifecycleLogoffSource) || ((key == ipc.PreferenceKey_PREFERENCE_KEY_SUSPEND || key == ipc.PreferenceKey_PREFERENCE_KEY_RESUME) && !m.lifecyclePowerSource) {
+		return rpc.Error(connect.CodeUnimplemented, ipc.ErrorCode_ERROR_CODE_UNSUPPORTED)
+	}
 	var value *ipc.LifecycleBehavior
 	var resolve func(Config, clientRPCProfile) (*ipc.LifecycleSetting, error)
 	switch key {

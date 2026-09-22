@@ -21,15 +21,25 @@ func (m *ClientRPCMutations) runtimeStartSetting(cfg Config, profile clientRPCPr
 }
 
 func (m *ClientRPCMutations) userLogoffSetting(cfg Config, profile clientRPCProfile) (*ipc.LifecycleSetting, error) {
-	return lifecycleSetting(cfg, profile, api.ClientSettingUserLogoff, profile.UserLogoff, m.now())
+	return m.sourcedLifecycleSetting(cfg, profile, api.ClientSettingUserLogoff, profile.UserLogoff, m.lifecycleLogoffSource)
 }
 
 func (m *ClientRPCMutations) suspendSetting(cfg Config, profile clientRPCProfile) (*ipc.LifecycleSetting, error) {
-	return lifecycleSetting(cfg, profile, api.ClientSettingSuspend, profile.Suspend, m.now())
+	return m.sourcedLifecycleSetting(cfg, profile, api.ClientSettingSuspend, profile.Suspend, m.lifecyclePowerSource)
 }
 
 func (m *ClientRPCMutations) resumeSetting(cfg Config, profile clientRPCProfile) (*ipc.LifecycleSetting, error) {
-	return lifecycleSetting(cfg, profile, api.ClientSettingResume, profile.Resume, m.now())
+	return m.sourcedLifecycleSetting(cfg, profile, api.ClientSettingResume, profile.Resume, m.lifecyclePowerSource)
+}
+
+func (m *ClientRPCMutations) sourcedLifecycleSetting(cfg Config, profile clientRPCProfile, key api.ClientSettingKey, requested *ipc.LifecycleBehavior, available bool) (*ipc.LifecycleSetting, error) {
+	setting, err := lifecycleSetting(cfg, profile, key, requested, m.now())
+	if err != nil || available {
+		return setting, err
+	}
+	setting.Control.Mutation = &ipc.Restriction{Availability: ipc.Availability_AVAILABILITY_UNSUPPORTED, ReasonKey: "lifecycle_source_unsupported"}
+	setting.AllowedValues = nil
+	return setting, nil
 }
 
 func lifecycleSetting(cfg Config, profile clientRPCProfile, key api.ClientSettingKey, requested *ipc.LifecycleBehavior, now time.Time) (*ipc.LifecycleSetting, error) {

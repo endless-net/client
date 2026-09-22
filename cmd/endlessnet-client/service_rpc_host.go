@@ -31,6 +31,9 @@ func startAgentRPC(ctx context.Context, fail context.CancelCauseFunc, opts agent
 	if err != nil {
 		return nil, nil, err
 	}
+	if opts.LifecycleSourcesKnown {
+		mutations.SetRuntimeLifecycleSources(opts.LifecycleLogoffSource, opts.LifecyclePowerSource)
+	}
 	if engine, ok := opts.WireGuard.(*client.WireGuardEngine); ok {
 		if opts.ExitRuntime != nil {
 			if !opts.ExitRuntime.BoundTo(engine, opts.OperationMu, opts.ConfigStore) {

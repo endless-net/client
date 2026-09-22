@@ -277,22 +277,25 @@ type agentIterationOptions struct {
 }
 
 type agentIPCOptions struct {
-	Offline        bool
-	Pipe           string
-	UnixSocket     string
-	ConfigPath     string
-	StateOutput    string
-	ConfigStore    *client.ConfigStore
-	OperationMu    *sync.Mutex
-	DiagnosticsDir string
-	RecentLogs     *recentLogBuffer
-	ListenPort     int
-	WGInterface    string
-	Timeout        time.Duration
-	WireGuard      agentWireGuard
-	ExitRuntime    *client.NativeExitRuntime
-	SyncWake       chan struct{}
-	ObserveRoutes  func(context.Context, string, []string) []client.WireGuardRouteInspection
+	LifecycleLogoffSource bool
+	LifecyclePowerSource  bool
+	LifecycleSourcesKnown bool
+	Offline               bool
+	Pipe                  string
+	UnixSocket            string
+	ConfigPath            string
+	StateOutput           string
+	ConfigStore           *client.ConfigStore
+	OperationMu           *sync.Mutex
+	DiagnosticsDir        string
+	RecentLogs            *recentLogBuffer
+	ListenPort            int
+	WGInterface           string
+	Timeout               time.Duration
+	WireGuard             agentWireGuard
+	ExitRuntime           *client.NativeExitRuntime
+	SyncWake              chan struct{}
+	ObserveRoutes         func(context.Context, string, []string) []client.WireGuardRouteInspection
 }
 
 func requestAgentSync(opts agentIPCOptions) {

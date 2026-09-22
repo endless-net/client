@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -462,19 +463,22 @@ func cmdAgent(args []string) error {
 		operationMu := &sync.Mutex{}
 		syncWake := make(chan struct{}, 1)
 		ipcOpts := agentIPCOptions{
-			Offline:        *offline,
-			Pipe:           *ipcPipe,
-			UnixSocket:     *ipcSocket,
-			ConfigPath:     *configPath,
-			StateOutput:    *stateOutput,
-			ConfigStore:    configStore,
-			OperationMu:    operationMu,
-			DiagnosticsDir: *diagnosticsDir,
-			ListenPort:     *listenPort,
-			WGInterface:    firstNonEmpty(*wgInterface, "endlessnet"),
-			Timeout:        timeout,
-			WireGuard:      wireGuard,
-			SyncWake:       syncWake,
+			LifecycleSourcesKnown: true,
+			LifecycleLogoffSource: runtime.GOOS == "windows" && lifecycleEvents != nil,
+			LifecyclePowerSource:  lifecycleEvents != nil && (runtime.GOOS == "windows" || runtime.GOOS == "linux"),
+			Offline:               *offline,
+			Pipe:                  *ipcPipe,
+			UnixSocket:            *ipcSocket,
+			ConfigPath:            *configPath,
+			StateOutput:           *stateOutput,
+			ConfigStore:           configStore,
+			OperationMu:           operationMu,
+			DiagnosticsDir:        *diagnosticsDir,
+			ListenPort:            *listenPort,
+			WGInterface:           firstNonEmpty(*wgInterface, "endlessnet"),
+			Timeout:               timeout,
+			WireGuard:             wireGuard,
+			SyncWake:              syncWake,
 		}
 		// The lifetime lock is held here. Recovery belongs to the runtime, not
 		// the contract transport, which must never replace a caller's path.

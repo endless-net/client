@@ -65,6 +65,12 @@ this dependency and Go-cache access. This is bounded logind sleep-cycle
 coordination, not an arbitrary kernel-suspend guarantee or native acceptance.
 Linux logoff delivery remains unimplemented; Windows SCM logoff and power paths
 remain synthetic-unit verified pending platform qualification.
+Production IPC now marks logoff/suspend/resume preferences unsupported when its
+runtime has no corresponding trusted event source. Linux exposes the logind
+power source only; macOS currently exposes none of these OS-event preferences.
+UI_QUIT and runtime_start remain independent settings. Source loss uses
+source-health gate events, so a configured DISCONNECT for real suspend/resume
+is never applied merely because D-Bus delivery failed.
 Validation: goimports, vet, configured lint (0 issues) and full local short suite
 passed (internal/client 142.623 s, CLI 11.119 s). The preceding HOST topology
 commit passed short CI [35718905260](https://github.com/endless-net/client/actions/runs/35718905260).
