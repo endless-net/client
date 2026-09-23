@@ -130,12 +130,15 @@ the resume gate. Source errors terminate the agent. This is built with cgo;
 Darwin builds without cgo retain unsupported power preferences. Release CI
 builds separate native Darwin arm64 and amd64 core artifacts at the current
 manifest schema. Native sleep/wake and release qualification remain open.
-macOS logoff remains unsupported: AppKit workspace session notifications
-describe a session switch, not logout, and the console-user API omits
-switched-out sessions. The system daemon requires a trusted per-session
-termination source that binds the exact UID across fast user switching.
-Neither a console-user change nor a client-reported logout can be treated as
-that source without risking mutation of the wrong owner's saved intent.
+macOS now optionally subscribes to Endpoint Security loginwindow-session logout
+notifications. It checks the per-event sequence for loss, resolves the event's
+system-supplied username to a UID, and sends only that UID through the existing
+owner-checked lifecycle executor. Subscription failure leaves the IOKit power
+source running and reports logoff as UNSUPPORTED. Released macOS core binaries
+are currently unsigned and lack Apple's Endpoint Security entitlement and Full
+Disk Access approval, so the source cannot activate in those artifacts. Native
+qualification must cover logout, fast user switching, missed-event detection,
+and source restart before macOS logoff can be considered delivered in release.
 UI_QUIT and runtime_start remain independent settings. Source loss uses
 source-health gate events, so a configured DISCONNECT for real suspend/resume
 is never applied merely because D-Bus delivery failed.

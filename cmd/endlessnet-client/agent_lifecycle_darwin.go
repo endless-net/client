@@ -3,8 +3,10 @@
 package main
 
 /*
-#cgo LDFLAGS: -framework IOKit -framework CoreFoundation
+#cgo CFLAGS: -fblocks
+#cgo LDFLAGS: -framework IOKit -framework CoreFoundation -framework EndpointSecurity
 #include "darwin_power.h"
+#include "darwin_logoff.h"
 #include <IOKit/IOMessage.h>
 */
 import "C"
@@ -13,7 +15,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"os/user"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +35,78 @@ type darwinPowerLifecycle struct {
 }
 
 var activeDarwinPower atomic.Pointer[darwinPowerLifecycle]
+
+type darwinLogoffEvent struct {
+	username string
+}
+
+type darwinLogoffLifecycle struct {
+	power     *darwinPowerLifecycle
+	raw       chan darwinLogoffEvent
+	lookupUID func(string) (string, error)
+	lastSeq   uint64 // Endpoint Security delivers callbacks serially.
+}
+
+var activeDarwinLogoff atomic.Pointer[darwinLogoffLifecycle]
+var darwinLogoffReady atomic.Bool
+
+func darwinLogoffAvailable() bool { return darwinLogoffReady.Load() }
+
+//export goDarwinLogoffEvent
+func goDarwinLogoffEvent(username *C.char, length C.size_t, session C.uint64_t, sequence C.uint64_t) {
+	source := activeDarwinLogoff.Load()
+	if source == nil || source.power.ctx.Err() != nil {
+		return
+	}
+	seq := uint64(sequence)
+	if seq == 0 || (source.lastSeq != 0 && seq != source.lastSeq+1) || username == nil || length == 0 || length > 256 {
+		source.power.fail(errors.New("Endpoint Security logout stream invalid or incomplete"))
+		return
+	}
+	source.lastSeq = seq
+	event := darwinLogoffEvent{username: C.GoStringN(username, C.int(length))}
+	select {
+	case source.raw <- event:
+	default:
+		source.power.fail(errors.New("Endpoint Security logout queue overflow"))
+	}
+}
+
+//export goDarwinLogoffFailure
+func goDarwinLogoffFailure() {
+	if source := activeDarwinLogoff.Load(); source != nil && source.power.ctx.Err() == nil {
+		source.power.fail(errors.New("Endpoint Security logout message invalid"))
+	}
+}
+
+func (s *darwinLogoffLifecycle) process() {
+	for {
+		select {
+		case <-s.power.ctx.Done():
+			return
+		case event := <-s.raw:
+			uidText, err := s.lookupUID(event.username)
+			if err != nil {
+				s.power.fail(errors.New("Endpoint Security logout owner lookup failed"))
+				return
+			}
+			uid, err := strconv.ParseUint(uidText, 10, 32)
+			if err != nil {
+				s.power.fail(errors.New("Endpoint Security logout UID invalid"))
+				return
+			}
+			notification := client.RuntimeLifecycleNotification{Event: client.RuntimeUserLogoff, SessionOwner: "uid:" + strconv.FormatUint(uid, 10)}
+			select {
+			case s.power.events <- notification:
+			case <-s.power.ctx.Done():
+				return
+			default:
+				s.power.fail(errors.New("Endpoint Security lifecycle queue overflow"))
+				return
+			}
+		}
+	}
+}
 
 func (s *darwinPowerLifecycle) fail(err error) {
 	s.once.Do(func() {
@@ -122,6 +199,31 @@ func runAgentPlatformLifecycle(parent context.Context, run func(context.Context,
 	if native == nil {
 		return errors.New("register IOKit system power source")
 	}
+	logoff := &darwinLogoffLifecycle{power: source, raw: make(chan darwinLogoffEvent, 64), lookupUID: func(name string) (string, error) {
+		account, err := user.Lookup(name)
+		if err != nil {
+			return "", err
+		}
+		return account.Uid, nil
+	}}
+	if !activeDarwinLogoff.CompareAndSwap(nil, logoff) {
+		cancel()
+		<-finished
+		close(cleanup)
+		<-done
+		return errors.New("darwin logout source already active")
+	}
+	var nativeLogoff *C.darwin_logoff_source
+	logoffStatus := C.darwin_logoff_start(&nativeLogoff)
+	logoffDone := make(chan struct{})
+	if logoffStatus == 0 {
+		darwinLogoffReady.Store(true)
+		go func() { defer close(logoffDone); logoff.process() }()
+	} else {
+		activeDarwinLogoff.CompareAndSwap(logoff, nil)
+		close(logoffDone)
+		log.Printf("Endpoint Security logout unavailable (status %d)", int(logoffStatus))
+	}
 	stopDone := make(chan struct{})
 	go func() {
 		defer close(stopDone)
@@ -136,6 +238,10 @@ func runAgentPlatformLifecycle(parent context.Context, run func(context.Context,
 	}()
 	runErr := run(ctx, events)
 	cancel()
+	darwinLogoffReady.Store(false)
+	activeDarwinLogoff.CompareAndSwap(logoff, nil)
+	C.darwin_logoff_stop(nativeLogoff)
+	<-logoffDone
 	<-stopDone
 	<-finished
 	close(cleanup)
