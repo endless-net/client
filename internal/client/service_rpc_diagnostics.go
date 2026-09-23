@@ -195,6 +195,10 @@ func (s *ClientRPCService) diagnosticsAs(ctx context.Context, peer local.Peer, r
 			result.RecentLogs = append(result.RecentLogs, proto.Clone(log.entry).(*ipc.LogEntry))
 		}
 	}
+	// The live preview has the same private-field boundary as the archive.
+	// Status may contain a browser action URL, and provider strings must never
+	// bypass the diagnostic redactor merely because no bundle was requested.
+	redactNativeDiagnosticsMessage(result.ProtoReflect())
 	if proto.Size(result) > rpc.MaxResponseBytes-4096 {
 		return nil, rpc.Error(connect.CodeResourceExhausted, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 	}

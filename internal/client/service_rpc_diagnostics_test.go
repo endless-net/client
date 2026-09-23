@@ -15,7 +15,7 @@ import (
 func TestRPCDiagnosticsCollectsNativePartialSnapshot(t *testing.T) {
 	m, peer, profile := rpcConnectFixture(t)
 	s := NewClientRPCService(m, &ipc.BuildIdentity{Version: "test-build"})
-	observation := ClientRPCDiagnosticsObservation{OSVersion: "test-os", Tunnel: WireGuardInspection{OK: true, Interface: "test0", MTU: 1420, ListenPort: 12345, Error: "synthetic-private-error"},
+	observation := ClientRPCDiagnosticsObservation{OSVersion: "session_token=synthetic-private", Tunnel: WireGuardInspection{OK: true, Interface: "test0", MTU: 1420, ListenPort: 12345, Error: "synthetic-private-error"},
 		Interfaces: []NetworkInterfaceStatus{{Name: "test0", Index: 1, MTU: 1420, Addresses: []string{"192.0.2.1"}, Error: "synthetic-private-interface-error"}}}
 	calls := 0
 	s.DiagnosticsProvider = func(context.Context) (ClientRPCDiagnosticsObservation, error) { calls++; return observation, nil }
@@ -30,7 +30,7 @@ func TestRPCDiagnosticsCollectsNativePartialSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := result.Diagnostics
-	if !d.Truncated || len(d.Failures) == 0 || d.Tunnel.Ok || d.Tunnel.Failure == nil || d.Interfaces[0].Failure == nil || len(d.RecentLogs) != 1 {
+	if !d.Truncated || len(d.Failures) == 0 || d.Tunnel.Ok || d.Tunnel.Failure == nil || d.Interfaces[0].Failure == nil || len(d.RecentLogs) != 1 || d.OsVersion != "[redacted token line]" {
 		t.Fatal("missing partial/error/log semantics")
 	}
 	if d.Client.Version != "test-build" || d.OsName != runtime.GOOS || d.GoVersion != runtime.Version() || d.Metadata.InstanceId != m.instanceID || d.Metadata.Revision != d.Status.Metadata.Revision {

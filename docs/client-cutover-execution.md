@@ -163,6 +163,8 @@ passed on Windows (internal/client 141.091 s); Unix-only uname tests await CI.
 Package 5 follow-up audit (2026-09-23): Darwin address lookup now requires one
 exact `route to` value matching the requested destination and one interface;
 missing, foreign and duplicate fields cannot produce a positive route sample.
+The live GetDiagnostics preview and ZIP archive now apply the same recursive
+private-string/unknown-field redaction and remove nested browser action URLs.
 Diagnostics explicitly reports that default-route and resource observations are
 not collected. When DNS is present, it is still signed map configuration and
 an explicit failure says OS resolver state was not observed. The snapshot and
