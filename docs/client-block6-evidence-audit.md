@@ -107,13 +107,16 @@ positive, negative and restart/concurrency outcomes in the related IT rows.
 | IPC/consumers | Agent serves generated v0 handler via protected local transport; CLI/helper use native client; Go/Dart bindings and descriptor exist | Targeted search found no production HTTP IPC v2 route, but does not prove all obsolete artifacts removed; run generation/transport and installed pairing gates. Backend HTTP is separate from local IPC |
 | Packaging | Core release, APT and cross-platform workflows live here | Installed artifact provenance, upgrade/reset/uninstall and exact UI/core pair need release CI; no version or generation increase is authorized |
 
-The fwmark failure is not isolated as a confirmed code defect. In pinned
-wireguard-go, `IpcSet(fwmark)` calls `BindSetMark`, which calls this repository's
-`MagicBind.SetMark`. Its `net.ErrClosed` means `session == nil`; the source
-review does not establish **why** the bind had closed. Ignoring that error or
-claiming a passing rerun fixed it would hide a failed socket operation.
-Capture device state, preceding BindUpdate/Close errors and fixture event order
-on the next authorized platform run before changing behavior.
+The fwmark failure has a concrete initial-open race. Pinned wireguard-go marks
+the device `Up` before its first `BindUpdate` obtains the net lock. An initial
+`IpcSet(fwmark)` may call this repository's `MagicBind.SetMark` while the new
+bind has never opened, as seen before `device-up begin` in failed Ubuntu log.
+The bind now accepts a mark **only before its first successful Open**; the
+wireguard-go device retains the requested mark and `BindUpdate` applies it to
+the sockets. Once opened, a later closed bind still returns `net.ErrClosed`.
+`TestMagicBindMarkBeforeFirstOpenAndAfterClose` covers this boundary. The exact
+CI failure has not been reproduced with instrumentation; platform recurrence
+and other bind-closure causes remain to be checked before calling it resolved.
 
 ## Acceptance plan and decision gate
 

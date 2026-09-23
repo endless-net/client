@@ -23,6 +23,7 @@ import (
 type MagicBind struct {
 	mu               sync.RWMutex
 	session          *magicBindSession
+	everOpened       bool
 	waiters          map[stunclient.TransactionID]*magicBindSTUNWaiter
 	pathKeys         map[[32]byte][32]byte
 	pathWaiters      map[[16]byte]magicBindPathProbeWaiter
@@ -80,6 +81,7 @@ func (b *MagicBind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
 		return nil, 0, err
 	}
 	b.session = session
+	b.everOpened = true
 	var receive []conn.ReceiveFunc
 	if session.v4 != nil {
 		receive = append(receive, magicBindReceiveFunc(session, session.rx4))
@@ -235,6 +237,14 @@ func (b *MagicBind) SetMark(mark uint32) error {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	if b.session == nil {
+		// wireguard-go records fwmark before opening the bind. Its TUN event
+		// reader can mark the device Up while the initial BindUpdate is still
+		// waiting for the net lock, so IpcSet may reach SetMark first. The
+		// subsequent BindUpdate applies the recorded mark to the new sockets.
+		// A bind that was already opened must still report an unexpected close.
+		if !b.everOpened {
+			return nil
+		}
 		return net.ErrClosed
 	}
 	setMark := b.setSocketMark

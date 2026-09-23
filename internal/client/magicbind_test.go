@@ -123,6 +123,44 @@ func TestMagicBindSendAndClose(t *testing.T) {
 	}
 }
 
+func TestMagicBindMarkBeforeFirstOpenAndAfterClose(t *testing.T) {
+	bind := NewMagicBind()
+	marked := 0
+	bind.setSocketMark = func(socket *net.UDPConn, mark uint32) error {
+		if socket != nil {
+			if mark != 51820 {
+				t.Fatalf("socket mark = %d", mark)
+			}
+			marked++
+		}
+		return nil
+	}
+	// An initial BindClose from listen_port setup must not make the mark
+	// recorded by wireguard-go before its first BindUpdate look like a lost
+	// live socket.
+	if err := bind.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := bind.SetMark(51820); err != nil {
+		t.Fatal("initial mark was rejected before socket creation", err)
+	}
+	if marked != 0 {
+		t.Fatal("initial mark tried to mutate a nonexistent socket")
+	}
+	if _, _, err := bind.Open(0); err != nil {
+		t.Fatal(err)
+	}
+	if err := bind.SetMark(51820); err != nil || marked == 0 {
+		t.Fatal("opened socket did not receive the mark", err)
+	}
+	if err := bind.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := bind.SetMark(51820); !errors.Is(err, net.ErrClosed) {
+		t.Fatalf("mark after closing a live bind = %v, want net.ErrClosed", err)
+	}
+}
+
 func TestMagicBindAuthenticatedPathProbeUsesSharedWireGuardSocket(t *testing.T) {
 	bindA := NewMagicBind()
 	_, portA, err := bindA.Open(0)
