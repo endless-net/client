@@ -44,6 +44,12 @@ func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driv
 	if plan.AbortFailure != nil {
 		return m.ReconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, plan.AbortFailure.Code)
 	}
+	// A persisted plan accepted before exit-transition admission was guarded
+	// must not resume into a different network with the old exit ownership.
+	// Abort before activation so explicit Clear becomes available again.
+	if !plan.Activated && (cfg.RPCState.ExitProtection != nil || cfg.ExitSelection != nil) {
+		return m.ReconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED)
+	}
 	if plan.Activated {
 		return m.ReconcileNetworkSelectionApply(ctx, driver)
 	}

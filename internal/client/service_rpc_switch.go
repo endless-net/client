@@ -44,6 +44,12 @@ func (m *ClientRPCMutations) selectProfileAs(peer local.Peer, request *ipc.Selec
 		if cfg.RPCState.ProfileSwitch != nil {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 		}
+		// Down contains an owned exit; it cannot release its firewall, routes
+		// and boot-scoped ownership. Activating another profile would strand
+		// that protection under the old profile while the new one is applied.
+		if profile.ID != cfg.RPCState.ActiveProfileID && (cfg.RPCState.ExitProtection != nil || cfg.ExitSelection != nil) {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+		}
 		// Existing enrollment must be assigned its initial v0 profile by startup
 		// adoption before switching; never silently discard unprojected state.
 		if cfg.RPCState.ActiveProfileID == "" && rpcConfigHasEnrollment(*cfg) {
@@ -111,6 +117,11 @@ func (m *ClientRPCMutations) ReconcileProfileSwitch(ctx context.Context, driver 
 	}
 	if current == nil {
 		return rpc.Error(connect.CodeInternal, ipc.ErrorCode_ERROR_CODE_INTERNAL)
+	}
+	if !plan.Activated && plan.From != plan.To && (cfg.RPCState.ExitProtection != nil || cfg.ExitSelection != nil) {
+		// A previously accepted journal can survive a process restart. Never
+		// call Stop or adopt its target while old exit ownership remains.
+		return m.failProfileSwitch(current.Id, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED), ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED, false)
 	}
 	resuming := current.State == ipc.OperationState_OPERATION_STATE_RUNNING
 	if current.State == ipc.OperationState_OPERATION_STATE_PENDING {

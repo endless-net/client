@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -235,6 +236,92 @@ func TestRPCProfileSwitchSameProfileAndBusy(t *testing.T) {
 	final, err := m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
 	if err != nil || final.Continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED {
 		t.Fatal("same profile continuity", err)
+	}
+}
+
+func TestRPCProfileSwitchRejectsOwnedExitBeforeAdmission(t *testing.T) {
+	m := newRPCStoreTest(t)
+	peer := local.Peer{Identity: "uid:1000"}
+	ids := []string{}
+	for _, origin := range []string{"https://source.test", "https://target.test"} {
+		request := rpcCreateRequest(t, m)
+		request.ControlOrigin = origin
+		created, err := m.createProfileAs(peer, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, created.ProfileId)
+	}
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.RPCState.ActiveProfileID = ids[0]
+		cfg.ExitSelection = &ClientExitSelection{ID: "source-exit"}
+		cfg.RPCState.ExitProtection = &clientRPCExitProtection{OperationID: "exit-select", ProfileID: ids[0], OwnerID: cfg.LocalOwnerID, InterfaceName: "endlessnet"}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before := clonePersistentConfig(m.store.Read())
+	_, err := m.selectProfileAs(peer, &ipc.SelectProfileRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: &ipc.ProfileRef{ProfileId: ids[1]}})
+	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_BUSY)
+	if !reflect.DeepEqual(before, clonePersistentConfig(m.store.Read())) {
+		t.Fatal("rejected profile switch changed exit ownership or accepted an operation")
+	}
+	if _, err := m.selectProfileAs(peer, &ipc.SelectProfileRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: &ipc.ProfileRef{ProfileId: ids[0]}}); err != nil {
+		t.Fatal("same-profile no-op was blocked by its own exit", err)
+	}
+}
+
+func TestRPCProfileSwitchAbortsPersistedExitOwnershipBeforeStop(t *testing.T) {
+	m := newRPCStoreTest(t)
+	peer := local.Peer{Identity: "uid:1000"}
+	ids := []string{}
+	for _, origin := range []string{"https://source.test", "https://target.test"} {
+		request := rpcCreateRequest(t, m)
+		request.ControlOrigin = origin
+		created, err := m.createProfileAs(peer, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, created.ProfileId)
+	}
+	if err := m.store.Update(func(cfg *Config) error { cfg.RPCState.ActiveProfileID = ids[0]; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	selected, err := m.selectProfileAs(peer, &ipc.SelectProfileRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: &ipc.ProfileRef{ProfileId: ids[1]}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.ExitSelection = &ClientExitSelection{ID: "source-exit"}
+		cfg.RPCState.ExitProtection = &clientRPCExitProtection{OperationID: "exit-select", ProfileID: ids[0], OwnerID: cfg.LocalOwnerID, InterfaceName: "endlessnet"}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before := clonePersistentConfig(m.store.Read())
+	store := reopenRPCStoreFromDisk(t, m.store)
+	m, err = NewClientRPCMutations(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stops := 0
+	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+		stops++
+		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED, nil
+	}, Start: func(context.Context, Config) error { t.Fatal("protected switch started target"); return nil }}
+	if err := m.ReconcileProfileSwitch(t.Context(), driver); err != nil {
+		t.Fatal(err)
+	}
+	result, err := m.operationAs(peer, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: selected.Id}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := m.store.Read()
+	if stops != 0 || result.State != ipc.OperationState_OPERATION_STATE_FAILED || result.GetFailure().Code != ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED || result.Continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED || after.RPCState.ProfileSwitch != nil {
+		t.Fatal("saved profile switch crossed owned exit or remained pending")
+	}
+	if after.RPCState.ActiveProfileID != before.RPCState.ActiveProfileID || !reflect.DeepEqual(after.ExitSelection, before.ExitSelection) || !reflect.DeepEqual(after.RPCState.ExitProtection, before.RPCState.ExitProtection) {
+		t.Fatal("saved profile switch changed protected source")
 	}
 }
 

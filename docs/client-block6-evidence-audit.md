@@ -7,6 +7,11 @@ architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
 local US-01–14 source is the pinned client-ui revision in
 [the local map](client-local-requirement-map.md). Existing maps name unit-test
 entry points. They do not establish the assertions or real effects below.
+The later [D-035](https://github.com/endless-net/architecture/blob/9ff22c1/docs/ru/decisions/d-035.md)
+and [update-source design](https://github.com/endless-net/architecture/blob/9ff22c1/docs/ru/client-update-source-and-pairing.md)
+at architecture `9ff22c1` add an approved UI-Q10 *channel direction* and a
+still-proposed trust/discovery design; they do not revise the pinned IT or
+BR/AC acceptance baseline or supply runtime evidence.
 
 ## Evidence available now
 
@@ -19,6 +24,9 @@ entry points. They do not establish the assertions or real effects below.
   passed all four short unit jobs at `93d854e` after the initial bind-mark
   change. One green Linux run does not establish that every closed-bind path
   causing the earlier intermittent failure has been removed.
+- Push [35851486488](https://github.com/endless-net/client/actions/runs/35851486488)
+  passed the same four short unit jobs at `000fa30`; it did not run native
+  cross-network, LAN_ALLOW, installer or update-source scenarios.
 - `test.yml` runs installation, eight-platform contract scenarios, isolated
   dataplane and container jobs only for non-push events. No result from those
   jobs at the current source was inspected in this audit. Push success is not
@@ -107,12 +115,21 @@ positive, negative and restart/concurrency outcomes in the related IT rows.
 | Lifecycle | Durable UI_QUIT/runtime_start/lifecycle settings; Linux logind power/session source, Windows SCM, macOS IOKit and optional Endpoint Security | Validate actual logoff and KEEP_INTENT through service restart. Released macOS binary lacks required entitlement/signing/FDA, so user_logoff is UNSUPPORTED there |
 | Context/security | Native enrollment, selection, session, trust, logout and forget workers with bounded journals and owner checks | Cross-worker late-response, uncertain remote cleanup and real provider outcomes require end-to-end evidence |
 | Diagnostics | Route target lookup and privacy bounded bundle | Full default-route/table, resource and OS resolver observations absent; v0 DTO has no resource observation section. Contract/consumer decision needed without implicit version increase |
-| Update | GetUpdateInfo reports SOURCE_UNAVAILABLE; support URLs absent | Distribution/product/UI owners must provide index/API, trust bootstrap/rotation, channel/platform/expiry/replay/classification and binding to existing UI/core schema-3 provenance; do not invent source/key/URL |
+| Update | GetUpdateInfo reports SOURCE_UNAVAILABLE and installed pair UNKNOWN; `reported_ui` is caller input. UI-Q10 now approves Windows signed MSI via WinGet/manual/enterprise, Linux APT exact UI/core pair, macOS Developer ID package and mobile store as channel direction | D-035 technical trust/discovery design remains proposed. `client-ui`/distribution owners must first establish an attested or signed-envelope binding for existing schema-3 provenance, authenticated installed package identity/receipt and exact running bytes, signed fresh channel index, publisher roles/trust bootstrap, rotation/revocation, and OS install outcome. Current Windows attestation subject omits `release-provenance.json`. No positive GetUpdateInfo state is implementable honestly from the present inputs; do not invent source, key, URL or a parallel pairing schema |
 | IPC/consumers | Agent serves generated v0 handler via protected local transport; CLI/helper use native client; Go/Dart bindings and descriptor exist | Targeted search found no production HTTP IPC v2 route, but does not prove all obsolete artifacts removed; run generation/transport and installed pairing gates. Backend HTTP is separate from local IPC |
 | Packaging | Core release, APT and cross-platform workflows live here | Installed artifact provenance, upgrade/reset/uninstall and exact UI/core pair need release CI; no version or generation increase is authorized |
 
 ### Focused cross-cutover assertion review
 
+- Profile and network switches previously could accept a different context
+  while source `ExitProtection`/`ExitSelection` remained owned; `Down` contains
+  the native guard but does not release it. Admission now rejects these
+  switches with `BUSY`. A pre-existing persisted plan observed before target
+  activation terminates as `POLICY_BLOCKED` without calling Stop, preserving
+  the source and allowing explicit exit Clear. Same-profile selection remains
+  a no-op. These are fail-closed boundaries, not an implementation of native
+  exit ownership transfer or an accepted combined transition. The native
+  Select→Maintain→Contain→Clear plus profile/network scenario remains open.
 - `PrepareNetworkSelectionTarget` drops the source Node, signed map, resource
   choices, network preferences and exit selection before target registration;
   `TestNetworkSelectionTargetSeparatesOldNetworkState` asserts those fields and
@@ -156,6 +173,16 @@ positive, negative and restart/concurrency outcomes in the related IT rows.
   This does not prove a native mobile bridge or installed UI/core pairing.
   Targeted source search found no old HTTP IPC v2 route in production agent,
   CLI or helper; backend HTTP and generated Connect codecs are distinct.
+- Under D-035, component work that can be checked now is the current
+  `SOURCE_UNAVAILABLE`/`UNKNOWN` projection and caller-claim handling, the
+  existing core manifest/attestation and Windows schema-3 provenance contents,
+  plus deterministic *negative* cases that do not imply trusted source
+  availability. Signed-index freshness, installed identity, positive
+  AVAILABLE/UP_TO_DATE, incompatible-pair mutation gating and external manager
+  outcomes depend on approved producer wire/receipt contracts, publisher
+  signature/attestation binding and a platform identity adapter. The direction
+  specifies package channels, not production feed URLs, keys, accounts or
+  install actions; release/system evidence requires exact immutable artifacts.
 - `tools/verify-source-ci` requires a **successful main Test workflow_dispatch
   with contract_repetitions=3 on the exact release SHA**; it rejects a short
   push success. The release and APT workflows call that gate before publishing.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
@@ -113,6 +114,70 @@ func TestNetworkSelectionAdmissionRejectsInvalidInstallationAndOrigin(t *testing
 				t.Fatal("rejected admission persisted an operation or changed source")
 			}
 		})
+	}
+}
+
+func TestNetworkSelectionRejectsOwnedExitBeforeAdmission(t *testing.T) {
+	for _, state := range []string{"protected", "selected"} {
+		t.Run(state, func(t *testing.T) {
+			m, owner, request := networkSelectionPlanFixture(t)
+			if err := m.store.Update(func(cfg *Config) error {
+				if state == "protected" {
+					cfg.RPCState.ExitProtection = &clientRPCExitProtection{OperationID: "exit-select", ProfileID: request.Profile.ProfileId, OwnerID: cfg.LocalOwnerID, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, InterfaceName: "endlessnet"}
+				} else {
+					cfg.ExitSelection = &ClientExitSelection{ID: "exit"}
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			before := clonePersistentConfig(m.store.Read())
+			_, err := m.beginNetworkSelectionAs(owner, request)
+			assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_BUSY)
+			if !reflect.DeepEqual(before, clonePersistentConfig(m.store.Read())) {
+				t.Fatal("rejected network switch changed exit ownership or accepted an operation")
+			}
+		})
+	}
+}
+
+func TestNetworkSelectionAbortsPersistedExitOwnershipBeforeStop(t *testing.T) {
+	m, owner, request := networkSelectionPlanFixture(t)
+	op, err := m.beginNetworkSelectionAs(owner, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.ExitSelection = &ClientExitSelection{ID: "source-exit"}
+		cfg.RPCState.ExitProtection = &clientRPCExitProtection{OperationID: "exit-select", ProfileID: request.Profile.ProfileId, OwnerID: cfg.LocalOwnerID, NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, InterfaceName: "endlessnet"}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before := clonePersistentConfig(m.store.Read())
+	store := reopenRPCStoreFromDisk(t, m.store)
+	m, err = NewClientRPCMutations(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stops := 0
+	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+		stops++
+		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED, nil
+	}}
+	if err := m.ReconcileNetworkSelection(t.Context(), driver, ClientRPCNetworkSelectionProviders{}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := m.operationAs(owner, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := m.store.Read()
+	if stops != 0 || result.State != ipc.OperationState_OPERATION_STATE_FAILED || result.GetFailure().Code != ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED || result.Continuity != ipc.ConnectionContinuity_CONNECTION_CONTINUITY_PRESERVED || after.RPCState.NetworkSelection != nil {
+		t.Fatal("saved network switch crossed owned exit or remained pending")
+	}
+	if after.NodeID != before.NodeID || after.NetworkID != before.NetworkID || !reflect.DeepEqual(after.ExitSelection, before.ExitSelection) || !reflect.DeepEqual(after.RPCState.ExitProtection, before.RPCState.ExitProtection) {
+		t.Fatal("saved network switch changed protected source")
 	}
 }
 

@@ -50,6 +50,12 @@ func (m *ClientRPCMutations) beginNetworkSelectionAs(peer local.Peer, request *i
 		if cfg.RPCState.NetworkSelection != nil || cfg.RPCState.ProfileSwitch != nil {
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
 		}
+		// A target network cannot inherit the old network's exit ownership.
+		// Stop only contains that guard; explicit Clear must release it before
+		// this operation can adopt a different signed network context.
+		if cfg.RPCState.ExitProtection != nil || cfg.ExitSelection != nil {
+			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_BUSY)
+		}
 		for _, record := range cfg.RPCState.Operations {
 			pending := new(ipc.Operation)
 			if proto.Unmarshal(record.Operation, pending) != nil {
