@@ -160,6 +160,18 @@ must compile/test these OS-specific collectors before later native qualification
 Local validation: goimports, vet, configured lint (0 issues) and full short suite
 passed on Windows (internal/client 141.091 s); Unix-only uname tests await CI.
 
+Package 5 follow-up audit (2026-09-23): Darwin address lookup now requires one
+exact `route to` value matching the requested destination and one interface;
+missing, foreign and duplicate fields cannot produce a positive route sample.
+Diagnostics explicitly reports that default-route and resource observations are
+not collected. When DNS is present, it is still signed map configuration and
+an explicit failure says OS resolver state was not observed. The snapshot and
+bundle remain truncated; these additions do not establish full route-table,
+resolver or resource diagnostics. The pinned v0 `Diagnostics` DTO has no
+resource observation section, and adding a replacement contract requires
+producer/consumer coordination without increasing its version implicitly.
+Installed and native OS observations remain acceptance work.
+
 Package 6 logout/session audit, delegated block 1 (2026-09-22): Logout and active
 Forget require a confirmed Stop before deleting credentials. PRESERVED and
 unrecognized enum values fail even with nil error, before restart continuity

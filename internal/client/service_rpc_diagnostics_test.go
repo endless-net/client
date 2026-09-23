@@ -195,4 +195,15 @@ func TestRPCDiagnosticsVerifiedMapProjectionAndBusyTunnel(t *testing.T) {
 	if result.Diagnostics.Dns.SearchDomain != "verified.test" {
 		t.Fatal("DNS response aliased")
 	}
+	for _, reason := range []string{"diagnostics_os_routes_not_collected", "diagnostics_default_route_not_observed", "diagnostics_resource_observation_not_collected", "diagnostics_os_resolver_not_observed"} {
+		found := false
+		for _, failure := range result.Diagnostics.Failures {
+			if failure.ReasonKey == reason {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("configured data or absent observation was presented without limitation", reason)
+		}
+	}
 }

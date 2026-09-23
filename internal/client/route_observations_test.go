@@ -115,3 +115,30 @@ func TestLinuxDiagnosticRouteRequiresOneMatchingJSONResult(t *testing.T) {
 		})
 	}
 }
+
+func TestDarwinDiagnosticRouteRequiresExactUnambiguousDestination(t *testing.T) {
+	for _, scenario := range []struct {
+		name, output string
+		ok           bool
+	}{
+		{"exact", "route to: 2001:db8::1\ninterface: utun0\n", true},
+		{"wrong_destination", "route to: 2001:db8::2\ninterface: utun0\n", false},
+		{"missing_destination", "interface: utun0\n", false},
+		{"missing_interface", "route to: 2001:db8::1\n", false},
+		{"duplicate_destination", "route to: 2001:db8::1\nroute to: 2001:db8::1\ninterface: utun0\n", false},
+		{"duplicate_interface", "route to: 2001:db8::1\ninterface: en0\ninterface: utun0\n", false},
+		{"error_text", "route: writing to routing socket: not in table\ninterface: utun0\n", false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			routes := observeOSRoutes(t.Context(), "darwin", "utun0", []string{"2001:db8::1"}, func(_ context.Context, name string, args ...string) ([]byte, error) {
+				if name != "route" || strings.Join(args, " ") != "-n get 2001:db8::1" {
+					t.Fatal("route lookup changed", name, args)
+				}
+				return []byte(scenario.output), nil
+			})
+			if len(routes) != 1 || (routes[0].Error == "") != scenario.ok || routes[0].UsesInterface != scenario.ok {
+				t.Fatal("incorrect Darwin route evidence", routes)
+			}
+		})
+	}
+}

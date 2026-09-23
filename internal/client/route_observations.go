@@ -116,10 +116,30 @@ func routeObservationInterface(goos string, target netip.Addr, output string) st
 		dev, _ := row["dev"].(string)
 		return dev
 	case "darwin":
+		var routeTo, iface string
+		var routeSeen, ifaceSeen bool
 		for _, line := range strings.Split(output, "\n") {
-			if key, value, ok := strings.Cut(strings.TrimSpace(line), ":"); ok && key == "interface" {
-				return strings.TrimSpace(value)
+			key, value, ok := strings.Cut(strings.TrimSpace(line), ":")
+			if !ok {
+				continue
 			}
+			switch key {
+			case "route to":
+				if routeSeen {
+					return ""
+				}
+				routeSeen = true
+				routeTo = strings.TrimSpace(value)
+			case "interface":
+				if ifaceSeen {
+					return ""
+				}
+				ifaceSeen = true
+				iface = strings.TrimSpace(value)
+			}
+		}
+		if routeTo == target.String() {
+			return iface
 		}
 	}
 	return ""
