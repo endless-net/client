@@ -15,6 +15,10 @@ entry points. They do not establish the assertions or real effects below.
   `7c3d486`. Earlier [35822315478](https://github.com/endless-net/client/actions/runs/35822315478)
   failed on Ubuntu with `failed to update fwmark: use of closed network
   connection`. Later passes have not identified the closure cause.
+- Push [35832270453](https://github.com/endless-net/client/actions/runs/35832270453)
+  passed all four short unit jobs at `93d854e` after the initial bind-mark
+  change. One green Linux run does not establish that every closed-bind path
+  causing the earlier intermittent failure has been removed.
 - `test.yml` runs installation, eight-platform contract scenarios, isolated
   dataplane and container jobs only for non-push events. No result from those
   jobs at the current source was inspected in this audit. Push success is not
@@ -106,6 +110,59 @@ positive, negative and restart/concurrency outcomes in the related IT rows.
 | Update | GetUpdateInfo reports SOURCE_UNAVAILABLE; support URLs absent | Distribution/product/UI owners must provide index/API, trust bootstrap/rotation, channel/platform/expiry/replay/classification and binding to existing UI/core schema-3 provenance; do not invent source/key/URL |
 | IPC/consumers | Agent serves generated v0 handler via protected local transport; CLI/helper use native client; Go/Dart bindings and descriptor exist | Targeted search found no production HTTP IPC v2 route, but does not prove all obsolete artifacts removed; run generation/transport and installed pairing gates. Backend HTTP is separate from local IPC |
 | Packaging | Core release, APT and cross-platform workflows live here | Installed artifact provenance, upgrade/reset/uninstall and exact UI/core pair need release CI; no version or generation increase is authorized |
+
+### Focused cross-cutover assertion review
+
+- `PrepareNetworkSelectionTarget` drops the source Node, signed map, resource
+  choices, network preferences and exit selection before target registration;
+  `TestNetworkSelectionTargetSeparatesOldNetworkState` asserts those fields and
+  immutability of the source. Activation records `DownStarted` before Stop and
+  adopts the target only after a confirmed Stop;
+  `TestNetworkActivationStopsSourceBeforeAtomicTargetAdoption` and
+  `TestNetworkActivationResumesUncertainStopFromDisk` assert ordering/restart.
+  Apply/abort tests assert stale target rejection, failed apply containment,
+  no repeat apply after restart and remote target cleanup. These use injected
+  drivers/providers. The installed `TestControlPlaneNetworkSelectionBoundary`
+  checks same-network no-op, accountless denial and replay, **not** a real
+  cross-network target with route/exit/resource withdrawal. IT-22/28 and
+  US-04/05/11 still need that integrated result.
+- `WireGuardEngine` resets the bounded resource-flow samples on every apply
+  and Down. `TestResourceFlowIsCollectedOnlyAcrossAllowedTUNDirections` and
+  `TestResourceFlowCollectorBindsSignedServiceSubnetAndLiveRoute` exercise
+  correlated admitted replies, signed target/path and route binding. The
+  HOST/SUBNET/SERVICE publication tests reject expired and changed topology
+  receipts. No platform test proves that a profile/network switch withdraws
+  a previously AVAILABLE receipt while the old path still sends packets.
+  A SUBNET receipt remains existential for one address; a SERVICE receipt
+  remains tuple evidence, as stated by the source.
+- Healthy `runtime_start` KEEP_INTENT preserves the saved requested intent.
+  When an enrolled connected intent has no verifiable map, however,
+  `InitializeRuntimeIntent` writes a **temporary durable disconnected gate**
+  with a context-bound `StartupRecovery` record; `RequestedConnectionIntent`
+  projects the original request and policy recovery may restore it after a
+  fresh signed map. `TestRPCStartupRecoveryProjectsRequestedIntentWithoutStarting`
+  and `TestRuntimeStartupRecoveryKeepsOriginalIntentWithoutRevivingNewDisconnect`
+  cover this distinction. `TestRuntimeLifecyclePreservesCurrentIntentAcrossRestart`
+  covers KEEP_INTENT for logoff/suspend/resume. Native service restart, OS
+  delivery and user-visible phase/traffic observations remain untested. The
+  temporary gate is not a user Disconnect operation, but the durable top-level
+  desired state is disconnected until verified recovery; treat literal
+  no-DISCONNECT-intent wording as an unresolved semantic check.
+- The agent serves the generated v0 handler over the protected local listener;
+  CLI and recovery helper bootstrap the generated Go client. The descriptor
+  digest is embedded in Go (`clientipc/rpc/protocol.go`) and generated Dart
+  metadata (`packages/client_api/lib/src/contract.dart`). Protobuf CI checks
+  regeneration, baseline compatibility and the Dart mobile bridge contract.
+  This does not prove a native mobile bridge or installed UI/core pairing.
+  Targeted source search found no old HTTP IPC v2 route in production agent,
+  CLI or helper; backend HTTP and generated Connect codecs are distinct.
+- `tools/verify-source-ci` requires a **successful main Test workflow_dispatch
+  with contract_repetitions=3 on the exact release SHA**; it rejects a short
+  push success. The release and APT workflows call that gate before publishing.
+  This makes a dispatch an explicit technical release prerequisite, while the
+  repository's current `AGENTS.md` still permits system validation only in
+  PR/release CI and forbids PRs. The human decision on an allowed venue is
+  required; a tag must not be created to obtain it.
 
 The fwmark failure has a concrete initial-open race. Pinned wireguard-go marks
 the device `Up` before its first `BindUpdate` obtains the net lock. An initial
