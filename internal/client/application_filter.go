@@ -247,13 +247,14 @@ func (f *applicationPacketFilter) allows(raw []byte, inbound bool, now time.Time
 
 type applicationTUN struct {
 	tun.Device
-	filter    *applicationPacketFilter
-	flows     *flowCollector
-	sharing   *sharingPacketFilter
-	peerACL   *peerACLFilter
-	exit      *exitPacketFilter
-	inbound   *inboundPacketFilter
-	resources *resourcePacketFilter
+	filter        *applicationPacketFilter
+	flows         *flowCollector
+	sharing       *sharingPacketFilter
+	peerACL       *peerACLFilter
+	exit          *exitPacketFilter
+	inbound       *inboundPacketFilter
+	resources     *resourcePacketFilter
+	resourceFlows *resourceFlowObserver
 }
 
 func (t *applicationTUN) Write(bufs [][]byte, offset int) (int, error) {
@@ -270,8 +271,12 @@ func (t *applicationTUN) Write(bufs [][]byte, offset int) (int, error) {
 		}
 	}
 	if len(accepted) > 0 {
-		if _, err := t.Device.Write(accepted, offset); err != nil {
+		written, err := t.Device.Write(accepted, offset)
+		if err != nil {
 			return 0, err
+		}
+		for i := 0; i < written && i < len(accepted); i++ {
+			t.resourceFlows.observe(accepted[i][offset:], true, time.Now())
 		}
 	}
 	return len(bufs), nil
@@ -296,6 +301,7 @@ func (t *applicationTUN) Read(bufs [][]byte, sizes []int, offset int) (int, erro
 			if !allowed {
 				continue
 			}
+			t.resourceFlows.observe(packet, false, now)
 			if accepted != i {
 				copy(bufs[accepted][offset:], bufs[i][offset:offset+sizes[i]])
 			}

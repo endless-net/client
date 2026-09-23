@@ -16,10 +16,11 @@ import (
 	"github.com/tailscale/wireguard-go/device"
 )
 
-// ResourceHostObservation is immutable transport evidence for HOST entries.
-// It says nothing about a remote application or service. Native routes remain
-// point-in-time observations: route notifications invalidate the receipt, but
-// asynchronous delivery is not an OS lease or packet-time enforcement.
+// ResourceHostObservation binds HOST transport and exact SUBNET/SERVICE reply
+// samples to one authenticated runtime. A reply is not semantic application
+// health or proof of every address in a subnet. Native routes remain point-in-
+// time observations: notifications invalidate the receipt, but asynchronous
+// delivery is not an OS lease or packet-time enforcement.
 type ResourceHostObservation struct {
 	engine        *WireGuardEngine
 	device        *device.Device
@@ -30,6 +31,8 @@ type ResourceHostObservation struct {
 	observedAt    time.Time
 	expires       time.Time
 	hosts         map[string]bool
+	resources     map[string][]resourceFlowSample
+	flows         *resourceFlowObserver
 	relayBridge   *wireGuardRelayBridge
 	relays        []wireGuardRelayPeerObservation
 	lifetime      *exitLANSourceLifetime
@@ -46,6 +49,13 @@ func (o *ResourceHostObservation) Close() error {
 }
 
 func (o *ResourceHostObservation) HostConfirmed(id string) bool { return o != nil && o.hosts[id] }
+
+func (o *ResourceHostObservation) ResourceConfirmed(id string) bool {
+	if o == nil {
+		return false
+	}
+	return len(o.resources[id]) != 0
+}
 
 func resourceObservationConfig(cfg Config) [32]byte {
 	raw, err := json.Marshal(clonePersistentConfig(cfg))
@@ -102,6 +112,17 @@ func (o *ResourceHostObservation) currentWithInspection(cfg Config, now time.Tim
 			return false
 		}
 	}
+	for id, samples := range o.resources {
+		identity, err := resolveResourceInAuthenticatedMap(cfg.CachedMap, id)
+		if err != nil {
+			return false
+		}
+		for _, sample := range samples {
+			if !o.flows.current(sample, now) || identity.Kind == ipc.ResourceKind_RESOURCE_KIND_SUBNET && !resourceSubnetFlowUnrestricted(e, cfg, sample.key.remote) {
+				return false
+			}
+		}
+	}
 	if _, err = inspect(e); err != nil {
 		return false
 	}
@@ -112,7 +133,18 @@ func (o *ResourceHostObservation) currentWithInspection(cfg Config, now time.Tim
 			return false
 		}
 	}
-	return o.lifetime.current() && now.Add(time.Since(started)).Before(expires)
+	checked := now.Add(time.Since(started))
+	if !o.lifetime.current() || !checked.Before(expires) {
+		return false
+	}
+	for _, samples := range o.resources {
+		for _, sample := range samples {
+			if !o.flows.current(sample, checked) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Caller holds engine.mu and has verified resourceHostExitFilterCurrent. The
@@ -229,7 +261,7 @@ func (e *WireGuardEngine) observeResourceHostsWithTopology(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	proof := &ResourceHostObservation{engine: e, device: e.device, configuration: resourceObservationConfig(cfg), uapi: sha256.Sum256([]byte(e.uapi)), paths: resourceObservationPaths(e), pathManager: e.relayPaths, observedAt: now, expires: now.Add(5 * time.Second), hosts: map[string]bool{}}
+	proof := &ResourceHostObservation{engine: e, device: e.device, configuration: resourceObservationConfig(cfg), uapi: sha256.Sum256([]byte(e.uapi)), paths: resourceObservationPaths(e), pathManager: e.relayPaths, observedAt: now, expires: now.Add(5 * time.Second), hosts: map[string]bool{}, resources: map[string][]resourceFlowSample{}, flows: e.resourceFlows}
 	proof.expires = resourceHostReceiptDeadline(e, cfg, proof.expires)
 	proof.lifetime, proof.close = lifetime, closeObservation
 	paths := e.relayPaths.Statuses()
@@ -312,6 +344,9 @@ func (e *WireGuardEngine) observeResourceHostsWithTopology(ctx context.Context, 
 				}
 			}
 		}
+	}
+	if err := e.observeResourceFlows(ctx, cfg, inspection, paths, own, runner, now, proof, &count); err != nil {
+		return nil, err
 	}
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

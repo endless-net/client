@@ -31,6 +31,48 @@ during collection and readback, partial factory errors, receipt copies, provider
 cleanup and resource availability/event withdrawal. Native delivery remains
 asynchronous and needs later Linux qualification; application observations and
 the rest of package 4 remain open.
+
+Package 4 resource-flow increment (2026-09-23): the TUN wrapper now retains a
+bounded, five-second, memory-only request/reply tuple after outgoing policy
+admission and successful delivery of the permitted reply to the OS. TCP RST,
+empty UDP replies, uncorrelated ports, malformed packets and failed TUN writes
+cannot produce positive evidence. Every reapply and Down revokes the sample.
+The Linux collector intersects a sample with the signed peer/port/subnet
+identity, exact unforced kernel route, fresh authenticated direct/relay path,
+current filters and the topology watcher retained through publication.
+SERVICE requires response samples for every address/family advertised by its
+approved hosts; SUBNET requires an observed destination in its signed prefix
+and unrestricted peer ACL, application and sharing reservations, including
+explicit single-IP subnet identities.
+Resource settings and packet-denial readback remain separate prerequisites.
+The resource clock invalidates ListResources/events when positive evidence
+appears or expires. `TestResourceFlowRequiresAllowedCorrelatedReplyAndExpiry`
+asserts TCP/UDP tuple, expiry and reset; `TestResourceFlowIsCollectedOnlyAcrossAllowedTUNDirections`
+checks actual TUN wrapper admission and delivery failure;
+`TestResourceFlowMatchesExactSignedServiceAndSubnet` checks port, signed host,
+single-IP subnet, IPv4/IPv6 completeness and overlapping peer ownership.
+`TestResourceFlowCollectorBindsSignedServiceSubnetAndLiveRoute` runs the
+configured in-memory engine through the signed service/subnet collector, route
+readback, foreign physical route and protected application destination rejection,
+path binding, final receipt check,
+snapshot/event projection and reset invalidation. Existing
+HOST collector and service projection tests cover topology/lifetime and final
+publication races. These are injected runtime and packet units, not
+native traffic or system acceptance. A SUBNET positive value describes one
+observed destination, not all addresses in the prefix; a SERVICE response
+confirms the tuple, not semantic health of an arbitrary application. The
+pinned producer contract has no universal application probe or subnet-wide
+reachability proof. The full package 4 transition audit and platform acceptance
+remain open.
+Local validation: `goimports -w .`, `go vet ./...`, configured golangci-lint
+(0 issues) and the complete `go test -short ./...` passed. An earlier full run
+also failed in the pre-existing `TestNativeExitResourceAdmissionAppliesAndRestoresPacketChoice`
+with WireGuard `failed to update fwmark: use of closed network connection`;
+the same failure class previously occurred in HOST tests and CI. In pinned
+wireguard-go, `BindSetMark` calls this repository's `MagicBind.SetMark`, whose
+`net.ErrClosed` means the UDP bind was already closed. Why the device closes it
+at that point remains unproved; the passing run is not a fix. No native,
+privileged, system, release or installer validation was run.
 Validation: goimports and vet passed; configured lint reports 0 issues after
 making ignored test-only Close results explicit. Full local short suite passed
 (internal/client 145.651 s, CLI 12.447 s); its run began before that test-only

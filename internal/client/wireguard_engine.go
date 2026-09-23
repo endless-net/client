@@ -84,6 +84,7 @@ type WireGuardEngine struct {
 	applicationFilter     *applicationPacketFilter
 	inboundFilter         *inboundPacketFilter
 	resourceFilter        *resourcePacketFilter
+	resourceFlows         *resourceFlowObserver
 	exitFilter            *exitPacketFilter
 	exitGuard             *linuxExitGuard
 	exitLAN               *exitLANRuntime
@@ -357,6 +358,10 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 	if e.resourceFilter == nil {
 		e.resourceFilter = &resourcePacketFilter{}
 	}
+	if e.resourceFlows == nil {
+		e.resourceFlows = &resourceFlowObserver{}
+	}
+	e.resourceFlows.reset()
 	if !resourceDeadline.IsZero() {
 		resourceChanged = e.resourceFilter.differs(resourceRules)
 		if err := e.resourceFilter.suspend(resourceRules, resourceDeadline); err != nil {
@@ -810,7 +815,10 @@ func (e *WireGuardEngine) startLocked(mtu int) error {
 	if e.resourceFilter == nil {
 		e.resourceFilter = &resourcePacketFilter{}
 	}
-	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, sharing: e.sharingFilter, peerACL: e.peerACLFilter, flows: e.flows, inbound: e.inboundFilter, resources: e.resourceFilter, exit: e.exitFilter}, bind, logger)
+	if e.resourceFlows == nil {
+		e.resourceFlows = &resourceFlowObserver{}
+	}
+	wgDevice := device.NewDevice(&applicationTUN{Device: tunDevice, filter: filter, sharing: e.sharingFilter, peerACL: e.peerACLFilter, flows: e.flows, inbound: e.inboundFilter, resources: e.resourceFilter, resourceFlows: e.resourceFlows, exit: e.exitFilter}, bind, logger)
 	e.applicationFilter = filter
 	router := e.opts.router
 	if router == nil {
@@ -1242,6 +1250,7 @@ func (e *WireGuardEngine) closeLocked(ctx context.Context) error {
 		e.inboundFilter.suspend(false, "")
 	}
 	e.resourceFilter.withdraw()
+	e.resourceFlows.reset()
 	e.sharingFilter.withdraw()
 	if e.relayBridge != nil {
 		e.relayBridge.Stop()

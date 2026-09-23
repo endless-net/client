@@ -52,7 +52,7 @@ func (s *ClientRPCService) publishResourceClock(ctx context.Context) error {
 			confirmed = s.ResourceEnforcementProvider(cfg, m.now())
 		}
 	}
-	hosts := confirmedResourceHosts(cfg, observed, m.now(), confirmed)
+	hosts := confirmedResourceIDs(cfg, observed, m.now(), confirmed)
 	fingerprint, err := rpcResourceObservationFingerprint(cfg, m.now(), confirmed, hosts)
 	if err != nil {
 		return err

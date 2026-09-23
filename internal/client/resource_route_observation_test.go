@@ -8,10 +8,12 @@ import (
 	"net/netip"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	api "github.com/endless-net/client-api/clientapi/v1"
+	"github.com/endless-net/client/clientipc/local"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/tailscale/wireguard-go/device"
 )
@@ -296,6 +298,173 @@ func TestResourceHostCollectorBindsNativeRulesRoutesAndPeerPath(t *testing.T) {
 				t.Fatal("foreign owner reached native commands")
 			}
 		})
+	}
+}
+
+func TestResourceFlowCollectorBindsSignedServiceSubnetAndLiveRoute(t *testing.T) {
+	n, cfg, _ := nativeExitResumeFixture(t)
+	n.engine.mu.Lock()
+	n.engine.pathCancel = func() {}
+	n.engine.mu.Unlock()
+	trusted, _, key := signedApplicationFixture(t, false)
+	cfg.MapSigningTrust = trusted.MapSigningTrust
+	peer := &cfg.CachedMap.Peers[0]
+	cfg.CachedMap.Network.Services = []api.AdvertisedService{{ID: "db", Name: "db", DNSName: "db.account.endlessnet", Ports: []api.ServicePort{{Protocol: "tcp", Port: 5432}}, ApprovalMode: "manual", ApprovalStatus: "approved", Hosts: []api.ServiceHost{{NodeID: peer.ID, PublicKey: peer.PublicKey}}}}
+	cfg.CachedMap.Network.ClientPolicy.Resources = []api.ManagedResourceSetting{{Kind: api.ManagedResourceSubnet, ID: peer.ID, CIDR: "100.64.0.2/32", Source: api.ClientPolicyAccount, PolicyID: "subnet", Enabled: true}}
+	resignApplicationMap(t, cfg.CachedMap, key)
+	cfg = clonePersistentConfig(cfg)
+	peer = &cfg.CachedMap.Peers[0]
+	if _, err := n.resumeSaved(t.Context(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	e := n.engine
+	now := time.Now().UTC()
+	e.mu.Lock()
+	inspection, err := resourceObservedUAPI(e)
+	if err != nil {
+		e.mu.Unlock()
+		t.Fatal(err)
+	}
+	live, ok := wireGuardPeerForMapPeer(inspection, *peer)
+	if !ok {
+		e.mu.Unlock()
+		t.Fatal("signed service host has no configured peer")
+	}
+	e.relayPaths.statuses = []PeerPathStatus{{PeerID: peer.ID, SelectedPath: "direct", LastTransitionAt: now.Add(-time.Second).Format(time.RFC3339Nano), SelectedEndpoint: live.Endpoint, Direct: PathCandidateStatus{Endpoint: live.Endpoint, State: "reachable", CheckedAt: now.Format(time.RFC3339Nano)}}}
+	iface, localAddress := e.interface_, e.routerCfg.Addresses[0].Addr().String()
+	e.mu.Unlock()
+	request := resourceTestTCP("100.64.0.1", "100.64.0.2", 40000, 5432, 0x02)
+	response := resourceTestTCP("100.64.0.2", "100.64.0.1", 5432, 40000, 0x12)
+	e.resourceFlows.observe(request, false, now)
+	e.resourceFlows.observe(response, true, now)
+	routes := 0
+	runner := func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		if strings.Contains(joined, "rule show") {
+			return []byte(`[{"priority":32766,"src":"all","table":"254"}]`), nil
+		}
+		if strings.Contains(joined, "address show") {
+			return []byte(fmt.Sprintf(`[{"ifindex":7,"ifname":%q,"flags":["UP"],"addr_info":[{"local":%q}]}]`, iface, localAddress)), nil
+		}
+		routes++
+		return []byte(fmt.Sprintf(`[{"dst":%q,"dev":%q,"prefsrc":%q,"flags":[]}]`, args[5], iface, localAddress)), nil
+	}
+	inspect := func(engine *WireGuardEngine) (WireGuardInspection, error) {
+		value, err := resourceObservedUAPI(engine)
+		for i := range value.Peers {
+			value.Peers[i].LatestHandshakeUnix = now.Unix()
+			value.Peers[i].latestHandshakeNanos = int64(now.Nanosecond())
+			value.Peers[i].handshakeTimeComplete = true
+		}
+		return value, err
+	}
+	proof, err := observeResourceHostsTest(t, e, t.Context(), cfg, runner, now, inspect)
+	serviceID := rpcResourceID(ipc.ResourceKind_RESOURCE_KIND_SERVICE, "db\x00tcp\x005432")
+	subnetID := rpcResourceID(ipc.ResourceKind_RESOURCE_KIND_SUBNET, peer.ID+"\x00100.64.0.2/32")
+	if err != nil || !proof.ResourceConfirmed(serviceID) || !proof.ResourceConfirmed(subnetID) || routes < 2 || !proof.Current(cfg, time.Now()) {
+		t.Fatal("flow did not survive signed identity, path, route and final readback", err, routes)
+	}
+	subnetOnly := *proof
+	subnetOnly.hosts = nil
+	subnetOnly.resources = map[string][]resourceFlowSample{subnetID: proof.resources[subnetID]}
+	protected := netip.MustParsePrefix("100.64.0.2/32")
+	e.applicationFilter.mu.Lock()
+	e.applicationFilter.protected[protected] = true
+	e.applicationFilter.mu.Unlock()
+	if subnetOnly.Current(cfg, time.Now()) {
+		t.Fatal("application reservation widened to subnet availability")
+	}
+	e.applicationFilter.mu.Lock()
+	delete(e.applicationFilter.protected, protected)
+	e.applicationFilter.mu.Unlock()
+	foreignRoute := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if strings.Contains(strings.Join(args, " "), "route get") {
+			return []byte(fmt.Sprintf(`[{"dst":%q,"dev":"eth0","prefsrc":%q,"flags":[]}]`, args[5], localAddress)), nil
+		}
+		return runner(ctx, name, args...)
+	}
+	foreignProof, err := observeResourceHostsTest(t, e, t.Context(), cfg, foreignRoute, now, inspect)
+	if err != nil || foreignProof.ResourceConfirmed(serviceID) || foreignProof.ResourceConfirmed(subnetID) {
+		t.Fatal("exit or LAN route overrode resource destination", err)
+	}
+	e.resourceFlows.reset()
+	if proof.Current(cfg, time.Now()) {
+		t.Fatal("reapply retained stale resource availability")
+	}
+	m := newRPCStoreTest(t)
+	cfg.RPCState.Revision = 1
+	cfg.RPCState.DigestKey = make([]byte, 32)
+	cfg.RPCState.Operations = map[string]clientRPCOperationRecord{}
+	if err := m.store.Update(func(next *Config) error { *next = clonePersistentConfig(cfg); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	s := NewClientRPCService(m, nil)
+	s.ResourceObservationLock = &sync.Mutex{}
+	s.ResourceEnforcementProvider = e.TryResourceEnforcement
+	s.ResourceHostProvider = func(ctx context.Context, current Config) (*ResourceHostObservation, error) {
+		return e.observeResourceHostsWithTopology(ctx, current, runner, time.Now(), inspect, func(context.Context) (exitLANChangeStream, error) {
+			return &exitLANTestStream{changed: make(chan struct{})}, nil
+		})
+	}
+	owner := local.Peer{Identity: cfg.LocalOwnerID}
+	list := &ipc.ListResourcesRequest{Profile: &ipc.ProfileRef{ProfileId: cfg.RPCState.ActiveProfileID}}
+	if err := s.publishResourceClock(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	sub, err := m.subscribe(owner, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.unsubscribe(sub)
+	eventsCtx, cancelEvents := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancelEvents()
+	if _, err := sub.next(eventsCtx); err != nil {
+		t.Fatal(err)
+	}
+	check := func(available bool) {
+		t.Helper()
+		rows, err := s.resourcesAs(t.Context(), owner, list)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := 0
+		for _, row := range rows.Resources {
+			if row.Id == serviceID || row.Id == subnetID {
+				found++
+				if (row.Availability.Availability == ipc.Availability_AVAILABILITY_AVAILABLE) != available {
+					t.Fatal("resource snapshot ignored live flow evidence", row.Kind, row.Availability)
+				}
+			}
+		}
+		if found != 2 {
+			t.Fatal("signed service and single-IP subnet not projected", found)
+		}
+	}
+	check(false)
+	for _, available := range []bool{true, false} {
+		if available {
+			e.resourceFlows.observe(request, false, time.Now())
+			e.resourceFlows.observe(response, true, time.Now())
+		} else {
+			e.resourceFlows.reset()
+		}
+		check(available)
+		before := m.Metadata().Revision
+		if err := s.publishResourceClock(t.Context()); err != nil || m.Metadata().Revision != before+1 {
+			t.Fatal("resource evidence transition did not invalidate revision", err)
+		}
+		for {
+			event, err := sub.next(eventsCtx)
+			if err != nil {
+				t.Fatal("resource evidence transition did not invalidate events", err)
+			}
+			if invalidated := event.GetInvalidated(); invalidated != nil {
+				if invalidated.Domain != ipc.Domain_DOMAIN_RESOURCES {
+					t.Fatal("resource evidence invalidated the wrong domain", event)
+				}
+				break
+			}
+		}
 	}
 }
 

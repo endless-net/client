@@ -30,7 +30,7 @@ func (s *ClientRPCService) observeResourceHosts(ctx context.Context, cfg Config)
 	return observed, release
 }
 
-func confirmedResourceHosts(cfg Config, observed *ResourceHostObservation, now time.Time, enforced bool) []string {
+func confirmedResourceIDs(cfg Config, observed *ResourceHostObservation, now time.Time, enforced bool) []string {
 	if !enforced || observed == nil || !observed.Current(cfg, now) || cfg.CachedMap == nil {
 		return nil
 	}
@@ -38,6 +38,11 @@ func confirmedResourceHosts(cfg Config, observed *ResourceHostObservation, now t
 	for _, peer := range cfg.CachedMap.Peers {
 		id := rpcResourceID(ipc.ResourceKind_RESOURCE_KIND_HOST, peer.ID)
 		if observed.HostConfirmed(id) {
+			hosts = append(hosts, id)
+		}
+	}
+	for id := range observed.resources {
+		if observed.ResourceConfirmed(id) {
 			hosts = append(hosts, id)
 		}
 	}
