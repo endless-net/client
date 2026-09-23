@@ -4,7 +4,7 @@ package main
 
 /*
 #cgo CFLAGS: -fblocks
-#cgo LDFLAGS: -framework IOKit -framework CoreFoundation -framework EndpointSecurity
+#cgo LDFLAGS: -framework IOKit -framework CoreFoundation -lEndpointSecurity
 #include "darwin_power.h"
 #include "darwin_logoff.h"
 #include <IOKit/IOMessage.h>
