@@ -285,14 +285,11 @@ and other bind-closure causes remain to be checked before calling it resolved.
 
 Current `AGENTS.md` permits local checks only via goimports, vet, configured
 golangci-lint and short tests. It says E2E, installer, privileged networking,
-release and system validation run in GitHub **pull-request or release CI**;
-the same file prohibits PRs and version increases, while the `Test` workflow's
-non-push jobs are reached by PR or `workflow_dispatch`. The latter is not named
-as an allowed venue in `AGENTS.md`. A release tag publishes assets and is not
-authorized for this block. Therefore the system plan above is prepared but
-cannot be executed under the current instructions. An explicit decision on an
-allowed CI venue is required after the independent implementation/audit work;
-do not bypass this with a PR, dispatch or release.
+release and system validation run in GitHub pull-request or release CI; the
+same file prohibits PRs and version increases. The user explicitly authorized
+two one-time `Test` workflow dispatches on main, so system evidence was gathered
+without creating a PR or release. No further dispatch is authorized by that
+approval.
 
 ### 2026-09-25 native context scenarios
 
@@ -342,3 +339,36 @@ target registration through signed-map adoption and restart; unit coverage in
 Disconnect cancels target application even when the provider returns success
 after cancellation. The native test does not yet hold and deliver a late
 registration response across Disconnect, so that race remains unqualified.
+
+### 2026-09-25 approved system acceptance dispatches
+
+The first explicitly approved manual `Test` dispatch,
+[36115587959](https://github.com/endless-net/client/actions/runs/36115587959),
+ran at `6863321` with three contract repetitions. Verify, native control-plane
+scenarios and all eight installer/smoke jobs passed. Contract artifacts exposed
+two fixture defects: account catalog selection was absent in the cross-network
+scenario, and the empty-profile test incorrectly required an immediate
+DISCONNECTED intent. The profile assertion correction in `9c50158` passed its
+system scenario on the next dispatch. The account fixture was first adjusted to
+select an account, but that run exposed an ordering error: successful join-token
+enrollment clears the saved user session while adopting the node credential.
+The fixture now enrolls first, logs in afterward, then selects its account.
+Container acceptance failed before native IPC readiness because the container
+had no system logind service.
+
+The second and final dispatch explicitly approved without further confirmation,
+[36120208250](https://github.com/endless-net/client/actions/runs/36120208250),
+ran on `79b99eb` with three repetitions. All eight installer/smoke jobs,
+Verify Linux/Windows/macOS, and native control-plane scenarios passed. The
+container job now starts the agent and serves IPC using a test-only isolated
+logind bus, but Connect remains RUNNING for 30 seconds in each persistent
+IPv4/IPv6 TCP/UDP case and ephemeral recreation; the lifecycle job fails. The
+safe test diagnostics show the operation still pending (kind=2, state=1), with
+the later operation read unclassified. This establishes startup readiness, not
+successful container connectivity. The repeated contract artifacts available
+so far consistently fail `TestControlPlaneNativeCrossNetworkSelection` at its
+account setup command across Linux x64/ARM and macOS ARM. The ordering defect is
+corrected in the current working tree; the run still covers `79b99eb`, so it
+cannot validate that correction. Remaining matrix jobs and the overall workflow
+conclusion are pending. Do not dispatch another system workflow without fresh
+user authorization.

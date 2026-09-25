@@ -151,8 +151,11 @@ func TestControlPlaneNativeCrossNetworkSelection(t *testing.T) {
 	}
 	n := testclient.New(t, s)
 	n.TrustControlTLS(s)
-	n.MustRun("login", "--config", n.Config, "--server", s.URL(), "--token", s.SessionToken(), "--map-signing-trust-file", n.TrustFile)
 	n.Enroll(s, source.Name, sourceJoin)
+	// Join-token enrollment clears any pre-existing user session when it adopts
+	// the node credential. Authenticate afterward to exercise account-scoped
+	// network discovery and selection as an actual signed-in user.
+	n.MustRun("login", "--config", n.Config, "--server", s.URL(), "--token", s.SessionToken(), "--map-signing-trust-file", n.TrustFile)
 	n.MustRun("billing", "accounts", "--config", n.Config, "--use", "test-account")
 	n.Start()
 	runNativeControlMutation(t, n, "connect", "6b160000-0000-4000-8000-000000000001")
