@@ -1,4 +1,4 @@
-# Block 6 evidence audit (2026-09-23)
+# Block 6 evidence audit (updated 2026-09-25)
 
 Source: `main` at `7c3d486`, clean checkout before this audit. This is an open
 requirement and acceptance ledger, not a declaration of cutover completion.
@@ -27,6 +27,11 @@ BR/AC acceptance baseline or supply runtime evidence.
 - Push [35851486488](https://github.com/endless-net/client/actions/runs/35851486488)
   passed the same four short unit jobs at `000fa30`; it did not run native
   cross-network, LAN_ALLOW, installer or update-source scenarios.
+- Push [35852868522](https://github.com/endless-net/client/actions/runs/35852868522)
+  passed the same four short unit jobs at `16fe207`. The profile/network exit
+  ownership guards therefore have Linux, Windows 2025, macOS ARM and Intel
+  short-unit evidence; native kernel containment and combined transition
+  acceptance remain outstanding.
 - `test.yml` runs installation, eight-platform contract scenarios, isolated
   dataplane and container jobs only for non-push events. No result from those
   jobs at the current source was inspected in this audit. Push success is not
