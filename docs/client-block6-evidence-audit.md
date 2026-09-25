@@ -1,8 +1,8 @@
 # Block 6 evidence audit (updated 2026-09-25)
 
-Source: acceptance evidence through `main` at `9f5faa4` (updated
-2026-09-25). This remains an open requirement and acceptance ledger, not a
-declaration of cutover completion.
+Source: system evidence through `main` at `79b99eb`; fixture corrections and
+short-unit evidence through `f9994af` (updated 2026-09-25). This remains an
+open requirement and acceptance ledger, not a declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
 architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
 local US-01–14 source is the pinned client-ui revision in
@@ -356,22 +356,26 @@ The fixture now enrolls first, logs in afterward, then selects its account.
 Container acceptance failed before native IPC readiness because the container
 had no system logind service.
 
-The second and final dispatch explicitly approved without further confirmation,
+The second dispatch explicitly approved without further confirmation,
 [36120208250](https://github.com/endless-net/client/actions/runs/36120208250),
-ran on `79b99eb` with three repetitions. All eight installer/smoke jobs,
-Verify Linux/Windows/macOS, and native control-plane scenarios passed. The
-container job now starts the agent and serves IPC using a test-only isolated
-logind bus, but Connect remains RUNNING for 30 seconds in each persistent
-IPv4/IPv6 TCP/UDP case and ephemeral recreation; the lifecycle job fails. The
-safe test diagnostics show the operation still pending (kind=2, state=1), with
-the later operation read unclassified. This establishes startup readiness, not
-successful container connectivity. Repeated contract artifacts on Linux
-x64/ARM and macOS ARM consistently fail `TestControlPlaneNativeCrossNetworkSelection`
-at account setup. A Windows 2022 repeat also fails the profile scenario with a
-canonical `STALE_STATE` response because its compare-and-set snapshot raced a
-revision change. The cross-network fixture now logs in after enrollment; profile
-selection retries only a classified stale admission using the same request ID,
-target and unchanged source context. These corrections are on the next main
-commit, so the run on `79b99eb` cannot validate them. Remaining matrix jobs and
-the overall workflow conclusion are pending. No further system workflow
-dispatch is authorized unless the user approves it.
+ran on `79b99eb` with three repetitions and completed with failure. All eight
+installer/smoke jobs, Verify Linux/Windows/macOS, and native control-plane
+scenarios passed. The container job starts the agent and serves IPC using a
+test-only isolated logind bus, but Connect remains RUNNING for 30 seconds in
+each persistent IPv4/IPv6 TCP/UDP case and ephemeral recreation; the lifecycle
+job fails. Safe test diagnostics show the operation still pending (kind=2,
+state=1), with the later operation read unclassified.
+
+All 24 platform/repetition contract jobs failed at least one of the two new
+scenarios: `TestControlPlaneNativeCrossNetworkSelection` failed in all 24 due
+to the fixture logging in before join-token enrollment (which clears the saved
+session); `TestControlPlaneNativeProfileContextSwitch` also received a
+canonical `STALE_STATE` on SelectProfile in five jobs. The cross-network
+fixture now logs in after enrollment; profile selection retries only a
+classified stale admission using the same request ID, target and unchanged
+source context. These corrections are in `f9994af`; the 79b99eb dispatch cannot
+validate them. The aggregate `verify` gate therefore failed. Push run
+[36124005128](https://github.com/endless-net/client/actions/runs/36124005128)
+passed all four platform short-unit jobs on `f9994af`. A third manual Test
+dispatch was requested for `f9994af`; explicit user approval is pending. No
+system workflow is dispatched without that approval.
