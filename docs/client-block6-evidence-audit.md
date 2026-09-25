@@ -1,7 +1,8 @@
 # Block 6 evidence audit (updated 2026-09-25)
 
-Source: `main` at `7c3d486`, clean checkout before this audit. This is an open
-requirement and acceptance ledger, not a declaration of cutover completion.
+Source: acceptance evidence through `main` at `65f1303` (updated
+2026-09-25). This remains an open requirement and acceptance ledger, not a
+declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
 architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
 local US-01–14 source is the pinned client-ui revision in
@@ -47,6 +48,11 @@ BR/AC acceptance baseline or supply runtime evidence.
   passed all four short unit jobs at `a9b2eca`. The new cross-network system
   scenario compiles but is skipped by the short-test gate; this run does not
   establish that the native switch executes successfully.
+- Push [36109476988](https://github.com/endless-net/client/actions/runs/36109476988)
+  passed all four short unit jobs at `65f1303` after adding the native profile
+  context scenario. Its non-push contract, installer, verify, container, STUN
+  and control-plane jobs were skipped. The profile scenario compiled but was
+  skipped by `-short`, so it has no execution result.
 - `test.yml` runs installation, eight-platform contract scenarios, isolated
   dataplane and container jobs only for non-push events. No result from those
   jobs at the current source was inspected in this audit. Push success is not
@@ -98,7 +104,7 @@ assertion review, not row-level passes. All rows remain open.
 | 25 | + consent window yields one durable receipt; − expired/revoked/duplicate window; R lost response replay | Producer receipt and bounded flow export |
 | 26 | + same request/payload returns one outcome; − changed payload conflicts; R lookup after restart for **each** mutation kind | Full mutation-kind journal audit and transport |
 | 27 | + opening snapshot precedes events; − observer sees no private IDs/deadlines; R concurrent Connect, overflow and reattach | OS-local owner/observer transport |
-| 28 | + one active profile and valid target; − stale profile response/active removal/mixed profile routes; R profile switch after crash | Native profile transition and removal guards. Cross-network handover is US-04; its late-response boundary is IT-22 |
+| 28 | + one active profile and valid target; − stale profile response/active removal/mixed profile routes; R profile switch after crash | Native profile context scenario now covers registered→empty→restart→restore with stable NodeID; stale response, active removal and mixed-route assertions remain. Cross-network handover is US-04; its late-response boundary is IT-22 |
 | 29 | + independent session/node clocks; − unknown expiry not infinite or seamless; R interrupted renewal | Native timing and producer renewal |
 | 30 | + explicit Select/Apply/Contain/Clear, exact LAN family result; − path loss, overlap, lock, expiry and no implicit default; R boot/namespace/ownership recovery | Linux kernel verifier, packet and route/firewall observations; other OS capability decisions |
 | 31 | + UI_QUIT, runtime_start and trusted OS events follow distinct settings; − source loss never becomes user DISCONNECT; R crash/suspend/logoff/overflow | Real Linux logind, Windows SCM, macOS IOKit/Endpoint Security lifecycle |
@@ -169,8 +175,9 @@ positive, negative and restart/concurrency outcomes in the related IT rows.
   `requireControlScenario`; no full control-plane CI result exists yet, and it
   does not provide kernel route, exit, resource withdrawal or real packet
   evidence. Its trace is US-04 and its restart boundary overlaps IT-22; the
-  delayed-old-response case in IT-22 and profile-switch assertions in IT-28
-  remain open, as do US-05/11 native path assertions.
+  delayed-old-response case in IT-22 and profile-switch stale-response,
+  active-removal and mixed-route assertions in IT-28 remain open, as do
+  US-05/11 native path assertions.
 - `WireGuardEngine` resets the bounded resource-flow samples on every apply
   and Down. `TestResourceFlowIsCollectedOnlyAcrossAllowedTUNDirections` and
   `TestResourceFlowCollectorBindsSignedServiceSubnetAndLiveRoute` exercise
@@ -282,10 +289,9 @@ scenario separately covers US-04/IT-22 selection and restart. Both are guarded
 system tests and are compiled but skipped by `go test -short ./...`; neither
 has a full control-plane CI result yet.
 
-Push run [36108614418](https://github.com/endless-net/client/actions/runs/36108614418)
-passed all four short unit jobs (Ubuntu, Windows, macOS ARM and macOS Intel);
-all verify, contract, installer, container, STUN and control-plane jobs were
-skipped because this was a push. The profile scenario was added after that run
-and is not part of its SHA. The four permitted local checks passed after adding
+Push run [36109476988](https://github.com/endless-net/client/actions/runs/36109476988)
+passed all four short unit jobs (Ubuntu, Windows, macOS ARM and macOS Intel).
+Verify, contract, installer, container, STUN and control-plane jobs were skipped
+because this was a push. The four permitted local checks passed after adding
 the scenario: goimports, vet, configured golangci-lint and short tests. Full
 system acceptance and the allowed CI venue decision remain outstanding.
