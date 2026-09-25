@@ -13,7 +13,11 @@ func observePlatformOSDefaultRoute(ctx context.Context) (present bool, observed 
 	}
 	for _, family := range []uint16{windows.AF_INET, windows.AF_INET6} {
 		var table *windows.MibIpForwardTable2
-		if err := windows.GetIpForwardTable2(family, &table); err != nil || table == nil {
+		err := windows.GetIpForwardTable2(family, &table)
+		if err != nil || table == nil {
+			if table != nil {
+				windows.FreeMibTable(unsafe.Pointer(table))
+			}
 			return false, false
 		}
 		if table.NumEntries > 1<<20 {
