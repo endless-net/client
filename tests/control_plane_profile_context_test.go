@@ -47,9 +47,16 @@ func TestControlPlaneNativeProfileContextSwitch(t *testing.T) {
 	selectProfile := func(id, target string, requestID string) *ipc.Operation {
 		t.Helper()
 		before := n.AwaitNativeStatus(func(v *ipc.Status) bool { return v.ActiveProfileId == id })
+		readStatus := func() (*ipc.Status, error) {
+			response := &ipc.GetStatusResponse{}
+			err := n.NativeService("status", response)
+			return response.GetStatus(), err
+		}
 		response := &ipc.SelectProfileResponse{}
-		args := append(testclient.NativeMutationArguments(requestID, before), "--profile-id", target)
-		if err := n.NativeService("select-profile", response, args...); err != nil {
+		if err := retryNativeControlAdmission("select-profile", before, readStatus, func(current *ipc.Status) error {
+			args := append(testclient.NativeMutationArguments(requestID, current), "--profile-id", target)
+			return n.NativeService("select-profile", response, args...)
+		}); err != nil {
 			t.Fatal("select profile failed", err)
 		}
 		if response.Operation == nil || response.Operation.Id == "" {

@@ -365,10 +365,13 @@ logind bus, but Connect remains RUNNING for 30 seconds in each persistent
 IPv4/IPv6 TCP/UDP case and ephemeral recreation; the lifecycle job fails. The
 safe test diagnostics show the operation still pending (kind=2, state=1), with
 the later operation read unclassified. This establishes startup readiness, not
-successful container connectivity. The repeated contract artifacts available
-so far consistently fail `TestControlPlaneNativeCrossNetworkSelection` at its
-account setup command across Linux x64/ARM and macOS ARM. The ordering defect is
-corrected in the current working tree; the run still covers `79b99eb`, so it
-cannot validate that correction. Remaining matrix jobs and the overall workflow
-conclusion are pending. Do not dispatch another system workflow without fresh
-user authorization.
+successful container connectivity. Repeated contract artifacts on Linux
+x64/ARM and macOS ARM consistently fail `TestControlPlaneNativeCrossNetworkSelection`
+at account setup. A Windows 2022 repeat also fails the profile scenario with a
+canonical `STALE_STATE` response because its compare-and-set snapshot raced a
+revision change. The cross-network fixture now logs in after enrollment; profile
+selection retries only a classified stale admission using the same request ID,
+target and unchanged source context. These corrections are on the next main
+commit, so the run on `79b99eb` cannot validate them. Remaining matrix jobs and
+the overall workflow conclusion are pending. No further system workflow
+dispatch is authorized unless the user approves it.

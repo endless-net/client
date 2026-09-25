@@ -11,24 +11,26 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Only explicit Connect/Disconnect/SelectNetwork admission rejection or the
-// unconfirmed-local-forget negative probe can refresh CAS. The latter must always
-// submit Confirmed=false; it can never authorize cleanup. Keep
-// the caller's request ID and semantic payload unchanged; never retry an
-// accepted operation, uncertain transport outcome, logout, or changed intent.
+// Only explicit Connect/Disconnect/SelectNetwork/SelectProfile admission
+// rejection or the unconfirmed-local-forget negative probe can refresh CAS.
+// The latter must always submit Confirmed=false; it can never authorize
+// cleanup. Keep the caller's request ID and semantic payload unchanged; never
+// retry an accepted operation, uncertain transport outcome, logout, or changed
+// source context.
 func retryNativeControlAdmission(command string, initial *ipc.Status, read func() (*ipc.Status, error), submit func(*ipc.Status) error) error {
 	current := initial
 	for attempt := 0; ; attempt++ {
 		err := submit(current)
 		stale := testclient.IsNativeStaleState(err) || (connect.CodeOf(err) == connect.CodeFailedPrecondition && rpc.FailureFromError(err).GetCode() == ipc.ErrorCode_ERROR_CODE_STALE_STATE)
-		if err == nil || attempt == 2 || (command != "connect" && command != "disconnect" && command != "select-network" && command != "unconfirmed-local-forget") || !stale {
+		if err == nil || attempt == 2 || (command != "connect" && command != "disconnect" && command != "select-network" && command != "select-profile" && command != "unconfirmed-local-forget") || !stale {
 			return err
 		}
 		next, readErr := read()
 		if readErr != nil {
 			return readErr
 		}
-		if current == nil || next == nil || current.NodeId == "" || current.NodeId != next.NodeId ||
+		if current == nil || next == nil || current.NodeId != next.NodeId ||
+			(current.NodeId == "" && command != "select-profile") ||
 			current.ActiveProfileId == "" || current.ActiveProfileId != next.ActiveProfileId ||
 			current.GetMetadata().GetInstanceId() == "" || current.GetMetadata().GetInstanceId() != next.GetMetadata().GetInstanceId() ||
 			next.GetMetadata().GetRevision() <= current.GetMetadata().GetRevision() ||
