@@ -136,7 +136,7 @@ func TestControlPlaneNetworkSelectionBoundary(t *testing.T) {
 	}
 }
 
-// IT-28/US-04: a user-authorized cross-network selection registers a distinct
+// IT-22/US-04: a user-authorized cross-network selection registers a distinct
 // node, adopts only its signed map, and keeps that context after agent restart.
 func TestControlPlaneNativeCrossNetworkSelection(t *testing.T) {
 	requireControlScenario(t)

@@ -98,7 +98,7 @@ assertion review, not row-level passes. All rows remain open.
 | 25 | + consent window yields one durable receipt; − expired/revoked/duplicate window; R lost response replay | Producer receipt and bounded flow export |
 | 26 | + same request/payload returns one outcome; − changed payload conflicts; R lookup after restart for **each** mutation kind | Full mutation-kind journal audit and transport |
 | 27 | + opening snapshot precedes events; − observer sees no private IDs/deadlines; R concurrent Connect, overflow and reattach | OS-local owner/observer transport |
-| 28 | + one active profile and valid target; − stale response/active removal/mixed routes; R cross-network apply/abort after crash | Native network/profile transition and producer cleanup |
+| 28 | + one active profile and valid target; − stale profile response/active removal/mixed profile routes; R profile switch after crash | Native profile transition and removal guards. Cross-network handover is US-04; its late-response boundary is IT-22 |
 | 29 | + independent session/node clocks; − unknown expiry not infinite or seamless; R interrupted renewal | Native timing and producer renewal |
 | 30 | + explicit Select/Apply/Contain/Clear, exact LAN family result; − path loss, overlap, lock, expiry and no implicit default; R boot/namespace/ownership recovery | Linux kernel verifier, packet and route/firewall observations; other OS capability decisions |
 | 31 | + UI_QUIT, runtime_start and trusted OS events follow distinct settings; − source loss never becomes user DISCONNECT; R crash/suspend/logoff/overflow | Real Linux logind, Windows SCM, macOS IOKit/Endpoint Security lifecycle |
@@ -168,8 +168,9 @@ positive, negative and restart/concurrency outcomes in the related IT rows.
   control plane. It compiles in short tests but is skipped there by
   `requireControlScenario`; no full control-plane CI result exists yet, and it
   does not provide kernel route, exit, resource withdrawal or real packet
-  evidence. IT-22/28 and US-04/05/11 remain open pending that system run and
-  the native path assertions.
+  evidence. Its trace is US-04 and its restart boundary overlaps IT-22; the
+  delayed-old-response case in IT-22 and profile-switch assertions in IT-28
+  remain open, as do US-05/11 native path assertions.
 - `WireGuardEngine` resets the bounded resource-flow samples on every apply
   and Down. `TestResourceFlowIsCollectedOnlyAcrossAllowedTUNDirections` and
   `TestResourceFlowCollectorBindsSignedServiceSubnetAndLiveRoute` exercise
