@@ -1,6 +1,6 @@
 # Block 6 evidence audit (updated 2026-09-25)
 
-Source: acceptance evidence through `main` at `65f1303` (updated
+Source: acceptance evidence through `main` at `35ff3ab` (updated
 2026-09-25). This remains an open requirement and acceptance ledger, not a
 declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
@@ -66,9 +66,12 @@ BR/AC acceptance baseline or supply runtime evidence.
   bounded Linux/macOS route-table reads and Windows IP Helper route tables;
   failure remains explicitly unobserved. This adds no IPC/schema version.
   `TestObserveLinuxDefaultRoutes`, `TestObserveDarwinDefaultRoutes` and
+  `TestZeroWindowsRoutePrefix`,
   `TestRPCDiagnosticsProjectsDefaultRouteOnlyWhenObserved` cover parsing,
-  completeness and projection. The four allowed local checks passed, but this
-  code has not yet completed cross-platform push CI or runtime system checks.
+  completeness and projection. The four allowed local checks passed, and push
+  [36112986842](https://github.com/endless-net/client/actions/runs/36112986842)
+  passed all four platform short-unit jobs, including Windows prefix tests.
+  Runtime/system checks remain outstanding.
   Resource observations and OS resolver readback remain unavailable, and
   platform runtime behavior still needs acceptance. `service_rpc_update.go`
   returns SOURCE_UNAVAILABLE; this is not full diagnostics/distribution
@@ -302,3 +305,19 @@ Verify, contract, installer, container, STUN and control-plane jobs were skipped
 because this was a push. The four permitted local checks passed after adding
 the scenario: goimports, vet, configured golangci-lint and short tests. Full
 system acceptance and the allowed CI venue decision remain outstanding.
+
+### 2026-09-25 default-route diagnostics
+
+The existing v0 boolean `default_route_present` now reflects a bounded read of
+both address families: Linux `ip -j` route rows, macOS `netstat` routing tables,
+or Windows `GetIpForwardTable2`. If either family cannot be read or validated,
+the response retains the fixed `diagnostics_default_route_not_observed`
+limitation. `TestObserveLinuxDefaultRoutes`, `TestObserveDarwinDefaultRoutes`,
+`TestZeroWindowsRoutePrefix` and
+`TestRPCDiagnosticsProjectsDefaultRouteOnlyWhenObserved` cover the collectors
+and projection. The local permitted checks passed and push run 36112986842
+passed the four short unit jobs; the non-push verification, contract, install,
+container, STUN and control-plane jobs were skipped. This samples default-route
+presence only; it does not collect the full route table or resource/resolver
+state, and it does not provide installed-platform runtime evidence. No IPC or
+schema version was changed.
