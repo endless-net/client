@@ -1,6 +1,6 @@
 # Block 6 evidence audit (updated 2026-09-25)
 
-Source: acceptance evidence through `main` at `35ff3ab` (updated
+Source: acceptance evidence through `main` at `9f5faa4` (updated
 2026-09-25). This remains an open requirement and acceptance ledger, not a
 declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
@@ -13,6 +13,12 @@ and [update-source design](https://github.com/endless-net/architecture/blob/9ff2
 at architecture `9ff22c1` add an approved UI-Q10 *channel direction* and a
 still-proposed trust/discovery design; they do not revise the pinned IT or
 BR/AC acceptance baseline or supply runtime evidence.
+The Client UI consumer SA was refreshed in the [local map](client-local-requirement-map.md)
+to [b03fd54](https://github.com/endless-net/client-ui/blob/b03fd540789a3a33fce26b9203888b899ce311f1/docs/client-ui-system-analysis.md),
+the latest edit to that path. Current architecture `main` is
+[74c5ff6](https://github.com/endless-net/architecture/commit/74c5ff6be7244fe1786194216780846955036dc3),
+but the two D-035 files have no edits after `9ff22c1`; their trust/discovery
+proposal and owner dependencies remain unchanged.
 
 ## Evidence available now
 
@@ -321,3 +327,8 @@ container, STUN and control-plane jobs were skipped. This samples default-route
 presence only; it does not collect the full route table or resource/resolver
 state, and it does not provide installed-platform runtime evidence. No IPC or
 schema version was changed.
+
+Push run [36114327050](https://github.com/endless-net/client/actions/runs/36114327050)
+passed all four short-unit jobs at `9f5faa4`, including the diagnostics provider
+injection test. Verify, contract, installer, container, STUN and control-plane
+jobs were skipped because this was a push.
