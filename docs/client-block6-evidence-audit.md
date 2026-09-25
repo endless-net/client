@@ -2,7 +2,7 @@
 
 Source: completed system evidence through manual dispatch `36127380078` on
 `main` at `3f9f432`; later fixture and diagnostic corrections and short-unit
-evidence through `4afd0c3` (updated 2026-09-25). This remains an
+evidence through `76481a5` (updated 2026-09-25). This remains an
 open requirement and acceptance ledger, not a declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
 architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
@@ -440,3 +440,18 @@ skipped because it is a push. The first macOS Intel unit job failed at
 that job at the same SHA passed in 4m28s; the other three platform unit jobs
 also passed. The isolated failure's cause remains undetermined. The change is
 diagnostic only and does not resolve the failed system acceptance.
+
+At `76481a5`, timeout diagnostics now include a bounded numeric-only native
+status snapshot, and cross-network aborts preserve one of five fixed phase
+reason keys (`source_changed`, `preparation_failed`, `registration_failed`,
+`activation_failed`, `exit_protection_active`); unknown keys remain generic.
+The phase test changes source intent during catalog preparation and confirms
+the durable preparation reason. The permitted local checks passed, and push
+[36139842205](https://github.com/endless-net/client/actions/runs/36139842205)
+passed all four platform short-unit jobs on this exact SHA. Its non-push system,
+installer and contract jobs were skipped, so neither the cross-network failure
+nor the container Connect timeout has been revalidated. The user's latest
+manual-dispatch approval names `3f9f432`, whose one approved dispatch is already
+`36127380078`; it does not authorize dispatching current `main` at `76481a5`.
+System acceptance remains open pending a run on the corrected source and
+resolution of the recorded failures.
