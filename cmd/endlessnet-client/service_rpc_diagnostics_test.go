@@ -39,14 +39,20 @@ func TestAgentRPCDiagnosticsVerifiesMapAndDoesNotWaitForEngine(t *testing.T) {
 				t.Fatal(err)
 			}
 			engine := &nonblockingDiagnosticsEngine{testAgentWireGuard: &testAgentWireGuard{}}
-			routeCalls := 0
+			routeCalls, defaultRouteCalls := 0, 0
 			provider := agentRPCDiagnostics(agentIPCOptions{ConfigStore: store, WireGuard: engine, WGInterface: "endlessnet", ObserveRoutes: func(context.Context, string, []string) []client.WireGuardRouteInspection {
 				routeCalls++
 				return []client.WireGuardRouteInspection{{Target: "192.0.2.1", Interface: "observed0"}}
+			}, ObserveDefaultRoute: func(context.Context) (bool, bool) {
+				defaultRouteCalls++
+				return true, true
 			}})
 			out, err := provider(t.Context())
 			if err != nil || !out.TunnelBusy || engine.calls != 1 {
 				t.Fatal("busy engine blocked or was misreported", err)
+			}
+			if !out.DefaultRouteObserved || !out.DefaultRoutePresent || defaultRouteCalls != 1 {
+				t.Fatal("observed default route was not included")
 			}
 			if out.VerifiedMap != valid || (out.DNS != nil) != valid {
 				t.Fatal("DNS source verification boundary failed")
@@ -60,7 +66,7 @@ func TestAgentRPCDiagnosticsVerifiesMapAndDoesNotWaitForEngine(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 			_, err = provider(ctx)
-			if !errors.Is(err, context.Canceled) || engine.calls != 1 {
+			if !errors.Is(err, context.Canceled) || engine.calls != 1 || defaultRouteCalls != 1 {
 				t.Fatal("cancelled diagnostics probed engine", err)
 			}
 		})

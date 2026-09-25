@@ -296,6 +296,7 @@ type agentIPCOptions struct {
 	ExitRuntime           *client.NativeExitRuntime
 	SyncWake              chan struct{}
 	ObserveRoutes         func(context.Context, string, []string) []client.WireGuardRouteInspection
+	ObserveDefaultRoute   func(context.Context) (present bool, observed bool)
 }
 
 func requestAgentSync(opts agentIPCOptions) {
