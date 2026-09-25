@@ -1,8 +1,8 @@
 # Block 6 evidence audit (updated 2026-09-25)
 
-Source: system evidence through the in-progress manual dispatch on `main` at
-`3f9f432`; fixture corrections and short-unit evidence through `f9994af`
-(updated 2026-09-25). This remains an
+Source: completed system evidence through manual dispatch `36127380078` on
+`main` at `3f9f432`; fixture corrections and short-unit evidence through
+`d8b7232` (updated 2026-09-25). This remains an
 open requirement and acceptance ledger, not a declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
 architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
@@ -191,9 +191,12 @@ positive, negative and restart/concurrency outcomes in the related IT rows.
   catalog selection, separate source/target node registration, target signed
   map activation, connected intent and restart using the native agent and test
   control plane. It compiles in short tests but is skipped there by
-  `requireControlScenario`; no full control-plane CI result exists yet, and it
-  does not provide kernel route, exit, resource withdrawal or real packet
-  evidence. Its trace is US-04 and its restart boundary overlaps IT-22; the
+  `requireControlScenario`. The three-repeat contract dispatch executed it on
+  all eight runners and recorded `ERROR_CODE_STALE_STATE` after acceptance on
+  all 24 platform/repetition jobs. The separate control-plane job passed, but
+  runs only `TestClientDataplane`; it does not provide kernel route, exit,
+  resource withdrawal or real packet evidence for this scenario. Its trace is
+  US-04 and its restart boundary overlaps IT-22; the
   delayed-old-response case in IT-22 and profile-switch stale-response,
   active-removal and mixed-route assertions in IT-28 remain open, as do
   US-05/11 native path assertions.
@@ -290,7 +293,7 @@ Current `AGENTS.md` permits local checks only via goimports, vet, configured
 golangci-lint and short tests. It says E2E, installer, privileged networking,
 release and system validation run in GitHub pull-request or release CI; the
 same file prohibits PRs and version increases. The user explicitly authorized
-two one-time `Test` workflow dispatches on main, so system evidence was gathered
+three one-time `Test` workflow dispatches on main, so system evidence was gathered
 without creating a PR or release. No further dispatch is authorized by that
 approval.
 
@@ -302,8 +305,12 @@ that node identity, network, credential and map do not leak into it after a
 restart, then restores the original profile and verifies the same NodeID,
 signed map and connected intent without another registration. The cross-network
 scenario separately covers US-04/IT-22 selection and restart. Both are guarded
-system tests and are compiled but skipped by `go test -short ./...`; neither
-has a full control-plane CI result yet.
+system tests compiled but skipped by `go test -short ./...`. The third Test
+dispatch ran both across 24 contract jobs: the profile scenario passed in 22
+and failed on two macOS Intel repetitions because CreateProfile's snapshot was
+stale at admission; `d8b7232` adds a bounded same-request retry for that case.
+The cross-network scenario failed on all 24 with `STALE_STATE` after acceptance.
+The newer `d8b7232` correction has local and push short-unit evidence only.
 
 Push run [36109476988](https://github.com/endless-net/client/actions/runs/36109476988)
 passed all four short unit jobs (Ubuntu, Windows, macOS ARM and macOS Intel).
@@ -380,17 +387,31 @@ source context. These corrections are in `f9994af`; the 79b99eb dispatch cannot
 validate them. The aggregate `verify` gate therefore failed. Push run
 [36124005128](https://github.com/endless-net/client/actions/runs/36124005128)
 passed all four platform short-unit jobs on `f9994af`. A third manual Test
-dispatch was explicitly approved and started once on current `main` at
-`3f9f432` with `contract_repetitions=3`:
+dispatch was explicitly approved and run once on current `main` at `3f9f432`
+with `contract_repetitions=3`:
 [36127380078](https://github.com/endless-net/client/actions/runs/36127380078).
-At the latest observation, its nine completed jobs passed: all three Verify
-platform jobs, the native control-plane scenarios and five installer/smoke
-jobs. Sixteen jobs were reported in progress and five queued, with no reported
-failures; the container lifecycle job remains queued. The workflow-level status
-is still `queued`, and GitHub's run `updated_at` has not advanced from its
-dispatch time (`2026-09-25T11:04:12Z`), so this is interim evidence only. The
-push workflow for `3f9f432` passed all 13 jobs. This was the third and final
-manual Test dispatch covered by the user's explicit approvals; do not dispatch
-another system workflow without fresh authorization. Container lifecycle,
-contract repetitions, the aggregate verify gate and overall system acceptance
-remain unresolved until the current run reaches a terminal state.
+It completed all 40 jobs with conclusion `failure`. Verify Linux, Windows and
+macOS; native control-plane scenarios; and all eight installer/smoke jobs
+passed. All 24 platform/repetition contract jobs failed:
+`TestControlPlaneNativeCrossNetworkSelection` failed on every job after its
+operation was accepted, with state `FAILED` and `ERROR_CODE_STALE_STATE`.
+Two macOS Intel repetitions also hit `ERROR_CODE_STALE_STATE` when the profile
+scenario submitted CreateProfile using an older CAS snapshot. `d8b7232` makes
+that test refresh status and retry only this explicit stale admission, keeping
+the same request ID and semantic payload. Local permitted checks and its push
+workflow passed, but no non-push run exercised that correction.
+
+The container job installed and started its isolated test logind service and
+reached native IPC, but Connect stayed RUNNING for 30 seconds in persistent
+IPv4/IPv6 TCP/UDP cases and ephemeral recreation. At each timeout the last safe
+observation was `kind=2 state=1 failure=0`; the subsequent operation read was
+unclassified. The aggregate `verify` gate failed because of the contract and
+container jobs. Push run [36127198821](https://github.com/endless-net/client/actions/runs/36127198821)
+passed all 13 jobs on `3f9f432`; push run
+[36131416680](https://github.com/endless-net/client/actions/runs/36131416680)
+passed all 13 jobs on `d8b7232`. The cross-network test now includes its
+operation `ReasonKey` in failure output, so a future authorized run can
+distinguish source invalidation from target-readiness failure without exposing
+provider details. This was the third manual Test dispatch covered by the
+user's explicit approvals; no further system workflow is authorized by those
+approvals. Overall system acceptance remains open.

@@ -215,7 +215,9 @@ func TestControlPlaneNativeCrossNetworkSelection(t *testing.T) {
 	}
 	operation := n.AwaitNativeOperation(selected.Operation.Id)
 	if operation.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || operation.GetSelection().GetSelectedId() != target.ID {
-		t.Fatalf("cross-network selection did not complete: state=%d failure=%d", operation.State, operation.GetFailure().GetCode())
+		failure := operation.GetFailure()
+		t.Fatalf("cross-network selection did not complete: state=%s failure=%s reason=%q",
+			operation.State, failure.GetCode(), failure.GetReasonKey())
 	}
 	targetStatus := n.AwaitNativeStatus(func(v *ipc.Status) bool {
 		return v.NodeId != "" && v.NodeId != sourceNode && v.ActiveProfileId == profileID && v.GetNetwork().GetId() == target.ID &&
