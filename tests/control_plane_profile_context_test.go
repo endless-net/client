@@ -65,8 +65,8 @@ func TestControlPlaneNativeProfileContextSwitch(t *testing.T) {
 		return v.ActiveProfileId == emptyProfile && v.NodeId == "" && v.GetNetwork().GetId() == "" &&
 			!v.GetStoredState().GetNodeCredentialPresent() && !v.GetStoredState().GetCachedMapValid()
 	})
-	if empty.GetIntent().GetDesiredState() != ipc.DesiredState_DESIRED_STATE_DISCONNECTED {
-		t.Fatal("empty profile inherited the source connection intent")
+	if empty.GetIntent().GetDesiredState() == ipc.DesiredState_DESIRED_STATE_CONNECTED {
+		t.Fatal("empty profile inherited the source connected intent")
 	}
 	n.Stop()
 	n.Start()

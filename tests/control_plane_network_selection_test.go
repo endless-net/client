@@ -153,6 +153,7 @@ func TestControlPlaneNativeCrossNetworkSelection(t *testing.T) {
 	n.TrustControlTLS(s)
 	n.MustRun("login", "--config", n.Config, "--server", s.URL(), "--token", s.SessionToken(), "--map-signing-trust-file", n.TrustFile)
 	n.Enroll(s, source.Name, sourceJoin)
+	n.MustRun("billing", "accounts", "--config", n.Config, "--use", "test-account")
 	n.Start()
 	runNativeControlMutation(t, n, "connect", "6b160000-0000-4000-8000-000000000001")
 	defer n.Stop()
