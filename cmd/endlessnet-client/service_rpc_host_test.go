@@ -263,6 +263,20 @@ func TestAgentNativeRPCHostBootstrapAndStop(t *testing.T) {
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition || output != "" {
 		t.Fatal("stale disconnect accepted", err)
 	}
+	latestCatalogJSON, err := captureStdout(t, func() error {
+		return cmdService([]string{"profiles", transportFlag, endpoint, "--timeout", "5s"})
+	})
+	if err != nil {
+		t.Fatal("refresh profile snapshot before disconnect", err)
+	}
+	latestCatalog := new(ipc.ListProfilesResponse)
+	if err := protojson.Unmarshal([]byte(latestCatalogJSON), latestCatalog); err != nil {
+		t.Fatal("decode refreshed profile snapshot", err)
+	}
+	disconnectArgs = append([]string{"disconnect", "--request-id", "0b9b9e54-42c5-4fca-a2e7-1d9c3a3d39c0"},
+		transportFlag, endpoint, "--timeout", "5s", "--profile-id", accepted.Msg.Operation.ProfileId,
+		"--expected-instance-id", latestCatalog.Page.Metadata.InstanceId,
+		"--expected-revision", fmt.Sprint(latestCatalog.Page.Metadata.Revision))
 	var original *ipc.Operation
 	downBefore := wireGuard.downCalls
 	for range 2 {

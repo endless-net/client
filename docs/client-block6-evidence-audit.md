@@ -32,6 +32,14 @@ BR/AC acceptance baseline or supply runtime evidence.
   ownership guards therefore have Linux, Windows 2025, macOS ARM and Intel
   short-unit evidence; native kernel containment and combined transition
   acceptance remain outstanding.
+- The documentation-only push at `26f44c5` had one Windows short-unit failure:
+  `TestAgentNativeRPCHostBootstrapAndStop` received `STALE_STATE` on Disconnect.
+  Rerunning only that job on the same SHA passed. The test had reused a
+  revision from an earlier operation instead of fetching a fresh snapshot for
+  the successful mutation; it now fetches the profile catalog immediately
+  before Disconnect and retains a separate deliberately stale request. This
+  corrects the test's compare-and-set input, but the one-off runner failure
+  does not establish the cause of every possible revision race.
 - `test.yml` runs installation, eight-platform contract scenarios, isolated
   dataplane and container jobs only for non-push events. No result from those
   jobs at the current source was inspected in this audit. Push success is not
