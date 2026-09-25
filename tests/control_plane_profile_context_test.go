@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"testing"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -31,8 +32,10 @@ func TestControlPlaneNativeProfileContextSwitch(t *testing.T) {
 	sourceNode, sourceProfile := source.NodeId, source.ActiveProfileId
 
 	created := &ipc.CreateProfileResponse{}
-	createArgs := append(testclient.NativeMutationArguments("6b170000-0000-4000-8000-000000000002", source),
-		"--display-name", "empty-context", "--control-origin", s.URL())
+	createArgs := []string{"--request-id", "6b170000-0000-4000-8000-000000000002",
+		"--expected-instance-id", source.GetMetadata().GetInstanceId(),
+		"--expected-revision", fmt.Sprint(source.GetMetadata().GetRevision()),
+		"--display-name", "empty-context", "--control-origin", s.URL()}
 	if err := n.NativeService("create-profile", created, createArgs...); err != nil {
 		t.Fatal("create empty profile failed", err)
 	}
