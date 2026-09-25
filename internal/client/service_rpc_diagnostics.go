@@ -16,16 +16,18 @@ import (
 // Observations must contain public interface metadata only, never config or
 // arbitrary process output. Raw inspection error strings are not serialized.
 type ClientRPCDiagnosticsObservation struct {
-	OSVersion      string
-	Tunnel         WireGuardInspection
-	Interfaces     []NetworkInterfaceStatus
-	TunnelBusy     bool
-	VerifiedMap    bool
-	DNS            *ipc.DnsDiagnostics
-	RouteConflicts []OverlayCIDRConflict
-	Peers          []*ipc.Peer
-	TunnelPeers    []*ipc.TunnelPeer
-	PeerFailures   []*ipc.Failure
+	OSVersion            string
+	Tunnel               WireGuardInspection
+	Interfaces           []NetworkInterfaceStatus
+	TunnelBusy           bool
+	VerifiedMap          bool
+	DNS                  *ipc.DnsDiagnostics
+	RouteConflicts       []OverlayCIDRConflict
+	Peers                []*ipc.Peer
+	TunnelPeers          []*ipc.TunnelPeer
+	PeerFailures         []*ipc.Failure
+	DefaultRoutePresent  bool
+	DefaultRouteObserved bool
 	// OSRoutes contains actual route lookups, never Tunnel.Routes (which may
 	// be synthesized from desired router configuration). A partial collection
 	// is permitted and does not establish completeness.
@@ -85,9 +87,8 @@ func (s *ClientRPCService) diagnosticsAs(ctx context.Context, peer local.Peer, r
 	}
 	result := &ipc.Diagnostics{Metadata: snapshot.Status.Metadata, Client: proto.Clone(s.build).(*ipc.BuildIdentity),
 		OsName: runtime.GOOS, OsVersion: observation.OSVersion, GoVersion: runtime.Version(), Status: snapshot.Status,
-		Truncated: true, Failures: []*ipc.Failure{
+		Truncated: true, DefaultRoutePresent: observation.DefaultRoutePresent, Failures: []*ipc.Failure{
 			{Code: ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, ReasonKey: "diagnostics_os_routes_not_collected"},
-			{Code: ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, ReasonKey: "diagnostics_default_route_not_observed"},
 			{Code: ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, ReasonKey: "diagnostics_resource_observation_not_collected"},
 		},
 		Tunnel: &ipc.TunnelInspection{Ok: observation.Tunnel.OK, InterfaceName: observation.Tunnel.Interface}}
@@ -97,6 +98,9 @@ func (s *ClientRPCService) diagnosticsAs(ctx context.Context, peer local.Peer, r
 	result.Tunnel.Mtu = uint32(observation.Tunnel.MTU)
 	if result.OsVersion == "" {
 		result.Failures = append(result.Failures, &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, ReasonKey: "diagnostics_os_version_unavailable"})
+	}
+	if !observation.DefaultRouteObserved {
+		result.Failures = append(result.Failures, &ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_UNSUPPORTED, ReasonKey: "diagnostics_default_route_not_observed"})
 	}
 	result.Tunnel.ListenPort = uint32(observation.Tunnel.ListenPort)
 	if !observation.Tunnel.OK || observation.Tunnel.Error != "" {

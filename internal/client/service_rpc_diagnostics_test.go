@@ -94,6 +94,37 @@ func TestRPCDiagnosticsSeparatesObservedRoutesFromDesiredRoutes(t *testing.T) {
 	assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED)
 }
 
+func TestRPCDiagnosticsProjectsDefaultRouteOnlyWhenObserved(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		observed bool
+		present  bool
+	}{
+		{name: "unknown"},
+		{name: "present", observed: true, present: true},
+		{name: "absent", observed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, peer, profile := rpcConnectFixture(t)
+			s := NewClientRPCService(m, nil)
+			s.DiagnosticsProvider = func(context.Context) (ClientRPCDiagnosticsObservation, error) {
+				return ClientRPCDiagnosticsObservation{VerifiedMap: true, DefaultRouteObserved: tc.observed, DefaultRoutePresent: tc.present}, nil
+			}
+			result, err := s.diagnosticsAs(t.Context(), peer, &ipc.GetDiagnosticsRequest{Profile: profile})
+			if err != nil || result.Diagnostics.DefaultRoutePresent != tc.present {
+				t.Fatal("default route projection did not match observation", err)
+			}
+			foundUnavailable := false
+			for _, failure := range result.Diagnostics.Failures {
+				foundUnavailable = foundUnavailable || failure.ReasonKey == "diagnostics_default_route_not_observed"
+			}
+			if foundUnavailable == tc.observed {
+				t.Fatal("default route limitation did not match observation completeness")
+			}
+		})
+	}
+}
+
 func TestRPCDiagnosticsRejectsChangedContextAndInvalidProvider(t *testing.T) {
 	for _, mode := range []string{"inactive", "nil-provider", "provider-error", "revision", "owner", "cancel", "oversized", "negative-mtu"} {
 		t.Run(mode, func(t *testing.T) {

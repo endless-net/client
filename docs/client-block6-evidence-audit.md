@@ -62,10 +62,17 @@ BR/AC acceptance baseline or supply runtime evidence.
   mentions LAN_ALLOW. `tests/control_plane_network_selection_test.go` covers
   current-ID reselection and account-catalog denial, not cross-network
   handover. These are concrete system-coverage holes.
-- `service_rpc_diagnostics.go` reports uncollected default-route/resource
-  observation and unobserved OS resolver state. `service_rpc_update.go` returns
-  SOURCE_UNAVAILABLE. Neither is an accepted implementation of the full
-  diagnostics/distribution contract.
+- Diagnostics now projects the existing v0 `default_route_present` field from
+  bounded Linux/macOS route-table reads and Windows IP Helper route tables;
+  failure remains explicitly unobserved. This adds no IPC/schema version.
+  `TestObserveLinuxDefaultRoutes`, `TestObserveDarwinDefaultRoutes` and
+  `TestRPCDiagnosticsProjectsDefaultRouteOnlyWhenObserved` cover parsing,
+  completeness and projection. The four allowed local checks passed, but this
+  code has not yet completed cross-platform push CI or runtime system checks.
+  Resource observations and OS resolver readback remain unavailable, and
+  platform runtime behavior still needs acceptance. `service_rpc_update.go`
+  returns SOURCE_UNAVAILABLE; this is not full diagnostics/distribution
+  acceptance.
 
 ## Per-IT assertion and acceptance matrix
 
@@ -108,7 +115,7 @@ assertion review, not row-level passes. All rows remain open.
 | 29 | + independent session/node clocks; − unknown expiry not infinite or seamless; R interrupted renewal | Native timing and producer renewal |
 | 30 | + explicit Select/Apply/Contain/Clear, exact LAN family result; − path loss, overlap, lock, expiry and no implicit default; R boot/namespace/ownership recovery | Linux kernel verifier, packet and route/firewall observations; other OS capability decisions |
 | 31 | + UI_QUIT, runtime_start and trusted OS events follow distinct settings; − source loss never becomes user DISCONNECT; R crash/suspend/logoff/overflow | Real Linux logind, Windows SCM, macOS IOKit/Endpoint Security lifecycle |
-| 32 | + bounded authorized redacted bundle; − foreign owner, stale handle/offset/context; R restart and expiry | Installed archive and resource/route/resolver observations |
+| 32 | + bounded authorized redacted bundle; − foreign owner, stale handle/offset/context; R restart and expiry | Installed archive, resource/resolver observations, and per-platform default-route collector execution |
 | 33 | + compatible verified pair and approved update; − digest mismatch, expired/replayed metadata, updater failure; R source rotation | Approved discovery contract, signed artifact pairing and installed updater |
 
 BR/AC-01–20 and RULE-01–16 retain the exact row-by-row trace in
@@ -140,7 +147,7 @@ positive, negative and restart/concurrency outcomes in the related IT rows.
 | Resources | Signed HOST/SUBNET/SERVICE catalog, durable enablement, packet filter and correlated reply observer | A SUBNET sample proves one destination, not a whole prefix; SERVICE reply proves tuple, not application health. Complete transition and native overlap/route observation remain open |
 | Lifecycle | Durable UI_QUIT/runtime_start/lifecycle settings; Linux logind power/session source, Windows SCM, macOS IOKit and optional Endpoint Security | Validate actual logoff and KEEP_INTENT through service restart. Released macOS binary lacks required entitlement/signing/FDA, so user_logoff is UNSUPPORTED there |
 | Context/security | Native enrollment, selection, session, trust, logout and forget workers with bounded journals and owner checks | Cross-worker late-response, uncertain remote cleanup and real provider outcomes require end-to-end evidence |
-| Diagnostics | Route target lookup and privacy bounded bundle | Full default-route/table, resource and OS resolver observations absent; v0 DTO has no resource observation section. Contract/consumer decision needed without implicit version increase |
+| Diagnostics | Route target lookup, privacy bounded bundle, bounded default-route presence collection | Resource observation and OS resolver state remain absent; v0 DTO has no resource observation section. Consumer contract decision needed for new fields without implicit version increase |
 | Update | GetUpdateInfo reports SOURCE_UNAVAILABLE and installed pair UNKNOWN; `reported_ui` is caller input. UI-Q10 now approves Windows signed MSI via WinGet/manual/enterprise, Linux APT exact UI/core pair, macOS Developer ID package and mobile store as channel direction | D-035 technical trust/discovery design remains proposed. `client-ui`/distribution owners must first establish an attested or signed-envelope binding for existing schema-3 provenance, authenticated installed package identity/receipt and exact running bytes, signed fresh channel index, publisher roles/trust bootstrap, rotation/revocation, and OS install outcome. Current Windows attestation subject omits `release-provenance.json`. No positive GetUpdateInfo state is implementable honestly from the present inputs; do not invent source, key, URL or a parallel pairing schema |
 | IPC/consumers | Agent serves generated v0 handler via protected local transport; CLI/helper use native client; Go/Dart bindings and descriptor exist | Targeted search found no production HTTP IPC v2 route, but does not prove all obsolete artifacts removed; run generation/transport and installed pairing gates. Backend HTTP is separate from local IPC |
 | Packaging | Core release, APT and cross-platform workflows live here | Installed artifact provenance, upgrade/reset/uninstall and exact UI/core pair need release CI; no version or generation increase is authorized |
@@ -262,8 +269,8 @@ and other bind-closure causes remain to be checked before calling it resolved.
    sleep/wake, logoff, source loss/recovery, owner changes and stream reattach.
    macOS logoff requires an entitled, signed and FDA-approved artifact and
    fast-user-switch/missed-event checks. Record unsupported status until then.
-5. Qualify diagnostics privacy/bounds and verified route/resource/resolver
-   observations, then update discovery only after the approved signed source
+5. Qualify diagnostics privacy/bounds, per-platform default-route collection,
+   and verified resource/resolver observations, then update discovery only after the approved signed source
    and exact UI/core pairing contract exist. Exercise expiry, replay, rotation,
    incompatible pair and external updater failure.
 

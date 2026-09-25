@@ -18,7 +18,9 @@ func agentRPCDiagnostics(opts agentIPCOptions) client.ClientRPCDiagnosticsProvid
 		}
 		osVersion, _ := diagnosticsOSVersion()["version"].(string)
 		inspection, available := opts.WireGuard.TryInspection()
-		result := client.ClientRPCDiagnosticsObservation{OSVersion: osVersion, Tunnel: inspection, TunnelBusy: !available, Interfaces: client.LocalInterfaceStatuses()}
+		defaultRoutePresent, defaultRouteObserved := client.ObserveOSDefaultRoute(ctx)
+		result := client.ClientRPCDiagnosticsObservation{OSVersion: osVersion, Tunnel: inspection, TunnelBusy: !available, Interfaces: client.LocalInterfaceStatuses(),
+			DefaultRoutePresent: defaultRoutePresent, DefaultRouteObserved: defaultRouteObserved}
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
