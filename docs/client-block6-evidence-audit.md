@@ -1,8 +1,8 @@
 # Block 6 evidence audit (updated 2026-09-25)
 
 Source: completed system evidence through manual dispatch `36127380078` on
-`main` at `3f9f432`; fixture corrections and short-unit evidence through
-`d8b7232` (updated 2026-09-25). This remains an
+`main` at `3f9f432`; later fixture and diagnostic corrections and short-unit
+evidence through `29de96c` (updated 2026-09-25). This remains an
 open requirement and acceptance ledger, not a declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
 architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
@@ -410,8 +410,15 @@ container jobs. Push run [36127198821](https://github.com/endless-net/client/act
 passed all 13 jobs on `3f9f432`; push run
 [36131416680](https://github.com/endless-net/client/actions/runs/36131416680)
 passed all 13 jobs on `d8b7232`. The cross-network test now includes its
-operation `ReasonKey` in failure output, so a future authorized run can
-distinguish source invalidation from target-readiness failure without exposing
-provider details. This was the third manual Test dispatch covered by the
-user's explicit approvals; no further system workflow is authorized by those
-approvals. Overall system acceptance remains open.
+operation `ReasonKey` in failure output. `internal/testclient.AwaitNativeOperation`
+also reports a bounded, numeric-only public status snapshot when an operation
+times out; this can distinguish control, connection and agent state without
+exposing provider details. Commit `29de96c` contains this timeout diagnostic.
+Its push run
+[36135490518](https://github.com/endless-net/client/actions/runs/36135490518)
+completed successfully on that exact SHA; as a push, it ran only the four
+platform short-unit jobs, while system, installer and contract jobs were
+skipped. The four permitted local checks passed at `29de96c`. This was the
+third manual Test dispatch covered by the user's explicit approvals; no
+further system workflow is authorized by those approvals. Overall system
+acceptance remains open.
