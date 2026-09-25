@@ -11,8 +11,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Only explicit Connect/Disconnect/SelectNetwork/SelectProfile admission
-// rejection or the unconfirmed-local-forget negative probe can refresh CAS.
+// Only explicit Connect/Disconnect/CreateProfile/SelectNetwork/SelectProfile
+// admission rejection or the unconfirmed-local-forget negative probe can refresh CAS.
 // The latter must always submit Confirmed=false; it can never authorize
 // cleanup. Keep the caller's request ID and semantic payload unchanged; never
 // retry an accepted operation, uncertain transport outcome, logout, or changed
@@ -22,7 +22,7 @@ func retryNativeControlAdmission(command string, initial *ipc.Status, read func(
 	for attempt := 0; ; attempt++ {
 		err := submit(current)
 		stale := testclient.IsNativeStaleState(err) || (connect.CodeOf(err) == connect.CodeFailedPrecondition && rpc.FailureFromError(err).GetCode() == ipc.ErrorCode_ERROR_CODE_STALE_STATE)
-		if err == nil || attempt == 2 || (command != "connect" && command != "disconnect" && command != "select-network" && command != "select-profile" && command != "unconfirmed-local-forget") || !stale {
+		if err == nil || attempt == 2 || (command != "connect" && command != "disconnect" && command != "create-profile" && command != "select-network" && command != "select-profile" && command != "unconfirmed-local-forget") || !stale {
 			return err
 		}
 		next, readErr := read()
@@ -82,12 +82,14 @@ func TestNativeControlAdmissionRetryBoundaries(t *testing.T) {
 	if !testclient.IsNativeStaleState(stale) {
 		t.Fatal("fixture is not a canonical stale admission rejection")
 	}
-	for _, mode := range []string{"success", "revision", "exhausted", "uncertain", "logout", "read-error", "nil", "node", "profile", "instance", "same-revision", "regression", "intent", "disconnected", "network"} {
+	for _, mode := range []string{"success", "revision", "exhausted", "uncertain", "logout", "create-profile", "read-error", "nil", "node", "profile", "instance", "same-revision", "regression", "intent", "disconnected", "network"} {
 		t.Run(mode, func(t *testing.T) {
 			initial := &ipc.Status{NodeId: "node", ActiveProfileId: "profile", Metadata: &ipc.SnapshotMetadata{InstanceId: "instance", Revision: 10}}
 			command := "connect"
 			if mode == "logout" {
 				command = "logout"
+			} else if mode == "create-profile" {
+				command = "create-profile"
 			}
 			calls, reads := 0, 0
 			uncertain := errors.New("unclassified transport outcome")
@@ -138,7 +140,7 @@ func TestNativeControlAdmissionRetryBoundaries(t *testing.T) {
 			if mode == "revision" {
 				wantCalls = 2
 			}
-			if mode == "exhausted" {
+			if mode == "exhausted" || mode == "create-profile" {
 				wantCalls, wantReads = 3, 2
 			}
 			if calls != wantCalls || reads != wantReads || (err == nil) != (mode == "success" || mode == "revision") {

@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	"testing"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
@@ -32,11 +31,16 @@ func TestControlPlaneNativeProfileContextSwitch(t *testing.T) {
 	sourceNode, sourceProfile := source.NodeId, source.ActiveProfileId
 
 	created := &ipc.CreateProfileResponse{}
-	createArgs := []string{"--request-id", "6b170000-0000-4000-8000-000000000002",
-		"--expected-instance-id", source.GetMetadata().GetInstanceId(),
-		"--expected-revision", fmt.Sprint(source.GetMetadata().GetRevision()),
-		"--display-name", "empty-context", "--control-origin", s.URL()}
-	if err := n.NativeService("create-profile", created, createArgs...); err != nil {
+	readStatus := func() (*ipc.Status, error) {
+		response := &ipc.GetStatusResponse{}
+		err := n.NativeService("status", response)
+		return response.GetStatus(), err
+	}
+	if err := retryNativeControlAdmission("create-profile", source, readStatus, func(current *ipc.Status) error {
+		args := append(testclient.NativeMutationArguments("6b170000-0000-4000-8000-000000000002", current),
+			"--display-name", "empty-context", "--control-origin", s.URL())
+		return n.NativeService("create-profile", created, args...)
+	}); err != nil {
 		t.Fatal("create empty profile failed", err)
 	}
 	if created.Operation == nil || created.Operation.State != ipc.OperationState_OPERATION_STATE_SUCCEEDED || created.Operation.ProfileId == "" {
