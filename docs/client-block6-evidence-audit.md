@@ -2,7 +2,7 @@
 
 Source: completed system evidence through manual dispatch `36127380078` on
 `main` at `3f9f432`; later fixture and diagnostic corrections and short-unit
-evidence through `29de96c` (updated 2026-09-25). This remains an
+evidence through `4afd0c3` (updated 2026-09-25). This remains an
 open requirement and acceptance ledger, not a declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
 architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
@@ -422,3 +422,21 @@ skipped. The four permitted local checks passed at `29de96c`. This was the
 third manual Test dispatch covered by the user's explicit approvals; no
 further system workflow is authorized by those approvals. Overall system
 acceptance remains open.
+
+Commit `4afd0c3` preserves fixed phase keys for network-selection aborts
+(source change, preparation, registration, activation or exit guard), while
+falling back to the generic key for any unknown value. This prevents the
+operation from collapsing every stale failure into `network_selection_aborted`
+and avoids exposing provider error text. Its short unit test changes source
+intent during catalog preparation and verifies that the durable result keeps
+the preparation-stage key. Local `goimports -w .`, `go vet ./...`,
+`golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m`, and
+`go test -short ./...` passed. Push run
+[36138621082](https://github.com/endless-net/client/actions/runs/36138621082)
+is the exact-SHA push CI evidence; its system, installer and contract jobs are
+skipped because it is a push. The first macOS Intel unit job failed at
+`TestWireGuardRelayReplacesConnectionsWhenUnderlayMarkChanges` with
+`relay retained a connection with the previous socket policy`. Rerunning only
+that job at the same SHA passed in 4m28s; the other three platform unit jobs
+also passed. The isolated failure's cause remains undetermined. The change is
+diagnostic only and does not resolve the failed system acceptance.
