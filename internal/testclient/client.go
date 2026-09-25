@@ -24,6 +24,7 @@ type Node struct {
 	Namespace, Pipe                              string
 	AgentArgs                                    []string
 	Environment                                  []string
+	lifecycleCleanup                             func()
 	cmd                                          *exec.Cmd
 	done                                         chan error
 }
@@ -62,7 +63,20 @@ func New(t *testing.T, s *testcontrol.Server) *Node {
 		}
 		n.Environment = []string{"SSL_CERT_FILE=" + path}
 	}
-	t.Cleanup(n.Stop)
+	if runtime.GOOS == "linux" && os.Getenv("ENDLESSNET_CONTAINER_TEST") == "1" {
+		address, cleanup, err := newTestLogindBus()
+		if err != nil {
+			t.Fatal("could not start isolated test logind bus")
+		}
+		n.Environment = append(n.Environment, "DBUS_SYSTEM_BUS_ADDRESS="+address)
+		n.lifecycleCleanup = cleanup
+	}
+	t.Cleanup(func() {
+		n.Stop()
+		if n.lifecycleCleanup != nil {
+			n.lifecycleCleanup()
+		}
+	})
 	return n
 }
 
