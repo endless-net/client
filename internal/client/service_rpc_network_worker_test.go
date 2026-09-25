@@ -90,6 +90,39 @@ func TestNetworkWorkerResumesAllPhasesFromDisk(t *testing.T) {
 	}
 }
 
+func TestNetworkSelectionFailureKeepsFixedPhaseDiagnostic(t *testing.T) {
+	m, owner, request := networkSelectionPlanFixture(t)
+	op, err := m.beginNetworkSelectionAs(owner, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	driver := ClientRPCProfileDriver{Lock: &sync.Mutex{}, Stop: func(context.Context) (ipc.ConnectionContinuity, error) {
+		return ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED, nil
+	}}
+	err = m.ReconcileNetworkSelection(t.Context(), driver, ClientRPCNetworkSelectionProviders{
+		Networks: func(context.Context, ClientRPCNetworksInput) ([]*ipc.Network, error) {
+			if err := m.store.Update(func(cfg *Config) error {
+				cfg.ConnectionIntent = &ConnectionIntent{DesiredState: ConnectionIntentDesiredDisconnected, Reason: "user_disconnect"}
+				return nil
+			}); err != nil {
+				return nil, err
+			}
+			return []*ipc.Network{{Id: "target", AccountId: "account"}}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := m.operationAs(owner, &ipc.GetOperationRequest{Lookup: &ipc.GetOperationRequest_OperationId{OperationId: op.Id}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.State != ipc.OperationState_OPERATION_STATE_FAILED || result.GetFailure().GetCode() != ipc.ErrorCode_ERROR_CODE_STALE_STATE ||
+		result.GetFailure().GetReasonKey() != "network_selection_preparation_failed" {
+		t.Fatal("network selection did not retain its fixed preparation diagnostic", result)
+	}
+}
+
 func TestNetworkHostJoinsRegistrationOnShutdown(t *testing.T) {
 	m, _ := networkRegistrationExecutorFixture(t)
 	s := NewClientRPCService(m, nil)

@@ -42,13 +42,13 @@ func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driv
 	}
 	plan := cfg.RPCState.NetworkSelection
 	if plan.AbortFailure != nil {
-		return m.ReconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, plan.AbortFailure.Code)
+		return m.reconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, plan.AbortFailure.Code, plan.AbortFailure.ReasonKey)
 	}
 	// A persisted plan accepted before exit-transition admission was guarded
 	// must not resume into a different network with the old exit ownership.
 	// Abort before activation so explicit Clear becomes available again.
 	if !plan.Activated && (cfg.RPCState.ExitProtection != nil || cfg.ExitSelection != nil) {
-		return m.ReconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED)
+		return m.reconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "network_selection_exit_protection_active")
 	}
 	if plan.Activated {
 		return m.ReconcileNetworkSelectionApply(ctx, driver)
@@ -58,13 +58,16 @@ func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driv
 		if cfg.ConnectionIntent != nil && cfg.ConnectionIntent.DesiredState == ConnectionIntentDesiredDisconnected && !reflect.DeepEqual(cfg.ConnectionIntent, plan.Source.ConnectionIntent) {
 			code = ipc.ErrorCode_ERROR_CODE_CANCELLED
 		}
-		return m.ReconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, code)
+		return m.reconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, code, "network_selection_source_changed")
 	}
 	var err error
+	reasonKey := "network_selection_registration_failed"
 	switch {
 	case plan.Target == nil:
+		reasonKey = "network_selection_preparation_failed"
 		err = m.ReconcileNetworkSelectionPreparation(ctx, providers.Networks)
 	case plan.DownStarted || (plan.RegistrationReady && networkSelectionTargetReady(*plan.Target, m.now())):
+		reasonKey = "network_selection_activation_failed"
 		err = m.ReconcileNetworkSelectionActivation(ctx, driver)
 	default:
 		err = m.ReconcileNetworkSelectionRegistration(ctx, providers.Register)
@@ -79,7 +82,7 @@ func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driv
 	switch failure.Code {
 	case ipc.ErrorCode_ERROR_CODE_CANCELLED, ipc.ErrorCode_ERROR_CODE_STALE_STATE, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED, ipc.ErrorCode_ERROR_CODE_APPROVAL_REJECTED, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED,
 		ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, ipc.ErrorCode_ERROR_CODE_NOT_FOUND, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED:
-		return m.ReconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, failure.Code)
+		return m.reconcileNetworkSelectionAbort(ctx, driver, providers.Cleanup, failure.Code, reasonKey)
 	default:
 		return err
 	}

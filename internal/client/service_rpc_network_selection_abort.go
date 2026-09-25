@@ -13,6 +13,16 @@ import (
 // The private target is retained until remote cleanup and any uncertain local
 // teardown are confirmed. Runtime shutdown leaves the same plan recoverable.
 func (m *ClientRPCMutations) ReconcileNetworkSelectionAbort(ctx context.Context, driver ClientRPCProfileDriver, provider ClientRPCNetworkTargetCleanupProvider, code ipc.ErrorCode) error {
+	return m.reconcileNetworkSelectionAbort(ctx, driver, provider, code, "network_selection_aborted")
+}
+
+func (m *ClientRPCMutations) reconcileNetworkSelectionAbort(ctx context.Context, driver ClientRPCProfileDriver, provider ClientRPCNetworkTargetCleanupProvider, code ipc.ErrorCode, reasonKey string) error {
+	switch reasonKey {
+	case "network_selection_aborted", "network_selection_exit_protection_active", "network_selection_source_changed",
+		"network_selection_preparation_failed", "network_selection_registration_failed", "network_selection_activation_failed":
+	default:
+		reasonKey = "network_selection_aborted"
+	}
 	switch code {
 	case ipc.ErrorCode_ERROR_CODE_CANCELLED, ipc.ErrorCode_ERROR_CODE_STALE_STATE, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED, ipc.ErrorCode_ERROR_CODE_APPROVAL_REJECTED, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED,
 		ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, ipc.ErrorCode_ERROR_CODE_NOT_FOUND, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED:
@@ -50,7 +60,7 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionAbort(ctx context.Context,
 			if op.Kind != ipc.OperationKind_OPERATION_KIND_SELECT_NETWORK || op.ProfileId != plan.Profile.ID || !reflect.DeepEqual(current.RPCState.NetworkSelection, plan) {
 				return stale()
 			}
-			current.RPCState.NetworkSelection.AbortFailure = &ipc.Failure{Code: code, ReasonKey: "network_selection_aborted"}
+			current.RPCState.NetworkSelection.AbortFailure = &ipc.Failure{Code: code, ReasonKey: reasonKey}
 			op.State = ipc.OperationState_OPERATION_STATE_RUNNING
 			op.UserAction = nil
 			return nil
