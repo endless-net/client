@@ -232,10 +232,11 @@ and other bind-closure causes remain to be checked before calling it resolved.
 
 ## Acceptance plan and decision gate
 
-1. Complete the missing implementation and assertion work above, especially
-   cross-network transition, diagnostic observation and an explicit LAN_ALLOW
-   system scenario. Keep unavailable results explicit while external contracts
-   are unresolved.
+1. Complete the missing implementation and assertion work above. Native
+   cross-network selection/restart now has an integrated test, and IT-28 now
+   has a native profile isolation/restart/restore test. Diagnostic observation
+   and an explicit LAN_ALLOW system scenario remain open. Keep unavailable
+   results explicit while external contracts are unresolved.
 2. Pin one commit and approved producer/consumer artifacts. Run the existing
    `Test` workflow's non-push jobs with reports: `verify-*`, `installation`,
    `control-plane-platforms` on all eight runners, `control-plane`, `container-client`
@@ -269,3 +270,22 @@ authorized for this block. Therefore the system plan above is prepared but
 cannot be executed under the current instructions. An explicit decision on an
 allowed CI venue is required after the independent implementation/audit work;
 do not bypass this with a PR, dispatch or release.
+
+### 2026-09-25 native context scenarios
+
+Added `TestControlPlaneNativeProfileContextSwitch` for IT-28: it starts from a
+registered, connected profile, creates and selects an empty profile, checks
+that node identity, network, credential and map do not leak into it after a
+restart, then restores the original profile and verifies the same NodeID,
+signed map and connected intent without another registration. The cross-network
+scenario separately covers US-04/IT-22 selection and restart. Both are guarded
+system tests and are compiled but skipped by `go test -short ./...`; neither
+has a full control-plane CI result yet.
+
+Push run [36108614418](https://github.com/endless-net/client/actions/runs/36108614418)
+passed all four short unit jobs (Ubuntu, Windows, macOS ARM and macOS Intel);
+all verify, contract, installer, container, STUN and control-plane jobs were
+skipped because this was a push. The profile scenario was added after that run
+and is not part of its SHA. The four permitted local checks passed after adding
+the scenario: goimports, vet, configured golangci-lint and short tests. Full
+system acceptance and the allowed CI venue decision remain outstanding.
