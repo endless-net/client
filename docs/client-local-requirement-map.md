@@ -28,6 +28,26 @@ either external repository:
 These are source revisions, not a proposed version increase or acceptance pin.
 The source documents retain normative wording; this is client traceability.
 
+## Consumer-analysis source refresh — 2026-09-25
+
+The current Client UI `docs/client-ui-system-analysis.md` source is
+`b03fd540789a3a33fce26b9203888b899ce311f1`, after the original `a8df8d4`
+read. Path history confirms this is the latest edit to that document. It records
+two ownership clarifications relevant to this map: the client confirms browser
+enrollment through operation/status/events, and a callback in UI is not
+required; the producer owns browser completion security. Client owns mobile
+core embedding/binding while Client UI owns the consumer/plugin and
+presentation. Android Binder and iOS provider-message are proposals, not
+approved bindings; authorization, calls/events/errors, permission continuation,
+iOS bootstrap and WatchEvents delivery remain open.
+
+These clarify responsibility and acceptance dependencies; they do not prove a
+mobile binding, browser completion behavior, installation or platform runtime.
+The architecture D-035 and update-source design remain unchanged at
+`9ff22c1`: UI-Q10 channel direction is approved, while trust/discovery design
+is still proposed. See the [block 6 evidence audit](client-block6-evidence-audit.md)
+for current implementation and CI evidence.
+
 ## Implementation and unit paths
 
 Every requirement below joins through its US IDs to this implementation/unit
