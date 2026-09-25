@@ -1,7 +1,8 @@
 # Block 6 evidence audit (updated 2026-09-25)
 
-Source: system evidence through `main` at `79b99eb`; fixture corrections and
-short-unit evidence through `f9994af` (updated 2026-09-25). This remains an
+Source: system evidence through the in-progress manual dispatch on `main` at
+`3f9f432`; fixture corrections and short-unit evidence through `f9994af`
+(updated 2026-09-25). This remains an
 open requirement and acceptance ledger, not a declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
 architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
@@ -379,5 +380,17 @@ source context. These corrections are in `f9994af`; the 79b99eb dispatch cannot
 validate them. The aggregate `verify` gate therefore failed. Push run
 [36124005128](https://github.com/endless-net/client/actions/runs/36124005128)
 passed all four platform short-unit jobs on `f9994af`. A third manual Test
-dispatch was requested for `f9994af`; explicit user approval is pending. No
-system workflow is dispatched without that approval.
+dispatch was explicitly approved and started once on current `main` at
+`3f9f432` with `contract_repetitions=3`:
+[36127380078](https://github.com/endless-net/client/actions/runs/36127380078).
+At the latest observation, its nine completed jobs passed: all three Verify
+platform jobs, the native control-plane scenarios and five installer/smoke
+jobs. Sixteen jobs were reported in progress and five queued, with no reported
+failures; the container lifecycle job remains queued. The workflow-level status
+is still `queued`, and GitHub's run `updated_at` has not advanced from its
+dispatch time (`2026-09-25T11:04:12Z`), so this is interim evidence only. The
+push workflow for `3f9f432` passed all 13 jobs. This was the third and final
+manual Test dispatch covered by the user's explicit approvals; do not dispatch
+another system workflow without fresh authorization. Container lifecycle,
+contract repetitions, the aggregate verify gate and overall system acceptance
+remain unresolved until the current run reaches a terminal state.
