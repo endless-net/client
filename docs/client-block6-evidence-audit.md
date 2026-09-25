@@ -43,6 +43,10 @@ BR/AC acceptance baseline or supply runtime evidence.
 - Push [36106109151](https://github.com/endless-net/client/actions/runs/36106109151)
   passed all four short unit jobs at `0c70a54`, including the fresh-snapshot
   native CLI Disconnect scenario on Windows 2025.
+- Push [36107626963](https://github.com/endless-net/client/actions/runs/36107626963)
+  passed all four short unit jobs at `a9b2eca`. The new cross-network system
+  scenario compiles but is skipped by the short-test gate; this run does not
+  establish that the native switch executes successfully.
 - `test.yml` runs installation, eight-platform contract scenarios, isolated
   dataplane and container jobs only for non-push events. No result from those
   jobs at the current source was inspected in this audit. Push success is not
