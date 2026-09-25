@@ -332,3 +332,13 @@ Push run [36114327050](https://github.com/endless-net/client/actions/runs/361143
 passed all four short-unit jobs at `9f5faa4`, including the diagnostics provider
 injection test. Verify, contract, installer, container, STUN and control-plane
 jobs were skipped because this was a push.
+
+Push run [36114870086](https://github.com/endless-net/client/actions/runs/36114870086)
+passed all four short-unit jobs at `b1753cd`. Verify, contract, installer,
+container, STUN and control-plane jobs were skipped because this was a push.
+For IT-22, `TestControlPlaneNativeCrossNetworkSelection` exercises an accepted
+target registration through signed-map adoption and restart; unit coverage in
+`TestNetworkApplyContainsContextChangeDespiteProviderSuccess` confirms a
+Disconnect cancels target application even when the provider returns success
+after cancellation. The native test does not yet hold and deliver a late
+registration response across Disconnect, so that race remains unqualified.
