@@ -157,8 +157,15 @@ positive, negative and restart/concurrency outcomes in the related IT rows.
   no repeat apply after restart and remote target cleanup. These use injected
   drivers/providers. The installed `TestControlPlaneNetworkSelectionBoundary`
   checks same-network no-op, accountless denial and replay, **not** a real
-  cross-network target with route/exit/resource withdrawal. IT-22/28 and
-  US-04/05/11 still need that integrated result.
+  cross-network target with route/exit/resource withdrawal. New
+  `TestControlPlaneNativeCrossNetworkSelection` exercises authenticated
+  catalog selection, separate source/target node registration, target signed
+  map activation, connected intent and restart using the native agent and test
+  control plane. It compiles in short tests but is skipped there by
+  `requireControlScenario`; no full control-plane CI result exists yet, and it
+  does not provide kernel route, exit, resource withdrawal or real packet
+  evidence. IT-22/28 and US-04/05/11 remain open pending that system run and
+  the native path assertions.
 - `WireGuardEngine` resets the bounded resource-flow samples on every apply
   and Down. `TestResourceFlowIsCollectedOnlyAcrossAllowedTUNDirections` and
   `TestResourceFlowCollectorBindsSignedServiceSubnetAndLiveRoute` exercise
