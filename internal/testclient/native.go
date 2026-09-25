@@ -131,6 +131,14 @@ func (n *Node) AwaitNativeOperation(id string) *ipc.Operation {
 		// Never include operation/profile IDs or free-form failure details.
 		n.t.Logf("native operation last observation: present=%t kind=%d state=%d failure=%d last_read_error=%v",
 			op != nil, op.GetKind(), op.GetState(), op.GetFailure().GetCode(), lastErr)
+		statusResponse := &ipc.GetStatusResponse{}
+		statusErr := n.NativeService("status", statusResponse, "--timeout", "1s")
+		status := statusResponse.GetStatus()
+		n.t.Logf("native status at operation timeout: available=%t service=%d control=%d connection=%d desired=%d disconnected=%t revision=%d map_revision=%d agent_present=%t agent_state=%d agent_map_revision=%d agent_failure=%d status_read_error=%v",
+			statusErr == nil && status != nil, status.GetServiceState(), status.GetControlState(), status.GetConnectionPhase(),
+			status.GetIntent().GetDesiredState(), status.GetUserDisconnected(), status.GetMetadata().GetRevision(),
+			status.GetMapRevision(), status.GetAgent() != nil, status.GetAgent().GetSnapshotState(),
+			status.GetAgent().GetMapRevision(), status.GetAgent().GetLastFailure().GetCode(), statusErr)
 		n.t.Fatal("native operation did not finish")
 	}
 	return op
