@@ -40,6 +40,9 @@ BR/AC acceptance baseline or supply runtime evidence.
   before Disconnect and retains a separate deliberately stale request. This
   corrects the test's compare-and-set input, but the one-off runner failure
   does not establish the cause of every possible revision race.
+- Push [36106109151](https://github.com/endless-net/client/actions/runs/36106109151)
+  passed all four short unit jobs at `0c70a54`, including the fresh-snapshot
+  native CLI Disconnect scenario on Windows 2025.
 - `test.yml` runs installation, eight-platform contract scenarios, isolated
   dataplane and container jobs only for non-push events. No result from those
   jobs at the current source was inspected in this audit. Push success is not
