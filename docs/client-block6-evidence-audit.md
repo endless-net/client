@@ -560,3 +560,12 @@ The aggregate verifier failed because the shard-2 reports and container job
 failed. This run confirms the pre-fix failures are repeatable, but does not
 test the changes at `d7d3f63`. A system run on the fix SHA remains necessary;
 the Connect timeout also remains unresolved, so Block 6 acceptance is open.
+
+At `70fe547`, the native operation timeout diagnostic also records whether the
+agent process has exited and whether that exit was unsuccessful. It emits only
+two booleans and preserves the process completion value for cleanup. The four
+permitted local checks passed, and push run
+[36494552837](https://github.com/endless-net/client/actions/runs/36494552837)
+passed all four platform short-unit jobs. This diagnostic has not yet run in
+system acceptance; the next authorized Test dispatch must target `70fe547` or
+a later source SHA containing it.
