@@ -6,8 +6,39 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
+	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+func TestNetworkSelectionTargetReportsPrecisePreflightFailures(t *testing.T) {
+	for _, scenario := range []struct {
+		name       string
+		mutate     func(*Config)
+		wantReason string
+	}{
+		{name: "owner", mutate: func(cfg *Config) { cfg.LocalOwnerID = "" }, wantReason: "network_selection_target_owner_stale"},
+		{name: "profile", mutate: func(cfg *Config) { cfg.RPCState = nil }, wantReason: "network_selection_target_profile_stale"},
+		{name: "already_selected", mutate: func(cfg *Config) { cfg.NetworkID = "target" }, wantReason: "network_selection_target_already_selected"},
+		{name: "origin", mutate: func(cfg *Config) { cfg.ControlPlaneURLs = []string{"https://other.test"} }, wantReason: "network_selection_target_origin_stale"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			m, _, _ := rpcPreferenceFixture(t)
+			source := m.store.Read()
+			source.ControlPlaneURLs = []string{source.RPCState.Profiles[source.RPCState.ActiveProfileID].ControlOrigin}
+			source.ActiveAccountID, source.Token = "account", "synthetic-session"
+			scenario.mutate(&source)
+			calls := 0
+			_, err := PrepareNetworkSelectionTarget(t.Context(), source, "target", func(context.Context, ClientRPCNetworksInput) ([]*ipc.Network, error) {
+				calls++
+				return nil, nil
+			})
+			failure := rpc.FailureFromError(err)
+			if failure.GetCode() != ipc.ErrorCode_ERROR_CODE_STALE_STATE || failure.GetReasonKey() != scenario.wantReason || calls != 0 {
+				t.Fatalf("preflight result: failure=%v provider_calls=%d", failure, calls)
+			}
+		})
+	}
+}
 
 func TestNetworkSelectionTargetSeparatesOldNetworkState(t *testing.T) {
 	m, _, _ := rpcPreferenceFixture(t)

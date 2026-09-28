@@ -20,7 +20,8 @@ func (m *ClientRPCMutations) reconcileNetworkSelectionAbort(ctx context.Context,
 	switch reasonKey {
 	case "network_selection_aborted", "network_selection_exit_protection_active", "network_selection_source_changed",
 		"network_selection_preparation_failed", "network_selection_source_changed_before_catalog", "network_selection_target_context_stale",
-		"network_selection_source_changed_after_catalog", "network_selection_registration_failed", "network_selection_activation_failed":
+		"network_selection_source_changed_after_catalog", "network_selection_target_owner_stale", "network_selection_target_profile_stale",
+		"network_selection_target_already_selected", "network_selection_target_origin_stale", "network_selection_registration_failed", "network_selection_activation_failed":
 	default:
 		reasonKey = "network_selection_aborted"
 	}
@@ -150,7 +151,8 @@ func (m *ClientRPCMutations) reconcileNetworkSelectionAbort(ctx context.Context,
 
 func networkSelectionPreparationReasonAllowed(reasonKey string) bool {
 	switch reasonKey {
-	case "network_selection_source_changed_before_catalog", "network_selection_target_context_stale", "network_selection_source_changed_after_catalog":
+	case "network_selection_source_changed_before_catalog", "network_selection_target_context_stale", "network_selection_source_changed_after_catalog",
+		"network_selection_target_owner_stale", "network_selection_target_profile_stale", "network_selection_target_already_selected", "network_selection_target_origin_stale":
 		return true
 	default:
 		return false

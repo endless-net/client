@@ -129,7 +129,8 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionPreparation(ctx context.Co
 	}
 	target, err := PrepareNetworkSelectionTarget(ctx, cfg, plan.NetworkID, provider)
 	if err != nil {
-		if rpc.FailureFromError(err).GetCode() == ipc.ErrorCode_ERROR_CODE_STALE_STATE {
+		failure := rpc.FailureFromError(err)
+		if failure.GetCode() == ipc.ErrorCode_ERROR_CODE_STALE_STATE && !networkSelectionPreparationReasonAllowed(failure.GetReasonKey()) {
 			return networkSelectionPreparationFailure("network_selection_target_context_stale")
 		}
 		return err

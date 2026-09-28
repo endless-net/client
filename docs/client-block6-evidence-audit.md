@@ -500,3 +500,14 @@ all subprocess output and arbitrary error text. This addresses the lack of
 information in the repeated unclassified `CreateProfile` failure. Local short
 tests, vet and lint pass for that diagnostic change. The dispatch predates it,
 so a later system run would be needed to exercise it if the failure remains.
+
+The authorized run `36478835005` has produced failed contract reports on
+multiple platforms. Reports downloaded from Ubuntu ARM repeats 1–3, Ubuntu
+22.04 ARM repeat 2, and macOS repeat 2 all show the same failures:
+`network_selection_target_context_stale` for cross-network selection and an
+unclassified subprocess failure for profile creation. The run is still
+executing its remaining contract jobs, so these are interim results. The
+preflight stale reason is now split into fixed owner, profile, already-selected
+network and control-origin reasons; targeted unit tests and the complete local
+short suite pass. Push CI for this follow-up is pending. These newest reason
+keys have not yet been exercised by system CI.

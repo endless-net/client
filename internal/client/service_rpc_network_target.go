@@ -21,23 +21,29 @@ func PrepareNetworkSelectionTarget(ctx context.Context, source Config, networkID
 		return Config{}, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	source = clonePersistentConfig(source)
-	if source.LocalOwnerID == "" || source.RPCState == nil || source.RPCState.ActiveProfileID == "" {
-		return Config{}, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	if source.LocalOwnerID == "" {
+		return Config{}, networkSelectionPreparationFailure("network_selection_target_owner_stale")
+	}
+	if source.RPCState == nil || source.RPCState.ActiveProfileID == "" {
+		return Config{}, networkSelectionPreparationFailure("network_selection_target_profile_stale")
 	}
 	profile, exists := source.RPCState.Profiles[source.RPCState.ActiveProfileID]
-	if !exists || profile.ID != source.RPCState.ActiveProfileID || networkID == source.NetworkID {
-		return Config{}, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+	if !exists || profile.ID != source.RPCState.ActiveProfileID {
+		return Config{}, networkSelectionPreparationFailure("network_selection_target_profile_stale")
+	}
+	if networkID == source.NetworkID {
+		return Config{}, networkSelectionPreparationFailure("network_selection_target_already_selected")
 	}
 	if source.ActiveAccountID == "" || source.Token == "" {
 		return Config{}, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN)
 	}
 	if len(source.ControlPlaneURLs) == 0 {
-		return Config{}, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		return Config{}, networkSelectionPreparationFailure("network_selection_target_origin_stale")
 	}
 	for _, raw := range source.ControlPlaneURLs {
 		origin, err := rpcProfileOrigin(raw)
 		if err != nil || origin != profile.ControlOrigin {
-			return Config{}, rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			return Config{}, networkSelectionPreparationFailure("network_selection_target_origin_stale")
 		}
 	}
 	if provider == nil {
