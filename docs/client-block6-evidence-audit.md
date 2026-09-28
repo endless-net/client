@@ -10,19 +10,23 @@ architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
 local US-01–14 source is the pinned client-ui revision in
 [the local map](client-local-requirement-map.md). Existing maps name unit-test
 entry points. They do not establish the assertions or real effects below.
-The later [D-035](https://github.com/endless-net/architecture/blob/9ff22c1/docs/ru/decisions/d-035.md)
-and [update-source design](https://github.com/endless-net/architecture/blob/9ff22c1/docs/ru/client-update-source-and-pairing.md)
-at architecture `9ff22c1` add an approved UI-Q10 *channel direction* and a
-still-proposed trust/discovery design; they do not revise the pinned IT or
-BR/AC acceptance baseline or supply runtime evidence. At current architecture
-`main` (`68b4c5b`), both files retain their `9ff22c1` blob identities; the newer
-commit changes D-036 and leaves these client update decisions unchanged.
+The later [D-035](https://github.com/endless-net/architecture/blob/e3c40f6/docs/ru/decisions/d-035.md)
+and [update-source design](https://github.com/endless-net/architecture/blob/e3c40f6/docs/ru/client-update-source-and-pairing.md)
+add an approved UI-Q10 *channel direction* and a still-proposed trust/discovery
+design; they do not revise the pinned IT or BR/AC acceptance baseline or supply
+runtime evidence. Current architecture `main` (`e3c40f6`) adds an explicit
+mapping from D-035 to proposed business requirement EN-R-08. EN-R-08 requires
+installing, updating or restoring an accepted platform distribution and then
+confirming real resource access; the accepted UI/core pair must be decided by
+business acceptance. This mapping clarifies the acceptance dependency without
+making the proposed trust/discovery design approved or providing implementation
+or runtime evidence.
 The Client UI consumer SA was refreshed in the [local map](client-local-requirement-map.md)
 to [b03fd54](https://github.com/endless-net/client-ui/blob/b03fd540789a3a33fce26b9203888b899ce311f1/docs/client-ui-system-analysis.md),
 the latest edit to that path. Current architecture `main` is
-[68b4c5b](https://github.com/endless-net/architecture/commit/68b4c5bd11be4484e1eeda6164b9b5cab4fb80c4),
-but the two D-035 files have no edits after `9ff22c1`; their trust/discovery
-proposal and owner dependencies remain unchanged.
+[e3c40f6](https://github.com/endless-net/architecture/commit/e3c40f6df91e13cfc3256b5195b2a8d73f1a3aa9).
+The update-source design remains unchanged from `9ff22c1`; D-035 only gains the
+EN-R-08 mapping. Its trust/discovery proposal and owner dependencies remain open.
 
 ## Evidence available now
 
