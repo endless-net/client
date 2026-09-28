@@ -581,3 +581,6 @@ and push run
 [36496541809](https://github.com/endless-net/client/actions/runs/36496541809)
 passed all four platform short-unit jobs at `b6a12e8`. System acceptance is
 still required for the new scenario and the remaining Connect timeout.
+The documentation update was pushed at `2fd23f2`; push run
+[36497001970](https://github.com/endless-net/client/actions/runs/36497001970)
+passed all four platform short-unit jobs.
