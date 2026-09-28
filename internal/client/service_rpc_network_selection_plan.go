@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"unicode/utf8"
 
@@ -124,10 +125,13 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionPreparation(ctx context.Co
 		return nil
 	}
 	if !networkSelectionSourceMatches(cfg, plan) {
-		return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+		return networkSelectionPreparationFailure("network_selection_source_changed_before_catalog")
 	}
 	target, err := PrepareNetworkSelectionTarget(ctx, cfg, plan.NetworkID, provider)
 	if err != nil {
+		if rpc.FailureFromError(err).GetCode() == ipc.ErrorCode_ERROR_CODE_STALE_STATE {
+			return networkSelectionPreparationFailure("network_selection_target_context_stale")
+		}
 		return err
 	}
 	_, err = m.ReconcileOperation(plan.OperationID, func(current *Config, op *ipc.Operation) error {
@@ -137,12 +141,21 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionPreparation(ctx context.Co
 		pending := current.RPCState.NetworkSelection
 		if op.Kind != ipc.OperationKind_OPERATION_KIND_SELECT_NETWORK || op.ProfileId != plan.Profile.ID ||
 			pending == nil || !reflect.DeepEqual(pending, plan) || !networkSelectionSourceMatches(*current, plan) {
-			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			return networkSelectionPreparationFailure("network_selection_source_changed_after_catalog")
 		}
 		pending.Target = &target
 		op.State = ipc.OperationState_OPERATION_STATE_RUNNING
 		return nil
 	})
+	return err
+}
+
+func networkSelectionPreparationFailure(reasonKey string) error {
+	err := connect.NewError(connect.CodeFailedPrecondition, errors.New(ipc.ErrorCode_ERROR_CODE_STALE_STATE.String()))
+	detail, detailErr := connect.NewErrorDetail(&ipc.Failure{Code: ipc.ErrorCode_ERROR_CODE_STALE_STATE, ReasonKey: reasonKey})
+	if detailErr == nil {
+		err.AddDetail(detail)
+	}
 	return err
 }
 

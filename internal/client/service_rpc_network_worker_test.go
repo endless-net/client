@@ -118,7 +118,7 @@ func TestNetworkSelectionFailureKeepsFixedPhaseDiagnostic(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.State != ipc.OperationState_OPERATION_STATE_FAILED || result.GetFailure().GetCode() != ipc.ErrorCode_ERROR_CODE_STALE_STATE ||
-		result.GetFailure().GetReasonKey() != "network_selection_preparation_failed" {
+		result.GetFailure().GetReasonKey() != "network_selection_source_changed_after_catalog" {
 		t.Fatal("network selection did not retain its fixed preparation diagnostic", result)
 	}
 }

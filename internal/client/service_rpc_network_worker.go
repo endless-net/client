@@ -79,6 +79,9 @@ func (m *ClientRPCMutations) ReconcileNetworkSelection(ctx context.Context, driv
 	if failure == nil {
 		return err // Unexpected failures stop the host with its journal intact.
 	}
+	if reasonKey == "network_selection_preparation_failed" && networkSelectionPreparationReasonAllowed(failure.ReasonKey) {
+		reasonKey = failure.ReasonKey
+	}
 	switch failure.Code {
 	case ipc.ErrorCode_ERROR_CODE_CANCELLED, ipc.ErrorCode_ERROR_CODE_STALE_STATE, ipc.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED, ipc.ErrorCode_ERROR_CODE_APPROVAL_REJECTED, ipc.ErrorCode_ERROR_CODE_APPLY_FAILED,
 		ipc.ErrorCode_ERROR_CODE_NEEDS_LOGIN, ipc.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, ipc.ErrorCode_ERROR_CODE_NOT_FOUND, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED:

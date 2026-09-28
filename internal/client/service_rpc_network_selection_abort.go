@@ -19,7 +19,8 @@ func (m *ClientRPCMutations) ReconcileNetworkSelectionAbort(ctx context.Context,
 func (m *ClientRPCMutations) reconcileNetworkSelectionAbort(ctx context.Context, driver ClientRPCProfileDriver, provider ClientRPCNetworkTargetCleanupProvider, code ipc.ErrorCode, reasonKey string) error {
 	switch reasonKey {
 	case "network_selection_aborted", "network_selection_exit_protection_active", "network_selection_source_changed",
-		"network_selection_preparation_failed", "network_selection_registration_failed", "network_selection_activation_failed":
+		"network_selection_preparation_failed", "network_selection_source_changed_before_catalog", "network_selection_target_context_stale",
+		"network_selection_source_changed_after_catalog", "network_selection_registration_failed", "network_selection_activation_failed":
 	default:
 		reasonKey = "network_selection_aborted"
 	}
@@ -145,6 +146,15 @@ func (m *ClientRPCMutations) reconcileNetworkSelectionAbort(ctx context.Context,
 		return nil
 	})
 	return err
+}
+
+func networkSelectionPreparationReasonAllowed(reasonKey string) bool {
+	switch reasonKey {
+	case "network_selection_source_changed_before_catalog", "network_selection_target_context_stale", "network_selection_source_changed_after_catalog":
+		return true
+	default:
+		return false
+	}
 }
 
 func networkSelectionCleanupTargetIsolated(cfg Config, plan *clientRPCNetworkSelection, target Config) bool {

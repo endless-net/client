@@ -9,6 +9,7 @@ import (
 
 	wgkeys "github.com/endless-net/client-api/clientapi/wireguard"
 	"github.com/endless-net/client/clientipc/local"
+	"github.com/endless-net/client/clientipc/rpc"
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -208,6 +209,9 @@ func TestNetworkSelectionPreparationRejectsConcurrentSourceChange(t *testing.T) 
 				return []*ipc.Network{{Id: "target", AccountId: "account"}}, nil
 			})
 			assertRPCFailure(t, err, ipc.ErrorCode_ERROR_CODE_STALE_STATE)
+			if failure := rpc.FailureFromError(err); failure.GetReasonKey() != "network_selection_source_changed_after_catalog" {
+				t.Fatalf("preparation stale reason = %q", failure.GetReasonKey())
+			}
 			if cfg := m.store.Read(); cfg.RPCState.NetworkSelection.Target != nil || cfg.RPCState.Revision != op.Metadata.Revision {
 				t.Fatal("stale provider committed target or advanced journal")
 			}

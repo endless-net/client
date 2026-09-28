@@ -479,3 +479,14 @@ status could not be collected at timeout, but it still does not locate the
 stalled Connect phase. The aggregate `verify` job failed. No system acceptance
 requirement is closed by this run, and further system runs require a new
 authorization after a code or diagnostic change.
+
+The preparation failure is now split into three fixed reason keys without
+changing stale-state behavior: source changed before catalog lookup, target
+context was stale during candidate preparation, or source changed at the final
+checkpoint after catalog lookup. The concurrent-source unit test confirms the
+third key survives durable abort. `go test -short ./internal/client`,
+`go test -short ./...`, `go vet ./...`, and
+`golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m` passed
+locally after this change. The prior full-suite attempt caught and corrected an
+outdated unit assertion for the newly precise key. No subsequent system run
+has exercised the new diagnostics; Block 6 acceptance remains open.
