@@ -569,3 +569,15 @@ permitted local checks passed, and push run
 passed all four platform short-unit jobs. This diagnostic has not yet run in
 system acceptance; the next authorized Test dispatch must target `70fe547` or
 a later source SHA containing it.
+
+The Linux exit-provider system scenario now also submits native
+`SelectExitNode` requests against a signed, lease-bound grant. It verifies
+external TCP/UDP forwarding through that provider, both `LAN_BLOCK` and
+`LAN_ALLOW` effects for a local service, IPv4 applied state with the IPv6
+family explicitly cleared, and `ClearExitNode` restoration. This closes the
+previously identified test-coverage hole for HC-036/037; the new path still
+requires system execution. The permitted local checks passed after adding it,
+and push run
+[36496541809](https://github.com/endless-net/client/actions/runs/36496541809)
+passed all four platform short-unit jobs at `b6a12e8`. System acceptance is
+still required for the new scenario and the remaining Connect timeout.
