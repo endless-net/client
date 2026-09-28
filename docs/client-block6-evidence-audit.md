@@ -542,6 +542,21 @@ checks (`goimports -w .`, `go vet ./...`,
 `go test -short ./...`) passed after these changes. Push run
 [36485532172](https://github.com/endless-net/client/actions/runs/36485532172)
 passed all four platform short-unit jobs on its exact SHA `0fb341e`; its
-system, installer and contract jobs were skipped. These fixes still need a
-system run on their own SHA. The Connect timeout has not been resolved, so
-Block 6 system acceptance remains open.
+system, installer and contract jobs were skipped. The subsequent push run
+[36488441226](https://github.com/endless-net/client/actions/runs/36488441226)
+passed all four platform short-unit jobs on `d7d3f63`.
+
+The user-triggered Test run
+[36488191430](https://github.com/endless-net/client/actions/runs/36488191430)
+used SHA `0fb341e`, before these fixes. It completed with `failure`: all 24
+shard-2 contract jobs failed and all 24 shard-1 jobs passed. Reports from
+Ubuntu 24.04 ARM repeats 1 and 3 and Windows 2025 repeat 1 reproduce the same
+cross-network `network_selection_target_owner_stale` and
+`create-profile` subprocess `exit_code=1` failures. Verify on Linux, Windows
+and macOS, the control-plane scenarios and all eight installer/smoke jobs
+passed. The container lifecycle job again failed five Connect operations;
+operation and status reads exited with code 1 while output remained withheld.
+The aggregate verifier failed because the shard-2 reports and container job
+failed. This run confirms the pre-fix failures are repeatable, but does not
+test the changes at `d7d3f63`. A system run on the fix SHA remains necessary;
+the Connect timeout also remains unresolved, so Block 6 acceptance is open.
