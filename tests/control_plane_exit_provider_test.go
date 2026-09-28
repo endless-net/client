@@ -17,11 +17,11 @@ import (
 	"github.com/endless-net/client/internal/testcontrol"
 )
 
-// HC-038 provider boundary: a real Client advertises an IPv4 default route and
-// forwards/SNATs traffic to an external namespace. Its consumer uses an explicit
-// resource route; a default advertisement cannot select an exit implicitly.
-// Other native platforms publish the explicit unsupported provider outcome.
-// This does not qualify consumer exit selection or HC-037 exit LAN policy.
+// HC-036–038 boundaries: a real Client advertises an IPv4 default route and
+// forwards/SNATs traffic to an external namespace. Its consumer proves that a
+// default advertisement cannot select an exit implicitly, then exercises the
+// explicit selection, LAN policy and clear paths. Other native platforms
+// publish the explicit unsupported provider outcome.
 func TestControlPlaneExitProvider(t *testing.T) {
 	requireControlScenario(t)
 	if runtime.GOOS != "linux" {
@@ -233,6 +233,107 @@ func testLinuxExitProvider(t *testing.T) {
 		states[0] = awaitNativePeerMap(t, nodes[0], states[0], states[0].MapRevision, 1)
 		lanAccess(true)
 		reachable()
+
+		// A signed grant is required in addition to the provider's advertised
+		// default route. The same live consumer then verifies actual forwarding,
+		// LAN_BLOCK/LAN_ALLOW effects and durable clear through native IPC.
+		apply(false)
+		blocked()
+		providerIdentity, err := s.Snapshot(states[1].NodeId)
+		if err != nil {
+			t.Fatal(err)
+		}
+		grant := api.ExitNodeGrant{
+			ID: "contract-exit", Name: "contract exit",
+			Host:               api.ServiceHost{NodeID: providerIdentity.Node.ID, PublicKey: providerIdentity.Node.PublicKey},
+			AllowedFamilyModes: []api.ExitFamilyMode{api.ExitFamilyIPv4Only},
+			AllowedLANAccess:   []api.ExitLANAccess{api.ExitLANBlock, api.ExitLANAllow},
+			ExpiresAt:          time.Now().Add(time.Hour),
+		}
+		if err := s.UpdateMap(states[0].NodeId, func(m *api.NetworkMapSnapshot) {
+			if m.Network.ClientPolicy == nil {
+				m.Network.ClientPolicy = &api.ClientPolicy{}
+			}
+			m.Network.ClientPolicy.ExitNodes = []api.ExitNodeGrant{grant}
+		}); err != nil {
+			t.Fatal(err)
+		}
+		consumerMap, err := s.Snapshot(states[0].NodeId)
+		if err != nil {
+			t.Fatal(err)
+		}
+		states[0] = awaitNativePeerMap(t, nodes[0], states[0], consumerMap.Revision.Network, 1)
+
+		mutateExit := func(requestID, command, lan string) {
+			t.Helper()
+			current := nodes[0].AwaitNativeStatus(nativeControlSnapshotReady)
+			args := testclient.NativeMutationArguments(requestID, current)
+			var op *ipc.Operation
+			switch command {
+			case "select-exit-node":
+				args = append(args, "--exit-node-id", grant.ID, "--family-mode", "ipv4-only", "--lan-access", lan)
+				response := &ipc.SelectExitNodeResponse{}
+				if err := nodes[0].NativeService(command, response, args...); err != nil {
+					t.Fatal(err)
+				}
+				op = response.GetOperation()
+			case "clear-exit-node":
+				response := &ipc.ClearExitNodeResponse{}
+				if err := nodes[0].NativeService(command, response, args...); err != nil {
+					t.Fatal(err)
+				}
+				op = response.GetOperation()
+			default:
+				t.Fatal("unexpected exit mutation")
+			}
+			if op == nil || op.GetId() == "" || nodes[0].AwaitNativeOperation(op.GetId()).GetState() != ipc.OperationState_OPERATION_STATE_SUCCEEDED {
+				t.Fatal("native exit mutation did not succeed")
+			}
+		}
+		awaitExit := func(wantID string, wantLAN ipc.LanAccess) {
+			t.Helper()
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+			defer cancel()
+			var last *ipc.ExitNodeStatus
+			var lastErr error
+			err := testclient.Await(ctx, func() bool {
+				response := &ipc.GetExitNodeResponse{}
+				lastErr = nodes[0].NativeService("exit-node", response, "--profile-id", states[0].ActiveProfileId, "--timeout", "1s")
+				last = response.GetStatus()
+				if lastErr != nil || last == nil {
+					return false
+				}
+				if wantID == "" {
+					return last.GetEffectiveExitNodeId() == "" && last.GetApplyState() == ipc.ApplyState_APPLY_STATE_APPLIED
+				}
+				return last.GetRequestedExitNodeId() == wantID && last.GetEffectiveExitNodeId() == wantID &&
+					last.GetRequestedLanAccess() == wantLAN && last.GetEffectiveLanAccess() == wantLAN &&
+					last.GetApplyState() == ipc.ApplyState_APPLY_STATE_APPLIED &&
+					last.GetIpv4().GetEffectiveExitNodeId() == wantID &&
+					last.GetIpv4().GetApplyState() == ipc.ApplyState_APPLY_STATE_APPLIED &&
+					!last.GetIpv4().GetFailClosed() && last.GetIpv6().GetEffectiveExitNodeId() == "" &&
+					last.GetIpv6().GetApplyState() == ipc.ApplyState_APPLY_STATE_APPLIED &&
+					!last.GetIpv6().GetFailClosed() && !last.GetFailClosed()
+			})
+			if err != nil {
+				t.Fatalf("exit runtime did not reach requested public state: requested=%t effective=%t ipv4=%d ipv6=%d fail_closed=%t error=%v",
+					last.GetRequestedExitNodeId() == wantID, last.GetEffectiveExitNodeId() == wantID,
+					last.GetIpv4().GetApplyState(), last.GetIpv6().GetApplyState(), last.GetFailClosed(), lastErr)
+			}
+		}
+
+		mutateExit("6b130000-0000-4000-8000-000000000002", "select-exit-node", "block")
+		awaitExit(grant.ID, ipc.LanAccess_LAN_ACCESS_BLOCK)
+		reachable()
+		lanAccess(false)
+		mutateExit("6b130000-0000-4000-8000-000000000003", "select-exit-node", "allow")
+		awaitExit(grant.ID, ipc.LanAccess_LAN_ACCESS_ALLOW)
+		reachable()
+		lanAccess(true)
+		mutateExit("6b130000-0000-4000-8000-000000000004", "clear-exit-node", "")
+		awaitExit("", ipc.LanAccess_LAN_ACCESS_UNSPECIFIED)
+		blocked()
+		lanAccess(true)
 	}
 	registrations := 0
 	for _, event := range s.Events() {
