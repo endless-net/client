@@ -1,6 +1,8 @@
 package testclient
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -63,5 +65,17 @@ func TestNativeStaleStateRequiresCanonicalClassifiedRejection(t *testing.T) {
 		if IsNativeStaleState(err) {
 			t.Fatal("uncertain or non-CAS failure was treated as a stale rejection")
 		}
+	}
+}
+
+func TestNativeServiceProcessFailureDiagnosticsAreBounded(t *testing.T) {
+	if got := NativeServiceCommandErrorWithCause("status", []byte("private output"), context.DeadlineExceeded).Error(); got != "native service status failed (subprocess deadline exceeded; output withheld)" {
+		t.Fatal("deadline classification was not fixed and redacted")
+	}
+	if got := NativeServiceCommandErrorWithCause("status", nil, context.Canceled).Error(); got != "native service status failed (subprocess canceled; output withheld)" {
+		t.Fatal("cancellation classification was not fixed and redacted")
+	}
+	if got := NativeServiceCommandErrorWithCause("status", nil, errors.New("synthetic private process detail")).Error(); got != "native service status failed (unclassified subprocess failure; output withheld)" {
+		t.Fatal("arbitrary process error was exposed")
 	}
 }

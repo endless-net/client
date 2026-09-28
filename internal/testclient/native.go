@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -21,7 +22,7 @@ import (
 func (n *Node) NativeService(operation string, target proto.Message, options ...string) error {
 	out, err := n.ServiceCommand(operation, options...)
 	if err != nil {
-		return NativeServiceCommandError(operation, out)
+		return NativeServiceCommandErrorWithCause(operation, out, err)
 	}
 	return decodeNativeService(out, target)
 }
@@ -67,6 +68,32 @@ func NativeServiceCommandError(operation string, output []byte) error {
 		}
 	}
 	return fmt.Errorf("native service %s failed (unclassified subprocess failure; output withheld)", operation)
+}
+
+// NativeServiceCommandErrorWithCause adds only a fixed subprocess outcome to
+// the existing typed RPC classification. It never includes output, arguments,
+// executable paths or arbitrary error text.
+func NativeServiceCommandErrorWithCause(operation string, output []byte, cause error) error {
+	classified := NativeServiceCommandError(operation, output)
+	var failure *nativeServiceFailure
+	if errors.As(classified, &failure) || cause == nil {
+		return classified
+	}
+	if errors.Is(cause, context.DeadlineExceeded) {
+		return fmt.Errorf("native service %s failed (subprocess deadline exceeded; output withheld)", operation)
+	}
+	if errors.Is(cause, context.Canceled) {
+		return fmt.Errorf("native service %s failed (subprocess canceled; output withheld)", operation)
+	}
+	var exit *exec.ExitError
+	if errors.As(cause, &exit) {
+		return fmt.Errorf("native service %s failed (subprocess exit_code=%d; output withheld)", operation, exit.ExitCode())
+	}
+	var start *exec.Error
+	if errors.As(cause, &start) {
+		return fmt.Errorf("native service %s failed (subprocess start failure; output withheld)", operation)
+	}
+	return classified
 }
 
 func decodeNativeService(out []byte, target proto.Message) error {

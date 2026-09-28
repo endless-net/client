@@ -490,3 +490,13 @@ third key survives durable abort. `go test -short ./internal/client`,
 locally after this change. The prior full-suite attempt caught and corrected an
 outdated unit assertion for the newly precise key. No subsequent system run
 has exercised the new diagnostics; Block 6 acceptance remains open.
+
+One further Test dispatch was explicitly authorized for `main` at `d1be114`
+with `contract_repetitions=3`; run
+[36478835005](https://github.com/endless-net/client/actions/runs/36478835005)
+is still running. Separately, native CLI test diagnostics now classify process
+deadline, cancellation, and numeric exit status while continuing to withhold
+all subprocess output and arbitrary error text. This addresses the lack of
+information in the repeated unclassified `CreateProfile` failure. Local short
+tests, vet and lint pass for that diagnostic change. The dispatch predates it,
+so a later system run would be needed to exercise it if the failure remains.
