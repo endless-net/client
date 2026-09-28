@@ -166,6 +166,8 @@ func (n *Node) AwaitNativeOperation(id string) *ipc.Operation {
 			status.GetIntent().GetDesiredState(), status.GetUserDisconnected(), status.GetMetadata().GetRevision(),
 			status.GetMapRevision(), status.GetAgent() != nil, status.GetAgent().GetSnapshotState(),
 			status.GetAgent().GetMapRevision(), status.GetAgent().GetLastFailure().GetCode(), statusErr)
+		completed, failed := observeAgentCompletion(n.done)
+		n.t.Logf("agent operation process observation: completion_observed=%t unsuccessful_exit=%t", completed, failed)
 		n.t.Fatal("native operation did not finish")
 	}
 	return op
