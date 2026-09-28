@@ -518,3 +518,30 @@ passed all four platform short-unit jobs for `15a6f8e`. The system dispatch was
 pinned to `d1be114`, so it did not exercise the newer preflight or subprocess
 diagnostics. Acceptance remains open pending those system results and the
 Connect lifecycle failure's cause.
+
+The user-triggered Test dispatch
+[36485364304](https://github.com/endless-net/client/actions/runs/36485364304)
+on `15a6f8e` completed with `failure`. Verify (Linux, macOS, Windows), the
+control-plane scenario and all eight installer/smoke jobs passed. Eight of 16
+contract shards failed: shard 2 on each platform reproduced cross-network
+selection as `network_selection_target_owner_stale` and profile creation as
+`subprocess exit_code=1`; shard 1 passed on each platform. The container
+lifecycle job again failed five Connect operations after 30 seconds. Operation
+and status reads both exited with code 1, with output withheld by design, so
+the underlying cause remains unknown. The aggregate verifier failed on the
+contract and container jobs.
+
+The owner-stale rejection was incorrect for administrator-authorized network
+selection on an unclaimed local installation. Preparation now preserves the
+empty local owner binding; the source-matching checkpoint continues to guard
+against concurrent changes. The profile-context acceptance test now supplies
+only arguments supported by `create-profile`, removing the invalid
+`--profile-id` flag that caused its subprocess exit. The permitted local
+checks (`goimports -w .`, `go vet ./...`,
+`golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m`, and
+`go test -short ./...`) passed after these changes. Push run
+[36485532172](https://github.com/endless-net/client/actions/runs/36485532172)
+passed all four platform short-unit jobs on its exact SHA `0fb341e`; its
+system, installer and contract jobs were skipped. These fixes still need a
+system run on their own SHA. The Connect timeout has not been resolved, so
+Block 6 system acceptance remains open.

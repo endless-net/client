@@ -21,9 +21,6 @@ func PrepareNetworkSelectionTarget(ctx context.Context, source Config, networkID
 		return Config{}, rpc.Error(connect.CodeInvalidArgument, ipc.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	source = clonePersistentConfig(source)
-	if source.LocalOwnerID == "" {
-		return Config{}, networkSelectionPreparationFailure("network_selection_target_owner_stale")
-	}
 	if source.RPCState == nil || source.RPCState.ActiveProfileID == "" {
 		return Config{}, networkSelectionPreparationFailure("network_selection_target_profile_stale")
 	}

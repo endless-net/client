@@ -16,7 +16,6 @@ func TestNetworkSelectionTargetReportsPrecisePreflightFailures(t *testing.T) {
 		mutate     func(*Config)
 		wantReason string
 	}{
-		{name: "owner", mutate: func(cfg *Config) { cfg.LocalOwnerID = "" }, wantReason: "network_selection_target_owner_stale"},
 		{name: "profile", mutate: func(cfg *Config) { cfg.RPCState = nil }, wantReason: "network_selection_target_profile_stale"},
 		{name: "already_selected", mutate: func(cfg *Config) { cfg.NetworkID = "target" }, wantReason: "network_selection_target_already_selected"},
 		{name: "origin", mutate: func(cfg *Config) { cfg.ControlPlaneURLs = []string{"https://other.test"} }, wantReason: "network_selection_target_origin_stale"},
@@ -43,6 +42,9 @@ func TestNetworkSelectionTargetReportsPrecisePreflightFailures(t *testing.T) {
 func TestNetworkSelectionTargetSeparatesOldNetworkState(t *testing.T) {
 	m, _, _ := rpcPreferenceFixture(t)
 	source := clonePersistentConfig(m.store.Read())
+	// An administrator caller may operate an unclaimed local installation; the
+	// target preserves that empty owner binding rather than inventing one.
+	source.LocalOwnerID = ""
 	source.ControlPlaneURLs = []string{source.RPCState.Profiles[source.RPCState.ActiveProfileID].ControlOrigin}
 	source.ActiveAccountID, source.Token = "account", "synthetic-session"
 	source.IdentityPrivateKey, source.PrivateKey = "synthetic-identity", "synthetic-wireguard"
