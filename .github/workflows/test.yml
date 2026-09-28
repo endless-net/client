@@ -238,18 +238,18 @@ jobs:
 
   control-plane-platforms:
     if: ${{ github.event_name != 'push' }}
-    name: Client contracts (${{ matrix.os }}, repeat ${{ matrix.repetition }})
+    name: Client contracts (${{ matrix.os }}, repeat ${{ matrix.repetition }}, shard ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
-    # Four real-time flow-consent lifecycles and eight cleanup traffic variants
-    # extend the suite; individual CLI/RPC/probe deadlines remain unchanged.
-    # The 53-root suite needs more than 30m on Windows (run 34710382160).
-    # Bound execution to 40m; preserve setup and partial-report upload time.
+    # Each shard runs in a separate host because native routes and DNS affect
+    # the runner. Retain the existing deadline until platform shard timings
+    # establish a safe lower bound.
     timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04, ubuntu-22.04-arm, ubuntu-24.04-arm, windows-2022, windows-2025, macos-15, macos-15-intel]
         repetition: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.contract_repetitions == '3' && '[1,2,3]' || '[1]') }}
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -281,8 +281,10 @@ jobs:
           go build -o "$RUNNER_TEMP/client-contracts/packetprobe.exe" ./tools/packetprobe
           go test -c -o "$RUNNER_TEMP/client-contracts/contracts.test.exe" ./tests
           "$RUNNER_TEMP/client-contracts/contracts.test.exe" -test.list='^TestControlPlane' > "$RUNNER_TEMP/client-contracts/expected-tests.txt"
+          go run ./tools/contract-shards "$RUNNER_TEMP/client-contracts/expected-tests.txt" '${{ matrix.shard }}' \
+            "$RUNNER_TEMP/client-contracts/selected-tests.txt" "$RUNNER_TEMP/client-contracts/run-pattern.txt"
           printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/client-contracts/source.txt"
-          printf '%s\n' '${{ matrix.os }}-${{ matrix.repetition }}' > "$RUNNER_TEMP/client-contracts/shard.txt"
+          printf '%s\n' '${{ matrix.os }}-${{ matrix.repetition }}-${{ matrix.shard }}' > "$RUNNER_TEMP/client-contracts/shard.txt"
       - name: Prepare signed Wintun dependency
         if: runner.os == 'Windows'
         shell: pwsh
@@ -307,7 +309,7 @@ jobs:
             ENDLESSNET_TEST_COMMIT="$GITHUB_SHA" \
             ENDLESSNET_PACKET_PROBE="$RUNNER_TEMP/client-contracts/packetprobe.exe" \
             "$RUNNER_TEMP/client-contracts/contracts.test.exe" \
-            -test.run='^TestControlPlane' -test.count=1 -test.v -test.timeout=40m \
+            -test.run="$(cat "$RUNNER_TEMP/client-contracts/run-pattern.txt")" -test.count=1 -test.v -test.timeout=40m \
             2>&1 | tee "$RUNNER_TEMP/client-contracts/results.log"
       - name: Run isolated contract repetition (Windows)
         if: runner.os == 'Windows'
@@ -319,7 +321,8 @@ jobs:
           $env:ENDLESSNET_TEST_BINARY = Join-Path $env:RUNNER_TEMP 'client-contracts/client.exe'
           $env:ENDLESSNET_TEST_COMMIT = $env:GITHUB_SHA
           $env:ENDLESSNET_PACKET_PROBE = Join-Path $env:RUNNER_TEMP 'client-contracts/packetprobe.exe'
-          & "$env:RUNNER_TEMP/client-contracts/contracts.test.exe" '-test.run=^TestControlPlane' '-test.count=1' '-test.v' '-test.timeout=40m' 2>&1 |
+          $pattern = (Get-Content -Raw -LiteralPath "$env:RUNNER_TEMP/client-contracts/run-pattern.txt").Trim()
+          & "$env:RUNNER_TEMP/client-contracts/contracts.test.exe" "-test.run=$pattern" '-test.count=1' '-test.v' '-test.timeout=40m' 2>&1 |
             Tee-Object -FilePath "$env:RUNNER_TEMP/client-contracts/results.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Produce machine-readable contract report
@@ -328,17 +331,19 @@ jobs:
         run: |
           set -euo pipefail
           go tool test2json -t -p client/contracts < "$RUNNER_TEMP/client-contracts/results.log" > "$RUNNER_TEMP/client-contracts/results.jsonl"
-          echo "### Client contracts: ${{ matrix.os }}, repeat ${{ matrix.repetition }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Client contracts: ${{ matrix.os }}, repeat ${{ matrix.repetition }}, shard ${{ matrix.shard }}" >> "$GITHUB_STEP_SUMMARY"
           echo 'All selected repetitions on all eight platforms are required by verify.' >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve platform contract reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: client-contracts-${{ matrix.os }}-${{ matrix.repetition }}
+          name: client-contracts-${{ matrix.os }}-${{ matrix.repetition }}-${{ matrix.shard }}
           path: |
             ${{ runner.temp }}/client-contracts/results.log
             ${{ runner.temp }}/client-contracts/results.jsonl
             ${{ runner.temp }}/client-contracts/expected-tests.txt
+            ${{ runner.temp }}/client-contracts/selected-tests.txt
+            ${{ runner.temp }}/client-contracts/run-pattern.txt
             ${{ runner.temp }}/client-contracts/source.txt
             ${{ runner.temp }}/client-contracts/shard.txt
           if-no-files-found: error

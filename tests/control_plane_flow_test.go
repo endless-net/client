@@ -13,14 +13,20 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestControlPlaneNativeFlowConsent(t *testing.T) {
-	for _, family := range []string{"ipv4", "ipv6"} {
-		for _, protocol := range []string{"tcp", "udp"} {
-			t.Run(family+"/"+protocol, func(t *testing.T) {
-				exerciseNativeTrafficScenario(t, family == "ipv6", protocol, true, "", false)
-			})
-		}
-	}
+func TestControlPlaneNativeFlowConsentIPv4TCP(t *testing.T) {
+	exerciseNativeTrafficScenario(t, false, "tcp", true, "", false)
+}
+
+func TestControlPlaneNativeFlowConsentIPv4UDP(t *testing.T) {
+	exerciseNativeTrafficScenario(t, false, "udp", true, "", false)
+}
+
+func TestControlPlaneNativeFlowConsentIPv6TCP(t *testing.T) {
+	exerciseNativeTrafficScenario(t, true, "tcp", true, "", false)
+}
+
+func TestControlPlaneNativeFlowConsentIPv6UDP(t *testing.T) {
+	exerciseNativeTrafficScenario(t, true, "udp", true, "", false)
 }
 
 func checkNativeFlowConsent(t *testing.T, s *testcontrol.Server, id, protocol string, clientIP, peerIP netip.Addr, fresh func(string) bool) {

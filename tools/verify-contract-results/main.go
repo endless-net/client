@@ -12,11 +12,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/endless-net/client/internal/contractshard"
 )
 
 var platforms = []string{"ubuntu-22.04", "ubuntu-24.04", "ubuntu-22.04-arm", "ubuntu-24.04-arm", "windows-2022", "windows-2025", "macos-15", "macos-15-intel"}
 
-var testName = regexp.MustCompile(`^TestControlPlane[A-Za-z0-9_]+$`)
 var commitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 type event struct {
@@ -45,17 +46,7 @@ func main() {
 }
 
 func declaredTests(data []byte) ([]string, error) {
-	names := strings.Fields(string(data))
-	if len(names) == 0 {
-		return nil, errors.New("empty compiled test inventory")
-	}
-	slices.Sort(names)
-	for i, name := range names {
-		if !testName.MatchString(name) || i > 0 && names[i-1] == name {
-			return nil, errors.New("invalid or duplicate compiled test name")
-		}
-	}
-	return names, nil
+	return contractshard.ParseInventory(data)
 }
 
 func verifyReports(dir, sha string, repetitions int) (int, error) {
@@ -70,17 +61,40 @@ func verifyReports(dir, sha string, repetitions int) (int, error) {
 	for _, platformName := range platforms {
 		for repetition := 1; repetition <= repetitions; repetition++ {
 			platform := fmt.Sprintf("%s-%d", platformName, repetition)
-			names, err := verifyPlatformReport(dir, platformName, platform, sha)
-			if err != nil {
-				failures = append(failures, fmt.Errorf("%s: %w", platform, err))
+			var complete []string
+			selectedRoots := make(map[string]bool)
+			selectedShards := 0
+			for shard := 1; shard <= contractshard.Count; shard++ {
+				names, selected, err := verifyShardReport(dir, platformName, platform, sha, shard)
+				if err != nil {
+					failures = append(failures, fmt.Errorf("%s-%d: %w", platform, shard, err))
+				}
+				if names != nil {
+					if complete == nil {
+						complete = names
+					} else if !slices.Equal(complete, names) {
+						failures = append(failures, fmt.Errorf("%s-%d: compiled scenario inventory differs across shards", platform, shard))
+					}
+				}
+				if selected != nil {
+					selectedShards++
+				}
+				for _, name := range selected {
+					if selectedRoots[name] {
+						failures = append(failures, fmt.Errorf("%s: duplicate scenario selection %s", platform, name))
+					}
+					selectedRoots[name] = true
+				}
 			}
-			if names == nil {
-				continue
-			}
-			if common == nil {
-				common = names
-			} else if !slices.Equal(common, names) {
-				failures = append(failures, fmt.Errorf("%s: compiled scenario inventory differs across platforms", platform))
+			if complete != nil {
+				if selectedShards == contractshard.Count && len(selectedRoots) != len(complete) {
+					failures = append(failures, fmt.Errorf("%s: incomplete scenario selection", platform))
+				}
+				if common == nil {
+					common = complete
+				} else if !slices.Equal(common, complete) {
+					failures = append(failures, fmt.Errorf("%s: compiled scenario inventory differs across platforms", platform))
+				}
 			}
 		}
 	}
@@ -90,33 +104,48 @@ func verifyReports(dir, sha string, repetitions int) (int, error) {
 	return len(common), nil
 }
 
-func verifyPlatformReport(dir, platformName, platform, sha string) ([]string, error) {
-	root := filepath.Join(dir, "client-contracts-"+platform)
+func verifyShardReport(dir, platformName, platform, sha string, shardIndex int) ([]string, []string, error) {
+	identity := fmt.Sprintf("%s-%d", platform, shardIndex)
+	root := filepath.Join(dir, "client-contracts-"+identity)
 	shard, err := os.ReadFile(filepath.Join(root, "shard.txt"))
-	if err != nil || strings.TrimSpace(string(shard)) != platform {
-		return nil, errors.New("missing or mismatched repetition identity")
+	if err != nil || strings.TrimSpace(string(shard)) != identity {
+		return nil, nil, errors.New("missing or mismatched shard identity")
 	}
 	source, err := os.ReadFile(filepath.Join(root, "source.txt"))
 	if err != nil || strings.TrimSpace(string(source)) != sha {
-		return nil, errors.New("missing or mismatched source identity")
+		return nil, nil, errors.New("missing or mismatched source identity")
 	}
 	inventory, err := os.ReadFile(filepath.Join(root, "expected-tests.txt"))
 	if err != nil {
-		return nil, errors.New("missing compiled test inventory")
+		return nil, nil, errors.New("missing compiled test inventory")
 	}
 	names, err := declaredTests(inventory)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if err := contractshard.RequireFlowRoots(names); err != nil {
+		return names, nil, err
+	}
+	selectedData, err := os.ReadFile(filepath.Join(root, "selected-tests.txt"))
+	if err != nil {
+		return names, nil, errors.New("missing selected test inventory")
+	}
+	selected, err := declaredTests(selectedData)
+	if err != nil {
+		return names, nil, err
+	}
+	if !slices.Equal(selected, contractshard.Split(names)[shardIndex-1]) {
+		return names, selected, errors.New("selected scenarios do not match deterministic shard assignment")
 	}
 	file, err := os.Open(filepath.Join(root, "results.jsonl"))
 	if err != nil {
-		return names, errors.New("missing execution report")
+		return names, selected, errors.New("missing execution report")
 	}
-	err = verifyEvents(file, names, requiredPlatformSubtests(platformName, names)...)
+	err = verifyEvents(file, selected, requiredPlatformSubtests(platformName, selected)...)
 	if closeErr := file.Close(); closeErr != nil {
 		err = errors.Join(err, errors.New("report close failed"))
 	}
-	return names, err
+	return names, selected, err
 }
 
 func requiredPlatformSubtests(platform string, names []string) []string {
@@ -139,9 +168,6 @@ func requiredPlatformSubtests(platform string, names []string) []string {
 	}
 	for _, family := range []string{"ipv4", "ipv6"} {
 		for _, protocol := range []string{"tcp", "udp"} {
-			if slices.Contains(names, "TestControlPlaneNativeFlowConsent") {
-				required = append(required, "TestControlPlaneNativeFlowConsent/"+family+"/"+protocol)
-			}
 			if slices.Contains(names, "TestControlPlaneNativeLogoutTraffic") {
 				for _, cleanup := range []string{"logout", "local-forget"} {
 					required = append(required, "TestControlPlaneNativeLogoutTraffic/"+cleanup+"/"+family+"/"+protocol)

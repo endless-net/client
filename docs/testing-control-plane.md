@@ -44,12 +44,15 @@ updates, bad signatures, unknown keys, expired maps, cancellation and concurrenc
 
 The parallel `Client contracts` matrix in `.github/workflows/test.yml` runs
 `TestControlPlane*` on Ubuntu 22.04/24.04 (amd64 and arm64), Windows 2022/2025 and
-macOS 15 ARM/Intel. Each platform has three isolated runner jobs, each executing
-the suite once: 24 reports total. Fail-fast is disabled. Each job preserves text
-and JSONL results, source SHA, compiled root inventory and platform/repetition
-identity; all 24 jobs are required by verification and publication gates.
-The suite has a 25-minute process budget within a 30-minute job, accommodating
-the four real-time flow-consent lifecycles and eight cleanup traffic variants.
+macOS 15 ARM/Intel. Each repetition has two isolated runner jobs per platform,
+each executing a deterministic, duration-balanced subset of complete root tests.
+Routine checks produce 16 reports; three-repeat qualification produces 48.
+Fail-fast is disabled. Each job preserves text and JSONL results, source SHA,
+the full compiled inventory, selected roots and platform/repetition/shard identity.
+The aggregate gate requires every root exactly once per platform and repetition,
+including the four independently sharded real-time flow-consent variants.
+The existing 40-minute process deadline remains until CI establishes safe shard
+timings; all 16 or 48 jobs are required by verification and publication gates.
 Individual CLI, RPC and probe deadlines remain independently bounded.
 Windows uses the same checksum-pinned Wintun dependency as the installer suite.
 Windows agent restart in this driver uses process termination; graceful Windows

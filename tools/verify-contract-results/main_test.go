@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/endless-net/client/internal/contractshard"
 )
 
 func TestRecordedTest2JSONSubtests(t *testing.T) {
@@ -26,23 +28,14 @@ func TestRecordedTest2JSONSubtests(t *testing.T) {
 func TestSinglePassReportsDoNotSatisfyReleaseRepetitions(t *testing.T) {
 	dir := t.TempDir()
 	sha := strings.Repeat("a", 40)
+	names := fixtureNames()
+	groups := contractshard.Split(names)
 	for _, platform := range platforms {
-		shard := platform + "-1"
-		root := filepath.Join(dir, "client-contracts-"+shard)
-		if err := os.MkdirAll(root, 0700); err != nil {
-			t.Fatal(err)
-		}
-		for name, data := range map[string][]byte{
-			"source.txt": []byte(sha), "shard.txt": []byte(shard),
-			"expected-tests.txt": []byte("TestControlPlaneAlpha\n"),
-			"results.jsonl":      goodReport([]string{"TestControlPlaneAlpha"}, 1),
-		} {
-			if err := os.WriteFile(filepath.Join(root, name), data, 0600); err != nil {
-				t.Fatal(err)
-			}
+		for shard := 1; shard <= contractshard.Count; shard++ {
+			writeFixtureShard(t, dir, platform, 1, shard, sha, names, groups[shard-1])
 		}
 	}
-	if n, err := verifyReports(dir, sha, 1); err != nil || n != 1 {
+	if n, err := verifyReports(dir, sha, 1); err != nil || n != len(names) {
 		t.Fatalf("single-pass matrix rejected: %d %v", n, err)
 	}
 	for _, repetitions := range []int{0, 2, 3, 4} {
@@ -50,6 +43,31 @@ func TestSinglePassReportsDoNotSatisfyReleaseRepetitions(t *testing.T) {
 			t.Fatalf("incomplete or invalid repetition count accepted: %d", repetitions)
 		}
 	}
+}
+
+func fixtureNames() []string {
+	return append([]string{"TestControlPlaneAlpha", "TestControlPlaneBeta"}, contractshard.RequiredFlowRoots...)
+}
+
+func writeFixtureShard(t *testing.T, dir, platform string, repetition, shard int, sha string, names, selected []string) string {
+	t.Helper()
+	identity := fmt.Sprintf("%s-%d-%d", platform, repetition, shard)
+	root := filepath.Join(dir, "client-contracts-"+identity)
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string][]byte{
+		"source.txt":         []byte(sha + "\n"),
+		"shard.txt":          []byte(identity + "\n"),
+		"expected-tests.txt": []byte(strings.Join(names, "\n") + "\n"),
+		"selected-tests.txt": []byte(strings.Join(selected, "\n") + "\n"),
+		"results.jsonl":      goodReport(selected, 1),
+	} {
+		if err := os.WriteFile(filepath.Join(root, name), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
 }
 
 func goodReport(names []string, repetitions int) []byte {
@@ -182,7 +200,6 @@ func TestRequireNativeAddressAndProtocolVariants(t *testing.T) {
 	} {
 		t.Run(root, func(t *testing.T) { checkRequiredLeaves(t, root, []string{"ipv4", "ipv6"}) })
 	}
-	checkRequiredLeaves(t, "TestControlPlaneNativeFlowConsent", []string{"ipv4/tcp", "ipv4/udp", "ipv6/tcp", "ipv6/udp"})
 	checkRequiredLeaves(t, "TestControlPlaneNativeLogoutTraffic", []string{
 		"logout/ipv4/tcp", "logout/ipv4/udp", "logout/ipv6/tcp", "logout/ipv6/udp",
 		"local-forget/ipv4/tcp", "local-forget/ipv4/udp", "local-forget/ipv6/tcp", "local-forget/ipv6/udp",
@@ -191,80 +208,81 @@ func TestRequireNativeAddressAndProtocolVariants(t *testing.T) {
 
 func TestRequireThreeIsolatedReportsOnEightPlatforms(t *testing.T) {
 	const sha = "0123456789012345678901234567890123456789"
+	names := fixtureNames()
+	groups := contractshard.Split(names)
 	write := func(path string, value []byte) {
 		t.Helper()
 		if err := os.WriteFile(path, value, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, mutation := range []string{"none", "multiple-platform-errors", "missing-platform", "missing-linux-arm", "missing-repetition", "wrong-shard", "missing-shard", "missing-report", "missing-inventory", "source", "inventory", "empty-inventory", "duplicate-inventory", "repeated-in-one-shard"} {
+	for _, mutation := range []string{
+		"none", "multiple-platform-errors", "missing-platform", "missing-linux-arm", "missing-repetition",
+		"missing-segment", "wrong-shard", "missing-shard", "missing-report", "missing-inventory",
+		"missing-selected", "source", "inventory", "empty-inventory", "duplicate-inventory",
+		"missing-flow", "duplicate-selection", "incomplete-selection", "repeated-in-one-shard", "malformed-report",
+	} {
 		t.Run(mutation, func(t *testing.T) {
 			dir := t.TempDir()
 			for _, platform := range platforms {
 				for repetition := 1; repetition <= 3; repetition++ {
-					shard := fmt.Sprintf("%s-%d", platform, repetition)
-					root := filepath.Join(dir, "client-contracts-"+shard)
-					if platform == "ubuntu-24.04-arm" && mutation == "missing-linux-arm" {
-						continue
-					}
-					if platform == "windows-2025" && mutation == "missing-platform" {
-						continue
-					}
-					if platform == "windows-2025" && repetition == 2 && mutation == "missing-repetition" {
-						continue
-					}
-					if err := os.MkdirAll(root, 0o700); err != nil {
-						t.Fatal(err)
-					}
-					write(filepath.Join(root, "source.txt"), []byte(sha+"\n"))
-					write(filepath.Join(root, "shard.txt"), []byte(shard+"\n"))
-					write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneAlpha\n"))
-					write(filepath.Join(root, "results.jsonl"), goodReport([]string{"TestControlPlaneAlpha"}, 1))
-					if mutation == "multiple-platform-errors" {
-						switch shard {
-						case "ubuntu-22.04-1":
-							write(filepath.Join(root, "source.txt"), []byte(strings.Repeat("f", 40)))
-						case "windows-2025-2":
-							write(filepath.Join(root, "results.jsonl"), bytes.Replace(goodReport([]string{"TestControlPlaneAlpha"}, 1), []byte(`"pass"`), []byte(`"fail"`), 1))
-						case "macos-15-intel-3":
-							if err := os.Remove(filepath.Join(root, "results.jsonl")); err != nil {
-								t.Fatal(err)
+					for shard := 1; shard <= contractshard.Count; shard++ {
+						if platform == "ubuntu-24.04-arm" && mutation == "missing-linux-arm" ||
+							platform == "windows-2025" && mutation == "missing-platform" ||
+							platform == "windows-2025" && repetition == 2 && mutation == "missing-repetition" ||
+							platform == "windows-2025" && repetition == 2 && shard == 2 && mutation == "missing-segment" {
+							continue
+						}
+						root := writeFixtureShard(t, dir, platform, repetition, shard, sha, names, groups[shard-1])
+						identity := fmt.Sprintf("%s-%d-%d", platform, repetition, shard)
+						if mutation == "multiple-platform-errors" {
+							switch identity {
+							case "ubuntu-22.04-1-1":
+								write(filepath.Join(root, "source.txt"), []byte(strings.Repeat("f", 40)))
+							case "windows-2025-2-2":
+								write(filepath.Join(root, "results.jsonl"), bytes.Replace(goodReport(groups[1], 1), []byte(`"pass"`), []byte(`"fail"`), 1))
+							case "macos-15-intel-3-1":
+								if err := os.Remove(filepath.Join(root, "results.jsonl")); err != nil {
+									t.Fatal(err)
+								}
 							}
 						}
-					}
-					if platform != "windows-2025" || repetition != 2 {
-						continue
-					}
-					switch mutation {
-					case "missing-report", "missing-inventory", "missing-shard":
-						file := "results.jsonl"
-						if mutation == "missing-inventory" {
-							file = "expected-tests.txt"
+						if platform != "windows-2025" || repetition != 2 || shard != 2 {
+							continue
 						}
-						if mutation == "missing-shard" {
-							file = "shard.txt"
+						switch mutation {
+						case "missing-report", "missing-inventory", "missing-shard", "missing-selected":
+							file := map[string]string{"missing-report": "results.jsonl", "missing-inventory": "expected-tests.txt", "missing-shard": "shard.txt", "missing-selected": "selected-tests.txt"}[mutation]
+							if err := os.Remove(filepath.Join(root, file)); err != nil {
+								t.Fatal(err)
+							}
+						case "source":
+							write(filepath.Join(root, "source.txt"), []byte(strings.Repeat("f", 40)))
+						case "inventory":
+							write(filepath.Join(root, "expected-tests.txt"), []byte(strings.Join(append(names, "TestControlPlaneGamma"), "\n")+"\n"))
+						case "empty-inventory":
+							write(filepath.Join(root, "expected-tests.txt"), nil)
+						case "duplicate-inventory":
+							write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneAlpha\nTestControlPlaneAlpha\n"))
+						case "missing-flow":
+							write(filepath.Join(root, "expected-tests.txt"), []byte(strings.Join(names[:len(names)-1], "\n")+"\n"))
+						case "duplicate-selection":
+							write(filepath.Join(root, "selected-tests.txt"), []byte(strings.Join(groups[0], "\n")+"\n"))
+						case "incomplete-selection":
+							write(filepath.Join(root, "selected-tests.txt"), []byte(strings.Join(groups[1][:len(groups[1])-1], "\n")+"\n"))
+						case "wrong-shard":
+							write(filepath.Join(root, "shard.txt"), []byte("windows-2025-2-1\n"))
+						case "repeated-in-one-shard":
+							write(filepath.Join(root, "results.jsonl"), goodReport(groups[1], 3))
+						case "malformed-report":
+							write(filepath.Join(root, "results.jsonl"), []byte("{invalid json\n"))
 						}
-						if err := os.Remove(filepath.Join(root, file)); err != nil {
-							t.Fatal(err)
-						}
-					case "source":
-						write(filepath.Join(root, "source.txt"), []byte(strings.Repeat("f", 40)))
-					case "inventory":
-						write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneBeta\n"))
-					case "empty-inventory":
-						write(filepath.Join(root, "expected-tests.txt"), nil)
-					case "duplicate-inventory":
-						write(filepath.Join(root, "expected-tests.txt"), []byte("TestControlPlaneAlpha\nTestControlPlaneAlpha\n"))
-					case "wrong-shard":
-						write(filepath.Join(root, "shard.txt"), []byte("windows-2025-1\n"))
-					case "repeated-in-one-shard":
-						write(filepath.Join(root, "results.jsonl"), goodReport([]string{"TestControlPlaneAlpha"}, 3))
 					}
 				}
 			}
 			n, err := verifyReports(dir, sha, 3)
 			if mutation == "none" {
-				if err != nil || n != 1 {
+				if err != nil || n != len(names) {
 					t.Fatalf("valid reports: count=%d err=%v", n, err)
 				}
 			} else if err == nil {
@@ -272,9 +290,9 @@ func TestRequireThreeIsolatedReportsOnEightPlatforms(t *testing.T) {
 			}
 			if mutation == "multiple-platform-errors" {
 				for _, expected := range []string{
-					"ubuntu-22.04-1: missing or mismatched source identity",
-					"windows-2025-2: report contains a failed or skipped test",
-					"macos-15-intel-3: missing execution report",
+					"ubuntu-22.04-1-1: missing or mismatched source identity",
+					"windows-2025-2-2: report contains a failed or skipped test",
+					"macos-15-intel-3-1: missing execution report",
 				} {
 					if !strings.Contains(err.Error(), expected) {
 						t.Fatalf("aggregate omitted %q: %v", expected, err)
