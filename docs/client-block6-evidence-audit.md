@@ -494,20 +494,27 @@ has exercised the new diagnostics; Block 6 acceptance remains open.
 One further Test dispatch was explicitly authorized for `main` at `d1be114`
 with `contract_repetitions=3`; run
 [36478835005](https://github.com/endless-net/client/actions/runs/36478835005)
-is still running. Separately, native CLI test diagnostics now classify process
-deadline, cancellation, and numeric exit status while continuing to withhold
-all subprocess output and arbitrary error text. This addresses the lack of
-information in the repeated unclassified `CreateProfile` failure. Local short
-tests, vet and lint pass for that diagnostic change. The dispatch predates it,
-so a later system run would be needed to exercise it if the failure remains.
+completed with `failure`. All 24 contract jobs failed, across every OS and
+repetition. Downloaded reports from Ubuntu 24.04 ARM repeats 1–3, Ubuntu 22.04
+ARM repeat 2, macOS 15 repeat 2, and Windows 2022 repeat 2 have the same pair
+of failures: cross-network selection reports
+`network_selection_target_context_stale`, and profile creation reports an
+unclassified subprocess failure. The container lifecycle job failed five
+Connect operations (persistent IPv4/IPv6 TCP/UDP and ephemeral recreation)
+after 30 seconds each. Their last operation observation was RUNNING with no
+failure code; subsequent operation and status CLI reads were unclassified.
+Verify on all three OSes, the control-plane job and all eight installer/smoke
+jobs passed. Aggregate `verify` failed because the contract and container jobs
+failed. The D-035 / UI-Q10 acceptance ledger remains open.
 
-The authorized run `36478835005` has produced failed contract reports on
-multiple platforms. Reports downloaded from Ubuntu ARM repeats 1–3, Ubuntu
-22.04 ARM repeat 2, and macOS repeat 2 all show the same failures:
-`network_selection_target_context_stale` for cross-network selection and an
-unclassified subprocess failure for profile creation. The run is still
-executing its remaining contract jobs, so these are interim results. The
-preflight stale reason is now split into fixed owner, profile, already-selected
-network and control-origin reasons; targeted unit tests and the complete local
-short suite pass. Push CI for this follow-up is pending. These newest reason
-keys have not yet been exercised by system CI.
+After this dispatch, the preflight stale reason was split into fixed owner,
+profile, already-selected network and control-origin keys, with targeted unit
+coverage. Native CLI test diagnostics now classify process deadline,
+cancellation and numeric exit status while withholding subprocess output and
+arbitrary error text; this diagnostic addresses the repeated unclassified
+`CreateProfile` failure. The local short suite, vet and lint passed. Push run
+[36482868939](https://github.com/endless-net/client/actions/runs/36482868939)
+passed all four platform short-unit jobs for `15a6f8e`. The system dispatch was
+pinned to `d1be114`, so it did not exercise the newer preflight or subprocess
+diagnostics. Acceptance remains open pending those system results and the
+Connect lifecycle failure's cause.
