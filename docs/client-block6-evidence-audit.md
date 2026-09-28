@@ -1,8 +1,9 @@
-# Block 6 evidence audit (updated 2026-09-25)
+# Block 6 evidence audit (updated 2026-09-28)
 
 Source: completed system evidence through manual dispatch `36127380078` on
-`main` at `3f9f432`; later fixture and diagnostic corrections and short-unit
-evidence through `76481a5` (updated 2026-09-25). This remains an
+`main` at `3f9f432`; later fixture and diagnostic corrections, short-unit
+evidence through `76481a5`, and manual system evidence through dispatch
+`36468528401` on `main` at `aad13ca` (updated 2026-09-28). This remains an
 open requirement and acceptance ledger, not a declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
 architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
@@ -450,8 +451,31 @@ the durable preparation reason. The permitted local checks passed, and push
 [36139842205](https://github.com/endless-net/client/actions/runs/36139842205)
 passed all four platform short-unit jobs on this exact SHA. Its non-push system,
 installer and contract jobs were skipped, so neither the cross-network failure
-nor the container Connect timeout has been revalidated. The user's latest
-manual-dispatch approval names `3f9f432`, whose one approved dispatch is already
-`36127380078`; it does not authorize dispatching current `main` at `76481a5`.
-System acceptance remains open pending a run on the corrected source and
-resolution of the recorded failures.
+nor the container Connect timeout had been revalidated at that point. System
+acceptance remained open pending a system run and resolution of the recorded
+failures.
+
+The fourth manual Test dispatch was explicitly authorized for `main` at
+`aad13ca` with `contract_repetitions=3`:
+[36468528401](https://github.com/endless-net/client/actions/runs/36468528401).
+It completed with conclusion `failure`. All four platform Verify jobs, the
+control-plane scenarios job and all eight installer/smoke jobs passed. The
+control-plane scenarios job does not include the cross-network selection
+contract. All 24 platform/repetition contract jobs failed both
+`TestControlPlaneNativeCrossNetworkSelection` with
+`ERROR_CODE_STALE_STATE` / `network_selection_preparation_failed`, and
+`TestControlPlaneNativeProfileContextSwitch` with an unclassified
+`CreateProfile` subprocess failure. The phase key narrows the first failure to
+preparation, but does not identify which source, catalog or checkpoint guard
+rejected the operation. This run therefore confirms the failure is repeatable
+on every platform and repetition; it does not establish a fix.
+
+The container lifecycle job also failed. Connect remained RUNNING in all four
+persistent IPv4/IPv6 TCP/UDP cases and ephemeral recreation. The operation
+snapshot reported `kind=2 state=1 failure=0`; the subsequent status snapshot
+was unavailable because both operation and status CLI reads returned an
+unclassified subprocess error. Thus the new snapshot confirms that native
+status could not be collected at timeout, but it still does not locate the
+stalled Connect phase. The aggregate `verify` job failed. No system acceptance
+requirement is closed by this run, and further system runs require a new
+authorization after a code or diagnostic change.
