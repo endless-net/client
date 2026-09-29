@@ -588,3 +588,22 @@ still required for the new scenario and the remaining Connect timeout.
 The documentation update was pushed at `2fd23f2`; push run
 [36497001970](https://github.com/endless-net/client/actions/runs/36497001970)
 passed all four platform short-unit jobs.
+
+The user-authorized Test dispatch
+[36498730448](https://github.com/endless-net/client/actions/runs/36498730448)
+used `contract_repetitions=3` on `d1be114`, before the fixes at `d7d3f63`, the
+operation-exit diagnostic at `70fe547`, and the exit/LAN scenario at `b6a12e8`.
+The temporary tag needed to select that commit was removed before runners had
+checked it out. As a result, 28 jobs failed at checkout, the aggregate verifier
+failed for missing contract reports, and two installer/smoke jobs passed
+(Ubuntu 24.04 and macOS 15 Intel). Seven contract shards did execute. All seven
+reproduced `TestControlPlaneNativeCrossNetworkSelection` with
+`network_selection_target_context_stale` and
+`TestControlPlaneNativeProfileContextSwitch` with an unclassified
+`create-profile` subprocess failure. The macOS 15 repeat-3 shard additionally
+failed `TestControlPlaneNativeMachineSharing/ipv6` after an application dial
+timeout. These results characterize the earlier SHA only; they do not qualify
+the current fixes or the later exit/LAN coverage. The temporary tag has been
+removed after the run completed. Push run
+[36498640573](https://github.com/endless-net/client/actions/runs/36498640573)
+passed all four short-unit jobs for documentation commit `268353d`.
