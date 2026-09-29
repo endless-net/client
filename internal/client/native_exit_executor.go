@@ -66,35 +66,62 @@ func newNativeExitExecutorWithStore(engine *WireGuardEngine, lock *sync.Mutex, c
 func nativeExitOperation(cfg Config, id string, requested *ClientExitSelection, releasing bool) (*clientRPCExitChange, error) {
 	invalid := errors.New("native exit operation is not durably bound")
 	if requested != nil && !exitSelectionConnectionReady(cfg) {
+		log.Print("Native exit plan: connected intent missing")
 		return nil, invalid
 	}
 	if cfg.RPCState == nil || cfg.RPCState.ExitChange == nil || id == "" {
+		log.Print("Native exit plan: durable journal missing")
 		return nil, invalid
 	}
 	plan := cfg.RPCState.ExitChange
-	if plan.OperationID != id || plan.Containing || plan.Releasing != releasing || !reflect.DeepEqual(plan.Requested, requested) || plan.Protection == nil || !reflect.DeepEqual(plan.Protection, cfg.RPCState.ExitProtection) {
+	if plan.OperationID != id {
+		log.Print("Native exit plan: operation identity mismatch")
+		return nil, invalid
+	}
+	if plan.Containing || plan.Releasing != releasing {
+		log.Print("Native exit plan: journal lifecycle mismatch")
+		return nil, invalid
+	}
+	if !reflect.DeepEqual(plan.Requested, requested) {
+		log.Print("Native exit plan: requested selection mismatch")
+		return nil, invalid
+	}
+	if plan.Protection == nil || !reflect.DeepEqual(plan.Protection, cfg.RPCState.ExitProtection) {
+		log.Print("Native exit plan: protection scope mismatch")
 		return nil, invalid
 	}
 	// nft protection cannot be released while a BPF pin journal still needs
 	// native cleanup. The record must survive even an interrupted pin syscall.
 	if releasing && plan.Protection.LAN != nil {
+		log.Print("Native exit plan: LAN cleanup journal remains")
 		return nil, invalid
 	}
 	found := false
 	for _, record := range cfg.RPCState.Operations {
 		op := new(ipc.Operation)
 		if proto.Unmarshal(record.Operation, op) != nil {
+			log.Print("Native exit plan: operation journal decode failed")
 			return nil, invalid
 		}
 		if op.Id != id {
 			continue
 		}
-		if found || record.CompletedAt != nil || op.State != ipc.OperationState_OPERATION_STATE_RUNNING || !exitChangeBound(&cfg, plan, op) || !strings.EqualFold(record.Owner, plan.OwnerID) {
+		if found || record.CompletedAt != nil || op.State != ipc.OperationState_OPERATION_STATE_RUNNING {
+			log.Print("Native exit plan: operation journal is not running")
+			return nil, invalid
+		}
+		if !exitChangeBound(&cfg, plan, op) {
+			log.Print("Native exit plan: operation binding mismatch")
+			return nil, invalid
+		}
+		if !strings.EqualFold(record.Owner, plan.OwnerID) {
+			log.Print("Native exit plan: operation owner mismatch")
 			return nil, invalid
 		}
 		found = true
 	}
 	if !found {
+		log.Print("Native exit plan: operation journal not found")
 		return nil, invalid
 	}
 	return plan, nil

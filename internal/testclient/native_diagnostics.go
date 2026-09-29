@@ -58,6 +58,12 @@ func nativeExitOperationStage(message string) string {
 		"Native exit guard: runtime interface conflict", "Native exit guard: platform guard creation failed",
 		"Native exit guard: platform guard validation failed", "Native exit guard: runtime identity conflict",
 		"Native exit guard: existing guard validated", "Native exit guard: platform guard validated",
+		"Native exit plan: connected intent missing", "Native exit plan: durable journal missing",
+		"Native exit plan: operation identity mismatch", "Native exit plan: journal lifecycle mismatch",
+		"Native exit plan: requested selection mismatch", "Native exit plan: protection scope mismatch",
+		"Native exit plan: LAN cleanup journal remains", "Native exit plan: operation journal decode failed",
+		"Native exit plan: operation journal is not running", "Native exit plan: operation binding mismatch",
+		"Native exit plan: operation owner mismatch", "Native exit plan: operation journal not found",
 		"WireGuard engine: exit guard contained", "WireGuard engine: exit LAN cleanup complete",
 		"WireGuard engine: exit underlay capture complete", "WireGuard engine: exit runtime configure complete",
 		"WireGuard engine: exit routes confirmed", "WireGuard engine: exit policy opened":
