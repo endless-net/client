@@ -152,7 +152,6 @@ message CredentialStatus {
   google.protobuf.Timestamp warning_at = 3;
   bool automatic_renewal_supported = 4;
   Restriction recovery = 5;
-  string renewal_operation_id = 6;
 }
 
 enum ConnectionPhase {
@@ -171,13 +170,11 @@ message Session {
   Restriction renewal = 4;
   // Claim is supplied only when supported by the runtime/provider.
   bool seamless_renewal_supported = 5;
-  string renewal_operation_id = 6;
 }
 
 message Recovery {
-  string operation_id = 1;
-  ServiceState state = 2;
-  Failure failure = 3;
+  ServiceState state = 1;
+  Failure failure = 2;
 }
 
 message ServerIdentity {
@@ -262,8 +259,6 @@ message Status {
   string hostname = 9;
   Network network = 10;
   bool ephemeral = 11;
-  string enrollment_request_id = 12;
-  UserAction pending_action = 13;
   repeated string overlay_addresses = 14;
   uint64 map_revision = 15;
   uint32 peer_count = 16;
@@ -279,9 +274,6 @@ message Status {
   string route_table = 25;
   // Observable on the initial snapshot, including for a newly attached UI.
   ConnectionPhase connection_phase = 26;
-  // All nonterminal operations visible to this owner, including inactive profiles.
-  // Empty for observers. Each operation carries its own profile_id.
-  repeated Operation current_operations = 27;
   CredentialStatus credential = 28;
 }
 

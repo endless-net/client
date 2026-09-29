@@ -22,8 +22,6 @@ extend google.protobuf.MethodOptions {
   Access access = 51000;
   // Only a fresh installation with no owner or enrollment may claim atomically.
   bool allows_initial_ownership_claim = 51001;
-  // Required for every mutation; persisted into Operation.kind at acceptance.
-  OperationKind operation_kind = 51002;
 }
 
 enum Platform {
@@ -117,13 +115,11 @@ message ProfileRef {
   string profile_id = 1;
 }
 
-// Mandatory on every mutation. Never contains credentials or claimed roles.
+// Snapshot precondition for mutations. Never contains credentials or claimed roles.
 message MutationContext {
-  // UUID, scoped to authenticated installation owner. Durable for at least 24h.
-  string request_id = 1;
   // Both required; stale values fail before side effects.
-  string expected_instance_id = 2;
-  uint64 expected_revision = 3;
+  string expected_instance_id = 1;
+  uint64 expected_revision = 2;
 }
 
 enum ErrorCode {
@@ -157,26 +153,14 @@ enum ErrorCode {
   ERROR_CODE_CONTRACT_MISMATCH = 27;
 }
 
+// Typed details for RPC errors and status failures.
 message Failure {
   ErrorCode code = 1;
   string reason_key = 2;
-  // Correlation IDs only; no diagnostic payload, bearer token or credentials.
-  string control_request_id = 3;
-  bool retryable = 4;
-  google.protobuf.Duration retry_after = 5;
-  ActionOwner action_owner = 6;
-  repeated string field_paths = 7;
-}
-
-// Transport error details carry Failure. Completed operations use Failure too.
-enum OperationState {
-  OPERATION_STATE_UNSPECIFIED = 0;
-  OPERATION_STATE_PENDING = 1;
-  OPERATION_STATE_RUNNING = 2;
-  OPERATION_STATE_WAITING_FOR_USER = 3;
-  OPERATION_STATE_SUCCEEDED = 4;
-  OPERATION_STATE_FAILED = 5;
-  OPERATION_STATE_CANCELLED = 6;
+  bool retryable = 3;
+  google.protobuf.Duration retry_after = 4;
+  ActionOwner action_owner = 5;
+  repeated string field_paths = 6;
 }
 
 enum ConnectionContinuity {
@@ -194,22 +178,6 @@ enum CleanupOutcome {
   CLEANUP_OUTCOME_NOT_REGISTERED = 3;
 }
 
-message UserAction {
-  enum Kind {
-    KIND_UNSPECIFIED = 0;
-    KIND_OPEN_BROWSER = 1;
-    KIND_WAIT_FOR_APPROVAL = 2;
-    KIND_GRANT_VPN_PERMISSION = 3;
-    KIND_USE_PRIVILEGED_HELPER = 4;
-    KIND_CONTACT_ACCESS_ADMINISTRATOR = 5;
-  }
-  Kind kind = 1;
-  // Optional validated HTTPS browser URL; sensitive and excluded from logs.
-  string browser_url = 2;
-  google.protobuf.Timestamp expires_at = 3;
-  string reason_key = 4;
-}
-
 message ChangeResult {
   bool changed = 1;
 }
@@ -219,6 +187,10 @@ message EnrollmentResult {
   string node_id = 2;
 }
 
+message ProfileResult {
+  string profile_id = 1;
+}
+
 message SelectionResult {
   string selected_id = 1; // Empty means cleared, only for exit-node selection.
 }
@@ -226,7 +198,6 @@ message SelectionResult {
 message CleanupResult {
   CleanupOutcome outcome = 1;
   bool local_registration_removed = 2;
-  string control_request_id = 3;
 }
 
 message RenewalResult {
@@ -243,49 +214,13 @@ message BundleResult {
   bool reused = 6;
 }
 
-// Closed mutation vocabulary; UNSPECIFIED is invalid in returned operations.
-enum OperationKind {
-  OPERATION_KIND_UNSPECIFIED = 0;
-  OPERATION_KIND_ENROLL = 1;
-  OPERATION_KIND_CONNECT = 2;
-  OPERATION_KIND_DISCONNECT = 3;
-  OPERATION_KIND_TRUST_SERVER_IDENTITY = 4;
-  OPERATION_KIND_LOGOUT = 5;
-  OPERATION_KIND_FORGET_LOCAL_ENROLLMENT = 6;
-  OPERATION_KIND_SELECT_NETWORK = 7;
-  OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE = 8;
-  OPERATION_KIND_CREATE_PROFILE = 9;
-  OPERATION_KIND_SELECT_PROFILE = 10;
-  OPERATION_KIND_RENAME_PROFILE = 11;
-  OPERATION_KIND_REMOVE_PROFILE = 12;
-  OPERATION_KIND_RENEW_SESSION = 13;
-  OPERATION_KIND_SELECT_EXIT_NODE = 14;
-  OPERATION_KIND_CLEAR_EXIT_NODE = 15;
-  OPERATION_KIND_SET_PREFERENCES = 16;
-  OPERATION_KIND_RESET_PREFERENCES = 17;
-  OPERATION_KIND_SET_RESOURCE_ENABLED = 18;
-  OPERATION_KIND_NOTIFY_LIFECYCLE = 19;
-}
-
-message Operation {
-  string id = 1;
-  string request_id = 2;
-  string profile_id = 3;
-  OperationState state = 4;
-  SnapshotMetadata metadata = 5;
-  UserAction user_action = 6;
-  ConnectionContinuity continuity = 7;
-  // Immutable, including pending operations, snapshots and restart recovery.
-  OperationKind kind = 8;
-  oneof outcome {
-    Failure failure = 10;
-    ChangeResult change = 11;
-    EnrollmentResult enrollment = 12;
-    SelectionResult selection = 13;
-    CleanupResult cleanup = 14;
-    RenewalResult renewal = 15;
-    BundleResult bundle = 16;
-  }
+// Browser challenge belongs to enrollment or session renewal, never to a
+// generic command journal. The user code is issued by the identity provider.
+message BrowserLoginChallenge {
+  string user_code = 1;
+  string verification_uri = 2;
+  string verification_uri_complete = 3;
+  google.protobuf.Timestamp expires_at = 4;
 }
 
 message PageRequest {

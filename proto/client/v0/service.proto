@@ -22,44 +22,38 @@ service ClientService {
   rpc WatchEvents(WatchEventsRequest) returns (stream WatchEventsResponse) {
     option (access) = ACCESS_OBSERVER;
   }
-  // Read a caller-owned operation after timeout or reconnection.
-  rpc GetOperation(GetOperationRequest) returns (GetOperationResponse) {
-    option (access) = ACCESS_OWNER;
-  }
   // UF-03: initial unowned installation uses the ownership-claim exception.
   rpc Enroll(EnrollRequest) returns (EnrollResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_ENROLL;
     option (allows_initial_ownership_claim) = true;
+  }
+  // Complete an identity-provider browser login started by Enroll.
+  rpc WaitBrowserEnrollment(WaitBrowserEnrollmentRequest) returns (WaitBrowserEnrollmentResponse) {
+    option (access) = ACCESS_OWNER;
   }
   // UF-05: persist connected intent, then reconcile runtime.
   rpc Connect(ConnectRequest) returns (ConnectResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_CONNECT;
   }
   // UF-05: persist disconnected intent; retain registration.
   rpc Disconnect(DisconnectRequest) returns (DisconnectResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_DISCONNECT;
   }
   // UF-10: review announced and trusted identity for a profile.
   rpc GetServerIdentity(GetServerIdentityRequest) returns (GetServerIdentityResponse) {
     option (access) = ACCESS_OWNER;
   }
-  // UF-10: fixed-purpose privileged operation, matching the current announcement.
+  // UF-10: fixed-purpose privileged trust, matching the current announcement.
   rpc TrustServerIdentity(TrustServerIdentityRequest) returns (TrustServerIdentityResponse) {
     option (access) = ACCESS_ADMINISTRATOR;
-    option (operation_kind) = OPERATION_KIND_TRUST_SERVER_IDENTITY;
   }
   // UF-12: remote confirmation is required before deleting local registration.
   rpc Logout(LogoutRequest) returns (LogoutResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_LOGOUT;
   }
   // UF-12: explicit local-only cleanup; never claims remote revocation.
   rpc ForgetLocalEnrollment(ForgetLocalEnrollmentRequest) returns (ForgetLocalEnrollmentResponse) {
     option (access) = ACCESS_ADMINISTRATOR;
-    option (operation_kind) = OPERATION_KIND_FORGET_LOCAL_ENROLLMENT;
   }
   // UF-07: only already granted networks for this profile.
   rpc ListNetworks(ListNetworksRequest) returns (ListNetworksResponse) {
@@ -68,7 +62,6 @@ service ClientService {
   // UF-07: select an enrolled network by stable ID.
   rpc SelectNetwork(SelectNetworkRequest) returns (SelectNetworkResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_SELECT_NETWORK;
   }
   // UF-06, UF-19: filtered peer search and path inspection.
   rpc ListPeers(ListPeersRequest) returns (ListPeersResponse) {
@@ -81,7 +74,6 @@ service ClientService {
   // UF-11: local-only redacted archive, no upload or packet capture.
   rpc CreateDiagnosticsBundle(CreateDiagnosticsBundleRequest) returns (CreateDiagnosticsBundleResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_CREATE_DIAGNOSTICS_BUNDLE;
   }
   // UF-11: caller-bound handle; bounded chunks, no filesystem path input.
   rpc ReadDiagnosticsBundle(ReadDiagnosticsBundleRequest) returns (ReadDiagnosticsBundleResponse) {
@@ -98,23 +90,19 @@ service ClientService {
   // UF-16: create empty context; enrollment is a separate explicit action.
   rpc CreateProfile(CreateProfileRequest) returns (CreateProfileResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_CREATE_PROFILE;
     option (allows_initial_ownership_claim) = true;
   }
   // UF-16: atomic context switch, report actual connection interruption.
   rpc SelectProfile(SelectProfileRequest) returns (SelectProfileResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_SELECT_PROFILE;
   }
   // UF-16: change display name only; identity and origin are immutable.
   rpc RenameProfile(RenameProfileRequest) returns (RenameProfileResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_RENAME_PROFILE;
   }
   // UF-16: only inactive profiles with no remaining registration/session.
   rpc RemoveProfile(RemoveProfileRequest) returns (RemoveProfileResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_REMOVE_PROFILE;
   }
   // UF-17: expiry, warning deadline and renewal availability.
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse) {
@@ -123,7 +111,10 @@ service ClientService {
   // UF-17: no caller-supplied callback URL or browser credential.
   rpc RenewSession(RenewSessionRequest) returns (RenewSessionResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_RENEW_SESSION;
+  }
+  // Complete an identity-provider browser login started by RenewSession.
+  rpc WaitSessionRenewal(WaitSessionRenewalRequest) returns (WaitSessionRenewalResponse) {
+    option (access) = ACCESS_OWNER;
   }
   // UF-08: list authorized consumer-side egress choices.
   rpc ListExitNodes(ListExitNodesRequest) returns (ListExitNodesResponse) {
@@ -136,12 +127,10 @@ service ClientService {
   // UF-08: only an authorized catalog ID; never arbitrary routes.
   rpc SelectExitNode(SelectExitNodeRequest) returns (SelectExitNodeResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_SELECT_EXIT_NODE;
   }
   // UF-08: explicit removal of consumer-side egress selection.
   rpc ClearExitNode(ClearExitNodeRequest) returns (ClearExitNodeResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_CLEAR_EXIT_NODE;
   }
   // UF-18, UF-21: effective values, user overrides and locks.
   rpc GetPreferences(GetPreferencesRequest) returns (GetPreferencesResponse) {
@@ -150,12 +139,10 @@ service ClientService {
   // UF-18, UF-21: nonempty typed patch, all-or-nothing validation.
   rpc SetPreferences(SetPreferencesRequest) returns (SetPreferencesResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_SET_PREFERENCES;
   }
   // UF-18, UF-21: remove named user overrides; managed values remain.
   rpc ResetPreferences(ResetPreferencesRequest) returns (ResetPreferencesResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_RESET_PREFERENCES;
   }
   // UF-20: read-only effective runtime policy and next-action owner.
   rpc ListManagedSettings(ListManagedSettingsRequest) returns (ListManagedSettingsResponse) {
@@ -168,12 +155,10 @@ service ClientService {
   // UF-19: local subset selection cannot expand backend authorization.
   rpc SetResourceEnabled(SetResourceEnabledRequest) returns (SetResourceEnabledResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_SET_RESOURCE_ENABLED;
   }
   // UF-21: explicit graceful UI quit only; OS lifecycle comes from runtime adapters.
   rpc NotifyLifecycle(NotifyLifecycleRequest) returns (NotifyLifecycleResponse) {
     option (access) = ACCESS_OWNER;
-    option (operation_kind) = OPERATION_KIND_NOTIFY_LIFECYCLE;
   }
   // UF-22: verified distribution projection and installed-pair compatibility.
   rpc GetUpdateInfo(GetUpdateInfoRequest) returns (GetUpdateInfoResponse) {
@@ -199,18 +184,6 @@ message GetStatusResponse {
 
 message WatchEventsRequest {}
 
-message GetOperationRequest {
-  // Request-ID lookup recovers an accepted command whose response was lost.
-  oneof lookup {
-    string operation_id = 1;
-    string request_id = 2;
-  }
-}
-
-message GetOperationResponse {
-  Operation operation = 1;
-}
-
 message EnrollRequest {
   MutationContext mutation = 1;
   ProfileRef profile = 2;
@@ -223,17 +196,31 @@ message EnrollRequest {
 }
 
 message EnrollResponse {
-  Operation operation = 1;
+  oneof result {
+    EnrollmentResult enrollment = 1;
+    BrowserLoginChallenge browser_login = 2;
+  }
+}
+
+message WaitBrowserEnrollmentRequest {
+  ProfileRef profile = 1;
+  // Identity-provider user code returned by Enroll, not an IPC request ID.
+  string user_code = 2;
+}
+
+message WaitBrowserEnrollmentResponse {
+  EnrollmentResult enrollment = 1;
 }
 
 message ConnectRequest {
   MutationContext mutation = 1;
   ProfileRef profile = 2;
+  // False waits for a connected tunnel or failure; true returns after intent
+  // is accepted, with subsequent connection changes in GetStatus/WatchEvents.
+  bool async = 3;
 }
 
-message ConnectResponse {
-  Operation operation = 1;
-}
+message ConnectResponse {}
 
 message DisconnectRequest {
   MutationContext mutation = 1;
@@ -241,7 +228,7 @@ message DisconnectRequest {
 }
 
 message DisconnectResponse {
-  Operation operation = 1;
+  ChangeResult change = 1;
 }
 
 message GetServerIdentityRequest {
@@ -262,7 +249,7 @@ message TrustServerIdentityRequest {
 }
 
 message TrustServerIdentityResponse {
-  Operation operation = 1;
+  ChangeResult change = 1;
 }
 
 message LogoutRequest {
@@ -271,7 +258,7 @@ message LogoutRequest {
 }
 
 message LogoutResponse {
-  Operation operation = 1;
+  CleanupResult cleanup = 1;
 }
 
 message ForgetLocalEnrollmentRequest {
@@ -281,7 +268,7 @@ message ForgetLocalEnrollmentRequest {
 }
 
 message ForgetLocalEnrollmentResponse {
-  Operation operation = 1;
+  CleanupResult cleanup = 1;
 }
 
 message ListNetworksRequest {
@@ -302,7 +289,8 @@ message SelectNetworkRequest {
 }
 
 message SelectNetworkResponse {
-  Operation operation = 1;
+  SelectionResult selection = 1;
+  ConnectionContinuity continuity = 2;
 }
 
 message ListPeersRequest {
@@ -333,7 +321,7 @@ message CreateDiagnosticsBundleRequest {
 }
 
 message CreateDiagnosticsBundleResponse {
-  Operation operation = 1;
+  BundleResult bundle = 1;
 }
 
 message ReadDiagnosticsBundleRequest {
@@ -375,7 +363,7 @@ message CreateProfileRequest {
 }
 
 message CreateProfileResponse {
-  Operation operation = 1;
+  ProfileResult profile = 1;
 }
 
 message SelectProfileRequest {
@@ -384,7 +372,8 @@ message SelectProfileRequest {
 }
 
 message SelectProfileResponse {
-  Operation operation = 1;
+  SelectionResult selection = 1;
+  ConnectionContinuity continuity = 2;
 }
 
 message RenameProfileRequest {
@@ -394,7 +383,7 @@ message RenameProfileRequest {
 }
 
 message RenameProfileResponse {
-  Operation operation = 1;
+  ChangeResult change = 1;
 }
 
 message RemoveProfileRequest {
@@ -403,7 +392,7 @@ message RemoveProfileRequest {
 }
 
 message RemoveProfileResponse {
-  Operation operation = 1;
+  ChangeResult change = 1;
 }
 
 message GetSessionRequest {
@@ -421,7 +410,23 @@ message RenewSessionRequest {
 }
 
 message RenewSessionResponse {
-  Operation operation = 1;
+  oneof result {
+    RenewalResult renewal = 1;
+    BrowserLoginChallenge browser_login = 2;
+  }
+  // Set for a direct renewal; browser renewal reports continuity when it ends.
+  ConnectionContinuity continuity = 3;
+}
+
+message WaitSessionRenewalRequest {
+  ProfileRef profile = 1;
+  // Identity-provider user code returned by RenewSession.
+  string user_code = 2;
+}
+
+message WaitSessionRenewalResponse {
+  RenewalResult renewal = 1;
+  ConnectionContinuity continuity = 2;
 }
 
 message ListExitNodesRequest {
@@ -453,7 +458,8 @@ message SelectExitNodeRequest {
 }
 
 message SelectExitNodeResponse {
-  Operation operation = 1;
+  SelectionResult selection = 1;
+  ConnectionContinuity continuity = 2;
 }
 
 message ClearExitNodeRequest {
@@ -462,7 +468,8 @@ message ClearExitNodeRequest {
 }
 
 message ClearExitNodeResponse {
-  Operation operation = 1;
+  SelectionResult selection = 1;
+  ConnectionContinuity continuity = 2;
 }
 
 message GetPreferencesRequest {
@@ -480,7 +487,7 @@ message SetPreferencesRequest {
 }
 
 message SetPreferencesResponse {
-  Operation operation = 1;
+  ChangeResult change = 1;
 }
 
 message ResetPreferencesRequest {
@@ -490,7 +497,7 @@ message ResetPreferencesRequest {
 }
 
 message ResetPreferencesResponse {
-  Operation operation = 1;
+  ChangeResult change = 1;
 }
 
 message ListManagedSettingsRequest {
@@ -522,7 +529,7 @@ message SetResourceEnabledRequest {
 }
 
 message SetResourceEnabledResponse {
-  Operation operation = 1;
+  ChangeResult change = 1;
 }
 
 message NotifyLifecycleRequest {
@@ -532,7 +539,7 @@ message NotifyLifecycleRequest {
 }
 
 message NotifyLifecycleResponse {
-  Operation operation = 1;
+  ChangeResult change = 1;
 }
 
 message GetUpdateInfoRequest {
@@ -558,7 +565,6 @@ message WatchEventsResponse {
     SnapshotEvent snapshot = 3;
     Status status_changed = 4;
     DomainInvalidated invalidated = 5;
-    Operation operation_changed = 6;
     Failure failure = 7;
     Session session_changed = 8;
   }

@@ -1,12 +1,15 @@
 # Client Protobuf IPC v0
 
-- Status: **accepted**, 2026-09-12.
+- Status: **accepted baseline** (2026-09-12); 2026-09-29 contract-only
+  correction is a draft pending generated bindings and runtime adoption.
 - Owner: `client`.
 - Contract version: **v0**, explicitly selected by the user.
 - Additive BA/SA alignment: 2026-09-13 (credential deadlines and initial
   connection/operation snapshot). Version and accepted baseline are unchanged.
 - Contract corrections: 2026-09-13 (operation kinds, initial-claim annotations,
   explicit IPv4/IPv6 exit selection and per-family application state).
+- Draft contract correction: 2026-09-29 (direct RPC results and domain state replace
+  the generic operation journal and request identifiers).
 - Canonical source: [service.proto](../proto/client/v0/service.proto),
   [common.proto](../proto/client/v0/common.proto),
   [runtime.proto](../proto/client/v0/runtime.proto),
@@ -15,9 +18,10 @@
 - Input: [Client UI business analysis, main](https://github.com/endless-net/architecture/blob/main/docs/ru/client-ui-business-analysis.md),
   read on 2026-09-12.
 
-This is the accepted RPC specification for the analyzed functions. Contract
-acceptance is separate from implementation and release acceptance. The runtime
-and native CLI now use v0 over local OS transport; remaining HTTP v2 DTOs and
+This records the accepted v0 baseline and the draft contract-only correction
+above. Contract acceptance is separate from implementation and release
+acceptance. The runtime and native CLI now use the prior generated v0 bindings
+over local OS transport; remaining HTTP v2 DTOs and
 callbacks are migration residue, not an active production contract. The old
 HTTP client/server, codecs and OpenAPI specification have been removed from the
 current tree. Protobuf v0 is a separate protocol
@@ -33,7 +37,7 @@ privileged-helper/release pairing or full platform acceptance.
 
 | File | Responsibility |
 | --- | --- |
-| `proto/client/v0/common.proto` | Caller access, capabilities, errors, operation lifecycle, pagination |
+| `proto/client/v0/common.proto` | Caller access, capabilities, errors, typed results, pagination |
 | `proto/client/v0/runtime.proto` | Status, enrollment, profiles, network/peer state, diagnostics |
 | `proto/client/v0/features.proto` | Exit nodes, preferences, resources, policy, lifecycle, update/support projections |
 | `proto/client/v0/service.proto` | RPCs, requests/responses, access annotations, event stream |
@@ -131,7 +135,7 @@ shell command, private key or arbitrary executable.
 
 - Observer: sanitized active status, capabilities, product information and
   filtered events. Do not disclose account/profile identity, browser approval
-  URLs, peer addresses, session deadlines or owner operations to other users.
+  URLs, peer addresses or session deadlines to other users.
 - Owner: installation owner and device administrator, limited to the caller's
   profiles and already granted account/network permissions.
 - Administrator: fixed-purpose trust and local-forget operations. On mobile,
@@ -146,72 +150,79 @@ Only methods annotated `allows_initial_ownership_claim = true` may use that
 exception; both still require an authenticated local peer. The annotation is
 permission to evaluate the exception, not an authorization grant. The runtime
 must atomically recheck that owner and enrollment are absent together with
-persisting the winning owner and accepted mutation. A losing different identity
-receives OWNER_REQUIRED; it cannot observe the winner's operation. A retry from
-the winning identity follows normal durable deduplication. Unannotated methods
-never claim ownership. Existing ownerless enrollment cannot use this exception.
+persisting the winning owner and mutation. A losing different identity receives
+OWNER_REQUIRED. Repeating a browser Enroll for the same owner and profile while
+its challenge is valid returns the current challenge. Unannotated methods never
+claim ownership. Existing ownerless enrollment cannot use this exception.
 
 Responses are caller-filtered before serialization, including nested status,
-diagnostics, operations and streams. Unauthorized lookup returns NOT_FOUND.
-Observer event streams receive neither session payloads nor operation updates.
+diagnostics and streams. Unauthorized lookup returns NOT_FOUND. Observer event
+streams receive no session payloads.
 No account, network, resource, policy or exit-node hosting administration is
 introduced.
 
-## Mutations, consistency and operations
+## Mutations and consistency
 
-All mutations require a nonempty UUID `request_id`, `expected_instance_id`
-and nonzero `expected_revision` from an authorized fresh snapshot. For an
-inactive profile the owner can obtain that revision through `ListProfiles` or
-a profile read. Snapshot revision is a monotonic runtime-wide state revision,
-not a map revision; instance ID prevents ABA after restart.
+The local RPC design follows the command-specific patterns visible in
+[NetBird v0.79.0 daemon.proto](https://github.com/netbirdio/netbird/blob/v0.79.0/client/proto/daemon.proto):
+`Up.async` with `SubscribeStatus`, browser `Login` with `WaitSSOLogin`, and a
+direct `DebugBundleResponse`. NetBird does not define a generic operation
+lifecycle for those RPCs. Its contract does not establish an administrative
+approval lifecycle for EndlessNet; the existing approval-related domain states
+remain separate from command progress.
 
-The server checks authorization first, then durable deduplication, then revision,
-capability, policy and domain preconditions. Repeat of the same request ID and
-semantic payload returns the same operation, even after restart or revision
-change. Reuse with a different RPC or payload fails INVALID_ARGUMENT. Request
-and operation records remain queryable for at least 24 hours after terminal
-completion; waiting/running records cannot expire. Sensitive enrollment tokens
-must not be stored in plaintext in deduplication records.
+Every new state-changing command carries `expected_instance_id` and nonzero
+`expected_revision` from an authorized fresh snapshot. The two browser wait
+RPCs continue an existing owner/profile/provider flow using its user code.
+For an inactive profile, the owner obtains
+the revision through `ListProfiles` or a profile read. Snapshot revision is a
+monotonic runtime-wide state revision, not a map revision; instance ID prevents
+ABA after restart. The server checks authorization, revision, capability, policy
+and domain preconditions before side effects. A stale precondition fails
+STALE_STATE. There is no request ID, command record, generic operation status,
+lookup RPC or exactly-once guarantee. After a lost response, the caller reads
+the authoritative status or resource and decides whether another call is needed.
 
-`GetOperation` accepts either operation ID or original request ID. It recovers
-a command whose acceptance response was lost. Caller timeout or stream disconnect
-does not cancel accepted work. Operation acceptance and requested state must be
-durable before returning; crash recovery reconciles them. No generic cancellation
-RPC is specified because remote revocation, trust and context switching cannot
-always be safely rolled back.
+Local mutations return their typed result after the requested change is applied.
+RPC failure carries `Failure` details. Profile/network/exit switches report
+actual `ConnectionContinuity`; they never infer uninterrupted access from RPC
+success. Mutations affecting the active context serialize. A conflicting call
+fails BUSY; explicit Disconnect remains available and prevents an earlier
+connection attempt from restoring connected intent.
 
-`PENDING -> RUNNING -> [WAITING_FOR_USER -> RUNNING] -> terminal`.
-Terminals are SUCCEEDED, FAILED or CANCELLED (provider/OS cancellation).
-For local-only changes, the lifecycle can complete within one atomic config
-transaction: intermediate states need not be externally visible. The terminal
-outcome and actual effect must be durable together before returning SUCCEEDED.
-This does not permit early success for asynchronous network or device effects.
-WAITING_FOR_USER has a typed `UserAction`. Nonterminal operations have no outcome;
-FAILED/CANCELLED have `Failure`; SUCCEEDED has exactly one success outcome.
-Terminal outcome and actual continuity are immutable. Success means the requested
-effect is achieved, not merely that a command was queued. Profile/network/exit
-switches and renewal report PRESERVED, INTERRUPTED, UNKNOWN or NOT_APPLICABLE;
-they must never infer uninterrupted access from RPC success.
+`Connect(async=false)` waits for a connected tunnel or returns an RPC error.
+`Connect(async=true)` returns after connected intent is accepted, while
+`GetStatus` and `WatchEvents` report `connection_phase` and any later failure.
+Repeated Connect for the same active intent joins the current attempt; after
+that attempt has stopped, another Connect may start a new one. Disconnect
+persists disconnected intent and waits for local teardown. Neither response
+contains an operation handle.
 
-Every mutation RPC has an `operation_kind` annotation matching one distinct
-`OperationKind`. The runtime sets `Operation.kind` before durable acceptance;
-it remains immutable in responses, GetOperation, current_operations and events,
-including inactive profiles and restart recovery. UNSPECIFIED and unknown kinds
-are not valid producer outputs. UI must not infer the kind from operation ID,
-outcome, active profile or the last command it remembers sending.
+Token-based Enroll returns `EnrollmentResult` after enrollment is accepted.
+Browser Enroll returns `BrowserLoginChallenge` containing the provider's user
+code and validated verification URLs. `WaitBrowserEnrollment` waits for that
+browser step and returns `EnrollmentResult`; repeating Enroll for the same
+profile and identity while the browser flow is valid returns its current
+challenge. The user code is provider authentication data, not a generic RPC
+request ID. A pending administrative approval is represented by the existing
+profile/control state, not by a waiting operation. Renewal uses the same
+domain-specific pattern: `RenewSession` returns a direct `RenewalResult` or a
+browser challenge; `WaitSessionRenewal` returns the final renewal result and
+actual connection continuity.
+Only one current browser flow per profile and purpose is exposed to its owner.
 
-Mutations affecting the active context serialize. While enrollment, renewal,
-trust or a switch is pending, conflicting mutations fail BUSY. Explicit
-disconnect must remain possible and prevents a pending operation from restoring
-connected intent. Enrollment may be pending approval, with status and an operation
-showing the action until confirmed.
+`CreateDiagnosticsBundle` waits for archive creation and returns `BundleResult`
+directly; `ReadDiagnosticsBundle` reads its bounded caller-bound handle. A
+timeout does not yield a recoverable command ID. The caller may inspect
+available diagnostics and retry, without an exactly-once promise.
 
-| Mutation family | Success outcome |
+| Mutation family | Direct response |
 | --- | --- |
-| Enroll | `EnrollmentResult` |
-| CreateProfile, SelectProfile, SelectNetwork, SelectExitNode, ClearExitNode | `SelectionResult` (new/selected ID; empty only on clear exit node) |
+| Enroll, RenewSession | Result or browser challenge, followed by the matching wait RPC; renewal reports continuity |
+| Connect | Empty response; connection state is authoritative in Status |
+| CreateProfile | `ProfileResult` |
+| SelectProfile, SelectNetwork, SelectExitNode, ClearExitNode | `SelectionResult` and actual `ConnectionContinuity` |
 | Logout, ForgetLocalEnrollment | `CleanupResult` |
-| RenewSession | `RenewalResult` plus continuity |
 | CreateDiagnosticsBundle | `BundleResult` |
 | Other mutations | `ChangeResult` |
 
@@ -223,27 +234,17 @@ must not infer Connecting solely from desired_state. On blocked/error states,
 the UI prioritizes the service/control reason over the progress indication.
 UNSPECIFIED means unavailable information, never connected.
 
-Status.current_operations contains all nonterminal operations visible to the
-owner, including inactive profiles. The first stream snapshot and GetStatus
-include this list atomically with connection_phase. Its entries have profile IDs.
-There are at most 32 nonterminal operations per installation; new commands beyond
-the bound fail LIMIT_EXCEEDED without side effects, while Disconnect remains
-available. The runtime serializes/coalesces Disconnect to honor the bound.
-The runtime reserves one of these 32 slots for serialized Disconnect; other
-commands can occupy at most 31 nonterminal slots. Distinct Disconnect request
-identities are not aliased: each retains its own durable outcome. The normal
-4096-record admission cap does not block Disconnect; its terminal outcomes retain
-the same 24-hour retention, including when the normal journal cap is reached.
-Terminal transitions remove the entry, emit operation_changed and update status.
-An observer receives the connection phase but no operation list or credential
-deadlines. A reconnect refetches persisted terminal outcomes by saved request ID.
+The first stream snapshot and GetStatus include `connection_phase`. Connection
+changes update status without an operation list or journal. An observer receives
+the connection phase but no credential deadlines. After reconnect, the caller
+reads a new snapshot and refetches any domain whose result it did not receive.
 
 Status.credential describes node-credential expiry independently of Session.
 Absent expiry is unknown and cannot be replaced with the session deadline.
 warning_at must not exceed expires_at. Credential renewal is runtime-owned:
 RenewSession renews the user session and never claims to renew a node credential.
-Expose automatic renewal support, recovery restriction and the associated
-operation ID when one exists. Authoritative credential changes update status.
+Expose automatic renewal support and the recovery restriction. Authoritative
+credential changes update status.
 No credential or session deadline may be inferred from UI wall-clock defaults.
 
 A profile is one immutable control origin plus a locally stored account identity,
@@ -267,14 +268,14 @@ managed restrictions.
 `RemoveProfile` rejects an active profile (PROFILE_ACTIVE), and rejects any
 remaining registration/session (REMOTE_CLEANUP_REQUIRED). Logout must first
 confirm remote cleanup. If unavailable, it preserves local registration and
-returns a failed operation. Only explicit administrator
+returns an RPC error. Only explicit administrator
 `ForgetLocalEnrollment(confirmed=true)` performs local-only cleanup, reports
-REMOTE_UNCONFIRMED and preserves the control-plane correlation ID.
+REMOTE_UNCONFIRMED in its cleanup result.
 Apply the [existing cleanup matrix](client-ownership-recovery.md) per profile;
 installation ownership and installation keys are retained.
 
 Trust requires exact control origin, key ID and announcement ID comparison.
-Persist trust and the recovery operation atomically before network recovery.
+Persist trust before network recovery; recovery state remains visible in Status.
 Apply the existing typed terminal/retryable recovery rules. A supplied boolean
 does not replace OS privilege verification.
 
@@ -297,7 +298,7 @@ Selection cannot grant access, advertise routes or turn this device into an exit
 node. Exit selection separates requested and effective IDs and LAN behavior.
 A selected but unreachable exit remains fail-closed; never silently route
 protected traffic through the local default route. Clear is an explicit,
-policy-checked operation. Report ApplyState and typed failure on apply errors.
+policy-checked RPC. Report ApplyState and typed failure on apply errors.
 
 SelectExitNode requires an explicit `family_mode` from the selected node's
 `allowed_family_modes`. The catalog is already filtered by platform/provider and
@@ -355,7 +356,7 @@ preferences and mobile navigation remain UI-owned.
 ## Streams, pagination and bounds
 
 WatchEvents starts with sequence 1 containing runtime info and a full authorized
-status snapshot. Subsequent events contain full status/session/operation payloads
+status snapshot. Subsequent events contain full status/session payloads
 or typed domain invalidations. Include the current metadata on every event.
 Sequence is per stream, strictly increasing, with no replay/resume token.
 On reconnect discard cached domain data, consume a fresh snapshot and refetch
@@ -366,7 +367,8 @@ Slow subscribers are disconnected with LIMIT_EXCEEDED, never silently dropped
 events. Queue limit is 64 events or 8 MiB, whichever is reached first.
 Domain invalidations may be coalesced before assigning sequence numbers.
 Revision changes in capabilities require a new SnapshotEvent.
-Owner operations can always be recovered by GetOperation after reconnect.
+After reconnect, callers refetch status and any domain affected by an RPC whose
+response was lost.
 
 Pages default to 100 items, maximum 500. Tokens bind caller, query, profile,
 instance and snapshot revision and expire after 5 minutes. Stale tokens fail
@@ -387,8 +389,9 @@ Redact before serialization/archive generation, including logs and browser URLs.
 
 ## Errors and validation
 
-Failures before acceptance are RPC errors with typed Failure details. Failures
-after acceptance appear in Operation.outcome; the transport may still succeed.
+Synchronous failures are RPC errors with typed Failure details. Failures after
+an asynchronous Connect response are visible in authoritative Status and its
+WatchEvents updates.
 Domain failure codes replace HTTP parsing/header errors; no legacy text-based
 mapping is specified. Failure.reason_key is for localization, not a diagnostic
 message. Unknown codes are treated as failure and never authorize cleanup.
@@ -413,7 +416,8 @@ references, allowed enum values, required oneofs, timestamp ordering, port range
 CIDRs and origins. `browser_login` and `confirmed` must be true when selected.
 Resource kind must match its target oneof. Browser URLs must be HTTPS and validated
 against the profile's trusted origin/provider policy; support/update links must
-come from trusted configured sources. Tokens and browser actions never belong
+come from trusted configured sources. Browser user codes and verification URLs
+must not be logged or sent to observers. Tokens and browser actions never belong
 in diagnostics or notification bodies.
 
 ## Updates and distribution
@@ -435,20 +439,20 @@ prove installer success or rollback; that requires the distribution contract.
 
 ## Business-function coverage
 
-All rows are covered by the **accepted specification**, not implemented or
-accepted for release.
+Rows describe the contract surface, including the draft correction above.
+They do not establish runtime implementation or release acceptance.
 
 | Function | Proposed coverage / owning boundary |
 | --- | --- |
 | UF-01 installation | Package/store contract; GetRuntimeInfo for installed identity |
 | UF-02 native shell | UI-owned; GetStatus, WatchEvents |
-| UF-03 enrollment | CreateProfile, Enroll, GetOperation, Status.pending_action |
+| UF-03 enrollment | CreateProfile, Enroll, WaitBrowserEnrollment, profile/control state |
 | UF-04 status | GetRuntimeInfo, GetStatus, WatchEvents |
-| UF-05 connect/disconnect | Connect, Disconnect, ConnectionIntent, Operation |
+| UF-05 connect/disconnect | Connect, Disconnect, ConnectionIntent, ConnectionPhase |
 | UF-06 peers and paths | ListPeers, AgentStatus, PathCandidate |
 | UF-07 network selection | ListNetworks, SelectNetwork |
 | UF-08 exit-node use | ListExitNodes, GetExitNode, SelectExitNode, ClearExitNode |
-| UF-09 recovery | Status.recovery/session/pending_action, GetOperation, WatchEvents |
+| UF-09 recovery | Status.recovery/session, WatchEvents |
 | UF-10 identity trust | GetServerIdentity, TrustServerIdentity, privileged platform adapter |
 | UF-11 diagnostics | GetDiagnostics, CreateDiagnosticsBundle, ReadDiagnosticsBundle, ListRecentLogs |
 | UF-12 logout/forget | Logout, ForgetLocalEnrollment, CleanupOutcome |
@@ -456,7 +460,7 @@ accepted for release.
 | UF-14 localization/accessibility | UI-owned; stable enums/reason keys/action owners |
 | UF-15 notifications | WatchEvents, Session.warning_at, domain invalidations; UI-owned policy and presentation |
 | UF-16 profiles | List/Create/Select/Rename/RemoveProfile, per-profile enrollment and cleanup |
-| UF-17 session renewal | GetSession, RenewSession, RenewalResult and actual continuity |
+| UF-17 session renewal | GetSession, RenewSession, WaitSessionRenewal, RenewalResult and actual continuity |
 | UF-18 preferences | Get/Set/ResetPreferences, requested/effective values and apply outcome |
 | UF-19 resource browser | ListPeers, ListResources, SetResourceEnabled, bounded search/pagination/overlap |
 | UF-20 managed settings | ListManagedSettings, SettingControl, CapabilityStatus |
@@ -467,13 +471,13 @@ accepted for release.
 ## Adoption and follow-up owners
 
 - **client**: select transport; integrate generated Go bindings, interception,
-  persistence/deduplication, RPC adapters and capability providers; migrate CLI
+  state persistence, RPC adapters and capability providers; migrate CLI
   and helper; test authorization, stream reconnect, interruption, crash recovery,
   cleanup and requested/effective divergence. Current code does not implement
   this surface. CI schema compilation is not runtime revalidation.
 - **client-ui**: consume pinned generated Dart messages, implement desktop/mobile
-  bridges and UX, protect disclosure, refresh invalidated data, recover operations
-  by request ID; implement UI-only functions and distribution outcome handling.
+  bridges and UX, protect disclosure, refresh invalidated data after reconnect;
+  implement UI-only functions and distribution outcome handling.
 - **coordinator / identity / management / billing**, as applicable: establish
   authoritative exit-node/resource visibility, renewable-session and policy data.
   This schema is not evidence those provider capabilities exist.
