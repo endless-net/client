@@ -51,6 +51,7 @@ func nativeExitOperationStage(message string) string {
 	switch message {
 	case "Native exit apply: begin", "Native exit apply: guard validated",
 		"Native exit apply: engine configured", "Native exit apply: observation confirmed",
+		"Native exit apply: engine configuration started",
 		"Native exit apply: durable operation validation failed", "Native exit apply: durable operation validated",
 		"Native exit apply: context canceled before guard", "Native exit apply: guard acquisition started",
 		"Native exit apply: guard acquisition failed",
@@ -70,6 +71,7 @@ func nativeExitOperationStage(message string) string {
 		"Native exit plan: operation journal is not running", "Native exit plan: operation binding mismatch",
 		"Native exit plan: request owner missing", "Native exit plan: operation request owner mismatch",
 		"Native exit plan: operation journal not found",
+		"WireGuard engine: exit lock acquisition started", "WireGuard engine: exit lock acquired",
 		"WireGuard engine: exit guard contained", "WireGuard engine: exit LAN cleanup complete",
 		"WireGuard engine: exit underlay capture complete", "WireGuard engine: exit runtime configure complete",
 		"WireGuard engine: exit routes confirmed", "WireGuard engine: exit policy opened":

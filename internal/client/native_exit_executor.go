@@ -339,6 +339,7 @@ func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, s
 			status = nil
 		}
 	}()
+	log.Print("Native exit apply: engine configuration started")
 	result, err := n.engine.configureExit(ctx, cfg, *cfg.CachedMap, selection, guard)
 	if err != nil {
 		return nil, continuity, err

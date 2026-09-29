@@ -111,8 +111,15 @@ func (*testLogindBus) ListSessions() ([]testLogindSession, *dbus.Error) {
 }
 
 func (testLogindProperties) Get(iface, property string) (dbus.Variant, *dbus.Error) {
-	if iface != testLogindInterface || property != "PreparingForSleep" {
+	if iface != testLogindInterface {
 		return dbus.Variant{}, dbus.MakeFailedError(errors.New("unexpected logind property"))
 	}
-	return dbus.MakeVariant(false), nil
+	switch property {
+	case "PreparingForSleep":
+		return dbus.MakeVariant(false), nil
+	case "InhibitDelayMaxUSec":
+		return dbus.MakeVariant(uint64(5_000_000)), nil
+	default:
+		return dbus.Variant{}, dbus.MakeFailedError(errors.New("unexpected logind property"))
+	}
 }

@@ -219,8 +219,10 @@ func (e *WireGuardEngine) Configure(ctx context.Context, cfg Config, networkMap 
 // same guard instance owns this engine until explicit, verified clear. Returning
 // OK means engine application, not a complete RPC observation or durable commit.
 func (e *WireGuardEngine) configureExit(ctx context.Context, cfg Config, networkMap clientapi.RegisterNodeResponse, selection *ClientExitSelection, guard *linuxExitGuard) (WireGuardApplyResult, error) {
+	log.Print("WireGuard engine: exit lock acquisition started")
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	log.Print("WireGuard engine: exit lock acquired")
 	if selection == nil || guard == nil || (e.exitGuard != nil && e.exitGuard != guard) {
 		return WireGuardApplyResult{}, errors.New("explicit exit requires its owned OS guard")
 	}

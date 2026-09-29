@@ -706,3 +706,23 @@ push CI and a three-repetition system Test dispatch. Block 6 remains open,
 including the external business decision D-035 and accepted update-source and
 discovery evidence UI-Q10. No release was created, and no version was
 increased.
+
+The follow-up system Test run `36589087113` on `0e0d44d` completed with 48
+successful jobs, 14 failed jobs, and two skipped jobs. All 12 Linux
+`TestControlPlaneExitProvider` shards again timed out with the durable operation
+still running. They passed guard validation but did not report engine
+configuration completion. The operation subprocess remained alive, so this run
+does not yet distinguish a wait on the engine mutex from a later configure
+stage. The next run adds exact public markers before and after that lock and
+before `configureExit`.
+
+The container lifecycle job failed all five workloads with
+`exit_category=logind_initialization_failure`; unlike the previous run, it did
+not report a `PreparingForSleep` value error. Inspection of the isolated
+logind fixture showed that it served `PreparingForSleep` but rejected the
+additional `InhibitDelayMaxUSec` property required by `openLogindSession`.
+The fixture now returns the expected boolean and a positive `uint64`, with a
+unit test for both property types. This diagnosis and the exit-stage
+instrumentation have passed local checks; a new push CI run and system Test
+acceptance are still required. D-035 / UI-Q10 remain external acceptance
+blockers, and Block 6 is not complete.
