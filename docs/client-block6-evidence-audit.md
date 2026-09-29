@@ -675,3 +675,34 @@ with code 1. Their output remains withheld, so the root cause is unknown.
 Block 6 remains unaccepted pending the Linux exit-selection and container
 Connect failures, plus the external business and update-source evidence above.
 No release was created, and no version was increased.
+
+The user-authorized Test dispatch
+[36581364655](https://github.com/endless-net/client/actions/runs/36581364655)
+ran three contract repetitions on `main` SHA `f38312a`. It completed with
+48 successful jobs, 14 failed jobs, and two skipped jobs. All 12 Linux
+`TestControlPlaneExitProvider` shards failed across repeats 1–3 on Ubuntu 22.04
+x64, Ubuntu 22.04 ARM, Ubuntu 24.04 x64, and Ubuntu 24.04 ARM. Every report
+reached durable operation validation and then emitted the exact stage
+`Native exit guard: owner id missing`; the request owner binding fix is
+therefore working, while the test installation lacked its local owner identity
+in the retained protection scope. Container lifecycle again failed all four
+persistent-state Connect cases and ephemeral recreation. Its exact diagnostic
+was `logind lifecycle stage: preparing state value uint64`, with reconnect
+succeeding between attempts; the isolated test logind mock returned a numeric
+variant although the client correctly expects the D-Bus boolean property.
+Aggregate `verify` failed on the container and Linux contract reports. The
+remaining platform contract shards and installer/smoke jobs passed; no
+cross-network stale-state failure appeared. The failure stage is identified,
+but Block 6 requires another system run after the fixture and owner-binding
+changes below.
+
+The pending remediation corrects the test logind mock to return `false` for
+`PreparingForSleep`, initializes Linux exit-provider test configurations with
+the effective IPC peer identity before enrollment, and makes selection binding
+reject an empty installation owner. `goimports`, `go vet ./...`,
+`golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m`, and
+`go test -short ./...` passed on the working tree. The remediation still needs
+push CI and a three-repetition system Test dispatch. Block 6 remains open,
+including the external business decision D-035 and accepted update-source and
+discovery evidence UI-Q10. No release was created, and no version was
+increased.

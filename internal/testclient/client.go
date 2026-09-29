@@ -9,12 +9,14 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/endless-net/client/internal/client"
 	"github.com/endless-net/client/internal/testcontrol"
 )
 
@@ -127,6 +129,25 @@ func (n *Node) Enroll(s *testcontrol.Server, network, join string, options ...st
 	args := []string{"up", "--config", n.Config, "--server", s.URL(), "--network", network, "--join-token", join, "--hostname", "scenario-node", "--map-signing-trust-file", n.TrustFile, "--route-table", "off"}
 	n.MustRun(append(args, options...)...)
 }
+
+// InitializeLocalOwner gives scenarios that exercise owner-bound native
+// mutations the same installation-owner identity used by the local IPC peer.
+// Call it before enrollment, while the test config is still empty.
+func (n *Node) InitializeLocalOwner() {
+	n.t.Helper()
+	current, err := user.Current()
+	if err != nil || current.Uid == "" {
+		n.t.Fatal("could not identify native test owner")
+	}
+	identity := current.Uid
+	if runtime.GOOS != "windows" {
+		identity = "uid:" + identity
+	}
+	if err := client.SaveConfig(n.Config, client.Config{LocalOwnerID: identity}); err != nil {
+		n.t.Fatal("could not initialize native test owner")
+	}
+}
+
 func (n *Node) Start() {
 	n.t.Helper()
 	if n.cmd != nil {

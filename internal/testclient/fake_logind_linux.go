@@ -110,6 +110,9 @@ func (*testLogindBus) ListSessions() ([]testLogindSession, *dbus.Error) {
 	return []testLogindSession{}, nil
 }
 
-func (testLogindProperties) Get(_, _ string) (dbus.Variant, *dbus.Error) {
-	return dbus.MakeVariant(uint64(5_000_000)), nil
+func (testLogindProperties) Get(iface, property string) (dbus.Variant, *dbus.Error) {
+	if iface != testLogindInterface || property != "PreparingForSleep" {
+		return dbus.Variant{}, dbus.MakeFailedError(errors.New("unexpected logind property"))
+	}
+	return dbus.MakeVariant(false), nil
 }

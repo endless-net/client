@@ -78,6 +78,7 @@ func testLinuxExitProvider(t *testing.T) {
 	var states [2]*ipc.Status
 	for i := range nodes {
 		n := testclient.New(t, s)
+		n.InitializeLocalOwner()
 		n.Namespace = namespaces[i]
 		n.AgentArgs = []string{"--listen-port", "51820", "--endpoint", endpoints[i]}
 		options := []string{"--route-table", "auto"}
