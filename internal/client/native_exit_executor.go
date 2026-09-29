@@ -135,8 +135,40 @@ func nativeExitOperation(cfg Config, id string, requested *ClientExitSelection, 
 // Select and ResumeSaved separately require the configured interface; cleanup
 // and read-only absence checks must remain possible after an interface change.
 func (n *nativeExitExecutor) guard(scope *clientRPCExitProtection) (*linuxExitGuard, error) {
-	if scope == nil || scope.OperationID == "" || scope.ProfileID == "" || scope.OwnerID == "" || scope.NodeID == "" || scope.NetworkID == "" || !safeWireGuardInterfaceName(scope.InterfaceName) || scope.InterfaceName == "lo" || strings.TrimSpace(scope.InterfaceName) != scope.InterfaceName {
-		log.Print("Native exit guard: ownership validation failed")
+	if scope == nil {
+		log.Print("Native exit guard: protection scope missing")
+		return nil, errors.New("native exit protection has no ownership")
+	}
+	if scope.OperationID == "" {
+		log.Print("Native exit guard: operation id missing")
+		return nil, errors.New("native exit protection has no ownership")
+	}
+	if scope.ProfileID == "" {
+		log.Print("Native exit guard: profile id missing")
+		return nil, errors.New("native exit protection has no ownership")
+	}
+	if scope.OwnerID == "" {
+		log.Print("Native exit guard: owner id missing")
+		return nil, errors.New("native exit protection has no ownership")
+	}
+	if scope.NodeID == "" {
+		log.Print("Native exit guard: node id missing")
+		return nil, errors.New("native exit protection has no ownership")
+	}
+	if scope.NetworkID == "" {
+		log.Print("Native exit guard: network id missing")
+		return nil, errors.New("native exit protection has no ownership")
+	}
+	if !safeWireGuardInterfaceName(scope.InterfaceName) {
+		log.Print("Native exit guard: interface name invalid")
+		return nil, errors.New("native exit protection has no ownership")
+	}
+	if scope.InterfaceName == "lo" {
+		log.Print("Native exit guard: loopback interface rejected")
+		return nil, errors.New("native exit protection has no ownership")
+	}
+	if strings.TrimSpace(scope.InterfaceName) != scope.InterfaceName {
+		log.Print("Native exit guard: interface name whitespace rejected")
 		return nil, errors.New("native exit protection has no ownership")
 	}
 	normalized, err := NormalizeWireGuardRouteTable(scope.RouteTable)
