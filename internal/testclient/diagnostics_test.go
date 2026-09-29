@@ -17,3 +17,24 @@ func TestStartupStageLogsWithholdUnrecognizedContext(t *testing.T) {
 		}
 	}
 }
+
+func TestExitOperationStageLogsWithholdUnrecognizedContext(t *testing.T) {
+	stages := []string{
+		"Native exit apply: begin", "Native exit apply: guard validated",
+		"Native exit apply: engine configured", "Native exit apply: observation confirmed",
+		"WireGuard engine: exit guard contained", "WireGuard engine: exit LAN cleanup complete",
+		"WireGuard engine: exit underlay capture complete", "WireGuard engine: exit runtime configure complete",
+		"WireGuard engine: exit routes confirmed", "WireGuard engine: exit policy opened",
+		"WireGuard engine: routes begin", "WireGuard engine: routes complete",
+	}
+	for _, message := range stages {
+		if got := nativeExitOperationStage(message); got != message {
+			t.Fatalf("fixed public stage %q was not classified", message)
+		}
+		for _, unknown := range []string{message + " private context", "private context " + message, "unrelated message"} {
+			if nativeExitOperationStage(unknown) != "" {
+				t.Fatalf("unrecognized log context escaped: %q", unknown)
+			}
+		}
+	}
+}

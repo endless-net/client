@@ -296,14 +296,17 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 		if err := guard.Contain(ctx); err != nil {
 			return WireGuardApplyResult{}, err
 		}
+		log.Print("WireGuard engine: exit guard contained")
 		if e.exitLAN != nil {
 			if err := e.exitLAN.cleanup(ctx, e, guard, cfg); err != nil {
 				return WireGuardApplyResult{}, err
 			}
+			log.Print("WireGuard engine: exit LAN cleanup complete")
 		}
 		if err := e.captureUnderlayDNSLocked(ctx, underlayDNSRequired(cfg, &networkMap)); err != nil {
 			return WireGuardApplyResult{}, err
 		}
+		log.Print("WireGuard engine: exit underlay capture complete")
 		// Existing ordinary TUN wrappers do not contain an exit filter. Replace
 		// that runtime under protection rather than racing a live wrapper pointer.
 		if attachFilter && e.device != nil {
@@ -397,6 +400,9 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 	}
 	peerACLChanged := e.peerACLFilter.suspend(aclPeers)
 	result, err = e.configureLocked(ctx, plan, previous, &progress)
+	if guard != nil && err == nil {
+		log.Print("WireGuard engine: exit runtime configure complete")
+	}
 	if err == nil {
 		err = ctx.Err()
 		if err != nil {
@@ -426,6 +432,7 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 				result.OK = false
 				return result, err
 			}
+			log.Print("WireGuard engine: exit routes confirmed")
 			if _, err := exitRoutePeers(cfg, networkMap, selection, time.Now()); err != nil {
 				result.OK = false
 				return result, err
@@ -448,6 +455,7 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 				result.OK = false
 				return result, err
 			}
+			log.Print("WireGuard engine: exit policy opened")
 		}
 		return result, nil
 	}

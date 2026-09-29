@@ -158,6 +158,9 @@ func (n *Node) AwaitNativeOperation(id string) *ipc.Operation {
 		// Never include operation/profile IDs or free-form failure details.
 		n.t.Logf("native operation last observation: present=%t kind=%d state=%d failure=%d last_read_error=%v",
 			op != nil, op.GetKind(), op.GetState(), op.GetFailure().GetCode(), lastErr)
+		if op != nil && op.GetKind() == ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE {
+			n.logNativeExitOperationStages(op.GetProfileId())
+		}
 		statusResponse := &ipc.GetStatusResponse{}
 		statusErr := n.NativeService("status", statusResponse, "--timeout", "1s")
 		status := statusResponse.GetStatus()
@@ -181,6 +184,21 @@ func (n *Node) AwaitNativeOperation(id string) *ipc.Operation {
 		n.t.Fatal("native operation did not finish")
 	}
 	return op
+}
+
+func (n *Node) logNativeExitOperationStages(profile string) {
+	n.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	stages, err := nativeExitOperationStages(ctx, func(ctx context.Context, operation string, options ...string) ([]byte, error) {
+		args := append([]string{"service", operation, "--timeout", "1s"}, n.ipcArgs()...)
+		return n.command(ctx, append(args, options...)...).CombinedOutput()
+	}, profile)
+	if err != nil {
+		n.t.Log("public exit-operation stage log unavailable")
+		return
+	}
+	n.t.Logf("public native exit-operation stages: %v", stages)
 }
 
 func (n *Node) awaitNativeReady() {

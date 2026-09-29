@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"log"
 	"reflect"
 	"runtime"
 	"strings"
@@ -230,6 +231,7 @@ func (n *nativeExitExecutor) observeStopped(ctx context.Context, guard *linuxExi
 }
 
 func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, selection *ClientExitSelection) (status *ipc.ExitNodeStatus, continuity ipc.ConnectionContinuity, err error) {
+	log.Print("Native exit apply: begin")
 	continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED
 	plan, err := nativeExitOperation(cfg, id, selection, false)
 	if err != nil {
@@ -242,6 +244,7 @@ func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, s
 	if err != nil {
 		return nil, continuity, err
 	}
+	log.Print("Native exit apply: guard validated")
 	if selection == nil {
 		// Validate a live identity before installing any new guard in its place.
 		err = n.stopOwned(ctx, plan.Protection, guard, plan.ControlOrigin)
@@ -264,10 +267,14 @@ func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, s
 	if err != nil {
 		return nil, continuity, err
 	}
+	log.Print("Native exit apply: engine configured")
 	if !result.OK {
 		return nil, continuity, errors.New("native exit application was not confirmed")
 	}
 	status, err = n.observeSelection(ctx, cfg, selection, plan.ProfileID, guard)
+	if err == nil {
+		log.Print("Native exit apply: observation confirmed")
+	}
 	return status, continuity, err
 }
 
