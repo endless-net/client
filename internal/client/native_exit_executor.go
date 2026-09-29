@@ -105,30 +105,38 @@ func nativeExitOperation(cfg Config, id string, requested *ClientExitSelection, 
 // and read-only absence checks must remain possible after an interface change.
 func (n *nativeExitExecutor) guard(scope *clientRPCExitProtection) (*linuxExitGuard, error) {
 	if scope == nil || scope.OperationID == "" || scope.ProfileID == "" || scope.OwnerID == "" || scope.NodeID == "" || scope.NetworkID == "" || !safeWireGuardInterfaceName(scope.InterfaceName) || scope.InterfaceName == "lo" || strings.TrimSpace(scope.InterfaceName) != scope.InterfaceName {
+		log.Print("Native exit guard: ownership validation failed")
 		return nil, errors.New("native exit protection has no ownership")
 	}
 	normalized, err := NormalizeWireGuardRouteTable(scope.RouteTable)
 	if err != nil || normalized != scope.RouteTable || normalized == "off" {
+		log.Print("Native exit guard: route table validation failed")
 		return nil, errors.New("native exit protection has invalid route scope")
 	}
 	n.engine.mu.Lock()
 	defer n.engine.mu.Unlock()
 	if guard := n.engine.exitGuard; guard != nil && guard.interfaceName != scope.InterfaceName {
+		log.Print("Native exit guard: runtime interface conflict")
 		return nil, errors.New("native exit runtime owns another protection scope")
 	}
 	expected, err := n.createGuard(scope.InterfaceName, scope.RouteTable)
 	if err != nil {
+		log.Print("Native exit guard: platform guard creation failed")
 		return nil, err
 	}
 	if expected == nil || expected.interfaceName != scope.InterfaceName || !validExitPolicyTable(expected.mark) {
+		log.Print("Native exit guard: platform guard validation failed")
 		return nil, errors.New("native exit guard differs from durable scope")
 	}
 	if guard := n.engine.exitGuard; guard != nil {
 		if guard.interfaceName != expected.interfaceName || guard.mark != expected.mark || guard.table != expected.table {
+			log.Print("Native exit guard: runtime identity conflict")
 			return nil, errors.New("native exit runtime owns another protection scope")
 		}
+		log.Print("Native exit guard: existing guard validated")
 		return guard, nil
 	}
+	log.Print("Native exit guard: platform guard validated")
 	return expected, nil
 }
 

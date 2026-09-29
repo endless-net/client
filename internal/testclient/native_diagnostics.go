@@ -51,6 +51,10 @@ func nativeExitOperationStage(message string) string {
 	switch message {
 	case "Native exit apply: begin", "Native exit apply: guard validated",
 		"Native exit apply: engine configured", "Native exit apply: observation confirmed",
+		"Native exit guard: ownership validation failed", "Native exit guard: route table validation failed",
+		"Native exit guard: runtime interface conflict", "Native exit guard: platform guard creation failed",
+		"Native exit guard: platform guard validation failed", "Native exit guard: runtime identity conflict",
+		"Native exit guard: existing guard validated", "Native exit guard: platform guard validated",
 		"WireGuard engine: exit guard contained", "WireGuard engine: exit LAN cleanup complete",
 		"WireGuard engine: exit underlay capture complete", "WireGuard engine: exit runtime configure complete",
 		"WireGuard engine: exit routes confirmed", "WireGuard engine: exit policy opened":
