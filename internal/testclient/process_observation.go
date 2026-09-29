@@ -11,6 +11,63 @@ type boundedProcessOutput struct {
 	limit int
 }
 
+const nativeStageLogLineLimit = 512
+
+// nativeExitStageCapture retains only allowlisted stage labels while stderr
+// streams, so verbose logs cannot evict an early marker from the bounded tail.
+type nativeExitStageCapture struct {
+	mu      sync.Mutex
+	pending []byte
+	discard bool
+	stages  []string
+	seen    map[string]struct{}
+}
+
+func (c *nativeExitStageCapture) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, b := range p {
+		if b == '\n' {
+			c.capturePendingLine()
+			continue
+		}
+		if c.discard {
+			continue
+		}
+		if len(c.pending) >= nativeStageLogLineLimit {
+			c.pending = nil
+			c.discard = true
+			continue
+		}
+		c.pending = append(c.pending, b)
+	}
+	return len(p), nil
+}
+
+func (c *nativeExitStageCapture) snapshot() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.capturePendingLine()
+	return append([]string(nil), c.stages...)
+}
+
+func (c *nativeExitStageCapture) capturePendingLine() {
+	if !c.discard && len(c.pending) > 0 {
+		for _, stage := range nativeExitOperationStagesFromOutput(c.pending) {
+			if c.seen == nil {
+				c.seen = make(map[string]struct{})
+			}
+			if _, ok := c.seen[stage]; ok {
+				continue
+			}
+			c.seen[stage] = struct{}{}
+			c.stages = append(c.stages, stage)
+		}
+	}
+	c.pending = c.pending[:0]
+	c.discard = false
+}
+
 func (b *boundedProcessOutput) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

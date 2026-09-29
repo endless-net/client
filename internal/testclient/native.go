@@ -195,7 +195,7 @@ func (n *Node) AwaitNativeOperation(id string) *ipc.Operation {
 
 func (n *Node) logNativeExitOperationStages() {
 	n.t.Helper()
-	stages := nativeExitOperationStagesFromOutput(n.stderr.snapshot())
+	stages := n.exitStages.snapshot()
 	n.t.Logf("public native exit-operation stages: %v", stages)
 }
 

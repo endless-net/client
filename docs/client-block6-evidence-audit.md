@@ -779,3 +779,19 @@ prefixed and bare lines while withholding arbitrary context. The focused
 to localize the Linux failure with the corrected parser and assess the Windows
 IPv4 failure. D-035 / UI-Q10 acceptance remains open; no release or version
 increase was made.
+
+The follow-up three-repetition system Test run `36616642647` on `a3b048b`
+completed with 49 successful jobs, 13 failed jobs, and two skipped jobs. The
+same 12 Linux shard-1 `TestControlPlaneExitProvider` combinations failed, and
+their stage lists remained empty even after teaching the parser to accept Go's
+timestamp and source-file prefix. The Windows 2025 IPv4 catalog failure from
+the prior run did not recur. The harness currently retains only the last 64
+KiB of stderr while debug logging is enabled; that bounded tail can evict
+earlier stage lines, so the prefixed parser alone did not establish whether the
+engine emitted them. A streaming collector now records only allowlisted public
+stage labels as stderr arrives, independent of the bounded diagnostic tail.
+Its unit test feeds a stage before more than 64 KiB of private debug text and
+checks that only the fixed public markers survive. Local verification passes;
+push CI and another system run are required to learn the actual first Linux
+stage. D-035 / UI-Q10 acceptance remains open; no release or version increase
+was made.

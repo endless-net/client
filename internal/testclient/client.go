@@ -30,6 +30,7 @@ type Node struct {
 	cmd                                          *exec.Cmd
 	done                                         chan error
 	stderr                                       *boundedProcessOutput
+	exitStages                                   *nativeExitStageCapture
 }
 
 func New(t *testing.T, s *testcontrol.Server) *Node {
@@ -158,7 +159,8 @@ func (n *Node) Start() {
 	n.cmd = n.command(context.Background(), append(args, n.AgentArgs...)...)
 	n.cmd.Stdout = io.Discard
 	n.stderr = &boundedProcessOutput{limit: 64 << 10}
-	n.cmd.Stderr = n.stderr
+	n.exitStages = &nativeExitStageCapture{}
+	n.cmd.Stderr = io.MultiWriter(n.stderr, n.exitStages)
 	if err := n.cmd.Start(); err != nil {
 		n.cmd = nil
 		n.t.Fatal(err)
