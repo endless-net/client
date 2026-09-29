@@ -3,7 +3,7 @@
 Source: completed system evidence through manual dispatch `36127380078` on
 `main` at `3f9f432`; later fixture and diagnostic corrections, short-unit
 evidence through `76481a5`, and manual system evidence through dispatch
-`36468528401` on `main` at `aad13ca` (updated 2026-09-28). This remains an
+`36468528401` on `main` at `aad13ca` (ledger updated 2026-09-29). This remains an
 open requirement and acceptance ledger, not a declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
 architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
@@ -605,5 +605,6 @@ failed `TestControlPlaneNativeMachineSharing/ipv6` after an application dial
 timeout. These results characterize the earlier SHA only; they do not qualify
 the current fixes or the later exit/LAN coverage. The temporary tag has been
 removed after the run completed. Push run
-[36498640573](https://github.com/endless-net/client/actions/runs/36498640573)
-passed all four short-unit jobs for documentation commit `268353d`.
+[36502157561](https://github.com/endless-net/client/actions/runs/36502157561)
+passed all four short-unit jobs for documentation commit `4f482bd`; the
+documentation-only push does not replace the missing current-SHA system run.
