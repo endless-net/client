@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"runtime"
 	"sync"
@@ -86,7 +87,7 @@ func (s *ClientRPCService) GetSupportInfo(_ context.Context, _ *connect.Request[
 
 func (s *ClientRPCService) Handler() http.Handler {
 	_, handler := clientipcconnect.NewClientServiceHandler(s,
-		connect.WithInterceptors(rpc.Guard{Authorize: s.mutations.Authorize}, runtimeRPCFailureInterceptor{}),
+		connect.WithInterceptors(clientRPCLoggingInterceptor{}, rpc.Guard{Authorize: s.mutations.Authorize}, runtimeRPCFailureInterceptor{}),
 		connect.WithReadMaxBytes(rpc.MaxRequestBytes), connect.WithSendMaxBytes(rpc.MaxResponseBytes))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithCancel(r.Context())
@@ -98,6 +99,42 @@ func (s *ClientRPCService) Handler() http.Handler {
 }
 
 type rpcStreamAbortKey struct{}
+
+// Record the method and outcome only. Requests and errors can contain credentials.
+type clientRPCLoggingInterceptor struct{}
+
+func (clientRPCLoggingInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
+	return func(ctx context.Context, request connect.AnyRequest) (connect.AnyResponse, error) {
+		procedure := request.Spec().Procedure
+		log.Printf("client RPC started procedure=%s", procedure)
+		started := time.Now()
+		response, err := next(ctx, request)
+		log.Printf("client RPC finished procedure=%s outcome=%s duration=%s", procedure, clientRPCLogOutcome(err), time.Since(started).Round(time.Millisecond))
+		return response, err
+	}
+}
+
+func (clientRPCLoggingInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
+		procedure := conn.Spec().Procedure
+		log.Printf("client RPC stream started procedure=%s", procedure)
+		started := time.Now()
+		err := next(ctx, conn)
+		log.Printf("client RPC stream finished procedure=%s outcome=%s duration=%s", procedure, clientRPCLogOutcome(err), time.Since(started).Round(time.Millisecond))
+		return err
+	}
+}
+
+func (clientRPCLoggingInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
+	return next
+}
+
+func clientRPCLogOutcome(err error) string {
+	if err == nil {
+		return "ok"
+	}
+	return connect.CodeOf(err).String()
+}
 
 // Never serialize filesystem/provider diagnostics at the local RPC boundary.
 type runtimeRPCFailureInterceptor struct{}

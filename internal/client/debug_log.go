@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -20,7 +21,7 @@ const (
 type DebugLogHandle struct {
 	previousFlags int
 	previousOut   io.Writer
-	file          *os.File
+	writer        *rotatingDebugLogWriter
 }
 
 func ConfigureDebugLogger(component, dir string) (*DebugLogHandle, error) {
@@ -43,20 +44,29 @@ func ConfigureDebugLogger(component, dir string) (*DebugLogHandle, error) {
 	if err != nil {
 		return nil, err
 	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	writer := &rotatingDebugLogWriter{path: path, file: file, size: info.Size(), maxBytes: debugLogMaxBytes}
 	handle := &DebugLogHandle{
 		previousFlags: log.Flags(),
 		previousOut:   log.Writer(),
-		file:          file,
+		writer:        writer,
 	}
-	_, _ = file.WriteString(time.Now().UTC().Format(time.RFC3339Nano) + " debug logger opened component=" + component + " path=" + path + "\n")
-	_ = file.Sync()
+	if _, err := writer.Write([]byte(time.Now().UTC().Format(time.RFC3339Nano) + " debug logger opened component=" + component + " path=" + path + "\n")); err != nil {
+		_ = writer.Close()
+		return nil, err
+	}
+	_ = writer.Sync()
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.LUTC | log.Lshortfile)
 	log.SetOutput(bestEffortDebugLogWriter{
-		primary:   redactingDebugLogWriter{w: file},
-		secondary: handle.previousOut,
+		primary:   redactingDebugLogWriter{w: writer},
+		secondary: redactingDebugLogWriter{w: handle.previousOut},
 	})
 	log.Printf("debug logging enabled component=%s path=%s", component, path)
-	_ = file.Sync()
+	_ = writer.Sync()
 	return handle, nil
 }
 
@@ -66,10 +76,64 @@ func (h *DebugLogHandle) Close() error {
 	}
 	log.SetFlags(h.previousFlags)
 	log.SetOutput(h.previousOut)
-	if h.file == nil {
+	if h.writer == nil {
 		return nil
 	}
-	return h.file.Close()
+	return h.writer.Close()
+}
+
+type rotatingDebugLogWriter struct {
+	mu       sync.Mutex
+	path     string
+	file     *os.File
+	size     int64
+	maxBytes int64
+}
+
+func (w *rotatingDebugLogWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.file == nil {
+		return 0, os.ErrClosed
+	}
+	if w.size > 0 && w.size+int64(len(p)) > w.maxBytes {
+		if err := w.file.Close(); err != nil {
+			return 0, err
+		}
+		w.file = nil
+		if err := rotateDebugLogFiles(w.path); err != nil {
+			return 0, err
+		}
+		file, err := os.OpenFile(w.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+		if err != nil {
+			return 0, err
+		}
+		w.file = file
+		w.size = 0
+	}
+	n, err := w.file.Write(p)
+	w.size += int64(n)
+	return n, err
+}
+
+func (w *rotatingDebugLogWriter) Sync() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.file == nil {
+		return os.ErrClosed
+	}
+	return w.file.Sync()
+}
+
+func (w *rotatingDebugLogWriter) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.file == nil {
+		return nil
+	}
+	err := w.file.Close()
+	w.file = nil
+	return err
 }
 
 func ResolveDebugLogDir(dir string) (string, error) {
@@ -120,11 +184,23 @@ func rotateDebugLog(path string) error {
 	if info.Size() < debugLogMaxBytes {
 		return nil
 	}
+	return rotateDebugLogFiles(path)
+}
+
+func rotateDebugLogFiles(path string) error {
+	oldest := fmt.Sprintf("%s.%d", path, debugLogBackups)
+	if err := os.Remove(oldest); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	for i := debugLogBackups - 1; i >= 1; i-- {
 		from := fmt.Sprintf("%s.%d", path, i)
 		to := fmt.Sprintf("%s.%d", path, i+1)
 		if _, err := os.Stat(from); err == nil {
-			_ = os.Rename(from, to)
+			if err := os.Rename(from, to); err != nil {
+				return err
+			}
+		} else if !os.IsNotExist(err) {
+			return err
 		}
 	}
 	return os.Rename(path, path+".1")
@@ -138,7 +214,7 @@ func (w redactingDebugLogWriter) Write(p []byte) (int, error) {
 	if w.w == nil {
 		return len(p), nil
 	}
-	_, err := w.w.Write([]byte(redactDebugLogText(string(p))))
+	_, err := w.w.Write([]byte(redactDebugLogText(RedactServiceLogMessage(string(p)))))
 	if err != nil {
 		return 0, err
 	}

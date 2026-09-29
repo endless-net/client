@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"google.golang.org/protobuf/proto"
@@ -62,6 +63,7 @@ func (m *ClientRPCMutations) recordDiagnosticTransitionLocked(cfg Config, operat
 		m.recentLogs = m.recentLogs[:maxRPCRecentLogs-1]
 	}
 	m.recentLogs = append(m.recentLogs, clientRPCScopedLog{profileID: profileID, entry: &ipc.LogEntry{Timestamp: timestamp, Message: message}})
+	log.Printf("client diagnostic transition %s", message)
 }
 
 // recentLogsSnapshot is process-local diagnostic history, not an operation

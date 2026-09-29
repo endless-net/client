@@ -354,7 +354,7 @@ func cmdAgent(args []string) error {
 	ipcPipe := fs.String("ipc-pipe", "", "Windows named pipe used for local service IPC; defaults in windows-service mode")
 	ipcSocket := fs.String("ipc-socket", "", "Unix domain socket used for local service IPC")
 	eventLogSource := fs.String("event-log-source", client.DefaultWindowsEventLogSource, "Windows Event Log source used in windows-service mode")
-	debugMode := fs.Bool("debug", false, "enable maximum debug logging")
+	debugMode := fs.Bool("debug", true, "enable maximum debug logging (default true; use --debug=false to disable)")
 	debugLogDir := fs.String("debug-log-dir", client.DefaultDebugLogDir, "debug log directory; supports ~")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -427,6 +427,8 @@ func cmdAgent(args []string) error {
 	run := func(parentCtx context.Context, lifecycleEvents <-chan client.RuntimeLifecycleNotification) (runErr error) {
 		ctx, cancelRuntime := context.WithCancelCause(parentCtx)
 		defer cancelRuntime(nil)
+		log.Printf("agent starting offline=%t once=%t windows_service=%t", *offline, *once, *windowsService)
+		defer func() { log.Printf("agent stopped failed=%t", runErr != nil) }()
 		lockPath, err := client.AgentLockPath(*configPath)
 		if err != nil {
 			return err
@@ -436,6 +438,7 @@ func cmdAgent(args []string) error {
 			return err
 		}
 		defer func() { _ = lock.Close() }()
+		log.Print("agent lifetime lock acquired")
 		configStore, err := client.OpenConfigStore(*configPath)
 		if err != nil {
 			return err
@@ -457,9 +460,11 @@ func cmdAgent(args []string) error {
 				log.Printf("close wireguard-go: %v", closeErr)
 			}
 		}()
+		log.Print("agent WireGuard engine initialized")
 		if err := initializeAgentStartup(ctx, wireGuard, configStore, timeout, *offline); err != nil {
 			return err
 		}
+		log.Print("agent startup state initialized")
 		operationMu := &sync.Mutex{}
 		syncWake := make(chan struct{}, 1)
 		ipcOpts := agentIPCOptions{
@@ -491,6 +496,7 @@ func cmdAgent(args []string) error {
 		if err != nil {
 			return err
 		}
+		log.Print("agent local RPC started")
 		defer func() {
 			if err := stopIPC(); runErr == nil && err != nil {
 				runErr = err
@@ -500,6 +506,7 @@ func cmdAgent(args []string) error {
 		if err != nil {
 			return err
 		}
+		log.Print("agent runtime lifecycle started")
 		defer func() {
 			if err := stopLifecycle(); runErr == nil && err != nil {
 				runErr = err
@@ -511,6 +518,7 @@ func cmdAgent(args []string) error {
 		disconnectedLogged := false
 		cachedBootstrapAttempted := false
 		for {
+			log.Printf("agent sync iteration starting offline=%t from_revision=%d", *offline, streamFromRevision)
 			var snapshot client.AgentSnapshot
 			var mapUnchanged bool
 			var err error
@@ -573,6 +581,7 @@ func cmdAgent(args []string) error {
 				} else {
 					consecutiveFailures = 0
 				}
+				log.Printf("agent disconnected-state iteration finished failed=%t next_sync=%s", err != nil, nextDelay.Round(time.Millisecond))
 				proceed, woken := waitForAgentSync(ctx, nextDelay, syncWake)
 				if !proceed {
 					return nil
@@ -675,6 +684,7 @@ func cmdAgent(args []string) error {
 			}
 			phase := agentRPCIterationPhase(snapshot, err != nil || skipForDisconnected || skipForRecovery)
 			publishAgentRPCObservation(ctx, rpcMutations, ipcOpts, phase, err)
+			log.Printf("agent sync iteration finished phase=%s revision=%d map_unchanged=%t skipped_disconnected=%t skipped_recovery=%t failed=%t", phase, snapshot.MapRevision, mapUnchanged, skipForDisconnected, skipForRecovery, err != nil)
 			operationMu.Unlock()
 			if skipForDisconnected {
 				proceed, woken := waitForAgentSync(ctx, interval, syncWake)
@@ -714,11 +724,13 @@ func cmdAgent(args []string) error {
 				}
 				log.Printf("agent synced revision %d", snapshot.MapRevision)
 			}
+			log.Printf("agent next sync in %s", nextDelay.Round(time.Millisecond))
 			proceed, woken := waitForAgentSync(ctx, nextDelay, syncWake)
 			if !proceed {
 				return nil
 			}
 			if woken {
+				log.Print("agent sync awakened by local request")
 				consecutiveFailures = 0
 			}
 		}
@@ -758,6 +770,7 @@ func runAgentIteration(ctx context.Context, opts agentIterationOptions) (client.
 	if err != nil {
 		return client.AgentSnapshot{}, false, err
 	}
+	log.Printf("agent network map ready revision=%d peers=%d unchanged=%t offline=%t", networkMap.Network.Revision, len(networkMap.Peers), mapUnchanged, opts.Offline)
 	if strings.TrimSpace(cfg.PrivateKey) == "" {
 		return client.AgentSnapshot{}, false, fmt.Errorf("private key is missing; run up first")
 	}
@@ -777,6 +790,7 @@ func runAgentIteration(ctx context.Context, opts agentIterationOptions) (client.
 		if configureErr != nil {
 			return client.AgentSnapshot{}, false, configureErr
 		}
+		log.Print("agent WireGuard configuration applied")
 	}
 	var stunSnapshot *client.AgentSTUNSnapshot
 	var wireGuardSnapshot *client.WireGuardInspection
@@ -791,6 +805,7 @@ func runAgentIteration(ctx context.Context, opts agentIterationOptions) (client.
 		wireGuardSnapshot = &inspection
 		paths := opts.WireGuard.PathStatus()
 		pathSnapshot = &paths
+		log.Printf("agent network probes completed paths=%d", len(paths))
 		if status, ok, statusErr := opts.WireGuard.RelayStatus(); ok {
 			result := status.Relay
 			relayResult = &result
@@ -828,11 +843,13 @@ func runAgentIteration(ctx context.Context, opts agentIterationOptions) (client.
 	raw = append(raw, '\n')
 	if strings.TrimSpace(opts.StateOutput) == "" {
 		fmt.Print(string(raw))
+		log.Print("agent state emitted to stdout")
 		return snapshot, mapUnchanged, nil
 	}
 	if err := client.WriteFileAtomic(opts.StateOutput, raw, 0o600); err != nil {
 		return client.AgentSnapshot{}, false, err
 	}
+	log.Print("agent state snapshot written")
 	return snapshot, mapUnchanged, nil
 }
 

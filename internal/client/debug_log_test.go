@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -73,6 +74,61 @@ func TestBestEffortDebugLogWriterKeepsPrimaryWhenSecondaryFails(t *testing.T) {
 	}
 	if !strings.Contains(got, "[redacted]") {
 		t.Fatalf("primary log missing redaction marker: %s", got)
+	}
+}
+
+func TestConfigureDebugLoggerRedactsFileAndFallback(t *testing.T) {
+	var fallback bytes.Buffer
+	previousOutput := log.Writer()
+	previousFlags := log.Flags()
+	log.SetOutput(&fallback)
+	t.Cleanup(func() {
+		log.SetOutput(previousOutput)
+		log.SetFlags(previousFlags)
+	})
+	dir := t.TempDir()
+	handle, err := ConfigureDebugLogger("agent", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Print("debug token=synthetic-secret")
+	if err := handle.Close(); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(filepath.Join(dir, "agent.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, output := range map[string]string{"file": string(contents), "fallback": fallback.String()} {
+		if strings.Contains(output, "synthetic-secret") || !strings.Contains(output, "[redacted") {
+			t.Fatalf("%s output was not redacted: %s", name, output)
+		}
+	}
+}
+
+func TestDebugLogRotatesWhileRunning(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent.log")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := &rotatingDebugLogWriter{path: path, file: file, maxBytes: 12}
+	for _, line := range []string{"first\n", "second\n", "third\n", "fourth\n", "fifth\n"} {
+		if _, err := writer.Write([]byte(line)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{"agent.log": "fifth\n", "agent.log.1": "fourth\n", "agent.log.2": "third\n", "agent.log.3": "second\n"} {
+		contents, err := os.ReadFile(filepath.Join(filepath.Dir(path), name))
+		if err != nil || string(contents) != want {
+			t.Fatalf("%s = %q, %v; want %q", name, contents, err, want)
+		}
+	}
+	if _, err := os.Stat(path + ".4"); !os.IsNotExist(err) {
+		t.Fatalf("old backup was not removed: %v", err)
 	}
 }
 
