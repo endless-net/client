@@ -190,8 +190,9 @@ func renderWindowsServiceInstallScript(opts WindowsServiceOptions) string {
 		"--ipc-pipe", opts.IPCPipe,
 		"--event-log-source", opts.EventLogSource,
 	}
+	args = append(args, "--debug="+strconv.FormatBool(opts.Debug))
 	if opts.Debug {
-		args = append(args, "--debug", "--debug-log-dir", opts.DebugLogDir)
+		args = append(args, "--debug-log-dir", opts.DebugLogDir)
 	}
 	if opts.ListenPort > 0 {
 		args = append(args, "--listen-port", strconv.Itoa(opts.ListenPort))

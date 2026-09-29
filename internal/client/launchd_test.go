@@ -92,6 +92,18 @@ func TestRenderLaunchdServiceArtifactsRejectsUnsafeValues(t *testing.T) {
 	}
 }
 
+func TestLaunchdServiceExplicitlyDisablesDebugWhenRequested(t *testing.T) {
+	opts := DefaultLaunchdServiceOptions()
+	opts.Debug = false
+	artifacts, err := RenderLaunchdServiceArtifacts(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(artifacts.Plist, "<string>--debug=false</string>") {
+		t.Fatal("launchd service omitted explicit debug=false")
+	}
+}
+
 func TestDefaultLaunchdServiceUsesWireGuardGo(t *testing.T) {
 	artifacts, err := RenderLaunchdServiceArtifacts(DefaultLaunchdServiceOptions())
 	if err != nil {

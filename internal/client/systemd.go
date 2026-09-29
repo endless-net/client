@@ -12,6 +12,8 @@ import (
 	"github.com/endless-net/client/clientipc/local"
 )
 
+const systemdDebugLogDir = "/var/log/endlessnet-client"
+
 type SystemdServiceOptions struct {
 	ServiceName       string
 	Description       string
@@ -188,6 +190,7 @@ func renderSystemdUnit(opts SystemdServiceOptions) string {
 		"--stun-timeout", opts.STUNTimeout.String(),
 		"--reconnect-max-delay", opts.ReconnectMaxDelay.String(),
 		"--reconnect-jitter", strconv.FormatFloat(opts.ReconnectJitter, 'f', -1, 64),
+		"--debug=true", "--debug-log-dir", systemdDebugLogDir,
 	}
 	if opts.ListenPort > 0 {
 		args = append(args, "--listen-port", strconv.Itoa(opts.ListenPort))
@@ -203,6 +206,7 @@ func renderSystemdUnit(opts SystemdServiceOptions) string {
 		filepath.ToSlash(filepath.Dir(opts.ConfigPath)),
 		filepath.ToSlash(filepath.Dir(opts.StatePath)),
 		filepath.ToSlash(filepath.Dir(opts.IPCSocketPath)),
+		systemdDebugLogDir,
 	})
 	return fmt.Sprintf(`[Unit]
 Description=%s
@@ -219,6 +223,8 @@ RuntimeDirectory=endlessnet
 RuntimeDirectoryMode=0750
 StateDirectory=endlessnet
 StateDirectoryMode=0700
+LogsDirectory=endlessnet-client
+LogsDirectoryMode=0750
 ConfigurationDirectory=endlessnet
 ConfigurationDirectoryMode=0700
 Environment=ENDLESSNET_INSTALLATION_STATE_DIR=/var/lib/endlessnet

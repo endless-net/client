@@ -39,14 +39,17 @@ func TestRenderSystemdServiceArtifacts(t *testing.T) {
 		`"--listen-port" "51820"`,
 		`"--reconnect-max-delay" "42s"`,
 		`"--reconnect-jitter" "0.3"`,
+		`"--debug=true" "--debug-log-dir" "/var/log/endlessnet-client"`,
 		`"--wg-interface" "endlessnet"`,
 		"Restart=always",
 		"KillSignal=SIGINT",
 		"AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW",
 		"StateDirectory=endlessnet",
 		"StateDirectoryMode=0700",
+		"LogsDirectory=endlessnet-client",
+		"LogsDirectoryMode=0750",
 		"Environment=ENDLESSNET_INSTALLATION_STATE_DIR=/var/lib/endlessnet",
-		"ReadWritePaths=/var/lib/endlessnet /run/endlessnet",
+		"ReadWritePaths=/var/lib/endlessnet /run/endlessnet /var/log/endlessnet-client",
 	} {
 		if !strings.Contains(artifacts.ServiceUnit, want) {
 			t.Fatalf("service unit missing %q:\n%s", want, artifacts.ServiceUnit)

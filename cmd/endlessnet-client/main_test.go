@@ -1880,7 +1880,7 @@ func TestCmdServiceRenderWindowsWritesArtifacts(t *testing.T) {
 		"'9s'",
 		"'--ipc-pipe'",
 		`\\.\pipe\endlessnet-service`,
-		"'--debug'",
+		"'--debug=true'",
 		"'--debug-log-dir'",
 		`~\.endlessnet\logs`,
 		"icacls.exe $StateRoot /inheritance:r",

@@ -743,3 +743,23 @@ failed `TestControlPlaneSessionExpiryRecovery` on IPv6; it did not affect the
 Linux exit-provider or container results and should be assessed after the
 primary failure is instrumented. Block 6 remains open, including external
 D-035 / UI-Q10 evidence; no release or version increase was made.
+
+Two later authorized system Test attempts were interrupted by newer pushes to
+`main` before their matrices completed. Run `36605891826` on `1f8dfc5` had
+five install-and-smoke failures; their `TestInstalledClient/fresh-install`
+subtests each hit the 45-second deadline waiting for native service status.
+Run `36606594466` on `16d2457` was also cancelled by subsequent `main` pushes
+after four install-and-smoke failures. Push CI `36607581914` for the latest
+pre-remediation main commit passed all 13 jobs.
+
+The installer failures exposed an interaction with the new default-on debug
+logger: the systemd service uses `ProtectHome=true` while the CLI default
+resolves logs beneath the service user's home, and launchd / Windows renderers
+omitted an explicit false value when their service options disabled logging.
+Systemd now uses its managed `/var/log/endlessnet-client` log directory;
+launchd and Windows service templates pass the selected debug value explicitly.
+The CLI artifact assertion was updated for the explicit true value. All four
+allowed local checks pass on this remediation. Push CI and an uninterrupted
+three-repetition system Test run are still needed. The Linux exit-provider
+configure-stage diagnostics remain in `68f4d06` and will be included in that
+next system run. D-035 / UI-Q10 and the prior Linux exit acceptance remain open.

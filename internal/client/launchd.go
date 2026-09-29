@@ -227,8 +227,9 @@ func launchdAgentArguments(opts LaunchdServiceOptions) []string {
 		"--reconnect-max-delay", opts.ReconnectMaxDelay.String(),
 		"--reconnect-jitter", strconv.FormatFloat(opts.ReconnectJitter, 'f', -1, 64),
 	}
+	args = append(args, "--debug="+strconv.FormatBool(opts.Debug))
 	if opts.Debug {
-		args = append(args, "--debug", "--debug-log-dir", opts.DebugLogDir)
+		args = append(args, "--debug-log-dir", opts.DebugLogDir)
 	}
 	if opts.ListenPort > 0 {
 		args = append(args, "--listen-port", strconv.Itoa(opts.ListenPort))

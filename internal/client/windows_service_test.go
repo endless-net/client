@@ -52,7 +52,7 @@ func TestRenderWindowsServiceArtifacts(t *testing.T) {
 		`\\.\pipe\endlessnet-service`,
 		"'--event-log-source'",
 		"'EndlessNet Client'",
-		"'--debug'",
+		"'--debug=true'",
 		"'--debug-log-dir'",
 		`~\.endlessnet\logs`,
 		"New-EventLog -LogName Application -Source $EventLogSource",
@@ -95,6 +95,18 @@ func TestRenderWindowsServiceArtifacts(t *testing.T) {
 		if strings.Contains(artifacts.InstallScript, leak) || strings.Contains(artifacts.UninstallScript, leak) {
 			t.Fatalf("windows service artifacts leaked %q", leak)
 		}
+	}
+}
+
+func TestWindowsServiceExplicitlyDisablesDebugWhenRequested(t *testing.T) {
+	opts := DefaultWindowsServiceOptions()
+	opts.Debug = false
+	artifacts, err := RenderWindowsServiceArtifacts(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(artifacts.InstallScript, "'--debug=false'") {
+		t.Fatal("Windows service installer omitted explicit debug=false")
 	}
 }
 
