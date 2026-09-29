@@ -166,6 +166,16 @@ func (n *Node) AwaitNativeOperation(id string) *ipc.Operation {
 			status.GetIntent().GetDesiredState(), status.GetUserDisconnected(), status.GetMetadata().GetRevision(),
 			status.GetMapRevision(), status.GetAgent() != nil, status.GetAgent().GetSnapshotState(),
 			status.GetAgent().GetMapRevision(), status.GetAgent().GetLastFailure().GetCode(), statusErr)
+		diagnosticsResponse := &ipc.GetDiagnosticsResponse{}
+		var diagnosticsErr error
+		if op != nil && op.GetProfileId() != "" {
+			diagnosticsErr = n.NativeService("diagnostics", diagnosticsResponse, "--profile-id", op.GetProfileId())
+		}
+		diagnostics := diagnosticsResponse.GetDiagnostics()
+		tunnel := diagnostics.GetTunnel()
+		n.t.Logf("native tunnel at operation timeout: available=%t present=%t ok=%t failure=%d interface_present=%t mtu=%d listen_port=%d diagnostics_error=%v",
+			diagnosticsErr == nil && diagnostics != nil, tunnel != nil, tunnel.GetOk(), tunnel.GetFailure().GetCode(),
+			tunnel.GetInterfaceName() != "", tunnel.GetMtu(), tunnel.GetListenPort(), diagnosticsErr)
 		completed, failed := observeAgentCompletion(n.done)
 		n.t.Logf("agent operation process observation: completion_observed=%t unsuccessful_exit=%t", completed, failed)
 		n.t.Fatal("native operation did not finish")
