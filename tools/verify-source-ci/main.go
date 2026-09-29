@@ -61,7 +61,9 @@ var requiredJobs = func() []string {
 	}
 	for _, platform := range []string{"ubuntu-22.04", "ubuntu-24.04", "ubuntu-22.04-arm", "ubuntu-24.04-arm", "windows-2022", "windows-2025", "macos-15", "macos-15-intel"} {
 		for repetition := 1; repetition <= 3; repetition++ {
-			jobs = append(jobs, fmt.Sprintf("Client contracts (%s, repeat %d)", platform, repetition))
+			for shard := 1; shard <= 2; shard++ {
+				jobs = append(jobs, fmt.Sprintf("Client contracts (%s, repeat %d, shard %d)", platform, repetition, shard))
+			}
 		}
 	}
 	return jobs
