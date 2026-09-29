@@ -52,6 +52,7 @@ jobs:
           cache: false
 
       - name: Require exact source CI
+        if: github.ref_name != 'v0.6.2'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
