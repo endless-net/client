@@ -726,3 +726,20 @@ unit test for both property types. This diagnosis and the exit-stage
 instrumentation have passed local checks; a new push CI run and system Test
 acceptance are still required. D-035 / UI-Q10 remain external acceptance
 blockers, and Block 6 is not complete.
+
+Push CI run `36598096514` for `2f14add` passed all 13 jobs. The authorized
+three-repetition system Test run `36598774376` on that commit completed with
+48 successful jobs, 14 failed jobs, and two skipped jobs. The container
+lifecycle job passed, confirming that the isolated logind fixture now serves
+the startup properties with their expected D-Bus types. All 13 Linux
+`TestControlPlaneExitProvider` shard-1 jobs failed with an unfinished operation;
+the corresponding shard-2 jobs passed. Each failed report shows that engine
+mutex acquisition completed but does not show the later `exit guard contained`
+stage. This narrows the next inspection to the start of
+`configureWithExitLocked`, its context check, packet-filter withdrawal, and
+guard containment. Exact fixed markers for those boundaries are now added and
+need their own push CI and system acceptance run. One macOS Intel shard also
+failed `TestControlPlaneSessionExpiryRecovery` on IPv6; it did not affect the
+Linux exit-provider or container results and should be assessed after the
+primary failure is instrumented. Block 6 remains open, including external
+D-035 / UI-Q10 evidence; no release or version increase was made.

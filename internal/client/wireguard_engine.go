@@ -280,12 +280,18 @@ func (e *WireGuardEngine) releaseClearedExit(ctx context.Context, guard *linuxEx
 }
 
 func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Config, networkMap clientapi.RegisterNodeResponse, selection *ClientExitSelection, guard *linuxExitGuard) (result WireGuardApplyResult, applyErr error) {
+	if guard != nil {
+		log.Print("WireGuard engine: exit configure started")
+	}
 	defer func() {
 		if applyErr == nil && result.OK {
 			e.runtimeIdentity = nativeExitAppliedIdentity(cfg, networkMap, e.interface_)
 		}
 	}()
 	if err := ctx.Err(); err != nil {
+		if guard != nil {
+			log.Print("WireGuard engine: exit configure context canceled")
+		}
 		return result, err
 	}
 	if guard != nil {
@@ -295,7 +301,9 @@ func (e *WireGuardEngine) configureWithExitLocked(ctx context.Context, cfg Confi
 			e.exitFilter = &exitPacketFilter{}
 		}
 		e.exitFilter.withdraw()
+		log.Print("WireGuard engine: exit guard containment started")
 		if err := guard.Contain(ctx); err != nil {
+			log.Print("WireGuard engine: exit guard containment failed")
 			return WireGuardApplyResult{}, err
 		}
 		log.Print("WireGuard engine: exit guard contained")

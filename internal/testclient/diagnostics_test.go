@@ -43,6 +43,8 @@ func TestExitOperationStageLogsWithholdUnrecognizedContext(t *testing.T) {
 		"Native exit plan: request owner missing", "Native exit plan: operation request owner mismatch",
 		"Native exit plan: operation journal not found",
 		"WireGuard engine: exit lock acquisition started", "WireGuard engine: exit lock acquired",
+		"WireGuard engine: exit configure started", "WireGuard engine: exit configure context canceled",
+		"WireGuard engine: exit guard containment started", "WireGuard engine: exit guard containment failed",
 		"WireGuard engine: exit guard contained", "WireGuard engine: exit LAN cleanup complete",
 		"WireGuard engine: exit underlay capture complete", "WireGuard engine: exit runtime configure complete",
 		"WireGuard engine: exit routes confirmed", "WireGuard engine: exit policy opened",
