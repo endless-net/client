@@ -3,7 +3,7 @@
 Source: completed system evidence through manual dispatch `36127380078` on
 `main` at `3f9f432`; later fixture and diagnostic corrections, short-unit
 evidence through `76481a5`, and manual system evidence through dispatch
-`36468528401` on `main` at `aad13ca` (ledger updated 2026-09-29). This remains an
+`36540037972` on `main` at `687cdf3` (ledger updated 2026-09-29). This remains an
 open requirement and acceptance ledger, not a declaration of cutover completion.
 The normative IT-01–33 and BR/AC-01–20, RULE-01–16 sources are the pinned
 architecture revision `bdb5ba63c0e5356122c0760f4d63205e84ef507d`; the
@@ -644,3 +644,34 @@ created, and no version was increased. Block 6 remains unaccepted pending
 the Linux exit operation, intermittent authenticated catalog, and container
 Connect failures, as well as the external business and update-source evidence
 listed above.
+
+The user-authorized Test dispatch
+[36540037972](https://github.com/endless-net/client/actions/runs/36540037972)
+ran three contract repetitions on `main` SHA `687cdf3`. It completed with
+`failure`: 48 jobs passed and 13 failed, including 12 contract shards, the
+container lifecycle job, and aggregate `verify`; the remaining three jobs were
+skipped. All three platform Verify jobs, the control-plane scenarios, and all
+eight installer/smoke jobs passed. Of 48 contract shards, 36 passed. The 12
+failed shards are again exclusively Linux `TestControlPlaneExitProvider` runs:
+repeats 1–3 on Ubuntu 22.04 x64, Ubuntu 22.04 ARM, Ubuntu 24.04 x64, and Ubuntu
+24.04 ARM. Each stalls applying explicit IPv4 exit selection for 30 seconds.
+On a Ubuntu 22.04 report, the bounded timeout diagnostics confirmed the native
+WireGuard interface was present and healthy (`present=true`, `ok=true`,
+`interface_present=true`, MTU 1420, listen port 51820), while the operation
+remained RUNNING without a failure code and the packet probe reported network
+unreachable. This narrows the failure to a later part of exit selection or
+confirmation; the exact cause is not established. HC-036/037 system
+acceptance remains open.
+
+No Windows or macOS contract shard failed in this run, and no
+`ListNetworks`/`STALE_STATE` failure appeared. This is evidence that the bounded
+retry prevented the intermittent catalog failure in this matrix, not proof
+that the catalog race is impossible. The container lifecycle job again failed
+the four persistent-state Connect cases (IPv4/IPv6 TCP/UDP) and ephemeral
+recreation after 30 seconds each. At every timeout the Connect operation
+remained RUNNING, but the native subprocess had exited with code 1; status and
+tunnel diagnostics were unavailable because those subprocesses also exited
+with code 1. Their output remains withheld, so the root cause is unknown.
+Block 6 remains unaccepted pending the Linux exit-selection and container
+Connect failures, plus the external business and update-source evidence above.
+No release was created, and no version was increased.
