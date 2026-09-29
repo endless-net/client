@@ -795,3 +795,16 @@ checks that only the fixed public markers survive. Local verification passes;
 push CI and another system run are required to learn the actual first Linux
 stage. D-035 / UI-Q10 acceptance remains open; no release or version increase
 was made.
+
+The in-progress run `36624163520` on `e0900ab` has now captured an initial
+Linux failure path: `WireGuard engine: exit guard containment started`, then
+`WireGuard engine: exit guard containment failed`, followed by validation of
+the existing guard. The same contract's readiness and tunnel diagnostics are
+healthy, while the exit operation remains running. Inspection shows this test
+requires the `nft` executable, but its preflight checked only `ip` and
+`iptables`, and the contract workflow did not install the `nftables` package.
+The runner image package inventory also does not list that dependency. I have
+added Linux contract setup for `nftables` and an explicit `nft` preflight. This
+is the leading cause of the containment failure, to be confirmed by a fresh
+three-repetition system run; no failure internals or command output are
+included in the artifact.

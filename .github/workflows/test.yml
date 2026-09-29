@@ -256,6 +256,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Install Linux exit-guard test dependency
+        if: runner.os == 'Linux'
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends nftables
+          command -v nft
       - name: Download pinned contract-test dependencies
         shell: bash
         timeout-minutes: 3

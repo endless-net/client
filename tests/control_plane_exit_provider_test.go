@@ -53,7 +53,7 @@ func testUnsupportedExitProvider(t *testing.T) {
 
 func testLinuxExitProvider(t *testing.T) {
 	t.Helper()
-	for _, tool := range []string{"ip", "iptables"} {
+	for _, tool := range []string{"ip", "iptables", "nft"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Fatalf("CI requires %s", tool)
 		}
