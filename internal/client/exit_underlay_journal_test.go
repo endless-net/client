@@ -15,7 +15,7 @@ func TestFirstExitRecoveryRequiresBoundRunningJournal(t *testing.T) {
 	for _, scenario := range []string{"running", "pending", "terminal", "missing_operation", "owner", "record_owner", "profile", "origin", "intent", "node", "wrong_kind", "route_table"} {
 		t.Run(scenario, func(t *testing.T) {
 			cfg := Config{NodeID: "node", NetworkID: "network", NodeCredential: "synthetic-credential", LocalOwnerID: "owner", ControlPlaneURLs: []string{"https://control.example"}}
-			plan := &clientRPCExitChange{OperationID: "operation", ProfileID: "profile", OwnerID: "owner", ControlOrigin: "https://control.example", NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, Requested: &ClientExitSelection{ID: "exit", NodeID: cfg.NodeID, NetworkID: cfg.NetworkID}}
+			plan := &clientRPCExitChange{OperationID: "operation", ProfileID: "profile", RequestOwner: "owner", OwnerID: "owner", ControlOrigin: "https://control.example", NodeID: cfg.NodeID, NetworkID: cfg.NetworkID, Requested: &ClientExitSelection{ID: "exit", NodeID: cfg.NodeID, NetworkID: cfg.NetworkID}}
 			cfg.WireGuardRouteTable, plan.RouteTable = "51999", "51999"
 			plan.Requested.RouteTable = cfg.WireGuardRouteTable
 			cfg.RPCState = &ClientRPCState{ActiveProfileID: "profile", Profiles: map[string]clientRPCProfile{"profile": {ID: "profile", ControlOrigin: plan.ControlOrigin}}, ExitChange: plan}

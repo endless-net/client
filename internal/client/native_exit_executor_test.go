@@ -16,6 +16,7 @@ import (
 	ipc "github.com/endless-net/client/clientipc/v0"
 	"github.com/tailscale/wireguard-go/tun"
 	"github.com/tailscale/wireguard-go/tun/tuntest"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestNativeExitClearUsesDurableCheckpointAndObservedRelease(t *testing.T) {
@@ -237,6 +238,26 @@ func TestExitApplyReceivesCommittedRunningOperation(t *testing.T) {
 	m, owner, profile := rpcExitFixture(t)
 	op, err := m.clearExitNodeAs(owner, &ipc.ClearExitNodeRequest{Mutation: rpcCreateRequest(t, m).Mutation, Profile: profile})
 	if err != nil {
+		t.Fatal(err)
+	}
+	requestOwner := "authenticated-request-owner"
+	if err := m.store.Update(func(cfg *Config) error {
+		cfg.RPCState.ExitChange.RequestOwner = requestOwner
+		found := false
+		for key, record := range cfg.RPCState.Operations {
+			operation := new(ipc.Operation)
+			if proto.Unmarshal(record.Operation, operation) != nil || operation.Id != op.Id {
+				continue
+			}
+			record.Owner = requestOwner
+			cfg.RPCState.Operations[key] = record
+			found = true
+		}
+		if !found {
+			return errors.New("accepted operation record was not found")
+		}
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	called := false

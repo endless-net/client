@@ -96,6 +96,10 @@ func nativeExitOperation(cfg Config, id string, requested *ClientExitSelection, 
 		log.Print("Native exit plan: LAN cleanup journal remains")
 		return nil, invalid
 	}
+	if plan.RequestOwner == "" {
+		log.Print("Native exit plan: request owner missing")
+		return nil, invalid
+	}
 	found := false
 	for _, record := range cfg.RPCState.Operations {
 		op := new(ipc.Operation)
@@ -114,8 +118,8 @@ func nativeExitOperation(cfg Config, id string, requested *ClientExitSelection, 
 			log.Print("Native exit plan: operation binding mismatch")
 			return nil, invalid
 		}
-		if !strings.EqualFold(record.Owner, plan.OwnerID) {
-			log.Print("Native exit plan: operation owner mismatch")
+		if !strings.EqualFold(record.Owner, plan.RequestOwner) {
+			log.Print("Native exit plan: operation request owner mismatch")
 			return nil, invalid
 		}
 		found = true

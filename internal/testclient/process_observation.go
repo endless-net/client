@@ -73,6 +73,12 @@ func logindLifecycleStages(output []byte) []string {
 			"logind lifecycle stage: preparing state read stopped",
 			"logind lifecycle stage: preparing state D-Bus read failed",
 			"logind lifecycle stage: preparing state value invalid",
+			"logind lifecycle stage: preparing state value nested variant",
+			"logind lifecycle stage: preparing state value string",
+			"logind lifecycle stage: preparing state value uint32",
+			"logind lifecycle stage: preparing state value uint64",
+			"logind lifecycle stage: preparing state value int32",
+			"logind lifecycle stage: preparing state value int64",
 			"logind lifecycle stage: resume notification stopped",
 			"logind lifecycle stage: suspend notification stopped",
 			"logind lifecycle stage: signal listener stopped":

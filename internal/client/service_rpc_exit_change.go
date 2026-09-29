@@ -40,6 +40,7 @@ type clientRPCExitChange struct {
 	OperationID              string                   `json:"operation_id"`
 	ProfileID                string                   `json:"profile_id"`
 	ActiveProfileID          string                   `json:"active_profile_id"`
+	RequestOwner             string                   `json:"request_owner,omitempty"`
 	Protection               *clientRPCExitProtection `json:"protection,omitempty"`
 	OwnerID                  string                   `json:"owner_id"`
 	ControlOrigin            string                   `json:"control_origin"`
@@ -217,6 +218,7 @@ func (m *ClientRPCMutations) selectExitNodeAs(peer local.Peer, request *ipc.Sele
 			return rpc.Error(connect.CodeFailedPrecondition, ipc.ErrorCode_ERROR_CODE_POLICY_BLOCKED)
 		}
 		plan.Requested = selected
+		plan.RequestOwner = peer.Identity
 		plan.MapHash = cfg.CachedMap.MapSignature.PayloadHash
 		cfg.RPCState.ExitChange = plan
 		// Acceptance records intent only; the engine must not observe a newly
@@ -232,6 +234,7 @@ func (m *ClientRPCMutations) clearExitNodeAs(peer local.Peer, request *ipc.Clear
 		if err != nil {
 			return err
 		}
+		plan.RequestOwner = peer.Identity
 		// Clear does not need a live map/grant; withdrawn authorization must not
 		// prevent removing local routing. It still requires an executor to apply.
 		cfg.RPCState.ExitChange = plan

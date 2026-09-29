@@ -124,7 +124,7 @@ func exitUnderlayRecoverySelection(cfg Config) (*ClientExitSelection, error) {
 	}
 	plan := cfg.RPCState.ExitChange
 	profile, exists := cfg.RPCState.Profiles[plan.ProfileID]
-	if !exists || profile.ID != plan.ProfileID || plan.OperationID == "" || plan.ProfileID != cfg.RPCState.ActiveProfileID || plan.ControlOrigin != profile.ControlOrigin || plan.OwnerID == "" || !strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) || plan.NodeID != cfg.NodeID || plan.NetworkID != cfg.NetworkID || plan.Previous != nil || plan.Requested == nil || !reflect.DeepEqual(plan.PreviousIntent, cfg.ConnectionIntent) {
+	if !exists || profile.ID != plan.ProfileID || plan.OperationID == "" || plan.RequestOwner == "" || plan.ProfileID != cfg.RPCState.ActiveProfileID || plan.ControlOrigin != profile.ControlOrigin || plan.OwnerID == "" || !strings.EqualFold(plan.OwnerID, cfg.LocalOwnerID) || plan.NodeID != cfg.NodeID || plan.NetworkID != cfg.NetworkID || plan.Previous != nil || plan.Requested == nil || !reflect.DeepEqual(plan.PreviousIntent, cfg.ConnectionIntent) {
 		return nil, invalid
 	}
 	origin, err := rpcProfileOrigin(plan.ControlOrigin)
@@ -144,7 +144,7 @@ func exitUnderlayRecoverySelection(cfg Config) (*ClientExitSelection, error) {
 		if op.Id != plan.OperationID {
 			continue
 		}
-		if found != nil || record.CompletedAt != nil || !strings.EqualFold(record.Owner, plan.OwnerID) || op.State != ipc.OperationState_OPERATION_STATE_RUNNING || op.Kind != ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE || op.ProfileId != plan.ProfileID {
+		if found != nil || record.CompletedAt != nil || !strings.EqualFold(record.Owner, plan.RequestOwner) || op.State != ipc.OperationState_OPERATION_STATE_RUNNING || op.Kind != ipc.OperationKind_OPERATION_KIND_SELECT_EXIT_NODE || op.ProfileId != plan.ProfileID {
 			return nil, invalid
 		}
 		found = op

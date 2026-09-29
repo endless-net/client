@@ -363,9 +363,25 @@ func (s *logindSession) preparing(ctx context.Context) (bool, error) {
 		log.Print("logind lifecycle stage: preparing state D-Bus read failed")
 		return false, err
 	}
-	preparing, ok := value.Value().(bool)
+	raw := value.Value()
+	preparing, ok := raw.(bool)
 	if !ok {
-		log.Print("logind lifecycle stage: preparing state value invalid")
+		stage := "logind lifecycle stage: preparing state value invalid"
+		switch raw.(type) {
+		case dbus.Variant:
+			stage = "logind lifecycle stage: preparing state value nested variant"
+		case string:
+			stage = "logind lifecycle stage: preparing state value string"
+		case uint32:
+			stage = "logind lifecycle stage: preparing state value uint32"
+		case uint64:
+			stage = "logind lifecycle stage: preparing state value uint64"
+		case int32:
+			stage = "logind lifecycle stage: preparing state value int32"
+		case int64:
+			stage = "logind lifecycle stage: preparing state value int64"
+		}
+		log.Print(stage)
 		return false, errors.New("invalid logind sleep state")
 	}
 	return preparing, nil

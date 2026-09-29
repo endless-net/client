@@ -65,9 +65,9 @@ func TestBoundedProcessOutputRetainsOnlyLimit(t *testing.T) {
 }
 
 func TestLogindLifecycleStagesAreAllowlisted(t *testing.T) {
-	input := "logind lifecycle stage: reconnect open failed\nlogind lifecycle stage: preparing state D-Bus read failed\nlogind lifecycle stage: preparing state value invalid\nlogind lifecycle stage: preparing state read stopped\nlogind lifecycle stage: signal listener stopped private detail"
+	input := "logind lifecycle stage: reconnect open failed\nlogind lifecycle stage: preparing state D-Bus read failed\nlogind lifecycle stage: preparing state value invalid\nlogind lifecycle stage: preparing state value nested variant\nlogind lifecycle stage: preparing state value string\nlogind lifecycle stage: preparing state value uint32\nlogind lifecycle stage: preparing state value uint64\nlogind lifecycle stage: preparing state value int32\nlogind lifecycle stage: preparing state value int64\nlogind lifecycle stage: preparing state read stopped\nlogind lifecycle stage: signal listener stopped private detail"
 	got := logindLifecycleStages([]byte(input))
-	if len(got) != 4 || got[0] != "logind lifecycle stage: reconnect open failed" || got[1] != "logind lifecycle stage: preparing state D-Bus read failed" || got[2] != "logind lifecycle stage: preparing state value invalid" || got[3] != "logind lifecycle stage: preparing state read stopped" {
+	if len(got) != 10 || got[0] != "logind lifecycle stage: reconnect open failed" || got[1] != "logind lifecycle stage: preparing state D-Bus read failed" || got[2] != "logind lifecycle stage: preparing state value invalid" || got[3] != "logind lifecycle stage: preparing state value nested variant" || got[4] != "logind lifecycle stage: preparing state value string" || got[5] != "logind lifecycle stage: preparing state value uint32" || got[6] != "logind lifecycle stage: preparing state value uint64" || got[7] != "logind lifecycle stage: preparing state value int32" || got[8] != "logind lifecycle stage: preparing state value int64" || got[9] != "logind lifecycle stage: preparing state read stopped" {
 		t.Fatalf("unrecognized logind lifecycle context escaped: %v", got)
 	}
 }
