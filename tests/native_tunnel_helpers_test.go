@@ -36,12 +36,19 @@ func nativeTunnelPort(t *testing.T, n *testclient.Node, status *ipc.Status) uint
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	var port uint16
+	var last *ipc.Diagnostics
+	var lastRequestError error
+	attempts, requestFailures := 0, 0
 	err := testclient.Await(ctx, func() bool {
+		attempts++
 		response := &ipc.GetDiagnosticsResponse{}
-		if n.NativeService("diagnostics", response, "--profile-id", status.ActiveProfileId, "--timeout", "1s") != nil {
+		if err := n.NativeService("diagnostics", response, "--profile-id", status.ActiveProfileId, "--timeout", "1s"); err != nil {
+			lastRequestError = err // NativeService returns only fixed, sanitized diagnostics.
+			requestFailures++
 			return false
 		}
 		d := response.GetDiagnostics()
+		last = d
 		if d.GetStatus().GetNodeId() != status.NodeId || d.GetStatus().GetActiveProfileId() != status.ActiveProfileId || d.GetStatus().GetMapRevision() < status.MapRevision ||
 			!d.GetTunnel().GetOk() || d.GetTunnel().GetFailure() != nil || d.GetTunnel().GetListenPort() == 0 || d.GetTunnel().GetListenPort() > 65535 {
 			return false
@@ -50,7 +57,8 @@ func nativeTunnelPort(t *testing.T, n *testclient.Node, status *ipc.Status) uint
 		return true
 	})
 	if err != nil {
-		t.Fatal("native diagnostics did not expose a bound active tunnel port")
+		t.Fatalf("native diagnostics did not expose a bound active tunnel port: attempts=%d request_failures=%d last_request_error=%v last={%s}",
+			attempts, requestFailures, lastRequestError, nativePeerTunnelSummary(last, status))
 	}
 	return port
 }

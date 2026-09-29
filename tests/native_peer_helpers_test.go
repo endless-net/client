@@ -91,11 +91,12 @@ func nativePeerTunnelSummary(d *ipc.Diagnostics, baseline *ipc.Status) string {
 			transmitted++
 		}
 	}
-	return fmt.Sprintf("response=%t node_bound=%t profile_bound=%t map_current=%t tunnel_ok=%t tunnel_failure=%d diagnostic_failures=%d peers=%d handshakes=%d receiving=%d transmitting=%d",
+	return fmt.Sprintf("response=%t node_bound=%t profile_bound=%t map_current=%t tunnel_ok=%t tunnel_failure=%d interface_present=%t mtu=%d listen_port=%d diagnostic_failures=%d peers=%d handshakes=%d receiving=%d transmitting=%d",
 		d != nil, baseline.GetNodeId() != "" && status.GetNodeId() == baseline.GetNodeId(),
 		baseline.GetActiveProfileId() != "" && status.GetActiveProfileId() == baseline.GetActiveProfileId(),
 		status != nil && baseline != nil && status.GetMapRevision() >= baseline.GetMapRevision(),
-		tunnel.GetOk(), tunnel.GetFailure().GetCode(), len(d.GetFailures()), len(tunnel.GetPeers()), handshakes, received, transmitted)
+		tunnel.GetOk(), tunnel.GetFailure().GetCode(), tunnel.GetInterfaceName() != "", tunnel.GetMtu(), tunnel.GetListenPort(),
+		len(d.GetFailures()), len(tunnel.GetPeers()), handshakes, received, transmitted)
 }
 
 func TestNativePeerMapRequiresCurrentAppliedObservation(t *testing.T) {
