@@ -15,13 +15,15 @@ func (b *boundedProcessOutput) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	written := len(p)
-	remaining := b.limit - len(b.data)
-	if remaining > 0 {
-		if len(p) > remaining {
-			p = p[:remaining]
-		}
-		b.data = append(b.data, p...)
+	if len(p) >= b.limit {
+		b.data = append(b.data[:0], p[len(p)-b.limit:]...)
+		return written, nil
 	}
+	if excess := len(b.data) + len(p) - b.limit; excess > 0 {
+		copy(b.data, b.data[excess:])
+		b.data = b.data[:len(b.data)-excess]
+	}
+	b.data = append(b.data, p...)
 	return written, nil
 }
 

@@ -3,6 +3,7 @@ package testclient
 import (
 	"context"
 	"errors"
+	"strings"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
@@ -34,25 +35,16 @@ func nativeStartupStages(ctx context.Context, call func(context.Context, string,
 	return stages, nil
 }
 
-// nativeExitOperationStages returns only exact, fixed runtime markers. The
-// native log payload and all unrecognized messages remain private to the test
-// process.
-func nativeExitOperationStages(ctx context.Context, call func(context.Context, string, ...string) ([]byte, error), profile string) ([]string, error) {
-	if profile == "" {
-		return nil, errors.New("public exit-operation log unavailable")
-	}
-	out, err := call(ctx, "logs-recent", "--profile-id", profile, "--page-size", "500")
-	logs := &ipc.ListRecentLogsResponse{}
-	if err != nil || decodeNativeService(out, logs) != nil {
-		return nil, errors.New("public exit-operation log unavailable")
-	}
+// nativeExitOperationStagesFromOutput emits only exact fixed markers from the
+// bounded process-output snapshot. All other content stays private.
+func nativeExitOperationStagesFromOutput(output []byte) []string {
 	var stages []string
-	for _, entry := range logs.Logs {
-		if stage := nativeExitOperationStage(entry.GetMessage()); stage != "" {
+	for _, line := range strings.Split(string(output), "\n") {
+		if stage := nativeExitOperationStage(strings.TrimSpace(line)); stage != "" {
 			stages = append(stages, stage)
 		}
 	}
-	return stages, nil
+	return stages
 }
 
 func nativeExitOperationStage(message string) string {

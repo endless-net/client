@@ -59,7 +59,7 @@ func TestBoundedProcessOutputRetainsOnlyLimit(t *testing.T) {
 	if n, err := output.Write([]byte("secret")); err != nil || n != len("secret") {
 		t.Fatal("process output writer did not consume the complete write")
 	}
-	if got := string(output.snapshot()); got != "secr" {
-		t.Fatalf("bounded output = %q, want capped prefix", got)
+	if got := string(output.snapshot()); got != "cret" {
+		t.Fatalf("bounded output = %q, want capped suffix", got)
 	}
 }
