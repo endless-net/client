@@ -63,3 +63,11 @@ func TestBoundedProcessOutputRetainsOnlyLimit(t *testing.T) {
 		t.Fatalf("bounded output = %q, want capped suffix", got)
 	}
 }
+
+func TestLogindLifecycleStagesAreAllowlisted(t *testing.T) {
+	input := "logind lifecycle stage: reconnect open failed\nlogind lifecycle stage: preparing state read stopped\nlogind lifecycle stage: signal listener stopped private detail"
+	got := logindLifecycleStages([]byte(input))
+	if len(got) != 2 || got[0] != "logind lifecycle stage: reconnect open failed" || got[1] != "logind lifecycle stage: preparing state read stopped" {
+		t.Fatalf("unrecognized logind lifecycle context escaped: %v", got)
+	}
+}

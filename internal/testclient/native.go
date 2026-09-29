@@ -183,6 +183,7 @@ func (n *Node) AwaitNativeOperation(id string) *ipc.Operation {
 		category := "process_alive"
 		if completed && failed {
 			category = agentExitCategory(n.stderr.snapshot())
+			n.t.Logf("public logind lifecycle stages: %v", logindLifecycleStages(n.stderr.snapshot()))
 		} else if completed {
 			category = "clean_exit"
 		}

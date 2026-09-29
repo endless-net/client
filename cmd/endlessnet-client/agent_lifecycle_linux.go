@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -97,19 +98,24 @@ func runLogindSourceWith(ctx context.Context, events chan<- client.RuntimeLifecy
 			var err error
 			session, err = open(ctx)
 			if err != nil {
+				log.Print("logind lifecycle stage: reconnect open failed")
 				continue
 			}
+			log.Print("logind lifecycle stage: reconnect open succeeded")
 		}
 		current := session.sessionSnapshot()
 		if attempt > 0 {
 			if err := deliverMissedLogoffs(ctx, events, known, current); err != nil {
+				log.Print("logind lifecycle stage: missed logoff delivery failed")
 				session.close()
 				return err
 			}
 		}
 		known = current
+		stage := "preparing state read"
 		preparing, err := session.preparing(ctx)
 		if err == nil && recovering && !preparing {
+			stage = "resume notification"
 			resumeEvent := client.RuntimeSourceRecovered
 			if missedResume {
 				resumeEvent = client.RuntimeResume
@@ -121,13 +127,18 @@ func runLogindSourceWith(ctx context.Context, events chan<- client.RuntimeLifecy
 			}
 		}
 		if err == nil && preparing {
+			stage = "suspend notification"
 			err = session.suspend(ctx, events)
 			if err == nil {
 				session.markSleeping()
 			}
 		}
 		if err == nil {
+			stage = "signal listener"
 			err = session.listen(ctx, events)
+		}
+		if err != nil {
+			log.Printf("logind lifecycle stage: %s stopped", stage)
 		}
 		if session.hasResumed() {
 			missedResume = false

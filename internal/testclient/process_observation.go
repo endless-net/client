@@ -59,6 +59,27 @@ func agentExitCategory(output []byte) string {
 	return "unclassified"
 }
 
+func logindLifecycleStages(output []byte) []string {
+	var stages []string
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "logind lifecycle stage: ") {
+			continue
+		}
+		switch line {
+		case "logind lifecycle stage: reconnect open failed",
+			"logind lifecycle stage: reconnect open succeeded",
+			"logind lifecycle stage: missed logoff delivery failed",
+			"logind lifecycle stage: preparing state read stopped",
+			"logind lifecycle stage: resume notification stopped",
+			"logind lifecycle stage: suspend notification stopped",
+			"logind lifecycle stage: signal listener stopped":
+			stages = append(stages, line)
+		}
+	}
+	return stages
+}
+
 // observeAgentCompletion is used only by the synchronous readiness failure path.
 // The buffered completion remains available to Stop/Crash; the observation never
 // waits for the process, reads its output, or replaces the readiness predicate.
