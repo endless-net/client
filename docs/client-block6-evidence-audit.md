@@ -601,8 +601,9 @@ reproduced `TestControlPlaneNativeCrossNetworkSelection` with
 `network_selection_target_context_stale` and
 `TestControlPlaneNativeProfileContextSwitch` with an unclassified
 `create-profile` subprocess failure. The macOS 15 repeat-3 shard additionally
-failed `TestControlPlaneNativeMachineSharing/ipv6` after an application dial
-timeout. These results characterize the earlier SHA only; they do not qualify
+failed `TestControlPlaneNativeMachineSharing/ipv6`: packet probes logged
+`errno=65`, and diagnostics did not expose a bound tunnel port within 30
+seconds. These results characterize the earlier SHA only; they do not qualify
 the current fixes or the later exit/LAN coverage. The temporary tag has been
 removed after the run completed. Push run
 [36502157561](https://github.com/endless-net/client/actions/runs/36502157561)
