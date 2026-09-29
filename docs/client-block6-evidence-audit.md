@@ -609,3 +609,38 @@ removed after the run completed. Push run
 [36502157561](https://github.com/endless-net/client/actions/runs/36502157561)
 passed all four short-unit jobs for documentation commit `4f482bd`; the
 documentation-only push does not replace the missing current-SHA system run.
+
+The user-authorized Test dispatch
+[36532058005](https://github.com/endless-net/client/actions/runs/36532058005)
+ran three contract repetitions on the current `main` SHA `1b50f8a`. It
+completed with `failure`: 46 jobs passed, 14 contract shards failed, the
+container lifecycle job failed, and aggregate `verify` failed; two jobs were
+skipped. All three platform Verify jobs, the control-plane scenarios, and all
+eight installer/smoke jobs passed. Of 48 contract shards, 34 passed. Twelve
+failed shards are Linux `TestControlPlaneExitProvider` runs: repeats 1–3 on
+Ubuntu 22.04 x64, Ubuntu 22.04 ARM, Ubuntu 24.04 x64, and Ubuntu 24.04 ARM.
+Each timed out while applying the explicit IPv4 exit selection after 30
+seconds. The native operation remained RUNNING with no failure code, the
+agent process was still alive, and no tunnel port became observable. This
+reproduces the same failure on both supported Linux runner generations and
+architectures; HC-036/037 exit-provider/LAN system acceptance remains open.
+
+Two additional shards failed `TestControlPlaneNativeCrossNetworkSelection`:
+Windows 2022 repeat 2 and macOS 15 Intel repeat 1. Both report
+`ListNetworks` as `failed_precondition: ERROR_CODE_STALE_STATE` before the
+cross-network mutation is submitted. The profile-context scenario passed on
+the Windows shard. All contract shards for macOS 15, macOS 15 Intel (other
+than the one above), Windows 2022 (other than the one above), and Windows
+2025 passed. This makes the network catalog issue intermittent; it is not
+closed by the passing repetitions.
+
+The container lifecycle job failed all four persistent-state Connect cases
+(IPv4/IPv6 TCP/UDP) and ephemeral recreation. At each 30-second timeout the
+Connect operation's subprocess had exited unsuccessfully with exit code 1;
+subprocess output remains withheld, so the underlying Connect failure is
+still unknown. Container system acceptance remains open. The aggregate
+verifier failed because system coverage was incomplete. No release was
+created, and no version was increased. Block 6 remains unaccepted pending
+the Linux exit operation, intermittent authenticated catalog, and container
+Connect failures, as well as the external business and update-source evidence
+listed above.
