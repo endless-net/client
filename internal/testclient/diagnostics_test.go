@@ -22,6 +22,9 @@ func TestExitOperationStageLogsWithholdUnrecognizedContext(t *testing.T) {
 	stages := []string{
 		"Native exit apply: begin", "Native exit apply: guard validated",
 		"Native exit apply: engine configured", "Native exit apply: observation confirmed",
+		"Native exit apply: durable operation validation failed", "Native exit apply: durable operation validated",
+		"Native exit apply: context canceled before guard", "Native exit apply: guard acquisition started",
+		"Native exit apply: guard acquisition failed",
 		"Native exit guard: ownership validation failed", "Native exit guard: route table validation failed",
 		"Native exit guard: runtime interface conflict", "Native exit guard: platform guard creation failed",
 		"Native exit guard: platform guard validation failed", "Native exit guard: runtime identity conflict",

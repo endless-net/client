@@ -243,13 +243,18 @@ func (n *nativeExitExecutor) apply(ctx context.Context, id string, cfg Config, s
 	continuity = ipc.ConnectionContinuity_CONNECTION_CONTINUITY_INTERRUPTED
 	plan, err := nativeExitOperation(cfg, id, selection, false)
 	if err != nil {
+		log.Print("Native exit apply: durable operation validation failed")
 		return nil, continuity, err
 	}
+	log.Print("Native exit apply: durable operation validated")
 	if err = ctx.Err(); err != nil {
+		log.Print("Native exit apply: context canceled before guard")
 		return nil, continuity, err
 	}
+	log.Print("Native exit apply: guard acquisition started")
 	guard, err := n.guard(plan.Protection)
 	if err != nil {
+		log.Print("Native exit apply: guard acquisition failed")
 		return nil, continuity, err
 	}
 	log.Print("Native exit apply: guard validated")
