@@ -27,6 +27,7 @@ type Node struct {
 	lifecycleCleanup                             func()
 	cmd                                          *exec.Cmd
 	done                                         chan error
+	stderr                                       *boundedProcessOutput
 }
 
 func New(t *testing.T, s *testcontrol.Server) *Node {
@@ -135,7 +136,8 @@ func (n *Node) Start() {
 	args = append(args, n.ipcArgs()...)
 	n.cmd = n.command(context.Background(), append(args, n.AgentArgs...)...)
 	n.cmd.Stdout = io.Discard
-	n.cmd.Stderr = io.Discard
+	n.stderr = &boundedProcessOutput{limit: 64 << 10}
+	n.cmd.Stderr = n.stderr
 	if err := n.cmd.Start(); err != nil {
 		n.cmd = nil
 		n.t.Fatal(err)

@@ -180,7 +180,13 @@ func (n *Node) AwaitNativeOperation(id string) *ipc.Operation {
 			diagnosticsErr == nil && diagnostics != nil, tunnel != nil, tunnel.GetOk(), tunnel.GetFailure().GetCode(),
 			tunnel.GetInterfaceName() != "", tunnel.GetMtu(), tunnel.GetListenPort(), diagnosticsErr)
 		completed, failed := observeAgentCompletion(n.done)
-		n.t.Logf("agent operation process observation: completion_observed=%t unsuccessful_exit=%t", completed, failed)
+		category := "process_alive"
+		if completed && failed {
+			category = agentExitCategory(n.stderr.snapshot())
+		} else if completed {
+			category = "clean_exit"
+		}
+		n.t.Logf("agent operation process observation: completion_observed=%t unsuccessful_exit=%t exit_category=%s", completed, failed, category)
 		n.t.Fatal("native operation did not finish")
 	}
 	return op
@@ -217,7 +223,13 @@ func (n *Node) awaitNativeReady() {
 		// never expose subprocess output or the runtime instance identifier here.
 		n.t.Logf("native runtime readiness: instance_present=%t error=%v", instancePresent, lastErr)
 		completed, failed := observeAgentCompletion(n.done)
-		n.t.Logf("agent readiness observation: completion_observed=%t unsuccessful_exit=%t", completed, failed)
+		category := "process_alive"
+		if completed && failed {
+			category = agentExitCategory(n.stderr.snapshot())
+		} else if completed {
+			category = "clean_exit"
+		}
+		n.t.Logf("agent readiness observation: completion_observed=%t unsuccessful_exit=%t exit_category=%s", completed, failed, category)
 		n.t.Fatal("native runtime did not become ready")
 	}
 }
