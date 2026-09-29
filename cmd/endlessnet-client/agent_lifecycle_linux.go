@@ -360,10 +360,12 @@ func (s *logindSession) acquire(ctx context.Context) error {
 func (s *logindSession) preparing(ctx context.Context) (bool, error) {
 	var value dbus.Variant
 	if err := s.conn.Object(loginName, loginPath).CallWithContext(ctx, "org.freedesktop.DBus.Properties.Get", 0, loginInterface, "PreparingForSleep").Store(&value); err != nil {
+		log.Print("logind lifecycle stage: preparing state D-Bus read failed")
 		return false, err
 	}
 	preparing, ok := value.Value().(bool)
 	if !ok {
+		log.Print("logind lifecycle stage: preparing state value invalid")
 		return false, errors.New("invalid logind sleep state")
 	}
 	return preparing, nil

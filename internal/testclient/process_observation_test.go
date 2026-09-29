@@ -65,9 +65,9 @@ func TestBoundedProcessOutputRetainsOnlyLimit(t *testing.T) {
 }
 
 func TestLogindLifecycleStagesAreAllowlisted(t *testing.T) {
-	input := "logind lifecycle stage: reconnect open failed\nlogind lifecycle stage: preparing state read stopped\nlogind lifecycle stage: signal listener stopped private detail"
+	input := "logind lifecycle stage: reconnect open failed\nlogind lifecycle stage: preparing state D-Bus read failed\nlogind lifecycle stage: preparing state value invalid\nlogind lifecycle stage: preparing state read stopped\nlogind lifecycle stage: signal listener stopped private detail"
 	got := logindLifecycleStages([]byte(input))
-	if len(got) != 2 || got[0] != "logind lifecycle stage: reconnect open failed" || got[1] != "logind lifecycle stage: preparing state read stopped" {
+	if len(got) != 4 || got[0] != "logind lifecycle stage: reconnect open failed" || got[1] != "logind lifecycle stage: preparing state D-Bus read failed" || got[2] != "logind lifecycle stage: preparing state value invalid" || got[3] != "logind lifecycle stage: preparing state read stopped" {
 		t.Fatalf("unrecognized logind lifecycle context escaped: %v", got)
 	}
 }

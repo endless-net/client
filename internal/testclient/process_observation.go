@@ -71,6 +71,8 @@ func logindLifecycleStages(output []byte) []string {
 			"logind lifecycle stage: reconnect open succeeded",
 			"logind lifecycle stage: missed logoff delivery failed",
 			"logind lifecycle stage: preparing state read stopped",
+			"logind lifecycle stage: preparing state D-Bus read failed",
+			"logind lifecycle stage: preparing state value invalid",
 			"logind lifecycle stage: resume notification stopped",
 			"logind lifecycle stage: suspend notification stopped",
 			"logind lifecycle stage: signal listener stopped":
