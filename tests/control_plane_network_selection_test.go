@@ -176,9 +176,24 @@ func TestControlPlaneNativeCrossNetworkSelection(t *testing.T) {
 	defer consumer.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	catalog, err := consumer.ListNetworks(ctx, connect.NewRequest(&ipc.ListNetworksRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
-	if err != nil || catalog == nil || catalog.Msg == nil {
-		t.Fatal("authenticated network catalog was unavailable", err)
+	var catalog *connect.Response[ipc.ListNetworksResponse]
+	for {
+		catalog, err = consumer.ListNetworks(ctx, connect.NewRequest(&ipc.ListNetworksRequest{Profile: &ipc.ProfileRef{ProfileId: profileID}}))
+		if err == nil {
+			break
+		}
+		failure := rpc.FailureFromError(err)
+		if failure == nil || failure.GetCode() != ipc.ErrorCode_ERROR_CODE_STALE_STATE || ctx.Err() != nil {
+			t.Fatal("authenticated network catalog was unavailable", err)
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("authenticated network catalog stayed stale", ctx.Err())
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	if catalog == nil || catalog.Msg == nil {
+		t.Fatal("authenticated network catalog returned no data")
 	}
 	selectedTarget := false
 	selectedSource := false
