@@ -60,8 +60,8 @@ func TestExitOperationStageLogsWithholdUnrecognizedContext(t *testing.T) {
 			}
 		}
 	}
-	got := nativeExitOperationStagesFromOutput([]byte("WireGuard engine: exit guard contained\nprivate WireGuard engine: exit policy opened"))
-	if len(got) != 1 || got[0] != "WireGuard engine: exit guard contained" {
+	got := nativeExitOperationStagesFromOutput([]byte("WireGuard engine: exit guard contained\n2026/09/29 17:51:10.019234 wireguard_engine.go:306: WireGuard engine: exit guard containment started\n2026/09/29 17:51:10.019235 wireguard_engine.go:306: private WireGuard engine: exit policy opened"))
+	if len(got) != 2 || got[0] != "WireGuard engine: exit guard contained" || got[1] != "WireGuard engine: exit guard containment started" {
 		t.Fatal("exit stage output parser did not retain only exact public markers")
 	}
 }

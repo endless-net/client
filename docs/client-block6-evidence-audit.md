@@ -763,3 +763,19 @@ allowed local checks pass on this remediation. Push CI and an uninterrupted
 three-repetition system Test run are still needed. The Linux exit-provider
 configure-stage diagnostics remain in `68f4d06` and will be included in that
 next system run. D-035 / UI-Q10 and the prior Linux exit acceptance remain open.
+
+The authorized three-repetition system Test run `36609361815` on `ea6a9e9`
+completed with 48 successful jobs, 14 failed jobs, and two skipped jobs. The
+container lifecycle and installation jobs passed. All 12 Linux shard-1 failures
+were `TestControlPlaneExitProvider`, each timing out after about 35 seconds;
+their public exit-operation stage list was empty. One Windows 2025 shard-1 job
+also failed `TestControlPlaneNativeServiceCatalog/ipv4` on repeat 3. The empty
+Linux stage list was a diagnostics-parser mismatch: the newly enabled Go logger
+prefixes messages with timestamp and source file, while the parser accepted
+only bare marker lines. The parser now strips only a strict Go log prefix before
+matching the fixed public marker allowlist, and its unit test covers both
+prefixed and bare lines while withholding arbitrary context. The focused
+`go test ./internal/testclient` passes. Push CI and a new system run are needed
+to localize the Linux failure with the corrected parser and assess the Windows
+IPv4 failure. D-035 / UI-Q10 acceptance remains open; no release or version
+increase was made.

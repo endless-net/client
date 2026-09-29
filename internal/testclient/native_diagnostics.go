@@ -3,10 +3,13 @@ package testclient
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 
 	ipc "github.com/endless-net/client/clientipc/v0"
 )
+
+var nativeStageLogLine = regexp.MustCompile(`^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,9})? [A-Za-z0-9_.-]+\.go:\d+: (.+)$`)
 
 // Both calls share the caller's diagnostic deadline. Only fixed public stage
 // labels escape this function, never subprocess output or arbitrary log text.
@@ -40,7 +43,11 @@ func nativeStartupStages(ctx context.Context, call func(context.Context, string,
 func nativeExitOperationStagesFromOutput(output []byte) []string {
 	var stages []string
 	for _, line := range strings.Split(string(output), "\n") {
-		if stage := nativeExitOperationStage(strings.TrimSpace(line)); stage != "" {
+		message := strings.TrimSpace(line)
+		if match := nativeStageLogLine.FindStringSubmatch(message); len(match) == 2 {
+			message = match[1]
+		}
+		if stage := nativeExitOperationStage(message); stage != "" {
 			stages = append(stages, stage)
 		}
 	}
