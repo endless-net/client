@@ -55,31 +55,37 @@ Service Kit или приватного workspace, их credentials, код, wor
 
 ## Проверки владельца
 
-Существующий Go-модуль — `api/`; его локальный публичный lint config —
-`api/.golangci-lint.yaml`, без загрузки private конфигурации. Из `api/` выполнять
-последовательно:
+Собственные Go-модули — корневой `go.mod` и независимый `api/go.mod`; каждый
+использует свою `.golangci-lint.yaml`, без загрузки private конфигурации.
+Из корня каждого модуля в Ubuntu 26.04 выполнять базовый набор:
 
 ```bash
-goimports -w .
+goimports -l .
 go vet ./...
 golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m
 go test -short ./...
 govulncheck ./...
-go build ./...
 ```
 
-Версии инструментов, Buf format/build/lint/breaking, repeat generation и
-producer-specific fixtures описаны в [контрактном README](api/README.md).
-Generated outputs не редактировать вручную; отсутствие published baseline
-фиксировать явно. Новые модули не создавать ради формального запуска Go checks.
+Непустой вывод `goimports -l` означает ошибку форматирования; исправления
+просматриваются отдельно. Корневой `cmd/client/main.go` — пустой сборочный каркас.
+Его Windows amd64, Linux amd64 и macOS amd64/arm64 outputs проверяют сборку,
+но не реализацию туннеля, маршрутов, OS adapter или продуктовых сценариев.
+Сборка выполняется отдельно командой `python3 -B scripts/ci.py build`.
 
-Для существующих Dart runtime/tooling packages использовать lockfiles и exact
-versions из `api/toolchain.json`, выполнить `pub get --enforce-lockfile` и analyze.
-Go↔Dart transport требует opt-in conformance из API README с проверкой deadline,
-expiry/cancel и отрицательных mutations; обычный Go test с skip это не заменяет.
-Изменения OS pipe/socket/peer-auth проверять на целевой ОС; wire fixture не
-подтверждает caller authority. Client владеет локальным runtime, ключами и
-применением effective policy, но не remote Account/Network authority.
+Версии инструментов и producer-owned generation/fixtures описаны в
+[контрактном README](api/README.md). При изменении схемы использовать закреплённые
+Buf build/lint и воспроизводимую генерацию; generated outputs вручную не менять.
+Buf breaking и сравнение с прежними версиями не входят в обязательный v0 CI:
+историческое сравнение не создаёт окно backward compatibility или release gate.
+
+Для `api/dart` и `api/tooling/dart` использовать lockfiles и exact versions из
+`api/toolchain.json`: locked setup, format/analyze и только unit entrypoints
+собственного `.ci/profile.json`. Go↔Dart transport conformance и OS pipe/socket/
+peer-auth не исполняются базовым short CI; их приёмка задаётся отдельным этапом.
+Skip такого сценария не означает pass. Wire fixture не подтверждает caller authority.
+По карте владельцев Client отвечает за локальный runtime, ключи и
+применение effective policy, но не remote Account/Network authority.
 
 ## MVP v0 и цикл 002
 
@@ -87,7 +93,8 @@ expiry/cancel и отрицательных mutations; обычный Go test с
 стабильного major новой линейки, включая patch. Изменения — hard cutover, без
 shims, dual API и fallback ради прошлых версий. Сохраняемые данные обновляются
 прямыми миграциями; скрытый reset запрещён. Runtime и api/v0.* версионируются
-независимо, first-party local replace и обход pin через GOWORK запрещены.
+независимо. Consumer закрепляет точную версию producer API; `@latest`, first-party
+local replace и обход pin через GOWORK запрещены.
 
 Профиль .ci/profile.json явно перечисляет все собственные модули и outputs.
 Базовый CI: format/lint, go vet, go test -short и govulncheck для Go, применимые
