@@ -1,0 +1,18 @@
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: .
+    opt:
+      - module=github.com/endless-net/client/api
+  - local: protoc-gen-go-grpc
+    out: .
+    opt:
+      - module=github.com/endless-net/client/api
+  - local: protoc-gen-connect-go
+    out: .
+    opt:
+      - module=github.com/endless-net/client/api
+  - local: [dart, tooling/dart/bin/protoc_plugin.dart]
+    out: dart/lib/src/gen
+    opt:
+      - grpc

@@ -1,0 +1,41 @@
+{
+  "status": "candidate-unreleased",
+  "historical_source_revision": "7f80d7c4ee4419349c1922346ff0a61b834a9fe0",
+  "published_api_baseline": null,
+  "published_breaking_check": "not applicable: first api/ release has no published supported predecessor",
+  "migration_comparisons": [
+    {
+      "comparison": "historical_migration",
+      "exit_code": 100,
+      "findings": 4,
+      "rules": {
+        "FILE_SAME_GO_PACKAGE": 4
+      },
+      "status": "incompatible; not a supported-version pass"
+    },
+    {
+      "comparison": "accepted_baseline",
+      "exit_code": 100,
+      "findings": 103,
+      "rules": {
+        "ENUM_NO_DELETE": 2,
+        "MESSAGE_NO_DELETE": 4,
+        "FILE_SAME_GO_PACKAGE": 4,
+        "FIELD_NO_DELETE": 9,
+        "FIELD_SAME_JSON_NAME": 26,
+        "FIELD_SAME_NAME": 26,
+        "FIELD_SAME_TYPE": 25,
+        "FIELD_SAME_CARDINALITY": 4,
+        "RPC_NO_DELETE": 1,
+        "FIELD_SAME_ONEOF": 2
+      },
+      "status": "incompatible; not a supported-version pass"
+    }
+  ],
+  "normalized_historical_comparison": {
+    "exit_code": 0,
+    "normalization": "new go_package; Relay callback removed from comparison as quarantined foreign authority",
+    "scope": "only remaining wire shapes; does not erase incompatible migration findings"
+  },
+  "accepted_baseline_sha256": "18543d4a306add4b13e66607be26456ffb4bf3d623f07bb69a744f4d844ac165"
+}

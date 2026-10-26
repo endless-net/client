@@ -1,0 +1,4 @@
+dart/.dart_tool/
+dart/.packages
+dart/build/
+tooling/dart/.dart_tool/

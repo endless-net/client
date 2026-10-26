@@ -1,0 +1,66 @@
+{
+  "status": "candidate-unreleased",
+  "source": {
+    "repository": "https://github.com/endless-net/client",
+    "revision": "7f80d7c4ee4419349c1922346ff0a61b834a9fe0",
+    "schema_paths": [
+      "proto/client/v0/common.proto",
+      "proto/client/v0/runtime.proto",
+      "proto/client/v0/features.proto",
+      "proto/client/v0/service.proto"
+    ]
+  },
+  "buf": "1.50.0",
+  "protoc-gen-go": "v1.36.10",
+  "protoc-gen-go-grpc": "v1.5.1",
+  "go": "1.26.0 minimum",
+  "remote_plugins": false,
+  "schema_registry": false,
+  "module": "github.com/endless-net/client/api",
+  "published_breaking_baseline": null,
+  "historical_comparison_is_release_baseline": false,
+  "protoc_plugin": "25.0.0",
+  "dart_runtime_sdk_constraint": ">=3.8.0 <4.0.0",
+  "dart_package": "api/dart",
+  "runtime_dependencies": {
+    "google.golang.org/grpc": "v1.83.2",
+    "google.golang.org/protobuf": "v1.36.11",
+    "connectrpc.com/connect": "v1.19.1",
+    "golang.org/x/net": "v0.60.0",
+    "golang.org/x/sys": "v0.48.0",
+    "golang.org/x/text": "v0.42.0"
+  },
+  "protoc-gen-connect-go": "v1.19.1",
+  "dart_generator": {
+    "sdk": "3.13.5",
+    "sdk_constraint": ">=3.13.0 <4.0.0",
+    "launcher": "tooling/dart/bin/protoc_plugin.dart",
+    "package": "protoc_plugin",
+    "version": "25.0.0",
+    "lock": "tooling/dart/pubspec.lock",
+    "lock_sha256": "703b5b5abb482b7305cac849459c3443c8dbb142ad4402be22ef9dd67c398047"
+  },
+  "dart_runtime_dependencies": {
+    "grpc": "5.1.0",
+    "protobuf": "6.0.0",
+    "fixnum": "1.1.1"
+  },
+  "supported_wire_test_pair": "Connect Go handler over gRPC wire + generated grpc-Go client and Dart grpc client; OS-auth adapter excluded",
+  "goimports": "v0.48.0",
+  "conformance_test": {
+    "command": "ENDLESSNET_DART_SMOKE=1 go test -count=1 -run TestGoDartLocalGRPC -v ./client/v0",
+    "positive_marker": "CONFORMANCE_PASS deadline_forwarded=true server_expired=true cancellation_ack=true",
+    "mutation_environment": "ENDLESSNET_CONFORMANCE_MUTATION",
+    "mutations": {
+      "drop-timeout": {
+        "required_exit": "nonzero",
+        "required_marker": "CONFORMANCE_MISSING_DEADLINE"
+      },
+      "omit-cancel": {
+        "required_exit": "nonzero",
+        "required_marker": "CONFORMANCE_CANCEL_NOT_OBSERVED"
+      }
+    },
+    "scope": "test fixtures only; no OS peer-auth or runtime authorization claim"
+  }
+}
