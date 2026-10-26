@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "component": "client",
+  "modules": [
+    {
+      "path": ".",
+      "kind": "go"
+    },
+    {
+      "path": "api",
+      "kind": "go"
+    },
+    {
+      "path": "api/dart",
+      "kind": "dart",
+      "unit": [
+        "test/serialization_test.dart"
+      ]
+    },
+    {
+      "path": "api/tooling/dart",
+      "kind": "dart",
+      "unit": []
+    }
+  ],
+  "artifacts": [
+    {
+      "release": "runtime",
+      "kind": "go",
+      "name": "client",
+      "module": ".",
+      "package": "./cmd/client",
+      "target": {
+        "os": "windows",
+        "arch": "amd64"
+      }
+    },
+    {
+      "release": "runtime",
+      "kind": "go",
+      "name": "client",
+      "module": ".",
+      "package": "./cmd/client",
+      "target": {
+        "os": "linux",
+        "arch": "amd64"
+      }
+    },
+    {
+      "release": "runtime",
+      "kind": "go",
+      "name": "client",
+      "module": ".",
+      "package": "./cmd/client",
+      "target": {
+        "os": "darwin",
+        "arch": "amd64"
+      }
+    },
+    {
+      "release": "runtime",
+      "kind": "go",
+      "name": "client",
+      "module": ".",
+      "package": "./cmd/client",
+      "target": {
+        "os": "darwin",
+        "arch": "arm64"
+      }
+    },
+    {
+      "release": "api",
+      "kind": "source",
+      "name": "client-api",
+      "path": "api"
+    }
+  ]
+}

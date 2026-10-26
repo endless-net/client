@@ -1,5 +1,6 @@
 // Producer-specific launcher for the pinned public protoc_plugin package.
 import 'dart:io';
+
 import 'package:protoc_plugin/protoc.dart';
 
 void main() {

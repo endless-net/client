@@ -9,4 +9,5 @@ dependencies:
   grpc: 5.1.0
   protobuf: 6.0.0
 dev_dependencies:
+  test: 1.33.0
   http2: 2.3.1

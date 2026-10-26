@@ -100,6 +100,9 @@ func (s *dartSmokeServer) WaitBrowserEnrollment(ctx context.Context, _ *connect.
 }
 
 func TestGoDartLocalGRPC(t *testing.T) {
+	if testing.Short() {
+		t.Skip("transport interop is outside the MVP unit-only suite")
+	}
 	if os.Getenv("ENDLESSNET_DART_SMOKE") != "1" {
 		t.Skip("set ENDLESSNET_DART_SMOKE=1 after dart pub get; no transport pass is claimed when skipped")
 	}
