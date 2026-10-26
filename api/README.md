@@ -27,8 +27,8 @@ Connect bindings — `client/v0/clientv0connect`, gRPC bindings — `client/v0`.
 Dart import — `package:endlessnet_client_api/client_api.dart`, Git package
 path `api/dart`. Генерация и schemas всегда находятся у Client, не UI.
 
-Это новая неопубликованная API-линия. Будущие tags `api/v<semver>` независимы
-от IPC v0 и версии runtime. Номер публикации сейчас не назначен. Предыдущей
+Базовая контрактная версия новой API-линии — `api/v0.1.0`. API tags независимы
+от IPC v0 и версии runtime; выпуск выполняет цикл 002 после CI. Предыдущей
 поддерживаемой опубликованной `api/` baseline нет; release breaking check
 первого выпуска явно не имеет такой базы. [migration.json](migration.json)
 фиксирует отдельное сравнение с историей: 4 изменения Go package против
@@ -131,8 +131,9 @@ server implementation требует повторить actual expiration тес
 
 ## Потребление Flutter
 
-Для будущего UI dependency задаются Git URL Client, exact immutable revision
-с этими файлами и path `api/dart`. Такой remote revision пока не опубликован.
+Для UI dependency использовать Git URL `https://github.com/endless-net/client.git`,
+exact immutable tag `api/v0.1.0` и package path `api/dart` после успешного tag pipeline
+002. До появления тега не подменять этот pin соседним checkout или fixture revision.
 Локальная приёмка создаёт отдельный временный Git candidate repository,
 фиксирует его exact revision и импортирует Dart SDK минимальным Flutter consumer.
 Этот fixture revision не является producer commit, remote pin или release.
