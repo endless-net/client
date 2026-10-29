@@ -1,5 +1,18 @@
 # Client API: контрактный candidate
 
+## Формальный контракт 003 — api/v0.2.0
+
+Enroll теперь принимает сохраняемый request UUID и возвращает EnrollmentAttempt.
+Добавлены GetEnrollmentAttempt/ListEnrollmentTargets/SelectEnrollmentTarget/
+CancelEnrollmentAttempt; WaitBrowserEnrollment и прежний EnrollmentResult удалены
+hard cutover. Provider user_code остаётся только в отдельном renewal-контракте,
+который не входит в 003. Схемы, Go gRPC/Connect и Dart SDK сгенерированы локально;
+новая поверхность содержит 42 RPC. Новый attempt различает phase/certainty,
+выбор контекста, сроки и публичный browser action без grants/private material.
+Current schema/descriptor digest обязателен для IPC pair; целевой выпуск нового API — api/v0.2.0.
+Consumer Client UI сохраняет прежний published pin; local/path replace не вводится.
+Ниже сохранён baseline 001; прежнее direct-result описание не задаёт форму Enroll 003.
+
 ## Новая MVP-линейка v0
 
 До отдельно объявленного стабильного major новой линейки обратная совместимость
@@ -101,7 +114,7 @@ Dart принимает только полученный server outcome с то
 cancel подтверждается отдельным `GetRuntimeInfo` probe по test-only metadata
 до закрытия канала и до stream timeout. Эти metadata не входят в production IPC.
 Serialization tests также проверяют explicit false/absence,
-malformed wire, unknown bytes preservation, 39 access annotations и отсутствие
+malformed wire, unknown bytes preservation, 42 access annotations и отсутствие
 private-key export fields. Это не доказывает runtime validation и domain authorization.
 
 Успешный opt-in тест печатает `CONFORMANCE_PASS` с подтверждениями

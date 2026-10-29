@@ -77,7 +77,7 @@ func (s *dartSmokeServer) WatchEvents(ctx context.Context, _ *connect.Request[cl
 	}
 	return connect.NewError(connect.CodeCanceled, ctx.Err())
 }
-func (s *dartSmokeServer) WaitBrowserEnrollment(ctx context.Context, _ *connect.Request[clientv0.WaitBrowserEnrollmentRequest]) (*connect.Response[clientv0.WaitBrowserEnrollmentResponse], error) {
+func (s *dartSmokeServer) GetEnrollmentAttempt(ctx context.Context, _ *connect.Request[clientv0.GetEnrollmentAttemptRequest]) (*connect.Response[clientv0.GetEnrollmentAttemptResponse], error) {
 	inboundDeadline, ok := ctx.Deadline()
 	if !ok {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("CONFORMANCE_MISSING_DEADLINE"))
@@ -133,7 +133,7 @@ func TestGoDartLocalGRPC(t *testing.T) {
 	mux := http.NewServeMux()
 	path, handler := clientv0connect.NewClientServiceHandler(fixture)
 	mux.Handle(path, http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if mutation == "drop-timeout" && request.URL.Path == clientv0connect.ClientServiceWaitBrowserEnrollmentProcedure {
+		if mutation == "drop-timeout" && request.URL.Path == clientv0connect.ClientServiceGetEnrollmentAttemptProcedure {
 			request.Header.Del("Grpc-Timeout")
 		}
 		handler.ServeHTTP(w, request)

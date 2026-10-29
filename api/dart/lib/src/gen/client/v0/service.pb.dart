@@ -254,24 +254,20 @@ class WatchEventsRequest extends $pb.GeneratedMessage {
   static WatchEventsRequest? _defaultInstance;
 }
 
-enum EnrollRequest_Authentication { enrollmentToken, browserLogin, notSet }
-
 class EnrollRequest extends $pb.GeneratedMessage {
   factory EnrollRequest({
     $1.MutationContext? mutation,
     $1.ProfileRef? profile,
     $2.EnrollmentMode? mode,
     $core.String? hostname,
-    $core.String? enrollmentToken,
-    $core.bool? browserLogin,
+    $core.String? requestId,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
     if (profile != null) result.profile = profile;
     if (mode != null) result.mode = mode;
     if (hostname != null) result.hostname = hostname;
-    if (enrollmentToken != null) result.enrollmentToken = enrollmentToken;
-    if (browserLogin != null) result.browserLogin = browserLogin;
+    if (requestId != null) result.requestId = requestId;
     return result;
   }
 
@@ -284,17 +280,10 @@ class EnrollRequest extends $pb.GeneratedMessage {
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromJson(json, registry);
 
-  static const $core.Map<$core.int, EnrollRequest_Authentication>
-      _EnrollRequest_AuthenticationByTag = {
-    5: EnrollRequest_Authentication.enrollmentToken,
-    6: EnrollRequest_Authentication.browserLogin,
-    0: EnrollRequest_Authentication.notSet
-  };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'EnrollRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..oo(0, [5, 6])
     ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
         subBuilder: $1.MutationContext.create)
     ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
@@ -302,8 +291,7 @@ class EnrollRequest extends $pb.GeneratedMessage {
     ..aE<$2.EnrollmentMode>(3, _omitFieldNames ? '' : 'mode',
         enumValues: $2.EnrollmentMode.values)
     ..aOS(4, _omitFieldNames ? '' : 'hostname')
-    ..aOS(5, _omitFieldNames ? '' : 'enrollmentToken')
-    ..aOB(6, _omitFieldNames ? '' : 'browserLogin')
+    ..aOS(7, _omitFieldNames ? '' : 'requestId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -324,14 +312,6 @@ class EnrollRequest extends $pb.GeneratedMessage {
   static EnrollRequest getDefault() => _defaultInstance ??=
       $pb.GeneratedMessage.$_defaultFor<EnrollRequest>(create);
   static EnrollRequest? _defaultInstance;
-
-  @$pb.TagNumber(5)
-  @$pb.TagNumber(6)
-  EnrollRequest_Authentication whichAuthentication() =>
-      _EnrollRequest_AuthenticationByTag[$_whichOneof(0)]!;
-  @$pb.TagNumber(5)
-  @$pb.TagNumber(6)
-  void clearAuthentication() => $_clearField($_whichOneof(0));
 
   @$pb.TagNumber(1)
   $1.MutationContext get mutation => $_getN(0);
@@ -373,35 +353,25 @@ class EnrollRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(4)
   void clearHostname() => $_clearField(4);
 
-  @$pb.TagNumber(5)
-  $core.String get enrollmentToken => $_getSZ(4);
-  @$pb.TagNumber(5)
-  set enrollmentToken($core.String value) => $_setString(4, value);
-  @$pb.TagNumber(5)
-  $core.bool hasEnrollmentToken() => $_has(4);
-  @$pb.TagNumber(5)
-  void clearEnrollmentToken() => $_clearField(5);
-
-  @$pb.TagNumber(6)
-  $core.bool get browserLogin => $_getBF(5);
-  @$pb.TagNumber(6)
-  set browserLogin($core.bool value) => $_setBool(5, value);
-  @$pb.TagNumber(6)
-  $core.bool hasBrowserLogin() => $_has(5);
-  @$pb.TagNumber(6)
-  void clearBrowserLogin() => $_clearField(6);
+  /// Canonical UUID, generated and persisted by UI before sending. Same caller,
+  /// profile/origin/mode/hostname and identity binding returns the same attempt.
+  /// Changed input conflicts. MutationContext is a separate concurrency check.
+  @$pb.TagNumber(7)
+  $core.String get requestId => $_getSZ(4);
+  @$pb.TagNumber(7)
+  set requestId($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(7)
+  $core.bool hasRequestId() => $_has(4);
+  @$pb.TagNumber(7)
+  void clearRequestId() => $_clearField(7);
 }
-
-enum EnrollResponse_Result { enrollment, browserLogin, notSet }
 
 class EnrollResponse extends $pb.GeneratedMessage {
   factory EnrollResponse({
-    $1.EnrollmentResult? enrollment,
-    $1.BrowserLoginChallenge? browserLogin,
+    $2.EnrollmentAttempt? attempt,
   }) {
     final result = create();
-    if (enrollment != null) result.enrollment = enrollment;
-    if (browserLogin != null) result.browserLogin = browserLogin;
+    if (attempt != null) result.attempt = attempt;
     return result;
   }
 
@@ -414,21 +384,12 @@ class EnrollResponse extends $pb.GeneratedMessage {
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromJson(json, registry);
 
-  static const $core.Map<$core.int, EnrollResponse_Result>
-      _EnrollResponse_ResultByTag = {
-    1: EnrollResponse_Result.enrollment,
-    2: EnrollResponse_Result.browserLogin,
-    0: EnrollResponse_Result.notSet
-  };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'EnrollResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..oo(0, [1, 2])
-    ..aOM<$1.EnrollmentResult>(1, _omitFieldNames ? '' : 'enrollment',
-        subBuilder: $1.EnrollmentResult.create)
-    ..aOM<$1.BrowserLoginChallenge>(2, _omitFieldNames ? '' : 'browserLogin',
-        subBuilder: $1.BrowserLoginChallenge.create)
+    ..aOM<$2.EnrollmentAttempt>(3, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $2.EnrollmentAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -450,87 +411,88 @@ class EnrollResponse extends $pb.GeneratedMessage {
       $pb.GeneratedMessage.$_defaultFor<EnrollResponse>(create);
   static EnrollResponse? _defaultInstance;
 
-  @$pb.TagNumber(1)
-  @$pb.TagNumber(2)
-  EnrollResponse_Result whichResult() =>
-      _EnrollResponse_ResultByTag[$_whichOneof(0)]!;
-  @$pb.TagNumber(1)
-  @$pb.TagNumber(2)
-  void clearResult() => $_clearField($_whichOneof(0));
-
-  @$pb.TagNumber(1)
-  $1.EnrollmentResult get enrollment => $_getN(0);
-  @$pb.TagNumber(1)
-  set enrollment($1.EnrollmentResult value) => $_setField(1, value);
-  @$pb.TagNumber(1)
-  $core.bool hasEnrollment() => $_has(0);
-  @$pb.TagNumber(1)
-  void clearEnrollment() => $_clearField(1);
-  @$pb.TagNumber(1)
-  $1.EnrollmentResult ensureEnrollment() => $_ensure(0);
-
-  @$pb.TagNumber(2)
-  $1.BrowserLoginChallenge get browserLogin => $_getN(1);
-  @$pb.TagNumber(2)
-  set browserLogin($1.BrowserLoginChallenge value) => $_setField(2, value);
-  @$pb.TagNumber(2)
-  $core.bool hasBrowserLogin() => $_has(1);
-  @$pb.TagNumber(2)
-  void clearBrowserLogin() => $_clearField(2);
-  @$pb.TagNumber(2)
-  $1.BrowserLoginChallenge ensureBrowserLogin() => $_ensure(1);
+  @$pb.TagNumber(3)
+  $2.EnrollmentAttempt get attempt => $_getN(0);
+  @$pb.TagNumber(3)
+  set attempt($2.EnrollmentAttempt value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasAttempt() => $_has(0);
+  @$pb.TagNumber(3)
+  void clearAttempt() => $_clearField(3);
+  @$pb.TagNumber(3)
+  $2.EnrollmentAttempt ensureAttempt() => $_ensure(0);
 }
 
-class WaitBrowserEnrollmentRequest extends $pb.GeneratedMessage {
-  factory WaitBrowserEnrollmentRequest({
+enum GetEnrollmentAttemptRequest_Selector { attemptId, requestId, notSet }
+
+class GetEnrollmentAttemptRequest extends $pb.GeneratedMessage {
+  factory GetEnrollmentAttemptRequest({
     $1.ProfileRef? profile,
-    $core.String? userCode,
+    $core.String? attemptId,
+    $core.String? requestId,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
-    if (userCode != null) result.userCode = userCode;
+    if (attemptId != null) result.attemptId = attemptId;
+    if (requestId != null) result.requestId = requestId;
     return result;
   }
 
-  WaitBrowserEnrollmentRequest._();
+  GetEnrollmentAttemptRequest._();
 
-  factory WaitBrowserEnrollmentRequest.fromBuffer($core.List<$core.int> data,
+  factory GetEnrollmentAttemptRequest.fromBuffer($core.List<$core.int> data,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromBuffer(data, registry);
-  factory WaitBrowserEnrollmentRequest.fromJson($core.String json,
+  factory GetEnrollmentAttemptRequest.fromJson($core.String json,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromJson(json, registry);
 
+  static const $core.Map<$core.int, GetEnrollmentAttemptRequest_Selector>
+      _GetEnrollmentAttemptRequest_SelectorByTag = {
+    2: GetEnrollmentAttemptRequest_Selector.attemptId,
+    3: GetEnrollmentAttemptRequest_Selector.requestId,
+    0: GetEnrollmentAttemptRequest_Selector.notSet
+  };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
-      _omitMessageNames ? '' : 'WaitBrowserEnrollmentRequest',
+      _omitMessageNames ? '' : 'GetEnrollmentAttemptRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
+    ..oo(0, [2, 3])
     ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
         subBuilder: $1.ProfileRef.create)
-    ..aOS(2, _omitFieldNames ? '' : 'userCode')
+    ..aOS(2, _omitFieldNames ? '' : 'attemptId')
+    ..aOS(3, _omitFieldNames ? '' : 'requestId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  WaitBrowserEnrollmentRequest clone() => deepCopy();
+  GetEnrollmentAttemptRequest clone() => deepCopy();
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  WaitBrowserEnrollmentRequest copyWith(
-          void Function(WaitBrowserEnrollmentRequest) updates) =>
+  GetEnrollmentAttemptRequest copyWith(
+          void Function(GetEnrollmentAttemptRequest) updates) =>
       super.copyWith(
-              (message) => updates(message as WaitBrowserEnrollmentRequest))
-          as WaitBrowserEnrollmentRequest;
+              (message) => updates(message as GetEnrollmentAttemptRequest))
+          as GetEnrollmentAttemptRequest;
 
   @$core.override
   $pb.BuilderInfo get info_ => _i;
 
   @$core.pragma('dart2js:noInline')
-  static WaitBrowserEnrollmentRequest create() =>
-      WaitBrowserEnrollmentRequest._();
+  static GetEnrollmentAttemptRequest create() =>
+      GetEnrollmentAttemptRequest._();
   @$core.override
-  WaitBrowserEnrollmentRequest createEmptyInstance() => create();
+  GetEnrollmentAttemptRequest createEmptyInstance() => create();
   @$core.pragma('dart2js:noInline')
-  static WaitBrowserEnrollmentRequest getDefault() => _defaultInstance ??=
-      $pb.GeneratedMessage.$_defaultFor<WaitBrowserEnrollmentRequest>(create);
-  static WaitBrowserEnrollmentRequest? _defaultInstance;
+  static GetEnrollmentAttemptRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetEnrollmentAttemptRequest>(create);
+  static GetEnrollmentAttemptRequest? _defaultInstance;
+
+  @$pb.TagNumber(2)
+  @$pb.TagNumber(3)
+  GetEnrollmentAttemptRequest_Selector whichSelector() =>
+      _GetEnrollmentAttemptRequest_SelectorByTag[$_whichOneof(0)]!;
+  @$pb.TagNumber(2)
+  @$pb.TagNumber(3)
+  void clearSelector() => $_clearField($_whichOneof(0));
 
   @$pb.TagNumber(1)
   $1.ProfileRef get profile => $_getN(0);
@@ -543,75 +505,571 @@ class WaitBrowserEnrollmentRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(1)
   $1.ProfileRef ensureProfile() => $_ensure(0);
 
-  /// Identity-provider user code returned by Enroll, not an IPC request ID.
   @$pb.TagNumber(2)
-  $core.String get userCode => $_getSZ(1);
+  $core.String get attemptId => $_getSZ(1);
   @$pb.TagNumber(2)
-  set userCode($core.String value) => $_setString(1, value);
+  set attemptId($core.String value) => $_setString(1, value);
   @$pb.TagNumber(2)
-  $core.bool hasUserCode() => $_has(1);
+  $core.bool hasAttemptId() => $_has(1);
   @$pb.TagNumber(2)
-  void clearUserCode() => $_clearField(2);
+  void clearAttemptId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get requestId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set requestId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRequestId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRequestId() => $_clearField(3);
 }
 
-class WaitBrowserEnrollmentResponse extends $pb.GeneratedMessage {
-  factory WaitBrowserEnrollmentResponse({
-    $1.EnrollmentResult? enrollment,
+class GetEnrollmentAttemptResponse extends $pb.GeneratedMessage {
+  factory GetEnrollmentAttemptResponse({
+    $2.EnrollmentAttempt? attempt,
   }) {
     final result = create();
-    if (enrollment != null) result.enrollment = enrollment;
+    if (attempt != null) result.attempt = attempt;
     return result;
   }
 
-  WaitBrowserEnrollmentResponse._();
+  GetEnrollmentAttemptResponse._();
 
-  factory WaitBrowserEnrollmentResponse.fromBuffer($core.List<$core.int> data,
+  factory GetEnrollmentAttemptResponse.fromBuffer($core.List<$core.int> data,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromBuffer(data, registry);
-  factory WaitBrowserEnrollmentResponse.fromJson($core.String json,
+  factory GetEnrollmentAttemptResponse.fromJson($core.String json,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromJson(json, registry);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
-      _omitMessageNames ? '' : 'WaitBrowserEnrollmentResponse',
+      _omitMessageNames ? '' : 'GetEnrollmentAttemptResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.EnrollmentResult>(1, _omitFieldNames ? '' : 'enrollment',
-        subBuilder: $1.EnrollmentResult.create)
+    ..aOM<$2.EnrollmentAttempt>(1, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $2.EnrollmentAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  WaitBrowserEnrollmentResponse clone() => deepCopy();
+  GetEnrollmentAttemptResponse clone() => deepCopy();
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  WaitBrowserEnrollmentResponse copyWith(
-          void Function(WaitBrowserEnrollmentResponse) updates) =>
+  GetEnrollmentAttemptResponse copyWith(
+          void Function(GetEnrollmentAttemptResponse) updates) =>
       super.copyWith(
-              (message) => updates(message as WaitBrowserEnrollmentResponse))
-          as WaitBrowserEnrollmentResponse;
+              (message) => updates(message as GetEnrollmentAttemptResponse))
+          as GetEnrollmentAttemptResponse;
 
   @$core.override
   $pb.BuilderInfo get info_ => _i;
 
   @$core.pragma('dart2js:noInline')
-  static WaitBrowserEnrollmentResponse create() =>
-      WaitBrowserEnrollmentResponse._();
+  static GetEnrollmentAttemptResponse create() =>
+      GetEnrollmentAttemptResponse._();
   @$core.override
-  WaitBrowserEnrollmentResponse createEmptyInstance() => create();
+  GetEnrollmentAttemptResponse createEmptyInstance() => create();
   @$core.pragma('dart2js:noInline')
-  static WaitBrowserEnrollmentResponse getDefault() => _defaultInstance ??=
-      $pb.GeneratedMessage.$_defaultFor<WaitBrowserEnrollmentResponse>(create);
-  static WaitBrowserEnrollmentResponse? _defaultInstance;
+  static GetEnrollmentAttemptResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetEnrollmentAttemptResponse>(create);
+  static GetEnrollmentAttemptResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.EnrollmentResult get enrollment => $_getN(0);
+  $2.EnrollmentAttempt get attempt => $_getN(0);
   @$pb.TagNumber(1)
-  set enrollment($1.EnrollmentResult value) => $_setField(1, value);
+  set attempt($2.EnrollmentAttempt value) => $_setField(1, value);
   @$pb.TagNumber(1)
-  $core.bool hasEnrollment() => $_has(0);
+  $core.bool hasAttempt() => $_has(0);
   @$pb.TagNumber(1)
-  void clearEnrollment() => $_clearField(1);
+  void clearAttempt() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.EnrollmentResult ensureEnrollment() => $_ensure(0);
+  $2.EnrollmentAttempt ensureAttempt() => $_ensure(0);
+}
+
+class ListEnrollmentTargetsRequest extends $pb.GeneratedMessage {
+  factory ListEnrollmentTargetsRequest({
+    $1.ProfileRef? profile,
+    $core.String? attemptId,
+    $1.PageRequest? page,
+  }) {
+    final result = create();
+    if (profile != null) result.profile = profile;
+    if (attemptId != null) result.attemptId = attemptId;
+    if (page != null) result.page = page;
+    return result;
+  }
+
+  ListEnrollmentTargetsRequest._();
+
+  factory ListEnrollmentTargetsRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListEnrollmentTargetsRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListEnrollmentTargetsRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $1.ProfileRef.create)
+    ..aOS(2, _omitFieldNames ? '' : 'attemptId')
+    ..aOM<$1.PageRequest>(3, _omitFieldNames ? '' : 'page',
+        subBuilder: $1.PageRequest.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListEnrollmentTargetsRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListEnrollmentTargetsRequest copyWith(
+          void Function(ListEnrollmentTargetsRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListEnrollmentTargetsRequest))
+          as ListEnrollmentTargetsRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListEnrollmentTargetsRequest create() =>
+      ListEnrollmentTargetsRequest._();
+  @$core.override
+  ListEnrollmentTargetsRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListEnrollmentTargetsRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListEnrollmentTargetsRequest>(create);
+  static ListEnrollmentTargetsRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $1.ProfileRef get profile => $_getN(0);
+  @$pb.TagNumber(1)
+  set profile($1.ProfileRef value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasProfile() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearProfile() => $_clearField(1);
+  @$pb.TagNumber(1)
+  $1.ProfileRef ensureProfile() => $_ensure(0);
+
+  @$pb.TagNumber(2)
+  $core.String get attemptId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set attemptId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAttemptId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAttemptId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $1.PageRequest get page => $_getN(2);
+  @$pb.TagNumber(3)
+  set page($1.PageRequest value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasPage() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearPage() => $_clearField(3);
+  @$pb.TagNumber(3)
+  $1.PageRequest ensurePage() => $_ensure(2);
+}
+
+class ListEnrollmentTargetsResponse extends $pb.GeneratedMessage {
+  factory ListEnrollmentTargetsResponse({
+    $core.Iterable<$2.EnrollmentTarget>? targets,
+    $1.PageResponse? page,
+    $1.SnapshotMetadata? metadata,
+  }) {
+    final result = create();
+    if (targets != null) result.targets.addAll(targets);
+    if (page != null) result.page = page;
+    if (metadata != null) result.metadata = metadata;
+    return result;
+  }
+
+  ListEnrollmentTargetsResponse._();
+
+  factory ListEnrollmentTargetsResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListEnrollmentTargetsResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListEnrollmentTargetsResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..pPM<$2.EnrollmentTarget>(1, _omitFieldNames ? '' : 'targets',
+        subBuilder: $2.EnrollmentTarget.create)
+    ..aOM<$1.PageResponse>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $1.PageResponse.create)
+    ..aOM<$1.SnapshotMetadata>(3, _omitFieldNames ? '' : 'metadata',
+        subBuilder: $1.SnapshotMetadata.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListEnrollmentTargetsResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListEnrollmentTargetsResponse copyWith(
+          void Function(ListEnrollmentTargetsResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListEnrollmentTargetsResponse))
+          as ListEnrollmentTargetsResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListEnrollmentTargetsResponse create() =>
+      ListEnrollmentTargetsResponse._();
+  @$core.override
+  ListEnrollmentTargetsResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListEnrollmentTargetsResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListEnrollmentTargetsResponse>(create);
+  static ListEnrollmentTargetsResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<$2.EnrollmentTarget> get targets => $_getList(0);
+
+  @$pb.TagNumber(2)
+  $1.PageResponse get page => $_getN(1);
+  @$pb.TagNumber(2)
+  set page($1.PageResponse value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasPage() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearPage() => $_clearField(2);
+  @$pb.TagNumber(2)
+  $1.PageResponse ensurePage() => $_ensure(1);
+
+  @$pb.TagNumber(3)
+  $1.SnapshotMetadata get metadata => $_getN(2);
+  @$pb.TagNumber(3)
+  set metadata($1.SnapshotMetadata value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasMetadata() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearMetadata() => $_clearField(3);
+  @$pb.TagNumber(3)
+  $1.SnapshotMetadata ensureMetadata() => $_ensure(2);
+}
+
+class SelectEnrollmentTargetRequest extends $pb.GeneratedMessage {
+  factory SelectEnrollmentTargetRequest({
+    $1.MutationContext? mutation,
+    $1.ProfileRef? profile,
+    $core.String? attemptId,
+    $core.String? accountId,
+    $core.String? networkId,
+  }) {
+    final result = create();
+    if (mutation != null) result.mutation = mutation;
+    if (profile != null) result.profile = profile;
+    if (attemptId != null) result.attemptId = attemptId;
+    if (accountId != null) result.accountId = accountId;
+    if (networkId != null) result.networkId = networkId;
+    return result;
+  }
+
+  SelectEnrollmentTargetRequest._();
+
+  factory SelectEnrollmentTargetRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SelectEnrollmentTargetRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SelectEnrollmentTargetRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $1.MutationContext.create)
+    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $1.ProfileRef.create)
+    ..aOS(3, _omitFieldNames ? '' : 'attemptId')
+    ..aOS(4, _omitFieldNames ? '' : 'accountId')
+    ..aOS(5, _omitFieldNames ? '' : 'networkId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SelectEnrollmentTargetRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SelectEnrollmentTargetRequest copyWith(
+          void Function(SelectEnrollmentTargetRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as SelectEnrollmentTargetRequest))
+          as SelectEnrollmentTargetRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SelectEnrollmentTargetRequest create() =>
+      SelectEnrollmentTargetRequest._();
+  @$core.override
+  SelectEnrollmentTargetRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SelectEnrollmentTargetRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SelectEnrollmentTargetRequest>(create);
+  static SelectEnrollmentTargetRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $1.MutationContext get mutation => $_getN(0);
+  @$pb.TagNumber(1)
+  set mutation($1.MutationContext value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasMutation() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearMutation() => $_clearField(1);
+  @$pb.TagNumber(1)
+  $1.MutationContext ensureMutation() => $_ensure(0);
+
+  @$pb.TagNumber(2)
+  $1.ProfileRef get profile => $_getN(1);
+  @$pb.TagNumber(2)
+  set profile($1.ProfileRef value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasProfile() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearProfile() => $_clearField(2);
+  @$pb.TagNumber(2)
+  $1.ProfileRef ensureProfile() => $_ensure(1);
+
+  @$pb.TagNumber(3)
+  $core.String get attemptId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set attemptId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasAttemptId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearAttemptId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get accountId => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set accountId($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasAccountId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearAccountId() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get networkId => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set networkId($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasNetworkId() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearNetworkId() => $_clearField(5);
+}
+
+class SelectEnrollmentTargetResponse extends $pb.GeneratedMessage {
+  factory SelectEnrollmentTargetResponse({
+    $2.EnrollmentAttempt? attempt,
+  }) {
+    final result = create();
+    if (attempt != null) result.attempt = attempt;
+    return result;
+  }
+
+  SelectEnrollmentTargetResponse._();
+
+  factory SelectEnrollmentTargetResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SelectEnrollmentTargetResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SelectEnrollmentTargetResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOM<$2.EnrollmentAttempt>(1, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $2.EnrollmentAttempt.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SelectEnrollmentTargetResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SelectEnrollmentTargetResponse copyWith(
+          void Function(SelectEnrollmentTargetResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as SelectEnrollmentTargetResponse))
+          as SelectEnrollmentTargetResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SelectEnrollmentTargetResponse create() =>
+      SelectEnrollmentTargetResponse._();
+  @$core.override
+  SelectEnrollmentTargetResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SelectEnrollmentTargetResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SelectEnrollmentTargetResponse>(create);
+  static SelectEnrollmentTargetResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $2.EnrollmentAttempt get attempt => $_getN(0);
+  @$pb.TagNumber(1)
+  set attempt($2.EnrollmentAttempt value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAttempt() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAttempt() => $_clearField(1);
+  @$pb.TagNumber(1)
+  $2.EnrollmentAttempt ensureAttempt() => $_ensure(0);
+}
+
+class CancelEnrollmentAttemptRequest extends $pb.GeneratedMessage {
+  factory CancelEnrollmentAttemptRequest({
+    $1.MutationContext? mutation,
+    $1.ProfileRef? profile,
+    $core.String? attemptId,
+  }) {
+    final result = create();
+    if (mutation != null) result.mutation = mutation;
+    if (profile != null) result.profile = profile;
+    if (attemptId != null) result.attemptId = attemptId;
+    return result;
+  }
+
+  CancelEnrollmentAttemptRequest._();
+
+  factory CancelEnrollmentAttemptRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CancelEnrollmentAttemptRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CancelEnrollmentAttemptRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $1.MutationContext.create)
+    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $1.ProfileRef.create)
+    ..aOS(3, _omitFieldNames ? '' : 'attemptId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CancelEnrollmentAttemptRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CancelEnrollmentAttemptRequest copyWith(
+          void Function(CancelEnrollmentAttemptRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as CancelEnrollmentAttemptRequest))
+          as CancelEnrollmentAttemptRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CancelEnrollmentAttemptRequest create() =>
+      CancelEnrollmentAttemptRequest._();
+  @$core.override
+  CancelEnrollmentAttemptRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CancelEnrollmentAttemptRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CancelEnrollmentAttemptRequest>(create);
+  static CancelEnrollmentAttemptRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $1.MutationContext get mutation => $_getN(0);
+  @$pb.TagNumber(1)
+  set mutation($1.MutationContext value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasMutation() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearMutation() => $_clearField(1);
+  @$pb.TagNumber(1)
+  $1.MutationContext ensureMutation() => $_ensure(0);
+
+  @$pb.TagNumber(2)
+  $1.ProfileRef get profile => $_getN(1);
+  @$pb.TagNumber(2)
+  set profile($1.ProfileRef value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasProfile() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearProfile() => $_clearField(2);
+  @$pb.TagNumber(2)
+  $1.ProfileRef ensureProfile() => $_ensure(1);
+
+  @$pb.TagNumber(3)
+  $core.String get attemptId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set attemptId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasAttemptId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearAttemptId() => $_clearField(3);
+}
+
+class CancelEnrollmentAttemptResponse extends $pb.GeneratedMessage {
+  factory CancelEnrollmentAttemptResponse({
+    $2.EnrollmentAttempt? attempt,
+  }) {
+    final result = create();
+    if (attempt != null) result.attempt = attempt;
+    return result;
+  }
+
+  CancelEnrollmentAttemptResponse._();
+
+  factory CancelEnrollmentAttemptResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CancelEnrollmentAttemptResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CancelEnrollmentAttemptResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOM<$2.EnrollmentAttempt>(1, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $2.EnrollmentAttempt.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CancelEnrollmentAttemptResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CancelEnrollmentAttemptResponse copyWith(
+          void Function(CancelEnrollmentAttemptResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as CancelEnrollmentAttemptResponse))
+          as CancelEnrollmentAttemptResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CancelEnrollmentAttemptResponse create() =>
+      CancelEnrollmentAttemptResponse._();
+  @$core.override
+  CancelEnrollmentAttemptResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CancelEnrollmentAttemptResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CancelEnrollmentAttemptResponse>(
+          create);
+  static CancelEnrollmentAttemptResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $2.EnrollmentAttempt get attempt => $_getN(0);
+  @$pb.TagNumber(1)
+  set attempt($2.EnrollmentAttempt value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAttempt() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAttempt() => $_clearField(1);
+  @$pb.TagNumber(1)
+  $2.EnrollmentAttempt ensureAttempt() => $_ensure(0);
 }
 
 class ConnectRequest extends $pb.GeneratedMessage {

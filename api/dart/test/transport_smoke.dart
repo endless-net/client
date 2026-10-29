@@ -182,8 +182,8 @@ Future<void> main(List<String> args) async {
     stdout.writeln('CONFORMANCE_CANCEL_ACK');
     rejected = false;
     try {
-      await client.waitBrowserEnrollment(
-        WaitBrowserEnrollmentRequest(),
+      await client.getEnrollmentAttempt(
+        GetEnrollmentAttemptRequest(),
         options: CallOptions(timeout: const Duration(seconds: 3)),
       );
     } on GrpcError catch (error) {

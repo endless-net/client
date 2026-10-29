@@ -12,7 +12,7 @@ import (
 
 func TestDescriptorAccessAndInitialClaim(t *testing.T) {
 	service := clientv0.File_client_v0_service_proto.Services().ByName("ClientService")
-	if service.Methods().Len() != 39 {
+	if service.Methods().Len() != 42 {
 		t.Fatalf("unexpected RPC inventory: %d", service.Methods().Len())
 	}
 	claims := map[string]bool{"CreateProfile": true, "Enroll": true}

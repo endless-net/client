@@ -95,6 +95,67 @@ enum ProfileState {
   PROFILE_STATE_BLOCKED = 5;
 }
 
+// 003 enrollment projection: never exports native request/poll/access/renewal
+// credentials, PKCE verifier, provider user code or device private material.
+enum EnrollmentPhase {
+  ENROLLMENT_PHASE_UNSPECIFIED = 0;
+  ENROLLMENT_PHASE_AWAITING_LOGIN = 1;
+  ENROLLMENT_PHASE_CHOOSING_CONTEXT = 2;
+  ENROLLMENT_PHASE_REGISTERING = 3;
+  ENROLLMENT_PHASE_PENDING_APPROVAL = 4;
+  ENROLLMENT_PHASE_COMPLETING = 5;
+  ENROLLMENT_PHASE_REGISTERED = 6;
+  ENROLLMENT_PHASE_DENIED = 7;
+  ENROLLMENT_PHASE_CANCELLED = 8;
+  ENROLLMENT_PHASE_EXPIRED = 9;
+}
+
+enum EnrollmentCertainty {
+  ENROLLMENT_CERTAINTY_UNSPECIFIED = 0;
+  ENROLLMENT_CERTAINTY_KNOWN = 1;
+  ENROLLMENT_CERTAINTY_UNCERTAIN = 2;
+}
+
+message EnrollmentBrowserAction {
+  // Trusted HTTPS URL from Identity; no proof/bearer/provider code.
+  string verification_url = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message EnrollmentTarget {
+  string account_id = 1;
+  string account_name = 2;
+  string network_id = 3;
+  string network_name = 4;
+  Restriction restriction = 5;
+}
+
+message EnrollmentAttempt {
+  string attempt_id = 1;
+  string request_id = 2;
+  string profile_id = 3;
+  EnrollmentPhase phase = 4;
+  EnrollmentCertainty certainty = 5;
+  SnapshotMetadata metadata = 6;
+  google.protobuf.Timestamp created_at = 7;
+  // At most 22 minutes from Enroll; no retry/restart extends this deadline.
+  google.protobuf.Timestamp deadline = 8;
+  EnrollmentBrowserAction browser_action = 9;
+  // Present after selection; node_id only for confirmed registration.
+  optional string account_id = 10;
+  optional string network_id = 11;
+  optional string node_id = 12;
+  Restriction restriction = 13;
+  // 10-minute login/approval deadlines; do not infer one from the other.
+  google.protobuf.Timestamp login_expires_at = 14;
+  google.protobuf.Timestamp approval_expires_at = 15;
+  // 2 minutes from the first uncertain outcome, persisted across restarts.
+  google.protobuf.Timestamp recovery_deadline = 16;
+  // Public refresh hint: 1..30 seconds while pending/uncertain, 0 terminal.
+  // Client core separately respects Identity/Coordinator poll hints.
+  uint32 poll_after_seconds = 17;
+}
+
 message ConnectionIntent {
   DesiredState desired_state = 1;
   string reason_key = 2;

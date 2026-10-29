@@ -26,7 +26,10 @@ const (
 	ClientService_GetStatus_FullMethodName               = "/client.v0.ClientService/GetStatus"
 	ClientService_WatchEvents_FullMethodName             = "/client.v0.ClientService/WatchEvents"
 	ClientService_Enroll_FullMethodName                  = "/client.v0.ClientService/Enroll"
-	ClientService_WaitBrowserEnrollment_FullMethodName   = "/client.v0.ClientService/WaitBrowserEnrollment"
+	ClientService_GetEnrollmentAttempt_FullMethodName    = "/client.v0.ClientService/GetEnrollmentAttempt"
+	ClientService_ListEnrollmentTargets_FullMethodName   = "/client.v0.ClientService/ListEnrollmentTargets"
+	ClientService_SelectEnrollmentTarget_FullMethodName  = "/client.v0.ClientService/SelectEnrollmentTarget"
+	ClientService_CancelEnrollmentAttempt_FullMethodName = "/client.v0.ClientService/CancelEnrollmentAttempt"
 	ClientService_Connect_FullMethodName                 = "/client.v0.ClientService/Connect"
 	ClientService_Disconnect_FullMethodName              = "/client.v0.ClientService/Disconnect"
 	ClientService_GetServerIdentity_FullMethodName       = "/client.v0.ClientService/GetServerIdentity"
@@ -75,8 +78,14 @@ type ClientServiceClient interface {
 	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEventsResponse], error)
 	// UF-03: initial unowned installation uses the ownership-claim exception.
 	Enroll(ctx context.Context, in *EnrollRequest, opts ...grpc.CallOption) (*EnrollResponse, error)
-	// Complete an identity-provider browser login started by Enroll.
-	WaitBrowserEnrollment(ctx context.Context, in *WaitBrowserEnrollmentRequest, opts ...grpc.CallOption) (*WaitBrowserEnrollmentResponse, error)
+	// 003: caller-bound persisted attempt; read by exactly one public selector.
+	GetEnrollmentAttempt(ctx context.Context, in *GetEnrollmentAttemptRequest, opts ...grpc.CallOption) (*GetEnrollmentAttemptResponse, error)
+	// Only native-session-authorized Account/Network targets; listing is not a grant.
+	ListEnrollmentTargets(ctx context.Context, in *ListEnrollmentTargetsRequest, opts ...grpc.CallOption) (*ListEnrollmentTargetsResponse, error)
+	// Reauthorize selected Account/Network before registration; no caller role field.
+	SelectEnrollmentTarget(ctx context.Context, in *SelectEnrollmentTargetRequest, opts ...grpc.CallOption) (*SelectEnrollmentTargetResponse, error)
+	// Stops waiting, not remote Node revocation; committed result wins a race.
+	CancelEnrollmentAttempt(ctx context.Context, in *CancelEnrollmentAttemptRequest, opts ...grpc.CallOption) (*CancelEnrollmentAttemptResponse, error)
 	// UF-05: persist connected intent, then reconcile runtime.
 	Connect(ctx context.Context, in *ConnectRequest, opts ...grpc.CallOption) (*ConnectResponse, error)
 	// UF-05: persist disconnected intent; retain registration.
@@ -204,10 +213,40 @@ func (c *clientServiceClient) Enroll(ctx context.Context, in *EnrollRequest, opt
 	return out, nil
 }
 
-func (c *clientServiceClient) WaitBrowserEnrollment(ctx context.Context, in *WaitBrowserEnrollmentRequest, opts ...grpc.CallOption) (*WaitBrowserEnrollmentResponse, error) {
+func (c *clientServiceClient) GetEnrollmentAttempt(ctx context.Context, in *GetEnrollmentAttemptRequest, opts ...grpc.CallOption) (*GetEnrollmentAttemptResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(WaitBrowserEnrollmentResponse)
-	err := c.cc.Invoke(ctx, ClientService_WaitBrowserEnrollment_FullMethodName, in, out, cOpts...)
+	out := new(GetEnrollmentAttemptResponse)
+	err := c.cc.Invoke(ctx, ClientService_GetEnrollmentAttempt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientServiceClient) ListEnrollmentTargets(ctx context.Context, in *ListEnrollmentTargetsRequest, opts ...grpc.CallOption) (*ListEnrollmentTargetsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListEnrollmentTargetsResponse)
+	err := c.cc.Invoke(ctx, ClientService_ListEnrollmentTargets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientServiceClient) SelectEnrollmentTarget(ctx context.Context, in *SelectEnrollmentTargetRequest, opts ...grpc.CallOption) (*SelectEnrollmentTargetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SelectEnrollmentTargetResponse)
+	err := c.cc.Invoke(ctx, ClientService_SelectEnrollmentTarget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientServiceClient) CancelEnrollmentAttempt(ctx context.Context, in *CancelEnrollmentAttemptRequest, opts ...grpc.CallOption) (*CancelEnrollmentAttemptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelEnrollmentAttemptResponse)
+	err := c.cc.Invoke(ctx, ClientService_CancelEnrollmentAttempt_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -566,8 +605,14 @@ type ClientServiceServer interface {
 	WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[WatchEventsResponse]) error
 	// UF-03: initial unowned installation uses the ownership-claim exception.
 	Enroll(context.Context, *EnrollRequest) (*EnrollResponse, error)
-	// Complete an identity-provider browser login started by Enroll.
-	WaitBrowserEnrollment(context.Context, *WaitBrowserEnrollmentRequest) (*WaitBrowserEnrollmentResponse, error)
+	// 003: caller-bound persisted attempt; read by exactly one public selector.
+	GetEnrollmentAttempt(context.Context, *GetEnrollmentAttemptRequest) (*GetEnrollmentAttemptResponse, error)
+	// Only native-session-authorized Account/Network targets; listing is not a grant.
+	ListEnrollmentTargets(context.Context, *ListEnrollmentTargetsRequest) (*ListEnrollmentTargetsResponse, error)
+	// Reauthorize selected Account/Network before registration; no caller role field.
+	SelectEnrollmentTarget(context.Context, *SelectEnrollmentTargetRequest) (*SelectEnrollmentTargetResponse, error)
+	// Stops waiting, not remote Node revocation; committed result wins a race.
+	CancelEnrollmentAttempt(context.Context, *CancelEnrollmentAttemptRequest) (*CancelEnrollmentAttemptResponse, error)
 	// UF-05: persist connected intent, then reconcile runtime.
 	Connect(context.Context, *ConnectRequest) (*ConnectResponse, error)
 	// UF-05: persist disconnected intent; retain registration.
@@ -658,8 +703,17 @@ func (UnimplementedClientServiceServer) WatchEvents(*WatchEventsRequest, grpc.Se
 func (UnimplementedClientServiceServer) Enroll(context.Context, *EnrollRequest) (*EnrollResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Enroll not implemented")
 }
-func (UnimplementedClientServiceServer) WaitBrowserEnrollment(context.Context, *WaitBrowserEnrollmentRequest) (*WaitBrowserEnrollmentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method WaitBrowserEnrollment not implemented")
+func (UnimplementedClientServiceServer) GetEnrollmentAttempt(context.Context, *GetEnrollmentAttemptRequest) (*GetEnrollmentAttemptResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetEnrollmentAttempt not implemented")
+}
+func (UnimplementedClientServiceServer) ListEnrollmentTargets(context.Context, *ListEnrollmentTargetsRequest) (*ListEnrollmentTargetsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListEnrollmentTargets not implemented")
+}
+func (UnimplementedClientServiceServer) SelectEnrollmentTarget(context.Context, *SelectEnrollmentTargetRequest) (*SelectEnrollmentTargetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SelectEnrollmentTarget not implemented")
+}
+func (UnimplementedClientServiceServer) CancelEnrollmentAttempt(context.Context, *CancelEnrollmentAttemptRequest) (*CancelEnrollmentAttemptResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelEnrollmentAttempt not implemented")
 }
 func (UnimplementedClientServiceServer) Connect(context.Context, *ConnectRequest) (*ConnectResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Connect not implemented")
@@ -849,20 +903,74 @@ func _ClientService_Enroll_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ClientService_WaitBrowserEnrollment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(WaitBrowserEnrollmentRequest)
+func _ClientService_GetEnrollmentAttempt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEnrollmentAttemptRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientServiceServer).WaitBrowserEnrollment(ctx, in)
+		return srv.(ClientServiceServer).GetEnrollmentAttempt(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ClientService_WaitBrowserEnrollment_FullMethodName,
+		FullMethod: ClientService_GetEnrollmentAttempt_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ClientServiceServer).WaitBrowserEnrollment(ctx, req.(*WaitBrowserEnrollmentRequest))
+		return srv.(ClientServiceServer).GetEnrollmentAttempt(ctx, req.(*GetEnrollmentAttemptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientService_ListEnrollmentTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListEnrollmentTargetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).ListEnrollmentTargets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_ListEnrollmentTargets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).ListEnrollmentTargets(ctx, req.(*ListEnrollmentTargetsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientService_SelectEnrollmentTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SelectEnrollmentTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).SelectEnrollmentTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_SelectEnrollmentTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).SelectEnrollmentTarget(ctx, req.(*SelectEnrollmentTargetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientService_CancelEnrollmentAttempt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelEnrollmentAttemptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).CancelEnrollmentAttempt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_CancelEnrollmentAttempt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).CancelEnrollmentAttempt(ctx, req.(*CancelEnrollmentAttemptRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1499,8 +1607,20 @@ var ClientService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ClientService_Enroll_Handler,
 		},
 		{
-			MethodName: "WaitBrowserEnrollment",
-			Handler:    _ClientService_WaitBrowserEnrollment_Handler,
+			MethodName: "GetEnrollmentAttempt",
+			Handler:    _ClientService_GetEnrollmentAttempt_Handler,
+		},
+		{
+			MethodName: "ListEnrollmentTargets",
+			Handler:    _ClientService_ListEnrollmentTargets_Handler,
+		},
+		{
+			MethodName: "SelectEnrollmentTarget",
+			Handler:    _ClientService_SelectEnrollmentTarget_Handler,
+		},
+		{
+			MethodName: "CancelEnrollmentAttempt",
+			Handler:    _ClientService_CancelEnrollmentAttempt_Handler,
 		},
 		{
 			MethodName: "Connect",

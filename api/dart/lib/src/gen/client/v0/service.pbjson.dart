@@ -140,26 +140,13 @@ const EnrollRequest$json = {
       '10': 'mode'
     },
     {'1': 'hostname', '3': 4, '4': 1, '5': 9, '10': 'hostname'},
-    {
-      '1': 'enrollment_token',
-      '3': 5,
-      '4': 1,
-      '5': 9,
-      '9': 0,
-      '10': 'enrollmentToken'
-    },
-    {
-      '1': 'browser_login',
-      '3': 6,
-      '4': 1,
-      '5': 8,
-      '9': 0,
-      '10': 'browserLogin'
-    },
+    {'1': 'request_id', '3': 7, '4': 1, '5': 9, '10': 'requestId'},
   ],
-  '8': [
-    {'1': 'authentication'},
+  '9': [
+    {'1': 5, '2': 6},
+    {'1': 6, '2': 7},
   ],
+  '10': ['enrollment_token', 'browser_login'],
 };
 
 /// Descriptor for `EnrollRequest`. Decode as a `google.protobuf.DescriptorProto`.
@@ -167,47 +154,37 @@ final $typed_data.Uint8List enrollRequestDescriptor = $convert.base64Decode(
     'Cg1FbnJvbGxSZXF1ZXN0EjYKCG11dGF0aW9uGAEgASgLMhouY2xpZW50LnYwLk11dGF0aW9uQ2'
     '9udGV4dFIIbXV0YXRpb24SLwoHcHJvZmlsZRgCIAEoCzIVLmNsaWVudC52MC5Qcm9maWxlUmVm'
     'Ugdwcm9maWxlEi0KBG1vZGUYAyABKA4yGS5jbGllbnQudjAuRW5yb2xsbWVudE1vZGVSBG1vZG'
-    'USGgoIaG9zdG5hbWUYBCABKAlSCGhvc3RuYW1lEisKEGVucm9sbG1lbnRfdG9rZW4YBSABKAlI'
-    'AFIPZW5yb2xsbWVudFRva2VuEiUKDWJyb3dzZXJfbG9naW4YBiABKAhIAFIMYnJvd3NlckxvZ2'
-    'luQhAKDmF1dGhlbnRpY2F0aW9u');
+    'USGgoIaG9zdG5hbWUYBCABKAlSCGhvc3RuYW1lEh0KCnJlcXVlc3RfaWQYByABKAlSCXJlcXVl'
+    'c3RJZEoECAUQBkoECAYQB1IQZW5yb2xsbWVudF90b2tlblINYnJvd3Nlcl9sb2dpbg==');
 
 @$core.Deprecated('Use enrollResponseDescriptor instead')
 const EnrollResponse$json = {
   '1': 'EnrollResponse',
   '2': [
     {
-      '1': 'enrollment',
-      '3': 1,
+      '1': 'attempt',
+      '3': 3,
       '4': 1,
       '5': 11,
-      '6': '.client.v0.EnrollmentResult',
-      '9': 0,
-      '10': 'enrollment'
-    },
-    {
-      '1': 'browser_login',
-      '3': 2,
-      '4': 1,
-      '5': 11,
-      '6': '.client.v0.BrowserLoginChallenge',
-      '9': 0,
-      '10': 'browserLogin'
+      '6': '.client.v0.EnrollmentAttempt',
+      '10': 'attempt'
     },
   ],
-  '8': [
-    {'1': 'result'},
+  '9': [
+    {'1': 1, '2': 2},
+    {'1': 2, '2': 3},
   ],
+  '10': ['enrollment', 'browser_login'],
 };
 
 /// Descriptor for `EnrollResponse`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List enrollResponseDescriptor = $convert.base64Decode(
-    'Cg5FbnJvbGxSZXNwb25zZRI9CgplbnJvbGxtZW50GAEgASgLMhsuY2xpZW50LnYwLkVucm9sbG'
-    '1lbnRSZXN1bHRIAFIKZW5yb2xsbWVudBJHCg1icm93c2VyX2xvZ2luGAIgASgLMiAuY2xpZW50'
-    'LnYwLkJyb3dzZXJMb2dpbkNoYWxsZW5nZUgAUgxicm93c2VyTG9naW5CCAoGcmVzdWx0');
+    'Cg5FbnJvbGxSZXNwb25zZRI2CgdhdHRlbXB0GAMgASgLMhwuY2xpZW50LnYwLkVucm9sbG1lbn'
+    'RBdHRlbXB0UgdhdHRlbXB0SgQIARACSgQIAhADUgplbnJvbGxtZW50Ug1icm93c2VyX2xvZ2lu');
 
-@$core.Deprecated('Use waitBrowserEnrollmentRequestDescriptor instead')
-const WaitBrowserEnrollmentRequest$json = {
-  '1': 'WaitBrowserEnrollmentRequest',
+@$core.Deprecated('Use getEnrollmentAttemptRequestDescriptor instead')
+const GetEnrollmentAttemptRequest$json = {
+  '1': 'GetEnrollmentAttemptRequest',
   '2': [
     {
       '1': 'profile',
@@ -217,36 +194,218 @@ const WaitBrowserEnrollmentRequest$json = {
       '6': '.client.v0.ProfileRef',
       '10': 'profile'
     },
-    {'1': 'user_code', '3': 2, '4': 1, '5': 9, '10': 'userCode'},
+    {'1': 'attempt_id', '3': 2, '4': 1, '5': 9, '9': 0, '10': 'attemptId'},
+    {'1': 'request_id', '3': 3, '4': 1, '5': 9, '9': 0, '10': 'requestId'},
+  ],
+  '8': [
+    {'1': 'selector'},
   ],
 };
 
-/// Descriptor for `WaitBrowserEnrollmentRequest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List waitBrowserEnrollmentRequestDescriptor =
+/// Descriptor for `GetEnrollmentAttemptRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getEnrollmentAttemptRequestDescriptor =
     $convert.base64Decode(
-        'ChxXYWl0QnJvd3NlckVucm9sbG1lbnRSZXF1ZXN0Ei8KB3Byb2ZpbGUYASABKAsyFS5jbGllbn'
-        'QudjAuUHJvZmlsZVJlZlIHcHJvZmlsZRIbCgl1c2VyX2NvZGUYAiABKAlSCHVzZXJDb2Rl');
+        'ChtHZXRFbnJvbGxtZW50QXR0ZW1wdFJlcXVlc3QSLwoHcHJvZmlsZRgBIAEoCzIVLmNsaWVudC'
+        '52MC5Qcm9maWxlUmVmUgdwcm9maWxlEh8KCmF0dGVtcHRfaWQYAiABKAlIAFIJYXR0ZW1wdElk'
+        'Eh8KCnJlcXVlc3RfaWQYAyABKAlIAFIJcmVxdWVzdElkQgoKCHNlbGVjdG9y');
 
-@$core.Deprecated('Use waitBrowserEnrollmentResponseDescriptor instead')
-const WaitBrowserEnrollmentResponse$json = {
-  '1': 'WaitBrowserEnrollmentResponse',
+@$core.Deprecated('Use getEnrollmentAttemptResponseDescriptor instead')
+const GetEnrollmentAttemptResponse$json = {
+  '1': 'GetEnrollmentAttemptResponse',
   '2': [
     {
-      '1': 'enrollment',
+      '1': 'attempt',
       '3': 1,
       '4': 1,
       '5': 11,
-      '6': '.client.v0.EnrollmentResult',
-      '10': 'enrollment'
+      '6': '.client.v0.EnrollmentAttempt',
+      '10': 'attempt'
     },
   ],
 };
 
-/// Descriptor for `WaitBrowserEnrollmentResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List waitBrowserEnrollmentResponseDescriptor =
+/// Descriptor for `GetEnrollmentAttemptResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getEnrollmentAttemptResponseDescriptor =
     $convert.base64Decode(
-        'Ch1XYWl0QnJvd3NlckVucm9sbG1lbnRSZXNwb25zZRI7CgplbnJvbGxtZW50GAEgASgLMhsuY2'
-        'xpZW50LnYwLkVucm9sbG1lbnRSZXN1bHRSCmVucm9sbG1lbnQ=');
+        'ChxHZXRFbnJvbGxtZW50QXR0ZW1wdFJlc3BvbnNlEjYKB2F0dGVtcHQYASABKAsyHC5jbGllbn'
+        'QudjAuRW5yb2xsbWVudEF0dGVtcHRSB2F0dGVtcHQ=');
+
+@$core.Deprecated('Use listEnrollmentTargetsRequestDescriptor instead')
+const ListEnrollmentTargetsRequest$json = {
+  '1': 'ListEnrollmentTargetsRequest',
+  '2': [
+    {
+      '1': 'profile',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.ProfileRef',
+      '10': 'profile'
+    },
+    {'1': 'attempt_id', '3': 2, '4': 1, '5': 9, '10': 'attemptId'},
+    {
+      '1': 'page',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.PageRequest',
+      '10': 'page'
+    },
+  ],
+};
+
+/// Descriptor for `ListEnrollmentTargetsRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listEnrollmentTargetsRequestDescriptor =
+    $convert.base64Decode(
+        'ChxMaXN0RW5yb2xsbWVudFRhcmdldHNSZXF1ZXN0Ei8KB3Byb2ZpbGUYASABKAsyFS5jbGllbn'
+        'QudjAuUHJvZmlsZVJlZlIHcHJvZmlsZRIdCgphdHRlbXB0X2lkGAIgASgJUglhdHRlbXB0SWQS'
+        'KgoEcGFnZRgDIAEoCzIWLmNsaWVudC52MC5QYWdlUmVxdWVzdFIEcGFnZQ==');
+
+@$core.Deprecated('Use listEnrollmentTargetsResponseDescriptor instead')
+const ListEnrollmentTargetsResponse$json = {
+  '1': 'ListEnrollmentTargetsResponse',
+  '2': [
+    {
+      '1': 'targets',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.client.v0.EnrollmentTarget',
+      '10': 'targets'
+    },
+    {
+      '1': 'page',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.PageResponse',
+      '10': 'page'
+    },
+    {
+      '1': 'metadata',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.SnapshotMetadata',
+      '10': 'metadata'
+    },
+  ],
+};
+
+/// Descriptor for `ListEnrollmentTargetsResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listEnrollmentTargetsResponseDescriptor = $convert.base64Decode(
+    'Ch1MaXN0RW5yb2xsbWVudFRhcmdldHNSZXNwb25zZRI1Cgd0YXJnZXRzGAEgAygLMhsuY2xpZW'
+    '50LnYwLkVucm9sbG1lbnRUYXJnZXRSB3RhcmdldHMSKwoEcGFnZRgCIAEoCzIXLmNsaWVudC52'
+    'MC5QYWdlUmVzcG9uc2VSBHBhZ2USNwoIbWV0YWRhdGEYAyABKAsyGy5jbGllbnQudjAuU25hcH'
+    'Nob3RNZXRhZGF0YVIIbWV0YWRhdGE=');
+
+@$core.Deprecated('Use selectEnrollmentTargetRequestDescriptor instead')
+const SelectEnrollmentTargetRequest$json = {
+  '1': 'SelectEnrollmentTargetRequest',
+  '2': [
+    {
+      '1': 'mutation',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.MutationContext',
+      '10': 'mutation'
+    },
+    {
+      '1': 'profile',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.ProfileRef',
+      '10': 'profile'
+    },
+    {'1': 'attempt_id', '3': 3, '4': 1, '5': 9, '10': 'attemptId'},
+    {'1': 'account_id', '3': 4, '4': 1, '5': 9, '10': 'accountId'},
+    {'1': 'network_id', '3': 5, '4': 1, '5': 9, '10': 'networkId'},
+  ],
+};
+
+/// Descriptor for `SelectEnrollmentTargetRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List selectEnrollmentTargetRequestDescriptor = $convert.base64Decode(
+    'Ch1TZWxlY3RFbnJvbGxtZW50VGFyZ2V0UmVxdWVzdBI2CghtdXRhdGlvbhgBIAEoCzIaLmNsaW'
+    'VudC52MC5NdXRhdGlvbkNvbnRleHRSCG11dGF0aW9uEi8KB3Byb2ZpbGUYAiABKAsyFS5jbGll'
+    'bnQudjAuUHJvZmlsZVJlZlIHcHJvZmlsZRIdCgphdHRlbXB0X2lkGAMgASgJUglhdHRlbXB0SW'
+    'QSHQoKYWNjb3VudF9pZBgEIAEoCVIJYWNjb3VudElkEh0KCm5ldHdvcmtfaWQYBSABKAlSCW5l'
+    'dHdvcmtJZA==');
+
+@$core.Deprecated('Use selectEnrollmentTargetResponseDescriptor instead')
+const SelectEnrollmentTargetResponse$json = {
+  '1': 'SelectEnrollmentTargetResponse',
+  '2': [
+    {
+      '1': 'attempt',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.EnrollmentAttempt',
+      '10': 'attempt'
+    },
+  ],
+};
+
+/// Descriptor for `SelectEnrollmentTargetResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List selectEnrollmentTargetResponseDescriptor =
+    $convert.base64Decode(
+        'Ch5TZWxlY3RFbnJvbGxtZW50VGFyZ2V0UmVzcG9uc2USNgoHYXR0ZW1wdBgBIAEoCzIcLmNsaW'
+        'VudC52MC5FbnJvbGxtZW50QXR0ZW1wdFIHYXR0ZW1wdA==');
+
+@$core.Deprecated('Use cancelEnrollmentAttemptRequestDescriptor instead')
+const CancelEnrollmentAttemptRequest$json = {
+  '1': 'CancelEnrollmentAttemptRequest',
+  '2': [
+    {
+      '1': 'mutation',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.MutationContext',
+      '10': 'mutation'
+    },
+    {
+      '1': 'profile',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.ProfileRef',
+      '10': 'profile'
+    },
+    {'1': 'attempt_id', '3': 3, '4': 1, '5': 9, '10': 'attemptId'},
+  ],
+};
+
+/// Descriptor for `CancelEnrollmentAttemptRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List cancelEnrollmentAttemptRequestDescriptor =
+    $convert.base64Decode(
+        'Ch5DYW5jZWxFbnJvbGxtZW50QXR0ZW1wdFJlcXVlc3QSNgoIbXV0YXRpb24YASABKAsyGi5jbG'
+        'llbnQudjAuTXV0YXRpb25Db250ZXh0UghtdXRhdGlvbhIvCgdwcm9maWxlGAIgASgLMhUuY2xp'
+        'ZW50LnYwLlByb2ZpbGVSZWZSB3Byb2ZpbGUSHQoKYXR0ZW1wdF9pZBgDIAEoCVIJYXR0ZW1wdE'
+        'lk');
+
+@$core.Deprecated('Use cancelEnrollmentAttemptResponseDescriptor instead')
+const CancelEnrollmentAttemptResponse$json = {
+  '1': 'CancelEnrollmentAttemptResponse',
+  '2': [
+    {
+      '1': 'attempt',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.EnrollmentAttempt',
+      '10': 'attempt'
+    },
+  ],
+};
+
+/// Descriptor for `CancelEnrollmentAttemptResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List cancelEnrollmentAttemptResponseDescriptor =
+    $convert.base64Decode(
+        'Ch9DYW5jZWxFbnJvbGxtZW50QXR0ZW1wdFJlc3BvbnNlEjYKB2F0dGVtcHQYASABKAsyHC5jbG'
+        'llbnQudjAuRW5yb2xsbWVudEF0dGVtcHRSB2F0dGVtcHQ=');
 
 @$core.Deprecated('Use connectRequestDescriptor instead')
 const ConnectRequest$json = {

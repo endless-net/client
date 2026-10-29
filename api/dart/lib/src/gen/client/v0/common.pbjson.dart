@@ -472,20 +472,6 @@ const ChangeResult$json = {
 final $typed_data.Uint8List changeResultDescriptor = $convert
     .base64Decode('CgxDaGFuZ2VSZXN1bHQSGAoHY2hhbmdlZBgBIAEoCFIHY2hhbmdlZA==');
 
-@$core.Deprecated('Use enrollmentResultDescriptor instead')
-const EnrollmentResult$json = {
-  '1': 'EnrollmentResult',
-  '2': [
-    {'1': 'profile_id', '3': 1, '4': 1, '5': 9, '10': 'profileId'},
-    {'1': 'node_id', '3': 2, '4': 1, '5': 9, '10': 'nodeId'},
-  ],
-};
-
-/// Descriptor for `EnrollmentResult`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List enrollmentResultDescriptor = $convert.base64Decode(
-    'ChBFbnJvbGxtZW50UmVzdWx0Eh0KCnByb2ZpbGVfaWQYASABKAlSCXByb2ZpbGVJZBIXCgdub2'
-    'RlX2lkGAIgASgJUgZub2RlSWQ=');
-
 @$core.Deprecated('Use profileResultDescriptor instead')
 const ProfileResult$json = {
   '1': 'ProfileResult',

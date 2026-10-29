@@ -66,12 +66,40 @@ class ClientServiceClient extends $grpc.Client {
     return $createUnaryCall(_$enroll, request, options: options);
   }
 
-  /// Complete an identity-provider browser login started by Enroll.
-  $grpc.ResponseFuture<$0.WaitBrowserEnrollmentResponse> waitBrowserEnrollment(
-    $0.WaitBrowserEnrollmentRequest request, {
+  /// 003: caller-bound persisted attempt; read by exactly one public selector.
+  $grpc.ResponseFuture<$0.GetEnrollmentAttemptResponse> getEnrollmentAttempt(
+    $0.GetEnrollmentAttemptRequest request, {
     $grpc.CallOptions? options,
   }) {
-    return $createUnaryCall(_$waitBrowserEnrollment, request, options: options);
+    return $createUnaryCall(_$getEnrollmentAttempt, request, options: options);
+  }
+
+  /// Only native-session-authorized Account/Network targets; listing is not a grant.
+  $grpc.ResponseFuture<$0.ListEnrollmentTargetsResponse> listEnrollmentTargets(
+    $0.ListEnrollmentTargetsRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listEnrollmentTargets, request, options: options);
+  }
+
+  /// Reauthorize selected Account/Network before registration; no caller role field.
+  $grpc.ResponseFuture<$0.SelectEnrollmentTargetResponse>
+      selectEnrollmentTarget(
+    $0.SelectEnrollmentTargetRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$selectEnrollmentTarget, request,
+        options: options);
+  }
+
+  /// Stops waiting, not remote Node revocation; committed result wins a race.
+  $grpc.ResponseFuture<$0.CancelEnrollmentAttemptResponse>
+      cancelEnrollmentAttempt(
+    $0.CancelEnrollmentAttemptRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$cancelEnrollmentAttempt, request,
+        options: options);
   }
 
   /// UF-05: persist connected intent, then reconcile runtime.
@@ -370,11 +398,27 @@ class ClientServiceClient extends $grpc.Client {
           '/client.v0.ClientService/Enroll',
           ($0.EnrollRequest value) => value.writeToBuffer(),
           $0.EnrollResponse.fromBuffer);
-  static final _$waitBrowserEnrollment = $grpc.ClientMethod<
-          $0.WaitBrowserEnrollmentRequest, $0.WaitBrowserEnrollmentResponse>(
-      '/client.v0.ClientService/WaitBrowserEnrollment',
-      ($0.WaitBrowserEnrollmentRequest value) => value.writeToBuffer(),
-      $0.WaitBrowserEnrollmentResponse.fromBuffer);
+  static final _$getEnrollmentAttempt = $grpc.ClientMethod<
+          $0.GetEnrollmentAttemptRequest, $0.GetEnrollmentAttemptResponse>(
+      '/client.v0.ClientService/GetEnrollmentAttempt',
+      ($0.GetEnrollmentAttemptRequest value) => value.writeToBuffer(),
+      $0.GetEnrollmentAttemptResponse.fromBuffer);
+  static final _$listEnrollmentTargets = $grpc.ClientMethod<
+          $0.ListEnrollmentTargetsRequest, $0.ListEnrollmentTargetsResponse>(
+      '/client.v0.ClientService/ListEnrollmentTargets',
+      ($0.ListEnrollmentTargetsRequest value) => value.writeToBuffer(),
+      $0.ListEnrollmentTargetsResponse.fromBuffer);
+  static final _$selectEnrollmentTarget = $grpc.ClientMethod<
+          $0.SelectEnrollmentTargetRequest, $0.SelectEnrollmentTargetResponse>(
+      '/client.v0.ClientService/SelectEnrollmentTarget',
+      ($0.SelectEnrollmentTargetRequest value) => value.writeToBuffer(),
+      $0.SelectEnrollmentTargetResponse.fromBuffer);
+  static final _$cancelEnrollmentAttempt = $grpc.ClientMethod<
+          $0.CancelEnrollmentAttemptRequest,
+          $0.CancelEnrollmentAttemptResponse>(
+      '/client.v0.ClientService/CancelEnrollmentAttempt',
+      ($0.CancelEnrollmentAttemptRequest value) => value.writeToBuffer(),
+      $0.CancelEnrollmentAttemptResponse.fromBuffer);
   static final _$connect =
       $grpc.ClientMethod<$0.ConnectRequest, $0.ConnectResponse>(
           '/client.v0.ClientService/Connect',
@@ -585,15 +629,42 @@ abstract class ClientServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.EnrollRequest.fromBuffer(value),
         ($0.EnrollResponse value) => value.writeToBuffer()));
-    $addMethod($grpc.ServiceMethod<$0.WaitBrowserEnrollmentRequest,
-            $0.WaitBrowserEnrollmentResponse>(
-        'WaitBrowserEnrollment',
-        waitBrowserEnrollment_Pre,
+    $addMethod($grpc.ServiceMethod<$0.GetEnrollmentAttemptRequest,
+            $0.GetEnrollmentAttemptResponse>(
+        'GetEnrollmentAttempt',
+        getEnrollmentAttempt_Pre,
         false,
         false,
         ($core.List<$core.int> value) =>
-            $0.WaitBrowserEnrollmentRequest.fromBuffer(value),
-        ($0.WaitBrowserEnrollmentResponse value) => value.writeToBuffer()));
+            $0.GetEnrollmentAttemptRequest.fromBuffer(value),
+        ($0.GetEnrollmentAttemptResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListEnrollmentTargetsRequest,
+            $0.ListEnrollmentTargetsResponse>(
+        'ListEnrollmentTargets',
+        listEnrollmentTargets_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListEnrollmentTargetsRequest.fromBuffer(value),
+        ($0.ListEnrollmentTargetsResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SelectEnrollmentTargetRequest,
+            $0.SelectEnrollmentTargetResponse>(
+        'SelectEnrollmentTarget',
+        selectEnrollmentTarget_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SelectEnrollmentTargetRequest.fromBuffer(value),
+        ($0.SelectEnrollmentTargetResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CancelEnrollmentAttemptRequest,
+            $0.CancelEnrollmentAttemptResponse>(
+        'CancelEnrollmentAttempt',
+        cancelEnrollmentAttempt_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CancelEnrollmentAttemptRequest.fromBuffer(value),
+        ($0.CancelEnrollmentAttemptResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ConnectRequest, $0.ConnectResponse>(
         'Connect',
         connect_Pre,
@@ -925,14 +996,41 @@ abstract class ClientServiceBase extends $grpc.Service {
   $async.Future<$0.EnrollResponse> enroll(
       $grpc.ServiceCall call, $0.EnrollRequest request);
 
-  $async.Future<$0.WaitBrowserEnrollmentResponse> waitBrowserEnrollment_Pre(
+  $async.Future<$0.GetEnrollmentAttemptResponse> getEnrollmentAttempt_Pre(
       $grpc.ServiceCall $call,
-      $async.Future<$0.WaitBrowserEnrollmentRequest> $request) async {
-    return waitBrowserEnrollment($call, await $request);
+      $async.Future<$0.GetEnrollmentAttemptRequest> $request) async {
+    return getEnrollmentAttempt($call, await $request);
   }
 
-  $async.Future<$0.WaitBrowserEnrollmentResponse> waitBrowserEnrollment(
-      $grpc.ServiceCall call, $0.WaitBrowserEnrollmentRequest request);
+  $async.Future<$0.GetEnrollmentAttemptResponse> getEnrollmentAttempt(
+      $grpc.ServiceCall call, $0.GetEnrollmentAttemptRequest request);
+
+  $async.Future<$0.ListEnrollmentTargetsResponse> listEnrollmentTargets_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListEnrollmentTargetsRequest> $request) async {
+    return listEnrollmentTargets($call, await $request);
+  }
+
+  $async.Future<$0.ListEnrollmentTargetsResponse> listEnrollmentTargets(
+      $grpc.ServiceCall call, $0.ListEnrollmentTargetsRequest request);
+
+  $async.Future<$0.SelectEnrollmentTargetResponse> selectEnrollmentTarget_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.SelectEnrollmentTargetRequest> $request) async {
+    return selectEnrollmentTarget($call, await $request);
+  }
+
+  $async.Future<$0.SelectEnrollmentTargetResponse> selectEnrollmentTarget(
+      $grpc.ServiceCall call, $0.SelectEnrollmentTargetRequest request);
+
+  $async.Future<$0.CancelEnrollmentAttemptResponse> cancelEnrollmentAttempt_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CancelEnrollmentAttemptRequest> $request) async {
+    return cancelEnrollmentAttempt($call, await $request);
+  }
+
+  $async.Future<$0.CancelEnrollmentAttemptResponse> cancelEnrollmentAttempt(
+      $grpc.ServiceCall call, $0.CancelEnrollmentAttemptRequest request);
 
   $async.Future<$0.ConnectResponse> connect_Pre($grpc.ServiceCall $call,
       $async.Future<$0.ConnectRequest> $request) async {

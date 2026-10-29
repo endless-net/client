@@ -182,11 +182,6 @@ message ChangeResult {
   bool changed = 1;
 }
 
-message EnrollmentResult {
-  string profile_id = 1;
-  string node_id = 2;
-}
-
 message ProfileResult {
   string profile_id = 1;
 }

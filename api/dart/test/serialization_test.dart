@@ -38,4 +38,26 @@ void main() {
       );
     }
   });
+  test('003 request lookup and uncertain enrollment stay separate', () {
+    final lookup = GetEnrollmentAttemptRequest(
+      profile: ProfileRef(profileId: 'profile-fixture'),
+      requestId: '611fb038-329c-4de5-872a-89bcab17287a',
+    );
+    final restored = GetEnrollmentAttemptRequest.fromBuffer(
+      lookup.writeToBuffer(),
+    );
+    expect(restored.requestId, lookup.requestId);
+    expect(restored.hasAttemptId(), isFalse);
+    final attempt = EnrollmentAttempt(
+      phase: EnrollmentPhase.ENROLLMENT_PHASE_COMPLETING,
+      certainty: EnrollmentCertainty.ENROLLMENT_CERTAINTY_UNCERTAIN,
+    );
+    final decoded = EnrollmentAttempt.fromBuffer(attempt.writeToBuffer());
+    expect(
+      decoded.certainty,
+      EnrollmentCertainty.ENROLLMENT_CERTAINTY_UNCERTAIN,
+    );
+    expect(decoded.phase, isNot(EnrollmentPhase.ENROLLMENT_PHASE_REGISTERED));
+    expect(decoded.hasNodeId(), isFalse);
+  });
 }

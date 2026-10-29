@@ -302,13 +302,12 @@ type EnrollRequest struct {
 	Profile  *ProfileRef            `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
 	Mode     EnrollmentMode         `protobuf:"varint,3,opt,name=mode,proto3,enum=client.v0.EnrollmentMode" json:"mode,omitempty"`
 	Hostname string                 `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	// Types that are valid to be assigned to Authentication:
-	//
-	//	*EnrollRequest_EnrollmentToken
-	//	*EnrollRequest_BrowserLogin
-	Authentication isEnrollRequest_Authentication `protobuf_oneof:"authentication"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Canonical UUID, generated and persisted by UI before sending. Same caller,
+	// profile/origin/mode/hostname and identity binding returns the same attempt.
+	// Changed input conflicts. MutationContext is a separate concurrency check.
+	RequestId     string `protobuf:"bytes,7,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *EnrollRequest) Reset() {
@@ -369,54 +368,16 @@ func (x *EnrollRequest) GetHostname() string {
 	return ""
 }
 
-func (x *EnrollRequest) GetAuthentication() isEnrollRequest_Authentication {
+func (x *EnrollRequest) GetRequestId() string {
 	if x != nil {
-		return x.Authentication
-	}
-	return nil
-}
-
-func (x *EnrollRequest) GetEnrollmentToken() string {
-	if x != nil {
-		if x, ok := x.Authentication.(*EnrollRequest_EnrollmentToken); ok {
-			return x.EnrollmentToken
-		}
+		return x.RequestId
 	}
 	return ""
 }
 
-func (x *EnrollRequest) GetBrowserLogin() bool {
-	if x != nil {
-		if x, ok := x.Authentication.(*EnrollRequest_BrowserLogin); ok {
-			return x.BrowserLogin
-		}
-	}
-	return false
-}
-
-type isEnrollRequest_Authentication interface {
-	isEnrollRequest_Authentication()
-}
-
-type EnrollRequest_EnrollmentToken struct {
-	EnrollmentToken string `protobuf:"bytes,5,opt,name=enrollment_token,json=enrollmentToken,proto3,oneof"`
-}
-
-type EnrollRequest_BrowserLogin struct {
-	BrowserLogin bool `protobuf:"varint,6,opt,name=browser_login,json=browserLogin,proto3,oneof"`
-}
-
-func (*EnrollRequest_EnrollmentToken) isEnrollRequest_Authentication() {}
-
-func (*EnrollRequest_BrowserLogin) isEnrollRequest_Authentication() {}
-
 type EnrollResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Result:
-	//
-	//	*EnrollResponse_Enrollment
-	//	*EnrollResponse_BrowserLogin
-	Result        isEnrollResponse_Result `protobuf_oneof:"result"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Attempt       *EnrollmentAttempt     `protobuf:"bytes,3,opt,name=attempt,proto3" json:"attempt,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -451,70 +412,39 @@ func (*EnrollResponse) Descriptor() ([]byte, []int) {
 	return file_client_v0_service_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *EnrollResponse) GetResult() isEnrollResponse_Result {
+func (x *EnrollResponse) GetAttempt() *EnrollmentAttempt {
 	if x != nil {
-		return x.Result
+		return x.Attempt
 	}
 	return nil
 }
 
-func (x *EnrollResponse) GetEnrollment() *EnrollmentResult {
-	if x != nil {
-		if x, ok := x.Result.(*EnrollResponse_Enrollment); ok {
-			return x.Enrollment
-		}
-	}
-	return nil
-}
-
-func (x *EnrollResponse) GetBrowserLogin() *BrowserLoginChallenge {
-	if x != nil {
-		if x, ok := x.Result.(*EnrollResponse_BrowserLogin); ok {
-			return x.BrowserLogin
-		}
-	}
-	return nil
-}
-
-type isEnrollResponse_Result interface {
-	isEnrollResponse_Result()
-}
-
-type EnrollResponse_Enrollment struct {
-	Enrollment *EnrollmentResult `protobuf:"bytes,1,opt,name=enrollment,proto3,oneof"`
-}
-
-type EnrollResponse_BrowserLogin struct {
-	BrowserLogin *BrowserLoginChallenge `protobuf:"bytes,2,opt,name=browser_login,json=browserLogin,proto3,oneof"`
-}
-
-func (*EnrollResponse_Enrollment) isEnrollResponse_Result() {}
-
-func (*EnrollResponse_BrowserLogin) isEnrollResponse_Result() {}
-
-type WaitBrowserEnrollmentRequest struct {
+type GetEnrollmentAttemptRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Profile *ProfileRef            `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
-	// Identity-provider user code returned by Enroll, not an IPC request ID.
-	UserCode      string `protobuf:"bytes,2,opt,name=user_code,json=userCode,proto3" json:"user_code,omitempty"`
+	// Types that are valid to be assigned to Selector:
+	//
+	//	*GetEnrollmentAttemptRequest_AttemptId
+	//	*GetEnrollmentAttemptRequest_RequestId
+	Selector      isGetEnrollmentAttemptRequest_Selector `protobuf_oneof:"selector"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WaitBrowserEnrollmentRequest) Reset() {
-	*x = WaitBrowserEnrollmentRequest{}
+func (x *GetEnrollmentAttemptRequest) Reset() {
+	*x = GetEnrollmentAttemptRequest{}
 	mi := &file_client_v0_service_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WaitBrowserEnrollmentRequest) String() string {
+func (x *GetEnrollmentAttemptRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WaitBrowserEnrollmentRequest) ProtoMessage() {}
+func (*GetEnrollmentAttemptRequest) ProtoMessage() {}
 
-func (x *WaitBrowserEnrollmentRequest) ProtoReflect() protoreflect.Message {
+func (x *GetEnrollmentAttemptRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_client_v0_service_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -526,46 +456,80 @@ func (x *WaitBrowserEnrollmentRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WaitBrowserEnrollmentRequest.ProtoReflect.Descriptor instead.
-func (*WaitBrowserEnrollmentRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetEnrollmentAttemptRequest.ProtoReflect.Descriptor instead.
+func (*GetEnrollmentAttemptRequest) Descriptor() ([]byte, []int) {
 	return file_client_v0_service_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *WaitBrowserEnrollmentRequest) GetProfile() *ProfileRef {
+func (x *GetEnrollmentAttemptRequest) GetProfile() *ProfileRef {
 	if x != nil {
 		return x.Profile
 	}
 	return nil
 }
 
-func (x *WaitBrowserEnrollmentRequest) GetUserCode() string {
+func (x *GetEnrollmentAttemptRequest) GetSelector() isGetEnrollmentAttemptRequest_Selector {
 	if x != nil {
-		return x.UserCode
+		return x.Selector
+	}
+	return nil
+}
+
+func (x *GetEnrollmentAttemptRequest) GetAttemptId() string {
+	if x != nil {
+		if x, ok := x.Selector.(*GetEnrollmentAttemptRequest_AttemptId); ok {
+			return x.AttemptId
+		}
 	}
 	return ""
 }
 
-type WaitBrowserEnrollmentResponse struct {
+func (x *GetEnrollmentAttemptRequest) GetRequestId() string {
+	if x != nil {
+		if x, ok := x.Selector.(*GetEnrollmentAttemptRequest_RequestId); ok {
+			return x.RequestId
+		}
+	}
+	return ""
+}
+
+type isGetEnrollmentAttemptRequest_Selector interface {
+	isGetEnrollmentAttemptRequest_Selector()
+}
+
+type GetEnrollmentAttemptRequest_AttemptId struct {
+	AttemptId string `protobuf:"bytes,2,opt,name=attempt_id,json=attemptId,proto3,oneof"`
+}
+
+type GetEnrollmentAttemptRequest_RequestId struct {
+	RequestId string `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3,oneof"`
+}
+
+func (*GetEnrollmentAttemptRequest_AttemptId) isGetEnrollmentAttemptRequest_Selector() {}
+
+func (*GetEnrollmentAttemptRequest_RequestId) isGetEnrollmentAttemptRequest_Selector() {}
+
+type GetEnrollmentAttemptResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Enrollment    *EnrollmentResult      `protobuf:"bytes,1,opt,name=enrollment,proto3" json:"enrollment,omitempty"`
+	Attempt       *EnrollmentAttempt     `protobuf:"bytes,1,opt,name=attempt,proto3" json:"attempt,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WaitBrowserEnrollmentResponse) Reset() {
-	*x = WaitBrowserEnrollmentResponse{}
+func (x *GetEnrollmentAttemptResponse) Reset() {
+	*x = GetEnrollmentAttemptResponse{}
 	mi := &file_client_v0_service_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WaitBrowserEnrollmentResponse) String() string {
+func (x *GetEnrollmentAttemptResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WaitBrowserEnrollmentResponse) ProtoMessage() {}
+func (*GetEnrollmentAttemptResponse) ProtoMessage() {}
 
-func (x *WaitBrowserEnrollmentResponse) ProtoReflect() protoreflect.Message {
+func (x *GetEnrollmentAttemptResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_client_v0_service_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -577,14 +541,358 @@ func (x *WaitBrowserEnrollmentResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WaitBrowserEnrollmentResponse.ProtoReflect.Descriptor instead.
-func (*WaitBrowserEnrollmentResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetEnrollmentAttemptResponse.ProtoReflect.Descriptor instead.
+func (*GetEnrollmentAttemptResponse) Descriptor() ([]byte, []int) {
 	return file_client_v0_service_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *WaitBrowserEnrollmentResponse) GetEnrollment() *EnrollmentResult {
+func (x *GetEnrollmentAttemptResponse) GetAttempt() *EnrollmentAttempt {
 	if x != nil {
-		return x.Enrollment
+		return x.Attempt
+	}
+	return nil
+}
+
+type ListEnrollmentTargetsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Profile       *ProfileRef            `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	AttemptId     string                 `protobuf:"bytes,2,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	Page          *PageRequest           `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListEnrollmentTargetsRequest) Reset() {
+	*x = ListEnrollmentTargetsRequest{}
+	mi := &file_client_v0_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListEnrollmentTargetsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListEnrollmentTargetsRequest) ProtoMessage() {}
+
+func (x *ListEnrollmentTargetsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListEnrollmentTargetsRequest.ProtoReflect.Descriptor instead.
+func (*ListEnrollmentTargetsRequest) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ListEnrollmentTargetsRequest) GetProfile() *ProfileRef {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+func (x *ListEnrollmentTargetsRequest) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+func (x *ListEnrollmentTargetsRequest) GetPage() *PageRequest {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
+type ListEnrollmentTargetsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Targets       []*EnrollmentTarget    `protobuf:"bytes,1,rep,name=targets,proto3" json:"targets,omitempty"`
+	Page          *PageResponse          `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	Metadata      *SnapshotMetadata      `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListEnrollmentTargetsResponse) Reset() {
+	*x = ListEnrollmentTargetsResponse{}
+	mi := &file_client_v0_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListEnrollmentTargetsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListEnrollmentTargetsResponse) ProtoMessage() {}
+
+func (x *ListEnrollmentTargetsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListEnrollmentTargetsResponse.ProtoReflect.Descriptor instead.
+func (*ListEnrollmentTargetsResponse) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ListEnrollmentTargetsResponse) GetTargets() []*EnrollmentTarget {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+func (x *ListEnrollmentTargetsResponse) GetPage() *PageResponse {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
+func (x *ListEnrollmentTargetsResponse) GetMetadata() *SnapshotMetadata {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type SelectEnrollmentTargetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Mutation      *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	Profile       *ProfileRef            `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
+	AttemptId     string                 `protobuf:"bytes,3,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	AccountId     string                 `protobuf:"bytes,4,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	NetworkId     string                 `protobuf:"bytes,5,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SelectEnrollmentTargetRequest) Reset() {
+	*x = SelectEnrollmentTargetRequest{}
+	mi := &file_client_v0_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelectEnrollmentTargetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelectEnrollmentTargetRequest) ProtoMessage() {}
+
+func (x *SelectEnrollmentTargetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelectEnrollmentTargetRequest.ProtoReflect.Descriptor instead.
+func (*SelectEnrollmentTargetRequest) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SelectEnrollmentTargetRequest) GetMutation() *MutationContext {
+	if x != nil {
+		return x.Mutation
+	}
+	return nil
+}
+
+func (x *SelectEnrollmentTargetRequest) GetProfile() *ProfileRef {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+func (x *SelectEnrollmentTargetRequest) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+func (x *SelectEnrollmentTargetRequest) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *SelectEnrollmentTargetRequest) GetNetworkId() string {
+	if x != nil {
+		return x.NetworkId
+	}
+	return ""
+}
+
+type SelectEnrollmentTargetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Attempt       *EnrollmentAttempt     `protobuf:"bytes,1,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SelectEnrollmentTargetResponse) Reset() {
+	*x = SelectEnrollmentTargetResponse{}
+	mi := &file_client_v0_service_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelectEnrollmentTargetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelectEnrollmentTargetResponse) ProtoMessage() {}
+
+func (x *SelectEnrollmentTargetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelectEnrollmentTargetResponse.ProtoReflect.Descriptor instead.
+func (*SelectEnrollmentTargetResponse) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SelectEnrollmentTargetResponse) GetAttempt() *EnrollmentAttempt {
+	if x != nil {
+		return x.Attempt
+	}
+	return nil
+}
+
+type CancelEnrollmentAttemptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Mutation      *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	Profile       *ProfileRef            `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
+	AttemptId     string                 `protobuf:"bytes,3,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelEnrollmentAttemptRequest) Reset() {
+	*x = CancelEnrollmentAttemptRequest{}
+	mi := &file_client_v0_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelEnrollmentAttemptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelEnrollmentAttemptRequest) ProtoMessage() {}
+
+func (x *CancelEnrollmentAttemptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelEnrollmentAttemptRequest.ProtoReflect.Descriptor instead.
+func (*CancelEnrollmentAttemptRequest) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *CancelEnrollmentAttemptRequest) GetMutation() *MutationContext {
+	if x != nil {
+		return x.Mutation
+	}
+	return nil
+}
+
+func (x *CancelEnrollmentAttemptRequest) GetProfile() *ProfileRef {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+func (x *CancelEnrollmentAttemptRequest) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+type CancelEnrollmentAttemptResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Attempt       *EnrollmentAttempt     `protobuf:"bytes,1,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelEnrollmentAttemptResponse) Reset() {
+	*x = CancelEnrollmentAttemptResponse{}
+	mi := &file_client_v0_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelEnrollmentAttemptResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelEnrollmentAttemptResponse) ProtoMessage() {}
+
+func (x *CancelEnrollmentAttemptResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelEnrollmentAttemptResponse.ProtoReflect.Descriptor instead.
+func (*CancelEnrollmentAttemptResponse) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *CancelEnrollmentAttemptResponse) GetAttempt() *EnrollmentAttempt {
+	if x != nil {
+		return x.Attempt
 	}
 	return nil
 }
@@ -602,7 +910,7 @@ type ConnectRequest struct {
 
 func (x *ConnectRequest) Reset() {
 	*x = ConnectRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[9]
+	mi := &file_client_v0_service_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -614,7 +922,7 @@ func (x *ConnectRequest) String() string {
 func (*ConnectRequest) ProtoMessage() {}
 
 func (x *ConnectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[9]
+	mi := &file_client_v0_service_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -627,7 +935,7 @@ func (x *ConnectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectRequest.ProtoReflect.Descriptor instead.
 func (*ConnectRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{9}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ConnectRequest) GetMutation() *MutationContext {
@@ -659,7 +967,7 @@ type ConnectResponse struct {
 
 func (x *ConnectResponse) Reset() {
 	*x = ConnectResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[10]
+	mi := &file_client_v0_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -671,7 +979,7 @@ func (x *ConnectResponse) String() string {
 func (*ConnectResponse) ProtoMessage() {}
 
 func (x *ConnectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[10]
+	mi := &file_client_v0_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -684,7 +992,7 @@ func (x *ConnectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectResponse.ProtoReflect.Descriptor instead.
 func (*ConnectResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{10}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{16}
 }
 
 type DisconnectRequest struct {
@@ -697,7 +1005,7 @@ type DisconnectRequest struct {
 
 func (x *DisconnectRequest) Reset() {
 	*x = DisconnectRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[11]
+	mi := &file_client_v0_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -709,7 +1017,7 @@ func (x *DisconnectRequest) String() string {
 func (*DisconnectRequest) ProtoMessage() {}
 
 func (x *DisconnectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[11]
+	mi := &file_client_v0_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -722,7 +1030,7 @@ func (x *DisconnectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisconnectRequest.ProtoReflect.Descriptor instead.
 func (*DisconnectRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{11}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *DisconnectRequest) GetMutation() *MutationContext {
@@ -748,7 +1056,7 @@ type DisconnectResponse struct {
 
 func (x *DisconnectResponse) Reset() {
 	*x = DisconnectResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[12]
+	mi := &file_client_v0_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -760,7 +1068,7 @@ func (x *DisconnectResponse) String() string {
 func (*DisconnectResponse) ProtoMessage() {}
 
 func (x *DisconnectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[12]
+	mi := &file_client_v0_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -773,7 +1081,7 @@ func (x *DisconnectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisconnectResponse.ProtoReflect.Descriptor instead.
 func (*DisconnectResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{12}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *DisconnectResponse) GetChange() *ChangeResult {
@@ -792,7 +1100,7 @@ type GetServerIdentityRequest struct {
 
 func (x *GetServerIdentityRequest) Reset() {
 	*x = GetServerIdentityRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[13]
+	mi := &file_client_v0_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -804,7 +1112,7 @@ func (x *GetServerIdentityRequest) String() string {
 func (*GetServerIdentityRequest) ProtoMessage() {}
 
 func (x *GetServerIdentityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[13]
+	mi := &file_client_v0_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -817,7 +1125,7 @@ func (x *GetServerIdentityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetServerIdentityRequest.ProtoReflect.Descriptor instead.
 func (*GetServerIdentityRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{13}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetServerIdentityRequest) GetProfile() *ProfileRef {
@@ -837,7 +1145,7 @@ type GetServerIdentityResponse struct {
 
 func (x *GetServerIdentityResponse) Reset() {
 	*x = GetServerIdentityResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[14]
+	mi := &file_client_v0_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -849,7 +1157,7 @@ func (x *GetServerIdentityResponse) String() string {
 func (*GetServerIdentityResponse) ProtoMessage() {}
 
 func (x *GetServerIdentityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[14]
+	mi := &file_client_v0_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -862,7 +1170,7 @@ func (x *GetServerIdentityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetServerIdentityResponse.ProtoReflect.Descriptor instead.
 func (*GetServerIdentityResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{14}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetServerIdentityResponse) GetIdentity() *ServerIdentity {
@@ -892,7 +1200,7 @@ type TrustServerIdentityRequest struct {
 
 func (x *TrustServerIdentityRequest) Reset() {
 	*x = TrustServerIdentityRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[15]
+	mi := &file_client_v0_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -904,7 +1212,7 @@ func (x *TrustServerIdentityRequest) String() string {
 func (*TrustServerIdentityRequest) ProtoMessage() {}
 
 func (x *TrustServerIdentityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[15]
+	mi := &file_client_v0_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -917,7 +1225,7 @@ func (x *TrustServerIdentityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrustServerIdentityRequest.ProtoReflect.Descriptor instead.
 func (*TrustServerIdentityRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{15}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *TrustServerIdentityRequest) GetMutation() *MutationContext {
@@ -964,7 +1272,7 @@ type TrustServerIdentityResponse struct {
 
 func (x *TrustServerIdentityResponse) Reset() {
 	*x = TrustServerIdentityResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[16]
+	mi := &file_client_v0_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -976,7 +1284,7 @@ func (x *TrustServerIdentityResponse) String() string {
 func (*TrustServerIdentityResponse) ProtoMessage() {}
 
 func (x *TrustServerIdentityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[16]
+	mi := &file_client_v0_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -989,7 +1297,7 @@ func (x *TrustServerIdentityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrustServerIdentityResponse.ProtoReflect.Descriptor instead.
 func (*TrustServerIdentityResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{16}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *TrustServerIdentityResponse) GetChange() *ChangeResult {
@@ -1009,7 +1317,7 @@ type LogoutRequest struct {
 
 func (x *LogoutRequest) Reset() {
 	*x = LogoutRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[17]
+	mi := &file_client_v0_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1021,7 +1329,7 @@ func (x *LogoutRequest) String() string {
 func (*LogoutRequest) ProtoMessage() {}
 
 func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[17]
+	mi := &file_client_v0_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1034,7 +1342,7 @@ func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
 func (*LogoutRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{17}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *LogoutRequest) GetMutation() *MutationContext {
@@ -1060,7 +1368,7 @@ type LogoutResponse struct {
 
 func (x *LogoutResponse) Reset() {
 	*x = LogoutResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[18]
+	mi := &file_client_v0_service_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1072,7 +1380,7 @@ func (x *LogoutResponse) String() string {
 func (*LogoutResponse) ProtoMessage() {}
 
 func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[18]
+	mi := &file_client_v0_service_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1085,7 +1393,7 @@ func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutResponse.ProtoReflect.Descriptor instead.
 func (*LogoutResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{18}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *LogoutResponse) GetCleanup() *CleanupResult {
@@ -1106,7 +1414,7 @@ type ForgetLocalEnrollmentRequest struct {
 
 func (x *ForgetLocalEnrollmentRequest) Reset() {
 	*x = ForgetLocalEnrollmentRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[19]
+	mi := &file_client_v0_service_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1118,7 +1426,7 @@ func (x *ForgetLocalEnrollmentRequest) String() string {
 func (*ForgetLocalEnrollmentRequest) ProtoMessage() {}
 
 func (x *ForgetLocalEnrollmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[19]
+	mi := &file_client_v0_service_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1131,7 +1439,7 @@ func (x *ForgetLocalEnrollmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForgetLocalEnrollmentRequest.ProtoReflect.Descriptor instead.
 func (*ForgetLocalEnrollmentRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{19}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ForgetLocalEnrollmentRequest) GetMutation() *MutationContext {
@@ -1164,7 +1472,7 @@ type ForgetLocalEnrollmentResponse struct {
 
 func (x *ForgetLocalEnrollmentResponse) Reset() {
 	*x = ForgetLocalEnrollmentResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[20]
+	mi := &file_client_v0_service_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1176,7 +1484,7 @@ func (x *ForgetLocalEnrollmentResponse) String() string {
 func (*ForgetLocalEnrollmentResponse) ProtoMessage() {}
 
 func (x *ForgetLocalEnrollmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[20]
+	mi := &file_client_v0_service_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1189,7 +1497,7 @@ func (x *ForgetLocalEnrollmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForgetLocalEnrollmentResponse.ProtoReflect.Descriptor instead.
 func (*ForgetLocalEnrollmentResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{20}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ForgetLocalEnrollmentResponse) GetCleanup() *CleanupResult {
@@ -1209,7 +1517,7 @@ type ListNetworksRequest struct {
 
 func (x *ListNetworksRequest) Reset() {
 	*x = ListNetworksRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[21]
+	mi := &file_client_v0_service_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1221,7 +1529,7 @@ func (x *ListNetworksRequest) String() string {
 func (*ListNetworksRequest) ProtoMessage() {}
 
 func (x *ListNetworksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[21]
+	mi := &file_client_v0_service_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1234,7 +1542,7 @@ func (x *ListNetworksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNetworksRequest.ProtoReflect.Descriptor instead.
 func (*ListNetworksRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{21}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ListNetworksRequest) GetProfile() *ProfileRef {
@@ -1262,7 +1570,7 @@ type ListNetworksResponse struct {
 
 func (x *ListNetworksResponse) Reset() {
 	*x = ListNetworksResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[22]
+	mi := &file_client_v0_service_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1274,7 +1582,7 @@ func (x *ListNetworksResponse) String() string {
 func (*ListNetworksResponse) ProtoMessage() {}
 
 func (x *ListNetworksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[22]
+	mi := &file_client_v0_service_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1287,7 +1595,7 @@ func (x *ListNetworksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNetworksResponse.ProtoReflect.Descriptor instead.
 func (*ListNetworksResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{22}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ListNetworksResponse) GetNetworks() []*Network {
@@ -1322,7 +1630,7 @@ type SelectNetworkRequest struct {
 
 func (x *SelectNetworkRequest) Reset() {
 	*x = SelectNetworkRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[23]
+	mi := &file_client_v0_service_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1334,7 +1642,7 @@ func (x *SelectNetworkRequest) String() string {
 func (*SelectNetworkRequest) ProtoMessage() {}
 
 func (x *SelectNetworkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[23]
+	mi := &file_client_v0_service_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1347,7 +1655,7 @@ func (x *SelectNetworkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectNetworkRequest.ProtoReflect.Descriptor instead.
 func (*SelectNetworkRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{23}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *SelectNetworkRequest) GetMutation() *MutationContext {
@@ -1381,7 +1689,7 @@ type SelectNetworkResponse struct {
 
 func (x *SelectNetworkResponse) Reset() {
 	*x = SelectNetworkResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[24]
+	mi := &file_client_v0_service_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1393,7 +1701,7 @@ func (x *SelectNetworkResponse) String() string {
 func (*SelectNetworkResponse) ProtoMessage() {}
 
 func (x *SelectNetworkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[24]
+	mi := &file_client_v0_service_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1406,7 +1714,7 @@ func (x *SelectNetworkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectNetworkResponse.ProtoReflect.Descriptor instead.
 func (*SelectNetworkResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{24}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *SelectNetworkResponse) GetSelection() *SelectionResult {
@@ -1434,7 +1742,7 @@ type ListPeersRequest struct {
 
 func (x *ListPeersRequest) Reset() {
 	*x = ListPeersRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[25]
+	mi := &file_client_v0_service_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1446,7 +1754,7 @@ func (x *ListPeersRequest) String() string {
 func (*ListPeersRequest) ProtoMessage() {}
 
 func (x *ListPeersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[25]
+	mi := &file_client_v0_service_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1459,7 +1767,7 @@ func (x *ListPeersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPeersRequest.ProtoReflect.Descriptor instead.
 func (*ListPeersRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{25}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ListPeersRequest) GetProfile() *ProfileRef {
@@ -1496,7 +1804,7 @@ type ListPeersResponse struct {
 
 func (x *ListPeersResponse) Reset() {
 	*x = ListPeersResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[26]
+	mi := &file_client_v0_service_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1508,7 +1816,7 @@ func (x *ListPeersResponse) String() string {
 func (*ListPeersResponse) ProtoMessage() {}
 
 func (x *ListPeersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[26]
+	mi := &file_client_v0_service_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1521,7 +1829,7 @@ func (x *ListPeersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPeersResponse.ProtoReflect.Descriptor instead.
 func (*ListPeersResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{26}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ListPeersResponse) GetPeers() []*Peer {
@@ -1568,7 +1876,7 @@ type GetDiagnosticsRequest struct {
 
 func (x *GetDiagnosticsRequest) Reset() {
 	*x = GetDiagnosticsRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[27]
+	mi := &file_client_v0_service_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1580,7 +1888,7 @@ func (x *GetDiagnosticsRequest) String() string {
 func (*GetDiagnosticsRequest) ProtoMessage() {}
 
 func (x *GetDiagnosticsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[27]
+	mi := &file_client_v0_service_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1593,7 +1901,7 @@ func (x *GetDiagnosticsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDiagnosticsRequest.ProtoReflect.Descriptor instead.
 func (*GetDiagnosticsRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{27}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GetDiagnosticsRequest) GetProfile() *ProfileRef {
@@ -1612,7 +1920,7 @@ type GetDiagnosticsResponse struct {
 
 func (x *GetDiagnosticsResponse) Reset() {
 	*x = GetDiagnosticsResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[28]
+	mi := &file_client_v0_service_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1624,7 +1932,7 @@ func (x *GetDiagnosticsResponse) String() string {
 func (*GetDiagnosticsResponse) ProtoMessage() {}
 
 func (x *GetDiagnosticsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[28]
+	mi := &file_client_v0_service_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1637,7 +1945,7 @@ func (x *GetDiagnosticsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDiagnosticsResponse.ProtoReflect.Descriptor instead.
 func (*GetDiagnosticsResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{28}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *GetDiagnosticsResponse) GetDiagnostics() *Diagnostics {
@@ -1657,7 +1965,7 @@ type CreateDiagnosticsBundleRequest struct {
 
 func (x *CreateDiagnosticsBundleRequest) Reset() {
 	*x = CreateDiagnosticsBundleRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[29]
+	mi := &file_client_v0_service_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1669,7 +1977,7 @@ func (x *CreateDiagnosticsBundleRequest) String() string {
 func (*CreateDiagnosticsBundleRequest) ProtoMessage() {}
 
 func (x *CreateDiagnosticsBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[29]
+	mi := &file_client_v0_service_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1682,7 +1990,7 @@ func (x *CreateDiagnosticsBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDiagnosticsBundleRequest.ProtoReflect.Descriptor instead.
 func (*CreateDiagnosticsBundleRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{29}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CreateDiagnosticsBundleRequest) GetMutation() *MutationContext {
@@ -1708,7 +2016,7 @@ type CreateDiagnosticsBundleResponse struct {
 
 func (x *CreateDiagnosticsBundleResponse) Reset() {
 	*x = CreateDiagnosticsBundleResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[30]
+	mi := &file_client_v0_service_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1720,7 +2028,7 @@ func (x *CreateDiagnosticsBundleResponse) String() string {
 func (*CreateDiagnosticsBundleResponse) ProtoMessage() {}
 
 func (x *CreateDiagnosticsBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[30]
+	mi := &file_client_v0_service_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1733,7 +2041,7 @@ func (x *CreateDiagnosticsBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDiagnosticsBundleResponse.ProtoReflect.Descriptor instead.
 func (*CreateDiagnosticsBundleResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{30}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CreateDiagnosticsBundleResponse) GetBundle() *BundleResult {
@@ -1754,7 +2062,7 @@ type ReadDiagnosticsBundleRequest struct {
 
 func (x *ReadDiagnosticsBundleRequest) Reset() {
 	*x = ReadDiagnosticsBundleRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[31]
+	mi := &file_client_v0_service_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1766,7 +2074,7 @@ func (x *ReadDiagnosticsBundleRequest) String() string {
 func (*ReadDiagnosticsBundleRequest) ProtoMessage() {}
 
 func (x *ReadDiagnosticsBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[31]
+	mi := &file_client_v0_service_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1779,7 +2087,7 @@ func (x *ReadDiagnosticsBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadDiagnosticsBundleRequest.ProtoReflect.Descriptor instead.
 func (*ReadDiagnosticsBundleRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{31}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ReadDiagnosticsBundleRequest) GetBundleId() string {
@@ -1814,7 +2122,7 @@ type ReadDiagnosticsBundleResponse struct {
 
 func (x *ReadDiagnosticsBundleResponse) Reset() {
 	*x = ReadDiagnosticsBundleResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[32]
+	mi := &file_client_v0_service_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1826,7 +2134,7 @@ func (x *ReadDiagnosticsBundleResponse) String() string {
 func (*ReadDiagnosticsBundleResponse) ProtoMessage() {}
 
 func (x *ReadDiagnosticsBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[32]
+	mi := &file_client_v0_service_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1839,7 +2147,7 @@ func (x *ReadDiagnosticsBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadDiagnosticsBundleResponse.ProtoReflect.Descriptor instead.
 func (*ReadDiagnosticsBundleResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{32}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ReadDiagnosticsBundleResponse) GetData() []byte {
@@ -1873,7 +2181,7 @@ type ListRecentLogsRequest struct {
 
 func (x *ListRecentLogsRequest) Reset() {
 	*x = ListRecentLogsRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[33]
+	mi := &file_client_v0_service_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1885,7 +2193,7 @@ func (x *ListRecentLogsRequest) String() string {
 func (*ListRecentLogsRequest) ProtoMessage() {}
 
 func (x *ListRecentLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[33]
+	mi := &file_client_v0_service_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1898,7 +2206,7 @@ func (x *ListRecentLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRecentLogsRequest.ProtoReflect.Descriptor instead.
 func (*ListRecentLogsRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{33}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ListRecentLogsRequest) GetProfile() *ProfileRef {
@@ -1925,7 +2233,7 @@ type ListRecentLogsResponse struct {
 
 func (x *ListRecentLogsResponse) Reset() {
 	*x = ListRecentLogsResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[34]
+	mi := &file_client_v0_service_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1937,7 +2245,7 @@ func (x *ListRecentLogsResponse) String() string {
 func (*ListRecentLogsResponse) ProtoMessage() {}
 
 func (x *ListRecentLogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[34]
+	mi := &file_client_v0_service_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1950,7 +2258,7 @@ func (x *ListRecentLogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRecentLogsResponse.ProtoReflect.Descriptor instead.
 func (*ListRecentLogsResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{34}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListRecentLogsResponse) GetLogs() []*LogEntry {
@@ -1976,7 +2284,7 @@ type ListProfilesRequest struct {
 
 func (x *ListProfilesRequest) Reset() {
 	*x = ListProfilesRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[35]
+	mi := &file_client_v0_service_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1988,7 +2296,7 @@ func (x *ListProfilesRequest) String() string {
 func (*ListProfilesRequest) ProtoMessage() {}
 
 func (x *ListProfilesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[35]
+	mi := &file_client_v0_service_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2001,7 +2309,7 @@ func (x *ListProfilesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProfilesRequest.ProtoReflect.Descriptor instead.
 func (*ListProfilesRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{35}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ListProfilesRequest) GetPage() *PageRequest {
@@ -2022,7 +2330,7 @@ type ListProfilesResponse struct {
 
 func (x *ListProfilesResponse) Reset() {
 	*x = ListProfilesResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[36]
+	mi := &file_client_v0_service_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2034,7 +2342,7 @@ func (x *ListProfilesResponse) String() string {
 func (*ListProfilesResponse) ProtoMessage() {}
 
 func (x *ListProfilesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[36]
+	mi := &file_client_v0_service_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2047,7 +2355,7 @@ func (x *ListProfilesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProfilesResponse.ProtoReflect.Descriptor instead.
 func (*ListProfilesResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{36}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListProfilesResponse) GetProfiles() []*Profile {
@@ -2082,7 +2390,7 @@ type CreateProfileRequest struct {
 
 func (x *CreateProfileRequest) Reset() {
 	*x = CreateProfileRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[37]
+	mi := &file_client_v0_service_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2094,7 +2402,7 @@ func (x *CreateProfileRequest) String() string {
 func (*CreateProfileRequest) ProtoMessage() {}
 
 func (x *CreateProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[37]
+	mi := &file_client_v0_service_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2107,7 +2415,7 @@ func (x *CreateProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProfileRequest.ProtoReflect.Descriptor instead.
 func (*CreateProfileRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{37}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *CreateProfileRequest) GetMutation() *MutationContext {
@@ -2140,7 +2448,7 @@ type CreateProfileResponse struct {
 
 func (x *CreateProfileResponse) Reset() {
 	*x = CreateProfileResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[38]
+	mi := &file_client_v0_service_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2152,7 +2460,7 @@ func (x *CreateProfileResponse) String() string {
 func (*CreateProfileResponse) ProtoMessage() {}
 
 func (x *CreateProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[38]
+	mi := &file_client_v0_service_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2165,7 +2473,7 @@ func (x *CreateProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProfileResponse.ProtoReflect.Descriptor instead.
 func (*CreateProfileResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{38}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *CreateProfileResponse) GetProfile() *ProfileResult {
@@ -2185,7 +2493,7 @@ type SelectProfileRequest struct {
 
 func (x *SelectProfileRequest) Reset() {
 	*x = SelectProfileRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[39]
+	mi := &file_client_v0_service_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2197,7 +2505,7 @@ func (x *SelectProfileRequest) String() string {
 func (*SelectProfileRequest) ProtoMessage() {}
 
 func (x *SelectProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[39]
+	mi := &file_client_v0_service_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2210,7 +2518,7 @@ func (x *SelectProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectProfileRequest.ProtoReflect.Descriptor instead.
 func (*SelectProfileRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{39}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *SelectProfileRequest) GetMutation() *MutationContext {
@@ -2237,7 +2545,7 @@ type SelectProfileResponse struct {
 
 func (x *SelectProfileResponse) Reset() {
 	*x = SelectProfileResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[40]
+	mi := &file_client_v0_service_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2249,7 +2557,7 @@ func (x *SelectProfileResponse) String() string {
 func (*SelectProfileResponse) ProtoMessage() {}
 
 func (x *SelectProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[40]
+	mi := &file_client_v0_service_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2262,7 +2570,7 @@ func (x *SelectProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectProfileResponse.ProtoReflect.Descriptor instead.
 func (*SelectProfileResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{40}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *SelectProfileResponse) GetSelection() *SelectionResult {
@@ -2290,7 +2598,7 @@ type RenameProfileRequest struct {
 
 func (x *RenameProfileRequest) Reset() {
 	*x = RenameProfileRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[41]
+	mi := &file_client_v0_service_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2302,7 +2610,7 @@ func (x *RenameProfileRequest) String() string {
 func (*RenameProfileRequest) ProtoMessage() {}
 
 func (x *RenameProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[41]
+	mi := &file_client_v0_service_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2315,7 +2623,7 @@ func (x *RenameProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameProfileRequest.ProtoReflect.Descriptor instead.
 func (*RenameProfileRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{41}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *RenameProfileRequest) GetMutation() *MutationContext {
@@ -2348,7 +2656,7 @@ type RenameProfileResponse struct {
 
 func (x *RenameProfileResponse) Reset() {
 	*x = RenameProfileResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[42]
+	mi := &file_client_v0_service_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2360,7 +2668,7 @@ func (x *RenameProfileResponse) String() string {
 func (*RenameProfileResponse) ProtoMessage() {}
 
 func (x *RenameProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[42]
+	mi := &file_client_v0_service_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2373,7 +2681,7 @@ func (x *RenameProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameProfileResponse.ProtoReflect.Descriptor instead.
 func (*RenameProfileResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{42}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *RenameProfileResponse) GetChange() *ChangeResult {
@@ -2393,7 +2701,7 @@ type RemoveProfileRequest struct {
 
 func (x *RemoveProfileRequest) Reset() {
 	*x = RemoveProfileRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[43]
+	mi := &file_client_v0_service_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2405,7 +2713,7 @@ func (x *RemoveProfileRequest) String() string {
 func (*RemoveProfileRequest) ProtoMessage() {}
 
 func (x *RemoveProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[43]
+	mi := &file_client_v0_service_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2418,7 +2726,7 @@ func (x *RemoveProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveProfileRequest.ProtoReflect.Descriptor instead.
 func (*RemoveProfileRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{43}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *RemoveProfileRequest) GetMutation() *MutationContext {
@@ -2444,7 +2752,7 @@ type RemoveProfileResponse struct {
 
 func (x *RemoveProfileResponse) Reset() {
 	*x = RemoveProfileResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[44]
+	mi := &file_client_v0_service_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2456,7 +2764,7 @@ func (x *RemoveProfileResponse) String() string {
 func (*RemoveProfileResponse) ProtoMessage() {}
 
 func (x *RemoveProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[44]
+	mi := &file_client_v0_service_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2469,7 +2777,7 @@ func (x *RemoveProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveProfileResponse.ProtoReflect.Descriptor instead.
 func (*RemoveProfileResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{44}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *RemoveProfileResponse) GetChange() *ChangeResult {
@@ -2488,7 +2796,7 @@ type GetSessionRequest struct {
 
 func (x *GetSessionRequest) Reset() {
 	*x = GetSessionRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[45]
+	mi := &file_client_v0_service_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2500,7 +2808,7 @@ func (x *GetSessionRequest) String() string {
 func (*GetSessionRequest) ProtoMessage() {}
 
 func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[45]
+	mi := &file_client_v0_service_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2513,7 +2821,7 @@ func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetSessionRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{45}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *GetSessionRequest) GetProfile() *ProfileRef {
@@ -2533,7 +2841,7 @@ type GetSessionResponse struct {
 
 func (x *GetSessionResponse) Reset() {
 	*x = GetSessionResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[46]
+	mi := &file_client_v0_service_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2545,7 +2853,7 @@ func (x *GetSessionResponse) String() string {
 func (*GetSessionResponse) ProtoMessage() {}
 
 func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[46]
+	mi := &file_client_v0_service_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2558,7 +2866,7 @@ func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionResponse.ProtoReflect.Descriptor instead.
 func (*GetSessionResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{46}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *GetSessionResponse) GetSession() *Session {
@@ -2585,7 +2893,7 @@ type RenewSessionRequest struct {
 
 func (x *RenewSessionRequest) Reset() {
 	*x = RenewSessionRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[47]
+	mi := &file_client_v0_service_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2597,7 +2905,7 @@ func (x *RenewSessionRequest) String() string {
 func (*RenewSessionRequest) ProtoMessage() {}
 
 func (x *RenewSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[47]
+	mi := &file_client_v0_service_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2610,7 +2918,7 @@ func (x *RenewSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewSessionRequest.ProtoReflect.Descriptor instead.
 func (*RenewSessionRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{47}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *RenewSessionRequest) GetMutation() *MutationContext {
@@ -2642,7 +2950,7 @@ type RenewSessionResponse struct {
 
 func (x *RenewSessionResponse) Reset() {
 	*x = RenewSessionResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[48]
+	mi := &file_client_v0_service_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2654,7 +2962,7 @@ func (x *RenewSessionResponse) String() string {
 func (*RenewSessionResponse) ProtoMessage() {}
 
 func (x *RenewSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[48]
+	mi := &file_client_v0_service_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2667,7 +2975,7 @@ func (x *RenewSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewSessionResponse.ProtoReflect.Descriptor instead.
 func (*RenewSessionResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{48}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *RenewSessionResponse) GetResult() isRenewSessionResponse_Result {
@@ -2729,7 +3037,7 @@ type WaitSessionRenewalRequest struct {
 
 func (x *WaitSessionRenewalRequest) Reset() {
 	*x = WaitSessionRenewalRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[49]
+	mi := &file_client_v0_service_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2741,7 +3049,7 @@ func (x *WaitSessionRenewalRequest) String() string {
 func (*WaitSessionRenewalRequest) ProtoMessage() {}
 
 func (x *WaitSessionRenewalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[49]
+	mi := &file_client_v0_service_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2754,7 +3062,7 @@ func (x *WaitSessionRenewalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WaitSessionRenewalRequest.ProtoReflect.Descriptor instead.
 func (*WaitSessionRenewalRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{49}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *WaitSessionRenewalRequest) GetProfile() *ProfileRef {
@@ -2781,7 +3089,7 @@ type WaitSessionRenewalResponse struct {
 
 func (x *WaitSessionRenewalResponse) Reset() {
 	*x = WaitSessionRenewalResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[50]
+	mi := &file_client_v0_service_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2793,7 +3101,7 @@ func (x *WaitSessionRenewalResponse) String() string {
 func (*WaitSessionRenewalResponse) ProtoMessage() {}
 
 func (x *WaitSessionRenewalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[50]
+	mi := &file_client_v0_service_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2806,7 +3114,7 @@ func (x *WaitSessionRenewalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WaitSessionRenewalResponse.ProtoReflect.Descriptor instead.
 func (*WaitSessionRenewalResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{50}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *WaitSessionRenewalResponse) GetRenewal() *RenewalResult {
@@ -2833,7 +3141,7 @@ type ListExitNodesRequest struct {
 
 func (x *ListExitNodesRequest) Reset() {
 	*x = ListExitNodesRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[51]
+	mi := &file_client_v0_service_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2845,7 +3153,7 @@ func (x *ListExitNodesRequest) String() string {
 func (*ListExitNodesRequest) ProtoMessage() {}
 
 func (x *ListExitNodesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[51]
+	mi := &file_client_v0_service_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2858,7 +3166,7 @@ func (x *ListExitNodesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListExitNodesRequest.ProtoReflect.Descriptor instead.
 func (*ListExitNodesRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{51}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *ListExitNodesRequest) GetProfile() *ProfileRef {
@@ -2885,7 +3193,7 @@ type ListExitNodesResponse struct {
 
 func (x *ListExitNodesResponse) Reset() {
 	*x = ListExitNodesResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[52]
+	mi := &file_client_v0_service_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2897,7 +3205,7 @@ func (x *ListExitNodesResponse) String() string {
 func (*ListExitNodesResponse) ProtoMessage() {}
 
 func (x *ListExitNodesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[52]
+	mi := &file_client_v0_service_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2910,7 +3218,7 @@ func (x *ListExitNodesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListExitNodesResponse.ProtoReflect.Descriptor instead.
 func (*ListExitNodesResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{52}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ListExitNodesResponse) GetExitNodes() []*ExitNode {
@@ -2936,7 +3244,7 @@ type GetExitNodeRequest struct {
 
 func (x *GetExitNodeRequest) Reset() {
 	*x = GetExitNodeRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[53]
+	mi := &file_client_v0_service_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2948,7 +3256,7 @@ func (x *GetExitNodeRequest) String() string {
 func (*GetExitNodeRequest) ProtoMessage() {}
 
 func (x *GetExitNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[53]
+	mi := &file_client_v0_service_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2961,7 +3269,7 @@ func (x *GetExitNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetExitNodeRequest.ProtoReflect.Descriptor instead.
 func (*GetExitNodeRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{53}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *GetExitNodeRequest) GetProfile() *ProfileRef {
@@ -2980,7 +3288,7 @@ type GetExitNodeResponse struct {
 
 func (x *GetExitNodeResponse) Reset() {
 	*x = GetExitNodeResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[54]
+	mi := &file_client_v0_service_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2992,7 +3300,7 @@ func (x *GetExitNodeResponse) String() string {
 func (*GetExitNodeResponse) ProtoMessage() {}
 
 func (x *GetExitNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[54]
+	mi := &file_client_v0_service_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3005,7 +3313,7 @@ func (x *GetExitNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetExitNodeResponse.ProtoReflect.Descriptor instead.
 func (*GetExitNodeResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{54}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *GetExitNodeResponse) GetStatus() *ExitNodeStatus {
@@ -3030,7 +3338,7 @@ type SelectExitNodeRequest struct {
 
 func (x *SelectExitNodeRequest) Reset() {
 	*x = SelectExitNodeRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[55]
+	mi := &file_client_v0_service_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3042,7 +3350,7 @@ func (x *SelectExitNodeRequest) String() string {
 func (*SelectExitNodeRequest) ProtoMessage() {}
 
 func (x *SelectExitNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[55]
+	mi := &file_client_v0_service_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3055,7 +3363,7 @@ func (x *SelectExitNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectExitNodeRequest.ProtoReflect.Descriptor instead.
 func (*SelectExitNodeRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{55}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *SelectExitNodeRequest) GetMutation() *MutationContext {
@@ -3103,7 +3411,7 @@ type SelectExitNodeResponse struct {
 
 func (x *SelectExitNodeResponse) Reset() {
 	*x = SelectExitNodeResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[56]
+	mi := &file_client_v0_service_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3115,7 +3423,7 @@ func (x *SelectExitNodeResponse) String() string {
 func (*SelectExitNodeResponse) ProtoMessage() {}
 
 func (x *SelectExitNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[56]
+	mi := &file_client_v0_service_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3128,7 +3436,7 @@ func (x *SelectExitNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectExitNodeResponse.ProtoReflect.Descriptor instead.
 func (*SelectExitNodeResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{56}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *SelectExitNodeResponse) GetSelection() *SelectionResult {
@@ -3155,7 +3463,7 @@ type ClearExitNodeRequest struct {
 
 func (x *ClearExitNodeRequest) Reset() {
 	*x = ClearExitNodeRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[57]
+	mi := &file_client_v0_service_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3167,7 +3475,7 @@ func (x *ClearExitNodeRequest) String() string {
 func (*ClearExitNodeRequest) ProtoMessage() {}
 
 func (x *ClearExitNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[57]
+	mi := &file_client_v0_service_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3180,7 +3488,7 @@ func (x *ClearExitNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearExitNodeRequest.ProtoReflect.Descriptor instead.
 func (*ClearExitNodeRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{57}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ClearExitNodeRequest) GetMutation() *MutationContext {
@@ -3207,7 +3515,7 @@ type ClearExitNodeResponse struct {
 
 func (x *ClearExitNodeResponse) Reset() {
 	*x = ClearExitNodeResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[58]
+	mi := &file_client_v0_service_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3219,7 +3527,7 @@ func (x *ClearExitNodeResponse) String() string {
 func (*ClearExitNodeResponse) ProtoMessage() {}
 
 func (x *ClearExitNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[58]
+	mi := &file_client_v0_service_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3232,7 +3540,7 @@ func (x *ClearExitNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearExitNodeResponse.ProtoReflect.Descriptor instead.
 func (*ClearExitNodeResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{58}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *ClearExitNodeResponse) GetSelection() *SelectionResult {
@@ -3258,7 +3566,7 @@ type GetPreferencesRequest struct {
 
 func (x *GetPreferencesRequest) Reset() {
 	*x = GetPreferencesRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[59]
+	mi := &file_client_v0_service_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3270,7 +3578,7 @@ func (x *GetPreferencesRequest) String() string {
 func (*GetPreferencesRequest) ProtoMessage() {}
 
 func (x *GetPreferencesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[59]
+	mi := &file_client_v0_service_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3283,7 +3591,7 @@ func (x *GetPreferencesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPreferencesRequest.ProtoReflect.Descriptor instead.
 func (*GetPreferencesRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{59}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *GetPreferencesRequest) GetProfile() *ProfileRef {
@@ -3302,7 +3610,7 @@ type GetPreferencesResponse struct {
 
 func (x *GetPreferencesResponse) Reset() {
 	*x = GetPreferencesResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[60]
+	mi := &file_client_v0_service_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3314,7 +3622,7 @@ func (x *GetPreferencesResponse) String() string {
 func (*GetPreferencesResponse) ProtoMessage() {}
 
 func (x *GetPreferencesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[60]
+	mi := &file_client_v0_service_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3327,7 +3635,7 @@ func (x *GetPreferencesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPreferencesResponse.ProtoReflect.Descriptor instead.
 func (*GetPreferencesResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{60}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *GetPreferencesResponse) GetPreferences() *Preferences {
@@ -3348,7 +3656,7 @@ type SetPreferencesRequest struct {
 
 func (x *SetPreferencesRequest) Reset() {
 	*x = SetPreferencesRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[61]
+	mi := &file_client_v0_service_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3360,7 +3668,7 @@ func (x *SetPreferencesRequest) String() string {
 func (*SetPreferencesRequest) ProtoMessage() {}
 
 func (x *SetPreferencesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[61]
+	mi := &file_client_v0_service_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3373,7 +3681,7 @@ func (x *SetPreferencesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPreferencesRequest.ProtoReflect.Descriptor instead.
 func (*SetPreferencesRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{61}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *SetPreferencesRequest) GetMutation() *MutationContext {
@@ -3406,7 +3714,7 @@ type SetPreferencesResponse struct {
 
 func (x *SetPreferencesResponse) Reset() {
 	*x = SetPreferencesResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[62]
+	mi := &file_client_v0_service_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3418,7 +3726,7 @@ func (x *SetPreferencesResponse) String() string {
 func (*SetPreferencesResponse) ProtoMessage() {}
 
 func (x *SetPreferencesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[62]
+	mi := &file_client_v0_service_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3431,7 +3739,7 @@ func (x *SetPreferencesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPreferencesResponse.ProtoReflect.Descriptor instead.
 func (*SetPreferencesResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{62}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *SetPreferencesResponse) GetChange() *ChangeResult {
@@ -3452,7 +3760,7 @@ type ResetPreferencesRequest struct {
 
 func (x *ResetPreferencesRequest) Reset() {
 	*x = ResetPreferencesRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[63]
+	mi := &file_client_v0_service_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3464,7 +3772,7 @@ func (x *ResetPreferencesRequest) String() string {
 func (*ResetPreferencesRequest) ProtoMessage() {}
 
 func (x *ResetPreferencesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[63]
+	mi := &file_client_v0_service_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3477,7 +3785,7 @@ func (x *ResetPreferencesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPreferencesRequest.ProtoReflect.Descriptor instead.
 func (*ResetPreferencesRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{63}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *ResetPreferencesRequest) GetMutation() *MutationContext {
@@ -3510,7 +3818,7 @@ type ResetPreferencesResponse struct {
 
 func (x *ResetPreferencesResponse) Reset() {
 	*x = ResetPreferencesResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[64]
+	mi := &file_client_v0_service_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3522,7 +3830,7 @@ func (x *ResetPreferencesResponse) String() string {
 func (*ResetPreferencesResponse) ProtoMessage() {}
 
 func (x *ResetPreferencesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[64]
+	mi := &file_client_v0_service_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3535,7 +3843,7 @@ func (x *ResetPreferencesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPreferencesResponse.ProtoReflect.Descriptor instead.
 func (*ResetPreferencesResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{64}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *ResetPreferencesResponse) GetChange() *ChangeResult {
@@ -3554,7 +3862,7 @@ type ListManagedSettingsRequest struct {
 
 func (x *ListManagedSettingsRequest) Reset() {
 	*x = ListManagedSettingsRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[65]
+	mi := &file_client_v0_service_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3566,7 +3874,7 @@ func (x *ListManagedSettingsRequest) String() string {
 func (*ListManagedSettingsRequest) ProtoMessage() {}
 
 func (x *ListManagedSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[65]
+	mi := &file_client_v0_service_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3579,7 +3887,7 @@ func (x *ListManagedSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListManagedSettingsRequest.ProtoReflect.Descriptor instead.
 func (*ListManagedSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{65}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *ListManagedSettingsRequest) GetProfile() *ProfileRef {
@@ -3599,7 +3907,7 @@ type ListManagedSettingsResponse struct {
 
 func (x *ListManagedSettingsResponse) Reset() {
 	*x = ListManagedSettingsResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[66]
+	mi := &file_client_v0_service_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3611,7 +3919,7 @@ func (x *ListManagedSettingsResponse) String() string {
 func (*ListManagedSettingsResponse) ProtoMessage() {}
 
 func (x *ListManagedSettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[66]
+	mi := &file_client_v0_service_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3624,7 +3932,7 @@ func (x *ListManagedSettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListManagedSettingsResponse.ProtoReflect.Descriptor instead.
 func (*ListManagedSettingsResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{66}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ListManagedSettingsResponse) GetSettings() []*ManagedSetting {
@@ -3653,7 +3961,7 @@ type ListResourcesRequest struct {
 
 func (x *ListResourcesRequest) Reset() {
 	*x = ListResourcesRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[67]
+	mi := &file_client_v0_service_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3665,7 +3973,7 @@ func (x *ListResourcesRequest) String() string {
 func (*ListResourcesRequest) ProtoMessage() {}
 
 func (x *ListResourcesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[67]
+	mi := &file_client_v0_service_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3678,7 +3986,7 @@ func (x *ListResourcesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResourcesRequest.ProtoReflect.Descriptor instead.
 func (*ListResourcesRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{67}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *ListResourcesRequest) GetProfile() *ProfileRef {
@@ -3719,7 +4027,7 @@ type ListResourcesResponse struct {
 
 func (x *ListResourcesResponse) Reset() {
 	*x = ListResourcesResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[68]
+	mi := &file_client_v0_service_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3731,7 +4039,7 @@ func (x *ListResourcesResponse) String() string {
 func (*ListResourcesResponse) ProtoMessage() {}
 
 func (x *ListResourcesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[68]
+	mi := &file_client_v0_service_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3744,7 +4052,7 @@ func (x *ListResourcesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListResourcesResponse.ProtoReflect.Descriptor instead.
 func (*ListResourcesResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{68}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *ListResourcesResponse) GetResources() []*Resource {
@@ -3773,7 +4081,7 @@ type SetResourceEnabledRequest struct {
 
 func (x *SetResourceEnabledRequest) Reset() {
 	*x = SetResourceEnabledRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[69]
+	mi := &file_client_v0_service_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3785,7 +4093,7 @@ func (x *SetResourceEnabledRequest) String() string {
 func (*SetResourceEnabledRequest) ProtoMessage() {}
 
 func (x *SetResourceEnabledRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[69]
+	mi := &file_client_v0_service_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3798,7 +4106,7 @@ func (x *SetResourceEnabledRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetResourceEnabledRequest.ProtoReflect.Descriptor instead.
 func (*SetResourceEnabledRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{69}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *SetResourceEnabledRequest) GetMutation() *MutationContext {
@@ -3838,7 +4146,7 @@ type SetResourceEnabledResponse struct {
 
 func (x *SetResourceEnabledResponse) Reset() {
 	*x = SetResourceEnabledResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[70]
+	mi := &file_client_v0_service_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3850,7 +4158,7 @@ func (x *SetResourceEnabledResponse) String() string {
 func (*SetResourceEnabledResponse) ProtoMessage() {}
 
 func (x *SetResourceEnabledResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[70]
+	mi := &file_client_v0_service_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3863,7 +4171,7 @@ func (x *SetResourceEnabledResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetResourceEnabledResponse.ProtoReflect.Descriptor instead.
 func (*SetResourceEnabledResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{70}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *SetResourceEnabledResponse) GetChange() *ChangeResult {
@@ -3884,7 +4192,7 @@ type NotifyLifecycleRequest struct {
 
 func (x *NotifyLifecycleRequest) Reset() {
 	*x = NotifyLifecycleRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[71]
+	mi := &file_client_v0_service_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3896,7 +4204,7 @@ func (x *NotifyLifecycleRequest) String() string {
 func (*NotifyLifecycleRequest) ProtoMessage() {}
 
 func (x *NotifyLifecycleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[71]
+	mi := &file_client_v0_service_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3909,7 +4217,7 @@ func (x *NotifyLifecycleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotifyLifecycleRequest.ProtoReflect.Descriptor instead.
 func (*NotifyLifecycleRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{71}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *NotifyLifecycleRequest) GetMutation() *MutationContext {
@@ -3942,7 +4250,7 @@ type NotifyLifecycleResponse struct {
 
 func (x *NotifyLifecycleResponse) Reset() {
 	*x = NotifyLifecycleResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[72]
+	mi := &file_client_v0_service_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3954,7 +4262,7 @@ func (x *NotifyLifecycleResponse) String() string {
 func (*NotifyLifecycleResponse) ProtoMessage() {}
 
 func (x *NotifyLifecycleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[72]
+	mi := &file_client_v0_service_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3967,7 +4275,7 @@ func (x *NotifyLifecycleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotifyLifecycleResponse.ProtoReflect.Descriptor instead.
 func (*NotifyLifecycleResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{72}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *NotifyLifecycleResponse) GetChange() *ChangeResult {
@@ -3986,7 +4294,7 @@ type GetUpdateInfoRequest struct {
 
 func (x *GetUpdateInfoRequest) Reset() {
 	*x = GetUpdateInfoRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[73]
+	mi := &file_client_v0_service_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3998,7 +4306,7 @@ func (x *GetUpdateInfoRequest) String() string {
 func (*GetUpdateInfoRequest) ProtoMessage() {}
 
 func (x *GetUpdateInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[73]
+	mi := &file_client_v0_service_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4011,7 +4319,7 @@ func (x *GetUpdateInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUpdateInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetUpdateInfoRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{73}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *GetUpdateInfoRequest) GetReportedUi() *BuildIdentity {
@@ -4030,7 +4338,7 @@ type GetUpdateInfoResponse struct {
 
 func (x *GetUpdateInfoResponse) Reset() {
 	*x = GetUpdateInfoResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[74]
+	mi := &file_client_v0_service_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4042,7 +4350,7 @@ func (x *GetUpdateInfoResponse) String() string {
 func (*GetUpdateInfoResponse) ProtoMessage() {}
 
 func (x *GetUpdateInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[74]
+	mi := &file_client_v0_service_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4055,7 +4363,7 @@ func (x *GetUpdateInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUpdateInfoResponse.ProtoReflect.Descriptor instead.
 func (*GetUpdateInfoResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{74}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *GetUpdateInfoResponse) GetInfo() *UpdateInfo {
@@ -4073,7 +4381,7 @@ type GetSupportInfoRequest struct {
 
 func (x *GetSupportInfoRequest) Reset() {
 	*x = GetSupportInfoRequest{}
-	mi := &file_client_v0_service_proto_msgTypes[75]
+	mi := &file_client_v0_service_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4085,7 +4393,7 @@ func (x *GetSupportInfoRequest) String() string {
 func (*GetSupportInfoRequest) ProtoMessage() {}
 
 func (x *GetSupportInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[75]
+	mi := &file_client_v0_service_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4098,7 +4406,7 @@ func (x *GetSupportInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSupportInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetSupportInfoRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{75}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{81}
 }
 
 type GetSupportInfoResponse struct {
@@ -4110,7 +4418,7 @@ type GetSupportInfoResponse struct {
 
 func (x *GetSupportInfoResponse) Reset() {
 	*x = GetSupportInfoResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[76]
+	mi := &file_client_v0_service_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4122,7 +4430,7 @@ func (x *GetSupportInfoResponse) String() string {
 func (*GetSupportInfoResponse) ProtoMessage() {}
 
 func (x *GetSupportInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[76]
+	mi := &file_client_v0_service_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4135,7 +4443,7 @@ func (x *GetSupportInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSupportInfoResponse.ProtoReflect.Descriptor instead.
 func (*GetSupportInfoResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{76}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *GetSupportInfoResponse) GetInfo() *SupportInfo {
@@ -4165,7 +4473,7 @@ type WatchEventsResponse struct {
 
 func (x *WatchEventsResponse) Reset() {
 	*x = WatchEventsResponse{}
-	mi := &file_client_v0_service_proto_msgTypes[77]
+	mi := &file_client_v0_service_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4177,7 +4485,7 @@ func (x *WatchEventsResponse) String() string {
 func (*WatchEventsResponse) ProtoMessage() {}
 
 func (x *WatchEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[77]
+	mi := &file_client_v0_service_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4190,7 +4498,7 @@ func (x *WatchEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchEventsResponse.ProtoReflect.Descriptor instead.
 func (*WatchEventsResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{77}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *WatchEventsResponse) GetSequence() uint64 {
@@ -4303,7 +4611,7 @@ type SnapshotEvent struct {
 
 func (x *SnapshotEvent) Reset() {
 	*x = SnapshotEvent{}
-	mi := &file_client_v0_service_proto_msgTypes[78]
+	mi := &file_client_v0_service_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4315,7 +4623,7 @@ func (x *SnapshotEvent) String() string {
 func (*SnapshotEvent) ProtoMessage() {}
 
 func (x *SnapshotEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[78]
+	mi := &file_client_v0_service_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4328,7 +4636,7 @@ func (x *SnapshotEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotEvent.ProtoReflect.Descriptor instead.
 func (*SnapshotEvent) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{78}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *SnapshotEvent) GetRuntime() *RuntimeInfo {
@@ -4355,7 +4663,7 @@ type DomainInvalidated struct {
 
 func (x *DomainInvalidated) Reset() {
 	*x = DomainInvalidated{}
-	mi := &file_client_v0_service_proto_msgTypes[79]
+	mi := &file_client_v0_service_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4367,7 +4675,7 @@ func (x *DomainInvalidated) String() string {
 func (*DomainInvalidated) ProtoMessage() {}
 
 func (x *DomainInvalidated) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_service_proto_msgTypes[79]
+	mi := &file_client_v0_service_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4380,7 +4688,7 @@ func (x *DomainInvalidated) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DomainInvalidated.ProtoReflect.Descriptor instead.
 func (*DomainInvalidated) Descriptor() ([]byte, []int) {
-	return file_client_v0_service_proto_rawDescGZIP(), []int{79}
+	return file_client_v0_service_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *DomainInvalidated) GetDomain() Domain {
@@ -4408,28 +4716,54 @@ const file_client_v0_service_proto_rawDesc = "" +
 	"\x10GetStatusRequest\">\n" +
 	"\x11GetStatusResponse\x12)\n" +
 	"\x06status\x18\x01 \x01(\v2\x11.client.v0.StatusR\x06status\"\x14\n" +
-	"\x12WatchEventsRequest\"\xa9\x02\n" +
+	"\x12WatchEventsRequest\"\x8f\x02\n" +
 	"\rEnrollRequest\x126\n" +
 	"\bmutation\x18\x01 \x01(\v2\x1a.client.v0.MutationContextR\bmutation\x12/\n" +
 	"\aprofile\x18\x02 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\x12-\n" +
 	"\x04mode\x18\x03 \x01(\x0e2\x19.client.v0.EnrollmentModeR\x04mode\x12\x1a\n" +
-	"\bhostname\x18\x04 \x01(\tR\bhostname\x12+\n" +
-	"\x10enrollment_token\x18\x05 \x01(\tH\x00R\x0fenrollmentToken\x12%\n" +
-	"\rbrowser_login\x18\x06 \x01(\bH\x00R\fbrowserLoginB\x10\n" +
-	"\x0eauthentication\"\xa2\x01\n" +
-	"\x0eEnrollResponse\x12=\n" +
+	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
-	"enrollment\x18\x01 \x01(\v2\x1b.client.v0.EnrollmentResultH\x00R\n" +
-	"enrollment\x12G\n" +
-	"\rbrowser_login\x18\x02 \x01(\v2 .client.v0.BrowserLoginChallengeH\x00R\fbrowserLoginB\b\n" +
-	"\x06result\"l\n" +
-	"\x1cWaitBrowserEnrollmentRequest\x12/\n" +
-	"\aprofile\x18\x01 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\x12\x1b\n" +
-	"\tuser_code\x18\x02 \x01(\tR\buserCode\"\\\n" +
-	"\x1dWaitBrowserEnrollmentResponse\x12;\n" +
+	"request_id\x18\a \x01(\tR\trequestIdJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\x10enrollment_tokenR\rbrowser_login\"o\n" +
+	"\x0eEnrollResponse\x126\n" +
+	"\aattempt\x18\x03 \x01(\v2\x1c.client.v0.EnrollmentAttemptR\aattemptJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03R\n" +
+	"enrollmentR\rbrowser_login\"\x9c\x01\n" +
+	"\x1bGetEnrollmentAttemptRequest\x12/\n" +
+	"\aprofile\x18\x01 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\x12\x1f\n" +
 	"\n" +
-	"enrollment\x18\x01 \x01(\v2\x1b.client.v0.EnrollmentResultR\n" +
-	"enrollment\"\x8f\x01\n" +
+	"attempt_id\x18\x02 \x01(\tH\x00R\tattemptId\x12\x1f\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tH\x00R\trequestIdB\n" +
+	"\n" +
+	"\bselector\"V\n" +
+	"\x1cGetEnrollmentAttemptResponse\x126\n" +
+	"\aattempt\x18\x01 \x01(\v2\x1c.client.v0.EnrollmentAttemptR\aattempt\"\x9a\x01\n" +
+	"\x1cListEnrollmentTargetsRequest\x12/\n" +
+	"\aprofile\x18\x01 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x02 \x01(\tR\tattemptId\x12*\n" +
+	"\x04page\x18\x03 \x01(\v2\x16.client.v0.PageRequestR\x04page\"\xbc\x01\n" +
+	"\x1dListEnrollmentTargetsResponse\x125\n" +
+	"\atargets\x18\x01 \x03(\v2\x1b.client.v0.EnrollmentTargetR\atargets\x12+\n" +
+	"\x04page\x18\x02 \x01(\v2\x17.client.v0.PageResponseR\x04page\x127\n" +
+	"\bmetadata\x18\x03 \x01(\v2\x1b.client.v0.SnapshotMetadataR\bmetadata\"\xe5\x01\n" +
+	"\x1dSelectEnrollmentTargetRequest\x126\n" +
+	"\bmutation\x18\x01 \x01(\v2\x1a.client.v0.MutationContextR\bmutation\x12/\n" +
+	"\aprofile\x18\x02 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x03 \x01(\tR\tattemptId\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x04 \x01(\tR\taccountId\x12\x1d\n" +
+	"\n" +
+	"network_id\x18\x05 \x01(\tR\tnetworkId\"X\n" +
+	"\x1eSelectEnrollmentTargetResponse\x126\n" +
+	"\aattempt\x18\x01 \x01(\v2\x1c.client.v0.EnrollmentAttemptR\aattempt\"\xa8\x01\n" +
+	"\x1eCancelEnrollmentAttemptRequest\x126\n" +
+	"\bmutation\x18\x01 \x01(\v2\x1a.client.v0.MutationContextR\bmutation\x12/\n" +
+	"\aprofile\x18\x02 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x03 \x01(\tR\tattemptId\"Y\n" +
+	"\x1fCancelEnrollmentAttemptResponse\x126\n" +
+	"\aattempt\x18\x01 \x01(\v2\x1c.client.v0.EnrollmentAttemptR\aattempt\"\x8f\x01\n" +
 	"\x0eConnectRequest\x126\n" +
 	"\bmutation\x18\x01 \x01(\v2\x1a.client.v0.MutationContextR\bmutation\x12/\n" +
 	"\aprofile\x18\x02 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\x12\x14\n" +
@@ -4682,13 +5016,16 @@ const file_client_v0_service_proto_rawDesc = "" +
 	"\x0eDOMAIN_SUPPORT\x10\t\x12\x1a\n" +
 	"\x16DOMAIN_SERVER_IDENTITY\x10\n" +
 	"\x12\x12\n" +
-	"\x0eDOMAIN_SESSION\x10\v2\xac\x1c\n" +
+	"\x0eDOMAIN_SESSION\x10\v2\x88\x1f\n" +
 	"\rClientService\x12[\n" +
 	"\x0eGetRuntimeInfo\x12 .client.v0.GetRuntimeInfoRequest\x1a!.client.v0.GetRuntimeInfoResponse\"\x04\xc0\xf3\x18\x01\x12L\n" +
 	"\tGetStatus\x12\x1b.client.v0.GetStatusRequest\x1a\x1c.client.v0.GetStatusResponse\"\x04\xc0\xf3\x18\x01\x12T\n" +
 	"\vWatchEvents\x12\x1d.client.v0.WatchEventsRequest\x1a\x1e.client.v0.WatchEventsResponse\"\x04\xc0\xf3\x18\x010\x01\x12G\n" +
-	"\x06Enroll\x12\x18.client.v0.EnrollRequest\x1a\x19.client.v0.EnrollResponse\"\b\xc0\xf3\x18\x02\xc8\xf3\x18\x01\x12p\n" +
-	"\x15WaitBrowserEnrollment\x12'.client.v0.WaitBrowserEnrollmentRequest\x1a(.client.v0.WaitBrowserEnrollmentResponse\"\x04\xc0\xf3\x18\x02\x12F\n" +
+	"\x06Enroll\x12\x18.client.v0.EnrollRequest\x1a\x19.client.v0.EnrollResponse\"\b\xc0\xf3\x18\x02\xc8\xf3\x18\x01\x12m\n" +
+	"\x14GetEnrollmentAttempt\x12&.client.v0.GetEnrollmentAttemptRequest\x1a'.client.v0.GetEnrollmentAttemptResponse\"\x04\xc0\xf3\x18\x02\x12p\n" +
+	"\x15ListEnrollmentTargets\x12'.client.v0.ListEnrollmentTargetsRequest\x1a(.client.v0.ListEnrollmentTargetsResponse\"\x04\xc0\xf3\x18\x02\x12s\n" +
+	"\x16SelectEnrollmentTarget\x12(.client.v0.SelectEnrollmentTargetRequest\x1a).client.v0.SelectEnrollmentTargetResponse\"\x04\xc0\xf3\x18\x02\x12v\n" +
+	"\x17CancelEnrollmentAttempt\x12).client.v0.CancelEnrollmentAttemptRequest\x1a*.client.v0.CancelEnrollmentAttemptResponse\"\x04\xc0\xf3\x18\x02\x12F\n" +
 	"\aConnect\x12\x19.client.v0.ConnectRequest\x1a\x1a.client.v0.ConnectResponse\"\x04\xc0\xf3\x18\x02\x12O\n" +
 	"\n" +
 	"Disconnect\x12\x1c.client.v0.DisconnectRequest\x1a\x1d.client.v0.DisconnectResponse\"\x04\xc0\xf3\x18\x02\x12d\n" +
@@ -4739,7 +5076,7 @@ func file_client_v0_service_proto_rawDescGZIP() []byte {
 }
 
 var file_client_v0_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_client_v0_service_proto_msgTypes = make([]protoimpl.MessageInfo, 80)
+var file_client_v0_service_proto_msgTypes = make([]protoimpl.MessageInfo, 86)
 var file_client_v0_service_proto_goTypes = []any{
 	(Domain)(0),                             // 0: client.v0.Domain
 	(*GetRuntimeInfoRequest)(nil),           // 1: client.v0.GetRuntimeInfoRequest
@@ -4749,331 +5086,354 @@ var file_client_v0_service_proto_goTypes = []any{
 	(*WatchEventsRequest)(nil),              // 5: client.v0.WatchEventsRequest
 	(*EnrollRequest)(nil),                   // 6: client.v0.EnrollRequest
 	(*EnrollResponse)(nil),                  // 7: client.v0.EnrollResponse
-	(*WaitBrowserEnrollmentRequest)(nil),    // 8: client.v0.WaitBrowserEnrollmentRequest
-	(*WaitBrowserEnrollmentResponse)(nil),   // 9: client.v0.WaitBrowserEnrollmentResponse
-	(*ConnectRequest)(nil),                  // 10: client.v0.ConnectRequest
-	(*ConnectResponse)(nil),                 // 11: client.v0.ConnectResponse
-	(*DisconnectRequest)(nil),               // 12: client.v0.DisconnectRequest
-	(*DisconnectResponse)(nil),              // 13: client.v0.DisconnectResponse
-	(*GetServerIdentityRequest)(nil),        // 14: client.v0.GetServerIdentityRequest
-	(*GetServerIdentityResponse)(nil),       // 15: client.v0.GetServerIdentityResponse
-	(*TrustServerIdentityRequest)(nil),      // 16: client.v0.TrustServerIdentityRequest
-	(*TrustServerIdentityResponse)(nil),     // 17: client.v0.TrustServerIdentityResponse
-	(*LogoutRequest)(nil),                   // 18: client.v0.LogoutRequest
-	(*LogoutResponse)(nil),                  // 19: client.v0.LogoutResponse
-	(*ForgetLocalEnrollmentRequest)(nil),    // 20: client.v0.ForgetLocalEnrollmentRequest
-	(*ForgetLocalEnrollmentResponse)(nil),   // 21: client.v0.ForgetLocalEnrollmentResponse
-	(*ListNetworksRequest)(nil),             // 22: client.v0.ListNetworksRequest
-	(*ListNetworksResponse)(nil),            // 23: client.v0.ListNetworksResponse
-	(*SelectNetworkRequest)(nil),            // 24: client.v0.SelectNetworkRequest
-	(*SelectNetworkResponse)(nil),           // 25: client.v0.SelectNetworkResponse
-	(*ListPeersRequest)(nil),                // 26: client.v0.ListPeersRequest
-	(*ListPeersResponse)(nil),               // 27: client.v0.ListPeersResponse
-	(*GetDiagnosticsRequest)(nil),           // 28: client.v0.GetDiagnosticsRequest
-	(*GetDiagnosticsResponse)(nil),          // 29: client.v0.GetDiagnosticsResponse
-	(*CreateDiagnosticsBundleRequest)(nil),  // 30: client.v0.CreateDiagnosticsBundleRequest
-	(*CreateDiagnosticsBundleResponse)(nil), // 31: client.v0.CreateDiagnosticsBundleResponse
-	(*ReadDiagnosticsBundleRequest)(nil),    // 32: client.v0.ReadDiagnosticsBundleRequest
-	(*ReadDiagnosticsBundleResponse)(nil),   // 33: client.v0.ReadDiagnosticsBundleResponse
-	(*ListRecentLogsRequest)(nil),           // 34: client.v0.ListRecentLogsRequest
-	(*ListRecentLogsResponse)(nil),          // 35: client.v0.ListRecentLogsResponse
-	(*ListProfilesRequest)(nil),             // 36: client.v0.ListProfilesRequest
-	(*ListProfilesResponse)(nil),            // 37: client.v0.ListProfilesResponse
-	(*CreateProfileRequest)(nil),            // 38: client.v0.CreateProfileRequest
-	(*CreateProfileResponse)(nil),           // 39: client.v0.CreateProfileResponse
-	(*SelectProfileRequest)(nil),            // 40: client.v0.SelectProfileRequest
-	(*SelectProfileResponse)(nil),           // 41: client.v0.SelectProfileResponse
-	(*RenameProfileRequest)(nil),            // 42: client.v0.RenameProfileRequest
-	(*RenameProfileResponse)(nil),           // 43: client.v0.RenameProfileResponse
-	(*RemoveProfileRequest)(nil),            // 44: client.v0.RemoveProfileRequest
-	(*RemoveProfileResponse)(nil),           // 45: client.v0.RemoveProfileResponse
-	(*GetSessionRequest)(nil),               // 46: client.v0.GetSessionRequest
-	(*GetSessionResponse)(nil),              // 47: client.v0.GetSessionResponse
-	(*RenewSessionRequest)(nil),             // 48: client.v0.RenewSessionRequest
-	(*RenewSessionResponse)(nil),            // 49: client.v0.RenewSessionResponse
-	(*WaitSessionRenewalRequest)(nil),       // 50: client.v0.WaitSessionRenewalRequest
-	(*WaitSessionRenewalResponse)(nil),      // 51: client.v0.WaitSessionRenewalResponse
-	(*ListExitNodesRequest)(nil),            // 52: client.v0.ListExitNodesRequest
-	(*ListExitNodesResponse)(nil),           // 53: client.v0.ListExitNodesResponse
-	(*GetExitNodeRequest)(nil),              // 54: client.v0.GetExitNodeRequest
-	(*GetExitNodeResponse)(nil),             // 55: client.v0.GetExitNodeResponse
-	(*SelectExitNodeRequest)(nil),           // 56: client.v0.SelectExitNodeRequest
-	(*SelectExitNodeResponse)(nil),          // 57: client.v0.SelectExitNodeResponse
-	(*ClearExitNodeRequest)(nil),            // 58: client.v0.ClearExitNodeRequest
-	(*ClearExitNodeResponse)(nil),           // 59: client.v0.ClearExitNodeResponse
-	(*GetPreferencesRequest)(nil),           // 60: client.v0.GetPreferencesRequest
-	(*GetPreferencesResponse)(nil),          // 61: client.v0.GetPreferencesResponse
-	(*SetPreferencesRequest)(nil),           // 62: client.v0.SetPreferencesRequest
-	(*SetPreferencesResponse)(nil),          // 63: client.v0.SetPreferencesResponse
-	(*ResetPreferencesRequest)(nil),         // 64: client.v0.ResetPreferencesRequest
-	(*ResetPreferencesResponse)(nil),        // 65: client.v0.ResetPreferencesResponse
-	(*ListManagedSettingsRequest)(nil),      // 66: client.v0.ListManagedSettingsRequest
-	(*ListManagedSettingsResponse)(nil),     // 67: client.v0.ListManagedSettingsResponse
-	(*ListResourcesRequest)(nil),            // 68: client.v0.ListResourcesRequest
-	(*ListResourcesResponse)(nil),           // 69: client.v0.ListResourcesResponse
-	(*SetResourceEnabledRequest)(nil),       // 70: client.v0.SetResourceEnabledRequest
-	(*SetResourceEnabledResponse)(nil),      // 71: client.v0.SetResourceEnabledResponse
-	(*NotifyLifecycleRequest)(nil),          // 72: client.v0.NotifyLifecycleRequest
-	(*NotifyLifecycleResponse)(nil),         // 73: client.v0.NotifyLifecycleResponse
-	(*GetUpdateInfoRequest)(nil),            // 74: client.v0.GetUpdateInfoRequest
-	(*GetUpdateInfoResponse)(nil),           // 75: client.v0.GetUpdateInfoResponse
-	(*GetSupportInfoRequest)(nil),           // 76: client.v0.GetSupportInfoRequest
-	(*GetSupportInfoResponse)(nil),          // 77: client.v0.GetSupportInfoResponse
-	(*WatchEventsResponse)(nil),             // 78: client.v0.WatchEventsResponse
-	(*SnapshotEvent)(nil),                   // 79: client.v0.SnapshotEvent
-	(*DomainInvalidated)(nil),               // 80: client.v0.DomainInvalidated
-	(*RuntimeInfo)(nil),                     // 81: client.v0.RuntimeInfo
-	(*Status)(nil),                          // 82: client.v0.Status
-	(*MutationContext)(nil),                 // 83: client.v0.MutationContext
-	(*ProfileRef)(nil),                      // 84: client.v0.ProfileRef
-	(EnrollmentMode)(0),                     // 85: client.v0.EnrollmentMode
-	(*EnrollmentResult)(nil),                // 86: client.v0.EnrollmentResult
-	(*BrowserLoginChallenge)(nil),           // 87: client.v0.BrowserLoginChallenge
-	(*ChangeResult)(nil),                    // 88: client.v0.ChangeResult
-	(*ServerIdentity)(nil),                  // 89: client.v0.ServerIdentity
-	(*SnapshotMetadata)(nil),                // 90: client.v0.SnapshotMetadata
-	(*CleanupResult)(nil),                   // 91: client.v0.CleanupResult
-	(*PageRequest)(nil),                     // 92: client.v0.PageRequest
-	(*Network)(nil),                         // 93: client.v0.Network
-	(*PageResponse)(nil),                    // 94: client.v0.PageResponse
-	(*SelectionResult)(nil),                 // 95: client.v0.SelectionResult
-	(ConnectionContinuity)(0),               // 96: client.v0.ConnectionContinuity
-	(*Peer)(nil),                            // 97: client.v0.Peer
-	(AgentSnapshotState)(0),                 // 98: client.v0.AgentSnapshotState
-	(*Diagnostics)(nil),                     // 99: client.v0.Diagnostics
-	(*BundleResult)(nil),                    // 100: client.v0.BundleResult
-	(*LogEntry)(nil),                        // 101: client.v0.LogEntry
-	(*Profile)(nil),                         // 102: client.v0.Profile
-	(*ProfileResult)(nil),                   // 103: client.v0.ProfileResult
-	(*Session)(nil),                         // 104: client.v0.Session
-	(*RenewalResult)(nil),                   // 105: client.v0.RenewalResult
-	(*ExitNode)(nil),                        // 106: client.v0.ExitNode
-	(*ExitNodeStatus)(nil),                  // 107: client.v0.ExitNodeStatus
-	(LanAccess)(0),                          // 108: client.v0.LanAccess
-	(ExitFamilyMode)(0),                     // 109: client.v0.ExitFamilyMode
-	(*Preferences)(nil),                     // 110: client.v0.Preferences
-	(*PreferencesPatch)(nil),                // 111: client.v0.PreferencesPatch
-	(PreferenceKey)(0),                      // 112: client.v0.PreferenceKey
-	(*ManagedSetting)(nil),                  // 113: client.v0.ManagedSetting
-	(ResourceKind)(0),                       // 114: client.v0.ResourceKind
-	(*Resource)(nil),                        // 115: client.v0.Resource
-	(LifecycleEvent)(0),                     // 116: client.v0.LifecycleEvent
-	(*BuildIdentity)(nil),                   // 117: client.v0.BuildIdentity
-	(*UpdateInfo)(nil),                      // 118: client.v0.UpdateInfo
-	(*SupportInfo)(nil),                     // 119: client.v0.SupportInfo
-	(*Failure)(nil),                         // 120: client.v0.Failure
+	(*GetEnrollmentAttemptRequest)(nil),     // 8: client.v0.GetEnrollmentAttemptRequest
+	(*GetEnrollmentAttemptResponse)(nil),    // 9: client.v0.GetEnrollmentAttemptResponse
+	(*ListEnrollmentTargetsRequest)(nil),    // 10: client.v0.ListEnrollmentTargetsRequest
+	(*ListEnrollmentTargetsResponse)(nil),   // 11: client.v0.ListEnrollmentTargetsResponse
+	(*SelectEnrollmentTargetRequest)(nil),   // 12: client.v0.SelectEnrollmentTargetRequest
+	(*SelectEnrollmentTargetResponse)(nil),  // 13: client.v0.SelectEnrollmentTargetResponse
+	(*CancelEnrollmentAttemptRequest)(nil),  // 14: client.v0.CancelEnrollmentAttemptRequest
+	(*CancelEnrollmentAttemptResponse)(nil), // 15: client.v0.CancelEnrollmentAttemptResponse
+	(*ConnectRequest)(nil),                  // 16: client.v0.ConnectRequest
+	(*ConnectResponse)(nil),                 // 17: client.v0.ConnectResponse
+	(*DisconnectRequest)(nil),               // 18: client.v0.DisconnectRequest
+	(*DisconnectResponse)(nil),              // 19: client.v0.DisconnectResponse
+	(*GetServerIdentityRequest)(nil),        // 20: client.v0.GetServerIdentityRequest
+	(*GetServerIdentityResponse)(nil),       // 21: client.v0.GetServerIdentityResponse
+	(*TrustServerIdentityRequest)(nil),      // 22: client.v0.TrustServerIdentityRequest
+	(*TrustServerIdentityResponse)(nil),     // 23: client.v0.TrustServerIdentityResponse
+	(*LogoutRequest)(nil),                   // 24: client.v0.LogoutRequest
+	(*LogoutResponse)(nil),                  // 25: client.v0.LogoutResponse
+	(*ForgetLocalEnrollmentRequest)(nil),    // 26: client.v0.ForgetLocalEnrollmentRequest
+	(*ForgetLocalEnrollmentResponse)(nil),   // 27: client.v0.ForgetLocalEnrollmentResponse
+	(*ListNetworksRequest)(nil),             // 28: client.v0.ListNetworksRequest
+	(*ListNetworksResponse)(nil),            // 29: client.v0.ListNetworksResponse
+	(*SelectNetworkRequest)(nil),            // 30: client.v0.SelectNetworkRequest
+	(*SelectNetworkResponse)(nil),           // 31: client.v0.SelectNetworkResponse
+	(*ListPeersRequest)(nil),                // 32: client.v0.ListPeersRequest
+	(*ListPeersResponse)(nil),               // 33: client.v0.ListPeersResponse
+	(*GetDiagnosticsRequest)(nil),           // 34: client.v0.GetDiagnosticsRequest
+	(*GetDiagnosticsResponse)(nil),          // 35: client.v0.GetDiagnosticsResponse
+	(*CreateDiagnosticsBundleRequest)(nil),  // 36: client.v0.CreateDiagnosticsBundleRequest
+	(*CreateDiagnosticsBundleResponse)(nil), // 37: client.v0.CreateDiagnosticsBundleResponse
+	(*ReadDiagnosticsBundleRequest)(nil),    // 38: client.v0.ReadDiagnosticsBundleRequest
+	(*ReadDiagnosticsBundleResponse)(nil),   // 39: client.v0.ReadDiagnosticsBundleResponse
+	(*ListRecentLogsRequest)(nil),           // 40: client.v0.ListRecentLogsRequest
+	(*ListRecentLogsResponse)(nil),          // 41: client.v0.ListRecentLogsResponse
+	(*ListProfilesRequest)(nil),             // 42: client.v0.ListProfilesRequest
+	(*ListProfilesResponse)(nil),            // 43: client.v0.ListProfilesResponse
+	(*CreateProfileRequest)(nil),            // 44: client.v0.CreateProfileRequest
+	(*CreateProfileResponse)(nil),           // 45: client.v0.CreateProfileResponse
+	(*SelectProfileRequest)(nil),            // 46: client.v0.SelectProfileRequest
+	(*SelectProfileResponse)(nil),           // 47: client.v0.SelectProfileResponse
+	(*RenameProfileRequest)(nil),            // 48: client.v0.RenameProfileRequest
+	(*RenameProfileResponse)(nil),           // 49: client.v0.RenameProfileResponse
+	(*RemoveProfileRequest)(nil),            // 50: client.v0.RemoveProfileRequest
+	(*RemoveProfileResponse)(nil),           // 51: client.v0.RemoveProfileResponse
+	(*GetSessionRequest)(nil),               // 52: client.v0.GetSessionRequest
+	(*GetSessionResponse)(nil),              // 53: client.v0.GetSessionResponse
+	(*RenewSessionRequest)(nil),             // 54: client.v0.RenewSessionRequest
+	(*RenewSessionResponse)(nil),            // 55: client.v0.RenewSessionResponse
+	(*WaitSessionRenewalRequest)(nil),       // 56: client.v0.WaitSessionRenewalRequest
+	(*WaitSessionRenewalResponse)(nil),      // 57: client.v0.WaitSessionRenewalResponse
+	(*ListExitNodesRequest)(nil),            // 58: client.v0.ListExitNodesRequest
+	(*ListExitNodesResponse)(nil),           // 59: client.v0.ListExitNodesResponse
+	(*GetExitNodeRequest)(nil),              // 60: client.v0.GetExitNodeRequest
+	(*GetExitNodeResponse)(nil),             // 61: client.v0.GetExitNodeResponse
+	(*SelectExitNodeRequest)(nil),           // 62: client.v0.SelectExitNodeRequest
+	(*SelectExitNodeResponse)(nil),          // 63: client.v0.SelectExitNodeResponse
+	(*ClearExitNodeRequest)(nil),            // 64: client.v0.ClearExitNodeRequest
+	(*ClearExitNodeResponse)(nil),           // 65: client.v0.ClearExitNodeResponse
+	(*GetPreferencesRequest)(nil),           // 66: client.v0.GetPreferencesRequest
+	(*GetPreferencesResponse)(nil),          // 67: client.v0.GetPreferencesResponse
+	(*SetPreferencesRequest)(nil),           // 68: client.v0.SetPreferencesRequest
+	(*SetPreferencesResponse)(nil),          // 69: client.v0.SetPreferencesResponse
+	(*ResetPreferencesRequest)(nil),         // 70: client.v0.ResetPreferencesRequest
+	(*ResetPreferencesResponse)(nil),        // 71: client.v0.ResetPreferencesResponse
+	(*ListManagedSettingsRequest)(nil),      // 72: client.v0.ListManagedSettingsRequest
+	(*ListManagedSettingsResponse)(nil),     // 73: client.v0.ListManagedSettingsResponse
+	(*ListResourcesRequest)(nil),            // 74: client.v0.ListResourcesRequest
+	(*ListResourcesResponse)(nil),           // 75: client.v0.ListResourcesResponse
+	(*SetResourceEnabledRequest)(nil),       // 76: client.v0.SetResourceEnabledRequest
+	(*SetResourceEnabledResponse)(nil),      // 77: client.v0.SetResourceEnabledResponse
+	(*NotifyLifecycleRequest)(nil),          // 78: client.v0.NotifyLifecycleRequest
+	(*NotifyLifecycleResponse)(nil),         // 79: client.v0.NotifyLifecycleResponse
+	(*GetUpdateInfoRequest)(nil),            // 80: client.v0.GetUpdateInfoRequest
+	(*GetUpdateInfoResponse)(nil),           // 81: client.v0.GetUpdateInfoResponse
+	(*GetSupportInfoRequest)(nil),           // 82: client.v0.GetSupportInfoRequest
+	(*GetSupportInfoResponse)(nil),          // 83: client.v0.GetSupportInfoResponse
+	(*WatchEventsResponse)(nil),             // 84: client.v0.WatchEventsResponse
+	(*SnapshotEvent)(nil),                   // 85: client.v0.SnapshotEvent
+	(*DomainInvalidated)(nil),               // 86: client.v0.DomainInvalidated
+	(*RuntimeInfo)(nil),                     // 87: client.v0.RuntimeInfo
+	(*Status)(nil),                          // 88: client.v0.Status
+	(*MutationContext)(nil),                 // 89: client.v0.MutationContext
+	(*ProfileRef)(nil),                      // 90: client.v0.ProfileRef
+	(EnrollmentMode)(0),                     // 91: client.v0.EnrollmentMode
+	(*EnrollmentAttempt)(nil),               // 92: client.v0.EnrollmentAttempt
+	(*PageRequest)(nil),                     // 93: client.v0.PageRequest
+	(*EnrollmentTarget)(nil),                // 94: client.v0.EnrollmentTarget
+	(*PageResponse)(nil),                    // 95: client.v0.PageResponse
+	(*SnapshotMetadata)(nil),                // 96: client.v0.SnapshotMetadata
+	(*ChangeResult)(nil),                    // 97: client.v0.ChangeResult
+	(*ServerIdentity)(nil),                  // 98: client.v0.ServerIdentity
+	(*CleanupResult)(nil),                   // 99: client.v0.CleanupResult
+	(*Network)(nil),                         // 100: client.v0.Network
+	(*SelectionResult)(nil),                 // 101: client.v0.SelectionResult
+	(ConnectionContinuity)(0),               // 102: client.v0.ConnectionContinuity
+	(*Peer)(nil),                            // 103: client.v0.Peer
+	(AgentSnapshotState)(0),                 // 104: client.v0.AgentSnapshotState
+	(*Diagnostics)(nil),                     // 105: client.v0.Diagnostics
+	(*BundleResult)(nil),                    // 106: client.v0.BundleResult
+	(*LogEntry)(nil),                        // 107: client.v0.LogEntry
+	(*Profile)(nil),                         // 108: client.v0.Profile
+	(*ProfileResult)(nil),                   // 109: client.v0.ProfileResult
+	(*Session)(nil),                         // 110: client.v0.Session
+	(*RenewalResult)(nil),                   // 111: client.v0.RenewalResult
+	(*BrowserLoginChallenge)(nil),           // 112: client.v0.BrowserLoginChallenge
+	(*ExitNode)(nil),                        // 113: client.v0.ExitNode
+	(*ExitNodeStatus)(nil),                  // 114: client.v0.ExitNodeStatus
+	(LanAccess)(0),                          // 115: client.v0.LanAccess
+	(ExitFamilyMode)(0),                     // 116: client.v0.ExitFamilyMode
+	(*Preferences)(nil),                     // 117: client.v0.Preferences
+	(*PreferencesPatch)(nil),                // 118: client.v0.PreferencesPatch
+	(PreferenceKey)(0),                      // 119: client.v0.PreferenceKey
+	(*ManagedSetting)(nil),                  // 120: client.v0.ManagedSetting
+	(ResourceKind)(0),                       // 121: client.v0.ResourceKind
+	(*Resource)(nil),                        // 122: client.v0.Resource
+	(LifecycleEvent)(0),                     // 123: client.v0.LifecycleEvent
+	(*BuildIdentity)(nil),                   // 124: client.v0.BuildIdentity
+	(*UpdateInfo)(nil),                      // 125: client.v0.UpdateInfo
+	(*SupportInfo)(nil),                     // 126: client.v0.SupportInfo
+	(*Failure)(nil),                         // 127: client.v0.Failure
 }
 var file_client_v0_service_proto_depIdxs = []int32{
-	81,  // 0: client.v0.GetRuntimeInfoResponse.runtime:type_name -> client.v0.RuntimeInfo
-	82,  // 1: client.v0.GetStatusResponse.status:type_name -> client.v0.Status
-	83,  // 2: client.v0.EnrollRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 3: client.v0.EnrollRequest.profile:type_name -> client.v0.ProfileRef
-	85,  // 4: client.v0.EnrollRequest.mode:type_name -> client.v0.EnrollmentMode
-	86,  // 5: client.v0.EnrollResponse.enrollment:type_name -> client.v0.EnrollmentResult
-	87,  // 6: client.v0.EnrollResponse.browser_login:type_name -> client.v0.BrowserLoginChallenge
-	84,  // 7: client.v0.WaitBrowserEnrollmentRequest.profile:type_name -> client.v0.ProfileRef
-	86,  // 8: client.v0.WaitBrowserEnrollmentResponse.enrollment:type_name -> client.v0.EnrollmentResult
-	83,  // 9: client.v0.ConnectRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 10: client.v0.ConnectRequest.profile:type_name -> client.v0.ProfileRef
-	83,  // 11: client.v0.DisconnectRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 12: client.v0.DisconnectRequest.profile:type_name -> client.v0.ProfileRef
-	88,  // 13: client.v0.DisconnectResponse.change:type_name -> client.v0.ChangeResult
-	84,  // 14: client.v0.GetServerIdentityRequest.profile:type_name -> client.v0.ProfileRef
-	89,  // 15: client.v0.GetServerIdentityResponse.identity:type_name -> client.v0.ServerIdentity
-	90,  // 16: client.v0.GetServerIdentityResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	83,  // 17: client.v0.TrustServerIdentityRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 18: client.v0.TrustServerIdentityRequest.profile:type_name -> client.v0.ProfileRef
-	88,  // 19: client.v0.TrustServerIdentityResponse.change:type_name -> client.v0.ChangeResult
-	83,  // 20: client.v0.LogoutRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 21: client.v0.LogoutRequest.profile:type_name -> client.v0.ProfileRef
-	91,  // 22: client.v0.LogoutResponse.cleanup:type_name -> client.v0.CleanupResult
-	83,  // 23: client.v0.ForgetLocalEnrollmentRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 24: client.v0.ForgetLocalEnrollmentRequest.profile:type_name -> client.v0.ProfileRef
-	91,  // 25: client.v0.ForgetLocalEnrollmentResponse.cleanup:type_name -> client.v0.CleanupResult
-	84,  // 26: client.v0.ListNetworksRequest.profile:type_name -> client.v0.ProfileRef
-	92,  // 27: client.v0.ListNetworksRequest.page:type_name -> client.v0.PageRequest
-	93,  // 28: client.v0.ListNetworksResponse.networks:type_name -> client.v0.Network
-	94,  // 29: client.v0.ListNetworksResponse.page:type_name -> client.v0.PageResponse
-	83,  // 30: client.v0.SelectNetworkRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 31: client.v0.SelectNetworkRequest.profile:type_name -> client.v0.ProfileRef
-	95,  // 32: client.v0.SelectNetworkResponse.selection:type_name -> client.v0.SelectionResult
-	96,  // 33: client.v0.SelectNetworkResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	84,  // 34: client.v0.ListPeersRequest.profile:type_name -> client.v0.ProfileRef
-	92,  // 35: client.v0.ListPeersRequest.page:type_name -> client.v0.PageRequest
-	97,  // 36: client.v0.ListPeersResponse.peers:type_name -> client.v0.Peer
-	94,  // 37: client.v0.ListPeersResponse.page:type_name -> client.v0.PageResponse
-	98,  // 38: client.v0.ListPeersResponse.snapshot_state:type_name -> client.v0.AgentSnapshotState
-	84,  // 39: client.v0.GetDiagnosticsRequest.profile:type_name -> client.v0.ProfileRef
-	99,  // 40: client.v0.GetDiagnosticsResponse.diagnostics:type_name -> client.v0.Diagnostics
-	83,  // 41: client.v0.CreateDiagnosticsBundleRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 42: client.v0.CreateDiagnosticsBundleRequest.profile:type_name -> client.v0.ProfileRef
-	100, // 43: client.v0.CreateDiagnosticsBundleResponse.bundle:type_name -> client.v0.BundleResult
-	84,  // 44: client.v0.ListRecentLogsRequest.profile:type_name -> client.v0.ProfileRef
-	92,  // 45: client.v0.ListRecentLogsRequest.page:type_name -> client.v0.PageRequest
-	101, // 46: client.v0.ListRecentLogsResponse.logs:type_name -> client.v0.LogEntry
-	94,  // 47: client.v0.ListRecentLogsResponse.page:type_name -> client.v0.PageResponse
-	92,  // 48: client.v0.ListProfilesRequest.page:type_name -> client.v0.PageRequest
-	102, // 49: client.v0.ListProfilesResponse.profiles:type_name -> client.v0.Profile
-	94,  // 50: client.v0.ListProfilesResponse.page:type_name -> client.v0.PageResponse
-	83,  // 51: client.v0.CreateProfileRequest.mutation:type_name -> client.v0.MutationContext
-	103, // 52: client.v0.CreateProfileResponse.profile:type_name -> client.v0.ProfileResult
-	83,  // 53: client.v0.SelectProfileRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 54: client.v0.SelectProfileRequest.profile:type_name -> client.v0.ProfileRef
-	95,  // 55: client.v0.SelectProfileResponse.selection:type_name -> client.v0.SelectionResult
-	96,  // 56: client.v0.SelectProfileResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	83,  // 57: client.v0.RenameProfileRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 58: client.v0.RenameProfileRequest.profile:type_name -> client.v0.ProfileRef
-	88,  // 59: client.v0.RenameProfileResponse.change:type_name -> client.v0.ChangeResult
-	83,  // 60: client.v0.RemoveProfileRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 61: client.v0.RemoveProfileRequest.profile:type_name -> client.v0.ProfileRef
-	88,  // 62: client.v0.RemoveProfileResponse.change:type_name -> client.v0.ChangeResult
-	84,  // 63: client.v0.GetSessionRequest.profile:type_name -> client.v0.ProfileRef
-	104, // 64: client.v0.GetSessionResponse.session:type_name -> client.v0.Session
-	90,  // 65: client.v0.GetSessionResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	83,  // 66: client.v0.RenewSessionRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 67: client.v0.RenewSessionRequest.profile:type_name -> client.v0.ProfileRef
-	105, // 68: client.v0.RenewSessionResponse.renewal:type_name -> client.v0.RenewalResult
-	87,  // 69: client.v0.RenewSessionResponse.browser_login:type_name -> client.v0.BrowserLoginChallenge
-	96,  // 70: client.v0.RenewSessionResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	84,  // 71: client.v0.WaitSessionRenewalRequest.profile:type_name -> client.v0.ProfileRef
-	105, // 72: client.v0.WaitSessionRenewalResponse.renewal:type_name -> client.v0.RenewalResult
-	96,  // 73: client.v0.WaitSessionRenewalResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	84,  // 74: client.v0.ListExitNodesRequest.profile:type_name -> client.v0.ProfileRef
-	92,  // 75: client.v0.ListExitNodesRequest.page:type_name -> client.v0.PageRequest
-	106, // 76: client.v0.ListExitNodesResponse.exit_nodes:type_name -> client.v0.ExitNode
-	94,  // 77: client.v0.ListExitNodesResponse.page:type_name -> client.v0.PageResponse
-	84,  // 78: client.v0.GetExitNodeRequest.profile:type_name -> client.v0.ProfileRef
-	107, // 79: client.v0.GetExitNodeResponse.status:type_name -> client.v0.ExitNodeStatus
-	83,  // 80: client.v0.SelectExitNodeRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 81: client.v0.SelectExitNodeRequest.profile:type_name -> client.v0.ProfileRef
-	108, // 82: client.v0.SelectExitNodeRequest.lan_access:type_name -> client.v0.LanAccess
-	109, // 83: client.v0.SelectExitNodeRequest.family_mode:type_name -> client.v0.ExitFamilyMode
-	95,  // 84: client.v0.SelectExitNodeResponse.selection:type_name -> client.v0.SelectionResult
-	96,  // 85: client.v0.SelectExitNodeResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	83,  // 86: client.v0.ClearExitNodeRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 87: client.v0.ClearExitNodeRequest.profile:type_name -> client.v0.ProfileRef
-	95,  // 88: client.v0.ClearExitNodeResponse.selection:type_name -> client.v0.SelectionResult
-	96,  // 89: client.v0.ClearExitNodeResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	84,  // 90: client.v0.GetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
-	110, // 91: client.v0.GetPreferencesResponse.preferences:type_name -> client.v0.Preferences
-	83,  // 92: client.v0.SetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 93: client.v0.SetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
-	111, // 94: client.v0.SetPreferencesRequest.patch:type_name -> client.v0.PreferencesPatch
-	88,  // 95: client.v0.SetPreferencesResponse.change:type_name -> client.v0.ChangeResult
-	83,  // 96: client.v0.ResetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 97: client.v0.ResetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
-	112, // 98: client.v0.ResetPreferencesRequest.keys:type_name -> client.v0.PreferenceKey
-	88,  // 99: client.v0.ResetPreferencesResponse.change:type_name -> client.v0.ChangeResult
-	84,  // 100: client.v0.ListManagedSettingsRequest.profile:type_name -> client.v0.ProfileRef
-	113, // 101: client.v0.ListManagedSettingsResponse.settings:type_name -> client.v0.ManagedSetting
-	90,  // 102: client.v0.ListManagedSettingsResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	84,  // 103: client.v0.ListResourcesRequest.profile:type_name -> client.v0.ProfileRef
-	92,  // 104: client.v0.ListResourcesRequest.page:type_name -> client.v0.PageRequest
-	114, // 105: client.v0.ListResourcesRequest.kinds:type_name -> client.v0.ResourceKind
-	115, // 106: client.v0.ListResourcesResponse.resources:type_name -> client.v0.Resource
-	94,  // 107: client.v0.ListResourcesResponse.page:type_name -> client.v0.PageResponse
-	83,  // 108: client.v0.SetResourceEnabledRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 109: client.v0.SetResourceEnabledRequest.profile:type_name -> client.v0.ProfileRef
-	88,  // 110: client.v0.SetResourceEnabledResponse.change:type_name -> client.v0.ChangeResult
-	83,  // 111: client.v0.NotifyLifecycleRequest.mutation:type_name -> client.v0.MutationContext
-	84,  // 112: client.v0.NotifyLifecycleRequest.profile:type_name -> client.v0.ProfileRef
-	116, // 113: client.v0.NotifyLifecycleRequest.event:type_name -> client.v0.LifecycleEvent
-	88,  // 114: client.v0.NotifyLifecycleResponse.change:type_name -> client.v0.ChangeResult
-	117, // 115: client.v0.GetUpdateInfoRequest.reported_ui:type_name -> client.v0.BuildIdentity
-	118, // 116: client.v0.GetUpdateInfoResponse.info:type_name -> client.v0.UpdateInfo
-	119, // 117: client.v0.GetSupportInfoResponse.info:type_name -> client.v0.SupportInfo
-	90,  // 118: client.v0.WatchEventsResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	79,  // 119: client.v0.WatchEventsResponse.snapshot:type_name -> client.v0.SnapshotEvent
-	82,  // 120: client.v0.WatchEventsResponse.status_changed:type_name -> client.v0.Status
-	80,  // 121: client.v0.WatchEventsResponse.invalidated:type_name -> client.v0.DomainInvalidated
-	120, // 122: client.v0.WatchEventsResponse.failure:type_name -> client.v0.Failure
-	104, // 123: client.v0.WatchEventsResponse.session_changed:type_name -> client.v0.Session
-	81,  // 124: client.v0.SnapshotEvent.runtime:type_name -> client.v0.RuntimeInfo
-	82,  // 125: client.v0.SnapshotEvent.status:type_name -> client.v0.Status
-	0,   // 126: client.v0.DomainInvalidated.domain:type_name -> client.v0.Domain
-	1,   // 127: client.v0.ClientService.GetRuntimeInfo:input_type -> client.v0.GetRuntimeInfoRequest
-	3,   // 128: client.v0.ClientService.GetStatus:input_type -> client.v0.GetStatusRequest
-	5,   // 129: client.v0.ClientService.WatchEvents:input_type -> client.v0.WatchEventsRequest
-	6,   // 130: client.v0.ClientService.Enroll:input_type -> client.v0.EnrollRequest
-	8,   // 131: client.v0.ClientService.WaitBrowserEnrollment:input_type -> client.v0.WaitBrowserEnrollmentRequest
-	10,  // 132: client.v0.ClientService.Connect:input_type -> client.v0.ConnectRequest
-	12,  // 133: client.v0.ClientService.Disconnect:input_type -> client.v0.DisconnectRequest
-	14,  // 134: client.v0.ClientService.GetServerIdentity:input_type -> client.v0.GetServerIdentityRequest
-	16,  // 135: client.v0.ClientService.TrustServerIdentity:input_type -> client.v0.TrustServerIdentityRequest
-	18,  // 136: client.v0.ClientService.Logout:input_type -> client.v0.LogoutRequest
-	20,  // 137: client.v0.ClientService.ForgetLocalEnrollment:input_type -> client.v0.ForgetLocalEnrollmentRequest
-	22,  // 138: client.v0.ClientService.ListNetworks:input_type -> client.v0.ListNetworksRequest
-	24,  // 139: client.v0.ClientService.SelectNetwork:input_type -> client.v0.SelectNetworkRequest
-	26,  // 140: client.v0.ClientService.ListPeers:input_type -> client.v0.ListPeersRequest
-	28,  // 141: client.v0.ClientService.GetDiagnostics:input_type -> client.v0.GetDiagnosticsRequest
-	30,  // 142: client.v0.ClientService.CreateDiagnosticsBundle:input_type -> client.v0.CreateDiagnosticsBundleRequest
-	32,  // 143: client.v0.ClientService.ReadDiagnosticsBundle:input_type -> client.v0.ReadDiagnosticsBundleRequest
-	34,  // 144: client.v0.ClientService.ListRecentLogs:input_type -> client.v0.ListRecentLogsRequest
-	36,  // 145: client.v0.ClientService.ListProfiles:input_type -> client.v0.ListProfilesRequest
-	38,  // 146: client.v0.ClientService.CreateProfile:input_type -> client.v0.CreateProfileRequest
-	40,  // 147: client.v0.ClientService.SelectProfile:input_type -> client.v0.SelectProfileRequest
-	42,  // 148: client.v0.ClientService.RenameProfile:input_type -> client.v0.RenameProfileRequest
-	44,  // 149: client.v0.ClientService.RemoveProfile:input_type -> client.v0.RemoveProfileRequest
-	46,  // 150: client.v0.ClientService.GetSession:input_type -> client.v0.GetSessionRequest
-	48,  // 151: client.v0.ClientService.RenewSession:input_type -> client.v0.RenewSessionRequest
-	50,  // 152: client.v0.ClientService.WaitSessionRenewal:input_type -> client.v0.WaitSessionRenewalRequest
-	52,  // 153: client.v0.ClientService.ListExitNodes:input_type -> client.v0.ListExitNodesRequest
-	54,  // 154: client.v0.ClientService.GetExitNode:input_type -> client.v0.GetExitNodeRequest
-	56,  // 155: client.v0.ClientService.SelectExitNode:input_type -> client.v0.SelectExitNodeRequest
-	58,  // 156: client.v0.ClientService.ClearExitNode:input_type -> client.v0.ClearExitNodeRequest
-	60,  // 157: client.v0.ClientService.GetPreferences:input_type -> client.v0.GetPreferencesRequest
-	62,  // 158: client.v0.ClientService.SetPreferences:input_type -> client.v0.SetPreferencesRequest
-	64,  // 159: client.v0.ClientService.ResetPreferences:input_type -> client.v0.ResetPreferencesRequest
-	66,  // 160: client.v0.ClientService.ListManagedSettings:input_type -> client.v0.ListManagedSettingsRequest
-	68,  // 161: client.v0.ClientService.ListResources:input_type -> client.v0.ListResourcesRequest
-	70,  // 162: client.v0.ClientService.SetResourceEnabled:input_type -> client.v0.SetResourceEnabledRequest
-	72,  // 163: client.v0.ClientService.NotifyLifecycle:input_type -> client.v0.NotifyLifecycleRequest
-	74,  // 164: client.v0.ClientService.GetUpdateInfo:input_type -> client.v0.GetUpdateInfoRequest
-	76,  // 165: client.v0.ClientService.GetSupportInfo:input_type -> client.v0.GetSupportInfoRequest
-	2,   // 166: client.v0.ClientService.GetRuntimeInfo:output_type -> client.v0.GetRuntimeInfoResponse
-	4,   // 167: client.v0.ClientService.GetStatus:output_type -> client.v0.GetStatusResponse
-	78,  // 168: client.v0.ClientService.WatchEvents:output_type -> client.v0.WatchEventsResponse
-	7,   // 169: client.v0.ClientService.Enroll:output_type -> client.v0.EnrollResponse
-	9,   // 170: client.v0.ClientService.WaitBrowserEnrollment:output_type -> client.v0.WaitBrowserEnrollmentResponse
-	11,  // 171: client.v0.ClientService.Connect:output_type -> client.v0.ConnectResponse
-	13,  // 172: client.v0.ClientService.Disconnect:output_type -> client.v0.DisconnectResponse
-	15,  // 173: client.v0.ClientService.GetServerIdentity:output_type -> client.v0.GetServerIdentityResponse
-	17,  // 174: client.v0.ClientService.TrustServerIdentity:output_type -> client.v0.TrustServerIdentityResponse
-	19,  // 175: client.v0.ClientService.Logout:output_type -> client.v0.LogoutResponse
-	21,  // 176: client.v0.ClientService.ForgetLocalEnrollment:output_type -> client.v0.ForgetLocalEnrollmentResponse
-	23,  // 177: client.v0.ClientService.ListNetworks:output_type -> client.v0.ListNetworksResponse
-	25,  // 178: client.v0.ClientService.SelectNetwork:output_type -> client.v0.SelectNetworkResponse
-	27,  // 179: client.v0.ClientService.ListPeers:output_type -> client.v0.ListPeersResponse
-	29,  // 180: client.v0.ClientService.GetDiagnostics:output_type -> client.v0.GetDiagnosticsResponse
-	31,  // 181: client.v0.ClientService.CreateDiagnosticsBundle:output_type -> client.v0.CreateDiagnosticsBundleResponse
-	33,  // 182: client.v0.ClientService.ReadDiagnosticsBundle:output_type -> client.v0.ReadDiagnosticsBundleResponse
-	35,  // 183: client.v0.ClientService.ListRecentLogs:output_type -> client.v0.ListRecentLogsResponse
-	37,  // 184: client.v0.ClientService.ListProfiles:output_type -> client.v0.ListProfilesResponse
-	39,  // 185: client.v0.ClientService.CreateProfile:output_type -> client.v0.CreateProfileResponse
-	41,  // 186: client.v0.ClientService.SelectProfile:output_type -> client.v0.SelectProfileResponse
-	43,  // 187: client.v0.ClientService.RenameProfile:output_type -> client.v0.RenameProfileResponse
-	45,  // 188: client.v0.ClientService.RemoveProfile:output_type -> client.v0.RemoveProfileResponse
-	47,  // 189: client.v0.ClientService.GetSession:output_type -> client.v0.GetSessionResponse
-	49,  // 190: client.v0.ClientService.RenewSession:output_type -> client.v0.RenewSessionResponse
-	51,  // 191: client.v0.ClientService.WaitSessionRenewal:output_type -> client.v0.WaitSessionRenewalResponse
-	53,  // 192: client.v0.ClientService.ListExitNodes:output_type -> client.v0.ListExitNodesResponse
-	55,  // 193: client.v0.ClientService.GetExitNode:output_type -> client.v0.GetExitNodeResponse
-	57,  // 194: client.v0.ClientService.SelectExitNode:output_type -> client.v0.SelectExitNodeResponse
-	59,  // 195: client.v0.ClientService.ClearExitNode:output_type -> client.v0.ClearExitNodeResponse
-	61,  // 196: client.v0.ClientService.GetPreferences:output_type -> client.v0.GetPreferencesResponse
-	63,  // 197: client.v0.ClientService.SetPreferences:output_type -> client.v0.SetPreferencesResponse
-	65,  // 198: client.v0.ClientService.ResetPreferences:output_type -> client.v0.ResetPreferencesResponse
-	67,  // 199: client.v0.ClientService.ListManagedSettings:output_type -> client.v0.ListManagedSettingsResponse
-	69,  // 200: client.v0.ClientService.ListResources:output_type -> client.v0.ListResourcesResponse
-	71,  // 201: client.v0.ClientService.SetResourceEnabled:output_type -> client.v0.SetResourceEnabledResponse
-	73,  // 202: client.v0.ClientService.NotifyLifecycle:output_type -> client.v0.NotifyLifecycleResponse
-	75,  // 203: client.v0.ClientService.GetUpdateInfo:output_type -> client.v0.GetUpdateInfoResponse
-	77,  // 204: client.v0.ClientService.GetSupportInfo:output_type -> client.v0.GetSupportInfoResponse
-	166, // [166:205] is the sub-list for method output_type
-	127, // [127:166] is the sub-list for method input_type
-	127, // [127:127] is the sub-list for extension type_name
-	127, // [127:127] is the sub-list for extension extendee
-	0,   // [0:127] is the sub-list for field type_name
+	87,  // 0: client.v0.GetRuntimeInfoResponse.runtime:type_name -> client.v0.RuntimeInfo
+	88,  // 1: client.v0.GetStatusResponse.status:type_name -> client.v0.Status
+	89,  // 2: client.v0.EnrollRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 3: client.v0.EnrollRequest.profile:type_name -> client.v0.ProfileRef
+	91,  // 4: client.v0.EnrollRequest.mode:type_name -> client.v0.EnrollmentMode
+	92,  // 5: client.v0.EnrollResponse.attempt:type_name -> client.v0.EnrollmentAttempt
+	90,  // 6: client.v0.GetEnrollmentAttemptRequest.profile:type_name -> client.v0.ProfileRef
+	92,  // 7: client.v0.GetEnrollmentAttemptResponse.attempt:type_name -> client.v0.EnrollmentAttempt
+	90,  // 8: client.v0.ListEnrollmentTargetsRequest.profile:type_name -> client.v0.ProfileRef
+	93,  // 9: client.v0.ListEnrollmentTargetsRequest.page:type_name -> client.v0.PageRequest
+	94,  // 10: client.v0.ListEnrollmentTargetsResponse.targets:type_name -> client.v0.EnrollmentTarget
+	95,  // 11: client.v0.ListEnrollmentTargetsResponse.page:type_name -> client.v0.PageResponse
+	96,  // 12: client.v0.ListEnrollmentTargetsResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	89,  // 13: client.v0.SelectEnrollmentTargetRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 14: client.v0.SelectEnrollmentTargetRequest.profile:type_name -> client.v0.ProfileRef
+	92,  // 15: client.v0.SelectEnrollmentTargetResponse.attempt:type_name -> client.v0.EnrollmentAttempt
+	89,  // 16: client.v0.CancelEnrollmentAttemptRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 17: client.v0.CancelEnrollmentAttemptRequest.profile:type_name -> client.v0.ProfileRef
+	92,  // 18: client.v0.CancelEnrollmentAttemptResponse.attempt:type_name -> client.v0.EnrollmentAttempt
+	89,  // 19: client.v0.ConnectRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 20: client.v0.ConnectRequest.profile:type_name -> client.v0.ProfileRef
+	89,  // 21: client.v0.DisconnectRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 22: client.v0.DisconnectRequest.profile:type_name -> client.v0.ProfileRef
+	97,  // 23: client.v0.DisconnectResponse.change:type_name -> client.v0.ChangeResult
+	90,  // 24: client.v0.GetServerIdentityRequest.profile:type_name -> client.v0.ProfileRef
+	98,  // 25: client.v0.GetServerIdentityResponse.identity:type_name -> client.v0.ServerIdentity
+	96,  // 26: client.v0.GetServerIdentityResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	89,  // 27: client.v0.TrustServerIdentityRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 28: client.v0.TrustServerIdentityRequest.profile:type_name -> client.v0.ProfileRef
+	97,  // 29: client.v0.TrustServerIdentityResponse.change:type_name -> client.v0.ChangeResult
+	89,  // 30: client.v0.LogoutRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 31: client.v0.LogoutRequest.profile:type_name -> client.v0.ProfileRef
+	99,  // 32: client.v0.LogoutResponse.cleanup:type_name -> client.v0.CleanupResult
+	89,  // 33: client.v0.ForgetLocalEnrollmentRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 34: client.v0.ForgetLocalEnrollmentRequest.profile:type_name -> client.v0.ProfileRef
+	99,  // 35: client.v0.ForgetLocalEnrollmentResponse.cleanup:type_name -> client.v0.CleanupResult
+	90,  // 36: client.v0.ListNetworksRequest.profile:type_name -> client.v0.ProfileRef
+	93,  // 37: client.v0.ListNetworksRequest.page:type_name -> client.v0.PageRequest
+	100, // 38: client.v0.ListNetworksResponse.networks:type_name -> client.v0.Network
+	95,  // 39: client.v0.ListNetworksResponse.page:type_name -> client.v0.PageResponse
+	89,  // 40: client.v0.SelectNetworkRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 41: client.v0.SelectNetworkRequest.profile:type_name -> client.v0.ProfileRef
+	101, // 42: client.v0.SelectNetworkResponse.selection:type_name -> client.v0.SelectionResult
+	102, // 43: client.v0.SelectNetworkResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	90,  // 44: client.v0.ListPeersRequest.profile:type_name -> client.v0.ProfileRef
+	93,  // 45: client.v0.ListPeersRequest.page:type_name -> client.v0.PageRequest
+	103, // 46: client.v0.ListPeersResponse.peers:type_name -> client.v0.Peer
+	95,  // 47: client.v0.ListPeersResponse.page:type_name -> client.v0.PageResponse
+	104, // 48: client.v0.ListPeersResponse.snapshot_state:type_name -> client.v0.AgentSnapshotState
+	90,  // 49: client.v0.GetDiagnosticsRequest.profile:type_name -> client.v0.ProfileRef
+	105, // 50: client.v0.GetDiagnosticsResponse.diagnostics:type_name -> client.v0.Diagnostics
+	89,  // 51: client.v0.CreateDiagnosticsBundleRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 52: client.v0.CreateDiagnosticsBundleRequest.profile:type_name -> client.v0.ProfileRef
+	106, // 53: client.v0.CreateDiagnosticsBundleResponse.bundle:type_name -> client.v0.BundleResult
+	90,  // 54: client.v0.ListRecentLogsRequest.profile:type_name -> client.v0.ProfileRef
+	93,  // 55: client.v0.ListRecentLogsRequest.page:type_name -> client.v0.PageRequest
+	107, // 56: client.v0.ListRecentLogsResponse.logs:type_name -> client.v0.LogEntry
+	95,  // 57: client.v0.ListRecentLogsResponse.page:type_name -> client.v0.PageResponse
+	93,  // 58: client.v0.ListProfilesRequest.page:type_name -> client.v0.PageRequest
+	108, // 59: client.v0.ListProfilesResponse.profiles:type_name -> client.v0.Profile
+	95,  // 60: client.v0.ListProfilesResponse.page:type_name -> client.v0.PageResponse
+	89,  // 61: client.v0.CreateProfileRequest.mutation:type_name -> client.v0.MutationContext
+	109, // 62: client.v0.CreateProfileResponse.profile:type_name -> client.v0.ProfileResult
+	89,  // 63: client.v0.SelectProfileRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 64: client.v0.SelectProfileRequest.profile:type_name -> client.v0.ProfileRef
+	101, // 65: client.v0.SelectProfileResponse.selection:type_name -> client.v0.SelectionResult
+	102, // 66: client.v0.SelectProfileResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	89,  // 67: client.v0.RenameProfileRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 68: client.v0.RenameProfileRequest.profile:type_name -> client.v0.ProfileRef
+	97,  // 69: client.v0.RenameProfileResponse.change:type_name -> client.v0.ChangeResult
+	89,  // 70: client.v0.RemoveProfileRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 71: client.v0.RemoveProfileRequest.profile:type_name -> client.v0.ProfileRef
+	97,  // 72: client.v0.RemoveProfileResponse.change:type_name -> client.v0.ChangeResult
+	90,  // 73: client.v0.GetSessionRequest.profile:type_name -> client.v0.ProfileRef
+	110, // 74: client.v0.GetSessionResponse.session:type_name -> client.v0.Session
+	96,  // 75: client.v0.GetSessionResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	89,  // 76: client.v0.RenewSessionRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 77: client.v0.RenewSessionRequest.profile:type_name -> client.v0.ProfileRef
+	111, // 78: client.v0.RenewSessionResponse.renewal:type_name -> client.v0.RenewalResult
+	112, // 79: client.v0.RenewSessionResponse.browser_login:type_name -> client.v0.BrowserLoginChallenge
+	102, // 80: client.v0.RenewSessionResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	90,  // 81: client.v0.WaitSessionRenewalRequest.profile:type_name -> client.v0.ProfileRef
+	111, // 82: client.v0.WaitSessionRenewalResponse.renewal:type_name -> client.v0.RenewalResult
+	102, // 83: client.v0.WaitSessionRenewalResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	90,  // 84: client.v0.ListExitNodesRequest.profile:type_name -> client.v0.ProfileRef
+	93,  // 85: client.v0.ListExitNodesRequest.page:type_name -> client.v0.PageRequest
+	113, // 86: client.v0.ListExitNodesResponse.exit_nodes:type_name -> client.v0.ExitNode
+	95,  // 87: client.v0.ListExitNodesResponse.page:type_name -> client.v0.PageResponse
+	90,  // 88: client.v0.GetExitNodeRequest.profile:type_name -> client.v0.ProfileRef
+	114, // 89: client.v0.GetExitNodeResponse.status:type_name -> client.v0.ExitNodeStatus
+	89,  // 90: client.v0.SelectExitNodeRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 91: client.v0.SelectExitNodeRequest.profile:type_name -> client.v0.ProfileRef
+	115, // 92: client.v0.SelectExitNodeRequest.lan_access:type_name -> client.v0.LanAccess
+	116, // 93: client.v0.SelectExitNodeRequest.family_mode:type_name -> client.v0.ExitFamilyMode
+	101, // 94: client.v0.SelectExitNodeResponse.selection:type_name -> client.v0.SelectionResult
+	102, // 95: client.v0.SelectExitNodeResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	89,  // 96: client.v0.ClearExitNodeRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 97: client.v0.ClearExitNodeRequest.profile:type_name -> client.v0.ProfileRef
+	101, // 98: client.v0.ClearExitNodeResponse.selection:type_name -> client.v0.SelectionResult
+	102, // 99: client.v0.ClearExitNodeResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	90,  // 100: client.v0.GetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
+	117, // 101: client.v0.GetPreferencesResponse.preferences:type_name -> client.v0.Preferences
+	89,  // 102: client.v0.SetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 103: client.v0.SetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
+	118, // 104: client.v0.SetPreferencesRequest.patch:type_name -> client.v0.PreferencesPatch
+	97,  // 105: client.v0.SetPreferencesResponse.change:type_name -> client.v0.ChangeResult
+	89,  // 106: client.v0.ResetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 107: client.v0.ResetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
+	119, // 108: client.v0.ResetPreferencesRequest.keys:type_name -> client.v0.PreferenceKey
+	97,  // 109: client.v0.ResetPreferencesResponse.change:type_name -> client.v0.ChangeResult
+	90,  // 110: client.v0.ListManagedSettingsRequest.profile:type_name -> client.v0.ProfileRef
+	120, // 111: client.v0.ListManagedSettingsResponse.settings:type_name -> client.v0.ManagedSetting
+	96,  // 112: client.v0.ListManagedSettingsResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	90,  // 113: client.v0.ListResourcesRequest.profile:type_name -> client.v0.ProfileRef
+	93,  // 114: client.v0.ListResourcesRequest.page:type_name -> client.v0.PageRequest
+	121, // 115: client.v0.ListResourcesRequest.kinds:type_name -> client.v0.ResourceKind
+	122, // 116: client.v0.ListResourcesResponse.resources:type_name -> client.v0.Resource
+	95,  // 117: client.v0.ListResourcesResponse.page:type_name -> client.v0.PageResponse
+	89,  // 118: client.v0.SetResourceEnabledRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 119: client.v0.SetResourceEnabledRequest.profile:type_name -> client.v0.ProfileRef
+	97,  // 120: client.v0.SetResourceEnabledResponse.change:type_name -> client.v0.ChangeResult
+	89,  // 121: client.v0.NotifyLifecycleRequest.mutation:type_name -> client.v0.MutationContext
+	90,  // 122: client.v0.NotifyLifecycleRequest.profile:type_name -> client.v0.ProfileRef
+	123, // 123: client.v0.NotifyLifecycleRequest.event:type_name -> client.v0.LifecycleEvent
+	97,  // 124: client.v0.NotifyLifecycleResponse.change:type_name -> client.v0.ChangeResult
+	124, // 125: client.v0.GetUpdateInfoRequest.reported_ui:type_name -> client.v0.BuildIdentity
+	125, // 126: client.v0.GetUpdateInfoResponse.info:type_name -> client.v0.UpdateInfo
+	126, // 127: client.v0.GetSupportInfoResponse.info:type_name -> client.v0.SupportInfo
+	96,  // 128: client.v0.WatchEventsResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	85,  // 129: client.v0.WatchEventsResponse.snapshot:type_name -> client.v0.SnapshotEvent
+	88,  // 130: client.v0.WatchEventsResponse.status_changed:type_name -> client.v0.Status
+	86,  // 131: client.v0.WatchEventsResponse.invalidated:type_name -> client.v0.DomainInvalidated
+	127, // 132: client.v0.WatchEventsResponse.failure:type_name -> client.v0.Failure
+	110, // 133: client.v0.WatchEventsResponse.session_changed:type_name -> client.v0.Session
+	87,  // 134: client.v0.SnapshotEvent.runtime:type_name -> client.v0.RuntimeInfo
+	88,  // 135: client.v0.SnapshotEvent.status:type_name -> client.v0.Status
+	0,   // 136: client.v0.DomainInvalidated.domain:type_name -> client.v0.Domain
+	1,   // 137: client.v0.ClientService.GetRuntimeInfo:input_type -> client.v0.GetRuntimeInfoRequest
+	3,   // 138: client.v0.ClientService.GetStatus:input_type -> client.v0.GetStatusRequest
+	5,   // 139: client.v0.ClientService.WatchEvents:input_type -> client.v0.WatchEventsRequest
+	6,   // 140: client.v0.ClientService.Enroll:input_type -> client.v0.EnrollRequest
+	8,   // 141: client.v0.ClientService.GetEnrollmentAttempt:input_type -> client.v0.GetEnrollmentAttemptRequest
+	10,  // 142: client.v0.ClientService.ListEnrollmentTargets:input_type -> client.v0.ListEnrollmentTargetsRequest
+	12,  // 143: client.v0.ClientService.SelectEnrollmentTarget:input_type -> client.v0.SelectEnrollmentTargetRequest
+	14,  // 144: client.v0.ClientService.CancelEnrollmentAttempt:input_type -> client.v0.CancelEnrollmentAttemptRequest
+	16,  // 145: client.v0.ClientService.Connect:input_type -> client.v0.ConnectRequest
+	18,  // 146: client.v0.ClientService.Disconnect:input_type -> client.v0.DisconnectRequest
+	20,  // 147: client.v0.ClientService.GetServerIdentity:input_type -> client.v0.GetServerIdentityRequest
+	22,  // 148: client.v0.ClientService.TrustServerIdentity:input_type -> client.v0.TrustServerIdentityRequest
+	24,  // 149: client.v0.ClientService.Logout:input_type -> client.v0.LogoutRequest
+	26,  // 150: client.v0.ClientService.ForgetLocalEnrollment:input_type -> client.v0.ForgetLocalEnrollmentRequest
+	28,  // 151: client.v0.ClientService.ListNetworks:input_type -> client.v0.ListNetworksRequest
+	30,  // 152: client.v0.ClientService.SelectNetwork:input_type -> client.v0.SelectNetworkRequest
+	32,  // 153: client.v0.ClientService.ListPeers:input_type -> client.v0.ListPeersRequest
+	34,  // 154: client.v0.ClientService.GetDiagnostics:input_type -> client.v0.GetDiagnosticsRequest
+	36,  // 155: client.v0.ClientService.CreateDiagnosticsBundle:input_type -> client.v0.CreateDiagnosticsBundleRequest
+	38,  // 156: client.v0.ClientService.ReadDiagnosticsBundle:input_type -> client.v0.ReadDiagnosticsBundleRequest
+	40,  // 157: client.v0.ClientService.ListRecentLogs:input_type -> client.v0.ListRecentLogsRequest
+	42,  // 158: client.v0.ClientService.ListProfiles:input_type -> client.v0.ListProfilesRequest
+	44,  // 159: client.v0.ClientService.CreateProfile:input_type -> client.v0.CreateProfileRequest
+	46,  // 160: client.v0.ClientService.SelectProfile:input_type -> client.v0.SelectProfileRequest
+	48,  // 161: client.v0.ClientService.RenameProfile:input_type -> client.v0.RenameProfileRequest
+	50,  // 162: client.v0.ClientService.RemoveProfile:input_type -> client.v0.RemoveProfileRequest
+	52,  // 163: client.v0.ClientService.GetSession:input_type -> client.v0.GetSessionRequest
+	54,  // 164: client.v0.ClientService.RenewSession:input_type -> client.v0.RenewSessionRequest
+	56,  // 165: client.v0.ClientService.WaitSessionRenewal:input_type -> client.v0.WaitSessionRenewalRequest
+	58,  // 166: client.v0.ClientService.ListExitNodes:input_type -> client.v0.ListExitNodesRequest
+	60,  // 167: client.v0.ClientService.GetExitNode:input_type -> client.v0.GetExitNodeRequest
+	62,  // 168: client.v0.ClientService.SelectExitNode:input_type -> client.v0.SelectExitNodeRequest
+	64,  // 169: client.v0.ClientService.ClearExitNode:input_type -> client.v0.ClearExitNodeRequest
+	66,  // 170: client.v0.ClientService.GetPreferences:input_type -> client.v0.GetPreferencesRequest
+	68,  // 171: client.v0.ClientService.SetPreferences:input_type -> client.v0.SetPreferencesRequest
+	70,  // 172: client.v0.ClientService.ResetPreferences:input_type -> client.v0.ResetPreferencesRequest
+	72,  // 173: client.v0.ClientService.ListManagedSettings:input_type -> client.v0.ListManagedSettingsRequest
+	74,  // 174: client.v0.ClientService.ListResources:input_type -> client.v0.ListResourcesRequest
+	76,  // 175: client.v0.ClientService.SetResourceEnabled:input_type -> client.v0.SetResourceEnabledRequest
+	78,  // 176: client.v0.ClientService.NotifyLifecycle:input_type -> client.v0.NotifyLifecycleRequest
+	80,  // 177: client.v0.ClientService.GetUpdateInfo:input_type -> client.v0.GetUpdateInfoRequest
+	82,  // 178: client.v0.ClientService.GetSupportInfo:input_type -> client.v0.GetSupportInfoRequest
+	2,   // 179: client.v0.ClientService.GetRuntimeInfo:output_type -> client.v0.GetRuntimeInfoResponse
+	4,   // 180: client.v0.ClientService.GetStatus:output_type -> client.v0.GetStatusResponse
+	84,  // 181: client.v0.ClientService.WatchEvents:output_type -> client.v0.WatchEventsResponse
+	7,   // 182: client.v0.ClientService.Enroll:output_type -> client.v0.EnrollResponse
+	9,   // 183: client.v0.ClientService.GetEnrollmentAttempt:output_type -> client.v0.GetEnrollmentAttemptResponse
+	11,  // 184: client.v0.ClientService.ListEnrollmentTargets:output_type -> client.v0.ListEnrollmentTargetsResponse
+	13,  // 185: client.v0.ClientService.SelectEnrollmentTarget:output_type -> client.v0.SelectEnrollmentTargetResponse
+	15,  // 186: client.v0.ClientService.CancelEnrollmentAttempt:output_type -> client.v0.CancelEnrollmentAttemptResponse
+	17,  // 187: client.v0.ClientService.Connect:output_type -> client.v0.ConnectResponse
+	19,  // 188: client.v0.ClientService.Disconnect:output_type -> client.v0.DisconnectResponse
+	21,  // 189: client.v0.ClientService.GetServerIdentity:output_type -> client.v0.GetServerIdentityResponse
+	23,  // 190: client.v0.ClientService.TrustServerIdentity:output_type -> client.v0.TrustServerIdentityResponse
+	25,  // 191: client.v0.ClientService.Logout:output_type -> client.v0.LogoutResponse
+	27,  // 192: client.v0.ClientService.ForgetLocalEnrollment:output_type -> client.v0.ForgetLocalEnrollmentResponse
+	29,  // 193: client.v0.ClientService.ListNetworks:output_type -> client.v0.ListNetworksResponse
+	31,  // 194: client.v0.ClientService.SelectNetwork:output_type -> client.v0.SelectNetworkResponse
+	33,  // 195: client.v0.ClientService.ListPeers:output_type -> client.v0.ListPeersResponse
+	35,  // 196: client.v0.ClientService.GetDiagnostics:output_type -> client.v0.GetDiagnosticsResponse
+	37,  // 197: client.v0.ClientService.CreateDiagnosticsBundle:output_type -> client.v0.CreateDiagnosticsBundleResponse
+	39,  // 198: client.v0.ClientService.ReadDiagnosticsBundle:output_type -> client.v0.ReadDiagnosticsBundleResponse
+	41,  // 199: client.v0.ClientService.ListRecentLogs:output_type -> client.v0.ListRecentLogsResponse
+	43,  // 200: client.v0.ClientService.ListProfiles:output_type -> client.v0.ListProfilesResponse
+	45,  // 201: client.v0.ClientService.CreateProfile:output_type -> client.v0.CreateProfileResponse
+	47,  // 202: client.v0.ClientService.SelectProfile:output_type -> client.v0.SelectProfileResponse
+	49,  // 203: client.v0.ClientService.RenameProfile:output_type -> client.v0.RenameProfileResponse
+	51,  // 204: client.v0.ClientService.RemoveProfile:output_type -> client.v0.RemoveProfileResponse
+	53,  // 205: client.v0.ClientService.GetSession:output_type -> client.v0.GetSessionResponse
+	55,  // 206: client.v0.ClientService.RenewSession:output_type -> client.v0.RenewSessionResponse
+	57,  // 207: client.v0.ClientService.WaitSessionRenewal:output_type -> client.v0.WaitSessionRenewalResponse
+	59,  // 208: client.v0.ClientService.ListExitNodes:output_type -> client.v0.ListExitNodesResponse
+	61,  // 209: client.v0.ClientService.GetExitNode:output_type -> client.v0.GetExitNodeResponse
+	63,  // 210: client.v0.ClientService.SelectExitNode:output_type -> client.v0.SelectExitNodeResponse
+	65,  // 211: client.v0.ClientService.ClearExitNode:output_type -> client.v0.ClearExitNodeResponse
+	67,  // 212: client.v0.ClientService.GetPreferences:output_type -> client.v0.GetPreferencesResponse
+	69,  // 213: client.v0.ClientService.SetPreferences:output_type -> client.v0.SetPreferencesResponse
+	71,  // 214: client.v0.ClientService.ResetPreferences:output_type -> client.v0.ResetPreferencesResponse
+	73,  // 215: client.v0.ClientService.ListManagedSettings:output_type -> client.v0.ListManagedSettingsResponse
+	75,  // 216: client.v0.ClientService.ListResources:output_type -> client.v0.ListResourcesResponse
+	77,  // 217: client.v0.ClientService.SetResourceEnabled:output_type -> client.v0.SetResourceEnabledResponse
+	79,  // 218: client.v0.ClientService.NotifyLifecycle:output_type -> client.v0.NotifyLifecycleResponse
+	81,  // 219: client.v0.ClientService.GetUpdateInfo:output_type -> client.v0.GetUpdateInfoResponse
+	83,  // 220: client.v0.ClientService.GetSupportInfo:output_type -> client.v0.GetSupportInfoResponse
+	179, // [179:221] is the sub-list for method output_type
+	137, // [137:179] is the sub-list for method input_type
+	137, // [137:137] is the sub-list for extension type_name
+	137, // [137:137] is the sub-list for extension extendee
+	0,   // [0:137] is the sub-list for field type_name
 }
 
 func init() { file_client_v0_service_proto_init() }
@@ -5084,19 +5444,15 @@ func file_client_v0_service_proto_init() {
 	file_client_v0_common_proto_init()
 	file_client_v0_features_proto_init()
 	file_client_v0_runtime_proto_init()
-	file_client_v0_service_proto_msgTypes[5].OneofWrappers = []any{
-		(*EnrollRequest_EnrollmentToken)(nil),
-		(*EnrollRequest_BrowserLogin)(nil),
+	file_client_v0_service_proto_msgTypes[7].OneofWrappers = []any{
+		(*GetEnrollmentAttemptRequest_AttemptId)(nil),
+		(*GetEnrollmentAttemptRequest_RequestId)(nil),
 	}
-	file_client_v0_service_proto_msgTypes[6].OneofWrappers = []any{
-		(*EnrollResponse_Enrollment)(nil),
-		(*EnrollResponse_BrowserLogin)(nil),
-	}
-	file_client_v0_service_proto_msgTypes[48].OneofWrappers = []any{
+	file_client_v0_service_proto_msgTypes[54].OneofWrappers = []any{
 		(*RenewSessionResponse_Renewal)(nil),
 		(*RenewSessionResponse_BrowserLogin)(nil),
 	}
-	file_client_v0_service_proto_msgTypes[77].OneofWrappers = []any{
+	file_client_v0_service_proto_msgTypes[83].OneofWrappers = []any{
 		(*WatchEventsResponse_Snapshot)(nil),
 		(*WatchEventsResponse_StatusChanged)(nil),
 		(*WatchEventsResponse_Invalidated)(nil),
@@ -5109,7 +5465,7 @@ func file_client_v0_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v0_service_proto_rawDesc), len(file_client_v0_service_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   80,
+			NumMessages:   86,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

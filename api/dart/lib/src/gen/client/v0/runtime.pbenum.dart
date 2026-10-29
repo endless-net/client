@@ -314,6 +314,79 @@ class ProfileState extends $pb.ProtobufEnum {
   const ProfileState._(super.value, super.name);
 }
 
+/// 003 enrollment projection: never exports native request/poll/access/renewal
+/// credentials, PKCE verifier, provider user code or device private material.
+class EnrollmentPhase extends $pb.ProtobufEnum {
+  static const EnrollmentPhase ENROLLMENT_PHASE_UNSPECIFIED = EnrollmentPhase._(
+      0, _omitEnumNames ? '' : 'ENROLLMENT_PHASE_UNSPECIFIED');
+  static const EnrollmentPhase ENROLLMENT_PHASE_AWAITING_LOGIN =
+      EnrollmentPhase._(
+          1, _omitEnumNames ? '' : 'ENROLLMENT_PHASE_AWAITING_LOGIN');
+  static const EnrollmentPhase ENROLLMENT_PHASE_CHOOSING_CONTEXT =
+      EnrollmentPhase._(
+          2, _omitEnumNames ? '' : 'ENROLLMENT_PHASE_CHOOSING_CONTEXT');
+  static const EnrollmentPhase ENROLLMENT_PHASE_REGISTERING = EnrollmentPhase._(
+      3, _omitEnumNames ? '' : 'ENROLLMENT_PHASE_REGISTERING');
+  static const EnrollmentPhase ENROLLMENT_PHASE_PENDING_APPROVAL =
+      EnrollmentPhase._(
+          4, _omitEnumNames ? '' : 'ENROLLMENT_PHASE_PENDING_APPROVAL');
+  static const EnrollmentPhase ENROLLMENT_PHASE_COMPLETING =
+      EnrollmentPhase._(5, _omitEnumNames ? '' : 'ENROLLMENT_PHASE_COMPLETING');
+  static const EnrollmentPhase ENROLLMENT_PHASE_REGISTERED =
+      EnrollmentPhase._(6, _omitEnumNames ? '' : 'ENROLLMENT_PHASE_REGISTERED');
+  static const EnrollmentPhase ENROLLMENT_PHASE_DENIED =
+      EnrollmentPhase._(7, _omitEnumNames ? '' : 'ENROLLMENT_PHASE_DENIED');
+  static const EnrollmentPhase ENROLLMENT_PHASE_CANCELLED =
+      EnrollmentPhase._(8, _omitEnumNames ? '' : 'ENROLLMENT_PHASE_CANCELLED');
+  static const EnrollmentPhase ENROLLMENT_PHASE_EXPIRED =
+      EnrollmentPhase._(9, _omitEnumNames ? '' : 'ENROLLMENT_PHASE_EXPIRED');
+
+  static const $core.List<EnrollmentPhase> values = <EnrollmentPhase>[
+    ENROLLMENT_PHASE_UNSPECIFIED,
+    ENROLLMENT_PHASE_AWAITING_LOGIN,
+    ENROLLMENT_PHASE_CHOOSING_CONTEXT,
+    ENROLLMENT_PHASE_REGISTERING,
+    ENROLLMENT_PHASE_PENDING_APPROVAL,
+    ENROLLMENT_PHASE_COMPLETING,
+    ENROLLMENT_PHASE_REGISTERED,
+    ENROLLMENT_PHASE_DENIED,
+    ENROLLMENT_PHASE_CANCELLED,
+    ENROLLMENT_PHASE_EXPIRED,
+  ];
+
+  static final $core.List<EnrollmentPhase?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 9);
+  static EnrollmentPhase? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const EnrollmentPhase._(super.value, super.name);
+}
+
+class EnrollmentCertainty extends $pb.ProtobufEnum {
+  static const EnrollmentCertainty ENROLLMENT_CERTAINTY_UNSPECIFIED =
+      EnrollmentCertainty._(
+          0, _omitEnumNames ? '' : 'ENROLLMENT_CERTAINTY_UNSPECIFIED');
+  static const EnrollmentCertainty ENROLLMENT_CERTAINTY_KNOWN =
+      EnrollmentCertainty._(
+          1, _omitEnumNames ? '' : 'ENROLLMENT_CERTAINTY_KNOWN');
+  static const EnrollmentCertainty ENROLLMENT_CERTAINTY_UNCERTAIN =
+      EnrollmentCertainty._(
+          2, _omitEnumNames ? '' : 'ENROLLMENT_CERTAINTY_UNCERTAIN');
+
+  static const $core.List<EnrollmentCertainty> values = <EnrollmentCertainty>[
+    ENROLLMENT_CERTAINTY_UNSPECIFIED,
+    ENROLLMENT_CERTAINTY_KNOWN,
+    ENROLLMENT_CERTAINTY_UNCERTAIN,
+  ];
+
+  static final $core.List<EnrollmentCertainty?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 2);
+  static EnrollmentCertainty? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const EnrollmentCertainty._(super.value, super.name);
+}
+
 class CredentialState extends $pb.ProtobufEnum {
   static const CredentialState CREDENTIAL_STATE_UNSPECIFIED = CredentialState._(
       0, _omitEnumNames ? '' : 'CREDENTIAL_STATE_UNSPECIFIED');

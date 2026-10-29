@@ -35,7 +35,25 @@
   "normalized_historical_comparison": {
     "exit_code": 0,
     "normalization": "new go_package; Relay callback removed from comparison as quarantined foreign authority",
-    "scope": "only remaining wire shapes; does not erase incompatible migration findings"
+    "scope": "Historical 001 comparison only, not a verdict on changed 003 candidate"
   },
-  "accepted_baseline_sha256": "18543d4a306add4b13e66607be26456ffb4bf3d623f07bb69a744f4d844ac165"
+  "accepted_baseline_sha256": "18543d4a306add4b13e66607be26456ffb4bf3d623f07bb69a744f4d844ac165",
+  "system_003": {
+    "publication_status": "api-release-candidate",
+    "baseline_api_tag": "api/v0.1.0",
+    "baseline_commit": "46ca2d1944a3a48ddd606305bab712a766786f93",
+    "removed": [
+      "ClientService.WaitBrowserEnrollment",
+      "WaitBrowserEnrollmentRequest",
+      "WaitBrowserEnrollmentResponse",
+      "EnrollmentResult",
+      "EnrollRequest.enrollment_token",
+      "EnrollRequest.browser_login"
+    ],
+    "replacement": "Enroll request_id and EnrollmentAttempt; Get/ListTargets/Select/Cancel attempt RPCs",
+    "backward_compatible": false,
+    "runtime_adopted": false,
+    "consumer_pins_changed": false,
+    "target_api_tag": "api/v0.2.0"
+  }
 }

@@ -26,6 +26,461 @@ export 'package:protobuf/protobuf.dart' show GeneratedMessageGenericExtensions;
 
 export 'runtime.pbenum.dart';
 
+class EnrollmentBrowserAction extends $pb.GeneratedMessage {
+  factory EnrollmentBrowserAction({
+    $core.String? verificationUrl,
+    $0.Timestamp? expiresAt,
+  }) {
+    final result = create();
+    if (verificationUrl != null) result.verificationUrl = verificationUrl;
+    if (expiresAt != null) result.expiresAt = expiresAt;
+    return result;
+  }
+
+  EnrollmentBrowserAction._();
+
+  factory EnrollmentBrowserAction.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory EnrollmentBrowserAction.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'EnrollmentBrowserAction',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'verificationUrl')
+    ..aOM<$0.Timestamp>(2, _omitFieldNames ? '' : 'expiresAt',
+        subBuilder: $0.Timestamp.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnrollmentBrowserAction clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnrollmentBrowserAction copyWith(
+          void Function(EnrollmentBrowserAction) updates) =>
+      super.copyWith((message) => updates(message as EnrollmentBrowserAction))
+          as EnrollmentBrowserAction;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static EnrollmentBrowserAction create() => EnrollmentBrowserAction._();
+  @$core.override
+  EnrollmentBrowserAction createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static EnrollmentBrowserAction getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<EnrollmentBrowserAction>(create);
+  static EnrollmentBrowserAction? _defaultInstance;
+
+  /// Trusted HTTPS URL from Identity; no proof/bearer/provider code.
+  @$pb.TagNumber(1)
+  $core.String get verificationUrl => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set verificationUrl($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasVerificationUrl() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearVerificationUrl() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $0.Timestamp get expiresAt => $_getN(1);
+  @$pb.TagNumber(2)
+  set expiresAt($0.Timestamp value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasExpiresAt() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearExpiresAt() => $_clearField(2);
+  @$pb.TagNumber(2)
+  $0.Timestamp ensureExpiresAt() => $_ensure(1);
+}
+
+class EnrollmentTarget extends $pb.GeneratedMessage {
+  factory EnrollmentTarget({
+    $core.String? accountId,
+    $core.String? accountName,
+    $core.String? networkId,
+    $core.String? networkName,
+    $1.Restriction? restriction,
+  }) {
+    final result = create();
+    if (accountId != null) result.accountId = accountId;
+    if (accountName != null) result.accountName = accountName;
+    if (networkId != null) result.networkId = networkId;
+    if (networkName != null) result.networkName = networkName;
+    if (restriction != null) result.restriction = restriction;
+    return result;
+  }
+
+  EnrollmentTarget._();
+
+  factory EnrollmentTarget.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory EnrollmentTarget.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'EnrollmentTarget',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'accountId')
+    ..aOS(2, _omitFieldNames ? '' : 'accountName')
+    ..aOS(3, _omitFieldNames ? '' : 'networkId')
+    ..aOS(4, _omitFieldNames ? '' : 'networkName')
+    ..aOM<$1.Restriction>(5, _omitFieldNames ? '' : 'restriction',
+        subBuilder: $1.Restriction.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnrollmentTarget clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnrollmentTarget copyWith(void Function(EnrollmentTarget) updates) =>
+      super.copyWith((message) => updates(message as EnrollmentTarget))
+          as EnrollmentTarget;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static EnrollmentTarget create() => EnrollmentTarget._();
+  @$core.override
+  EnrollmentTarget createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static EnrollmentTarget getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<EnrollmentTarget>(create);
+  static EnrollmentTarget? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get accountId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set accountId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAccountId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAccountId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get accountName => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set accountName($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAccountName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAccountName() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get networkId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set networkId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasNetworkId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearNetworkId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get networkName => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set networkName($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasNetworkName() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearNetworkName() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $1.Restriction get restriction => $_getN(4);
+  @$pb.TagNumber(5)
+  set restriction($1.Restriction value) => $_setField(5, value);
+  @$pb.TagNumber(5)
+  $core.bool hasRestriction() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearRestriction() => $_clearField(5);
+  @$pb.TagNumber(5)
+  $1.Restriction ensureRestriction() => $_ensure(4);
+}
+
+class EnrollmentAttempt extends $pb.GeneratedMessage {
+  factory EnrollmentAttempt({
+    $core.String? attemptId,
+    $core.String? requestId,
+    $core.String? profileId,
+    EnrollmentPhase? phase,
+    EnrollmentCertainty? certainty,
+    $1.SnapshotMetadata? metadata,
+    $0.Timestamp? createdAt,
+    $0.Timestamp? deadline,
+    EnrollmentBrowserAction? browserAction,
+    $core.String? accountId,
+    $core.String? networkId,
+    $core.String? nodeId,
+    $1.Restriction? restriction,
+    $0.Timestamp? loginExpiresAt,
+    $0.Timestamp? approvalExpiresAt,
+    $0.Timestamp? recoveryDeadline,
+    $core.int? pollAfterSeconds,
+  }) {
+    final result = create();
+    if (attemptId != null) result.attemptId = attemptId;
+    if (requestId != null) result.requestId = requestId;
+    if (profileId != null) result.profileId = profileId;
+    if (phase != null) result.phase = phase;
+    if (certainty != null) result.certainty = certainty;
+    if (metadata != null) result.metadata = metadata;
+    if (createdAt != null) result.createdAt = createdAt;
+    if (deadline != null) result.deadline = deadline;
+    if (browserAction != null) result.browserAction = browserAction;
+    if (accountId != null) result.accountId = accountId;
+    if (networkId != null) result.networkId = networkId;
+    if (nodeId != null) result.nodeId = nodeId;
+    if (restriction != null) result.restriction = restriction;
+    if (loginExpiresAt != null) result.loginExpiresAt = loginExpiresAt;
+    if (approvalExpiresAt != null) result.approvalExpiresAt = approvalExpiresAt;
+    if (recoveryDeadline != null) result.recoveryDeadline = recoveryDeadline;
+    if (pollAfterSeconds != null) result.pollAfterSeconds = pollAfterSeconds;
+    return result;
+  }
+
+  EnrollmentAttempt._();
+
+  factory EnrollmentAttempt.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory EnrollmentAttempt.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'EnrollmentAttempt',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'attemptId')
+    ..aOS(2, _omitFieldNames ? '' : 'requestId')
+    ..aOS(3, _omitFieldNames ? '' : 'profileId')
+    ..aE<EnrollmentPhase>(4, _omitFieldNames ? '' : 'phase',
+        enumValues: EnrollmentPhase.values)
+    ..aE<EnrollmentCertainty>(5, _omitFieldNames ? '' : 'certainty',
+        enumValues: EnrollmentCertainty.values)
+    ..aOM<$1.SnapshotMetadata>(6, _omitFieldNames ? '' : 'metadata',
+        subBuilder: $1.SnapshotMetadata.create)
+    ..aOM<$0.Timestamp>(7, _omitFieldNames ? '' : 'createdAt',
+        subBuilder: $0.Timestamp.create)
+    ..aOM<$0.Timestamp>(8, _omitFieldNames ? '' : 'deadline',
+        subBuilder: $0.Timestamp.create)
+    ..aOM<EnrollmentBrowserAction>(9, _omitFieldNames ? '' : 'browserAction',
+        subBuilder: EnrollmentBrowserAction.create)
+    ..aOS(10, _omitFieldNames ? '' : 'accountId')
+    ..aOS(11, _omitFieldNames ? '' : 'networkId')
+    ..aOS(12, _omitFieldNames ? '' : 'nodeId')
+    ..aOM<$1.Restriction>(13, _omitFieldNames ? '' : 'restriction',
+        subBuilder: $1.Restriction.create)
+    ..aOM<$0.Timestamp>(14, _omitFieldNames ? '' : 'loginExpiresAt',
+        subBuilder: $0.Timestamp.create)
+    ..aOM<$0.Timestamp>(15, _omitFieldNames ? '' : 'approvalExpiresAt',
+        subBuilder: $0.Timestamp.create)
+    ..aOM<$0.Timestamp>(16, _omitFieldNames ? '' : 'recoveryDeadline',
+        subBuilder: $0.Timestamp.create)
+    ..aI(17, _omitFieldNames ? '' : 'pollAfterSeconds',
+        fieldType: $pb.PbFieldType.OU3)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnrollmentAttempt clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnrollmentAttempt copyWith(void Function(EnrollmentAttempt) updates) =>
+      super.copyWith((message) => updates(message as EnrollmentAttempt))
+          as EnrollmentAttempt;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static EnrollmentAttempt create() => EnrollmentAttempt._();
+  @$core.override
+  EnrollmentAttempt createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static EnrollmentAttempt getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<EnrollmentAttempt>(create);
+  static EnrollmentAttempt? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get attemptId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set attemptId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAttemptId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAttemptId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get requestId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set requestId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasRequestId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearRequestId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get profileId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set profileId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasProfileId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearProfileId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  EnrollmentPhase get phase => $_getN(3);
+  @$pb.TagNumber(4)
+  set phase(EnrollmentPhase value) => $_setField(4, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPhase() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPhase() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  EnrollmentCertainty get certainty => $_getN(4);
+  @$pb.TagNumber(5)
+  set certainty(EnrollmentCertainty value) => $_setField(5, value);
+  @$pb.TagNumber(5)
+  $core.bool hasCertainty() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearCertainty() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $1.SnapshotMetadata get metadata => $_getN(5);
+  @$pb.TagNumber(6)
+  set metadata($1.SnapshotMetadata value) => $_setField(6, value);
+  @$pb.TagNumber(6)
+  $core.bool hasMetadata() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearMetadata() => $_clearField(6);
+  @$pb.TagNumber(6)
+  $1.SnapshotMetadata ensureMetadata() => $_ensure(5);
+
+  @$pb.TagNumber(7)
+  $0.Timestamp get createdAt => $_getN(6);
+  @$pb.TagNumber(7)
+  set createdAt($0.Timestamp value) => $_setField(7, value);
+  @$pb.TagNumber(7)
+  $core.bool hasCreatedAt() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearCreatedAt() => $_clearField(7);
+  @$pb.TagNumber(7)
+  $0.Timestamp ensureCreatedAt() => $_ensure(6);
+
+  /// At most 22 minutes from Enroll; no retry/restart extends this deadline.
+  @$pb.TagNumber(8)
+  $0.Timestamp get deadline => $_getN(7);
+  @$pb.TagNumber(8)
+  set deadline($0.Timestamp value) => $_setField(8, value);
+  @$pb.TagNumber(8)
+  $core.bool hasDeadline() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearDeadline() => $_clearField(8);
+  @$pb.TagNumber(8)
+  $0.Timestamp ensureDeadline() => $_ensure(7);
+
+  @$pb.TagNumber(9)
+  EnrollmentBrowserAction get browserAction => $_getN(8);
+  @$pb.TagNumber(9)
+  set browserAction(EnrollmentBrowserAction value) => $_setField(9, value);
+  @$pb.TagNumber(9)
+  $core.bool hasBrowserAction() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearBrowserAction() => $_clearField(9);
+  @$pb.TagNumber(9)
+  EnrollmentBrowserAction ensureBrowserAction() => $_ensure(8);
+
+  /// Present after selection; node_id only for confirmed registration.
+  @$pb.TagNumber(10)
+  $core.String get accountId => $_getSZ(9);
+  @$pb.TagNumber(10)
+  set accountId($core.String value) => $_setString(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasAccountId() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearAccountId() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  $core.String get networkId => $_getSZ(10);
+  @$pb.TagNumber(11)
+  set networkId($core.String value) => $_setString(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasNetworkId() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearNetworkId() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.String get nodeId => $_getSZ(11);
+  @$pb.TagNumber(12)
+  set nodeId($core.String value) => $_setString(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasNodeId() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearNodeId() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  $1.Restriction get restriction => $_getN(12);
+  @$pb.TagNumber(13)
+  set restriction($1.Restriction value) => $_setField(13, value);
+  @$pb.TagNumber(13)
+  $core.bool hasRestriction() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearRestriction() => $_clearField(13);
+  @$pb.TagNumber(13)
+  $1.Restriction ensureRestriction() => $_ensure(12);
+
+  /// 10-minute login/approval deadlines; do not infer one from the other.
+  @$pb.TagNumber(14)
+  $0.Timestamp get loginExpiresAt => $_getN(13);
+  @$pb.TagNumber(14)
+  set loginExpiresAt($0.Timestamp value) => $_setField(14, value);
+  @$pb.TagNumber(14)
+  $core.bool hasLoginExpiresAt() => $_has(13);
+  @$pb.TagNumber(14)
+  void clearLoginExpiresAt() => $_clearField(14);
+  @$pb.TagNumber(14)
+  $0.Timestamp ensureLoginExpiresAt() => $_ensure(13);
+
+  @$pb.TagNumber(15)
+  $0.Timestamp get approvalExpiresAt => $_getN(14);
+  @$pb.TagNumber(15)
+  set approvalExpiresAt($0.Timestamp value) => $_setField(15, value);
+  @$pb.TagNumber(15)
+  $core.bool hasApprovalExpiresAt() => $_has(14);
+  @$pb.TagNumber(15)
+  void clearApprovalExpiresAt() => $_clearField(15);
+  @$pb.TagNumber(15)
+  $0.Timestamp ensureApprovalExpiresAt() => $_ensure(14);
+
+  /// 2 minutes from the first uncertain outcome, persisted across restarts.
+  @$pb.TagNumber(16)
+  $0.Timestamp get recoveryDeadline => $_getN(15);
+  @$pb.TagNumber(16)
+  set recoveryDeadline($0.Timestamp value) => $_setField(16, value);
+  @$pb.TagNumber(16)
+  $core.bool hasRecoveryDeadline() => $_has(15);
+  @$pb.TagNumber(16)
+  void clearRecoveryDeadline() => $_clearField(16);
+  @$pb.TagNumber(16)
+  $0.Timestamp ensureRecoveryDeadline() => $_ensure(15);
+
+  /// Public refresh hint: 1..30 seconds while pending/uncertain, 0 terminal.
+  /// Client core separately respects Identity/Coordinator poll hints.
+  @$pb.TagNumber(17)
+  $core.int get pollAfterSeconds => $_getIZ(16);
+  @$pb.TagNumber(17)
+  set pollAfterSeconds($core.int value) => $_setUnsignedInt32(16, value);
+  @$pb.TagNumber(17)
+  $core.bool hasPollAfterSeconds() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearPollAfterSeconds() => $_clearField(17);
+}
+
 class ConnectionIntent extends $pb.GeneratedMessage {
   factory ConnectionIntent({
     DesiredState? desiredState,

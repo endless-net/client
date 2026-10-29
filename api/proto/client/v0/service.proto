@@ -27,8 +27,20 @@ service ClientService {
     option (access) = ACCESS_OWNER;
     option (allows_initial_ownership_claim) = true;
   }
-  // Complete an identity-provider browser login started by Enroll.
-  rpc WaitBrowserEnrollment(WaitBrowserEnrollmentRequest) returns (WaitBrowserEnrollmentResponse) {
+  // 003: caller-bound persisted attempt; read by exactly one public selector.
+  rpc GetEnrollmentAttempt(GetEnrollmentAttemptRequest) returns (GetEnrollmentAttemptResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // Only native-session-authorized Account/Network targets; listing is not a grant.
+  rpc ListEnrollmentTargets(ListEnrollmentTargetsRequest) returns (ListEnrollmentTargetsResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // Reauthorize selected Account/Network before registration; no caller role field.
+  rpc SelectEnrollmentTarget(SelectEnrollmentTargetRequest) returns (SelectEnrollmentTargetResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // Stops waiting, not remote Node revocation; committed result wins a race.
+  rpc CancelEnrollmentAttempt(CancelEnrollmentAttemptRequest) returns (CancelEnrollmentAttemptResponse) {
     option (access) = ACCESS_OWNER;
   }
   // UF-05: persist connected intent, then reconcile runtime.
@@ -189,27 +201,66 @@ message EnrollRequest {
   ProfileRef profile = 2;
   EnrollmentMode mode = 3;
   string hostname = 4;
-  oneof authentication {
-    string enrollment_token = 5;
-    bool browser_login = 6;
-  }
+  // Enrollment is interactive VK login in 003. Legacy token/device-code inputs
+  // are removed in a hard cutover, not retained as compatibility alternatives.
+  reserved 5, 6;
+  reserved "enrollment_token", "browser_login";
+  // Canonical UUID, generated and persisted by UI before sending. Same caller,
+  // profile/origin/mode/hostname and identity binding returns the same attempt.
+  // Changed input conflicts. MutationContext is a separate concurrency check.
+  string request_id = 7;
 }
 
 message EnrollResponse {
-  oneof result {
-    EnrollmentResult enrollment = 1;
-    BrowserLoginChallenge browser_login = 2;
+  reserved 1, 2;
+  reserved "enrollment", "browser_login";
+  EnrollmentAttempt attempt = 3;
+}
+
+message GetEnrollmentAttemptRequest {
+  ProfileRef profile = 1;
+  oneof selector {
+    string attempt_id = 2;
+    string request_id = 3;
   }
 }
 
-message WaitBrowserEnrollmentRequest {
-  ProfileRef profile = 1;
-  // Identity-provider user code returned by Enroll, not an IPC request ID.
-  string user_code = 2;
+message GetEnrollmentAttemptResponse {
+  EnrollmentAttempt attempt = 1;
 }
 
-message WaitBrowserEnrollmentResponse {
-  EnrollmentResult enrollment = 1;
+message ListEnrollmentTargetsRequest {
+  ProfileRef profile = 1;
+  string attempt_id = 2;
+  PageRequest page = 3;
+}
+
+message ListEnrollmentTargetsResponse {
+  repeated EnrollmentTarget targets = 1;
+  PageResponse page = 2;
+  SnapshotMetadata metadata = 3;
+}
+
+message SelectEnrollmentTargetRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  string attempt_id = 3;
+  string account_id = 4;
+  string network_id = 5;
+}
+
+message SelectEnrollmentTargetResponse {
+  EnrollmentAttempt attempt = 1;
+}
+
+message CancelEnrollmentAttemptRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  string attempt_id = 3;
+}
+
+message CancelEnrollmentAttemptResponse {
+  EnrollmentAttempt attempt = 1;
 }
 
 message ConnectRequest {

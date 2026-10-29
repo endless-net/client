@@ -62,5 +62,14 @@
       }
     },
     "scope": "test fixtures only; no OS peer-auth or runtime authorization claim"
+  },
+  "system_003": {
+    "status": "api-release-candidate",
+    "runtime_adopted": false,
+    "schema_or_profile_scope": "003 allocation only; no producer release and no consumer pin change",
+    "generated_manifest_sha256": "d0f9cddf938c71e7e0c36fdecfa21a4f89407486545c3d50907c23935a6fb53c",
+    "generated_files": 20,
+    "generation_environment": "Ubuntu 26.04.1 / Go 1.27.3 / Buf 1.50.0 / pinned local plugins; Dart 3.13.5 for Client",
+    "target_api_tag": "api/v0.2.0"
   }
 }

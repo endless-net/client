@@ -203,6 +203,49 @@ final $typed_data.Uint8List profileStateDescriptor = $convert.base64Decode(
     'X1NUQVRFX05FRURTX0xPR0lOEAMSIAocUFJPRklMRV9TVEFURV9ORUVEU19BUFBST1ZBTBAEEh'
     'kKFVBST0ZJTEVfU1RBVEVfQkxPQ0tFRBAF');
 
+@$core.Deprecated('Use enrollmentPhaseDescriptor instead')
+const EnrollmentPhase$json = {
+  '1': 'EnrollmentPhase',
+  '2': [
+    {'1': 'ENROLLMENT_PHASE_UNSPECIFIED', '2': 0},
+    {'1': 'ENROLLMENT_PHASE_AWAITING_LOGIN', '2': 1},
+    {'1': 'ENROLLMENT_PHASE_CHOOSING_CONTEXT', '2': 2},
+    {'1': 'ENROLLMENT_PHASE_REGISTERING', '2': 3},
+    {'1': 'ENROLLMENT_PHASE_PENDING_APPROVAL', '2': 4},
+    {'1': 'ENROLLMENT_PHASE_COMPLETING', '2': 5},
+    {'1': 'ENROLLMENT_PHASE_REGISTERED', '2': 6},
+    {'1': 'ENROLLMENT_PHASE_DENIED', '2': 7},
+    {'1': 'ENROLLMENT_PHASE_CANCELLED', '2': 8},
+    {'1': 'ENROLLMENT_PHASE_EXPIRED', '2': 9},
+  ],
+};
+
+/// Descriptor for `EnrollmentPhase`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List enrollmentPhaseDescriptor = $convert.base64Decode(
+    'Cg9FbnJvbGxtZW50UGhhc2USIAocRU5ST0xMTUVOVF9QSEFTRV9VTlNQRUNJRklFRBAAEiMKH0'
+    'VOUk9MTE1FTlRfUEhBU0VfQVdBSVRJTkdfTE9HSU4QARIlCiFFTlJPTExNRU5UX1BIQVNFX0NI'
+    'T09TSU5HX0NPTlRFWFQQAhIgChxFTlJPTExNRU5UX1BIQVNFX1JFR0lTVEVSSU5HEAMSJQohRU'
+    '5ST0xMTUVOVF9QSEFTRV9QRU5ESU5HX0FQUFJPVkFMEAQSHwobRU5ST0xMTUVOVF9QSEFTRV9D'
+    'T01QTEVUSU5HEAUSHwobRU5ST0xMTUVOVF9QSEFTRV9SRUdJU1RFUkVEEAYSGwoXRU5ST0xMTU'
+    'VOVF9QSEFTRV9ERU5JRUQQBxIeChpFTlJPTExNRU5UX1BIQVNFX0NBTkNFTExFRBAIEhwKGEVO'
+    'Uk9MTE1FTlRfUEhBU0VfRVhQSVJFRBAJ');
+
+@$core.Deprecated('Use enrollmentCertaintyDescriptor instead')
+const EnrollmentCertainty$json = {
+  '1': 'EnrollmentCertainty',
+  '2': [
+    {'1': 'ENROLLMENT_CERTAINTY_UNSPECIFIED', '2': 0},
+    {'1': 'ENROLLMENT_CERTAINTY_KNOWN', '2': 1},
+    {'1': 'ENROLLMENT_CERTAINTY_UNCERTAIN', '2': 2},
+  ],
+};
+
+/// Descriptor for `EnrollmentCertainty`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List enrollmentCertaintyDescriptor = $convert.base64Decode(
+    'ChNFbnJvbGxtZW50Q2VydGFpbnR5EiQKIEVOUk9MTE1FTlRfQ0VSVEFJTlRZX1VOU1BFQ0lGSU'
+    'VEEAASHgoaRU5ST0xMTUVOVF9DRVJUQUlOVFlfS05PV04QARIiCh5FTlJPTExNRU5UX0NFUlRB'
+    'SU5UWV9VTkNFUlRBSU4QAg==');
+
 @$core.Deprecated('Use credentialStateDescriptor instead')
 const CredentialState$json = {
   '1': 'CredentialState',
@@ -243,6 +286,203 @@ final $typed_data.Uint8List connectionPhaseDescriptor = $convert.base64Decode(
     'NPTk5FQ1RJT05fUEhBU0VfRElTQ09OTkVDVEVEEAESHwobQ09OTkVDVElPTl9QSEFTRV9DT05O'
     'RUNUSU5HEAISHgoaQ09OTkVDVElPTl9QSEFTRV9DT05ORUNURUQQAxIiCh5DT05ORUNUSU9OX1'
     'BIQVNFX0RJU0NPTk5FQ1RJTkcQBA==');
+
+@$core.Deprecated('Use enrollmentBrowserActionDescriptor instead')
+const EnrollmentBrowserAction$json = {
+  '1': 'EnrollmentBrowserAction',
+  '2': [
+    {'1': 'verification_url', '3': 1, '4': 1, '5': 9, '10': 'verificationUrl'},
+    {
+      '1': 'expires_at',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'expiresAt'
+    },
+  ],
+};
+
+/// Descriptor for `EnrollmentBrowserAction`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List enrollmentBrowserActionDescriptor = $convert.base64Decode(
+    'ChdFbnJvbGxtZW50QnJvd3NlckFjdGlvbhIpChB2ZXJpZmljYXRpb25fdXJsGAEgASgJUg92ZX'
+    'JpZmljYXRpb25VcmwSOQoKZXhwaXJlc19hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1l'
+    'c3RhbXBSCWV4cGlyZXNBdA==');
+
+@$core.Deprecated('Use enrollmentTargetDescriptor instead')
+const EnrollmentTarget$json = {
+  '1': 'EnrollmentTarget',
+  '2': [
+    {'1': 'account_id', '3': 1, '4': 1, '5': 9, '10': 'accountId'},
+    {'1': 'account_name', '3': 2, '4': 1, '5': 9, '10': 'accountName'},
+    {'1': 'network_id', '3': 3, '4': 1, '5': 9, '10': 'networkId'},
+    {'1': 'network_name', '3': 4, '4': 1, '5': 9, '10': 'networkName'},
+    {
+      '1': 'restriction',
+      '3': 5,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.Restriction',
+      '10': 'restriction'
+    },
+  ],
+};
+
+/// Descriptor for `EnrollmentTarget`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List enrollmentTargetDescriptor = $convert.base64Decode(
+    'ChBFbnJvbGxtZW50VGFyZ2V0Eh0KCmFjY291bnRfaWQYASABKAlSCWFjY291bnRJZBIhCgxhY2'
+    'NvdW50X25hbWUYAiABKAlSC2FjY291bnROYW1lEh0KCm5ldHdvcmtfaWQYAyABKAlSCW5ldHdv'
+    'cmtJZBIhCgxuZXR3b3JrX25hbWUYBCABKAlSC25ldHdvcmtOYW1lEjgKC3Jlc3RyaWN0aW9uGA'
+    'UgASgLMhYuY2xpZW50LnYwLlJlc3RyaWN0aW9uUgtyZXN0cmljdGlvbg==');
+
+@$core.Deprecated('Use enrollmentAttemptDescriptor instead')
+const EnrollmentAttempt$json = {
+  '1': 'EnrollmentAttempt',
+  '2': [
+    {'1': 'attempt_id', '3': 1, '4': 1, '5': 9, '10': 'attemptId'},
+    {'1': 'request_id', '3': 2, '4': 1, '5': 9, '10': 'requestId'},
+    {'1': 'profile_id', '3': 3, '4': 1, '5': 9, '10': 'profileId'},
+    {
+      '1': 'phase',
+      '3': 4,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.EnrollmentPhase',
+      '10': 'phase'
+    },
+    {
+      '1': 'certainty',
+      '3': 5,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.EnrollmentCertainty',
+      '10': 'certainty'
+    },
+    {
+      '1': 'metadata',
+      '3': 6,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.SnapshotMetadata',
+      '10': 'metadata'
+    },
+    {
+      '1': 'created_at',
+      '3': 7,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'createdAt'
+    },
+    {
+      '1': 'deadline',
+      '3': 8,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'deadline'
+    },
+    {
+      '1': 'browser_action',
+      '3': 9,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.EnrollmentBrowserAction',
+      '10': 'browserAction'
+    },
+    {
+      '1': 'account_id',
+      '3': 10,
+      '4': 1,
+      '5': 9,
+      '9': 0,
+      '10': 'accountId',
+      '17': true
+    },
+    {
+      '1': 'network_id',
+      '3': 11,
+      '4': 1,
+      '5': 9,
+      '9': 1,
+      '10': 'networkId',
+      '17': true
+    },
+    {
+      '1': 'node_id',
+      '3': 12,
+      '4': 1,
+      '5': 9,
+      '9': 2,
+      '10': 'nodeId',
+      '17': true
+    },
+    {
+      '1': 'restriction',
+      '3': 13,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.Restriction',
+      '10': 'restriction'
+    },
+    {
+      '1': 'login_expires_at',
+      '3': 14,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'loginExpiresAt'
+    },
+    {
+      '1': 'approval_expires_at',
+      '3': 15,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'approvalExpiresAt'
+    },
+    {
+      '1': 'recovery_deadline',
+      '3': 16,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'recoveryDeadline'
+    },
+    {
+      '1': 'poll_after_seconds',
+      '3': 17,
+      '4': 1,
+      '5': 13,
+      '10': 'pollAfterSeconds'
+    },
+  ],
+  '8': [
+    {'1': '_account_id'},
+    {'1': '_network_id'},
+    {'1': '_node_id'},
+  ],
+};
+
+/// Descriptor for `EnrollmentAttempt`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List enrollmentAttemptDescriptor = $convert.base64Decode(
+    'ChFFbnJvbGxtZW50QXR0ZW1wdBIdCgphdHRlbXB0X2lkGAEgASgJUglhdHRlbXB0SWQSHQoKcm'
+    'VxdWVzdF9pZBgCIAEoCVIJcmVxdWVzdElkEh0KCnByb2ZpbGVfaWQYAyABKAlSCXByb2ZpbGVJ'
+    'ZBIwCgVwaGFzZRgEIAEoDjIaLmNsaWVudC52MC5FbnJvbGxtZW50UGhhc2VSBXBoYXNlEjwKCW'
+    'NlcnRhaW50eRgFIAEoDjIeLmNsaWVudC52MC5FbnJvbGxtZW50Q2VydGFpbnR5UgljZXJ0YWlu'
+    'dHkSNwoIbWV0YWRhdGEYBiABKAsyGy5jbGllbnQudjAuU25hcHNob3RNZXRhZGF0YVIIbWV0YW'
+    'RhdGESOQoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBSCWNy'
+    'ZWF0ZWRBdBI2CghkZWFkbGluZRgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBSCG'
+    'RlYWRsaW5lEkkKDmJyb3dzZXJfYWN0aW9uGAkgASgLMiIuY2xpZW50LnYwLkVucm9sbG1lbnRC'
+    'cm93c2VyQWN0aW9uUg1icm93c2VyQWN0aW9uEiIKCmFjY291bnRfaWQYCiABKAlIAFIJYWNjb3'
+    'VudElkiAEBEiIKCm5ldHdvcmtfaWQYCyABKAlIAVIJbmV0d29ya0lkiAEBEhwKB25vZGVfaWQY'
+    'DCABKAlIAlIGbm9kZUlkiAEBEjgKC3Jlc3RyaWN0aW9uGA0gASgLMhYuY2xpZW50LnYwLlJlc3'
+    'RyaWN0aW9uUgtyZXN0cmljdGlvbhJEChBsb2dpbl9leHBpcmVzX2F0GA4gASgLMhouZ29vZ2xl'
+    'LnByb3RvYnVmLlRpbWVzdGFtcFIObG9naW5FeHBpcmVzQXQSSgoTYXBwcm92YWxfZXhwaXJlc1'
+    '9hdBgPIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBSEWFwcHJvdmFsRXhwaXJlc0F0'
+    'EkcKEXJlY292ZXJ5X2RlYWRsaW5lGBAgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcF'
+    'IQcmVjb3ZlcnlEZWFkbGluZRIsChJwb2xsX2FmdGVyX3NlY29uZHMYESABKA1SEHBvbGxBZnRl'
+    'clNlY29uZHNCDQoLX2FjY291bnRfaWRCDQoLX25ldHdvcmtfaWRCCgoIX25vZGVfaWQ=');
 
 @$core.Deprecated('Use connectionIntentDescriptor instead')
 const ConnectionIntent$json = {

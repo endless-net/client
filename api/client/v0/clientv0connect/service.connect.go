@@ -46,9 +46,18 @@ const (
 	ClientServiceWatchEventsProcedure = "/client.v0.ClientService/WatchEvents"
 	// ClientServiceEnrollProcedure is the fully-qualified name of the ClientService's Enroll RPC.
 	ClientServiceEnrollProcedure = "/client.v0.ClientService/Enroll"
-	// ClientServiceWaitBrowserEnrollmentProcedure is the fully-qualified name of the ClientService's
-	// WaitBrowserEnrollment RPC.
-	ClientServiceWaitBrowserEnrollmentProcedure = "/client.v0.ClientService/WaitBrowserEnrollment"
+	// ClientServiceGetEnrollmentAttemptProcedure is the fully-qualified name of the ClientService's
+	// GetEnrollmentAttempt RPC.
+	ClientServiceGetEnrollmentAttemptProcedure = "/client.v0.ClientService/GetEnrollmentAttempt"
+	// ClientServiceListEnrollmentTargetsProcedure is the fully-qualified name of the ClientService's
+	// ListEnrollmentTargets RPC.
+	ClientServiceListEnrollmentTargetsProcedure = "/client.v0.ClientService/ListEnrollmentTargets"
+	// ClientServiceSelectEnrollmentTargetProcedure is the fully-qualified name of the ClientService's
+	// SelectEnrollmentTarget RPC.
+	ClientServiceSelectEnrollmentTargetProcedure = "/client.v0.ClientService/SelectEnrollmentTarget"
+	// ClientServiceCancelEnrollmentAttemptProcedure is the fully-qualified name of the ClientService's
+	// CancelEnrollmentAttempt RPC.
+	ClientServiceCancelEnrollmentAttemptProcedure = "/client.v0.ClientService/CancelEnrollmentAttempt"
 	// ClientServiceConnectProcedure is the fully-qualified name of the ClientService's Connect RPC.
 	ClientServiceConnectProcedure = "/client.v0.ClientService/Connect"
 	// ClientServiceDisconnectProcedure is the fully-qualified name of the ClientService's Disconnect
@@ -160,8 +169,14 @@ type ClientServiceClient interface {
 	WatchEvents(context.Context, *connect.Request[v0.WatchEventsRequest]) (*connect.ServerStreamForClient[v0.WatchEventsResponse], error)
 	// UF-03: initial unowned installation uses the ownership-claim exception.
 	Enroll(context.Context, *connect.Request[v0.EnrollRequest]) (*connect.Response[v0.EnrollResponse], error)
-	// Complete an identity-provider browser login started by Enroll.
-	WaitBrowserEnrollment(context.Context, *connect.Request[v0.WaitBrowserEnrollmentRequest]) (*connect.Response[v0.WaitBrowserEnrollmentResponse], error)
+	// 003: caller-bound persisted attempt; read by exactly one public selector.
+	GetEnrollmentAttempt(context.Context, *connect.Request[v0.GetEnrollmentAttemptRequest]) (*connect.Response[v0.GetEnrollmentAttemptResponse], error)
+	// Only native-session-authorized Account/Network targets; listing is not a grant.
+	ListEnrollmentTargets(context.Context, *connect.Request[v0.ListEnrollmentTargetsRequest]) (*connect.Response[v0.ListEnrollmentTargetsResponse], error)
+	// Reauthorize selected Account/Network before registration; no caller role field.
+	SelectEnrollmentTarget(context.Context, *connect.Request[v0.SelectEnrollmentTargetRequest]) (*connect.Response[v0.SelectEnrollmentTargetResponse], error)
+	// Stops waiting, not remote Node revocation; committed result wins a race.
+	CancelEnrollmentAttempt(context.Context, *connect.Request[v0.CancelEnrollmentAttemptRequest]) (*connect.Response[v0.CancelEnrollmentAttemptResponse], error)
 	// UF-05: persist connected intent, then reconcile runtime.
 	Connect(context.Context, *connect.Request[v0.ConnectRequest]) (*connect.Response[v0.ConnectResponse], error)
 	// UF-05: persist disconnected intent; retain registration.
@@ -267,10 +282,28 @@ func NewClientServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(clientServiceMethods.ByName("Enroll")),
 			connect.WithClientOptions(opts...),
 		),
-		waitBrowserEnrollment: connect.NewClient[v0.WaitBrowserEnrollmentRequest, v0.WaitBrowserEnrollmentResponse](
+		getEnrollmentAttempt: connect.NewClient[v0.GetEnrollmentAttemptRequest, v0.GetEnrollmentAttemptResponse](
 			httpClient,
-			baseURL+ClientServiceWaitBrowserEnrollmentProcedure,
-			connect.WithSchema(clientServiceMethods.ByName("WaitBrowserEnrollment")),
+			baseURL+ClientServiceGetEnrollmentAttemptProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("GetEnrollmentAttempt")),
+			connect.WithClientOptions(opts...),
+		),
+		listEnrollmentTargets: connect.NewClient[v0.ListEnrollmentTargetsRequest, v0.ListEnrollmentTargetsResponse](
+			httpClient,
+			baseURL+ClientServiceListEnrollmentTargetsProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("ListEnrollmentTargets")),
+			connect.WithClientOptions(opts...),
+		),
+		selectEnrollmentTarget: connect.NewClient[v0.SelectEnrollmentTargetRequest, v0.SelectEnrollmentTargetResponse](
+			httpClient,
+			baseURL+ClientServiceSelectEnrollmentTargetProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("SelectEnrollmentTarget")),
+			connect.WithClientOptions(opts...),
+		),
+		cancelEnrollmentAttempt: connect.NewClient[v0.CancelEnrollmentAttemptRequest, v0.CancelEnrollmentAttemptResponse](
+			httpClient,
+			baseURL+ClientServiceCancelEnrollmentAttemptProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("CancelEnrollmentAttempt")),
 			connect.WithClientOptions(opts...),
 		),
 		connect: connect.NewClient[v0.ConnectRequest, v0.ConnectResponse](
@@ -486,7 +519,10 @@ type clientServiceClient struct {
 	getStatus               *connect.Client[v0.GetStatusRequest, v0.GetStatusResponse]
 	watchEvents             *connect.Client[v0.WatchEventsRequest, v0.WatchEventsResponse]
 	enroll                  *connect.Client[v0.EnrollRequest, v0.EnrollResponse]
-	waitBrowserEnrollment   *connect.Client[v0.WaitBrowserEnrollmentRequest, v0.WaitBrowserEnrollmentResponse]
+	getEnrollmentAttempt    *connect.Client[v0.GetEnrollmentAttemptRequest, v0.GetEnrollmentAttemptResponse]
+	listEnrollmentTargets   *connect.Client[v0.ListEnrollmentTargetsRequest, v0.ListEnrollmentTargetsResponse]
+	selectEnrollmentTarget  *connect.Client[v0.SelectEnrollmentTargetRequest, v0.SelectEnrollmentTargetResponse]
+	cancelEnrollmentAttempt *connect.Client[v0.CancelEnrollmentAttemptRequest, v0.CancelEnrollmentAttemptResponse]
 	connect                 *connect.Client[v0.ConnectRequest, v0.ConnectResponse]
 	disconnect              *connect.Client[v0.DisconnectRequest, v0.DisconnectResponse]
 	getServerIdentity       *connect.Client[v0.GetServerIdentityRequest, v0.GetServerIdentityResponse]
@@ -543,9 +579,24 @@ func (c *clientServiceClient) Enroll(ctx context.Context, req *connect.Request[v
 	return c.enroll.CallUnary(ctx, req)
 }
 
-// WaitBrowserEnrollment calls client.v0.ClientService.WaitBrowserEnrollment.
-func (c *clientServiceClient) WaitBrowserEnrollment(ctx context.Context, req *connect.Request[v0.WaitBrowserEnrollmentRequest]) (*connect.Response[v0.WaitBrowserEnrollmentResponse], error) {
-	return c.waitBrowserEnrollment.CallUnary(ctx, req)
+// GetEnrollmentAttempt calls client.v0.ClientService.GetEnrollmentAttempt.
+func (c *clientServiceClient) GetEnrollmentAttempt(ctx context.Context, req *connect.Request[v0.GetEnrollmentAttemptRequest]) (*connect.Response[v0.GetEnrollmentAttemptResponse], error) {
+	return c.getEnrollmentAttempt.CallUnary(ctx, req)
+}
+
+// ListEnrollmentTargets calls client.v0.ClientService.ListEnrollmentTargets.
+func (c *clientServiceClient) ListEnrollmentTargets(ctx context.Context, req *connect.Request[v0.ListEnrollmentTargetsRequest]) (*connect.Response[v0.ListEnrollmentTargetsResponse], error) {
+	return c.listEnrollmentTargets.CallUnary(ctx, req)
+}
+
+// SelectEnrollmentTarget calls client.v0.ClientService.SelectEnrollmentTarget.
+func (c *clientServiceClient) SelectEnrollmentTarget(ctx context.Context, req *connect.Request[v0.SelectEnrollmentTargetRequest]) (*connect.Response[v0.SelectEnrollmentTargetResponse], error) {
+	return c.selectEnrollmentTarget.CallUnary(ctx, req)
+}
+
+// CancelEnrollmentAttempt calls client.v0.ClientService.CancelEnrollmentAttempt.
+func (c *clientServiceClient) CancelEnrollmentAttempt(ctx context.Context, req *connect.Request[v0.CancelEnrollmentAttemptRequest]) (*connect.Response[v0.CancelEnrollmentAttemptResponse], error) {
+	return c.cancelEnrollmentAttempt.CallUnary(ctx, req)
 }
 
 // Connect calls client.v0.ClientService.Connect.
@@ -728,8 +779,14 @@ type ClientServiceHandler interface {
 	WatchEvents(context.Context, *connect.Request[v0.WatchEventsRequest], *connect.ServerStream[v0.WatchEventsResponse]) error
 	// UF-03: initial unowned installation uses the ownership-claim exception.
 	Enroll(context.Context, *connect.Request[v0.EnrollRequest]) (*connect.Response[v0.EnrollResponse], error)
-	// Complete an identity-provider browser login started by Enroll.
-	WaitBrowserEnrollment(context.Context, *connect.Request[v0.WaitBrowserEnrollmentRequest]) (*connect.Response[v0.WaitBrowserEnrollmentResponse], error)
+	// 003: caller-bound persisted attempt; read by exactly one public selector.
+	GetEnrollmentAttempt(context.Context, *connect.Request[v0.GetEnrollmentAttemptRequest]) (*connect.Response[v0.GetEnrollmentAttemptResponse], error)
+	// Only native-session-authorized Account/Network targets; listing is not a grant.
+	ListEnrollmentTargets(context.Context, *connect.Request[v0.ListEnrollmentTargetsRequest]) (*connect.Response[v0.ListEnrollmentTargetsResponse], error)
+	// Reauthorize selected Account/Network before registration; no caller role field.
+	SelectEnrollmentTarget(context.Context, *connect.Request[v0.SelectEnrollmentTargetRequest]) (*connect.Response[v0.SelectEnrollmentTargetResponse], error)
+	// Stops waiting, not remote Node revocation; committed result wins a race.
+	CancelEnrollmentAttempt(context.Context, *connect.Request[v0.CancelEnrollmentAttemptRequest]) (*connect.Response[v0.CancelEnrollmentAttemptResponse], error)
 	// UF-05: persist connected intent, then reconcile runtime.
 	Connect(context.Context, *connect.Request[v0.ConnectRequest]) (*connect.Response[v0.ConnectResponse], error)
 	// UF-05: persist disconnected intent; retain registration.
@@ -831,10 +888,28 @@ func NewClientServiceHandler(svc ClientServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(clientServiceMethods.ByName("Enroll")),
 		connect.WithHandlerOptions(opts...),
 	)
-	clientServiceWaitBrowserEnrollmentHandler := connect.NewUnaryHandler(
-		ClientServiceWaitBrowserEnrollmentProcedure,
-		svc.WaitBrowserEnrollment,
-		connect.WithSchema(clientServiceMethods.ByName("WaitBrowserEnrollment")),
+	clientServiceGetEnrollmentAttemptHandler := connect.NewUnaryHandler(
+		ClientServiceGetEnrollmentAttemptProcedure,
+		svc.GetEnrollmentAttempt,
+		connect.WithSchema(clientServiceMethods.ByName("GetEnrollmentAttempt")),
+		connect.WithHandlerOptions(opts...),
+	)
+	clientServiceListEnrollmentTargetsHandler := connect.NewUnaryHandler(
+		ClientServiceListEnrollmentTargetsProcedure,
+		svc.ListEnrollmentTargets,
+		connect.WithSchema(clientServiceMethods.ByName("ListEnrollmentTargets")),
+		connect.WithHandlerOptions(opts...),
+	)
+	clientServiceSelectEnrollmentTargetHandler := connect.NewUnaryHandler(
+		ClientServiceSelectEnrollmentTargetProcedure,
+		svc.SelectEnrollmentTarget,
+		connect.WithSchema(clientServiceMethods.ByName("SelectEnrollmentTarget")),
+		connect.WithHandlerOptions(opts...),
+	)
+	clientServiceCancelEnrollmentAttemptHandler := connect.NewUnaryHandler(
+		ClientServiceCancelEnrollmentAttemptProcedure,
+		svc.CancelEnrollmentAttempt,
+		connect.WithSchema(clientServiceMethods.ByName("CancelEnrollmentAttempt")),
 		connect.WithHandlerOptions(opts...),
 	)
 	clientServiceConnectHandler := connect.NewUnaryHandler(
@@ -1051,8 +1126,14 @@ func NewClientServiceHandler(svc ClientServiceHandler, opts ...connect.HandlerOp
 			clientServiceWatchEventsHandler.ServeHTTP(w, r)
 		case ClientServiceEnrollProcedure:
 			clientServiceEnrollHandler.ServeHTTP(w, r)
-		case ClientServiceWaitBrowserEnrollmentProcedure:
-			clientServiceWaitBrowserEnrollmentHandler.ServeHTTP(w, r)
+		case ClientServiceGetEnrollmentAttemptProcedure:
+			clientServiceGetEnrollmentAttemptHandler.ServeHTTP(w, r)
+		case ClientServiceListEnrollmentTargetsProcedure:
+			clientServiceListEnrollmentTargetsHandler.ServeHTTP(w, r)
+		case ClientServiceSelectEnrollmentTargetProcedure:
+			clientServiceSelectEnrollmentTargetHandler.ServeHTTP(w, r)
+		case ClientServiceCancelEnrollmentAttemptProcedure:
+			clientServiceCancelEnrollmentAttemptHandler.ServeHTTP(w, r)
 		case ClientServiceConnectProcedure:
 			clientServiceConnectHandler.ServeHTTP(w, r)
 		case ClientServiceDisconnectProcedure:
@@ -1146,8 +1227,20 @@ func (UnimplementedClientServiceHandler) Enroll(context.Context, *connect.Reques
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.Enroll is not implemented"))
 }
 
-func (UnimplementedClientServiceHandler) WaitBrowserEnrollment(context.Context, *connect.Request[v0.WaitBrowserEnrollmentRequest]) (*connect.Response[v0.WaitBrowserEnrollmentResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.WaitBrowserEnrollment is not implemented"))
+func (UnimplementedClientServiceHandler) GetEnrollmentAttempt(context.Context, *connect.Request[v0.GetEnrollmentAttemptRequest]) (*connect.Response[v0.GetEnrollmentAttemptResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.GetEnrollmentAttempt is not implemented"))
+}
+
+func (UnimplementedClientServiceHandler) ListEnrollmentTargets(context.Context, *connect.Request[v0.ListEnrollmentTargetsRequest]) (*connect.Response[v0.ListEnrollmentTargetsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.ListEnrollmentTargets is not implemented"))
+}
+
+func (UnimplementedClientServiceHandler) SelectEnrollmentTarget(context.Context, *connect.Request[v0.SelectEnrollmentTargetRequest]) (*connect.Response[v0.SelectEnrollmentTargetResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.SelectEnrollmentTarget is not implemented"))
+}
+
+func (UnimplementedClientServiceHandler) CancelEnrollmentAttempt(context.Context, *connect.Request[v0.CancelEnrollmentAttemptRequest]) (*connect.Response[v0.CancelEnrollmentAttemptResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.CancelEnrollmentAttempt is not implemented"))
 }
 
 func (UnimplementedClientServiceHandler) Connect(context.Context, *connect.Request[v0.ConnectRequest]) (*connect.Response[v0.ConnectResponse], error) {
