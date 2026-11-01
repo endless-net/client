@@ -161,6 +161,31 @@ def json_cases(where, manifest):
     print("JSON unit cases:", len(cases), flush=True)
 
 
+def verify_client_contract(root):
+    """Check the compiled pin against the actual immutable producer module."""
+    source = (root / "cmd/client/main_windows.go").read_text(encoding="utf-8")
+    revisions = re.findall(r'const clientAPIRevision = "([0-9a-f]{40})"', source)
+    digests = re.findall(r'const clientContractSHA256 = "([0-9a-f]{64})"', source)
+    if len(revisions) != 1 or len(digests) != 1:
+        raise ValueError("Client contract identity is ambiguous")
+    env = go_environment()
+    module = json.loads(command(["go", "list", "-m", "-json",
+                                 "github.com/endless-net/client/api"], cwd=root,
+                                capture=True, env=env))
+    if module.get("Replace") or module.get("Version") != "v0.2.0":
+        raise ValueError("Client SDK pin differs from compiled identity")
+    downloaded = json.loads(command(["go", "mod", "download", "-json",
+                                     "github.com/endless-net/client/api@v0.2.0"],
+                                    cwd=root, capture=True, env=env))
+    if downloaded.get("Origin", {}).get("Hash") != revisions[0]:
+        raise ValueError("Client SDK origin differs from compiled identity")
+    if Path(downloaded["Dir"]).resolve() != Path(module["Dir"]).resolve():
+        raise ValueError("Client SDK resolved directory differs")
+    descriptor = Path(module["Dir"]) / "client.binpb"
+    if hashlib.sha256(descriptor.read_bytes()).hexdigest() != digests[0]:
+        raise ValueError("Client contract digest differs from published descriptor")
+
+
 def check(root, profile, lint_config=None):
     for module in profile["modules"]:
         where = local(root, module["path"])
@@ -173,6 +198,8 @@ def check(root, profile, lint_config=None):
             if any(entry["Old"]["Path"].startswith("github.com/endless-net/")
                    for entry in metadata.get("Replace") or []):
                 raise ValueError("first-party replace is forbidden")
+            if module["path"] == ".":
+                verify_client_contract(root)
             for args in (
                 ["goimports", "-l", "."],
             ):
@@ -276,6 +303,11 @@ def build(root, profile, output, tag=None):
     if not selected:
         raise ValueError("selected release has no artifacts")
     sha = clean_commit(root)
+    windows_client = any(a["kind"] == "go" and a.get("package") == "./cmd/client"
+                         and a.get("target", {}).get("os") == "windows" for a in selected)
+    if windows_client:
+        verify_client_contract(root)
+        build_date = command(["git", "show", "-s", "--format=%cI", sha], cwd=root, capture=True)
     output = validate_output_location(root, output)
     version = tag.replace("/", "-") if tag else sha[:12]
     output.mkdir(parents=True, exist_ok=True)
@@ -294,7 +326,11 @@ def build(root, profile, output, tag=None):
             with tempfile.TemporaryDirectory() as temporary:
                 binary = Path(temporary) / executable
                 env = dict(go_environment(), GOOS=target["os"], GOARCH=target["arch"], CGO_ENABLED="0")
-                command(["go", "build", "-trimpath", "-buildvcs=false", "-o", str(binary),
+                metadata = []
+                if artifact.get("package") == "./cmd/client" and target["os"] == "windows":
+                    metadata = ["-ldflags", "-X main.version=" + version + " -X main.commit=" + sha
+                                + " -X main.buildDate=" + build_date]
+                command(["go", "build", "-trimpath", "-buildvcs=false", *metadata, "-o", str(binary),
                          artifact["package"]], cwd=local(root, artifact["module"]), env=env)
                 entries = {executable: (binary.read_bytes(), 0o755)}
         else:

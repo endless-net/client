@@ -15,6 +15,111 @@ spec.loader.exec_module(ci)
 
 
 class PublicCI(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "Bash fetch contract runs in Ubuntu CI")
+    def test_private_api_fetch_denies_before_download_without_leaving_helper(self):
+        script = Path(__file__).with_name("fetch-private-api.sh").resolve()
+        for token, event in (("", "push"), ("fixture-token", "pull_request_target")):
+            with self.subTest(event=event), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                go = root / "go"
+                go.write_text("#!/bin/sh\nexit 97\n", encoding="utf-8")
+                go.chmod(0o700)
+                env = {"PATH": str(root) + ":/usr/bin:/bin", "TMPDIR": str(root),
+                       "ENDLESSNET_API_READ_TOKEN": token, "GITHUB_EVENT_NAME": event}
+                result = subprocess.run(["bash", str(script)], cwd=root, env=env,
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(list(root.iterdir()), [go])
+                self.assertNotIn("fixture-token", result.stdout + result.stderr)
+
+    @unittest.skipUnless(os.name == "posix", "Bash fetch contract runs in Ubuntu CI")
+    def test_private_api_fetch_uses_ephemeral_auth_and_cleans_up_on_download_failure(self):
+        script = Path(__file__).with_name("fetch-private-api.sh").resolve()
+        for download_exit in (0, 42):
+            with self.subTest(download_exit=download_exit), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                go = root / "go"
+                go.write_text('''#!/usr/bin/env bash
+set -euo pipefail
+[[ "$*" == 'mod download all' ]]
+[[ "$GOWORK" == off && "$GIT_TERMINAL_PROMPT" == 0 ]]
+[[ "$GOPRIVATE" == 'github.com/endless-net/*' ]]
+[[ "$GONOPROXY" == "$GOPRIVATE" && "$GONOSUMDB" == "$GOPRIVATE" ]]
+[[ "$GIT_CONFIG_KEY_0" == credential.helper && -z "$GIT_CONFIG_VALUE_0" ]]
+[[ "$GIT_CONFIG_KEY_1" == core.askPass && "$GIT_CONFIG_VALUE_1" == "$GIT_ASKPASS" ]]
+[[ "$GIT_CONFIG_KEY_2" == credential.useHttpPath && "$GIT_CONFIG_VALUE_2" == false ]]
+[[ "$(stat -c %a "$GIT_ASKPASS")" == 700 ]]
+[[ "$("$GIT_ASKPASS" "Username for 'https://github.com': ")" == x-access-token ]]
+[[ "$("$GIT_ASKPASS" "Password for 'https://x-access-token@github.com': ")" == "$ENDLESSNET_API_READ_TOKEN" ]]
+if "$GIT_ASKPASS" "Password for 'https://other.example': "; then exit 98; fi
+exit "$FIXTURE_DOWNLOAD_EXIT"
+''', encoding="utf-8")
+                go.chmod(0o700)
+                env = {"PATH": str(root) + ":/usr/bin:/bin", "TMPDIR": str(root),
+                       "ENDLESSNET_API_READ_TOKEN": "fixture-token", "GITHUB_EVENT_NAME": "push",
+                       "FIXTURE_DOWNLOAD_EXIT": str(download_exit), "GOWORK": "ambient-workspace"}
+                result = subprocess.run(["bash", str(script)], cwd=root, env=env,
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, download_exit, result.stderr)
+                self.assertEqual(list(root.iterdir()), [go])
+                self.assertNotIn("fixture-token", result.stdout + result.stderr)
+
+    def test_windows_packaging_binds_identity_to_clean_commit_and_tag(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            sha = self.committed_checkout(root)
+            date = ci.command(["git", "show", "-s", "--format=%cI", sha], cwd=root, capture=True)
+            profile = {"component": "client", "artifacts": [{
+                "release": "runtime", "kind": "go", "name": "client", "module": ".",
+                "package": "./cmd/client", "target": {"os": "windows", "arch": "amd64"}}]}
+            real_command = ci.command
+            def compile_fixture(args, **kwargs):
+                if args[:2] == ["go", "build"]:
+                    flags = args[args.index("-ldflags") + 1]
+                    self.assertEqual(flags, "-X main.version=v0.7.0 -X main.commit=" + sha
+                                     + " -X main.buildDate=" + date)
+                    self.assertEqual(kwargs["env"]["GOOS"], "windows")
+                    Path(args[args.index("-o") + 1]).write_bytes(b"compiled fixture")
+                    return ""
+                return real_command(args, **kwargs)
+            with patch.object(ci, "command", side_effect=compile_fixture), patch.object(ci, "verify_client_contract") as verify:
+                ci.build(root, profile, root / ".artifacts", "v0.7.0")
+                verify.assert_called_once_with(root)
+
+    def test_client_contract_requires_exact_origin_resolved_module_and_descriptor(self):
+        for failure in (None, "origin", "descriptor", "replace", "directory", "version"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                (root / "cmd/client").mkdir(parents=True)
+                sdk = root / "sdk"
+                sdk.mkdir()
+                (sdk / "client.binpb").write_bytes(b"immutable descriptor fixture")
+                digest = ci.hashlib.sha256((sdk / "client.binpb").read_bytes()).hexdigest()
+                revision = "a" * 40
+                (root / "cmd/client/main_windows.go").write_text(
+                    'const clientAPIRevision = "' + revision + '"\n'
+                    'const clientContractSHA256 = "' + digest + '"\n', encoding="utf-8")
+                module = {"Version": "v0.2.0", "Dir": str(sdk)}
+                download = {"Origin": {"Hash": revision}, "Dir": str(sdk)}
+                if failure == "origin":
+                    download["Origin"]["Hash"] = "b" * 40
+                elif failure == "descriptor":
+                    (sdk / "client.binpb").write_bytes(b"mutated")
+                elif failure == "replace":
+                    module["Replace"] = {"Dir": str(sdk)}
+                elif failure == "directory":
+                    download["Dir"] = str(root / "other")
+                elif failure == "version":
+                    module["Version"] = "v0.1.0"
+                def resolve(args, **kwargs):
+                    return json.dumps(module if args[:3] == ["go", "list", "-m"] else download)
+                with patch.object(ci, "command", side_effect=resolve):
+                    if failure:
+                        with self.assertRaises(ValueError):
+                            ci.verify_client_contract(root)
+                    else:
+                        ci.verify_client_contract(root)
+
     def committed_checkout(self, root):
         root.mkdir()
         (root / ".gitignore").write_text(".artifacts/\n", encoding="utf-8")

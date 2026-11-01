@@ -68,9 +68,10 @@ govulncheck ./...
 ```
 
 Непустой вывод `goimports -l` означает ошибку форматирования; исправления
-просматриваются отдельно. Корневой `cmd/client/main.go` — пустой сборочный каркас.
-Его Windows amd64, Linux amd64 и macOS amd64/arm64 outputs проверяют сборку,
-но не реализацию туннеля, маршрутов, OS adapter или продуктовых сценариев.
+просматриваются отдельно. Windows `cmd/client/main_windows.go` собирает runtime003;
+`cmd/client/main.go` для остальных платформ сохраняет сборочный каркас.
+Windows amd64, Linux amd64 и macOS amd64/arm64 outputs проверяют сборку,
+но не доказывают реализацию туннеля, маршрутов или системную приёмку.
 Сборка выполняется отдельно командой `python3 -B scripts/ci.py build`.
 
 Версии инструментов и producer-owned generation/fixtures описаны в
@@ -100,8 +101,8 @@ local replace и обход pin через GOWORK запрещены.
 Базовый CI: format/lint, go vet, go test -short и govulncheck для Go, применимые
 Dart/JSON unit/static checks. Integration/E2E и тесты прежних версий в обязательный
 MVP gate не входят. Отсутствие unit cases у пустого main фиксируется без выдуманного
-покрытия. Собираемый пустой main явно запрошен пользователем для проверки поставки;
-он не реализует доменную логику, БД, handlers или сетевой runtime.
+покрытия. Наличие Windows entrypoint не объявляет завершённым весь runtime003;
+прочие платформы по-прежнему проверяют только сборочный каркас.
 
 Автономные команды: python3 -B scripts/ci.py check и build; unit tooling — scripts/test_ci.py.
 Kit не загружается, собственные публичные lint configs остаются у владельца.
