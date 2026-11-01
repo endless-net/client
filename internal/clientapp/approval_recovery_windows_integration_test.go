@@ -20,6 +20,7 @@ import (
 	"time"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
+	approvalmodel "github.com/endless-net/client/internal/approval"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/localipc"
@@ -180,7 +181,7 @@ func prepareBrowserRecoveryState(t *testing.T, c Config, bundle []byte, f *appro
 				return err
 			}
 			p.Attempt = &a
-			p.Approval.Snapshot = &control.ApprovalSnapshot{Request: f.view, PollToken: f.token, ObservedAt: created}
+			p.Approval.Snapshot = &approvalmodel.Snapshot{Request: f.view, PollToken: f.token, ObservedAt: created}
 		}
 		s.Profiles[p.ID] = p
 		return nil

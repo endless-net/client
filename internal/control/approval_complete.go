@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	approvalmodel "github.com/endless-net/client/internal/approval"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
@@ -12,7 +13,7 @@ import (
 // the original device proof, approval receipt and NODE_CREDENTIAL all agree.
 // The caller still needs an atomic Store commit before projecting registered.
 type ApprovalCompletion struct {
-	Snapshot   ApprovalSnapshot
+	Snapshot   approvalmodel.Snapshot
 	Registered *RegisteredResult
 }
 
@@ -21,10 +22,10 @@ func (ApprovalCompletion) GoString() string { return "[private approval completi
 
 // Complete sends once with the original poll bearer and no body. An approved
 // response without a credential remains an observation, never a success grant.
-func (a *Approval) Complete(ctx context.Context, p state.Profile, original []byte, previous ApprovalSnapshot) (ApprovalCompletion, error) {
+func (a *Approval) Complete(ctx context.Context, p state.Profile, original []byte, previous approvalmodel.Snapshot) (ApprovalCompletion, error) {
 	q, err := a.input(p, original)
 	if err != nil || a.validatePrevious(q, p, previous) != nil || previous.Request.Status != "approved" && previous.Request.Status != "enrolled" {
-		return ApprovalCompletion{}, ErrApprovalProtocol
+		return ApprovalCompletion{}, approvalmodel.ErrProtocol
 	}
 	if err := ctx.Err(); err != nil {
 		return ApprovalCompletion{}, err
@@ -42,13 +43,13 @@ func (a *Approval) Complete(ctx context.Context, p state.Profile, original []byt
 	v, err := coordinator.DecodeCompleteNodeEnrollmentRequestResponse(raw, a.registration.config.MaxResponseBytes)
 	now := a.registration.config.Now()
 	if err != nil || now.Before(previous.ObservedAt) || a.validate(q, p, v.Request, 0, now, false) != nil || !approvalSuccessor(previous.Request, v.Request) {
-		return ApprovalCompletion{}, ErrApprovalProtocol
+		return ApprovalCompletion{}, approvalmodel.ErrProtocol
 	}
-	completion := ApprovalCompletion{Snapshot: ApprovalSnapshot{Request: v.Request, PollToken: previous.PollToken, ObservedAt: now}}
+	completion := ApprovalCompletion{Snapshot: approvalmodel.Snapshot{Request: v.Request, PollToken: previous.PollToken, ObservedAt: now}}
 	if v.Request.Status == "enrolled" {
 		result := v.Registration
 		if result == nil || result.Network.AccountID != v.Request.AccountID || result.Network.ID != v.Request.NetworkID || result.Node.ID != v.Request.NodeID || result.Node.Hostname != q.Hostname {
-			return ApprovalCompletion{}, ErrApprovalProtocol
+			return ApprovalCompletion{}, approvalmodel.ErrProtocol
 		}
 		registered, err := a.registration.verifyResult(p, q, *result, now)
 		if err != nil {
@@ -56,7 +57,7 @@ func (a *Approval) Complete(ctx context.Context, p state.Profile, original []byt
 		}
 		completion.Registered = &registered
 	} else if v.Registration != nil {
-		return ApprovalCompletion{}, ErrApprovalProtocol
+		return ApprovalCompletion{}, approvalmodel.ErrProtocol
 	}
 	// Include decoding/signature work in this attempt's bounded context, then
 	// check the retained purpose bundle again at the time of acceptance.

@@ -76,11 +76,11 @@ func approvalText(value string, empty, spaces bool) bool {
 // It does not select a product entrypoint, change a native request, or dispatch.
 func PrepareApprovalState(p state.Profile, target ApprovalTarget, base string, now time.Time) (state.Profile, error) {
 	if p.Attempt == nil || !approvalmodel.ValidBase(base) {
-		return state.Profile{}, ErrApprovalProtocol
+		return state.Profile{}, approvalmodel.ErrProtocol
 	}
 	if p.Approval != nil {
 		if !p.Attempt.BrowserApproval || p.Approval.Base != base {
-			return state.Profile{}, ErrApprovalProtocol
+			return state.Profile{}, approvalmodel.ErrProtocol
 		}
 		if _, err := PrepareApproval(p, target); err != nil {
 			return state.Profile{}, err
@@ -88,7 +88,7 @@ func PrepareApprovalState(p state.Profile, target ApprovalTarget, base string, n
 		return p, nil
 	}
 	if p.Attempt.BrowserApproval || p.RemoteInFlight || p.Attempt.Uncertain || p.Secrets.RegistrationRequest != "" || p.Secrets.NodeCredential != "" {
-		return state.Profile{}, ErrApprovalProtocol
+		return state.Profile{}, approvalmodel.ErrProtocol
 	}
 	raw, err := PrepareApproval(p, target)
 	if err != nil {

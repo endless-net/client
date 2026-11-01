@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	approvalmodel "github.com/endless-net/client/internal/approval"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 )
@@ -186,7 +187,7 @@ func TestApprovalStateRejectsFrozenNativeRequest(t *testing.T) {
 	p := f.p
 	p.RemoteInFlight, p.InFlightAt = false, time.Time{}
 	p.Secrets.RegistrationRequest = string(f.original)
-	if _, err := PrepareApprovalState(p, ApprovalTarget{AccountID: "account", NetworkID: "network"}, approvalBase, f.now); !errors.Is(err, ErrApprovalProtocol) {
+	if _, err := PrepareApprovalState(p, ApprovalTarget{AccountID: "account", NetworkID: "network"}, approvalBase, f.now); !errors.Is(err, approvalmodel.ErrProtocol) {
 		t.Fatal("frozen native request converted into approval", err)
 	}
 	// Unrelated native state still round-trips without adding browser metadata.

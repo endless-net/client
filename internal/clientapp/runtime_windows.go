@@ -131,8 +131,6 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 	return r, nil
 }
 
-func (r *WindowsRuntime) PipeConfig() localipc.PipeConfig { return r.pipe }
-
 // RunSCM is an explicit service-host entry. It neither registers nor starts an
 // installed service and has no console fallback.
 func (r *WindowsRuntime) RunSCM() error {

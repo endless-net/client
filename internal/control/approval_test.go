@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	approvalmodel "github.com/endless-net/client/internal/approval"
 	"github.com/endless-net/client/internal/enrollment"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
@@ -58,8 +59,8 @@ func (f *approvalFixture) approval(t *testing.T, roundTrip transport) *Approval 
 	return a
 }
 
-func (f *approvalFixture) pending() ApprovalSnapshot {
-	return ApprovalSnapshot{Request: f.view, PollToken: f.token, PollAfterSeconds: 2, ObservedAt: f.now}
+func (f *approvalFixture) pending() approvalmodel.Snapshot {
+	return approvalmodel.Snapshot{Request: f.view, PollToken: f.token, PollAfterSeconds: 2, ObservedAt: f.now}
 }
 
 func approvalResponse(t *testing.T, req *http.Request, value any) *http.Response {
@@ -197,7 +198,7 @@ func TestApprovalRejectsForeignMalformedAndRegressedResponses(t *testing.T) {
 			} else {
 				_, err = a.Poll(context.Background(), f.p, f.original, previous)
 			}
-			if !errors.Is(err, ErrApprovalProtocol) {
+			if !errors.Is(err, approvalmodel.ErrProtocol) {
 				t.Fatal("invalid or rebound response accepted", err)
 			}
 		})
@@ -313,7 +314,7 @@ func TestApprovalRequiresExplicitTrustedBrowserBaseWithoutConstructorIO(t *testi
 			t.Fatal("constructor performed IO")
 			return nil, errors.New("unexpected")
 		})}, staticAnnouncement{f.announcement}, ApprovalConfig{RegistrationConfig: RegistrationConfig{MaxRequestBytes: 16384, MaxResponseBytes: 65536, MaxCredentialBytes: 8192}, ApprovalBase: base})
-		if !errors.Is(err, ErrApprovalProtocol) {
+		if !errors.Is(err, approvalmodel.ErrProtocol) {
 			t.Fatal("untrusted browser base accepted")
 		}
 	}

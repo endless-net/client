@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	approvalmodel "github.com/endless-net/client/internal/approval"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	"go.opentelemetry.io/otel/metric"
@@ -64,7 +65,7 @@ func NewEnrollmentWorker(login *LoginExecutor, registration *RegistrationExecuto
 // class. It selects no UI/IPC entrypoint and performs no construction-time I/O.
 func NewApprovalEnrollmentWorker(login *LoginExecutor, registration *RegistrationExecutor, approval *ApprovalExecutor, tracer trace.Tracer, meter metric.Meter, logger *slog.Logger) (*LoginWorker, error) {
 	if approval == nil || login == nil || approval.store != login.store {
-		return nil, ErrApprovalProtocol
+		return nil, approvalmodel.ErrProtocol
 	}
 	w, err := NewEnrollmentWorker(login, registration, tracer, meter, logger)
 	if err != nil {

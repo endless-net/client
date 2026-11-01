@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	approvalmodel "github.com/endless-net/client/internal/approval"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
@@ -27,7 +28,7 @@ type ApprovalExecutor struct {
 
 func NewApprovalExecutor(store *state.Store, remote *Approval, c ApprovalExecutorConfig) (*ApprovalExecutor, error) {
 	if store == nil || remote == nil || c.Now == nil || c.MaxCommitRetries <= 0 || c.RetryInterval < time.Millisecond || c.RetryInterval > 30*time.Second || c.WriteBudget < time.Millisecond || c.WriteBudget > 30*time.Second {
-		return nil, ErrApprovalProtocol
+		return nil, approvalmodel.ErrProtocol
 	}
 	return &ApprovalExecutor{store: store, remote: remote, config: c}, nil
 }
@@ -74,7 +75,7 @@ func (e *ApprovalExecutor) Reconcile(ctx context.Context, id, attempt string) (t
 		return time.Time{}, nil
 	}
 	if p.Approval.Base != e.remote.base {
-		return time.Time{}, ErrApprovalProtocol
+		return time.Time{}, approvalmodel.ErrProtocol
 	}
 	progress := *p.Approval
 	p.Approval = &progress
@@ -182,7 +183,7 @@ func (e *ApprovalExecutor) apply(p state.Profile, result ApprovalCompletion, cal
 			if err != nil {
 				return p, err
 			}
-			if errors.Is(callErr, ErrApprovalProtocol) || errors.Is(callErr, ErrRegistrationProtocol) {
+			if errors.Is(callErr, approvalmodel.ErrProtocol) || errors.Is(callErr, ErrRegistrationProtocol) {
 				p.Approval.BlockedReason = "client.approval.invalid_response"
 			}
 		}
@@ -222,7 +223,7 @@ func (e *ApprovalExecutor) apply(p state.Profile, result ApprovalCompletion, cal
 		if result.Registered != nil {
 			r := result.Registered
 			if status != "enrolled" || r.AccountID != a.AccountID || r.NetworkID != a.NetworkID || r.NodeID != snapshot.Request.NodeID || r.Credential == "" || !r.CredentialEnds.After(now) {
-				return p, ErrApprovalProtocol
+				return p, approvalmodel.ErrProtocol
 			}
 			public, err := e.remote.registration.credentialKey(p, r.Credential, now)
 			if err != nil {
@@ -230,7 +231,7 @@ func (e *ApprovalExecutor) apply(p state.Profile, result ApprovalCompletion, cal
 			}
 			claims, err := coordinator.VerifyNodeCredential(r.Credential, e.remote.registration.config.MaxCredentialBytes, public, r.NetworkID, r.NodeID, "node:register", now)
 			if err != nil || !claims.ExpiresAt.Equal(r.CredentialEnds) {
-				return p, ErrApprovalProtocol
+				return p, approvalmodel.ErrProtocol
 			}
 			a, err = a.ResolveCommittedRegistration(r.NodeID, r.CredentialEnds, now)
 			if err != nil {
@@ -241,7 +242,7 @@ func (e *ApprovalExecutor) apply(p state.Profile, result ApprovalCompletion, cal
 			a, err = a.Approved(now)
 		}
 	} else if result.Registered != nil {
-		return p, ErrApprovalProtocol
+		return p, approvalmodel.ErrProtocol
 	} else if status == "rejected" {
 		a, err = a.Reject(now)
 		if err == nil {

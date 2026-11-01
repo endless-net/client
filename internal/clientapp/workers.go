@@ -39,12 +39,6 @@ func NewWorkers(lifecycle fx.Lifecycle, shutdown fx.Shutdowner, signals *Signals
 	return w, nil
 }
 
-func (w *Workers) Healthy() bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.running && !w.stopping && !w.failed
-}
-
 func (w *Workers) start(ctx context.Context) error {
 	if _, bounded := ctx.Deadline(); !bounded || ctx.Err() != nil {
 		return ErrLifecycle
