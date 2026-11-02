@@ -71,5 +71,14 @@
     "generated_files": 20,
     "generation_environment": "Ubuntu 26.04.1 / Go 1.27.3 / Buf 1.50.0 / pinned local plugins; Dart 3.13.5 for Client",
     "target_api_tag": "api/v0.2.0"
+  },
+  "system_006": {
+    "status": "api-release-candidate",
+    "runtime_adopted": false,
+    "target_api_tag": "api/v0.3.0",
+    "generated_manifest_sha256": "e4dcffdbfd8753940ad9080afaf7b5d2babaa7da7ac4367eb0782dc3c75922c3",
+    "generated_files": 20,
+    "generation_environment": "Ubuntu26.04.1 / Go1.27.3 / Buf1.50.0 / pinned local plugins / Dart3.13.5; two byte-identical generations",
+    "scope": "caller-owned remote Node revocation; unknown and accepted only, no traffic evidence provider in MVP"
   }
 }

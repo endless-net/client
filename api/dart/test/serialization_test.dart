@@ -38,6 +38,35 @@ void main() {
       );
     }
   });
+  test('006 exact command and unknown result retain their meaning', () {
+    final command = RevokeNodeAccessRequest(
+      profile: ProfileRef(profileId: 'profile'),
+      commandId: '611fb038-329c-4de5-872a-89bcab17287a',
+      target: NodeRevocationTarget(
+        accountId: 'account',
+        networkId: 'network',
+        nodeId: 'lost',
+        hostname: 'same-name',
+        networkRevision: Int64.parseInt('9007199254740993'),
+      ),
+    );
+    final restored = RevokeNodeAccessRequest.fromBuffer(
+      command.writeToBuffer(),
+    );
+    expect(restored.commandId, command.commandId);
+    expect(restored.target.nodeId, 'lost');
+    expect(restored.target.networkRevision.toString(), '9007199254740993');
+    final unknown = NodeRevocationResult(
+      commandId: command.commandId,
+      phase: NodeRevocationPhase.NODE_REVOCATION_PHASE_UNKNOWN,
+    );
+    final result = NodeRevocationResult.fromBuffer(unknown.writeToBuffer());
+    expect(result.phase, NodeRevocationPhase.NODE_REVOCATION_PHASE_UNKNOWN);
+    expect(result.hasAcceptedAt(), isFalse);
+    expect(result.hasEnforceBy(), isFalse);
+    expect(result.committedNetworkRevision, Int64.ZERO);
+  });
+
   test('003 request lookup and uncertain enrollment stay separate', () {
     final lookup = GetEnrollmentAttemptRequest(
       profile: ProfileRef(profileId: 'profile-fixture'),

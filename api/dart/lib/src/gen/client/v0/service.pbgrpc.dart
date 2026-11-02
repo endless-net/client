@@ -32,6 +32,32 @@ class ClientServiceClient extends $grpc.Client {
 
   ClientServiceClient(super.channel, {super.options, super.interceptors});
 
+  /// 006: native human session, active profile Network; listing is not a grant.
+  $grpc.ResponseFuture<$0.ListNodeRevocationTargetsResponse>
+      listNodeRevocationTargets(
+    $0.ListNodeRevocationTargetsRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listNodeRevocationTargets, request,
+        options: options);
+  }
+
+  /// Persist the caller's command/target before dispatch. Exact replay keeps both.
+  $grpc.ResponseFuture<$0.RevokeNodeAccessResponse> revokeNodeAccess(
+    $0.RevokeNodeAccessRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$revokeNodeAccess, request, options: options);
+  }
+
+  /// Query the original caller-bound command, including after timeout/reopen.
+  $grpc.ResponseFuture<$0.GetNodeRevocationResponse> getNodeRevocation(
+    $0.GetNodeRevocationRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getNodeRevocation, request, options: options);
+  }
+
   /// UF-04, UF-20, UF-22, UF-23: installed identity and caller-filtered capabilities.
   $grpc.ResponseFuture<$0.GetRuntimeInfoResponse> getRuntimeInfo(
     $0.GetRuntimeInfoRequest request, {
@@ -378,6 +404,22 @@ class ClientServiceClient extends $grpc.Client {
 
   // method descriptors
 
+  static final _$listNodeRevocationTargets = $grpc.ClientMethod<
+          $0.ListNodeRevocationTargetsRequest,
+          $0.ListNodeRevocationTargetsResponse>(
+      '/client.v0.ClientService/ListNodeRevocationTargets',
+      ($0.ListNodeRevocationTargetsRequest value) => value.writeToBuffer(),
+      $0.ListNodeRevocationTargetsResponse.fromBuffer);
+  static final _$revokeNodeAccess = $grpc.ClientMethod<
+          $0.RevokeNodeAccessRequest, $0.RevokeNodeAccessResponse>(
+      '/client.v0.ClientService/RevokeNodeAccess',
+      ($0.RevokeNodeAccessRequest value) => value.writeToBuffer(),
+      $0.RevokeNodeAccessResponse.fromBuffer);
+  static final _$getNodeRevocation = $grpc.ClientMethod<
+          $0.GetNodeRevocationRequest, $0.GetNodeRevocationResponse>(
+      '/client.v0.ClientService/GetNodeRevocation',
+      ($0.GetNodeRevocationRequest value) => value.writeToBuffer(),
+      $0.GetNodeRevocationResponse.fromBuffer);
   static final _$getRuntimeInfo =
       $grpc.ClientMethod<$0.GetRuntimeInfoRequest, $0.GetRuntimeInfoResponse>(
           '/client.v0.ClientService/GetRuntimeInfo',
@@ -597,6 +639,33 @@ abstract class ClientServiceBase extends $grpc.Service {
   $core.String get $name => 'client.v0.ClientService';
 
   ClientServiceBase() {
+    $addMethod($grpc.ServiceMethod<$0.ListNodeRevocationTargetsRequest,
+            $0.ListNodeRevocationTargetsResponse>(
+        'ListNodeRevocationTargets',
+        listNodeRevocationTargets_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListNodeRevocationTargetsRequest.fromBuffer(value),
+        ($0.ListNodeRevocationTargetsResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.RevokeNodeAccessRequest,
+            $0.RevokeNodeAccessResponse>(
+        'RevokeNodeAccess',
+        revokeNodeAccess_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.RevokeNodeAccessRequest.fromBuffer(value),
+        ($0.RevokeNodeAccessResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetNodeRevocationRequest,
+            $0.GetNodeRevocationResponse>(
+        'GetNodeRevocation',
+        getNodeRevocation_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetNodeRevocationRequest.fromBuffer(value),
+        ($0.GetNodeRevocationResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.GetRuntimeInfoRequest,
             $0.GetRuntimeInfoResponse>(
         'GetRuntimeInfo',
@@ -962,6 +1031,33 @@ abstract class ClientServiceBase extends $grpc.Service {
             $0.GetSupportInfoRequest.fromBuffer(value),
         ($0.GetSupportInfoResponse value) => value.writeToBuffer()));
   }
+
+  $async.Future<$0.ListNodeRevocationTargetsResponse>
+      listNodeRevocationTargets_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.ListNodeRevocationTargetsRequest> $request) async {
+    return listNodeRevocationTargets($call, await $request);
+  }
+
+  $async.Future<$0.ListNodeRevocationTargetsResponse> listNodeRevocationTargets(
+      $grpc.ServiceCall call, $0.ListNodeRevocationTargetsRequest request);
+
+  $async.Future<$0.RevokeNodeAccessResponse> revokeNodeAccess_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.RevokeNodeAccessRequest> $request) async {
+    return revokeNodeAccess($call, await $request);
+  }
+
+  $async.Future<$0.RevokeNodeAccessResponse> revokeNodeAccess(
+      $grpc.ServiceCall call, $0.RevokeNodeAccessRequest request);
+
+  $async.Future<$0.GetNodeRevocationResponse> getNodeRevocation_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetNodeRevocationRequest> $request) async {
+    return getNodeRevocation($call, await $request);
+  }
+
+  $async.Future<$0.GetNodeRevocationResponse> getNodeRevocation(
+      $grpc.ServiceCall call, $0.GetNodeRevocationRequest request);
 
   $async.Future<$0.GetRuntimeInfoResponse> getRuntimeInfo_Pre(
       $grpc.ServiceCall $call,

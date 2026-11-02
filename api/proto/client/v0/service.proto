@@ -6,10 +6,23 @@ package client.v0;
 import "client/v0/common.proto";
 import "client/v0/features.proto";
 import "client/v0/runtime.proto";
+import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/endless-net/client/api/client/v0;clientv0";
 
 service ClientService {
+  // 006: native human session, active profile Network; listing is not a grant.
+  rpc ListNodeRevocationTargets(ListNodeRevocationTargetsRequest) returns (ListNodeRevocationTargetsResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // Persist the caller's command/target before dispatch. Exact replay keeps both.
+  rpc RevokeNodeAccess(RevokeNodeAccessRequest) returns (RevokeNodeAccessResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // Query the original caller-bound command, including after timeout/reopen.
+  rpc GetNodeRevocation(GetNodeRevocationRequest) returns (GetNodeRevocationResponse) {
+    option (access) = ACCESS_OWNER;
+  }
   // UF-04, UF-20, UF-22, UF-23: installed identity and caller-filtered capabilities.
   rpc GetRuntimeInfo(GetRuntimeInfoRequest) returns (GetRuntimeInfoResponse) {
     option (access) = ACCESS_OBSERVER;
@@ -644,4 +657,66 @@ enum Domain {
 message DomainInvalidated {
   Domain domain = 1;
   string profile_id = 2;
+}
+
+// A stable registration in the active profile's selected Account/Network.
+// Hostname is display only; the owner reauthorizes every command and query.
+message NodeRevocationTarget {
+  string account_id = 1;
+  string network_id = 2;
+  string node_id = 3;
+  string hostname = 4;
+  string assigned_ip = 5;
+  string status = 6;
+  uint64 network_revision = 7;
+}
+
+enum NodeRevocationPhase {
+  NODE_REVOCATION_PHASE_UNSPECIFIED = 0;
+  NODE_REVOCATION_PHASE_UNKNOWN = 1;
+  NODE_REVOCATION_PHASE_ACCEPTED = 2;
+}
+
+// Accepted is an authoritative receipt, never proof of stopped traffic or local
+// cleanup. No traffic-evidence provider is part of the 006 MVP. Expiry of
+// enforce_by, a map revision or an ACK cannot promote accepted to confirmed.
+message NodeRevocationResult {
+  string profile_id = 1;
+  NodeRevocationTarget target = 2;
+  string command_id = 3;
+  NodeRevocationPhase phase = 4;
+  google.protobuf.Timestamp accepted_at = 5;
+  google.protobuf.Timestamp enforce_by = 6;
+  uint64 committed_network_revision = 7;
+}
+
+message ListNodeRevocationTargetsRequest {
+  ProfileRef profile = 1;
+}
+
+message ListNodeRevocationTargetsResponse {
+  repeated NodeRevocationTarget targets = 1;
+  SnapshotMetadata metadata = 2;
+}
+
+message RevokeNodeAccessRequest {
+  MutationContext mutation = 1;
+  ProfileRef profile = 2;
+  NodeRevocationTarget target = 3;
+  // Canonical UUID persisted by UI before first dispatch. Changed input with
+  // the same command_id conflicts; timeout must not mint a new command.
+  string command_id = 4;
+}
+
+message RevokeNodeAccessResponse {
+  NodeRevocationResult result = 1;
+}
+
+message GetNodeRevocationRequest {
+  ProfileRef profile = 1;
+  string command_id = 2;
+}
+
+message GetNodeRevocationResponse {
+  NodeRevocationResult result = 1;
 }

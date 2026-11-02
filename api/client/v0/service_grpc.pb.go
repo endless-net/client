@@ -22,54 +22,63 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ClientService_GetRuntimeInfo_FullMethodName          = "/client.v0.ClientService/GetRuntimeInfo"
-	ClientService_GetStatus_FullMethodName               = "/client.v0.ClientService/GetStatus"
-	ClientService_WatchEvents_FullMethodName             = "/client.v0.ClientService/WatchEvents"
-	ClientService_Enroll_FullMethodName                  = "/client.v0.ClientService/Enroll"
-	ClientService_GetEnrollmentAttempt_FullMethodName    = "/client.v0.ClientService/GetEnrollmentAttempt"
-	ClientService_ListEnrollmentTargets_FullMethodName   = "/client.v0.ClientService/ListEnrollmentTargets"
-	ClientService_SelectEnrollmentTarget_FullMethodName  = "/client.v0.ClientService/SelectEnrollmentTarget"
-	ClientService_CancelEnrollmentAttempt_FullMethodName = "/client.v0.ClientService/CancelEnrollmentAttempt"
-	ClientService_Connect_FullMethodName                 = "/client.v0.ClientService/Connect"
-	ClientService_Disconnect_FullMethodName              = "/client.v0.ClientService/Disconnect"
-	ClientService_GetServerIdentity_FullMethodName       = "/client.v0.ClientService/GetServerIdentity"
-	ClientService_TrustServerIdentity_FullMethodName     = "/client.v0.ClientService/TrustServerIdentity"
-	ClientService_Logout_FullMethodName                  = "/client.v0.ClientService/Logout"
-	ClientService_ForgetLocalEnrollment_FullMethodName   = "/client.v0.ClientService/ForgetLocalEnrollment"
-	ClientService_ListNetworks_FullMethodName            = "/client.v0.ClientService/ListNetworks"
-	ClientService_SelectNetwork_FullMethodName           = "/client.v0.ClientService/SelectNetwork"
-	ClientService_ListPeers_FullMethodName               = "/client.v0.ClientService/ListPeers"
-	ClientService_GetDiagnostics_FullMethodName          = "/client.v0.ClientService/GetDiagnostics"
-	ClientService_CreateDiagnosticsBundle_FullMethodName = "/client.v0.ClientService/CreateDiagnosticsBundle"
-	ClientService_ReadDiagnosticsBundle_FullMethodName   = "/client.v0.ClientService/ReadDiagnosticsBundle"
-	ClientService_ListRecentLogs_FullMethodName          = "/client.v0.ClientService/ListRecentLogs"
-	ClientService_ListProfiles_FullMethodName            = "/client.v0.ClientService/ListProfiles"
-	ClientService_CreateProfile_FullMethodName           = "/client.v0.ClientService/CreateProfile"
-	ClientService_SelectProfile_FullMethodName           = "/client.v0.ClientService/SelectProfile"
-	ClientService_RenameProfile_FullMethodName           = "/client.v0.ClientService/RenameProfile"
-	ClientService_RemoveProfile_FullMethodName           = "/client.v0.ClientService/RemoveProfile"
-	ClientService_GetSession_FullMethodName              = "/client.v0.ClientService/GetSession"
-	ClientService_RenewSession_FullMethodName            = "/client.v0.ClientService/RenewSession"
-	ClientService_WaitSessionRenewal_FullMethodName      = "/client.v0.ClientService/WaitSessionRenewal"
-	ClientService_ListExitNodes_FullMethodName           = "/client.v0.ClientService/ListExitNodes"
-	ClientService_GetExitNode_FullMethodName             = "/client.v0.ClientService/GetExitNode"
-	ClientService_SelectExitNode_FullMethodName          = "/client.v0.ClientService/SelectExitNode"
-	ClientService_ClearExitNode_FullMethodName           = "/client.v0.ClientService/ClearExitNode"
-	ClientService_GetPreferences_FullMethodName          = "/client.v0.ClientService/GetPreferences"
-	ClientService_SetPreferences_FullMethodName          = "/client.v0.ClientService/SetPreferences"
-	ClientService_ResetPreferences_FullMethodName        = "/client.v0.ClientService/ResetPreferences"
-	ClientService_ListManagedSettings_FullMethodName     = "/client.v0.ClientService/ListManagedSettings"
-	ClientService_ListResources_FullMethodName           = "/client.v0.ClientService/ListResources"
-	ClientService_SetResourceEnabled_FullMethodName      = "/client.v0.ClientService/SetResourceEnabled"
-	ClientService_NotifyLifecycle_FullMethodName         = "/client.v0.ClientService/NotifyLifecycle"
-	ClientService_GetUpdateInfo_FullMethodName           = "/client.v0.ClientService/GetUpdateInfo"
-	ClientService_GetSupportInfo_FullMethodName          = "/client.v0.ClientService/GetSupportInfo"
+	ClientService_ListNodeRevocationTargets_FullMethodName = "/client.v0.ClientService/ListNodeRevocationTargets"
+	ClientService_RevokeNodeAccess_FullMethodName          = "/client.v0.ClientService/RevokeNodeAccess"
+	ClientService_GetNodeRevocation_FullMethodName         = "/client.v0.ClientService/GetNodeRevocation"
+	ClientService_GetRuntimeInfo_FullMethodName            = "/client.v0.ClientService/GetRuntimeInfo"
+	ClientService_GetStatus_FullMethodName                 = "/client.v0.ClientService/GetStatus"
+	ClientService_WatchEvents_FullMethodName               = "/client.v0.ClientService/WatchEvents"
+	ClientService_Enroll_FullMethodName                    = "/client.v0.ClientService/Enroll"
+	ClientService_GetEnrollmentAttempt_FullMethodName      = "/client.v0.ClientService/GetEnrollmentAttempt"
+	ClientService_ListEnrollmentTargets_FullMethodName     = "/client.v0.ClientService/ListEnrollmentTargets"
+	ClientService_SelectEnrollmentTarget_FullMethodName    = "/client.v0.ClientService/SelectEnrollmentTarget"
+	ClientService_CancelEnrollmentAttempt_FullMethodName   = "/client.v0.ClientService/CancelEnrollmentAttempt"
+	ClientService_Connect_FullMethodName                   = "/client.v0.ClientService/Connect"
+	ClientService_Disconnect_FullMethodName                = "/client.v0.ClientService/Disconnect"
+	ClientService_GetServerIdentity_FullMethodName         = "/client.v0.ClientService/GetServerIdentity"
+	ClientService_TrustServerIdentity_FullMethodName       = "/client.v0.ClientService/TrustServerIdentity"
+	ClientService_Logout_FullMethodName                    = "/client.v0.ClientService/Logout"
+	ClientService_ForgetLocalEnrollment_FullMethodName     = "/client.v0.ClientService/ForgetLocalEnrollment"
+	ClientService_ListNetworks_FullMethodName              = "/client.v0.ClientService/ListNetworks"
+	ClientService_SelectNetwork_FullMethodName             = "/client.v0.ClientService/SelectNetwork"
+	ClientService_ListPeers_FullMethodName                 = "/client.v0.ClientService/ListPeers"
+	ClientService_GetDiagnostics_FullMethodName            = "/client.v0.ClientService/GetDiagnostics"
+	ClientService_CreateDiagnosticsBundle_FullMethodName   = "/client.v0.ClientService/CreateDiagnosticsBundle"
+	ClientService_ReadDiagnosticsBundle_FullMethodName     = "/client.v0.ClientService/ReadDiagnosticsBundle"
+	ClientService_ListRecentLogs_FullMethodName            = "/client.v0.ClientService/ListRecentLogs"
+	ClientService_ListProfiles_FullMethodName              = "/client.v0.ClientService/ListProfiles"
+	ClientService_CreateProfile_FullMethodName             = "/client.v0.ClientService/CreateProfile"
+	ClientService_SelectProfile_FullMethodName             = "/client.v0.ClientService/SelectProfile"
+	ClientService_RenameProfile_FullMethodName             = "/client.v0.ClientService/RenameProfile"
+	ClientService_RemoveProfile_FullMethodName             = "/client.v0.ClientService/RemoveProfile"
+	ClientService_GetSession_FullMethodName                = "/client.v0.ClientService/GetSession"
+	ClientService_RenewSession_FullMethodName              = "/client.v0.ClientService/RenewSession"
+	ClientService_WaitSessionRenewal_FullMethodName        = "/client.v0.ClientService/WaitSessionRenewal"
+	ClientService_ListExitNodes_FullMethodName             = "/client.v0.ClientService/ListExitNodes"
+	ClientService_GetExitNode_FullMethodName               = "/client.v0.ClientService/GetExitNode"
+	ClientService_SelectExitNode_FullMethodName            = "/client.v0.ClientService/SelectExitNode"
+	ClientService_ClearExitNode_FullMethodName             = "/client.v0.ClientService/ClearExitNode"
+	ClientService_GetPreferences_FullMethodName            = "/client.v0.ClientService/GetPreferences"
+	ClientService_SetPreferences_FullMethodName            = "/client.v0.ClientService/SetPreferences"
+	ClientService_ResetPreferences_FullMethodName          = "/client.v0.ClientService/ResetPreferences"
+	ClientService_ListManagedSettings_FullMethodName       = "/client.v0.ClientService/ListManagedSettings"
+	ClientService_ListResources_FullMethodName             = "/client.v0.ClientService/ListResources"
+	ClientService_SetResourceEnabled_FullMethodName        = "/client.v0.ClientService/SetResourceEnabled"
+	ClientService_NotifyLifecycle_FullMethodName           = "/client.v0.ClientService/NotifyLifecycle"
+	ClientService_GetUpdateInfo_FullMethodName             = "/client.v0.ClientService/GetUpdateInfo"
+	ClientService_GetSupportInfo_FullMethodName            = "/client.v0.ClientService/GetSupportInfo"
 )
 
 // ClientServiceClient is the client API for ClientService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ClientServiceClient interface {
+	// 006: native human session, active profile Network; listing is not a grant.
+	ListNodeRevocationTargets(ctx context.Context, in *ListNodeRevocationTargetsRequest, opts ...grpc.CallOption) (*ListNodeRevocationTargetsResponse, error)
+	// Persist the caller's command/target before dispatch. Exact replay keeps both.
+	RevokeNodeAccess(ctx context.Context, in *RevokeNodeAccessRequest, opts ...grpc.CallOption) (*RevokeNodeAccessResponse, error)
+	// Query the original caller-bound command, including after timeout/reopen.
+	GetNodeRevocation(ctx context.Context, in *GetNodeRevocationRequest, opts ...grpc.CallOption) (*GetNodeRevocationResponse, error)
 	// UF-04, UF-20, UF-22, UF-23: installed identity and caller-filtered capabilities.
 	GetRuntimeInfo(ctx context.Context, in *GetRuntimeInfoRequest, opts ...grpc.CallOption) (*GetRuntimeInfoResponse, error)
 	// UF-04, UF-09: authoritative active-context snapshot.
@@ -162,6 +171,36 @@ type clientServiceClient struct {
 
 func NewClientServiceClient(cc grpc.ClientConnInterface) ClientServiceClient {
 	return &clientServiceClient{cc}
+}
+
+func (c *clientServiceClient) ListNodeRevocationTargets(ctx context.Context, in *ListNodeRevocationTargetsRequest, opts ...grpc.CallOption) (*ListNodeRevocationTargetsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNodeRevocationTargetsResponse)
+	err := c.cc.Invoke(ctx, ClientService_ListNodeRevocationTargets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientServiceClient) RevokeNodeAccess(ctx context.Context, in *RevokeNodeAccessRequest, opts ...grpc.CallOption) (*RevokeNodeAccessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeNodeAccessResponse)
+	err := c.cc.Invoke(ctx, ClientService_RevokeNodeAccess_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientServiceClient) GetNodeRevocation(ctx context.Context, in *GetNodeRevocationRequest, opts ...grpc.CallOption) (*GetNodeRevocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetNodeRevocationResponse)
+	err := c.cc.Invoke(ctx, ClientService_GetNodeRevocation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *clientServiceClient) GetRuntimeInfo(ctx context.Context, in *GetRuntimeInfoRequest, opts ...grpc.CallOption) (*GetRuntimeInfoResponse, error) {
@@ -597,6 +636,12 @@ func (c *clientServiceClient) GetSupportInfo(ctx context.Context, in *GetSupport
 // All implementations must embed UnimplementedClientServiceServer
 // for forward compatibility.
 type ClientServiceServer interface {
+	// 006: native human session, active profile Network; listing is not a grant.
+	ListNodeRevocationTargets(context.Context, *ListNodeRevocationTargetsRequest) (*ListNodeRevocationTargetsResponse, error)
+	// Persist the caller's command/target before dispatch. Exact replay keeps both.
+	RevokeNodeAccess(context.Context, *RevokeNodeAccessRequest) (*RevokeNodeAccessResponse, error)
+	// Query the original caller-bound command, including after timeout/reopen.
+	GetNodeRevocation(context.Context, *GetNodeRevocationRequest) (*GetNodeRevocationResponse, error)
 	// UF-04, UF-20, UF-22, UF-23: installed identity and caller-filtered capabilities.
 	GetRuntimeInfo(context.Context, *GetRuntimeInfoRequest) (*GetRuntimeInfoResponse, error)
 	// UF-04, UF-09: authoritative active-context snapshot.
@@ -691,6 +736,15 @@ type ClientServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedClientServiceServer struct{}
 
+func (UnimplementedClientServiceServer) ListNodeRevocationTargets(context.Context, *ListNodeRevocationTargetsRequest) (*ListNodeRevocationTargetsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListNodeRevocationTargets not implemented")
+}
+func (UnimplementedClientServiceServer) RevokeNodeAccess(context.Context, *RevokeNodeAccessRequest) (*RevokeNodeAccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RevokeNodeAccess not implemented")
+}
+func (UnimplementedClientServiceServer) GetNodeRevocation(context.Context, *GetNodeRevocationRequest) (*GetNodeRevocationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetNodeRevocation not implemented")
+}
 func (UnimplementedClientServiceServer) GetRuntimeInfo(context.Context, *GetRuntimeInfoRequest) (*GetRuntimeInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRuntimeInfo not implemented")
 }
@@ -836,6 +890,60 @@ func RegisterClientServiceServer(s grpc.ServiceRegistrar, srv ClientServiceServe
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&ClientService_ServiceDesc, srv)
+}
+
+func _ClientService_ListNodeRevocationTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNodeRevocationTargetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).ListNodeRevocationTargets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_ListNodeRevocationTargets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).ListNodeRevocationTargets(ctx, req.(*ListNodeRevocationTargetsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientService_RevokeNodeAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeNodeAccessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).RevokeNodeAccess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_RevokeNodeAccess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).RevokeNodeAccess(ctx, req.(*RevokeNodeAccessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientService_GetNodeRevocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeRevocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).GetNodeRevocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_GetNodeRevocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).GetNodeRevocation(ctx, req.(*GetNodeRevocationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _ClientService_GetRuntimeInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1594,6 +1702,18 @@ var ClientService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "client.v0.ClientService",
 	HandlerType: (*ClientServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListNodeRevocationTargets",
+			Handler:    _ClientService_ListNodeRevocationTargets_Handler,
+		},
+		{
+			MethodName: "RevokeNodeAccess",
+			Handler:    _ClientService_RevokeNodeAccess_Handler,
+		},
+		{
+			MethodName: "GetNodeRevocation",
+			Handler:    _ClientService_GetNodeRevocation_Handler,
+		},
 		{
 			MethodName: "GetRuntimeInfo",
 			Handler:    _ClientService_GetRuntimeInfo_Handler,

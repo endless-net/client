@@ -43,6 +43,22 @@ final $typed_data.Uint8List domainDescriptor = $convert.base64Decode(
     'UFBPUlQQCRIaChZET01BSU5fU0VSVkVSX0lERU5USVRZEAoSEgoORE9NQUlOX1NFU1NJT04QCw'
     '==');
 
+@$core.Deprecated('Use nodeRevocationPhaseDescriptor instead')
+const NodeRevocationPhase$json = {
+  '1': 'NodeRevocationPhase',
+  '2': [
+    {'1': 'NODE_REVOCATION_PHASE_UNSPECIFIED', '2': 0},
+    {'1': 'NODE_REVOCATION_PHASE_UNKNOWN', '2': 1},
+    {'1': 'NODE_REVOCATION_PHASE_ACCEPTED', '2': 2},
+  ],
+};
+
+/// Descriptor for `NodeRevocationPhase`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List nodeRevocationPhaseDescriptor = $convert.base64Decode(
+    'ChNOb2RlUmV2b2NhdGlvblBoYXNlEiUKIU5PREVfUkVWT0NBVElPTl9QSEFTRV9VTlNQRUNJRk'
+    'lFRBAAEiEKHU5PREVfUkVWT0NBVElPTl9QSEFTRV9VTktOT1dOEAESIgoeTk9ERV9SRVZPQ0FU'
+    'SU9OX1BIQVNFX0FDQ0VQVEVEEAI=');
+
 @$core.Deprecated('Use getRuntimeInfoRequestDescriptor instead')
 const GetRuntimeInfoRequest$json = {
   '1': 'GetRuntimeInfoRequest',
@@ -2336,3 +2352,237 @@ const DomainInvalidated$json = {
 final $typed_data.Uint8List domainInvalidatedDescriptor = $convert.base64Decode(
     'ChFEb21haW5JbnZhbGlkYXRlZBIpCgZkb21haW4YASABKA4yES5jbGllbnQudjAuRG9tYWluUg'
     'Zkb21haW4SHQoKcHJvZmlsZV9pZBgCIAEoCVIJcHJvZmlsZUlk');
+
+@$core.Deprecated('Use nodeRevocationTargetDescriptor instead')
+const NodeRevocationTarget$json = {
+  '1': 'NodeRevocationTarget',
+  '2': [
+    {'1': 'account_id', '3': 1, '4': 1, '5': 9, '10': 'accountId'},
+    {'1': 'network_id', '3': 2, '4': 1, '5': 9, '10': 'networkId'},
+    {'1': 'node_id', '3': 3, '4': 1, '5': 9, '10': 'nodeId'},
+    {'1': 'hostname', '3': 4, '4': 1, '5': 9, '10': 'hostname'},
+    {'1': 'assigned_ip', '3': 5, '4': 1, '5': 9, '10': 'assignedIp'},
+    {'1': 'status', '3': 6, '4': 1, '5': 9, '10': 'status'},
+    {'1': 'network_revision', '3': 7, '4': 1, '5': 4, '10': 'networkRevision'},
+  ],
+};
+
+/// Descriptor for `NodeRevocationTarget`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List nodeRevocationTargetDescriptor = $convert.base64Decode(
+    'ChROb2RlUmV2b2NhdGlvblRhcmdldBIdCgphY2NvdW50X2lkGAEgASgJUglhY2NvdW50SWQSHQ'
+    'oKbmV0d29ya19pZBgCIAEoCVIJbmV0d29ya0lkEhcKB25vZGVfaWQYAyABKAlSBm5vZGVJZBIa'
+    'Cghob3N0bmFtZRgEIAEoCVIIaG9zdG5hbWUSHwoLYXNzaWduZWRfaXAYBSABKAlSCmFzc2lnbm'
+    'VkSXASFgoGc3RhdHVzGAYgASgJUgZzdGF0dXMSKQoQbmV0d29ya19yZXZpc2lvbhgHIAEoBFIP'
+    'bmV0d29ya1JldmlzaW9u');
+
+@$core.Deprecated('Use nodeRevocationResultDescriptor instead')
+const NodeRevocationResult$json = {
+  '1': 'NodeRevocationResult',
+  '2': [
+    {'1': 'profile_id', '3': 1, '4': 1, '5': 9, '10': 'profileId'},
+    {
+      '1': 'target',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.NodeRevocationTarget',
+      '10': 'target'
+    },
+    {'1': 'command_id', '3': 3, '4': 1, '5': 9, '10': 'commandId'},
+    {
+      '1': 'phase',
+      '3': 4,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.NodeRevocationPhase',
+      '10': 'phase'
+    },
+    {
+      '1': 'accepted_at',
+      '3': 5,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'acceptedAt'
+    },
+    {
+      '1': 'enforce_by',
+      '3': 6,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'enforceBy'
+    },
+    {
+      '1': 'committed_network_revision',
+      '3': 7,
+      '4': 1,
+      '5': 4,
+      '10': 'committedNetworkRevision'
+    },
+  ],
+};
+
+/// Descriptor for `NodeRevocationResult`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List nodeRevocationResultDescriptor = $convert.base64Decode(
+    'ChROb2RlUmV2b2NhdGlvblJlc3VsdBIdCgpwcm9maWxlX2lkGAEgASgJUglwcm9maWxlSWQSNw'
+    'oGdGFyZ2V0GAIgASgLMh8uY2xpZW50LnYwLk5vZGVSZXZvY2F0aW9uVGFyZ2V0UgZ0YXJnZXQS'
+    'HQoKY29tbWFuZF9pZBgDIAEoCVIJY29tbWFuZElkEjQKBXBoYXNlGAQgASgOMh4uY2xpZW50Ln'
+    'YwLk5vZGVSZXZvY2F0aW9uUGhhc2VSBXBoYXNlEjsKC2FjY2VwdGVkX2F0GAUgASgLMhouZ29v'
+    'Z2xlLnByb3RvYnVmLlRpbWVzdGFtcFIKYWNjZXB0ZWRBdBI5CgplbmZvcmNlX2J5GAYgASgLMh'
+    'ouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcFIJZW5mb3JjZUJ5EjwKGmNvbW1pdHRlZF9uZXR3'
+    'b3JrX3JldmlzaW9uGAcgASgEUhhjb21taXR0ZWROZXR3b3JrUmV2aXNpb24=');
+
+@$core.Deprecated('Use listNodeRevocationTargetsRequestDescriptor instead')
+const ListNodeRevocationTargetsRequest$json = {
+  '1': 'ListNodeRevocationTargetsRequest',
+  '2': [
+    {
+      '1': 'profile',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.ProfileRef',
+      '10': 'profile'
+    },
+  ],
+};
+
+/// Descriptor for `ListNodeRevocationTargetsRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listNodeRevocationTargetsRequestDescriptor =
+    $convert.base64Decode(
+        'CiBMaXN0Tm9kZVJldm9jYXRpb25UYXJnZXRzUmVxdWVzdBIvCgdwcm9maWxlGAEgASgLMhUuY2'
+        'xpZW50LnYwLlByb2ZpbGVSZWZSB3Byb2ZpbGU=');
+
+@$core.Deprecated('Use listNodeRevocationTargetsResponseDescriptor instead')
+const ListNodeRevocationTargetsResponse$json = {
+  '1': 'ListNodeRevocationTargetsResponse',
+  '2': [
+    {
+      '1': 'targets',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.client.v0.NodeRevocationTarget',
+      '10': 'targets'
+    },
+    {
+      '1': 'metadata',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.SnapshotMetadata',
+      '10': 'metadata'
+    },
+  ],
+};
+
+/// Descriptor for `ListNodeRevocationTargetsResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listNodeRevocationTargetsResponseDescriptor =
+    $convert.base64Decode(
+        'CiFMaXN0Tm9kZVJldm9jYXRpb25UYXJnZXRzUmVzcG9uc2USOQoHdGFyZ2V0cxgBIAMoCzIfLm'
+        'NsaWVudC52MC5Ob2RlUmV2b2NhdGlvblRhcmdldFIHdGFyZ2V0cxI3CghtZXRhZGF0YRgCIAEo'
+        'CzIbLmNsaWVudC52MC5TbmFwc2hvdE1ldGFkYXRhUghtZXRhZGF0YQ==');
+
+@$core.Deprecated('Use revokeNodeAccessRequestDescriptor instead')
+const RevokeNodeAccessRequest$json = {
+  '1': 'RevokeNodeAccessRequest',
+  '2': [
+    {
+      '1': 'mutation',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.MutationContext',
+      '10': 'mutation'
+    },
+    {
+      '1': 'profile',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.ProfileRef',
+      '10': 'profile'
+    },
+    {
+      '1': 'target',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.NodeRevocationTarget',
+      '10': 'target'
+    },
+    {'1': 'command_id', '3': 4, '4': 1, '5': 9, '10': 'commandId'},
+  ],
+};
+
+/// Descriptor for `RevokeNodeAccessRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List revokeNodeAccessRequestDescriptor = $convert.base64Decode(
+    'ChdSZXZva2VOb2RlQWNjZXNzUmVxdWVzdBI2CghtdXRhdGlvbhgBIAEoCzIaLmNsaWVudC52MC'
+    '5NdXRhdGlvbkNvbnRleHRSCG11dGF0aW9uEi8KB3Byb2ZpbGUYAiABKAsyFS5jbGllbnQudjAu'
+    'UHJvZmlsZVJlZlIHcHJvZmlsZRI3CgZ0YXJnZXQYAyABKAsyHy5jbGllbnQudjAuTm9kZVJldm'
+    '9jYXRpb25UYXJnZXRSBnRhcmdldBIdCgpjb21tYW5kX2lkGAQgASgJUgljb21tYW5kSWQ=');
+
+@$core.Deprecated('Use revokeNodeAccessResponseDescriptor instead')
+const RevokeNodeAccessResponse$json = {
+  '1': 'RevokeNodeAccessResponse',
+  '2': [
+    {
+      '1': 'result',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.NodeRevocationResult',
+      '10': 'result'
+    },
+  ],
+};
+
+/// Descriptor for `RevokeNodeAccessResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List revokeNodeAccessResponseDescriptor =
+    $convert.base64Decode(
+        'ChhSZXZva2VOb2RlQWNjZXNzUmVzcG9uc2USNwoGcmVzdWx0GAEgASgLMh8uY2xpZW50LnYwLk'
+        '5vZGVSZXZvY2F0aW9uUmVzdWx0UgZyZXN1bHQ=');
+
+@$core.Deprecated('Use getNodeRevocationRequestDescriptor instead')
+const GetNodeRevocationRequest$json = {
+  '1': 'GetNodeRevocationRequest',
+  '2': [
+    {
+      '1': 'profile',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.ProfileRef',
+      '10': 'profile'
+    },
+    {'1': 'command_id', '3': 2, '4': 1, '5': 9, '10': 'commandId'},
+  ],
+};
+
+/// Descriptor for `GetNodeRevocationRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getNodeRevocationRequestDescriptor =
+    $convert.base64Decode(
+        'ChhHZXROb2RlUmV2b2NhdGlvblJlcXVlc3QSLwoHcHJvZmlsZRgBIAEoCzIVLmNsaWVudC52MC'
+        '5Qcm9maWxlUmVmUgdwcm9maWxlEh0KCmNvbW1hbmRfaWQYAiABKAlSCWNvbW1hbmRJZA==');
+
+@$core.Deprecated('Use getNodeRevocationResponseDescriptor instead')
+const GetNodeRevocationResponse$json = {
+  '1': 'GetNodeRevocationResponse',
+  '2': [
+    {
+      '1': 'result',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.NodeRevocationResult',
+      '10': 'result'
+    },
+  ],
+};
+
+/// Descriptor for `GetNodeRevocationResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getNodeRevocationResponseDescriptor =
+    $convert.base64Decode(
+        'ChlHZXROb2RlUmV2b2NhdGlvblJlc3BvbnNlEjcKBnJlc3VsdBgBIAEoCzIfLmNsaWVudC52MC'
+        '5Ob2RlUmV2b2NhdGlvblJlc3VsdFIGcmVzdWx0');

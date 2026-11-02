@@ -14,6 +14,8 @@ import 'dart:core' as $core;
 
 import 'package:fixnum/fixnum.dart' as $fixnum;
 import 'package:protobuf/protobuf.dart' as $pb;
+import 'package:protobuf/well_known_types/google/protobuf/timestamp.pb.dart'
+    as $4;
 
 import 'common.pb.dart' as $1;
 import 'features.pb.dart' as $3;
@@ -6179,6 +6181,697 @@ class DomainInvalidated extends $pb.GeneratedMessage {
   $core.bool hasProfileId() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfileId() => $_clearField(2);
+}
+
+/// A stable registration in the active profile's selected Account/Network.
+/// Hostname is display only; the owner reauthorizes every command and query.
+class NodeRevocationTarget extends $pb.GeneratedMessage {
+  factory NodeRevocationTarget({
+    $core.String? accountId,
+    $core.String? networkId,
+    $core.String? nodeId,
+    $core.String? hostname,
+    $core.String? assignedIp,
+    $core.String? status,
+    $fixnum.Int64? networkRevision,
+  }) {
+    final result = create();
+    if (accountId != null) result.accountId = accountId;
+    if (networkId != null) result.networkId = networkId;
+    if (nodeId != null) result.nodeId = nodeId;
+    if (hostname != null) result.hostname = hostname;
+    if (assignedIp != null) result.assignedIp = assignedIp;
+    if (status != null) result.status = status;
+    if (networkRevision != null) result.networkRevision = networkRevision;
+    return result;
+  }
+
+  NodeRevocationTarget._();
+
+  factory NodeRevocationTarget.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory NodeRevocationTarget.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeRevocationTarget',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'accountId')
+    ..aOS(2, _omitFieldNames ? '' : 'networkId')
+    ..aOS(3, _omitFieldNames ? '' : 'nodeId')
+    ..aOS(4, _omitFieldNames ? '' : 'hostname')
+    ..aOS(5, _omitFieldNames ? '' : 'assignedIp')
+    ..aOS(6, _omitFieldNames ? '' : 'status')
+    ..a<$fixnum.Int64>(
+        7, _omitFieldNames ? '' : 'networkRevision', $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeRevocationTarget clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeRevocationTarget copyWith(void Function(NodeRevocationTarget) updates) =>
+      super.copyWith((message) => updates(message as NodeRevocationTarget))
+          as NodeRevocationTarget;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static NodeRevocationTarget create() => NodeRevocationTarget._();
+  @$core.override
+  NodeRevocationTarget createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static NodeRevocationTarget getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<NodeRevocationTarget>(create);
+  static NodeRevocationTarget? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get accountId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set accountId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAccountId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAccountId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get networkId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set networkId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNetworkId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNetworkId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get nodeId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set nodeId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasNodeId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearNodeId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get hostname => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set hostname($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasHostname() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearHostname() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get assignedIp => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set assignedIp($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAssignedIp() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAssignedIp() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get status => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set status($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasStatus() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearStatus() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get networkRevision => $_getI64(6);
+  @$pb.TagNumber(7)
+  set networkRevision($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasNetworkRevision() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearNetworkRevision() => $_clearField(7);
+}
+
+/// Accepted is an authoritative receipt, never proof of stopped traffic or local
+/// cleanup. No traffic-evidence provider is part of the 006 MVP. Expiry of
+/// enforce_by, a map revision or an ACK cannot promote accepted to confirmed.
+class NodeRevocationResult extends $pb.GeneratedMessage {
+  factory NodeRevocationResult({
+    $core.String? profileId,
+    NodeRevocationTarget? target,
+    $core.String? commandId,
+    NodeRevocationPhase? phase,
+    $4.Timestamp? acceptedAt,
+    $4.Timestamp? enforceBy,
+    $fixnum.Int64? committedNetworkRevision,
+  }) {
+    final result = create();
+    if (profileId != null) result.profileId = profileId;
+    if (target != null) result.target = target;
+    if (commandId != null) result.commandId = commandId;
+    if (phase != null) result.phase = phase;
+    if (acceptedAt != null) result.acceptedAt = acceptedAt;
+    if (enforceBy != null) result.enforceBy = enforceBy;
+    if (committedNetworkRevision != null)
+      result.committedNetworkRevision = committedNetworkRevision;
+    return result;
+  }
+
+  NodeRevocationResult._();
+
+  factory NodeRevocationResult.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory NodeRevocationResult.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeRevocationResult',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'profileId')
+    ..aOM<NodeRevocationTarget>(2, _omitFieldNames ? '' : 'target',
+        subBuilder: NodeRevocationTarget.create)
+    ..aOS(3, _omitFieldNames ? '' : 'commandId')
+    ..aE<NodeRevocationPhase>(4, _omitFieldNames ? '' : 'phase',
+        enumValues: NodeRevocationPhase.values)
+    ..aOM<$4.Timestamp>(5, _omitFieldNames ? '' : 'acceptedAt',
+        subBuilder: $4.Timestamp.create)
+    ..aOM<$4.Timestamp>(6, _omitFieldNames ? '' : 'enforceBy',
+        subBuilder: $4.Timestamp.create)
+    ..a<$fixnum.Int64>(7, _omitFieldNames ? '' : 'committedNetworkRevision',
+        $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeRevocationResult clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeRevocationResult copyWith(void Function(NodeRevocationResult) updates) =>
+      super.copyWith((message) => updates(message as NodeRevocationResult))
+          as NodeRevocationResult;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static NodeRevocationResult create() => NodeRevocationResult._();
+  @$core.override
+  NodeRevocationResult createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static NodeRevocationResult getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<NodeRevocationResult>(create);
+  static NodeRevocationResult? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get profileId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set profileId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasProfileId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearProfileId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  NodeRevocationTarget get target => $_getN(1);
+  @$pb.TagNumber(2)
+  set target(NodeRevocationTarget value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTarget() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTarget() => $_clearField(2);
+  @$pb.TagNumber(2)
+  NodeRevocationTarget ensureTarget() => $_ensure(1);
+
+  @$pb.TagNumber(3)
+  $core.String get commandId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set commandId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasCommandId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearCommandId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  NodeRevocationPhase get phase => $_getN(3);
+  @$pb.TagNumber(4)
+  set phase(NodeRevocationPhase value) => $_setField(4, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPhase() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPhase() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $4.Timestamp get acceptedAt => $_getN(4);
+  @$pb.TagNumber(5)
+  set acceptedAt($4.Timestamp value) => $_setField(5, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAcceptedAt() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAcceptedAt() => $_clearField(5);
+  @$pb.TagNumber(5)
+  $4.Timestamp ensureAcceptedAt() => $_ensure(4);
+
+  @$pb.TagNumber(6)
+  $4.Timestamp get enforceBy => $_getN(5);
+  @$pb.TagNumber(6)
+  set enforceBy($4.Timestamp value) => $_setField(6, value);
+  @$pb.TagNumber(6)
+  $core.bool hasEnforceBy() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearEnforceBy() => $_clearField(6);
+  @$pb.TagNumber(6)
+  $4.Timestamp ensureEnforceBy() => $_ensure(5);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get committedNetworkRevision => $_getI64(6);
+  @$pb.TagNumber(7)
+  set committedNetworkRevision($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasCommittedNetworkRevision() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearCommittedNetworkRevision() => $_clearField(7);
+}
+
+class ListNodeRevocationTargetsRequest extends $pb.GeneratedMessage {
+  factory ListNodeRevocationTargetsRequest({
+    $1.ProfileRef? profile,
+  }) {
+    final result = create();
+    if (profile != null) result.profile = profile;
+    return result;
+  }
+
+  ListNodeRevocationTargetsRequest._();
+
+  factory ListNodeRevocationTargetsRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListNodeRevocationTargetsRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListNodeRevocationTargetsRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $1.ProfileRef.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListNodeRevocationTargetsRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListNodeRevocationTargetsRequest copyWith(
+          void Function(ListNodeRevocationTargetsRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListNodeRevocationTargetsRequest))
+          as ListNodeRevocationTargetsRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListNodeRevocationTargetsRequest create() =>
+      ListNodeRevocationTargetsRequest._();
+  @$core.override
+  ListNodeRevocationTargetsRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListNodeRevocationTargetsRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListNodeRevocationTargetsRequest>(
+          create);
+  static ListNodeRevocationTargetsRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $1.ProfileRef get profile => $_getN(0);
+  @$pb.TagNumber(1)
+  set profile($1.ProfileRef value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasProfile() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearProfile() => $_clearField(1);
+  @$pb.TagNumber(1)
+  $1.ProfileRef ensureProfile() => $_ensure(0);
+}
+
+class ListNodeRevocationTargetsResponse extends $pb.GeneratedMessage {
+  factory ListNodeRevocationTargetsResponse({
+    $core.Iterable<NodeRevocationTarget>? targets,
+    $1.SnapshotMetadata? metadata,
+  }) {
+    final result = create();
+    if (targets != null) result.targets.addAll(targets);
+    if (metadata != null) result.metadata = metadata;
+    return result;
+  }
+
+  ListNodeRevocationTargetsResponse._();
+
+  factory ListNodeRevocationTargetsResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListNodeRevocationTargetsResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListNodeRevocationTargetsResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..pPM<NodeRevocationTarget>(1, _omitFieldNames ? '' : 'targets',
+        subBuilder: NodeRevocationTarget.create)
+    ..aOM<$1.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
+        subBuilder: $1.SnapshotMetadata.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListNodeRevocationTargetsResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListNodeRevocationTargetsResponse copyWith(
+          void Function(ListNodeRevocationTargetsResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as ListNodeRevocationTargetsResponse))
+          as ListNodeRevocationTargetsResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListNodeRevocationTargetsResponse create() =>
+      ListNodeRevocationTargetsResponse._();
+  @$core.override
+  ListNodeRevocationTargetsResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListNodeRevocationTargetsResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListNodeRevocationTargetsResponse>(
+          create);
+  static ListNodeRevocationTargetsResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<NodeRevocationTarget> get targets => $_getList(0);
+
+  @$pb.TagNumber(2)
+  $1.SnapshotMetadata get metadata => $_getN(1);
+  @$pb.TagNumber(2)
+  set metadata($1.SnapshotMetadata value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasMetadata() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearMetadata() => $_clearField(2);
+  @$pb.TagNumber(2)
+  $1.SnapshotMetadata ensureMetadata() => $_ensure(1);
+}
+
+class RevokeNodeAccessRequest extends $pb.GeneratedMessage {
+  factory RevokeNodeAccessRequest({
+    $1.MutationContext? mutation,
+    $1.ProfileRef? profile,
+    NodeRevocationTarget? target,
+    $core.String? commandId,
+  }) {
+    final result = create();
+    if (mutation != null) result.mutation = mutation;
+    if (profile != null) result.profile = profile;
+    if (target != null) result.target = target;
+    if (commandId != null) result.commandId = commandId;
+    return result;
+  }
+
+  RevokeNodeAccessRequest._();
+
+  factory RevokeNodeAccessRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RevokeNodeAccessRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RevokeNodeAccessRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $1.MutationContext.create)
+    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $1.ProfileRef.create)
+    ..aOM<NodeRevocationTarget>(3, _omitFieldNames ? '' : 'target',
+        subBuilder: NodeRevocationTarget.create)
+    ..aOS(4, _omitFieldNames ? '' : 'commandId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeNodeAccessRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeNodeAccessRequest copyWith(
+          void Function(RevokeNodeAccessRequest) updates) =>
+      super.copyWith((message) => updates(message as RevokeNodeAccessRequest))
+          as RevokeNodeAccessRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RevokeNodeAccessRequest create() => RevokeNodeAccessRequest._();
+  @$core.override
+  RevokeNodeAccessRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RevokeNodeAccessRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RevokeNodeAccessRequest>(create);
+  static RevokeNodeAccessRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $1.MutationContext get mutation => $_getN(0);
+  @$pb.TagNumber(1)
+  set mutation($1.MutationContext value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasMutation() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearMutation() => $_clearField(1);
+  @$pb.TagNumber(1)
+  $1.MutationContext ensureMutation() => $_ensure(0);
+
+  @$pb.TagNumber(2)
+  $1.ProfileRef get profile => $_getN(1);
+  @$pb.TagNumber(2)
+  set profile($1.ProfileRef value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasProfile() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearProfile() => $_clearField(2);
+  @$pb.TagNumber(2)
+  $1.ProfileRef ensureProfile() => $_ensure(1);
+
+  @$pb.TagNumber(3)
+  NodeRevocationTarget get target => $_getN(2);
+  @$pb.TagNumber(3)
+  set target(NodeRevocationTarget value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasTarget() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearTarget() => $_clearField(3);
+  @$pb.TagNumber(3)
+  NodeRevocationTarget ensureTarget() => $_ensure(2);
+
+  /// Canonical UUID persisted by UI before first dispatch. Changed input with
+  /// the same command_id conflicts; timeout must not mint a new command.
+  @$pb.TagNumber(4)
+  $core.String get commandId => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set commandId($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasCommandId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearCommandId() => $_clearField(4);
+}
+
+class RevokeNodeAccessResponse extends $pb.GeneratedMessage {
+  factory RevokeNodeAccessResponse({
+    NodeRevocationResult? result,
+  }) {
+    final result$ = create();
+    if (result != null) result$.result = result;
+    return result$;
+  }
+
+  RevokeNodeAccessResponse._();
+
+  factory RevokeNodeAccessResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RevokeNodeAccessResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RevokeNodeAccessResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOM<NodeRevocationResult>(1, _omitFieldNames ? '' : 'result',
+        subBuilder: NodeRevocationResult.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeNodeAccessResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeNodeAccessResponse copyWith(
+          void Function(RevokeNodeAccessResponse) updates) =>
+      super.copyWith((message) => updates(message as RevokeNodeAccessResponse))
+          as RevokeNodeAccessResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RevokeNodeAccessResponse create() => RevokeNodeAccessResponse._();
+  @$core.override
+  RevokeNodeAccessResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RevokeNodeAccessResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RevokeNodeAccessResponse>(create);
+  static RevokeNodeAccessResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  NodeRevocationResult get result => $_getN(0);
+  @$pb.TagNumber(1)
+  set result(NodeRevocationResult value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasResult() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearResult() => $_clearField(1);
+  @$pb.TagNumber(1)
+  NodeRevocationResult ensureResult() => $_ensure(0);
+}
+
+class GetNodeRevocationRequest extends $pb.GeneratedMessage {
+  factory GetNodeRevocationRequest({
+    $1.ProfileRef? profile,
+    $core.String? commandId,
+  }) {
+    final result = create();
+    if (profile != null) result.profile = profile;
+    if (commandId != null) result.commandId = commandId;
+    return result;
+  }
+
+  GetNodeRevocationRequest._();
+
+  factory GetNodeRevocationRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetNodeRevocationRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetNodeRevocationRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $1.ProfileRef.create)
+    ..aOS(2, _omitFieldNames ? '' : 'commandId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetNodeRevocationRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetNodeRevocationRequest copyWith(
+          void Function(GetNodeRevocationRequest) updates) =>
+      super.copyWith((message) => updates(message as GetNodeRevocationRequest))
+          as GetNodeRevocationRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetNodeRevocationRequest create() => GetNodeRevocationRequest._();
+  @$core.override
+  GetNodeRevocationRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetNodeRevocationRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetNodeRevocationRequest>(create);
+  static GetNodeRevocationRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $1.ProfileRef get profile => $_getN(0);
+  @$pb.TagNumber(1)
+  set profile($1.ProfileRef value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasProfile() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearProfile() => $_clearField(1);
+  @$pb.TagNumber(1)
+  $1.ProfileRef ensureProfile() => $_ensure(0);
+
+  @$pb.TagNumber(2)
+  $core.String get commandId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set commandId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasCommandId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearCommandId() => $_clearField(2);
+}
+
+class GetNodeRevocationResponse extends $pb.GeneratedMessage {
+  factory GetNodeRevocationResponse({
+    NodeRevocationResult? result,
+  }) {
+    final result$ = create();
+    if (result != null) result$.result = result;
+    return result$;
+  }
+
+  GetNodeRevocationResponse._();
+
+  factory GetNodeRevocationResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetNodeRevocationResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetNodeRevocationResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOM<NodeRevocationResult>(1, _omitFieldNames ? '' : 'result',
+        subBuilder: NodeRevocationResult.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetNodeRevocationResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetNodeRevocationResponse copyWith(
+          void Function(GetNodeRevocationResponse) updates) =>
+      super.copyWith((message) => updates(message as GetNodeRevocationResponse))
+          as GetNodeRevocationResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetNodeRevocationResponse create() => GetNodeRevocationResponse._();
+  @$core.override
+  GetNodeRevocationResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetNodeRevocationResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetNodeRevocationResponse>(create);
+  static GetNodeRevocationResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  NodeRevocationResult get result => $_getN(0);
+  @$pb.TagNumber(1)
+  set result(NodeRevocationResult value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasResult() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearResult() => $_clearField(1);
+  @$pb.TagNumber(1)
+  NodeRevocationResult ensureResult() => $_ensure(0);
 }
 
 const $core.bool _omitFieldNames =

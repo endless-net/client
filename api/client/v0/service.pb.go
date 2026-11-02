@@ -15,6 +15,7 @@ import (
 
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -98,6 +99,55 @@ func (x Domain) Number() protoreflect.EnumNumber {
 // Deprecated: Use Domain.Descriptor instead.
 func (Domain) EnumDescriptor() ([]byte, []int) {
 	return file_client_v0_service_proto_rawDescGZIP(), []int{0}
+}
+
+type NodeRevocationPhase int32
+
+const (
+	NodeRevocationPhase_NODE_REVOCATION_PHASE_UNSPECIFIED NodeRevocationPhase = 0
+	NodeRevocationPhase_NODE_REVOCATION_PHASE_UNKNOWN     NodeRevocationPhase = 1
+	NodeRevocationPhase_NODE_REVOCATION_PHASE_ACCEPTED    NodeRevocationPhase = 2
+)
+
+// Enum value maps for NodeRevocationPhase.
+var (
+	NodeRevocationPhase_name = map[int32]string{
+		0: "NODE_REVOCATION_PHASE_UNSPECIFIED",
+		1: "NODE_REVOCATION_PHASE_UNKNOWN",
+		2: "NODE_REVOCATION_PHASE_ACCEPTED",
+	}
+	NodeRevocationPhase_value = map[string]int32{
+		"NODE_REVOCATION_PHASE_UNSPECIFIED": 0,
+		"NODE_REVOCATION_PHASE_UNKNOWN":     1,
+		"NODE_REVOCATION_PHASE_ACCEPTED":    2,
+	}
+)
+
+func (x NodeRevocationPhase) Enum() *NodeRevocationPhase {
+	p := new(NodeRevocationPhase)
+	*p = x
+	return p
+}
+
+func (x NodeRevocationPhase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (NodeRevocationPhase) Descriptor() protoreflect.EnumDescriptor {
+	return file_client_v0_service_proto_enumTypes[1].Descriptor()
+}
+
+func (NodeRevocationPhase) Type() protoreflect.EnumType {
+	return &file_client_v0_service_proto_enumTypes[1]
+}
+
+func (x NodeRevocationPhase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use NodeRevocationPhase.Descriptor instead.
+func (NodeRevocationPhase) EnumDescriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{1}
 }
 
 type GetRuntimeInfoRequest struct {
@@ -4705,11 +4755,506 @@ func (x *DomainInvalidated) GetProfileId() string {
 	return ""
 }
 
+// A stable registration in the active profile's selected Account/Network.
+// Hostname is display only; the owner reauthorizes every command and query.
+type NodeRevocationTarget struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AccountId       string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	NetworkId       string                 `protobuf:"bytes,2,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	NodeId          string                 `protobuf:"bytes,3,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Hostname        string                 `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	AssignedIp      string                 `protobuf:"bytes,5,opt,name=assigned_ip,json=assignedIp,proto3" json:"assigned_ip,omitempty"`
+	Status          string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	NetworkRevision uint64                 `protobuf:"varint,7,opt,name=network_revision,json=networkRevision,proto3" json:"network_revision,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *NodeRevocationTarget) Reset() {
+	*x = NodeRevocationTarget{}
+	mi := &file_client_v0_service_proto_msgTypes[86]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeRevocationTarget) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeRevocationTarget) ProtoMessage() {}
+
+func (x *NodeRevocationTarget) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[86]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeRevocationTarget.ProtoReflect.Descriptor instead.
+func (*NodeRevocationTarget) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{86}
+}
+
+func (x *NodeRevocationTarget) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *NodeRevocationTarget) GetNetworkId() string {
+	if x != nil {
+		return x.NetworkId
+	}
+	return ""
+}
+
+func (x *NodeRevocationTarget) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *NodeRevocationTarget) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *NodeRevocationTarget) GetAssignedIp() string {
+	if x != nil {
+		return x.AssignedIp
+	}
+	return ""
+}
+
+func (x *NodeRevocationTarget) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *NodeRevocationTarget) GetNetworkRevision() uint64 {
+	if x != nil {
+		return x.NetworkRevision
+	}
+	return 0
+}
+
+// Accepted is an authoritative receipt, never proof of stopped traffic or local
+// cleanup. No traffic-evidence provider is part of the 006 MVP. Expiry of
+// enforce_by, a map revision or an ACK cannot promote accepted to confirmed.
+type NodeRevocationResult struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	ProfileId                string                 `protobuf:"bytes,1,opt,name=profile_id,json=profileId,proto3" json:"profile_id,omitempty"`
+	Target                   *NodeRevocationTarget  `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	CommandId                string                 `protobuf:"bytes,3,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	Phase                    NodeRevocationPhase    `protobuf:"varint,4,opt,name=phase,proto3,enum=client.v0.NodeRevocationPhase" json:"phase,omitempty"`
+	AcceptedAt               *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=accepted_at,json=acceptedAt,proto3" json:"accepted_at,omitempty"`
+	EnforceBy                *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=enforce_by,json=enforceBy,proto3" json:"enforce_by,omitempty"`
+	CommittedNetworkRevision uint64                 `protobuf:"varint,7,opt,name=committed_network_revision,json=committedNetworkRevision,proto3" json:"committed_network_revision,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *NodeRevocationResult) Reset() {
+	*x = NodeRevocationResult{}
+	mi := &file_client_v0_service_proto_msgTypes[87]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeRevocationResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeRevocationResult) ProtoMessage() {}
+
+func (x *NodeRevocationResult) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[87]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeRevocationResult.ProtoReflect.Descriptor instead.
+func (*NodeRevocationResult) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{87}
+}
+
+func (x *NodeRevocationResult) GetProfileId() string {
+	if x != nil {
+		return x.ProfileId
+	}
+	return ""
+}
+
+func (x *NodeRevocationResult) GetTarget() *NodeRevocationTarget {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *NodeRevocationResult) GetCommandId() string {
+	if x != nil {
+		return x.CommandId
+	}
+	return ""
+}
+
+func (x *NodeRevocationResult) GetPhase() NodeRevocationPhase {
+	if x != nil {
+		return x.Phase
+	}
+	return NodeRevocationPhase_NODE_REVOCATION_PHASE_UNSPECIFIED
+}
+
+func (x *NodeRevocationResult) GetAcceptedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.AcceptedAt
+	}
+	return nil
+}
+
+func (x *NodeRevocationResult) GetEnforceBy() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EnforceBy
+	}
+	return nil
+}
+
+func (x *NodeRevocationResult) GetCommittedNetworkRevision() uint64 {
+	if x != nil {
+		return x.CommittedNetworkRevision
+	}
+	return 0
+}
+
+type ListNodeRevocationTargetsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Profile       *ProfileRef            `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNodeRevocationTargetsRequest) Reset() {
+	*x = ListNodeRevocationTargetsRequest{}
+	mi := &file_client_v0_service_proto_msgTypes[88]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNodeRevocationTargetsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNodeRevocationTargetsRequest) ProtoMessage() {}
+
+func (x *ListNodeRevocationTargetsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[88]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNodeRevocationTargetsRequest.ProtoReflect.Descriptor instead.
+func (*ListNodeRevocationTargetsRequest) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{88}
+}
+
+func (x *ListNodeRevocationTargetsRequest) GetProfile() *ProfileRef {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+type ListNodeRevocationTargetsResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Targets       []*NodeRevocationTarget `protobuf:"bytes,1,rep,name=targets,proto3" json:"targets,omitempty"`
+	Metadata      *SnapshotMetadata       `protobuf:"bytes,2,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNodeRevocationTargetsResponse) Reset() {
+	*x = ListNodeRevocationTargetsResponse{}
+	mi := &file_client_v0_service_proto_msgTypes[89]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNodeRevocationTargetsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNodeRevocationTargetsResponse) ProtoMessage() {}
+
+func (x *ListNodeRevocationTargetsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[89]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNodeRevocationTargetsResponse.ProtoReflect.Descriptor instead.
+func (*ListNodeRevocationTargetsResponse) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{89}
+}
+
+func (x *ListNodeRevocationTargetsResponse) GetTargets() []*NodeRevocationTarget {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+func (x *ListNodeRevocationTargetsResponse) GetMetadata() *SnapshotMetadata {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type RevokeNodeAccessRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Mutation *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	Profile  *ProfileRef            `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
+	Target   *NodeRevocationTarget  `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	// Canonical UUID persisted by UI before first dispatch. Changed input with
+	// the same command_id conflicts; timeout must not mint a new command.
+	CommandId     string `protobuf:"bytes,4,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeNodeAccessRequest) Reset() {
+	*x = RevokeNodeAccessRequest{}
+	mi := &file_client_v0_service_proto_msgTypes[90]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeNodeAccessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeNodeAccessRequest) ProtoMessage() {}
+
+func (x *RevokeNodeAccessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[90]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeNodeAccessRequest.ProtoReflect.Descriptor instead.
+func (*RevokeNodeAccessRequest) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{90}
+}
+
+func (x *RevokeNodeAccessRequest) GetMutation() *MutationContext {
+	if x != nil {
+		return x.Mutation
+	}
+	return nil
+}
+
+func (x *RevokeNodeAccessRequest) GetProfile() *ProfileRef {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+func (x *RevokeNodeAccessRequest) GetTarget() *NodeRevocationTarget {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *RevokeNodeAccessRequest) GetCommandId() string {
+	if x != nil {
+		return x.CommandId
+	}
+	return ""
+}
+
+type RevokeNodeAccessResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Result        *NodeRevocationResult  `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeNodeAccessResponse) Reset() {
+	*x = RevokeNodeAccessResponse{}
+	mi := &file_client_v0_service_proto_msgTypes[91]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeNodeAccessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeNodeAccessResponse) ProtoMessage() {}
+
+func (x *RevokeNodeAccessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[91]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeNodeAccessResponse.ProtoReflect.Descriptor instead.
+func (*RevokeNodeAccessResponse) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{91}
+}
+
+func (x *RevokeNodeAccessResponse) GetResult() *NodeRevocationResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+type GetNodeRevocationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Profile       *ProfileRef            `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	CommandId     string                 `protobuf:"bytes,2,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNodeRevocationRequest) Reset() {
+	*x = GetNodeRevocationRequest{}
+	mi := &file_client_v0_service_proto_msgTypes[92]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeRevocationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeRevocationRequest) ProtoMessage() {}
+
+func (x *GetNodeRevocationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[92]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeRevocationRequest.ProtoReflect.Descriptor instead.
+func (*GetNodeRevocationRequest) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{92}
+}
+
+func (x *GetNodeRevocationRequest) GetProfile() *ProfileRef {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+func (x *GetNodeRevocationRequest) GetCommandId() string {
+	if x != nil {
+		return x.CommandId
+	}
+	return ""
+}
+
+type GetNodeRevocationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Result        *NodeRevocationResult  `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNodeRevocationResponse) Reset() {
+	*x = GetNodeRevocationResponse{}
+	mi := &file_client_v0_service_proto_msgTypes[93]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeRevocationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeRevocationResponse) ProtoMessage() {}
+
+func (x *GetNodeRevocationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_service_proto_msgTypes[93]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeRevocationResponse.ProtoReflect.Descriptor instead.
+func (*GetNodeRevocationResponse) Descriptor() ([]byte, []int) {
+	return file_client_v0_service_proto_rawDescGZIP(), []int{93}
+}
+
+func (x *GetNodeRevocationResponse) GetResult() *NodeRevocationResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
 var File_client_v0_service_proto protoreflect.FileDescriptor
 
 const file_client_v0_service_proto_rawDesc = "" +
 	"\n" +
-	"\x17client/v0/service.proto\x12\tclient.v0\x1a\x16client/v0/common.proto\x1a\x18client/v0/features.proto\x1a\x17client/v0/runtime.proto\"\x17\n" +
+	"\x17client/v0/service.proto\x12\tclient.v0\x1a\x16client/v0/common.proto\x1a\x18client/v0/features.proto\x1a\x17client/v0/runtime.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x17\n" +
 	"\x15GetRuntimeInfoRequest\"J\n" +
 	"\x16GetRuntimeInfoResponse\x120\n" +
 	"\aruntime\x18\x01 \x01(\v2\x16.client.v0.RuntimeInfoR\aruntime\"\x12\n" +
@@ -5002,7 +5547,49 @@ const file_client_v0_service_proto_rawDesc = "" +
 	"\x11DomainInvalidated\x12)\n" +
 	"\x06domain\x18\x01 \x01(\x0e2\x11.client.v0.DomainR\x06domain\x12\x1d\n" +
 	"\n" +
-	"profile_id\x18\x02 \x01(\tR\tprofileId*\x95\x02\n" +
+	"profile_id\x18\x02 \x01(\tR\tprofileId\"\xed\x01\n" +
+	"\x14NodeRevocationTarget\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x01 \x01(\tR\taccountId\x12\x1d\n" +
+	"\n" +
+	"network_id\x18\x02 \x01(\tR\tnetworkId\x12\x17\n" +
+	"\anode_id\x18\x03 \x01(\tR\x06nodeId\x12\x1a\n" +
+	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x1f\n" +
+	"\vassigned_ip\x18\x05 \x01(\tR\n" +
+	"assignedIp\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\x12)\n" +
+	"\x10network_revision\x18\a \x01(\x04R\x0fnetworkRevision\"\xf9\x02\n" +
+	"\x14NodeRevocationResult\x12\x1d\n" +
+	"\n" +
+	"profile_id\x18\x01 \x01(\tR\tprofileId\x127\n" +
+	"\x06target\x18\x02 \x01(\v2\x1f.client.v0.NodeRevocationTargetR\x06target\x12\x1d\n" +
+	"\n" +
+	"command_id\x18\x03 \x01(\tR\tcommandId\x124\n" +
+	"\x05phase\x18\x04 \x01(\x0e2\x1e.client.v0.NodeRevocationPhaseR\x05phase\x12;\n" +
+	"\vaccepted_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"acceptedAt\x129\n" +
+	"\n" +
+	"enforce_by\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tenforceBy\x12<\n" +
+	"\x1acommitted_network_revision\x18\a \x01(\x04R\x18committedNetworkRevision\"S\n" +
+	" ListNodeRevocationTargetsRequest\x12/\n" +
+	"\aprofile\x18\x01 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\"\x97\x01\n" +
+	"!ListNodeRevocationTargetsResponse\x129\n" +
+	"\atargets\x18\x01 \x03(\v2\x1f.client.v0.NodeRevocationTargetR\atargets\x127\n" +
+	"\bmetadata\x18\x02 \x01(\v2\x1b.client.v0.SnapshotMetadataR\bmetadata\"\xda\x01\n" +
+	"\x17RevokeNodeAccessRequest\x126\n" +
+	"\bmutation\x18\x01 \x01(\v2\x1a.client.v0.MutationContextR\bmutation\x12/\n" +
+	"\aprofile\x18\x02 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\x127\n" +
+	"\x06target\x18\x03 \x01(\v2\x1f.client.v0.NodeRevocationTargetR\x06target\x12\x1d\n" +
+	"\n" +
+	"command_id\x18\x04 \x01(\tR\tcommandId\"S\n" +
+	"\x18RevokeNodeAccessResponse\x127\n" +
+	"\x06result\x18\x01 \x01(\v2\x1f.client.v0.NodeRevocationResultR\x06result\"j\n" +
+	"\x18GetNodeRevocationRequest\x12/\n" +
+	"\aprofile\x18\x01 \x01(\v2\x15.client.v0.ProfileRefR\aprofile\x12\x1d\n" +
+	"\n" +
+	"command_id\x18\x02 \x01(\tR\tcommandId\"T\n" +
+	"\x19GetNodeRevocationResponse\x127\n" +
+	"\x06result\x18\x01 \x01(\v2\x1f.client.v0.NodeRevocationResultR\x06result*\x95\x02\n" +
 	"\x06Domain\x12\x16\n" +
 	"\x12DOMAIN_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fDOMAIN_PROFILES\x10\x01\x12\x13\n" +
@@ -5016,8 +5603,15 @@ const file_client_v0_service_proto_rawDesc = "" +
 	"\x0eDOMAIN_SUPPORT\x10\t\x12\x1a\n" +
 	"\x16DOMAIN_SERVER_IDENTITY\x10\n" +
 	"\x12\x12\n" +
-	"\x0eDOMAIN_SESSION\x10\v2\x88\x1f\n" +
-	"\rClientService\x12[\n" +
+	"\x0eDOMAIN_SESSION\x10\v*\x83\x01\n" +
+	"\x13NodeRevocationPhase\x12%\n" +
+	"!NODE_REVOCATION_PHASE_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dNODE_REVOCATION_PHASE_UNKNOWN\x10\x01\x12\"\n" +
+	"\x1eNODE_REVOCATION_PHASE_ACCEPTED\x10\x022\xcf!\n" +
+	"\rClientService\x12|\n" +
+	"\x19ListNodeRevocationTargets\x12+.client.v0.ListNodeRevocationTargetsRequest\x1a,.client.v0.ListNodeRevocationTargetsResponse\"\x04\xc0\xf3\x18\x02\x12a\n" +
+	"\x10RevokeNodeAccess\x12\".client.v0.RevokeNodeAccessRequest\x1a#.client.v0.RevokeNodeAccessResponse\"\x04\xc0\xf3\x18\x02\x12d\n" +
+	"\x11GetNodeRevocation\x12#.client.v0.GetNodeRevocationRequest\x1a$.client.v0.GetNodeRevocationResponse\"\x04\xc0\xf3\x18\x02\x12[\n" +
 	"\x0eGetRuntimeInfo\x12 .client.v0.GetRuntimeInfoRequest\x1a!.client.v0.GetRuntimeInfoResponse\"\x04\xc0\xf3\x18\x01\x12L\n" +
 	"\tGetStatus\x12\x1b.client.v0.GetStatusRequest\x1a\x1c.client.v0.GetStatusResponse\"\x04\xc0\xf3\x18\x01\x12T\n" +
 	"\vWatchEvents\x12\x1d.client.v0.WatchEventsRequest\x1a\x1e.client.v0.WatchEventsResponse\"\x04\xc0\xf3\x18\x010\x01\x12G\n" +
@@ -5075,365 +5669,394 @@ func file_client_v0_service_proto_rawDescGZIP() []byte {
 	return file_client_v0_service_proto_rawDescData
 }
 
-var file_client_v0_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_client_v0_service_proto_msgTypes = make([]protoimpl.MessageInfo, 86)
+var file_client_v0_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_client_v0_service_proto_msgTypes = make([]protoimpl.MessageInfo, 94)
 var file_client_v0_service_proto_goTypes = []any{
-	(Domain)(0),                             // 0: client.v0.Domain
-	(*GetRuntimeInfoRequest)(nil),           // 1: client.v0.GetRuntimeInfoRequest
-	(*GetRuntimeInfoResponse)(nil),          // 2: client.v0.GetRuntimeInfoResponse
-	(*GetStatusRequest)(nil),                // 3: client.v0.GetStatusRequest
-	(*GetStatusResponse)(nil),               // 4: client.v0.GetStatusResponse
-	(*WatchEventsRequest)(nil),              // 5: client.v0.WatchEventsRequest
-	(*EnrollRequest)(nil),                   // 6: client.v0.EnrollRequest
-	(*EnrollResponse)(nil),                  // 7: client.v0.EnrollResponse
-	(*GetEnrollmentAttemptRequest)(nil),     // 8: client.v0.GetEnrollmentAttemptRequest
-	(*GetEnrollmentAttemptResponse)(nil),    // 9: client.v0.GetEnrollmentAttemptResponse
-	(*ListEnrollmentTargetsRequest)(nil),    // 10: client.v0.ListEnrollmentTargetsRequest
-	(*ListEnrollmentTargetsResponse)(nil),   // 11: client.v0.ListEnrollmentTargetsResponse
-	(*SelectEnrollmentTargetRequest)(nil),   // 12: client.v0.SelectEnrollmentTargetRequest
-	(*SelectEnrollmentTargetResponse)(nil),  // 13: client.v0.SelectEnrollmentTargetResponse
-	(*CancelEnrollmentAttemptRequest)(nil),  // 14: client.v0.CancelEnrollmentAttemptRequest
-	(*CancelEnrollmentAttemptResponse)(nil), // 15: client.v0.CancelEnrollmentAttemptResponse
-	(*ConnectRequest)(nil),                  // 16: client.v0.ConnectRequest
-	(*ConnectResponse)(nil),                 // 17: client.v0.ConnectResponse
-	(*DisconnectRequest)(nil),               // 18: client.v0.DisconnectRequest
-	(*DisconnectResponse)(nil),              // 19: client.v0.DisconnectResponse
-	(*GetServerIdentityRequest)(nil),        // 20: client.v0.GetServerIdentityRequest
-	(*GetServerIdentityResponse)(nil),       // 21: client.v0.GetServerIdentityResponse
-	(*TrustServerIdentityRequest)(nil),      // 22: client.v0.TrustServerIdentityRequest
-	(*TrustServerIdentityResponse)(nil),     // 23: client.v0.TrustServerIdentityResponse
-	(*LogoutRequest)(nil),                   // 24: client.v0.LogoutRequest
-	(*LogoutResponse)(nil),                  // 25: client.v0.LogoutResponse
-	(*ForgetLocalEnrollmentRequest)(nil),    // 26: client.v0.ForgetLocalEnrollmentRequest
-	(*ForgetLocalEnrollmentResponse)(nil),   // 27: client.v0.ForgetLocalEnrollmentResponse
-	(*ListNetworksRequest)(nil),             // 28: client.v0.ListNetworksRequest
-	(*ListNetworksResponse)(nil),            // 29: client.v0.ListNetworksResponse
-	(*SelectNetworkRequest)(nil),            // 30: client.v0.SelectNetworkRequest
-	(*SelectNetworkResponse)(nil),           // 31: client.v0.SelectNetworkResponse
-	(*ListPeersRequest)(nil),                // 32: client.v0.ListPeersRequest
-	(*ListPeersResponse)(nil),               // 33: client.v0.ListPeersResponse
-	(*GetDiagnosticsRequest)(nil),           // 34: client.v0.GetDiagnosticsRequest
-	(*GetDiagnosticsResponse)(nil),          // 35: client.v0.GetDiagnosticsResponse
-	(*CreateDiagnosticsBundleRequest)(nil),  // 36: client.v0.CreateDiagnosticsBundleRequest
-	(*CreateDiagnosticsBundleResponse)(nil), // 37: client.v0.CreateDiagnosticsBundleResponse
-	(*ReadDiagnosticsBundleRequest)(nil),    // 38: client.v0.ReadDiagnosticsBundleRequest
-	(*ReadDiagnosticsBundleResponse)(nil),   // 39: client.v0.ReadDiagnosticsBundleResponse
-	(*ListRecentLogsRequest)(nil),           // 40: client.v0.ListRecentLogsRequest
-	(*ListRecentLogsResponse)(nil),          // 41: client.v0.ListRecentLogsResponse
-	(*ListProfilesRequest)(nil),             // 42: client.v0.ListProfilesRequest
-	(*ListProfilesResponse)(nil),            // 43: client.v0.ListProfilesResponse
-	(*CreateProfileRequest)(nil),            // 44: client.v0.CreateProfileRequest
-	(*CreateProfileResponse)(nil),           // 45: client.v0.CreateProfileResponse
-	(*SelectProfileRequest)(nil),            // 46: client.v0.SelectProfileRequest
-	(*SelectProfileResponse)(nil),           // 47: client.v0.SelectProfileResponse
-	(*RenameProfileRequest)(nil),            // 48: client.v0.RenameProfileRequest
-	(*RenameProfileResponse)(nil),           // 49: client.v0.RenameProfileResponse
-	(*RemoveProfileRequest)(nil),            // 50: client.v0.RemoveProfileRequest
-	(*RemoveProfileResponse)(nil),           // 51: client.v0.RemoveProfileResponse
-	(*GetSessionRequest)(nil),               // 52: client.v0.GetSessionRequest
-	(*GetSessionResponse)(nil),              // 53: client.v0.GetSessionResponse
-	(*RenewSessionRequest)(nil),             // 54: client.v0.RenewSessionRequest
-	(*RenewSessionResponse)(nil),            // 55: client.v0.RenewSessionResponse
-	(*WaitSessionRenewalRequest)(nil),       // 56: client.v0.WaitSessionRenewalRequest
-	(*WaitSessionRenewalResponse)(nil),      // 57: client.v0.WaitSessionRenewalResponse
-	(*ListExitNodesRequest)(nil),            // 58: client.v0.ListExitNodesRequest
-	(*ListExitNodesResponse)(nil),           // 59: client.v0.ListExitNodesResponse
-	(*GetExitNodeRequest)(nil),              // 60: client.v0.GetExitNodeRequest
-	(*GetExitNodeResponse)(nil),             // 61: client.v0.GetExitNodeResponse
-	(*SelectExitNodeRequest)(nil),           // 62: client.v0.SelectExitNodeRequest
-	(*SelectExitNodeResponse)(nil),          // 63: client.v0.SelectExitNodeResponse
-	(*ClearExitNodeRequest)(nil),            // 64: client.v0.ClearExitNodeRequest
-	(*ClearExitNodeResponse)(nil),           // 65: client.v0.ClearExitNodeResponse
-	(*GetPreferencesRequest)(nil),           // 66: client.v0.GetPreferencesRequest
-	(*GetPreferencesResponse)(nil),          // 67: client.v0.GetPreferencesResponse
-	(*SetPreferencesRequest)(nil),           // 68: client.v0.SetPreferencesRequest
-	(*SetPreferencesResponse)(nil),          // 69: client.v0.SetPreferencesResponse
-	(*ResetPreferencesRequest)(nil),         // 70: client.v0.ResetPreferencesRequest
-	(*ResetPreferencesResponse)(nil),        // 71: client.v0.ResetPreferencesResponse
-	(*ListManagedSettingsRequest)(nil),      // 72: client.v0.ListManagedSettingsRequest
-	(*ListManagedSettingsResponse)(nil),     // 73: client.v0.ListManagedSettingsResponse
-	(*ListResourcesRequest)(nil),            // 74: client.v0.ListResourcesRequest
-	(*ListResourcesResponse)(nil),           // 75: client.v0.ListResourcesResponse
-	(*SetResourceEnabledRequest)(nil),       // 76: client.v0.SetResourceEnabledRequest
-	(*SetResourceEnabledResponse)(nil),      // 77: client.v0.SetResourceEnabledResponse
-	(*NotifyLifecycleRequest)(nil),          // 78: client.v0.NotifyLifecycleRequest
-	(*NotifyLifecycleResponse)(nil),         // 79: client.v0.NotifyLifecycleResponse
-	(*GetUpdateInfoRequest)(nil),            // 80: client.v0.GetUpdateInfoRequest
-	(*GetUpdateInfoResponse)(nil),           // 81: client.v0.GetUpdateInfoResponse
-	(*GetSupportInfoRequest)(nil),           // 82: client.v0.GetSupportInfoRequest
-	(*GetSupportInfoResponse)(nil),          // 83: client.v0.GetSupportInfoResponse
-	(*WatchEventsResponse)(nil),             // 84: client.v0.WatchEventsResponse
-	(*SnapshotEvent)(nil),                   // 85: client.v0.SnapshotEvent
-	(*DomainInvalidated)(nil),               // 86: client.v0.DomainInvalidated
-	(*RuntimeInfo)(nil),                     // 87: client.v0.RuntimeInfo
-	(*Status)(nil),                          // 88: client.v0.Status
-	(*MutationContext)(nil),                 // 89: client.v0.MutationContext
-	(*ProfileRef)(nil),                      // 90: client.v0.ProfileRef
-	(EnrollmentMode)(0),                     // 91: client.v0.EnrollmentMode
-	(*EnrollmentAttempt)(nil),               // 92: client.v0.EnrollmentAttempt
-	(*PageRequest)(nil),                     // 93: client.v0.PageRequest
-	(*EnrollmentTarget)(nil),                // 94: client.v0.EnrollmentTarget
-	(*PageResponse)(nil),                    // 95: client.v0.PageResponse
-	(*SnapshotMetadata)(nil),                // 96: client.v0.SnapshotMetadata
-	(*ChangeResult)(nil),                    // 97: client.v0.ChangeResult
-	(*ServerIdentity)(nil),                  // 98: client.v0.ServerIdentity
-	(*CleanupResult)(nil),                   // 99: client.v0.CleanupResult
-	(*Network)(nil),                         // 100: client.v0.Network
-	(*SelectionResult)(nil),                 // 101: client.v0.SelectionResult
-	(ConnectionContinuity)(0),               // 102: client.v0.ConnectionContinuity
-	(*Peer)(nil),                            // 103: client.v0.Peer
-	(AgentSnapshotState)(0),                 // 104: client.v0.AgentSnapshotState
-	(*Diagnostics)(nil),                     // 105: client.v0.Diagnostics
-	(*BundleResult)(nil),                    // 106: client.v0.BundleResult
-	(*LogEntry)(nil),                        // 107: client.v0.LogEntry
-	(*Profile)(nil),                         // 108: client.v0.Profile
-	(*ProfileResult)(nil),                   // 109: client.v0.ProfileResult
-	(*Session)(nil),                         // 110: client.v0.Session
-	(*RenewalResult)(nil),                   // 111: client.v0.RenewalResult
-	(*BrowserLoginChallenge)(nil),           // 112: client.v0.BrowserLoginChallenge
-	(*ExitNode)(nil),                        // 113: client.v0.ExitNode
-	(*ExitNodeStatus)(nil),                  // 114: client.v0.ExitNodeStatus
-	(LanAccess)(0),                          // 115: client.v0.LanAccess
-	(ExitFamilyMode)(0),                     // 116: client.v0.ExitFamilyMode
-	(*Preferences)(nil),                     // 117: client.v0.Preferences
-	(*PreferencesPatch)(nil),                // 118: client.v0.PreferencesPatch
-	(PreferenceKey)(0),                      // 119: client.v0.PreferenceKey
-	(*ManagedSetting)(nil),                  // 120: client.v0.ManagedSetting
-	(ResourceKind)(0),                       // 121: client.v0.ResourceKind
-	(*Resource)(nil),                        // 122: client.v0.Resource
-	(LifecycleEvent)(0),                     // 123: client.v0.LifecycleEvent
-	(*BuildIdentity)(nil),                   // 124: client.v0.BuildIdentity
-	(*UpdateInfo)(nil),                      // 125: client.v0.UpdateInfo
-	(*SupportInfo)(nil),                     // 126: client.v0.SupportInfo
-	(*Failure)(nil),                         // 127: client.v0.Failure
+	(Domain)(0),                               // 0: client.v0.Domain
+	(NodeRevocationPhase)(0),                  // 1: client.v0.NodeRevocationPhase
+	(*GetRuntimeInfoRequest)(nil),             // 2: client.v0.GetRuntimeInfoRequest
+	(*GetRuntimeInfoResponse)(nil),            // 3: client.v0.GetRuntimeInfoResponse
+	(*GetStatusRequest)(nil),                  // 4: client.v0.GetStatusRequest
+	(*GetStatusResponse)(nil),                 // 5: client.v0.GetStatusResponse
+	(*WatchEventsRequest)(nil),                // 6: client.v0.WatchEventsRequest
+	(*EnrollRequest)(nil),                     // 7: client.v0.EnrollRequest
+	(*EnrollResponse)(nil),                    // 8: client.v0.EnrollResponse
+	(*GetEnrollmentAttemptRequest)(nil),       // 9: client.v0.GetEnrollmentAttemptRequest
+	(*GetEnrollmentAttemptResponse)(nil),      // 10: client.v0.GetEnrollmentAttemptResponse
+	(*ListEnrollmentTargetsRequest)(nil),      // 11: client.v0.ListEnrollmentTargetsRequest
+	(*ListEnrollmentTargetsResponse)(nil),     // 12: client.v0.ListEnrollmentTargetsResponse
+	(*SelectEnrollmentTargetRequest)(nil),     // 13: client.v0.SelectEnrollmentTargetRequest
+	(*SelectEnrollmentTargetResponse)(nil),    // 14: client.v0.SelectEnrollmentTargetResponse
+	(*CancelEnrollmentAttemptRequest)(nil),    // 15: client.v0.CancelEnrollmentAttemptRequest
+	(*CancelEnrollmentAttemptResponse)(nil),   // 16: client.v0.CancelEnrollmentAttemptResponse
+	(*ConnectRequest)(nil),                    // 17: client.v0.ConnectRequest
+	(*ConnectResponse)(nil),                   // 18: client.v0.ConnectResponse
+	(*DisconnectRequest)(nil),                 // 19: client.v0.DisconnectRequest
+	(*DisconnectResponse)(nil),                // 20: client.v0.DisconnectResponse
+	(*GetServerIdentityRequest)(nil),          // 21: client.v0.GetServerIdentityRequest
+	(*GetServerIdentityResponse)(nil),         // 22: client.v0.GetServerIdentityResponse
+	(*TrustServerIdentityRequest)(nil),        // 23: client.v0.TrustServerIdentityRequest
+	(*TrustServerIdentityResponse)(nil),       // 24: client.v0.TrustServerIdentityResponse
+	(*LogoutRequest)(nil),                     // 25: client.v0.LogoutRequest
+	(*LogoutResponse)(nil),                    // 26: client.v0.LogoutResponse
+	(*ForgetLocalEnrollmentRequest)(nil),      // 27: client.v0.ForgetLocalEnrollmentRequest
+	(*ForgetLocalEnrollmentResponse)(nil),     // 28: client.v0.ForgetLocalEnrollmentResponse
+	(*ListNetworksRequest)(nil),               // 29: client.v0.ListNetworksRequest
+	(*ListNetworksResponse)(nil),              // 30: client.v0.ListNetworksResponse
+	(*SelectNetworkRequest)(nil),              // 31: client.v0.SelectNetworkRequest
+	(*SelectNetworkResponse)(nil),             // 32: client.v0.SelectNetworkResponse
+	(*ListPeersRequest)(nil),                  // 33: client.v0.ListPeersRequest
+	(*ListPeersResponse)(nil),                 // 34: client.v0.ListPeersResponse
+	(*GetDiagnosticsRequest)(nil),             // 35: client.v0.GetDiagnosticsRequest
+	(*GetDiagnosticsResponse)(nil),            // 36: client.v0.GetDiagnosticsResponse
+	(*CreateDiagnosticsBundleRequest)(nil),    // 37: client.v0.CreateDiagnosticsBundleRequest
+	(*CreateDiagnosticsBundleResponse)(nil),   // 38: client.v0.CreateDiagnosticsBundleResponse
+	(*ReadDiagnosticsBundleRequest)(nil),      // 39: client.v0.ReadDiagnosticsBundleRequest
+	(*ReadDiagnosticsBundleResponse)(nil),     // 40: client.v0.ReadDiagnosticsBundleResponse
+	(*ListRecentLogsRequest)(nil),             // 41: client.v0.ListRecentLogsRequest
+	(*ListRecentLogsResponse)(nil),            // 42: client.v0.ListRecentLogsResponse
+	(*ListProfilesRequest)(nil),               // 43: client.v0.ListProfilesRequest
+	(*ListProfilesResponse)(nil),              // 44: client.v0.ListProfilesResponse
+	(*CreateProfileRequest)(nil),              // 45: client.v0.CreateProfileRequest
+	(*CreateProfileResponse)(nil),             // 46: client.v0.CreateProfileResponse
+	(*SelectProfileRequest)(nil),              // 47: client.v0.SelectProfileRequest
+	(*SelectProfileResponse)(nil),             // 48: client.v0.SelectProfileResponse
+	(*RenameProfileRequest)(nil),              // 49: client.v0.RenameProfileRequest
+	(*RenameProfileResponse)(nil),             // 50: client.v0.RenameProfileResponse
+	(*RemoveProfileRequest)(nil),              // 51: client.v0.RemoveProfileRequest
+	(*RemoveProfileResponse)(nil),             // 52: client.v0.RemoveProfileResponse
+	(*GetSessionRequest)(nil),                 // 53: client.v0.GetSessionRequest
+	(*GetSessionResponse)(nil),                // 54: client.v0.GetSessionResponse
+	(*RenewSessionRequest)(nil),               // 55: client.v0.RenewSessionRequest
+	(*RenewSessionResponse)(nil),              // 56: client.v0.RenewSessionResponse
+	(*WaitSessionRenewalRequest)(nil),         // 57: client.v0.WaitSessionRenewalRequest
+	(*WaitSessionRenewalResponse)(nil),        // 58: client.v0.WaitSessionRenewalResponse
+	(*ListExitNodesRequest)(nil),              // 59: client.v0.ListExitNodesRequest
+	(*ListExitNodesResponse)(nil),             // 60: client.v0.ListExitNodesResponse
+	(*GetExitNodeRequest)(nil),                // 61: client.v0.GetExitNodeRequest
+	(*GetExitNodeResponse)(nil),               // 62: client.v0.GetExitNodeResponse
+	(*SelectExitNodeRequest)(nil),             // 63: client.v0.SelectExitNodeRequest
+	(*SelectExitNodeResponse)(nil),            // 64: client.v0.SelectExitNodeResponse
+	(*ClearExitNodeRequest)(nil),              // 65: client.v0.ClearExitNodeRequest
+	(*ClearExitNodeResponse)(nil),             // 66: client.v0.ClearExitNodeResponse
+	(*GetPreferencesRequest)(nil),             // 67: client.v0.GetPreferencesRequest
+	(*GetPreferencesResponse)(nil),            // 68: client.v0.GetPreferencesResponse
+	(*SetPreferencesRequest)(nil),             // 69: client.v0.SetPreferencesRequest
+	(*SetPreferencesResponse)(nil),            // 70: client.v0.SetPreferencesResponse
+	(*ResetPreferencesRequest)(nil),           // 71: client.v0.ResetPreferencesRequest
+	(*ResetPreferencesResponse)(nil),          // 72: client.v0.ResetPreferencesResponse
+	(*ListManagedSettingsRequest)(nil),        // 73: client.v0.ListManagedSettingsRequest
+	(*ListManagedSettingsResponse)(nil),       // 74: client.v0.ListManagedSettingsResponse
+	(*ListResourcesRequest)(nil),              // 75: client.v0.ListResourcesRequest
+	(*ListResourcesResponse)(nil),             // 76: client.v0.ListResourcesResponse
+	(*SetResourceEnabledRequest)(nil),         // 77: client.v0.SetResourceEnabledRequest
+	(*SetResourceEnabledResponse)(nil),        // 78: client.v0.SetResourceEnabledResponse
+	(*NotifyLifecycleRequest)(nil),            // 79: client.v0.NotifyLifecycleRequest
+	(*NotifyLifecycleResponse)(nil),           // 80: client.v0.NotifyLifecycleResponse
+	(*GetUpdateInfoRequest)(nil),              // 81: client.v0.GetUpdateInfoRequest
+	(*GetUpdateInfoResponse)(nil),             // 82: client.v0.GetUpdateInfoResponse
+	(*GetSupportInfoRequest)(nil),             // 83: client.v0.GetSupportInfoRequest
+	(*GetSupportInfoResponse)(nil),            // 84: client.v0.GetSupportInfoResponse
+	(*WatchEventsResponse)(nil),               // 85: client.v0.WatchEventsResponse
+	(*SnapshotEvent)(nil),                     // 86: client.v0.SnapshotEvent
+	(*DomainInvalidated)(nil),                 // 87: client.v0.DomainInvalidated
+	(*NodeRevocationTarget)(nil),              // 88: client.v0.NodeRevocationTarget
+	(*NodeRevocationResult)(nil),              // 89: client.v0.NodeRevocationResult
+	(*ListNodeRevocationTargetsRequest)(nil),  // 90: client.v0.ListNodeRevocationTargetsRequest
+	(*ListNodeRevocationTargetsResponse)(nil), // 91: client.v0.ListNodeRevocationTargetsResponse
+	(*RevokeNodeAccessRequest)(nil),           // 92: client.v0.RevokeNodeAccessRequest
+	(*RevokeNodeAccessResponse)(nil),          // 93: client.v0.RevokeNodeAccessResponse
+	(*GetNodeRevocationRequest)(nil),          // 94: client.v0.GetNodeRevocationRequest
+	(*GetNodeRevocationResponse)(nil),         // 95: client.v0.GetNodeRevocationResponse
+	(*RuntimeInfo)(nil),                       // 96: client.v0.RuntimeInfo
+	(*Status)(nil),                            // 97: client.v0.Status
+	(*MutationContext)(nil),                   // 98: client.v0.MutationContext
+	(*ProfileRef)(nil),                        // 99: client.v0.ProfileRef
+	(EnrollmentMode)(0),                       // 100: client.v0.EnrollmentMode
+	(*EnrollmentAttempt)(nil),                 // 101: client.v0.EnrollmentAttempt
+	(*PageRequest)(nil),                       // 102: client.v0.PageRequest
+	(*EnrollmentTarget)(nil),                  // 103: client.v0.EnrollmentTarget
+	(*PageResponse)(nil),                      // 104: client.v0.PageResponse
+	(*SnapshotMetadata)(nil),                  // 105: client.v0.SnapshotMetadata
+	(*ChangeResult)(nil),                      // 106: client.v0.ChangeResult
+	(*ServerIdentity)(nil),                    // 107: client.v0.ServerIdentity
+	(*CleanupResult)(nil),                     // 108: client.v0.CleanupResult
+	(*Network)(nil),                           // 109: client.v0.Network
+	(*SelectionResult)(nil),                   // 110: client.v0.SelectionResult
+	(ConnectionContinuity)(0),                 // 111: client.v0.ConnectionContinuity
+	(*Peer)(nil),                              // 112: client.v0.Peer
+	(AgentSnapshotState)(0),                   // 113: client.v0.AgentSnapshotState
+	(*Diagnostics)(nil),                       // 114: client.v0.Diagnostics
+	(*BundleResult)(nil),                      // 115: client.v0.BundleResult
+	(*LogEntry)(nil),                          // 116: client.v0.LogEntry
+	(*Profile)(nil),                           // 117: client.v0.Profile
+	(*ProfileResult)(nil),                     // 118: client.v0.ProfileResult
+	(*Session)(nil),                           // 119: client.v0.Session
+	(*RenewalResult)(nil),                     // 120: client.v0.RenewalResult
+	(*BrowserLoginChallenge)(nil),             // 121: client.v0.BrowserLoginChallenge
+	(*ExitNode)(nil),                          // 122: client.v0.ExitNode
+	(*ExitNodeStatus)(nil),                    // 123: client.v0.ExitNodeStatus
+	(LanAccess)(0),                            // 124: client.v0.LanAccess
+	(ExitFamilyMode)(0),                       // 125: client.v0.ExitFamilyMode
+	(*Preferences)(nil),                       // 126: client.v0.Preferences
+	(*PreferencesPatch)(nil),                  // 127: client.v0.PreferencesPatch
+	(PreferenceKey)(0),                        // 128: client.v0.PreferenceKey
+	(*ManagedSetting)(nil),                    // 129: client.v0.ManagedSetting
+	(ResourceKind)(0),                         // 130: client.v0.ResourceKind
+	(*Resource)(nil),                          // 131: client.v0.Resource
+	(LifecycleEvent)(0),                       // 132: client.v0.LifecycleEvent
+	(*BuildIdentity)(nil),                     // 133: client.v0.BuildIdentity
+	(*UpdateInfo)(nil),                        // 134: client.v0.UpdateInfo
+	(*SupportInfo)(nil),                       // 135: client.v0.SupportInfo
+	(*Failure)(nil),                           // 136: client.v0.Failure
+	(*timestamppb.Timestamp)(nil),             // 137: google.protobuf.Timestamp
 }
 var file_client_v0_service_proto_depIdxs = []int32{
-	87,  // 0: client.v0.GetRuntimeInfoResponse.runtime:type_name -> client.v0.RuntimeInfo
-	88,  // 1: client.v0.GetStatusResponse.status:type_name -> client.v0.Status
-	89,  // 2: client.v0.EnrollRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 3: client.v0.EnrollRequest.profile:type_name -> client.v0.ProfileRef
-	91,  // 4: client.v0.EnrollRequest.mode:type_name -> client.v0.EnrollmentMode
-	92,  // 5: client.v0.EnrollResponse.attempt:type_name -> client.v0.EnrollmentAttempt
-	90,  // 6: client.v0.GetEnrollmentAttemptRequest.profile:type_name -> client.v0.ProfileRef
-	92,  // 7: client.v0.GetEnrollmentAttemptResponse.attempt:type_name -> client.v0.EnrollmentAttempt
-	90,  // 8: client.v0.ListEnrollmentTargetsRequest.profile:type_name -> client.v0.ProfileRef
-	93,  // 9: client.v0.ListEnrollmentTargetsRequest.page:type_name -> client.v0.PageRequest
-	94,  // 10: client.v0.ListEnrollmentTargetsResponse.targets:type_name -> client.v0.EnrollmentTarget
-	95,  // 11: client.v0.ListEnrollmentTargetsResponse.page:type_name -> client.v0.PageResponse
-	96,  // 12: client.v0.ListEnrollmentTargetsResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	89,  // 13: client.v0.SelectEnrollmentTargetRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 14: client.v0.SelectEnrollmentTargetRequest.profile:type_name -> client.v0.ProfileRef
-	92,  // 15: client.v0.SelectEnrollmentTargetResponse.attempt:type_name -> client.v0.EnrollmentAttempt
-	89,  // 16: client.v0.CancelEnrollmentAttemptRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 17: client.v0.CancelEnrollmentAttemptRequest.profile:type_name -> client.v0.ProfileRef
-	92,  // 18: client.v0.CancelEnrollmentAttemptResponse.attempt:type_name -> client.v0.EnrollmentAttempt
-	89,  // 19: client.v0.ConnectRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 20: client.v0.ConnectRequest.profile:type_name -> client.v0.ProfileRef
-	89,  // 21: client.v0.DisconnectRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 22: client.v0.DisconnectRequest.profile:type_name -> client.v0.ProfileRef
-	97,  // 23: client.v0.DisconnectResponse.change:type_name -> client.v0.ChangeResult
-	90,  // 24: client.v0.GetServerIdentityRequest.profile:type_name -> client.v0.ProfileRef
-	98,  // 25: client.v0.GetServerIdentityResponse.identity:type_name -> client.v0.ServerIdentity
-	96,  // 26: client.v0.GetServerIdentityResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	89,  // 27: client.v0.TrustServerIdentityRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 28: client.v0.TrustServerIdentityRequest.profile:type_name -> client.v0.ProfileRef
-	97,  // 29: client.v0.TrustServerIdentityResponse.change:type_name -> client.v0.ChangeResult
-	89,  // 30: client.v0.LogoutRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 31: client.v0.LogoutRequest.profile:type_name -> client.v0.ProfileRef
-	99,  // 32: client.v0.LogoutResponse.cleanup:type_name -> client.v0.CleanupResult
-	89,  // 33: client.v0.ForgetLocalEnrollmentRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 34: client.v0.ForgetLocalEnrollmentRequest.profile:type_name -> client.v0.ProfileRef
-	99,  // 35: client.v0.ForgetLocalEnrollmentResponse.cleanup:type_name -> client.v0.CleanupResult
-	90,  // 36: client.v0.ListNetworksRequest.profile:type_name -> client.v0.ProfileRef
-	93,  // 37: client.v0.ListNetworksRequest.page:type_name -> client.v0.PageRequest
-	100, // 38: client.v0.ListNetworksResponse.networks:type_name -> client.v0.Network
-	95,  // 39: client.v0.ListNetworksResponse.page:type_name -> client.v0.PageResponse
-	89,  // 40: client.v0.SelectNetworkRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 41: client.v0.SelectNetworkRequest.profile:type_name -> client.v0.ProfileRef
-	101, // 42: client.v0.SelectNetworkResponse.selection:type_name -> client.v0.SelectionResult
-	102, // 43: client.v0.SelectNetworkResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	90,  // 44: client.v0.ListPeersRequest.profile:type_name -> client.v0.ProfileRef
-	93,  // 45: client.v0.ListPeersRequest.page:type_name -> client.v0.PageRequest
-	103, // 46: client.v0.ListPeersResponse.peers:type_name -> client.v0.Peer
-	95,  // 47: client.v0.ListPeersResponse.page:type_name -> client.v0.PageResponse
-	104, // 48: client.v0.ListPeersResponse.snapshot_state:type_name -> client.v0.AgentSnapshotState
-	90,  // 49: client.v0.GetDiagnosticsRequest.profile:type_name -> client.v0.ProfileRef
-	105, // 50: client.v0.GetDiagnosticsResponse.diagnostics:type_name -> client.v0.Diagnostics
-	89,  // 51: client.v0.CreateDiagnosticsBundleRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 52: client.v0.CreateDiagnosticsBundleRequest.profile:type_name -> client.v0.ProfileRef
-	106, // 53: client.v0.CreateDiagnosticsBundleResponse.bundle:type_name -> client.v0.BundleResult
-	90,  // 54: client.v0.ListRecentLogsRequest.profile:type_name -> client.v0.ProfileRef
-	93,  // 55: client.v0.ListRecentLogsRequest.page:type_name -> client.v0.PageRequest
-	107, // 56: client.v0.ListRecentLogsResponse.logs:type_name -> client.v0.LogEntry
-	95,  // 57: client.v0.ListRecentLogsResponse.page:type_name -> client.v0.PageResponse
-	93,  // 58: client.v0.ListProfilesRequest.page:type_name -> client.v0.PageRequest
-	108, // 59: client.v0.ListProfilesResponse.profiles:type_name -> client.v0.Profile
-	95,  // 60: client.v0.ListProfilesResponse.page:type_name -> client.v0.PageResponse
-	89,  // 61: client.v0.CreateProfileRequest.mutation:type_name -> client.v0.MutationContext
-	109, // 62: client.v0.CreateProfileResponse.profile:type_name -> client.v0.ProfileResult
-	89,  // 63: client.v0.SelectProfileRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 64: client.v0.SelectProfileRequest.profile:type_name -> client.v0.ProfileRef
-	101, // 65: client.v0.SelectProfileResponse.selection:type_name -> client.v0.SelectionResult
-	102, // 66: client.v0.SelectProfileResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	89,  // 67: client.v0.RenameProfileRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 68: client.v0.RenameProfileRequest.profile:type_name -> client.v0.ProfileRef
-	97,  // 69: client.v0.RenameProfileResponse.change:type_name -> client.v0.ChangeResult
-	89,  // 70: client.v0.RemoveProfileRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 71: client.v0.RemoveProfileRequest.profile:type_name -> client.v0.ProfileRef
-	97,  // 72: client.v0.RemoveProfileResponse.change:type_name -> client.v0.ChangeResult
-	90,  // 73: client.v0.GetSessionRequest.profile:type_name -> client.v0.ProfileRef
-	110, // 74: client.v0.GetSessionResponse.session:type_name -> client.v0.Session
-	96,  // 75: client.v0.GetSessionResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	89,  // 76: client.v0.RenewSessionRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 77: client.v0.RenewSessionRequest.profile:type_name -> client.v0.ProfileRef
-	111, // 78: client.v0.RenewSessionResponse.renewal:type_name -> client.v0.RenewalResult
-	112, // 79: client.v0.RenewSessionResponse.browser_login:type_name -> client.v0.BrowserLoginChallenge
-	102, // 80: client.v0.RenewSessionResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	90,  // 81: client.v0.WaitSessionRenewalRequest.profile:type_name -> client.v0.ProfileRef
-	111, // 82: client.v0.WaitSessionRenewalResponse.renewal:type_name -> client.v0.RenewalResult
-	102, // 83: client.v0.WaitSessionRenewalResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	90,  // 84: client.v0.ListExitNodesRequest.profile:type_name -> client.v0.ProfileRef
-	93,  // 85: client.v0.ListExitNodesRequest.page:type_name -> client.v0.PageRequest
-	113, // 86: client.v0.ListExitNodesResponse.exit_nodes:type_name -> client.v0.ExitNode
-	95,  // 87: client.v0.ListExitNodesResponse.page:type_name -> client.v0.PageResponse
-	90,  // 88: client.v0.GetExitNodeRequest.profile:type_name -> client.v0.ProfileRef
-	114, // 89: client.v0.GetExitNodeResponse.status:type_name -> client.v0.ExitNodeStatus
-	89,  // 90: client.v0.SelectExitNodeRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 91: client.v0.SelectExitNodeRequest.profile:type_name -> client.v0.ProfileRef
-	115, // 92: client.v0.SelectExitNodeRequest.lan_access:type_name -> client.v0.LanAccess
-	116, // 93: client.v0.SelectExitNodeRequest.family_mode:type_name -> client.v0.ExitFamilyMode
-	101, // 94: client.v0.SelectExitNodeResponse.selection:type_name -> client.v0.SelectionResult
-	102, // 95: client.v0.SelectExitNodeResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	89,  // 96: client.v0.ClearExitNodeRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 97: client.v0.ClearExitNodeRequest.profile:type_name -> client.v0.ProfileRef
-	101, // 98: client.v0.ClearExitNodeResponse.selection:type_name -> client.v0.SelectionResult
-	102, // 99: client.v0.ClearExitNodeResponse.continuity:type_name -> client.v0.ConnectionContinuity
-	90,  // 100: client.v0.GetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
-	117, // 101: client.v0.GetPreferencesResponse.preferences:type_name -> client.v0.Preferences
-	89,  // 102: client.v0.SetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 103: client.v0.SetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
-	118, // 104: client.v0.SetPreferencesRequest.patch:type_name -> client.v0.PreferencesPatch
-	97,  // 105: client.v0.SetPreferencesResponse.change:type_name -> client.v0.ChangeResult
-	89,  // 106: client.v0.ResetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 107: client.v0.ResetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
-	119, // 108: client.v0.ResetPreferencesRequest.keys:type_name -> client.v0.PreferenceKey
-	97,  // 109: client.v0.ResetPreferencesResponse.change:type_name -> client.v0.ChangeResult
-	90,  // 110: client.v0.ListManagedSettingsRequest.profile:type_name -> client.v0.ProfileRef
-	120, // 111: client.v0.ListManagedSettingsResponse.settings:type_name -> client.v0.ManagedSetting
-	96,  // 112: client.v0.ListManagedSettingsResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	90,  // 113: client.v0.ListResourcesRequest.profile:type_name -> client.v0.ProfileRef
-	93,  // 114: client.v0.ListResourcesRequest.page:type_name -> client.v0.PageRequest
-	121, // 115: client.v0.ListResourcesRequest.kinds:type_name -> client.v0.ResourceKind
-	122, // 116: client.v0.ListResourcesResponse.resources:type_name -> client.v0.Resource
-	95,  // 117: client.v0.ListResourcesResponse.page:type_name -> client.v0.PageResponse
-	89,  // 118: client.v0.SetResourceEnabledRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 119: client.v0.SetResourceEnabledRequest.profile:type_name -> client.v0.ProfileRef
-	97,  // 120: client.v0.SetResourceEnabledResponse.change:type_name -> client.v0.ChangeResult
-	89,  // 121: client.v0.NotifyLifecycleRequest.mutation:type_name -> client.v0.MutationContext
-	90,  // 122: client.v0.NotifyLifecycleRequest.profile:type_name -> client.v0.ProfileRef
-	123, // 123: client.v0.NotifyLifecycleRequest.event:type_name -> client.v0.LifecycleEvent
-	97,  // 124: client.v0.NotifyLifecycleResponse.change:type_name -> client.v0.ChangeResult
-	124, // 125: client.v0.GetUpdateInfoRequest.reported_ui:type_name -> client.v0.BuildIdentity
-	125, // 126: client.v0.GetUpdateInfoResponse.info:type_name -> client.v0.UpdateInfo
-	126, // 127: client.v0.GetSupportInfoResponse.info:type_name -> client.v0.SupportInfo
-	96,  // 128: client.v0.WatchEventsResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	85,  // 129: client.v0.WatchEventsResponse.snapshot:type_name -> client.v0.SnapshotEvent
-	88,  // 130: client.v0.WatchEventsResponse.status_changed:type_name -> client.v0.Status
-	86,  // 131: client.v0.WatchEventsResponse.invalidated:type_name -> client.v0.DomainInvalidated
-	127, // 132: client.v0.WatchEventsResponse.failure:type_name -> client.v0.Failure
-	110, // 133: client.v0.WatchEventsResponse.session_changed:type_name -> client.v0.Session
-	87,  // 134: client.v0.SnapshotEvent.runtime:type_name -> client.v0.RuntimeInfo
-	88,  // 135: client.v0.SnapshotEvent.status:type_name -> client.v0.Status
+	96,  // 0: client.v0.GetRuntimeInfoResponse.runtime:type_name -> client.v0.RuntimeInfo
+	97,  // 1: client.v0.GetStatusResponse.status:type_name -> client.v0.Status
+	98,  // 2: client.v0.EnrollRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 3: client.v0.EnrollRequest.profile:type_name -> client.v0.ProfileRef
+	100, // 4: client.v0.EnrollRequest.mode:type_name -> client.v0.EnrollmentMode
+	101, // 5: client.v0.EnrollResponse.attempt:type_name -> client.v0.EnrollmentAttempt
+	99,  // 6: client.v0.GetEnrollmentAttemptRequest.profile:type_name -> client.v0.ProfileRef
+	101, // 7: client.v0.GetEnrollmentAttemptResponse.attempt:type_name -> client.v0.EnrollmentAttempt
+	99,  // 8: client.v0.ListEnrollmentTargetsRequest.profile:type_name -> client.v0.ProfileRef
+	102, // 9: client.v0.ListEnrollmentTargetsRequest.page:type_name -> client.v0.PageRequest
+	103, // 10: client.v0.ListEnrollmentTargetsResponse.targets:type_name -> client.v0.EnrollmentTarget
+	104, // 11: client.v0.ListEnrollmentTargetsResponse.page:type_name -> client.v0.PageResponse
+	105, // 12: client.v0.ListEnrollmentTargetsResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	98,  // 13: client.v0.SelectEnrollmentTargetRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 14: client.v0.SelectEnrollmentTargetRequest.profile:type_name -> client.v0.ProfileRef
+	101, // 15: client.v0.SelectEnrollmentTargetResponse.attempt:type_name -> client.v0.EnrollmentAttempt
+	98,  // 16: client.v0.CancelEnrollmentAttemptRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 17: client.v0.CancelEnrollmentAttemptRequest.profile:type_name -> client.v0.ProfileRef
+	101, // 18: client.v0.CancelEnrollmentAttemptResponse.attempt:type_name -> client.v0.EnrollmentAttempt
+	98,  // 19: client.v0.ConnectRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 20: client.v0.ConnectRequest.profile:type_name -> client.v0.ProfileRef
+	98,  // 21: client.v0.DisconnectRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 22: client.v0.DisconnectRequest.profile:type_name -> client.v0.ProfileRef
+	106, // 23: client.v0.DisconnectResponse.change:type_name -> client.v0.ChangeResult
+	99,  // 24: client.v0.GetServerIdentityRequest.profile:type_name -> client.v0.ProfileRef
+	107, // 25: client.v0.GetServerIdentityResponse.identity:type_name -> client.v0.ServerIdentity
+	105, // 26: client.v0.GetServerIdentityResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	98,  // 27: client.v0.TrustServerIdentityRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 28: client.v0.TrustServerIdentityRequest.profile:type_name -> client.v0.ProfileRef
+	106, // 29: client.v0.TrustServerIdentityResponse.change:type_name -> client.v0.ChangeResult
+	98,  // 30: client.v0.LogoutRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 31: client.v0.LogoutRequest.profile:type_name -> client.v0.ProfileRef
+	108, // 32: client.v0.LogoutResponse.cleanup:type_name -> client.v0.CleanupResult
+	98,  // 33: client.v0.ForgetLocalEnrollmentRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 34: client.v0.ForgetLocalEnrollmentRequest.profile:type_name -> client.v0.ProfileRef
+	108, // 35: client.v0.ForgetLocalEnrollmentResponse.cleanup:type_name -> client.v0.CleanupResult
+	99,  // 36: client.v0.ListNetworksRequest.profile:type_name -> client.v0.ProfileRef
+	102, // 37: client.v0.ListNetworksRequest.page:type_name -> client.v0.PageRequest
+	109, // 38: client.v0.ListNetworksResponse.networks:type_name -> client.v0.Network
+	104, // 39: client.v0.ListNetworksResponse.page:type_name -> client.v0.PageResponse
+	98,  // 40: client.v0.SelectNetworkRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 41: client.v0.SelectNetworkRequest.profile:type_name -> client.v0.ProfileRef
+	110, // 42: client.v0.SelectNetworkResponse.selection:type_name -> client.v0.SelectionResult
+	111, // 43: client.v0.SelectNetworkResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	99,  // 44: client.v0.ListPeersRequest.profile:type_name -> client.v0.ProfileRef
+	102, // 45: client.v0.ListPeersRequest.page:type_name -> client.v0.PageRequest
+	112, // 46: client.v0.ListPeersResponse.peers:type_name -> client.v0.Peer
+	104, // 47: client.v0.ListPeersResponse.page:type_name -> client.v0.PageResponse
+	113, // 48: client.v0.ListPeersResponse.snapshot_state:type_name -> client.v0.AgentSnapshotState
+	99,  // 49: client.v0.GetDiagnosticsRequest.profile:type_name -> client.v0.ProfileRef
+	114, // 50: client.v0.GetDiagnosticsResponse.diagnostics:type_name -> client.v0.Diagnostics
+	98,  // 51: client.v0.CreateDiagnosticsBundleRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 52: client.v0.CreateDiagnosticsBundleRequest.profile:type_name -> client.v0.ProfileRef
+	115, // 53: client.v0.CreateDiagnosticsBundleResponse.bundle:type_name -> client.v0.BundleResult
+	99,  // 54: client.v0.ListRecentLogsRequest.profile:type_name -> client.v0.ProfileRef
+	102, // 55: client.v0.ListRecentLogsRequest.page:type_name -> client.v0.PageRequest
+	116, // 56: client.v0.ListRecentLogsResponse.logs:type_name -> client.v0.LogEntry
+	104, // 57: client.v0.ListRecentLogsResponse.page:type_name -> client.v0.PageResponse
+	102, // 58: client.v0.ListProfilesRequest.page:type_name -> client.v0.PageRequest
+	117, // 59: client.v0.ListProfilesResponse.profiles:type_name -> client.v0.Profile
+	104, // 60: client.v0.ListProfilesResponse.page:type_name -> client.v0.PageResponse
+	98,  // 61: client.v0.CreateProfileRequest.mutation:type_name -> client.v0.MutationContext
+	118, // 62: client.v0.CreateProfileResponse.profile:type_name -> client.v0.ProfileResult
+	98,  // 63: client.v0.SelectProfileRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 64: client.v0.SelectProfileRequest.profile:type_name -> client.v0.ProfileRef
+	110, // 65: client.v0.SelectProfileResponse.selection:type_name -> client.v0.SelectionResult
+	111, // 66: client.v0.SelectProfileResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	98,  // 67: client.v0.RenameProfileRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 68: client.v0.RenameProfileRequest.profile:type_name -> client.v0.ProfileRef
+	106, // 69: client.v0.RenameProfileResponse.change:type_name -> client.v0.ChangeResult
+	98,  // 70: client.v0.RemoveProfileRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 71: client.v0.RemoveProfileRequest.profile:type_name -> client.v0.ProfileRef
+	106, // 72: client.v0.RemoveProfileResponse.change:type_name -> client.v0.ChangeResult
+	99,  // 73: client.v0.GetSessionRequest.profile:type_name -> client.v0.ProfileRef
+	119, // 74: client.v0.GetSessionResponse.session:type_name -> client.v0.Session
+	105, // 75: client.v0.GetSessionResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	98,  // 76: client.v0.RenewSessionRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 77: client.v0.RenewSessionRequest.profile:type_name -> client.v0.ProfileRef
+	120, // 78: client.v0.RenewSessionResponse.renewal:type_name -> client.v0.RenewalResult
+	121, // 79: client.v0.RenewSessionResponse.browser_login:type_name -> client.v0.BrowserLoginChallenge
+	111, // 80: client.v0.RenewSessionResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	99,  // 81: client.v0.WaitSessionRenewalRequest.profile:type_name -> client.v0.ProfileRef
+	120, // 82: client.v0.WaitSessionRenewalResponse.renewal:type_name -> client.v0.RenewalResult
+	111, // 83: client.v0.WaitSessionRenewalResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	99,  // 84: client.v0.ListExitNodesRequest.profile:type_name -> client.v0.ProfileRef
+	102, // 85: client.v0.ListExitNodesRequest.page:type_name -> client.v0.PageRequest
+	122, // 86: client.v0.ListExitNodesResponse.exit_nodes:type_name -> client.v0.ExitNode
+	104, // 87: client.v0.ListExitNodesResponse.page:type_name -> client.v0.PageResponse
+	99,  // 88: client.v0.GetExitNodeRequest.profile:type_name -> client.v0.ProfileRef
+	123, // 89: client.v0.GetExitNodeResponse.status:type_name -> client.v0.ExitNodeStatus
+	98,  // 90: client.v0.SelectExitNodeRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 91: client.v0.SelectExitNodeRequest.profile:type_name -> client.v0.ProfileRef
+	124, // 92: client.v0.SelectExitNodeRequest.lan_access:type_name -> client.v0.LanAccess
+	125, // 93: client.v0.SelectExitNodeRequest.family_mode:type_name -> client.v0.ExitFamilyMode
+	110, // 94: client.v0.SelectExitNodeResponse.selection:type_name -> client.v0.SelectionResult
+	111, // 95: client.v0.SelectExitNodeResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	98,  // 96: client.v0.ClearExitNodeRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 97: client.v0.ClearExitNodeRequest.profile:type_name -> client.v0.ProfileRef
+	110, // 98: client.v0.ClearExitNodeResponse.selection:type_name -> client.v0.SelectionResult
+	111, // 99: client.v0.ClearExitNodeResponse.continuity:type_name -> client.v0.ConnectionContinuity
+	99,  // 100: client.v0.GetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
+	126, // 101: client.v0.GetPreferencesResponse.preferences:type_name -> client.v0.Preferences
+	98,  // 102: client.v0.SetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 103: client.v0.SetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
+	127, // 104: client.v0.SetPreferencesRequest.patch:type_name -> client.v0.PreferencesPatch
+	106, // 105: client.v0.SetPreferencesResponse.change:type_name -> client.v0.ChangeResult
+	98,  // 106: client.v0.ResetPreferencesRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 107: client.v0.ResetPreferencesRequest.profile:type_name -> client.v0.ProfileRef
+	128, // 108: client.v0.ResetPreferencesRequest.keys:type_name -> client.v0.PreferenceKey
+	106, // 109: client.v0.ResetPreferencesResponse.change:type_name -> client.v0.ChangeResult
+	99,  // 110: client.v0.ListManagedSettingsRequest.profile:type_name -> client.v0.ProfileRef
+	129, // 111: client.v0.ListManagedSettingsResponse.settings:type_name -> client.v0.ManagedSetting
+	105, // 112: client.v0.ListManagedSettingsResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	99,  // 113: client.v0.ListResourcesRequest.profile:type_name -> client.v0.ProfileRef
+	102, // 114: client.v0.ListResourcesRequest.page:type_name -> client.v0.PageRequest
+	130, // 115: client.v0.ListResourcesRequest.kinds:type_name -> client.v0.ResourceKind
+	131, // 116: client.v0.ListResourcesResponse.resources:type_name -> client.v0.Resource
+	104, // 117: client.v0.ListResourcesResponse.page:type_name -> client.v0.PageResponse
+	98,  // 118: client.v0.SetResourceEnabledRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 119: client.v0.SetResourceEnabledRequest.profile:type_name -> client.v0.ProfileRef
+	106, // 120: client.v0.SetResourceEnabledResponse.change:type_name -> client.v0.ChangeResult
+	98,  // 121: client.v0.NotifyLifecycleRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 122: client.v0.NotifyLifecycleRequest.profile:type_name -> client.v0.ProfileRef
+	132, // 123: client.v0.NotifyLifecycleRequest.event:type_name -> client.v0.LifecycleEvent
+	106, // 124: client.v0.NotifyLifecycleResponse.change:type_name -> client.v0.ChangeResult
+	133, // 125: client.v0.GetUpdateInfoRequest.reported_ui:type_name -> client.v0.BuildIdentity
+	134, // 126: client.v0.GetUpdateInfoResponse.info:type_name -> client.v0.UpdateInfo
+	135, // 127: client.v0.GetSupportInfoResponse.info:type_name -> client.v0.SupportInfo
+	105, // 128: client.v0.WatchEventsResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	86,  // 129: client.v0.WatchEventsResponse.snapshot:type_name -> client.v0.SnapshotEvent
+	97,  // 130: client.v0.WatchEventsResponse.status_changed:type_name -> client.v0.Status
+	87,  // 131: client.v0.WatchEventsResponse.invalidated:type_name -> client.v0.DomainInvalidated
+	136, // 132: client.v0.WatchEventsResponse.failure:type_name -> client.v0.Failure
+	119, // 133: client.v0.WatchEventsResponse.session_changed:type_name -> client.v0.Session
+	96,  // 134: client.v0.SnapshotEvent.runtime:type_name -> client.v0.RuntimeInfo
+	97,  // 135: client.v0.SnapshotEvent.status:type_name -> client.v0.Status
 	0,   // 136: client.v0.DomainInvalidated.domain:type_name -> client.v0.Domain
-	1,   // 137: client.v0.ClientService.GetRuntimeInfo:input_type -> client.v0.GetRuntimeInfoRequest
-	3,   // 138: client.v0.ClientService.GetStatus:input_type -> client.v0.GetStatusRequest
-	5,   // 139: client.v0.ClientService.WatchEvents:input_type -> client.v0.WatchEventsRequest
-	6,   // 140: client.v0.ClientService.Enroll:input_type -> client.v0.EnrollRequest
-	8,   // 141: client.v0.ClientService.GetEnrollmentAttempt:input_type -> client.v0.GetEnrollmentAttemptRequest
-	10,  // 142: client.v0.ClientService.ListEnrollmentTargets:input_type -> client.v0.ListEnrollmentTargetsRequest
-	12,  // 143: client.v0.ClientService.SelectEnrollmentTarget:input_type -> client.v0.SelectEnrollmentTargetRequest
-	14,  // 144: client.v0.ClientService.CancelEnrollmentAttempt:input_type -> client.v0.CancelEnrollmentAttemptRequest
-	16,  // 145: client.v0.ClientService.Connect:input_type -> client.v0.ConnectRequest
-	18,  // 146: client.v0.ClientService.Disconnect:input_type -> client.v0.DisconnectRequest
-	20,  // 147: client.v0.ClientService.GetServerIdentity:input_type -> client.v0.GetServerIdentityRequest
-	22,  // 148: client.v0.ClientService.TrustServerIdentity:input_type -> client.v0.TrustServerIdentityRequest
-	24,  // 149: client.v0.ClientService.Logout:input_type -> client.v0.LogoutRequest
-	26,  // 150: client.v0.ClientService.ForgetLocalEnrollment:input_type -> client.v0.ForgetLocalEnrollmentRequest
-	28,  // 151: client.v0.ClientService.ListNetworks:input_type -> client.v0.ListNetworksRequest
-	30,  // 152: client.v0.ClientService.SelectNetwork:input_type -> client.v0.SelectNetworkRequest
-	32,  // 153: client.v0.ClientService.ListPeers:input_type -> client.v0.ListPeersRequest
-	34,  // 154: client.v0.ClientService.GetDiagnostics:input_type -> client.v0.GetDiagnosticsRequest
-	36,  // 155: client.v0.ClientService.CreateDiagnosticsBundle:input_type -> client.v0.CreateDiagnosticsBundleRequest
-	38,  // 156: client.v0.ClientService.ReadDiagnosticsBundle:input_type -> client.v0.ReadDiagnosticsBundleRequest
-	40,  // 157: client.v0.ClientService.ListRecentLogs:input_type -> client.v0.ListRecentLogsRequest
-	42,  // 158: client.v0.ClientService.ListProfiles:input_type -> client.v0.ListProfilesRequest
-	44,  // 159: client.v0.ClientService.CreateProfile:input_type -> client.v0.CreateProfileRequest
-	46,  // 160: client.v0.ClientService.SelectProfile:input_type -> client.v0.SelectProfileRequest
-	48,  // 161: client.v0.ClientService.RenameProfile:input_type -> client.v0.RenameProfileRequest
-	50,  // 162: client.v0.ClientService.RemoveProfile:input_type -> client.v0.RemoveProfileRequest
-	52,  // 163: client.v0.ClientService.GetSession:input_type -> client.v0.GetSessionRequest
-	54,  // 164: client.v0.ClientService.RenewSession:input_type -> client.v0.RenewSessionRequest
-	56,  // 165: client.v0.ClientService.WaitSessionRenewal:input_type -> client.v0.WaitSessionRenewalRequest
-	58,  // 166: client.v0.ClientService.ListExitNodes:input_type -> client.v0.ListExitNodesRequest
-	60,  // 167: client.v0.ClientService.GetExitNode:input_type -> client.v0.GetExitNodeRequest
-	62,  // 168: client.v0.ClientService.SelectExitNode:input_type -> client.v0.SelectExitNodeRequest
-	64,  // 169: client.v0.ClientService.ClearExitNode:input_type -> client.v0.ClearExitNodeRequest
-	66,  // 170: client.v0.ClientService.GetPreferences:input_type -> client.v0.GetPreferencesRequest
-	68,  // 171: client.v0.ClientService.SetPreferences:input_type -> client.v0.SetPreferencesRequest
-	70,  // 172: client.v0.ClientService.ResetPreferences:input_type -> client.v0.ResetPreferencesRequest
-	72,  // 173: client.v0.ClientService.ListManagedSettings:input_type -> client.v0.ListManagedSettingsRequest
-	74,  // 174: client.v0.ClientService.ListResources:input_type -> client.v0.ListResourcesRequest
-	76,  // 175: client.v0.ClientService.SetResourceEnabled:input_type -> client.v0.SetResourceEnabledRequest
-	78,  // 176: client.v0.ClientService.NotifyLifecycle:input_type -> client.v0.NotifyLifecycleRequest
-	80,  // 177: client.v0.ClientService.GetUpdateInfo:input_type -> client.v0.GetUpdateInfoRequest
-	82,  // 178: client.v0.ClientService.GetSupportInfo:input_type -> client.v0.GetSupportInfoRequest
-	2,   // 179: client.v0.ClientService.GetRuntimeInfo:output_type -> client.v0.GetRuntimeInfoResponse
-	4,   // 180: client.v0.ClientService.GetStatus:output_type -> client.v0.GetStatusResponse
-	84,  // 181: client.v0.ClientService.WatchEvents:output_type -> client.v0.WatchEventsResponse
-	7,   // 182: client.v0.ClientService.Enroll:output_type -> client.v0.EnrollResponse
-	9,   // 183: client.v0.ClientService.GetEnrollmentAttempt:output_type -> client.v0.GetEnrollmentAttemptResponse
-	11,  // 184: client.v0.ClientService.ListEnrollmentTargets:output_type -> client.v0.ListEnrollmentTargetsResponse
-	13,  // 185: client.v0.ClientService.SelectEnrollmentTarget:output_type -> client.v0.SelectEnrollmentTargetResponse
-	15,  // 186: client.v0.ClientService.CancelEnrollmentAttempt:output_type -> client.v0.CancelEnrollmentAttemptResponse
-	17,  // 187: client.v0.ClientService.Connect:output_type -> client.v0.ConnectResponse
-	19,  // 188: client.v0.ClientService.Disconnect:output_type -> client.v0.DisconnectResponse
-	21,  // 189: client.v0.ClientService.GetServerIdentity:output_type -> client.v0.GetServerIdentityResponse
-	23,  // 190: client.v0.ClientService.TrustServerIdentity:output_type -> client.v0.TrustServerIdentityResponse
-	25,  // 191: client.v0.ClientService.Logout:output_type -> client.v0.LogoutResponse
-	27,  // 192: client.v0.ClientService.ForgetLocalEnrollment:output_type -> client.v0.ForgetLocalEnrollmentResponse
-	29,  // 193: client.v0.ClientService.ListNetworks:output_type -> client.v0.ListNetworksResponse
-	31,  // 194: client.v0.ClientService.SelectNetwork:output_type -> client.v0.SelectNetworkResponse
-	33,  // 195: client.v0.ClientService.ListPeers:output_type -> client.v0.ListPeersResponse
-	35,  // 196: client.v0.ClientService.GetDiagnostics:output_type -> client.v0.GetDiagnosticsResponse
-	37,  // 197: client.v0.ClientService.CreateDiagnosticsBundle:output_type -> client.v0.CreateDiagnosticsBundleResponse
-	39,  // 198: client.v0.ClientService.ReadDiagnosticsBundle:output_type -> client.v0.ReadDiagnosticsBundleResponse
-	41,  // 199: client.v0.ClientService.ListRecentLogs:output_type -> client.v0.ListRecentLogsResponse
-	43,  // 200: client.v0.ClientService.ListProfiles:output_type -> client.v0.ListProfilesResponse
-	45,  // 201: client.v0.ClientService.CreateProfile:output_type -> client.v0.CreateProfileResponse
-	47,  // 202: client.v0.ClientService.SelectProfile:output_type -> client.v0.SelectProfileResponse
-	49,  // 203: client.v0.ClientService.RenameProfile:output_type -> client.v0.RenameProfileResponse
-	51,  // 204: client.v0.ClientService.RemoveProfile:output_type -> client.v0.RemoveProfileResponse
-	53,  // 205: client.v0.ClientService.GetSession:output_type -> client.v0.GetSessionResponse
-	55,  // 206: client.v0.ClientService.RenewSession:output_type -> client.v0.RenewSessionResponse
-	57,  // 207: client.v0.ClientService.WaitSessionRenewal:output_type -> client.v0.WaitSessionRenewalResponse
-	59,  // 208: client.v0.ClientService.ListExitNodes:output_type -> client.v0.ListExitNodesResponse
-	61,  // 209: client.v0.ClientService.GetExitNode:output_type -> client.v0.GetExitNodeResponse
-	63,  // 210: client.v0.ClientService.SelectExitNode:output_type -> client.v0.SelectExitNodeResponse
-	65,  // 211: client.v0.ClientService.ClearExitNode:output_type -> client.v0.ClearExitNodeResponse
-	67,  // 212: client.v0.ClientService.GetPreferences:output_type -> client.v0.GetPreferencesResponse
-	69,  // 213: client.v0.ClientService.SetPreferences:output_type -> client.v0.SetPreferencesResponse
-	71,  // 214: client.v0.ClientService.ResetPreferences:output_type -> client.v0.ResetPreferencesResponse
-	73,  // 215: client.v0.ClientService.ListManagedSettings:output_type -> client.v0.ListManagedSettingsResponse
-	75,  // 216: client.v0.ClientService.ListResources:output_type -> client.v0.ListResourcesResponse
-	77,  // 217: client.v0.ClientService.SetResourceEnabled:output_type -> client.v0.SetResourceEnabledResponse
-	79,  // 218: client.v0.ClientService.NotifyLifecycle:output_type -> client.v0.NotifyLifecycleResponse
-	81,  // 219: client.v0.ClientService.GetUpdateInfo:output_type -> client.v0.GetUpdateInfoResponse
-	83,  // 220: client.v0.ClientService.GetSupportInfo:output_type -> client.v0.GetSupportInfoResponse
-	179, // [179:221] is the sub-list for method output_type
-	137, // [137:179] is the sub-list for method input_type
-	137, // [137:137] is the sub-list for extension type_name
-	137, // [137:137] is the sub-list for extension extendee
-	0,   // [0:137] is the sub-list for field type_name
+	88,  // 137: client.v0.NodeRevocationResult.target:type_name -> client.v0.NodeRevocationTarget
+	1,   // 138: client.v0.NodeRevocationResult.phase:type_name -> client.v0.NodeRevocationPhase
+	137, // 139: client.v0.NodeRevocationResult.accepted_at:type_name -> google.protobuf.Timestamp
+	137, // 140: client.v0.NodeRevocationResult.enforce_by:type_name -> google.protobuf.Timestamp
+	99,  // 141: client.v0.ListNodeRevocationTargetsRequest.profile:type_name -> client.v0.ProfileRef
+	88,  // 142: client.v0.ListNodeRevocationTargetsResponse.targets:type_name -> client.v0.NodeRevocationTarget
+	105, // 143: client.v0.ListNodeRevocationTargetsResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	98,  // 144: client.v0.RevokeNodeAccessRequest.mutation:type_name -> client.v0.MutationContext
+	99,  // 145: client.v0.RevokeNodeAccessRequest.profile:type_name -> client.v0.ProfileRef
+	88,  // 146: client.v0.RevokeNodeAccessRequest.target:type_name -> client.v0.NodeRevocationTarget
+	89,  // 147: client.v0.RevokeNodeAccessResponse.result:type_name -> client.v0.NodeRevocationResult
+	99,  // 148: client.v0.GetNodeRevocationRequest.profile:type_name -> client.v0.ProfileRef
+	89,  // 149: client.v0.GetNodeRevocationResponse.result:type_name -> client.v0.NodeRevocationResult
+	90,  // 150: client.v0.ClientService.ListNodeRevocationTargets:input_type -> client.v0.ListNodeRevocationTargetsRequest
+	92,  // 151: client.v0.ClientService.RevokeNodeAccess:input_type -> client.v0.RevokeNodeAccessRequest
+	94,  // 152: client.v0.ClientService.GetNodeRevocation:input_type -> client.v0.GetNodeRevocationRequest
+	2,   // 153: client.v0.ClientService.GetRuntimeInfo:input_type -> client.v0.GetRuntimeInfoRequest
+	4,   // 154: client.v0.ClientService.GetStatus:input_type -> client.v0.GetStatusRequest
+	6,   // 155: client.v0.ClientService.WatchEvents:input_type -> client.v0.WatchEventsRequest
+	7,   // 156: client.v0.ClientService.Enroll:input_type -> client.v0.EnrollRequest
+	9,   // 157: client.v0.ClientService.GetEnrollmentAttempt:input_type -> client.v0.GetEnrollmentAttemptRequest
+	11,  // 158: client.v0.ClientService.ListEnrollmentTargets:input_type -> client.v0.ListEnrollmentTargetsRequest
+	13,  // 159: client.v0.ClientService.SelectEnrollmentTarget:input_type -> client.v0.SelectEnrollmentTargetRequest
+	15,  // 160: client.v0.ClientService.CancelEnrollmentAttempt:input_type -> client.v0.CancelEnrollmentAttemptRequest
+	17,  // 161: client.v0.ClientService.Connect:input_type -> client.v0.ConnectRequest
+	19,  // 162: client.v0.ClientService.Disconnect:input_type -> client.v0.DisconnectRequest
+	21,  // 163: client.v0.ClientService.GetServerIdentity:input_type -> client.v0.GetServerIdentityRequest
+	23,  // 164: client.v0.ClientService.TrustServerIdentity:input_type -> client.v0.TrustServerIdentityRequest
+	25,  // 165: client.v0.ClientService.Logout:input_type -> client.v0.LogoutRequest
+	27,  // 166: client.v0.ClientService.ForgetLocalEnrollment:input_type -> client.v0.ForgetLocalEnrollmentRequest
+	29,  // 167: client.v0.ClientService.ListNetworks:input_type -> client.v0.ListNetworksRequest
+	31,  // 168: client.v0.ClientService.SelectNetwork:input_type -> client.v0.SelectNetworkRequest
+	33,  // 169: client.v0.ClientService.ListPeers:input_type -> client.v0.ListPeersRequest
+	35,  // 170: client.v0.ClientService.GetDiagnostics:input_type -> client.v0.GetDiagnosticsRequest
+	37,  // 171: client.v0.ClientService.CreateDiagnosticsBundle:input_type -> client.v0.CreateDiagnosticsBundleRequest
+	39,  // 172: client.v0.ClientService.ReadDiagnosticsBundle:input_type -> client.v0.ReadDiagnosticsBundleRequest
+	41,  // 173: client.v0.ClientService.ListRecentLogs:input_type -> client.v0.ListRecentLogsRequest
+	43,  // 174: client.v0.ClientService.ListProfiles:input_type -> client.v0.ListProfilesRequest
+	45,  // 175: client.v0.ClientService.CreateProfile:input_type -> client.v0.CreateProfileRequest
+	47,  // 176: client.v0.ClientService.SelectProfile:input_type -> client.v0.SelectProfileRequest
+	49,  // 177: client.v0.ClientService.RenameProfile:input_type -> client.v0.RenameProfileRequest
+	51,  // 178: client.v0.ClientService.RemoveProfile:input_type -> client.v0.RemoveProfileRequest
+	53,  // 179: client.v0.ClientService.GetSession:input_type -> client.v0.GetSessionRequest
+	55,  // 180: client.v0.ClientService.RenewSession:input_type -> client.v0.RenewSessionRequest
+	57,  // 181: client.v0.ClientService.WaitSessionRenewal:input_type -> client.v0.WaitSessionRenewalRequest
+	59,  // 182: client.v0.ClientService.ListExitNodes:input_type -> client.v0.ListExitNodesRequest
+	61,  // 183: client.v0.ClientService.GetExitNode:input_type -> client.v0.GetExitNodeRequest
+	63,  // 184: client.v0.ClientService.SelectExitNode:input_type -> client.v0.SelectExitNodeRequest
+	65,  // 185: client.v0.ClientService.ClearExitNode:input_type -> client.v0.ClearExitNodeRequest
+	67,  // 186: client.v0.ClientService.GetPreferences:input_type -> client.v0.GetPreferencesRequest
+	69,  // 187: client.v0.ClientService.SetPreferences:input_type -> client.v0.SetPreferencesRequest
+	71,  // 188: client.v0.ClientService.ResetPreferences:input_type -> client.v0.ResetPreferencesRequest
+	73,  // 189: client.v0.ClientService.ListManagedSettings:input_type -> client.v0.ListManagedSettingsRequest
+	75,  // 190: client.v0.ClientService.ListResources:input_type -> client.v0.ListResourcesRequest
+	77,  // 191: client.v0.ClientService.SetResourceEnabled:input_type -> client.v0.SetResourceEnabledRequest
+	79,  // 192: client.v0.ClientService.NotifyLifecycle:input_type -> client.v0.NotifyLifecycleRequest
+	81,  // 193: client.v0.ClientService.GetUpdateInfo:input_type -> client.v0.GetUpdateInfoRequest
+	83,  // 194: client.v0.ClientService.GetSupportInfo:input_type -> client.v0.GetSupportInfoRequest
+	91,  // 195: client.v0.ClientService.ListNodeRevocationTargets:output_type -> client.v0.ListNodeRevocationTargetsResponse
+	93,  // 196: client.v0.ClientService.RevokeNodeAccess:output_type -> client.v0.RevokeNodeAccessResponse
+	95,  // 197: client.v0.ClientService.GetNodeRevocation:output_type -> client.v0.GetNodeRevocationResponse
+	3,   // 198: client.v0.ClientService.GetRuntimeInfo:output_type -> client.v0.GetRuntimeInfoResponse
+	5,   // 199: client.v0.ClientService.GetStatus:output_type -> client.v0.GetStatusResponse
+	85,  // 200: client.v0.ClientService.WatchEvents:output_type -> client.v0.WatchEventsResponse
+	8,   // 201: client.v0.ClientService.Enroll:output_type -> client.v0.EnrollResponse
+	10,  // 202: client.v0.ClientService.GetEnrollmentAttempt:output_type -> client.v0.GetEnrollmentAttemptResponse
+	12,  // 203: client.v0.ClientService.ListEnrollmentTargets:output_type -> client.v0.ListEnrollmentTargetsResponse
+	14,  // 204: client.v0.ClientService.SelectEnrollmentTarget:output_type -> client.v0.SelectEnrollmentTargetResponse
+	16,  // 205: client.v0.ClientService.CancelEnrollmentAttempt:output_type -> client.v0.CancelEnrollmentAttemptResponse
+	18,  // 206: client.v0.ClientService.Connect:output_type -> client.v0.ConnectResponse
+	20,  // 207: client.v0.ClientService.Disconnect:output_type -> client.v0.DisconnectResponse
+	22,  // 208: client.v0.ClientService.GetServerIdentity:output_type -> client.v0.GetServerIdentityResponse
+	24,  // 209: client.v0.ClientService.TrustServerIdentity:output_type -> client.v0.TrustServerIdentityResponse
+	26,  // 210: client.v0.ClientService.Logout:output_type -> client.v0.LogoutResponse
+	28,  // 211: client.v0.ClientService.ForgetLocalEnrollment:output_type -> client.v0.ForgetLocalEnrollmentResponse
+	30,  // 212: client.v0.ClientService.ListNetworks:output_type -> client.v0.ListNetworksResponse
+	32,  // 213: client.v0.ClientService.SelectNetwork:output_type -> client.v0.SelectNetworkResponse
+	34,  // 214: client.v0.ClientService.ListPeers:output_type -> client.v0.ListPeersResponse
+	36,  // 215: client.v0.ClientService.GetDiagnostics:output_type -> client.v0.GetDiagnosticsResponse
+	38,  // 216: client.v0.ClientService.CreateDiagnosticsBundle:output_type -> client.v0.CreateDiagnosticsBundleResponse
+	40,  // 217: client.v0.ClientService.ReadDiagnosticsBundle:output_type -> client.v0.ReadDiagnosticsBundleResponse
+	42,  // 218: client.v0.ClientService.ListRecentLogs:output_type -> client.v0.ListRecentLogsResponse
+	44,  // 219: client.v0.ClientService.ListProfiles:output_type -> client.v0.ListProfilesResponse
+	46,  // 220: client.v0.ClientService.CreateProfile:output_type -> client.v0.CreateProfileResponse
+	48,  // 221: client.v0.ClientService.SelectProfile:output_type -> client.v0.SelectProfileResponse
+	50,  // 222: client.v0.ClientService.RenameProfile:output_type -> client.v0.RenameProfileResponse
+	52,  // 223: client.v0.ClientService.RemoveProfile:output_type -> client.v0.RemoveProfileResponse
+	54,  // 224: client.v0.ClientService.GetSession:output_type -> client.v0.GetSessionResponse
+	56,  // 225: client.v0.ClientService.RenewSession:output_type -> client.v0.RenewSessionResponse
+	58,  // 226: client.v0.ClientService.WaitSessionRenewal:output_type -> client.v0.WaitSessionRenewalResponse
+	60,  // 227: client.v0.ClientService.ListExitNodes:output_type -> client.v0.ListExitNodesResponse
+	62,  // 228: client.v0.ClientService.GetExitNode:output_type -> client.v0.GetExitNodeResponse
+	64,  // 229: client.v0.ClientService.SelectExitNode:output_type -> client.v0.SelectExitNodeResponse
+	66,  // 230: client.v0.ClientService.ClearExitNode:output_type -> client.v0.ClearExitNodeResponse
+	68,  // 231: client.v0.ClientService.GetPreferences:output_type -> client.v0.GetPreferencesResponse
+	70,  // 232: client.v0.ClientService.SetPreferences:output_type -> client.v0.SetPreferencesResponse
+	72,  // 233: client.v0.ClientService.ResetPreferences:output_type -> client.v0.ResetPreferencesResponse
+	74,  // 234: client.v0.ClientService.ListManagedSettings:output_type -> client.v0.ListManagedSettingsResponse
+	76,  // 235: client.v0.ClientService.ListResources:output_type -> client.v0.ListResourcesResponse
+	78,  // 236: client.v0.ClientService.SetResourceEnabled:output_type -> client.v0.SetResourceEnabledResponse
+	80,  // 237: client.v0.ClientService.NotifyLifecycle:output_type -> client.v0.NotifyLifecycleResponse
+	82,  // 238: client.v0.ClientService.GetUpdateInfo:output_type -> client.v0.GetUpdateInfoResponse
+	84,  // 239: client.v0.ClientService.GetSupportInfo:output_type -> client.v0.GetSupportInfoResponse
+	195, // [195:240] is the sub-list for method output_type
+	150, // [150:195] is the sub-list for method input_type
+	150, // [150:150] is the sub-list for extension type_name
+	150, // [150:150] is the sub-list for extension extendee
+	0,   // [0:150] is the sub-list for field type_name
 }
 
 func init() { file_client_v0_service_proto_init() }
@@ -5464,8 +6087,8 @@ func file_client_v0_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v0_service_proto_rawDesc), len(file_client_v0_service_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   86,
+			NumEnums:      2,
+			NumMessages:   94,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

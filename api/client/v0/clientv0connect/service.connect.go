@@ -36,6 +36,15 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// ClientServiceListNodeRevocationTargetsProcedure is the fully-qualified name of the
+	// ClientService's ListNodeRevocationTargets RPC.
+	ClientServiceListNodeRevocationTargetsProcedure = "/client.v0.ClientService/ListNodeRevocationTargets"
+	// ClientServiceRevokeNodeAccessProcedure is the fully-qualified name of the ClientService's
+	// RevokeNodeAccess RPC.
+	ClientServiceRevokeNodeAccessProcedure = "/client.v0.ClientService/RevokeNodeAccess"
+	// ClientServiceGetNodeRevocationProcedure is the fully-qualified name of the ClientService's
+	// GetNodeRevocation RPC.
+	ClientServiceGetNodeRevocationProcedure = "/client.v0.ClientService/GetNodeRevocation"
 	// ClientServiceGetRuntimeInfoProcedure is the fully-qualified name of the ClientService's
 	// GetRuntimeInfo RPC.
 	ClientServiceGetRuntimeInfoProcedure = "/client.v0.ClientService/GetRuntimeInfo"
@@ -161,6 +170,12 @@ const (
 
 // ClientServiceClient is a client for the client.v0.ClientService service.
 type ClientServiceClient interface {
+	// 006: native human session, active profile Network; listing is not a grant.
+	ListNodeRevocationTargets(context.Context, *connect.Request[v0.ListNodeRevocationTargetsRequest]) (*connect.Response[v0.ListNodeRevocationTargetsResponse], error)
+	// Persist the caller's command/target before dispatch. Exact replay keeps both.
+	RevokeNodeAccess(context.Context, *connect.Request[v0.RevokeNodeAccessRequest]) (*connect.Response[v0.RevokeNodeAccessResponse], error)
+	// Query the original caller-bound command, including after timeout/reopen.
+	GetNodeRevocation(context.Context, *connect.Request[v0.GetNodeRevocationRequest]) (*connect.Response[v0.GetNodeRevocationResponse], error)
 	// UF-04, UF-20, UF-22, UF-23: installed identity and caller-filtered capabilities.
 	GetRuntimeInfo(context.Context, *connect.Request[v0.GetRuntimeInfoRequest]) (*connect.Response[v0.GetRuntimeInfoResponse], error)
 	// UF-04, UF-09: authoritative active-context snapshot.
@@ -258,6 +273,24 @@ func NewClientServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 	baseURL = strings.TrimRight(baseURL, "/")
 	clientServiceMethods := v0.File_client_v0_service_proto.Services().ByName("ClientService").Methods()
 	return &clientServiceClient{
+		listNodeRevocationTargets: connect.NewClient[v0.ListNodeRevocationTargetsRequest, v0.ListNodeRevocationTargetsResponse](
+			httpClient,
+			baseURL+ClientServiceListNodeRevocationTargetsProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("ListNodeRevocationTargets")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeNodeAccess: connect.NewClient[v0.RevokeNodeAccessRequest, v0.RevokeNodeAccessResponse](
+			httpClient,
+			baseURL+ClientServiceRevokeNodeAccessProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("RevokeNodeAccess")),
+			connect.WithClientOptions(opts...),
+		),
+		getNodeRevocation: connect.NewClient[v0.GetNodeRevocationRequest, v0.GetNodeRevocationResponse](
+			httpClient,
+			baseURL+ClientServiceGetNodeRevocationProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("GetNodeRevocation")),
+			connect.WithClientOptions(opts...),
+		),
 		getRuntimeInfo: connect.NewClient[v0.GetRuntimeInfoRequest, v0.GetRuntimeInfoResponse](
 			httpClient,
 			baseURL+ClientServiceGetRuntimeInfoProcedure,
@@ -515,48 +548,66 @@ func NewClientServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // clientServiceClient implements ClientServiceClient.
 type clientServiceClient struct {
-	getRuntimeInfo          *connect.Client[v0.GetRuntimeInfoRequest, v0.GetRuntimeInfoResponse]
-	getStatus               *connect.Client[v0.GetStatusRequest, v0.GetStatusResponse]
-	watchEvents             *connect.Client[v0.WatchEventsRequest, v0.WatchEventsResponse]
-	enroll                  *connect.Client[v0.EnrollRequest, v0.EnrollResponse]
-	getEnrollmentAttempt    *connect.Client[v0.GetEnrollmentAttemptRequest, v0.GetEnrollmentAttemptResponse]
-	listEnrollmentTargets   *connect.Client[v0.ListEnrollmentTargetsRequest, v0.ListEnrollmentTargetsResponse]
-	selectEnrollmentTarget  *connect.Client[v0.SelectEnrollmentTargetRequest, v0.SelectEnrollmentTargetResponse]
-	cancelEnrollmentAttempt *connect.Client[v0.CancelEnrollmentAttemptRequest, v0.CancelEnrollmentAttemptResponse]
-	connect                 *connect.Client[v0.ConnectRequest, v0.ConnectResponse]
-	disconnect              *connect.Client[v0.DisconnectRequest, v0.DisconnectResponse]
-	getServerIdentity       *connect.Client[v0.GetServerIdentityRequest, v0.GetServerIdentityResponse]
-	trustServerIdentity     *connect.Client[v0.TrustServerIdentityRequest, v0.TrustServerIdentityResponse]
-	logout                  *connect.Client[v0.LogoutRequest, v0.LogoutResponse]
-	forgetLocalEnrollment   *connect.Client[v0.ForgetLocalEnrollmentRequest, v0.ForgetLocalEnrollmentResponse]
-	listNetworks            *connect.Client[v0.ListNetworksRequest, v0.ListNetworksResponse]
-	selectNetwork           *connect.Client[v0.SelectNetworkRequest, v0.SelectNetworkResponse]
-	listPeers               *connect.Client[v0.ListPeersRequest, v0.ListPeersResponse]
-	getDiagnostics          *connect.Client[v0.GetDiagnosticsRequest, v0.GetDiagnosticsResponse]
-	createDiagnosticsBundle *connect.Client[v0.CreateDiagnosticsBundleRequest, v0.CreateDiagnosticsBundleResponse]
-	readDiagnosticsBundle   *connect.Client[v0.ReadDiagnosticsBundleRequest, v0.ReadDiagnosticsBundleResponse]
-	listRecentLogs          *connect.Client[v0.ListRecentLogsRequest, v0.ListRecentLogsResponse]
-	listProfiles            *connect.Client[v0.ListProfilesRequest, v0.ListProfilesResponse]
-	createProfile           *connect.Client[v0.CreateProfileRequest, v0.CreateProfileResponse]
-	selectProfile           *connect.Client[v0.SelectProfileRequest, v0.SelectProfileResponse]
-	renameProfile           *connect.Client[v0.RenameProfileRequest, v0.RenameProfileResponse]
-	removeProfile           *connect.Client[v0.RemoveProfileRequest, v0.RemoveProfileResponse]
-	getSession              *connect.Client[v0.GetSessionRequest, v0.GetSessionResponse]
-	renewSession            *connect.Client[v0.RenewSessionRequest, v0.RenewSessionResponse]
-	waitSessionRenewal      *connect.Client[v0.WaitSessionRenewalRequest, v0.WaitSessionRenewalResponse]
-	listExitNodes           *connect.Client[v0.ListExitNodesRequest, v0.ListExitNodesResponse]
-	getExitNode             *connect.Client[v0.GetExitNodeRequest, v0.GetExitNodeResponse]
-	selectExitNode          *connect.Client[v0.SelectExitNodeRequest, v0.SelectExitNodeResponse]
-	clearExitNode           *connect.Client[v0.ClearExitNodeRequest, v0.ClearExitNodeResponse]
-	getPreferences          *connect.Client[v0.GetPreferencesRequest, v0.GetPreferencesResponse]
-	setPreferences          *connect.Client[v0.SetPreferencesRequest, v0.SetPreferencesResponse]
-	resetPreferences        *connect.Client[v0.ResetPreferencesRequest, v0.ResetPreferencesResponse]
-	listManagedSettings     *connect.Client[v0.ListManagedSettingsRequest, v0.ListManagedSettingsResponse]
-	listResources           *connect.Client[v0.ListResourcesRequest, v0.ListResourcesResponse]
-	setResourceEnabled      *connect.Client[v0.SetResourceEnabledRequest, v0.SetResourceEnabledResponse]
-	notifyLifecycle         *connect.Client[v0.NotifyLifecycleRequest, v0.NotifyLifecycleResponse]
-	getUpdateInfo           *connect.Client[v0.GetUpdateInfoRequest, v0.GetUpdateInfoResponse]
-	getSupportInfo          *connect.Client[v0.GetSupportInfoRequest, v0.GetSupportInfoResponse]
+	listNodeRevocationTargets *connect.Client[v0.ListNodeRevocationTargetsRequest, v0.ListNodeRevocationTargetsResponse]
+	revokeNodeAccess          *connect.Client[v0.RevokeNodeAccessRequest, v0.RevokeNodeAccessResponse]
+	getNodeRevocation         *connect.Client[v0.GetNodeRevocationRequest, v0.GetNodeRevocationResponse]
+	getRuntimeInfo            *connect.Client[v0.GetRuntimeInfoRequest, v0.GetRuntimeInfoResponse]
+	getStatus                 *connect.Client[v0.GetStatusRequest, v0.GetStatusResponse]
+	watchEvents               *connect.Client[v0.WatchEventsRequest, v0.WatchEventsResponse]
+	enroll                    *connect.Client[v0.EnrollRequest, v0.EnrollResponse]
+	getEnrollmentAttempt      *connect.Client[v0.GetEnrollmentAttemptRequest, v0.GetEnrollmentAttemptResponse]
+	listEnrollmentTargets     *connect.Client[v0.ListEnrollmentTargetsRequest, v0.ListEnrollmentTargetsResponse]
+	selectEnrollmentTarget    *connect.Client[v0.SelectEnrollmentTargetRequest, v0.SelectEnrollmentTargetResponse]
+	cancelEnrollmentAttempt   *connect.Client[v0.CancelEnrollmentAttemptRequest, v0.CancelEnrollmentAttemptResponse]
+	connect                   *connect.Client[v0.ConnectRequest, v0.ConnectResponse]
+	disconnect                *connect.Client[v0.DisconnectRequest, v0.DisconnectResponse]
+	getServerIdentity         *connect.Client[v0.GetServerIdentityRequest, v0.GetServerIdentityResponse]
+	trustServerIdentity       *connect.Client[v0.TrustServerIdentityRequest, v0.TrustServerIdentityResponse]
+	logout                    *connect.Client[v0.LogoutRequest, v0.LogoutResponse]
+	forgetLocalEnrollment     *connect.Client[v0.ForgetLocalEnrollmentRequest, v0.ForgetLocalEnrollmentResponse]
+	listNetworks              *connect.Client[v0.ListNetworksRequest, v0.ListNetworksResponse]
+	selectNetwork             *connect.Client[v0.SelectNetworkRequest, v0.SelectNetworkResponse]
+	listPeers                 *connect.Client[v0.ListPeersRequest, v0.ListPeersResponse]
+	getDiagnostics            *connect.Client[v0.GetDiagnosticsRequest, v0.GetDiagnosticsResponse]
+	createDiagnosticsBundle   *connect.Client[v0.CreateDiagnosticsBundleRequest, v0.CreateDiagnosticsBundleResponse]
+	readDiagnosticsBundle     *connect.Client[v0.ReadDiagnosticsBundleRequest, v0.ReadDiagnosticsBundleResponse]
+	listRecentLogs            *connect.Client[v0.ListRecentLogsRequest, v0.ListRecentLogsResponse]
+	listProfiles              *connect.Client[v0.ListProfilesRequest, v0.ListProfilesResponse]
+	createProfile             *connect.Client[v0.CreateProfileRequest, v0.CreateProfileResponse]
+	selectProfile             *connect.Client[v0.SelectProfileRequest, v0.SelectProfileResponse]
+	renameProfile             *connect.Client[v0.RenameProfileRequest, v0.RenameProfileResponse]
+	removeProfile             *connect.Client[v0.RemoveProfileRequest, v0.RemoveProfileResponse]
+	getSession                *connect.Client[v0.GetSessionRequest, v0.GetSessionResponse]
+	renewSession              *connect.Client[v0.RenewSessionRequest, v0.RenewSessionResponse]
+	waitSessionRenewal        *connect.Client[v0.WaitSessionRenewalRequest, v0.WaitSessionRenewalResponse]
+	listExitNodes             *connect.Client[v0.ListExitNodesRequest, v0.ListExitNodesResponse]
+	getExitNode               *connect.Client[v0.GetExitNodeRequest, v0.GetExitNodeResponse]
+	selectExitNode            *connect.Client[v0.SelectExitNodeRequest, v0.SelectExitNodeResponse]
+	clearExitNode             *connect.Client[v0.ClearExitNodeRequest, v0.ClearExitNodeResponse]
+	getPreferences            *connect.Client[v0.GetPreferencesRequest, v0.GetPreferencesResponse]
+	setPreferences            *connect.Client[v0.SetPreferencesRequest, v0.SetPreferencesResponse]
+	resetPreferences          *connect.Client[v0.ResetPreferencesRequest, v0.ResetPreferencesResponse]
+	listManagedSettings       *connect.Client[v0.ListManagedSettingsRequest, v0.ListManagedSettingsResponse]
+	listResources             *connect.Client[v0.ListResourcesRequest, v0.ListResourcesResponse]
+	setResourceEnabled        *connect.Client[v0.SetResourceEnabledRequest, v0.SetResourceEnabledResponse]
+	notifyLifecycle           *connect.Client[v0.NotifyLifecycleRequest, v0.NotifyLifecycleResponse]
+	getUpdateInfo             *connect.Client[v0.GetUpdateInfoRequest, v0.GetUpdateInfoResponse]
+	getSupportInfo            *connect.Client[v0.GetSupportInfoRequest, v0.GetSupportInfoResponse]
+}
+
+// ListNodeRevocationTargets calls client.v0.ClientService.ListNodeRevocationTargets.
+func (c *clientServiceClient) ListNodeRevocationTargets(ctx context.Context, req *connect.Request[v0.ListNodeRevocationTargetsRequest]) (*connect.Response[v0.ListNodeRevocationTargetsResponse], error) {
+	return c.listNodeRevocationTargets.CallUnary(ctx, req)
+}
+
+// RevokeNodeAccess calls client.v0.ClientService.RevokeNodeAccess.
+func (c *clientServiceClient) RevokeNodeAccess(ctx context.Context, req *connect.Request[v0.RevokeNodeAccessRequest]) (*connect.Response[v0.RevokeNodeAccessResponse], error) {
+	return c.revokeNodeAccess.CallUnary(ctx, req)
+}
+
+// GetNodeRevocation calls client.v0.ClientService.GetNodeRevocation.
+func (c *clientServiceClient) GetNodeRevocation(ctx context.Context, req *connect.Request[v0.GetNodeRevocationRequest]) (*connect.Response[v0.GetNodeRevocationResponse], error) {
+	return c.getNodeRevocation.CallUnary(ctx, req)
 }
 
 // GetRuntimeInfo calls client.v0.ClientService.GetRuntimeInfo.
@@ -771,6 +822,12 @@ func (c *clientServiceClient) GetSupportInfo(ctx context.Context, req *connect.R
 
 // ClientServiceHandler is an implementation of the client.v0.ClientService service.
 type ClientServiceHandler interface {
+	// 006: native human session, active profile Network; listing is not a grant.
+	ListNodeRevocationTargets(context.Context, *connect.Request[v0.ListNodeRevocationTargetsRequest]) (*connect.Response[v0.ListNodeRevocationTargetsResponse], error)
+	// Persist the caller's command/target before dispatch. Exact replay keeps both.
+	RevokeNodeAccess(context.Context, *connect.Request[v0.RevokeNodeAccessRequest]) (*connect.Response[v0.RevokeNodeAccessResponse], error)
+	// Query the original caller-bound command, including after timeout/reopen.
+	GetNodeRevocation(context.Context, *connect.Request[v0.GetNodeRevocationRequest]) (*connect.Response[v0.GetNodeRevocationResponse], error)
 	// UF-04, UF-20, UF-22, UF-23: installed identity and caller-filtered capabilities.
 	GetRuntimeInfo(context.Context, *connect.Request[v0.GetRuntimeInfoRequest]) (*connect.Response[v0.GetRuntimeInfoResponse], error)
 	// UF-04, UF-09: authoritative active-context snapshot.
@@ -864,6 +921,24 @@ type ClientServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewClientServiceHandler(svc ClientServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	clientServiceMethods := v0.File_client_v0_service_proto.Services().ByName("ClientService").Methods()
+	clientServiceListNodeRevocationTargetsHandler := connect.NewUnaryHandler(
+		ClientServiceListNodeRevocationTargetsProcedure,
+		svc.ListNodeRevocationTargets,
+		connect.WithSchema(clientServiceMethods.ByName("ListNodeRevocationTargets")),
+		connect.WithHandlerOptions(opts...),
+	)
+	clientServiceRevokeNodeAccessHandler := connect.NewUnaryHandler(
+		ClientServiceRevokeNodeAccessProcedure,
+		svc.RevokeNodeAccess,
+		connect.WithSchema(clientServiceMethods.ByName("RevokeNodeAccess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	clientServiceGetNodeRevocationHandler := connect.NewUnaryHandler(
+		ClientServiceGetNodeRevocationProcedure,
+		svc.GetNodeRevocation,
+		connect.WithSchema(clientServiceMethods.ByName("GetNodeRevocation")),
+		connect.WithHandlerOptions(opts...),
+	)
 	clientServiceGetRuntimeInfoHandler := connect.NewUnaryHandler(
 		ClientServiceGetRuntimeInfoProcedure,
 		svc.GetRuntimeInfo,
@@ -1118,6 +1193,12 @@ func NewClientServiceHandler(svc ClientServiceHandler, opts ...connect.HandlerOp
 	)
 	return "/client.v0.ClientService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case ClientServiceListNodeRevocationTargetsProcedure:
+			clientServiceListNodeRevocationTargetsHandler.ServeHTTP(w, r)
+		case ClientServiceRevokeNodeAccessProcedure:
+			clientServiceRevokeNodeAccessHandler.ServeHTTP(w, r)
+		case ClientServiceGetNodeRevocationProcedure:
+			clientServiceGetNodeRevocationHandler.ServeHTTP(w, r)
 		case ClientServiceGetRuntimeInfoProcedure:
 			clientServiceGetRuntimeInfoHandler.ServeHTTP(w, r)
 		case ClientServiceGetStatusProcedure:
@@ -1210,6 +1291,18 @@ func NewClientServiceHandler(svc ClientServiceHandler, opts ...connect.HandlerOp
 
 // UnimplementedClientServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedClientServiceHandler struct{}
+
+func (UnimplementedClientServiceHandler) ListNodeRevocationTargets(context.Context, *connect.Request[v0.ListNodeRevocationTargetsRequest]) (*connect.Response[v0.ListNodeRevocationTargetsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.ListNodeRevocationTargets is not implemented"))
+}
+
+func (UnimplementedClientServiceHandler) RevokeNodeAccess(context.Context, *connect.Request[v0.RevokeNodeAccessRequest]) (*connect.Response[v0.RevokeNodeAccessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.RevokeNodeAccess is not implemented"))
+}
+
+func (UnimplementedClientServiceHandler) GetNodeRevocation(context.Context, *connect.Request[v0.GetNodeRevocationRequest]) (*connect.Response[v0.GetNodeRevocationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.GetNodeRevocation is not implemented"))
+}
 
 func (UnimplementedClientServiceHandler) GetRuntimeInfo(context.Context, *connect.Request[v0.GetRuntimeInfoRequest]) (*connect.Response[v0.GetRuntimeInfoResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.GetRuntimeInfo is not implemented"))

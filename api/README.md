@@ -1,5 +1,21 @@
 # Client API: контрактный candidate
 
+## Контракт006 — удалённый отзыв, api/v0.3.0
+
+`ListNodeRevocationTargets`, `RevokeNodeAccess`, `GetNodeRevocation` доступны только
+существующему IPC owner. Список ограничен Network активного профиля; display name
+не заменяет Account/Network/Node и Network revision. UI сохраняет command UUID
+до вызова; Client обязан сохранить исходную caller/target привязку до dispatch.
+Повтор и reopen используют тот же command, изменение входа конфликтует.
+
+`NodeRevocationResult` различает unknown и accepted. Исходные accepted_at,
+enforce_by и committed revision присутствуют только при подтверждённом receipt.
+Срок — 300 секунд от авторитетного принятия; явный отзыв применяется сразу.
+Истечение срока не доказывает остановку трафика. Источника traffic evidence
+в MVP006 нет; IPC не экспортирует подтверждённую локальную очистку, credentials
+или private keys. DTO/serialization tests не подтверждают OS caller authority,
+серверный commit или сетевой результат. Consumers ждут published exact ref.
+
 ## Формальный контракт 003 — api/v0.2.0
 
 Enroll теперь принимает сохраняемый request UUID и возвращает EnrollmentAttempt.

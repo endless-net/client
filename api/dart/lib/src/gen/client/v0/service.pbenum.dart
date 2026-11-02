@@ -63,5 +63,30 @@ class Domain extends $pb.ProtobufEnum {
   const Domain._(super.value, super.name);
 }
 
+class NodeRevocationPhase extends $pb.ProtobufEnum {
+  static const NodeRevocationPhase NODE_REVOCATION_PHASE_UNSPECIFIED =
+      NodeRevocationPhase._(
+          0, _omitEnumNames ? '' : 'NODE_REVOCATION_PHASE_UNSPECIFIED');
+  static const NodeRevocationPhase NODE_REVOCATION_PHASE_UNKNOWN =
+      NodeRevocationPhase._(
+          1, _omitEnumNames ? '' : 'NODE_REVOCATION_PHASE_UNKNOWN');
+  static const NodeRevocationPhase NODE_REVOCATION_PHASE_ACCEPTED =
+      NodeRevocationPhase._(
+          2, _omitEnumNames ? '' : 'NODE_REVOCATION_PHASE_ACCEPTED');
+
+  static const $core.List<NodeRevocationPhase> values = <NodeRevocationPhase>[
+    NODE_REVOCATION_PHASE_UNSPECIFIED,
+    NODE_REVOCATION_PHASE_UNKNOWN,
+    NODE_REVOCATION_PHASE_ACCEPTED,
+  ];
+
+  static final $core.List<NodeRevocationPhase?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 2);
+  static NodeRevocationPhase? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const NodeRevocationPhase._(super.value, super.name);
+}
+
 const $core.bool _omitEnumNames =
     $core.bool.fromEnvironment('protobuf.omit_enum_names');
