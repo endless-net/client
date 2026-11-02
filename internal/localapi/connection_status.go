@@ -37,6 +37,12 @@ func connectionDetails(err error) *clientv0.Failure {
 		f.Code, f.ReasonKey, f.ActionOwner = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.cleanup_unconfirmed", clientv0.ActionOwner_ACTION_OWNER_DEVICE_ADMINISTRATOR
 	case connectivity.FailureControl:
 		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.control_unavailable"
+	case connectivity.FailureTrust:
+		f.Code, f.ReasonKey, f.Retryable = clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "client.connection.trust_required", false
+	case connectivity.FailureCredential:
+		f.Code, f.ReasonKey, f.Retryable = clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "client.connection.credential_expired", false
+	case connectivity.FailureRevoked:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "client.connection.registration_revoked", clientv0.ActionOwner_ACTION_OWNER_ACCESS_ADMINISTRATOR, false
 	default:
 		return nil
 	}

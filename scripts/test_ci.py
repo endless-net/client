@@ -144,7 +144,7 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
                 (root / "cmd/client/main_windows.go").write_text(
                     'const clientAPIRevision = "' + revision + '"\n'
                     'const clientContractSHA256 = "' + digest + '"\n', encoding="utf-8")
-                module = {"Version": "v0.2.0", "Dir": str(sdk)}
+                module = {"Version": "v0.3.0", "Dir": str(sdk)}
                 download = {"Origin": {"Hash": revision}, "Dir": str(sdk)}
                 if failure == "origin":
                     download["Origin"]["Hash"] = "b" * 40

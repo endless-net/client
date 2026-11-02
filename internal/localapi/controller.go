@@ -35,6 +35,7 @@ type Runner interface {
 }
 
 type Config struct {
+	Revocations                                       RevocationSource
 	Connections                                       ConnectionRunner
 	ConnectionClock                                   connectivity.Clock
 	ConnectionObservations                            connectivity.ObservationSource

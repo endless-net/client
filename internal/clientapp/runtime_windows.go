@@ -128,7 +128,11 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{Connections: r.connection, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
+			revocations, err := control.NewRevocations(r.http, bootstrap, control.RevocationConfig{MaxBytes: min(c.MaxRequestBytes, c.MaxResponseBytes), MaxTargets: c.MaxTargets, Now: time.Now})
+			if err != nil {
+				return err
+			}
+			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{Revocations: revocations, Connections: r.connection, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
 			if err != nil {
 				return err
 			}
@@ -136,7 +140,9 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			r.workers, err = NewWorkers(lc, shutdown, t.Signals(), r.ipc.Run, worker.Run, r.connection.Run)
+			r.workers, err = NewWorkers(lc, shutdown, t.Signals(), r.ipc.Run, worker.Run, func(ctx context.Context) error {
+				return r.connection.RunWindows(ctx, c.MaxInventoryRows, c.MaxInterfaces)
+			})
 			return err
 		}))
 	if r.App.Err() != nil {

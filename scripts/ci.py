@@ -173,10 +173,10 @@ def verify_client_contract(root):
     module = json.loads(command(["go", "list", "-m", "-json",
                                  "github.com/endless-net/client/api"], cwd=root,
                                 capture=True, env=env))
-    if module.get("Replace") or module.get("Version") != "v0.2.0":
+    if module.get("Replace") or module.get("Version") != "v0.3.0":
         raise ValueError("Client SDK pin differs from compiled identity")
     downloaded = json.loads(command(["go", "mod", "download", "-json",
-                                     "github.com/endless-net/client/api@v0.2.0"],
+                                     "github.com/endless-net/client/api@v0.3.0"],
                                     cwd=root, capture=True, env=env))
     if downloaded.get("Origin", {}).get("Hash") != revisions[0]:
         raise ValueError("Client SDK origin differs from compiled identity")

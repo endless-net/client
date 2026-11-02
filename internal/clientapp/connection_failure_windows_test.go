@@ -26,7 +26,9 @@ func TestNativeConnectionFailuresKeepSafeActionableCategory(t *testing.T) {
 		{dataplane.ErrPolicyUncertain, connectivity.FailureCleanup, connectivity.FailureCleanup},
 		{dataplane.ErrEngine, connectivity.FailureApply, connectivity.FailureApply},
 		{context.DeadlineExceeded, connectivity.FailurePath, connectivity.FailurePath},
-		{connectivity.ErrRevoked, connectivity.FailureApply, connectivity.FailureAccess},
+		{connectivity.ErrRevoked, connectivity.FailureApply, connectivity.FailureRevoked},
+		{connectivity.ErrTrust, connectivity.FailureApply, connectivity.FailureTrust},
+		{connectivity.ErrCredentialExpired, connectivity.FailureApply, connectivity.FailureCredential},
 		{connectivity.ErrClock, connectivity.FailureApply, connectivity.ErrClock},
 	} {
 		got := nativeConnectionFailure(errors.Join(tc.native, errors.New("synthetic-secret backend response")), tc.fallback)

@@ -26,6 +26,20 @@ type announcementsFunc func(context.Context, string) (control.Announcement, erro
 
 type clockFunc func() (ClockSample, error)
 
+func TestRecoveryNeverTreatsUnknownOrExpiredCredentialAsUnlimited(t *testing.T) {
+	for _, unknown := range []bool{false, true} {
+		f := newMapFixture(t)
+		if unknown {
+			f.profile.Attempt.CredentialEnds = time.Time{}
+		} else {
+			f.profile.Attempt.CredentialEnds = f.now
+		}
+		if _, err := NewVerifier(f.profile, f.config); !errors.Is(err, ErrCredentialExpired) {
+			t.Fatal("credential recovery classification lost", unknown, err)
+		}
+	}
+}
+
 func (f clockFunc) Sample() (ClockSample, error) { return f() }
 
 func (f announcementsFunc) Fetch(ctx context.Context, origin string) (control.Announcement, error) {

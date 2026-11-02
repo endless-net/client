@@ -84,8 +84,9 @@ type Profile struct {
 	Trust                          ServerTrust
 	Login                          LoginProgress
 	Registration                   RegistrationProgress
-	Approval                       *ApprovalProgress `json:",omitempty"`
-	Connection                     *ConnectionState  `json:",omitempty"`
+	Approval                       *ApprovalProgress           `json:",omitempty"`
+	Connection                     *ConnectionState            `json:",omitempty"`
+	RemoteRevocations              map[string]RemoteRevocation `json:",omitempty"`
 	// Persisted by the worker before a remote mutation; cancellation must not
 	// imply rollback of a call whose response is still unresolved.
 	RemoteInFlight bool
@@ -106,7 +107,7 @@ type State struct {
 	Profiles        map[string]Profile
 }
 
-const CurrentVersion uint32 = 2
+const CurrentVersion uint32 = 3
 
 func (s State) Validate(installation string) error {
 	if s.Version != CurrentVersion || !validID(s.InstallationID) || s.InstallationID != installation || s.Revision == 0 || (len(s.Profiles) == 0) != (s.OwnerSID == "") {
@@ -121,6 +122,9 @@ func (s State) Validate(installation string) error {
 		}
 	}
 	for id, p := range s.Profiles {
+		if validateRevocations(s.OwnerSID, p) != nil {
+			return ErrCorrupt
+		}
 		if validateConnection(p) != nil {
 			return ErrCorrupt
 		}
@@ -334,6 +338,9 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 		for id, p := range before.Profiles {
 			next, ok := after.Profiles[id]
 			if !ok || p.ControlOrigin != next.ControlOrigin {
+				return ErrCorrupt
+			}
+			if revocationsUpdate(p, next) != nil {
 				return ErrCorrupt
 			}
 			if connectionUpdate(p.Connection, next.Connection) != nil || !connectionRequestRevision(p.Connection, next.Connection, before.Revision) {

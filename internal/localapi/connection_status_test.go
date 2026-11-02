@@ -20,6 +20,25 @@ type observedConnection struct {
 	calls int
 }
 
+func TestRecoveryFailuresRemainDistinctAndSafe(t *testing.T) {
+	for kind, reason := range map[connectivity.FailureKind]string{
+		connectivity.FailureTrust:      "client.connection.trust_required",
+		connectivity.FailureCredential: "client.connection.credential_expired",
+		connectivity.FailureAccess:     "client.connection.access_denied",
+		connectivity.FailureRevoked:    "client.connection.registration_revoked",
+		connectivity.FailurePath:       "client.connection.path_unconfirmed",
+		connectivity.FailureCleanup:    "client.connection.cleanup_unconfirmed",
+	} {
+		f := observedConnectionFailure(kind)
+		if f == nil || f.ReasonKey != reason {
+			t.Fatal("unsafe or conflated recovery reason", kind, f)
+		}
+		if (kind == connectivity.FailureTrust || kind == connectivity.FailureCredential) && f.Retryable {
+			t.Fatal("safety action replaced by automatic retry")
+		}
+	}
+}
+
 func (o *observedConnection) ConnectionSnapshot() connectivity.Observation {
 	o.calls++
 	return o.value

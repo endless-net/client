@@ -55,6 +55,7 @@ const (
 type ConnectionObservation = connectivity.Observation
 
 type connectionTarget struct {
+	attempt    uint64
 	profile    string
 	generation uint64
 	intent     state.DesiredIntent
@@ -88,12 +89,14 @@ type ConnectionWorker struct {
 	factory       ConnectionFactory
 	config        ConnectionWorkerConfig
 	wake          chan struct{}
+	recovery      chan connectionTarget
 	mu            sync.Mutex
 	used, running bool
 	view          ConnectionObservation
 	changed       chan struct{}
 	retired       ConnectionSession
 	observer      connectivity.LocalObservationSource
+	attempt       uint64
 }
 
 func (*ConnectionWorker) String() string   { return "[private connection worker]" }
@@ -104,7 +107,22 @@ func NewConnectionWorker(store *state.Store, factory ConnectionFactory, c Connec
 	if store == nil || factory == nil || c.Clock == nil || err != nil || id == uuid.Nil || id.String() != c.RuntimeID || c.ReadTimeout < time.Millisecond || c.ReadTimeout > 30*time.Second || c.PollInterval < time.Millisecond || c.PollInterval > 10*time.Second || c.CleanupTimeout < time.Millisecond || c.CleanupTimeout > 10*time.Second {
 		return nil, ErrConnectionWorker
 	}
-	return &ConnectionWorker{store: store, factory: factory, config: c, wake: make(chan struct{}, 1), changed: make(chan struct{})}, nil
+	return &ConnectionWorker{store: store, factory: factory, config: c, wake: make(chan struct{}, 1), recovery: make(chan connectionTarget, 1), changed: make(chan struct{})}, nil
+}
+
+// Recover is a volatile, generation-bound hint, never a new desired intent.
+// The run loop rechecks durable state before admitting any native owner.
+func (w *ConnectionWorker) Recover(profile string, generation uint64) {
+	w.mu.Lock()
+	attempt, phase := w.attempt, w.view.Phase
+	w.mu.Unlock()
+	if phase == ConnectionConnecting || phase == ConnectionDisconnecting {
+		return
+	}
+	select {
+	case w.recovery <- connectionTarget{profile: profile, generation: generation, attempt: attempt}:
+	default:
+	}
 }
 
 func (w *ConnectionWorker) Observe() ConnectionObservation {
@@ -264,7 +282,9 @@ func connectionOperationError(err error) error {
 	switch {
 	case errors.Is(err, connectivity.ErrUnavailable), errors.Is(err, connectivity.ErrEndpointUncertain):
 		return connectivity.FailureControl
-	case errors.Is(err, connectivity.ErrDenied), errors.Is(err, connectivity.ErrRevoked), errors.Is(err, connectivity.ErrExpired):
+	case errors.Is(err, connectivity.ErrRevoked):
+		return connectivity.FailureRevoked
+	case errors.Is(err, connectivity.ErrDenied), errors.Is(err, connectivity.ErrExpired):
 		return connectivity.FailureAccess
 	case errors.Is(err, context.DeadlineExceeded):
 		return context.DeadlineExceeded
@@ -274,6 +294,10 @@ func connectionOperationError(err error) error {
 		return state.ErrStale
 	case errors.Is(err, connectivity.ErrClock):
 		return connectivity.ErrClock
+	case errors.Is(err, connectivity.ErrTrust):
+		return connectivity.FailureTrust
+	case errors.Is(err, connectivity.ErrCredentialExpired):
+		return connectivity.FailureCredential
 	default:
 		return ErrConnectionOperation
 	}
@@ -286,6 +310,7 @@ func (w *ConnectionWorker) setTarget(t *connectionTarget) {
 	if t == nil {
 		w.view = ConnectionObservation{}
 	} else {
+		w.attempt = t.attempt
 		phase := ConnectionConnecting
 		if t.intent == state.IntentDisconnected {
 			phase = ConnectionDisconnecting
@@ -322,6 +347,15 @@ func (w *ConnectionWorker) result(r connectionResult) {
 		}
 	}
 	w.announceLocked()
+}
+
+func (w *ConnectionWorker) budgetFailure(t *connectionTarget, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.view.Profile == t.profile && w.view.Generation == t.generation {
+		w.view.Phase, w.view.Failure = ConnectionFailed, connectionOperationError(err)
+		w.announceLocked()
+	}
 }
 
 func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionResult) {
@@ -423,6 +457,27 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 	var desired, pending *connectionTarget
 	var deadlineTimer *time.Timer
 	operationOpen := false
+	var retryAt time.Time
+	beginRecovery := func() {
+		next := *desired
+		next.attempt++
+		next.restore = true
+		desired, pending = &next, &next
+		w.setTarget(desired)
+		if deadlineTimer != nil {
+			deadlineTimer.Stop()
+		}
+		operationOpen = true
+		if err := w.prepareBudget(desired); err != nil {
+			pending, operationOpen = nil, false
+			w.result(connectionResult{job: &connectionJob{target: *desired}, err: err})
+		} else {
+			deadlineTimer = time.NewTimer(time.Until(desired.deadline))
+		}
+		if current != nil {
+			current.cancel()
+		}
+	}
 	defer func() {
 		if deadlineTimer != nil {
 			deadlineTimer.Stop()
@@ -497,7 +552,7 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 				if deadlineTimer != nil {
 					deadlineTimer.Stop()
 				}
-				w.result(connectionResult{job: &connectionJob{target: *desired}, err: err})
+				w.budgetFailure(desired, err)
 			}
 		}
 		if load {
@@ -547,7 +602,7 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 			}
 			load = false
 		}
-		if current == nil && pending != nil {
+		if current == nil && pending != nil && !time.Now().Before(retryAt) {
 			t := *pending
 			pending = nil
 			lifetime, cancel := context.WithCancel(ctx)
@@ -564,6 +619,15 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 			return ctx.Err()
 		case <-w.wake:
 			load = true
+		case hint := <-w.recovery:
+			// Read current intent first; a committed Disconnect always wins.
+			latest, err := w.target(ctx)
+			if err == nil && latest != nil && desired != nil &&
+				latest.intent == state.IntentConnected && sameConnectionTarget(*latest, hint) &&
+				sameConnectionTarget(*latest, *desired) && hint.attempt == desired.attempt && !operationOpen {
+				beginRecovery()
+			}
+			load = true
 		case <-poll.C:
 			load = true
 		case <-timeout:
@@ -572,12 +636,17 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 			}
 			pending = nil
 			operationOpen = false
-			w.result(connectionResult{job: &connectionJob{target: *desired}, err: context.DeadlineExceeded})
+			w.budgetFailure(desired, context.DeadlineExceeded)
 		case r := <-results:
 			if current != r.job {
 				continue
 			}
-			if r.ready {
+			latestAttempt := desired != nil && sameConnectionTarget(*desired, current.target) && desired.attempt == current.target.attempt
+			if latestAttempt && !r.finished && recoveryFailure(r.err) && !operationOpen && current.target.intent == state.IntentConnected {
+				beginRecovery()
+				latestAttempt = false
+			}
+			if r.ready && latestAttempt {
 				if err := current.target.budget.Check(); err != nil {
 					r.ready = false
 					r.err = err
@@ -610,11 +679,32 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 					}
 				}
 			}
-			w.result(r)
+			if latestAttempt {
+				w.result(r)
+			}
 			if r.finished {
 				w.retired = r.retained
 				current.cancel()
-				if desired != nil && sameConnectionTarget(*desired, current.target) && deadlineTimer != nil {
+				// A failed cleanup retains its sole owner; never hide it behind a
+				// fresh attempt or start another native owner concurrently.
+				if r.retained != nil && desired != nil && desired.attempt > 0 && sameConnectionTarget(*desired, current.target) {
+					pending, operationOpen = nil, false
+					if !latestAttempt {
+						w.result(connectionResult{job: &connectionJob{target: *desired}, finished: true, err: connectivity.FailureCleanup})
+					}
+				} else if latestAttempt && operationOpen && desired.intent == state.IntentConnected {
+					if err := desired.budget.Check(); err != nil {
+						w.budgetFailure(desired, err)
+					} else if recoveryFailure(w.Observe().Failure) {
+						next := *desired
+						next.attempt++
+						next.restore = true
+						desired, pending = &next, &next
+						retryAt = time.Now().Add(w.config.PollInterval)
+						w.setTarget(desired)
+					}
+				}
+				if pending == nil && latestAttempt && deadlineTimer != nil {
 					deadlineTimer.Stop()
 					operationOpen = false
 				}

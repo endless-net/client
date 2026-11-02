@@ -7,8 +7,8 @@ require (
 	github.com/Microsoft/go-winio v0.6.3
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/endless-net/billing/api v0.5.0
-	github.com/endless-net/client/api v0.2.0
-	github.com/endless-net/coordinator/api v0.6.1
+	github.com/endless-net/client/api v0.3.0
+	github.com/endless-net/coordinator/api v0.8.1
 	github.com/endless-net/identity/api v0.2.0
 	github.com/endless-net/signing/api v0.1.0
 	github.com/google/uuid v1.6.0

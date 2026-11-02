@@ -52,6 +52,7 @@ type windowsConnections struct {
 	makeNative func(context.Context, string, uint64) (windowsConnectionNative, error)
 	cleanup    func(context.Context, string) error
 	stream     func(context.Context, *connectivity.Verifier, *state.MapCursor, func(context.Context, connectivity.Map) error) error
+	endpoint   func() (netip.AddrPort, error)
 }
 
 // NewWindowsConnectionFactory allocates no adapter or background worker. The
@@ -66,6 +67,9 @@ func NewWindowsConnectionFactory(store *state.Store, transport *connectivity.Tra
 		return nil, err
 	}
 	f := &windowsConnections{store: store, transport: transport, config: c, stream: transport.StreamSnapshot}
+	f.endpoint = func() (netip.AddrPort, error) {
+		return underlayEndpoint(c.Endpoint, c.Native.MaxInventoryRows, c.Native.MaxInterfaces)
+	}
 	f.makeNative = func(ctx context.Context, profile string, generation uint64) (windowsConnectionNative, error) {
 		return dataplane.NewWindowsSession(ctx, store, c.Verifier.Clock, profile, generation, c.Native)
 	}
@@ -383,6 +387,10 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				if err != nil && !errors.Is(err, dataplane.ErrNoAuthority) {
 					return nativeConnectionFailure(err, connectivity.FailurePath)
 				}
+				local := native.ConnectionLocal()
+				if local.Known && local.Permission.NewFlows && local.PeerCount > 0 && local.DirectPaths == 0 {
+					return connectivity.FailurePath
+				}
 			}
 		}
 	}
@@ -394,6 +402,14 @@ func (d *windowsConnection) announce(ctx context.Context, online bool, native wi
 	if online {
 		want = state.IntentConnected
 		status = "online"
+	}
+	endpoint := d.factory.config.Endpoint
+	if online && d.factory.endpoint != nil {
+		var err error
+		endpoint, err = d.factory.endpoint()
+		if err != nil {
+			return connectivity.FailurePath
+		}
 	}
 	// At most one frozen recovery and one explicit current announcement. An
 	// uncertain response is never retried here, nor does recovery renew a lease.
@@ -425,7 +441,7 @@ func (d *windowsConnection) announce(ctx context.Context, online bool, native wi
 				return state.ErrStale
 			}
 			endpointGeneration++
-			r := coordinator.UpdateNodeEndpointRequest{Endpoint: d.factory.config.Endpoint.String(), Generation: endpointGeneration, TTL: d.factory.config.EndpointTTL.String(), Status: status}
+			r := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint.String(), Generation: endpointGeneration, TTL: d.factory.config.EndpointTTL.String(), Status: status}
 			if err := connectivity.PrepareEndpoint(ctx, d.factory.store, d.profile, d.generation, r); err != nil {
 				return err
 			}
@@ -440,7 +456,7 @@ func (d *windowsConnection) announce(ctx context.Context, online bool, native wi
 		if err := announcementContext(ctx); err != nil {
 			return err
 		}
-		if !online || receipt.Online && receipt.Endpoint == d.factory.config.Endpoint.String() && receipt.ExpiresAt.After(d.factory.config.Verifier.Now()) {
+		if !online || receipt.Online && receipt.Endpoint == endpoint.String() && receipt.ExpiresAt.After(d.factory.config.Verifier.Now()) {
 			return nil
 		}
 	}

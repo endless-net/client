@@ -19,6 +19,9 @@ const (
 	FailurePath
 	FailureCleanup
 	FailureControl
+	FailureTrust
+	FailureCredential
+	FailureRevoked
 )
 
 func (FailureKind) Error() string { return "connection failure" }

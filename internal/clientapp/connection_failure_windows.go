@@ -24,7 +24,13 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 		return connectivity.FailureConflict
 	case errors.Is(err, connectivity.ErrClock):
 		return connectivity.ErrClock
-	case errors.Is(err, connectivity.ErrDenied), errors.Is(err, connectivity.ErrRevoked), errors.Is(err, connectivity.ErrExpired):
+	case errors.Is(err, connectivity.ErrTrust):
+		return connectivity.FailureTrust
+	case errors.Is(err, connectivity.ErrCredentialExpired):
+		return connectivity.FailureCredential
+	case errors.Is(err, connectivity.ErrRevoked):
+		return connectivity.FailureRevoked
+	case errors.Is(err, connectivity.ErrDenied), errors.Is(err, connectivity.ErrExpired):
 		return connectivity.FailureAccess
 	case errors.Is(err, state.ErrStale):
 		return state.ErrStale

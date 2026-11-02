@@ -24,13 +24,14 @@ import (
 )
 
 var (
-	ErrConfig = errors.New("invalid connectivity configuration")
-	ErrMap    = errors.New("invalid current network map")
-	ErrTrust  = errors.New("current connectivity trust unavailable")
-	ErrReplay = errors.New("network map replay")
-	ErrStale  = errors.New("network map rollback")
-	ErrNoMap  = errors.New("event is not a new authoritative map")
-	ErrResync = errors.New("network map resynchronization required")
+	ErrConfig            = errors.New("invalid connectivity configuration")
+	ErrMap               = errors.New("invalid current network map")
+	ErrTrust             = errors.New("current connectivity trust unavailable")
+	ErrReplay            = errors.New("network map replay")
+	ErrStale             = errors.New("network map rollback")
+	ErrNoMap             = errors.New("event is not a new authoritative map")
+	ErrResync            = errors.New("network map resynchronization required")
+	ErrCredentialExpired = errors.New("node credential expired or unknown")
 )
 
 type VerifierConfig struct {
@@ -63,6 +64,9 @@ func NewVerifier(p state.Profile, c VerifierConfig) (*Verifier, error) {
 func newBinding(p state.Profile, c VerifierConfig, connected bool) (*Verifier, error) {
 	if p.Connection == nil || p.Connection.Generation == 0 || p.Connection.Intent != state.IntentConnected && p.Connection.Intent != state.IntentDisconnected || connected && p.Connection.Intent != state.IntentConnected || p.Attempt != nil && !pathID(p.Attempt.NodeID) {
 		return nil, ErrConfig
+	}
+	if p.Attempt != nil && c.Now != nil && (p.Attempt.CredentialEnds.IsZero() || !p.Attempt.CredentialEnds.After(c.Now())) {
+		return nil, ErrCredentialExpired
 	}
 	if c.Announcements == nil || c.Now == nil || c.MaxBytes < 1 || c.MaxPeers < 1 || c.MaxRules < 1 || c.MaxCredentialBytes < 1 || c.CallTimeout < time.Millisecond || c.CallTimeout > 30*time.Second || p.Attempt == nil || p.Attempt.Validate() != nil || p.Attempt.Phase != enrollment.Registered || p.Attempt.Uncertain || p.Attempt.ProfileID != p.ID || p.Attempt.ControlOrigin != p.ControlOrigin || p.Trust.AnnouncementID == "" || p.Secrets.NodeCredential == "" {
 		return nil, ErrConfig
@@ -105,6 +109,9 @@ func (v *Verifier) previous(cursor *state.MapCursor) (*state.MapCursor, error) {
 
 func (v *Verifier) currentTrust(parent context.Context, scope string) (signing.ServerKeyResponse, error) {
 	var empty signing.ServerKeyResponse
+	if !v.credentialEnds.After(v.config.Now()) {
+		return empty, ErrCredentialExpired
+	}
 	if parent.Err() != nil {
 		return empty, parent.Err()
 	}
