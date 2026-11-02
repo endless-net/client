@@ -122,7 +122,7 @@ func TestWindowsExplicitInitializationCLI(t *testing.T) {
 		t.Fatalf("explicit initialization failed: %v: %s", err, output)
 	}
 	snapshot := loadInitializedState(t, c)
-	if snapshot.Version != 1 || snapshot.Revision != 1 || snapshot.InstallationID != c.InstallationID || snapshot.OwnerSID != "" || snapshot.ActiveProfileID != "" || len(snapshot.Profiles) != 0 {
+	if snapshot.Version != state.CurrentVersion || snapshot.Revision != 1 || snapshot.InstallationID != c.InstallationID || snapshot.OwnerSID != "" || snapshot.ActiveProfileID != "" || len(snapshot.Profiles) != 0 {
 		t.Fatal("initialization created an owner, profile, keys or attempt")
 	}
 	checkInitializedAppLifecycle(t, c)

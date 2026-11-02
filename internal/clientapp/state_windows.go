@@ -17,7 +17,8 @@ var ErrProtectedState = errors.New("client protected state unavailable")
 
 // ProtectedState binds the existing Windows backend to Fx. Store is available
 // for constructor wiring, but refuses operations before successful startup and
-// after shutdown begins. Startup never calls Initialize or generates keys.
+// after shutdown begins. Startup performs the explicit format migration before
+// Load; it never calls Initialize, resets state or generates keys.
 type ProtectedState struct {
 	store  *state.Store
 	gate   *stateGate
@@ -74,6 +75,10 @@ func (s *ProtectedState) start(ctx context.Context) error {
 	}
 	startup, err := state.New(backend, protector, s.config.InstallationID, s.config.MaxStatePlainBytes, s.config.MaxStateCipherBytes)
 	if err != nil {
+		_ = backend.Close()
+		return ErrProtectedState
+	}
+	if err := startup.Upgrade(ctx); err != nil {
 		_ = backend.Close()
 		return ErrProtectedState
 	}

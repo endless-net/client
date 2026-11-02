@@ -10,7 +10,7 @@ import (
 
 // InitializeWindowsState is an explicit, offline data initialization operation.
 // It does not create a directory, alter its permissions, start a service, or
-// replace any existing state. Ordinary application startup must keep using Load.
+// replace any existing state. Startup uses the direct Upgrade followed by Load.
 func InitializeWindowsState(ctx context.Context, config Config) (err error) {
 	if config.Validate() != nil {
 		return ErrConfig

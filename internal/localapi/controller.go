@@ -16,6 +16,7 @@ import (
 	"unicode"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
+	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/localipc"
@@ -34,6 +35,10 @@ type Runner interface {
 }
 
 type Config struct {
+	Connections                                       ConnectionRunner
+	ConnectionClock                                   connectivity.Clock
+	ConnectionObservations                            connectivity.ObservationSource
+	WatchInterval                                     time.Duration
 	Targets                                           TargetSource
 	TargetPageKey                                     [32]byte
 	Announcements                                     control.Announcements
@@ -66,7 +71,20 @@ func validOrigin(origin string) bool {
 	return err == nil && u.Scheme == "https" && u.Host != "" && u.Host == strings.ToLower(u.Host) && u.User == nil && u.Path == "" && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && u.String() == origin
 }
 
+func clearProfileKeys(s state.State) {
+	for _, profile := range s.Profiles {
+		clear(profile.Keys.IdentityPrivate)
+		clear(profile.Keys.WireGuardPrivate)
+	}
+}
+
 func New(store *state.Store, runner Runner, config Config) (*Controller, error) {
+	if config.WatchInterval < time.Millisecond || config.WatchInterval > 10*time.Second {
+		return nil, state.ErrCorrupt
+	}
+	if config.Connections != nil && config.ConnectionClock == nil {
+		return nil, state.ErrCorrupt
+	}
 	if (config.Targets == nil) != (config.TargetPageKey == [32]byte{}) {
 		return nil, state.ErrCorrupt
 	}
@@ -81,6 +99,22 @@ func New(store *state.Store, runner Runner, config Config) (*Controller, error) 
 }
 
 func rpcError(err error) error {
+	if failure := connectionDetails(err); failure != nil {
+		code := codes.Unavailable
+		switch failure.Code {
+		case clientv0.ErrorCode_ERROR_CODE_PERMISSION_REQUIRED:
+			code = codes.PermissionDenied
+		case clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED:
+			code = codes.FailedPrecondition
+		case clientv0.ErrorCode_ERROR_CODE_RESOURCE_CONFLICT:
+			code = codes.FailedPrecondition
+		}
+		s, detailErr := status.New(code, failure.ReasonKey).WithDetails(failure)
+		if detailErr == nil {
+			return s.Err()
+		}
+		return status.Error(code, failure.ReasonKey)
+	}
 	code, typed, reason := codes.Unavailable, clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.state.unavailable"
 	// Even a wrapped backend/runner status may contain credentials. Preserve
 	// known classifications only; all messages/details are built here.
@@ -181,6 +215,7 @@ func (c *Controller) runtimeInfo(ctx context.Context, p localipc.Principal) (*cl
 	if err != nil {
 		return nil, rpcError(err)
 	}
+	defer clearProfileKeys(s)
 	access := clientv0.Access_ACCESS_OBSERVER
 	if s.OwnerSID == p.SID {
 		access = clientv0.Access_ACCESS_OWNER
@@ -188,7 +223,15 @@ func (c *Controller) runtimeInfo(ctx context.Context, p localipc.Principal) (*cl
 	if p.Administrator {
 		access = clientv0.Access_ACCESS_ADMINISTRATOR
 	}
-	return &clientv0.GetRuntimeInfoResponse{Runtime: &clientv0.RuntimeInfo{Build: proto.Clone(c.config.Build).(*clientv0.BuildIdentity), InstanceId: c.config.RuntimeID, CallerAccess: access, Capabilities: enrollmentCapabilities(s, p, c.config.Build.Platform), ContractSha256: hex.EncodeToString(c.config.ContractDigest[:]), Protocol: "endlessnet-client-ipc", IpcVersion: 0}}, nil
+	capabilities := enrollmentCapabilities(s, p, c.config.Build.Platform)
+	if c.config.Connections != nil && c.config.ConnectionObservations != nil {
+		restriction := &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_PERMISSION_REQUIRED, ReasonKey: "client.owner.required", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}
+		if s.OwnerSID != "" && s.OwnerSID == p.SID {
+			restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_AVAILABLE}
+		}
+		capabilities = append(capabilities, &clientv0.CapabilityStatus{Capability: clientv0.Capability_CAPABILITY_CONNECTION, Restriction: restriction, Platform: c.config.Build.Platform})
+	}
+	return &clientv0.GetRuntimeInfoResponse{Runtime: &clientv0.RuntimeInfo{Build: proto.Clone(c.config.Build).(*clientv0.BuildIdentity), InstanceId: c.config.RuntimeID, CallerAccess: access, Capabilities: capabilities, ContractSha256: hex.EncodeToString(c.config.ContractDigest[:]), Protocol: "endlessnet-client-ipc", IpcVersion: 0}}, nil
 }
 
 func (c *Controller) CreateProfile(ctx context.Context, req *clientv0.CreateProfileRequest) (*clientv0.CreateProfileResponse, error) {

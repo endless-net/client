@@ -13,28 +13,28 @@ import (
 var ErrWorkers = errors.New("client mandatory worker failed")
 var ErrLifecycle = errors.New("invalid client worker lifecycle")
 
-// Workers binds the enrollment executor and local IPC serving loop to one Fx
+// Workers binds enrollment, connection reconciliation and local IPC to one Fx
 // lifetime. Resource acquisition and IPC self-bootstrap belong to earlier
 // application hooks; Healthy alone is not application readiness.
 type Workers struct {
-	mu                      sync.Mutex
-	ipc, enrollment         func(context.Context) error
-	shutdown                fx.Shutdowner
-	signals                 *Signals
-	cancel                  context.CancelFunc
-	done                    chan struct{}
-	used, running, stopping bool
-	failed                  bool
+	mu                          sync.Mutex
+	ipc, enrollment, connection func(context.Context) error
+	shutdown                    fx.Shutdowner
+	signals                     *Signals
+	cancel                      context.CancelFunc
+	done                        chan struct{}
+	used, running, stopping     bool
+	failed                      bool
 }
 
 // NewWorkers starts nothing and copies no private application implementation.
-// Both loops are mandatory and must return on context cancellation. Fx must be
+// All three loops are mandatory and must return on context cancellation. Fx must be
 // configured with explicit startup/stop budgets by the complete application.
-func NewWorkers(lifecycle fx.Lifecycle, shutdown fx.Shutdowner, signals *Signals, ipc, enrollment func(context.Context) error) (*Workers, error) {
-	if lifecycle == nil || shutdown == nil || !signals.valid() || ipc == nil || enrollment == nil {
+func NewWorkers(lifecycle fx.Lifecycle, shutdown fx.Shutdowner, signals *Signals, ipc, enrollment, connection func(context.Context) error) (*Workers, error) {
+	if lifecycle == nil || shutdown == nil || !signals.valid() || ipc == nil || enrollment == nil || connection == nil {
 		return nil, ErrLifecycle
 	}
-	w := &Workers{ipc: ipc, enrollment: enrollment, shutdown: shutdown, signals: signals}
+	w := &Workers{ipc: ipc, enrollment: enrollment, connection: connection, shutdown: shutdown, signals: signals}
 	lifecycle.Append(signals.hook("workers", w.start, w.stop))
 	return w, nil
 }
@@ -52,17 +52,23 @@ func (w *Workers) start(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(context.Background())
 	w.cancel, w.done = cancel, make(chan struct{})
 	var joined sync.WaitGroup
-	joined.Add(2)
+	joined.Add(3)
 	for _, worker := range []struct {
 		component string
 		run       func(context.Context) error
-	}{{"ipc", w.ipc}, {"enrollment", w.enrollment}} {
+	}{{"ipc", w.ipc}, {"enrollment", w.enrollment}, {"connection", w.connection}} {
 		go func() {
 			defer joined.Done()
 			_ = w.signals.observe(runCtx, worker.component, "run", func(ctx context.Context) error {
-				_ = worker.run(ctx)
+				err := worker.run(ctx)
 				w.mu.Lock()
 				unexpected := !w.stopping && !w.failed
+				// A joined cancellation/cleanup error still means failed teardown.
+				// Only a plain cancellation is a successful cancelled loop.
+				cleanupFailed := w.stopping && err != nil && err != context.Canceled
+				if cleanupFailed {
+					w.failed = true
+				}
 				if unexpected {
 					w.failed = true
 					w.cancel()
@@ -72,6 +78,9 @@ func (w *Workers) start(ctx context.Context) error {
 					// Health/cancellation/shutdown must precede telemetry delivery.
 					// Only one worker may call Fx's concurrency-unsafe ExitCode.
 					_ = w.shutdown.Shutdown(fx.ExitCode(1))
+					return ErrWorkers
+				}
+				if cleanupFailed {
 					return ErrWorkers
 				}
 				return ctx.Err()

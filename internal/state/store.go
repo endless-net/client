@@ -85,6 +85,7 @@ type Profile struct {
 	Login                          LoginProgress
 	Registration                   RegistrationProgress
 	Approval                       *ApprovalProgress `json:",omitempty"`
+	Connection                     *ConnectionState  `json:",omitempty"`
 	// Persisted by the worker before a remote mutation; cancellation must not
 	// imply rollback of a call whose response is still unresolved.
 	RemoteInFlight bool
@@ -105,8 +106,10 @@ type State struct {
 	Profiles        map[string]Profile
 }
 
+const CurrentVersion uint32 = 2
+
 func (s State) Validate(installation string) error {
-	if s.Version != 1 || !validID(s.InstallationID) || s.InstallationID != installation || s.Revision == 0 || (len(s.Profiles) == 0) != (s.OwnerSID == "") {
+	if s.Version != CurrentVersion || !validID(s.InstallationID) || s.InstallationID != installation || s.Revision == 0 || (len(s.Profiles) == 0) != (s.OwnerSID == "") {
 		return ErrCorrupt
 	}
 	if len(s.Profiles) == 0 && s.ActiveProfileID != "" {
@@ -118,6 +121,12 @@ func (s State) Validate(installation string) error {
 		}
 	}
 	for id, p := range s.Profiles {
+		if validateConnection(p) != nil {
+			return ErrCorrupt
+		}
+		if p.Connection != nil && p.Connection.Request != nil && p.Connection.Request.Revision >= s.Revision {
+			return ErrCorrupt
+		}
 		u, err := url.Parse(p.ControlOrigin)
 		if !validID(id) || id != p.ID || err != nil || u.Scheme != "https" || u.Host == "" || u.Host != strings.ToLower(u.Host) || u.String() != p.ControlOrigin || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery {
 			return ErrCorrupt
@@ -206,7 +215,7 @@ func New(backend Backend, protector Protector, installation string, maxPlain, ma
 	return &Store{backend: backend, protector: protector, installation: installation, maxPlain: maxPlain, maxCipher: maxCipher}, nil
 }
 
-func (s *Store) read(slot Slot) (State, error) {
+func (s *Store) decode(slot Slot) (State, error) {
 	data, err := slot.Read(s.maxCipher)
 	if err != nil {
 		return State{}, err
@@ -222,11 +231,22 @@ func (s *Store) read(slot Slot) (State, error) {
 	var state State
 	d := json.NewDecoder(bytes.NewReader(plain))
 	d.DisallowUnknownFields()
-	if err = d.Decode(&state); err != nil || state.Validate(s.installation) != nil {
+	if err = d.Decode(&state); err != nil {
 		return State{}, ErrCorrupt
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
+		return State{}, ErrCorrupt
+	}
+	return state, nil
+}
+
+func (s *Store) read(slot Slot) (State, error) {
+	state, err := s.decode(slot)
+	if err != nil {
+		return State{}, err
+	}
+	if state.Validate(s.installation) != nil {
 		return State{}, ErrCorrupt
 	}
 	return state, nil
@@ -254,8 +274,8 @@ func (s *Store) save(ctx context.Context, slot Slot, state State) error {
 	return nil
 }
 
-// Initialize is an explicit installation action. Normal startup calls Load,
-// which never initializes/replaces missing, unknown-version or corrupt state.
+// Initialize is an explicit installation action. Startup performs the direct
+// Upgrade then Load; neither initializes missing or repairs corrupt state.
 func (s *Store) Initialize(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -267,7 +287,7 @@ func (s *Store) Initialize(ctx context.Context) error {
 			}
 			return err
 		}
-		return s.save(ctx, slot, State{Version: 1, InstallationID: s.installation, Revision: 1, Profiles: map[string]Profile{}})
+		return s.save(ctx, slot, State{Version: CurrentVersion, InstallationID: s.installation, Revision: 1, Profiles: map[string]Profile{}})
 	})
 }
 
@@ -316,6 +336,9 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 			if !ok || p.ControlOrigin != next.ControlOrigin {
 				return ErrCorrupt
 			}
+			if connectionUpdate(p.Connection, next.Connection) != nil || !connectionRequestRevision(p.Connection, next.Connection, before.Revision) {
+				return ErrCorrupt
+			}
 			if p.Attempt != nil && (next.Attempt == nil || p.Attempt.Binding != next.Attempt.Binding || !bytes.Equal(p.Keys.IdentityPrivate, next.Keys.IdentityPrivate) || !bytes.Equal(p.Keys.WireGuardPrivate, next.Keys.WireGuardPrivate) || p.Secrets.RequestProof != next.Secrets.RequestProof || p.Mode != next.Mode || p.Hostname != next.Hostname) {
 				return ErrCorrupt
 			}
@@ -339,6 +362,11 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 				if !p.Login.CreatedAt.IsZero() && (!p.Login.CreatedAt.Equal(next.Login.CreatedAt) || !p.Login.ExpiresAt.Equal(next.Login.ExpiresAt) || !p.Login.ReplayUntil.Equal(next.Login.ReplayUntil)) {
 					return ErrCorrupt
 				}
+			}
+		}
+		for id, p := range after.Profiles {
+			if _, exists := before.Profiles[id]; !exists && (connectionUpdate(nil, p.Connection) != nil || !connectionRequestRevision(nil, p.Connection, before.Revision)) {
+				return ErrCorrupt
 			}
 		}
 		after.Revision++

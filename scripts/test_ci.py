@@ -82,9 +82,54 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
                     Path(args[args.index("-o") + 1]).write_bytes(b"compiled fixture")
                     return ""
                 return real_command(args, **kwargs)
-            with patch.object(ci, "command", side_effect=compile_fixture), patch.object(ci, "verify_client_contract") as verify:
+            native = {"wintun.dll": (b"pinned dll fixture", 0o644), "WINTUN-LICENSE.txt": (b"license fixture", 0o644)}
+            with patch.object(ci, "command", side_effect=compile_fixture), patch.object(ci, "verify_client_contract") as verify, patch.object(ci, "wintun_files", return_value=native) as driver:
                 ci.build(root, profile, root / ".artifacts", "v0.7.0")
                 verify.assert_called_once_with(root)
+                driver.assert_called_once_with(root, {"os": "windows", "arch": "amd64"})
+            with ci.zipfile.ZipFile(root / ".artifacts/client-v0.7.0-windows-amd64.zip") as archive:
+                self.assertEqual(set(archive.namelist()), {"client.exe", *native})
+                self.assertEqual(archive.read("wintun.dll"), b"pinned dll fixture")
+
+    def test_wintun_pins_archive_entries_and_license_without_network(self):
+        for failure in (None, "archive", "size", "dll", "license", "duplicate"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                data = ci.io.BytesIO()
+                files = {"wintun.dll": b"signed binary fixture", "WINTUN-LICENSE.txt": b"license fixture"}
+                entries = {"wintun.dll": "wintun/bin/amd64/wintun.dll", "WINTUN-LICENSE.txt": "wintun/LICENSE.txt"}
+                with ci.zipfile.ZipFile(data, "w") as archive:
+                    for name, content in files.items():
+                        archive.writestr(entries[name], content)
+                    if failure == "duplicate":
+                        import warnings
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore", UserWarning)
+                            archive.writestr(entries["wintun.dll"], files["wintun.dll"])
+                payload = data.getvalue()
+                manifest = {"version": "0.14.1", "url": "https://www.wintun.net/builds/wintun-0.14.1.zip",
+                            "size": len(payload), "sha256": ci.hashlib.sha256(payload).hexdigest(),
+                            "files": {name: {"entry": entries[name], "size": len(content),
+                                             "sha256": ci.hashlib.sha256(content).hexdigest()}
+                                      for name, content in files.items()}}
+                if failure == "archive":
+                    manifest["sha256"] = "0" * 64
+                elif failure == "size":
+                    manifest["size"] -= 1
+                elif failure in ("dll", "license"):
+                    manifest["files"]["wintun.dll" if failure == "dll" else "WINTUN-LICENSE.txt"]["sha256"] = "0" * 64
+                directory = root / "internal/wintundriver"
+                directory.mkdir(parents=True)
+                (directory / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+                with patch.object(ci.urllib.request, "urlopen", return_value=ci.io.BytesIO(payload)) as fetch:
+                    if failure:
+                        with self.assertRaises(ValueError):
+                            ci.wintun_files(root, {"os": "windows", "arch": "amd64"})
+                    else:
+                        result = ci.wintun_files(root, {"os": "windows", "arch": "amd64"})
+                        self.assertEqual({name: value[0] for name, value in result.items()}, files)
+                    self.assertEqual(fetch.call_count, 1)
+                    self.assertEqual(fetch.call_args.kwargs, {"timeout": 30})
 
     def test_client_contract_requires_exact_origin_resolved_module_and_descriptor(self):
         for failure in (None, "origin", "descriptor", "replace", "directory", "version"):

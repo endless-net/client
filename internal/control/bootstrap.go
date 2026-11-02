@@ -72,8 +72,11 @@ type Bootstrap struct {
 	now      func() time.Time
 }
 
-func NewBootstrap(client *http.Client, maxBytes int64, now func() time.Time) (*Bootstrap, error) {
-	if client == nil || client.Jar != nil || maxBytes <= 0 || maxBytes >= int64(^uint(0)>>1) {
+// RestrictedHTTPClient shares the public daemon HTTP policy. It rejects ambient
+// browser/workload credentials and unsafe TLS, disables redirects and bounds the
+// complete call. It starts no network operation and never adds request headers.
+func RestrictedHTTPClient(client *http.Client, maximum time.Duration) (*http.Client, error) {
+	if client == nil || client.Jar != nil || maximum < time.Millisecond || maximum > 5*time.Minute {
 		return nil, ErrBootstrap
 	}
 	copy := *client
@@ -88,13 +91,24 @@ func NewBootstrap(client *http.Client, maxBytes int64, now func() time.Time) (*B
 		copy.Transport = transport
 	}
 	copy.CheckRedirect = func(*http.Request, []*http.Request) error { return ErrBootstrap }
-	if copy.Timeout <= 0 || copy.Timeout > 30*time.Second {
-		copy.Timeout = 30 * time.Second
+	if copy.Timeout <= 0 || copy.Timeout > maximum {
+		copy.Timeout = maximum
+	}
+	return &copy, nil
+}
+
+func NewBootstrap(client *http.Client, maxBytes int64, now func() time.Time) (*Bootstrap, error) {
+	if maxBytes <= 0 || maxBytes >= int64(^uint(0)>>1) {
+		return nil, ErrBootstrap
+	}
+	client, err := RestrictedHTTPClient(client, 30*time.Second)
+	if err != nil {
+		return nil, err
 	}
 	if now == nil {
 		now = time.Now
 	}
-	return &Bootstrap{client: &copy, maxBytes: maxBytes, now: now}, nil
+	return &Bootstrap{client: client, maxBytes: maxBytes, now: now}, nil
 }
 
 func (b *Bootstrap) Fetch(ctx context.Context, origin string) (Announcement, error) {

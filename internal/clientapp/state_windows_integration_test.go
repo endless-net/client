@@ -5,6 +5,7 @@ package clientapp
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -140,6 +141,72 @@ func TestProtectedStateFxRestartKeepsOriginalCiphertextAndIdentity(t *testing.T)
 	after, err := os.ReadFile(filepath.Join(c.StateDirectory, "state.bin"))
 	if err != nil || !bytes.Equal(cipher, after) {
 		t.Fatal("startup rewrote protected state", err)
+	}
+}
+
+func TestProtectedStateFxMigratesLegacyWithoutChangingIdentity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("separate isolated Windows DPAPI migration/lifecycle fixture")
+	}
+	c := stateFixtureConfig(t)
+	original := seedState(t, c)
+	legacy := original
+	legacy.Version = 1
+	raw, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(raw)
+	protector, err := state.NewDPAPI(c.InstallationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := protector.Seal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend, err := state.OpenWindows(c.StateDirectory, c.ServiceSID, c.StateLockRetry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = backend.Exclusive(budget(t), func(slot state.Slot) error { return slot.Replace(cipher) })
+	if closeErr := backend.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resource *ProtectedState
+	app := fx.New(fx.NopLogger, fx.Invoke(func(lc fx.Lifecycle) error {
+		var err error
+		resource, err = NewProtectedState(lc, testSignals(t), c)
+		return err
+	}))
+	if err := app.Start(budget(t)); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := app.Stop(budget(t)); err != nil {
+			t.Error(err)
+		}
+	}()
+	current, err := resource.Store().Load(budget(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Version != state.CurrentVersion || current.Revision != original.Revision+1 || current.Profiles[c.DefaultProfileID].Connection != nil {
+		t.Fatal("startup did not perform exactly one data migration")
+	}
+	current.Revision = original.Revision
+	if !reflect.DeepEqual(current, original) {
+		t.Fatal("migration changed owner/key/attempt binding")
+	}
+	after, err := os.ReadFile(filepath.Join(c.StateDirectory, "state.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(after, cipher) || bytes.Contains(after, original.Profiles[c.DefaultProfileID].Keys.WireGuardPrivate) {
+		t.Fatal("migration did not reseal or exposed key material")
 	}
 }
 

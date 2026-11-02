@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import urllib.request
 import zipfile
 
 TAG = re.compile(r"(?:api/)?v0\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
@@ -295,6 +296,46 @@ def validate_output_location(root, output):
     return output
 
 
+def wintun_files(root, target):
+    if target != {"os": "windows", "arch": "amd64"}:
+        raise ValueError("Wintun runtime supports Windows amd64 only")
+    manifest = load_json(local(root, "internal/wintundriver/manifest.json"))
+    if (set(manifest) != {"version", "url", "size", "sha256", "files"}
+            or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", manifest["version"])
+            or manifest["url"] != "https://www.wintun.net/builds/wintun-" + manifest["version"] + ".zip"
+            or not re.fullmatch(r"[0-9a-f]{64}", manifest["sha256"])
+            or type(manifest["size"]) is not int or manifest["size"] <= 0
+            or set(manifest["files"]) != {"wintun.dll", "WINTUN-LICENSE.txt"}):
+        raise ValueError("invalid pinned Wintun manifest")
+    for name, entry in manifest["files"].items():
+        expected = "wintun/bin/amd64/wintun.dll" if name == "wintun.dll" else "wintun/LICENSE.txt"
+        if (set(entry) != {"entry", "size", "sha256"} or entry["entry"] != expected
+                or type(entry["size"]) is not int or not 0 < entry["size"] <= manifest["size"]
+                or not re.fullmatch(r"[0-9a-f]{64}", entry["sha256"])):
+            raise ValueError("invalid pinned Wintun entry")
+    # No cache/fallback or ambient credentials. A bounded download is verified
+    # before opening ZIP entries; archive paths are never extracted to disk.
+    request = urllib.request.Request(manifest["url"], headers={"User-Agent": "EndlessNet-Client-Build"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        data = response.read(manifest["size"] + 1)
+    if len(data) != manifest["size"] or hashlib.sha256(data).hexdigest() != manifest["sha256"]:
+        raise ValueError("pinned Wintun archive mismatch")
+    result = {}
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        names = archive.namelist()
+        if len(names) != len(set(names)):
+            raise ValueError("duplicate Wintun archive entry")
+        for name, entry in manifest["files"].items():
+            info = archive.getinfo(entry["entry"])
+            if info.file_size != entry["size"] or info.is_dir():
+                raise ValueError("pinned Wintun entry size mismatch")
+            content = archive.read(info)
+            if hashlib.sha256(content).hexdigest() != entry["sha256"]:
+                raise ValueError("pinned Wintun entry checksum mismatch")
+            result[name] = (content, 0o644)
+    return result
+
+
 def build(root, profile, output, tag=None):
     if tag and not TAG.fullmatch(tag):
         raise ValueError("only ordinary v0 tags can be released")
@@ -333,6 +374,8 @@ def build(root, profile, output, tag=None):
                 command(["go", "build", "-trimpath", "-buildvcs=false", *metadata, "-o", str(binary),
                          artifact["package"]], cwd=local(root, artifact["module"]), env=env)
                 entries = {executable: (binary.read_bytes(), 0o755)}
+                if artifact.get("package") == "./cmd/client" and target["os"] == "windows":
+                    entries.update(wintun_files(root, target))
         else:
             raise ValueError("Flutter native packaging is supplied by its native workflow")
         write_archive(destination, entries)

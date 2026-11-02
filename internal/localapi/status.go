@@ -25,8 +25,8 @@ func (c *Controller) snapshot(ctx context.Context, caller localipc.Principal) (*
 	if err != nil {
 		return nil, rpcError(err)
 	}
-	// 003 implements registration only. It never claims a connected data plane
-	// or that the user explicitly requested disconnection.
+	defer clearProfileKeys(s)
+	// A registration or durable intent alone never confirms native application.
 	r := &clientv0.Status{Metadata: &clientv0.SnapshotMetadata{InstanceId: c.config.RuntimeID, Revision: s.Revision, GeneratedAt: timestamppb.New(c.config.Now())}, ServiceState: clientv0.ServiceState_SERVICE_STATE_DISCONNECTED, ConnectionPhase: clientv0.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED, Intent: &clientv0.ConnectionIntent{DesiredState: clientv0.DesiredState_DESIRED_STATE_DISCONNECTED}}
 	if s.OwnerSID == "" {
 		r.ServiceState = clientv0.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT
@@ -42,6 +42,16 @@ func (c *Controller) snapshot(ctx context.Context, caller localipc.Principal) (*
 	r.ControlState = clientv0.ControlState_CONTROL_STATE_NOT_REGISTERED
 	r.StoredState = &clientv0.StoredStatePresence{IdentityPrivateKeyPresent: len(profile.Keys.IdentityPrivate) != 0, TunnelPrivateKeyPresent: len(profile.Keys.WireGuardPrivate) != 0, TokenPresent: profile.Secrets.Access != ""}
 	r.StoredState.NodeCredentialPresent = profile.Secrets.NodeCredential != ""
+	if profile.Attempt != nil && profile.Secrets.NodeCredential != "" {
+		r.Credential = &clientv0.CredentialStatus{State: clientv0.CredentialState_CREDENTIAL_STATE_UNSPECIFIED}
+		if !profile.Attempt.CredentialEnds.IsZero() {
+			r.Credential.ExpiresAt = timestamppb.New(profile.Attempt.CredentialEnds)
+			r.Credential.State = clientv0.CredentialState_CREDENTIAL_STATE_VALID
+			if !c.config.Now().Before(profile.Attempt.CredentialEnds) {
+				r.Credential.State = clientv0.CredentialState_CREDENTIAL_STATE_EXPIRED
+			}
+		}
+	}
 	r.StoredState.DeviceFingerprintPresent = profile.Attempt != nil && profile.Attempt.DeviceKeyHash != [32]byte{}
 	if profile.Secrets.Access != "" && !profile.Secrets.SessionExpiresAt.IsZero() {
 		r.Session = &clientv0.Session{State: clientv0.SessionState_SESSION_STATE_ACTIVE, ExpiresAt: timestamppb.New(profile.Secrets.SessionExpiresAt)}
@@ -80,5 +90,6 @@ func (c *Controller) snapshot(ctx context.Context, caller localipc.Principal) (*
 			}
 		}
 	}
+	c.projectConnection(r, profile)
 	return &clientv0.GetStatusResponse{Status: r}, nil
 }

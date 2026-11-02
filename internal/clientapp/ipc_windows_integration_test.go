@@ -150,7 +150,7 @@ func TestIPCApplicationLifecycle(t *testing.T) {
 						return ctx.Err()
 					}
 				}
-				workers, err = NewWorkers(lc, shutdown, testSignals(t), endpoint.Run, run)
+				workers, err = NewWorkers(lc, shutdown, testSignals(t), endpoint.Run, run, waitCancelled)
 				return err
 			}))
 			if err := app.Err(); err != nil {

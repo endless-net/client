@@ -62,6 +62,7 @@ type Config struct {
 	MaxTargets          int           `env:"MAX_TARGETS,required"`
 	UpstreamPageSize    uint32        `env:"UPSTREAM_PAGE_SIZE,required"`
 	TelemetryConfig
+	ConnectionConfig `envPrefix:"CONNECTION_"`
 }
 
 func ParseWindows(environment map[string]string) (Config, error) {
@@ -168,7 +169,7 @@ func (c Config) Validate() error {
 	if c.HandshakeTimeout > c.StartTimeout || c.DrainTimeout >= c.StopTimeout || c.WriteBudget >= c.StopTimeout || c.StateLockRetry <= 0 || c.StateLockRetry > time.Second {
 		return ErrConfig
 	}
-	if c.TelemetryConfig.Validate() != nil {
+	if c.TelemetryConfig.Validate() != nil || c.validateConnection() != nil {
 		return ErrConfig
 	}
 	return nil

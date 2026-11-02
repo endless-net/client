@@ -51,6 +51,13 @@ func TestWindowsAssemblyDoesNotAcquireStateOrPipeDuringConstruction(t *testing.T
 	if r.state.gate.backend != nil || r.ipc.listener != nil || r.workers.Healthy() || logs.Len() != 0 {
 		t.Fatal("constructor started resource or logging")
 	}
+	if r.connection == nil || r.connection.factory == nil || r.connection.config.RuntimeID != r.pipe.InstanceID || r.connection.running || r.workers.connection == nil || r.controller == nil {
+		t.Fatal("connection backend missing or started during construction")
+	}
+	sample, err := r.connection.config.Clock.Sample()
+	if err != nil || sample.Epoch != r.pipe.InstanceID {
+		t.Fatal("runtime connection clock has a different authority epoch", err)
+	}
 	if _, err := os.Stat(directory); !os.IsNotExist(err) {
 		t.Fatal("constructor created or opened state", err)
 	}

@@ -69,7 +69,7 @@ func TestWorkerFailurePrecedesBlockedTelemetryDelivery(t *testing.T) {
 	releaseWorker := make(chan struct{})
 	app := fx.New(fx.NopLogger, fx.Invoke(func(lc fx.Lifecycle, shutdown fx.Shutdowner) error {
 		var err error
-		workers, err = NewWorkers(lc, shutdown, signals, func(context.Context) error { <-releaseWorker; return nil }, waitCancelled)
+		workers, err = NewWorkers(lc, shutdown, signals, func(context.Context) error { <-releaseWorker; return nil }, waitCancelled, waitCancelled)
 		return err
 	}))
 	if err := app.Start(budget(t)); err != nil {

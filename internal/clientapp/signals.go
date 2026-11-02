@@ -63,7 +63,7 @@ func (s *Signals) hook(component string, start, stop func(context.Context) error
 func (s *Signals) observe(ctx context.Context, component, phase string, operation func(context.Context) error) error {
 	// Every call site chooses a fixed value. Reject arbitrary strings before
 	// they can become a metric label, span attribute or log field.
-	if !s.valid() || operation == nil || (component != "state" && component != "ipc" && component != "workers" && component != "enrollment" && component != "control_http") || (phase != "start" && phase != "stop" && phase != "run") {
+	if !s.valid() || operation == nil || (component != "state" && component != "ipc" && component != "workers" && component != "enrollment" && component != "connection" && component != "control_http") || (phase != "start" && phase != "stop" && phase != "run") {
 		return ErrSignals
 	}
 	attributes := []attribute.KeyValue{attribute.String("component", component), attribute.String("phase", phase)}

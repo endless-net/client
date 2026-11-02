@@ -102,7 +102,7 @@ func (r *testRunner) Wake(ctx context.Context, profile, attempt string) error {
 	return r.err
 }
 func config(now *time.Time) Config {
-	return Config{Announcements: &testAnnouncements{now: now}, RuntimeID: runtimeID, DefaultProfileID: defaultID, DefaultControlOrigin: "https://control.example", ContractDigest: [32]byte{7}, Build: &clientv0.BuildIdentity{Version: "fixture", Commit: "fixture", Architecture: "amd64"}, MaxProfiles: 2, MaxDisplayNameBytes: 128, MaxHostnameBytes: 253, DefaultProfileDisplayName: "fixture-profile", Now: func() time.Time { return *now }}
+	return Config{WatchInterval: time.Millisecond, Announcements: &testAnnouncements{now: now}, RuntimeID: runtimeID, DefaultProfileID: defaultID, DefaultControlOrigin: "https://control.example", ContractDigest: [32]byte{7}, Build: &clientv0.BuildIdentity{Version: "fixture", Commit: "fixture", Architecture: "amd64"}, MaxProfiles: 2, MaxDisplayNameBytes: 128, MaxHostnameBytes: 253, DefaultProfileDisplayName: "fixture-profile", Now: func() time.Time { return *now }}
 }
 func fixture(t *testing.T) (*Controller, *memory, *testRunner, *time.Time) {
 	t.Helper()

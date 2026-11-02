@@ -12,6 +12,7 @@ import (
 	"time"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
+	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/localapi"
 	"github.com/endless-net/client/internal/localipc"
@@ -33,6 +34,7 @@ type WindowsRuntime struct {
 	ipc        *IPC
 	workers    *Workers
 	controller *localapi.Controller
+	connection *ConnectionWorker
 }
 
 func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output io.Writer) (*WindowsRuntime, error) {
@@ -52,6 +54,10 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 	id[6] = id[6]&15 | 64
 	id[8] = id[8]&63 | 128
 	instance := fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:])
+	clock, err := connectivity.NewWindowsClock(instance)
+	if err != nil {
+		return nil, ErrConfig
+	}
 	r := &WindowsRuntime{config: c, pipe: localipc.PipeConfig{InstanceID: instance, ServerSID: c.ServiceSID, ContractDigest: digest, HandshakeTimeout: c.HandshakeTimeout}}
 	r.App = fx.New(fx.NopLogger, fx.StartTimeout(c.StartTimeout), fx.StopTimeout(c.StopTimeout),
 		fx.Provide(func(lc fx.Lifecycle) (*Telemetry, error) {
@@ -74,6 +80,19 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			}
 			lc.Append(t.Signals().hook("control_http", func(ctx context.Context) error { return ctx.Err() }, func(context.Context) error { r.http.CloseIdleConnections(); return nil }))
 			bootstrap, err := control.NewBootstrap(r.http, int64(c.MaxBootstrapBytes), time.Now)
+			if err != nil {
+				return err
+			}
+			transport, err := connectivity.NewTransport(r.http, c.connectionHTTP())
+			if err != nil {
+				return err
+			}
+			lc.Append(t.Signals().hook("control_http", func(ctx context.Context) error { return ctx.Err() }, func(context.Context) error { transport.CloseIdleConnections(); return nil }))
+			factory, err := NewWindowsConnectionFactory(r.state.Store(), transport, c.connectionDriver(clock, bootstrap))
+			if err != nil {
+				return err
+			}
+			r.connection, err = NewConnectionWorker(r.state.Store(), factory, ConnectionWorkerConfig{Clock: clock, RuntimeID: instance, ReadTimeout: c.WriteBudget, PollInterval: c.PollInterval, CleanupTimeout: c.CleanupTimeout})
 			if err != nil {
 				return err
 			}
@@ -109,7 +128,7 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
+			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{Connections: r.connection, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
 			if err != nil {
 				return err
 			}
@@ -117,7 +136,7 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			r.workers, err = NewWorkers(lc, shutdown, t.Signals(), r.ipc.Run, worker.Run)
+			r.workers, err = NewWorkers(lc, shutdown, t.Signals(), r.ipc.Run, worker.Run, r.connection.Run)
 			return err
 		}))
 	if r.App.Err() != nil {
