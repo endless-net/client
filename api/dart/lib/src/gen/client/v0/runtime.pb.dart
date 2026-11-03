@@ -1688,6 +1688,7 @@ class Peer extends $pb.GeneratedMessage {
     $core.String? selectedEndpoint,
     $0.Timestamp? lastTransitionAt,
     $core.String? selectionReasonKey,
+    PeerTransportStatus? transport,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -1700,6 +1701,7 @@ class Peer extends $pb.GeneratedMessage {
     if (lastTransitionAt != null) result.lastTransitionAt = lastTransitionAt;
     if (selectionReasonKey != null)
       result.selectionReasonKey = selectionReasonKey;
+    if (transport != null) result.transport = transport;
     return result;
   }
 
@@ -1727,6 +1729,8 @@ class Peer extends $pb.GeneratedMessage {
     ..aOM<$0.Timestamp>(7, _omitFieldNames ? '' : 'lastTransitionAt',
         subBuilder: $0.Timestamp.create)
     ..aOS(8, _omitFieldNames ? '' : 'selectionReasonKey')
+    ..aOM<PeerTransportStatus>(9, _omitFieldNames ? '' : 'transport',
+        subBuilder: PeerTransportStatus.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1808,6 +1812,192 @@ class Peer extends $pb.GeneratedMessage {
   $core.bool hasSelectionReasonKey() => $_has(7);
   @$pb.TagNumber(8)
   void clearSelectionReasonKey() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  PeerTransportStatus get transport => $_getN(8);
+  @$pb.TagNumber(9)
+  set transport(PeerTransportStatus value) => $_setField(9, value);
+  @$pb.TagNumber(9)
+  $core.bool hasTransport() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearTransport() => $_clearField(9);
+  @$pb.TagNumber(9)
+  PeerTransportStatus ensureTransport() => $_ensure(8);
+}
+
+class PeerTransportStatus extends $pb.GeneratedMessage {
+  factory PeerTransportStatus({
+    $core.String? peerId,
+    PathKind? selectedPath,
+    $core.String? engine,
+    $core.String? protocolVersion,
+    $core.String? transportProfileId,
+    $fixnum.Int64? transportProfileRevision,
+    TransportSearchState? searchState,
+    $core.String? reasonKey,
+    $0.Timestamp? checkedAt,
+    $0.Timestamp? nextSearchAt,
+  }) {
+    final result = create();
+    if (peerId != null) result.peerId = peerId;
+    if (selectedPath != null) result.selectedPath = selectedPath;
+    if (engine != null) result.engine = engine;
+    if (protocolVersion != null) result.protocolVersion = protocolVersion;
+    if (transportProfileId != null)
+      result.transportProfileId = transportProfileId;
+    if (transportProfileRevision != null)
+      result.transportProfileRevision = transportProfileRevision;
+    if (searchState != null) result.searchState = searchState;
+    if (reasonKey != null) result.reasonKey = reasonKey;
+    if (checkedAt != null) result.checkedAt = checkedAt;
+    if (nextSearchAt != null) result.nextSearchAt = nextSearchAt;
+    return result;
+  }
+
+  PeerTransportStatus._();
+
+  factory PeerTransportStatus.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PeerTransportStatus.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PeerTransportStatus',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'peerId')
+    ..aE<PathKind>(2, _omitFieldNames ? '' : 'selectedPath',
+        enumValues: PathKind.values)
+    ..aOS(3, _omitFieldNames ? '' : 'engine')
+    ..aOS(4, _omitFieldNames ? '' : 'protocolVersion')
+    ..aOS(5, _omitFieldNames ? '' : 'transportProfileId')
+    ..a<$fixnum.Int64>(6, _omitFieldNames ? '' : 'transportProfileRevision',
+        $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
+    ..aE<TransportSearchState>(7, _omitFieldNames ? '' : 'searchState',
+        enumValues: TransportSearchState.values)
+    ..aOS(8, _omitFieldNames ? '' : 'reasonKey')
+    ..aOM<$0.Timestamp>(9, _omitFieldNames ? '' : 'checkedAt',
+        subBuilder: $0.Timestamp.create)
+    ..aOM<$0.Timestamp>(10, _omitFieldNames ? '' : 'nextSearchAt',
+        subBuilder: $0.Timestamp.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PeerTransportStatus clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PeerTransportStatus copyWith(void Function(PeerTransportStatus) updates) =>
+      super.copyWith((message) => updates(message as PeerTransportStatus))
+          as PeerTransportStatus;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PeerTransportStatus create() => PeerTransportStatus._();
+  @$core.override
+  PeerTransportStatus createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static PeerTransportStatus getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<PeerTransportStatus>(create);
+  static PeerTransportStatus? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get peerId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set peerId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPeerId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPeerId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  PathKind get selectedPath => $_getN(1);
+  @$pb.TagNumber(2)
+  set selectedPath(PathKind value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSelectedPath() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSelectedPath() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get engine => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set engine($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasEngine() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearEngine() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get protocolVersion => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set protocolVersion($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasProtocolVersion() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearProtocolVersion() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get transportProfileId => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set transportProfileId($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasTransportProfileId() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearTransportProfileId() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $fixnum.Int64 get transportProfileRevision => $_getI64(5);
+  @$pb.TagNumber(6)
+  set transportProfileRevision($fixnum.Int64 value) => $_setInt64(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasTransportProfileRevision() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearTransportProfileRevision() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  TransportSearchState get searchState => $_getN(6);
+  @$pb.TagNumber(7)
+  set searchState(TransportSearchState value) => $_setField(7, value);
+  @$pb.TagNumber(7)
+  $core.bool hasSearchState() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearSearchState() => $_clearField(7);
+
+  /// Finite Client-owned reason key, never an upstream/raw error string.
+  @$pb.TagNumber(8)
+  $core.String get reasonKey => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set reasonKey($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasReasonKey() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearReasonKey() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $0.Timestamp get checkedAt => $_getN(8);
+  @$pb.TagNumber(9)
+  set checkedAt($0.Timestamp value) => $_setField(9, value);
+  @$pb.TagNumber(9)
+  $core.bool hasCheckedAt() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearCheckedAt() => $_clearField(9);
+  @$pb.TagNumber(9)
+  $0.Timestamp ensureCheckedAt() => $_ensure(8);
+
+  @$pb.TagNumber(10)
+  $0.Timestamp get nextSearchAt => $_getN(9);
+  @$pb.TagNumber(10)
+  set nextSearchAt($0.Timestamp value) => $_setField(10, value);
+  @$pb.TagNumber(10)
+  $core.bool hasNextSearchAt() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearNextSearchAt() => $_clearField(10);
+  @$pb.TagNumber(10)
+  $0.Timestamp ensureNextSearchAt() => $_ensure(9);
 }
 
 class AgentStatus extends $pb.GeneratedMessage {
@@ -2183,6 +2373,7 @@ class Status extends $pb.GeneratedMessage {
     $core.String? routeTable,
     ConnectionPhase? connectionPhase,
     CredentialStatus? credential,
+    $core.Iterable<PeerTransportStatus>? peerTransports,
   }) {
     final result = create();
     if (metadata != null) result.metadata = metadata;
@@ -2211,6 +2402,7 @@ class Status extends $pb.GeneratedMessage {
     if (routeTable != null) result.routeTable = routeTable;
     if (connectionPhase != null) result.connectionPhase = connectionPhase;
     if (credential != null) result.credential = credential;
+    if (peerTransports != null) result.peerTransports.addAll(peerTransports);
     return result;
   }
 
@@ -2269,6 +2461,8 @@ class Status extends $pb.GeneratedMessage {
         enumValues: ConnectionPhase.values)
     ..aOM<CredentialStatus>(28, _omitFieldNames ? '' : 'credential',
         subBuilder: CredentialStatus.create)
+    ..pPM<PeerTransportStatus>(29, _omitFieldNames ? '' : 'peerTransports',
+        subBuilder: PeerTransportStatus.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2509,6 +2703,9 @@ class Status extends $pb.GeneratedMessage {
   void clearCredential() => $_clearField(28);
   @$pb.TagNumber(28)
   CredentialStatus ensureCredential() => $_ensure(24);
+
+  @$pb.TagNumber(29)
+  $pb.PbList<PeerTransportStatus> get peerTransports => $_getList(25);
 }
 
 class TunnelPeer extends $pb.GeneratedMessage {

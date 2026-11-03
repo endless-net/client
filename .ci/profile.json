@@ -21,6 +21,13 @@
       "path": "api/tooling/dart",
       "kind": "dart",
       "unit": []
+    },
+    {
+      "path": "api/transport",
+      "kind": "json",
+      "unit": [
+        "fixtures/cases.json"
+      ]
     }
   ],
   "artifacts": [

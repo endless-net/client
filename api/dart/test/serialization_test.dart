@@ -67,6 +67,45 @@ void main() {
     expect(result.committedNetworkRevision, Int64.ZERO);
   });
 
+  test('007 working Relay and Direct search remain independent', () {
+    final status = Status(
+      serviceState: ServiceState.SERVICE_STATE_CONNECTED,
+      connectionPhase: ConnectionPhase.CONNECTION_PHASE_CONNECTED,
+      peerTransports: [
+        PeerTransportStatus(
+          peerId: 'peer',
+          selectedPath: PathKind.PATH_KIND_RELAY,
+          engine: 'wireguard',
+          protocolVersion: '1',
+          transportProfileId: 'wg',
+          transportProfileRevision: Int64.parseInt('9007199254740993'),
+          searchState: TransportSearchState.TRANSPORT_SEARCH_STATE_SEARCHING,
+          reasonKey: 'client.transport.searching',
+        ),
+      ],
+    );
+    final decoded = Status.fromBuffer(status.writeToBuffer());
+    expect(decoded.serviceState, ServiceState.SERVICE_STATE_CONNECTED);
+    expect(
+      decoded.peerTransports.single.selectedPath,
+      PathKind.PATH_KIND_RELAY,
+    );
+    expect(
+      decoded.peerTransports.single.searchState,
+      TransportSearchState.TRANSPORT_SEARCH_STATE_SEARCHING,
+    );
+    expect(
+      decoded.peerTransports.single.transportProfileRevision.toString(),
+      '9007199254740993',
+    );
+    expect(
+      PeerTransportStatus(
+        searchState: TransportSearchState.TRANSPORT_SEARCH_STATE_UNSUPPORTED,
+      ).selectedPath,
+      PathKind.PATH_KIND_UNSPECIFIED,
+    );
+  });
+
   test('003 request lookup and uncertain enrollment stay separate', () {
     final lookup = GetEnrollmentAttemptRequest(
       profile: ProfileRef(profileId: 'profile-fixture'),

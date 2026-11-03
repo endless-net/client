@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "kind": "challenge",
+  "account_id": "account",
+  "network_id": "network",
+  "source_node_id": "a",
+  "destination_node_id": "b",
+  "source_public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+  "destination_public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+  "source_generation": 4,
+  "destination_generation": 9,
+  "network_revision": 9007199254740993,
+  "profile_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "candidate_id": "11111111111111111111111111111111",
+  "nonce": null
+}

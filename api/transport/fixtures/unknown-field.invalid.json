@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "id": "awg",
+  "revision": 9007199254740993,
+  "engine": "amneziawg",
+  "protocol_version": "3.1",
+  "prelude": [
+    {
+      "delay_ms": 10,
+      "segments": [
+        {
+          "bytes": "AQID"
+        },
+        {
+          "random": 16
+        }
+      ]
+    }
+  ],
+  "awg": {
+    "headers": [
+      {
+        "min": 100,
+        "max": 199
+      },
+      {
+        "min": 200,
+        "max": 299
+      },
+      {
+        "min": 300,
+        "max": 399
+      },
+      {
+        "min": 400,
+        "max": 499
+      }
+    ],
+    "padding": [
+      12,
+      16,
+      20,
+      24
+    ],
+    "header_protection_key": "CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk=",
+    "content_padding": {
+      "min": 0,
+      "max": 32
+    },
+    "random_trailers": true,
+    "disable_cookies": true
+  },
+  "script": "exec"
+}

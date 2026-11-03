@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "engines": [
+    {
+      "engine": "wireguard",
+      "protocol_version": "1",
+      "profile_version": 1
+    },
+    {
+      "engine": "amneziawg",
+      "protocol_version": "3.1",
+      "profile_version": 1
+    },
+    {
+      "engine": "wireguard",
+      "protocol_version": "1",
+      "profile_version": 1
+    }
+  ]
+}

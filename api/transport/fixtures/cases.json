@@ -1,0 +1,176 @@
+[
+  {
+    "name": "wg.valid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/wg.valid.json",
+    "valid": true
+  },
+  {
+    "name": "awg.valid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/awg.valid.json",
+    "valid": true
+  },
+  {
+    "name": "unknown-field.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/unknown-field.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "case-alias.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/case-alias.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "unknown-engine.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/unknown-engine.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "unknown-version.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/unknown-version.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "wrong-protocol.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/wrong-protocol.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "null-prelude.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/null-prelude.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "too-many-datagrams.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/too-many-datagrams.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "zero-revision.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/zero-revision.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "missing-ID.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/missing-ID.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "short-header-key.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/short-header-key.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "zero-header-key.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/zero-header-key.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "unknown-parameter.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/unknown-parameter.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "short-padding.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/short-padding.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "small-padding.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/small-padding.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "random-overflow.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/random-overflow.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "two-primitives.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/two-primitives.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "empty-primitive.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/empty-primitive.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "nested-null.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Profile",
+    "instance": "fixtures/nested-null.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "capabilities.valid",
+    "schema": "schemas/transport.schema.json#/$defs/Capabilities",
+    "instance": "fixtures/capabilities.valid.json",
+    "valid": true
+  },
+  {
+    "name": "duplicate-capability.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Capabilities",
+    "instance": "fixtures/duplicate-capability.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "no-capability.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Capabilities",
+    "instance": "fixtures/no-capability.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "unknown-capability-version.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Capabilities",
+    "instance": "fixtures/unknown-capability-version.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "control.valid",
+    "schema": "schemas/transport.schema.json#/$defs/Control",
+    "instance": "fixtures/control.valid.json",
+    "valid": true
+  },
+  {
+    "name": "control-zero-generation.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Control",
+    "instance": "fixtures/control-zero-generation.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "control-short-nonce.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Control",
+    "instance": "fixtures/control-short-nonce.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "control-unknown-kind.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Control",
+    "instance": "fixtures/control-unknown-kind.invalid.json",
+    "valid": false
+  },
+  {
+    "name": "control-null.invalid",
+    "schema": "schemas/transport.schema.json#/$defs/Control",
+    "instance": "fixtures/control-null.invalid.json",
+    "valid": false
+  }
+]

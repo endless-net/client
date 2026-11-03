@@ -287,6 +287,27 @@ final $typed_data.Uint8List connectionPhaseDescriptor = $convert.base64Decode(
     'RUNUSU5HEAISHgoaQ09OTkVDVElPTl9QSEFTRV9DT05ORUNURUQQAxIiCh5DT05ORUNUSU9OX1'
     'BIQVNFX0RJU0NPTk5FQ1RJTkcQBA==');
 
+@$core.Deprecated('Use transportSearchStateDescriptor instead')
+const TransportSearchState$json = {
+  '1': 'TransportSearchState',
+  '2': [
+    {'1': 'TRANSPORT_SEARCH_STATE_UNSPECIFIED', '2': 0},
+    {'1': 'TRANSPORT_SEARCH_STATE_IDLE', '2': 1},
+    {'1': 'TRANSPORT_SEARCH_STATE_SEARCHING', '2': 2},
+    {'1': 'TRANSPORT_SEARCH_STATE_BACKOFF', '2': 3},
+    {'1': 'TRANSPORT_SEARCH_STATE_UNSUPPORTED', '2': 4},
+    {'1': 'TRANSPORT_SEARCH_STATE_EXHAUSTED', '2': 5},
+  ],
+};
+
+/// Descriptor for `TransportSearchState`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List transportSearchStateDescriptor = $convert.base64Decode(
+    'ChRUcmFuc3BvcnRTZWFyY2hTdGF0ZRImCiJUUkFOU1BPUlRfU0VBUkNIX1NUQVRFX1VOU1BFQ0'
+    'lGSUVEEAASHwobVFJBTlNQT1JUX1NFQVJDSF9TVEFURV9JRExFEAESJAogVFJBTlNQT1JUX1NF'
+    'QVJDSF9TVEFURV9TRUFSQ0hJTkcQAhIiCh5UUkFOU1BPUlRfU0VBUkNIX1NUQVRFX0JBQ0tPRk'
+    'YQAxImCiJUUkFOU1BPUlRfU0VBUkNIX1NUQVRFX1VOU1VQUE9SVEVEEAQSJAogVFJBTlNQT1JU'
+    'X1NFQVJDSF9TVEFURV9FWEhBVVNURUQQBQ==');
+
 @$core.Deprecated('Use enrollmentBrowserActionDescriptor instead')
 const EnrollmentBrowserAction$json = {
   '1': 'EnrollmentBrowserAction',
@@ -955,6 +976,14 @@ const Peer$json = {
       '5': 9,
       '10': 'selectionReasonKey'
     },
+    {
+      '1': 'transport',
+      '3': 9,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.PeerTransportStatus',
+      '10': 'transport'
+    },
   ],
 };
 
@@ -966,7 +995,78 @@ final $typed_data.Uint8List peerDescriptor = $convert.base64Decode(
     'BhdGgYBSABKA4yEy5jbGllbnQudjAuUGF0aEtpbmRSDHNlbGVjdGVkUGF0aBIrChFzZWxlY3Rl'
     'ZF9lbmRwb2ludBgGIAEoCVIQc2VsZWN0ZWRFbmRwb2ludBJIChJsYXN0X3RyYW5zaXRpb25fYX'
     'QYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wUhBsYXN0VHJhbnNpdGlvbkF0EjAK'
-    'FHNlbGVjdGlvbl9yZWFzb25fa2V5GAggASgJUhJzZWxlY3Rpb25SZWFzb25LZXk=');
+    'FHNlbGVjdGlvbl9yZWFzb25fa2V5GAggASgJUhJzZWxlY3Rpb25SZWFzb25LZXkSPAoJdHJhbn'
+    'Nwb3J0GAkgASgLMh4uY2xpZW50LnYwLlBlZXJUcmFuc3BvcnRTdGF0dXNSCXRyYW5zcG9ydA==');
+
+@$core.Deprecated('Use peerTransportStatusDescriptor instead')
+const PeerTransportStatus$json = {
+  '1': 'PeerTransportStatus',
+  '2': [
+    {'1': 'peer_id', '3': 1, '4': 1, '5': 9, '10': 'peerId'},
+    {
+      '1': 'selected_path',
+      '3': 2,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.PathKind',
+      '10': 'selectedPath'
+    },
+    {'1': 'engine', '3': 3, '4': 1, '5': 9, '10': 'engine'},
+    {'1': 'protocol_version', '3': 4, '4': 1, '5': 9, '10': 'protocolVersion'},
+    {
+      '1': 'transport_profile_id',
+      '3': 5,
+      '4': 1,
+      '5': 9,
+      '10': 'transportProfileId'
+    },
+    {
+      '1': 'transport_profile_revision',
+      '3': 6,
+      '4': 1,
+      '5': 4,
+      '10': 'transportProfileRevision'
+    },
+    {
+      '1': 'search_state',
+      '3': 7,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.TransportSearchState',
+      '10': 'searchState'
+    },
+    {'1': 'reason_key', '3': 8, '4': 1, '5': 9, '10': 'reasonKey'},
+    {
+      '1': 'checked_at',
+      '3': 9,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'checkedAt'
+    },
+    {
+      '1': 'next_search_at',
+      '3': 10,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'nextSearchAt'
+    },
+  ],
+};
+
+/// Descriptor for `PeerTransportStatus`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List peerTransportStatusDescriptor = $convert.base64Decode(
+    'ChNQZWVyVHJhbnNwb3J0U3RhdHVzEhcKB3BlZXJfaWQYASABKAlSBnBlZXJJZBI4Cg1zZWxlY3'
+    'RlZF9wYXRoGAIgASgOMhMuY2xpZW50LnYwLlBhdGhLaW5kUgxzZWxlY3RlZFBhdGgSFgoGZW5n'
+    'aW5lGAMgASgJUgZlbmdpbmUSKQoQcHJvdG9jb2xfdmVyc2lvbhgEIAEoCVIPcHJvdG9jb2xWZX'
+    'JzaW9uEjAKFHRyYW5zcG9ydF9wcm9maWxlX2lkGAUgASgJUhJ0cmFuc3BvcnRQcm9maWxlSWQS'
+    'PAoadHJhbnNwb3J0X3Byb2ZpbGVfcmV2aXNpb24YBiABKARSGHRyYW5zcG9ydFByb2ZpbGVSZX'
+    'Zpc2lvbhJCCgxzZWFyY2hfc3RhdGUYByABKA4yHy5jbGllbnQudjAuVHJhbnNwb3J0U2VhcmNo'
+    'U3RhdGVSC3NlYXJjaFN0YXRlEh0KCnJlYXNvbl9rZXkYCCABKAlSCXJlYXNvbktleRI5CgpjaG'
+    'Vja2VkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcFIJY2hlY2tlZEF0EkAK'
+    'Dm5leHRfc2VhcmNoX2F0GAogASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcFIMbmV4dF'
+    'NlYXJjaEF0');
 
 @$core.Deprecated('Use agentStatusDescriptor instead')
 const AgentStatus$json = {
@@ -1244,6 +1344,14 @@ const Status$json = {
       '6': '.client.v0.CredentialStatus',
       '10': 'credential'
     },
+    {
+      '1': 'peer_transports',
+      '3': 29,
+      '4': 3,
+      '5': 11,
+      '6': '.client.v0.PeerTransportStatus',
+      '10': 'peerTransports'
+    },
   ],
 };
 
@@ -1270,7 +1378,8 @@ final $typed_data.Uint8List statusDescriptor = $convert.base64Decode(
     'KAsyEi5jbGllbnQudjAuRmFpbHVyZVIIZmFpbHVyZXMSHwoLcm91dGVfdGFibGUYGSABKAlSCn'
     'JvdXRlVGFibGUSRQoQY29ubmVjdGlvbl9waGFzZRgaIAEoDjIaLmNsaWVudC52MC5Db25uZWN0'
     'aW9uUGhhc2VSD2Nvbm5lY3Rpb25QaGFzZRI7CgpjcmVkZW50aWFsGBwgASgLMhsuY2xpZW50Ln'
-    'YwLkNyZWRlbnRpYWxTdGF0dXNSCmNyZWRlbnRpYWw=');
+    'YwLkNyZWRlbnRpYWxTdGF0dXNSCmNyZWRlbnRpYWwSRwoPcGVlcl90cmFuc3BvcnRzGB0gAygL'
+    'Mh4uY2xpZW50LnYwLlBlZXJUcmFuc3BvcnRTdGF0dXNSDnBlZXJUcmFuc3BvcnRz');
 
 @$core.Deprecated('Use tunnelPeerDescriptor instead')
 const TunnelPeer$json = {

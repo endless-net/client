@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "wg",
+  "revision": 9007199254740993,
+  "engine": "wireguard",
+  "protocol_version": "1",
+  "prelude": []
+}

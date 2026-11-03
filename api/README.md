@@ -1,5 +1,44 @@
 # Client API: контрактный candidate
 
+
+## Дополнение007 — transport profile SDK и IPC, api/v0.4.0
+
+Пакет `transport` владеет декларативными Profile/Capabilities/Control v1 и
+[формальной JSON schema](transport/schemas/transport.schema.json). Profile не
+содержит endpoints, grant, script/raw UAPI/CPS или криптографического кода.
+Принимаются встроенные `wireguard/1` и `amneziawg/3.1`; новые обязательные
+возможности требуют обновления binary. Prelude содержит только literal bytes
+и bounded CSPRNG counts с задержкой внутри исходного probe budget. AWG fields —
+whitelist headers/padding/header protection/content padding/flags. Таймеры
+жизни криптографических ключей сохраняют defaults закреплённого движка.
+
+DecodeProfile/DecodeCapabilities/DecodeControl отвергают duplicate/unknown/
+case-alias/null/missing fields, некорректную base64 и выход за bounds до исполнения.
+CanonicalProfile/ProfileDigest связывают все параметры, ID/revision и порядок
+prelude, сохраняя uint64 без float. ValidateProfiles ограничивает ≤8 профилей
+на peer и уникальность IDs. Дополнительные условия Go SDK сверх JSON shape:
+непересекающиеся header ranges, порядок min/max, суммарные задержки/байты,
+лексикографическая роль proposer, различные identities и точное отражение
+bindings в MatchesReply. Это не проверка подписи, текущих прав, replay или пути.
+
+Profile≤64KiB; до16 prelude datagrams≤1200B; sum delays≤3000ms.
+Весь probe candidate ограничивается64KiB/cycle в runtime, включая crypto
+handshake и ответы; этот счётчик не заменяется одной лишь валидацией профиля.
+HeaderProtectionKey и literal templates — protected material, не UI/diagnostics.
+Получивший профиль обязан проверить текущую signed pair-bound Coordinator map.
+
+IPC Status.peer_transports и Peer.transport содержат только безопасную
+PeerTransportStatus: фактический путь, engine/protocol, profile ID/revision,
+search state и finite reason key. Relay+SEARCHING не означает Disconnected;
+ни handshake, ни selected transport не доказывают успех приложения. Private
+profile parameters/key/nonce/network fingerprint в IPC не экспортируются.
+
+Go/Dart SDK/descriptor сгенерированы pinned pipeline в двух идентичных проходах.
+Для adoption требуются успешный main CI, API release и exact published fetch.
+Root runtime закрепляет новый SDK отдельной зависимой поставкой; наличие
+контракта не подтверждает runtime adoption. Consumer не использует local
+replace/GOWORK/копию DTO.
+
 ## Контракт006 — удалённый отзыв, api/v0.3.0
 
 `ListNodeRevocationTargets`, `RevokeNodeAccess`, `GetNodeRevocation` доступны только

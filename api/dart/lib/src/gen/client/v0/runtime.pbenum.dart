@@ -451,5 +451,44 @@ class ConnectionPhase extends $pb.ProtobufEnum {
   const ConnectionPhase._(super.value, super.name);
 }
 
+/// Public observation only: no raw profile, obfuscation key, nonce or network
+/// fingerprint. A selected transport is not evidence of application availability.
+class TransportSearchState extends $pb.ProtobufEnum {
+  static const TransportSearchState TRANSPORT_SEARCH_STATE_UNSPECIFIED =
+      TransportSearchState._(
+          0, _omitEnumNames ? '' : 'TRANSPORT_SEARCH_STATE_UNSPECIFIED');
+  static const TransportSearchState TRANSPORT_SEARCH_STATE_IDLE =
+      TransportSearchState._(
+          1, _omitEnumNames ? '' : 'TRANSPORT_SEARCH_STATE_IDLE');
+  static const TransportSearchState TRANSPORT_SEARCH_STATE_SEARCHING =
+      TransportSearchState._(
+          2, _omitEnumNames ? '' : 'TRANSPORT_SEARCH_STATE_SEARCHING');
+  static const TransportSearchState TRANSPORT_SEARCH_STATE_BACKOFF =
+      TransportSearchState._(
+          3, _omitEnumNames ? '' : 'TRANSPORT_SEARCH_STATE_BACKOFF');
+  static const TransportSearchState TRANSPORT_SEARCH_STATE_UNSUPPORTED =
+      TransportSearchState._(
+          4, _omitEnumNames ? '' : 'TRANSPORT_SEARCH_STATE_UNSUPPORTED');
+  static const TransportSearchState TRANSPORT_SEARCH_STATE_EXHAUSTED =
+      TransportSearchState._(
+          5, _omitEnumNames ? '' : 'TRANSPORT_SEARCH_STATE_EXHAUSTED');
+
+  static const $core.List<TransportSearchState> values = <TransportSearchState>[
+    TRANSPORT_SEARCH_STATE_UNSPECIFIED,
+    TRANSPORT_SEARCH_STATE_IDLE,
+    TRANSPORT_SEARCH_STATE_SEARCHING,
+    TRANSPORT_SEARCH_STATE_BACKOFF,
+    TRANSPORT_SEARCH_STATE_UNSUPPORTED,
+    TRANSPORT_SEARCH_STATE_EXHAUSTED,
+  ];
+
+  static final $core.List<TransportSearchState?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 5);
+  static TransportSearchState? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const TransportSearchState._(super.value, super.name);
+}
+
 const $core.bool _omitEnumNames =
     $core.bool.fromEnvironment('protobuf.omit_enum_names');

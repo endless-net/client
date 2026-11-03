@@ -1,0 +1,444 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:endlessnet:client:transport:v1",
+  "title": "Client transport profile/capability/control v1",
+  "$defs": {
+    "Range": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ]
+    },
+    "Segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+          "minLength": 4,
+          "maxLength": 1600
+        },
+        "random": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1200
+        }
+      },
+      "required": [],
+      "oneOf": [
+        {
+          "required": [
+            "bytes"
+          ],
+          "not": {
+            "required": [
+              "random"
+            ]
+          }
+        },
+        {
+          "required": [
+            "random"
+          ],
+          "not": {
+            "required": [
+              "bytes"
+            ]
+          }
+        }
+      ]
+    },
+    "Datagram": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "delay_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3000
+        },
+        "segments": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1200,
+          "items": {
+            "$ref": "#/$defs/Segment"
+          }
+        }
+      },
+      "required": [
+        "delay_ms",
+        "segments"
+      ]
+    },
+    "AWG": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "headers": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/Range"
+          }
+        },
+        "padding": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "integer",
+            "minimum": 12,
+            "maximum": 1200
+          }
+        },
+        "header_protection_key": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+          "minLength": 44,
+          "maxLength": 44,
+          "not": {
+            "const": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          }
+        },
+        "content_padding": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            },
+            "max": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "min",
+            "max"
+          ]
+        },
+        "random_trailers": {
+          "type": "boolean"
+        },
+        "disable_cookies": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "headers",
+        "padding",
+        "header_protection_key",
+        "content_padding",
+        "random_trailers",
+        "disable_cookies"
+      ]
+    },
+    "Profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^\\S+$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709551615
+        },
+        "engine": {
+          "enum": [
+            "wireguard",
+            "amneziawg"
+          ]
+        },
+        "protocol_version": {
+          "enum": [
+            "1",
+            "3.1"
+          ]
+        },
+        "prelude": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/Datagram"
+          }
+        },
+        "awg": {
+          "$ref": "#/$defs/AWG"
+        }
+      },
+      "required": [
+        "version",
+        "id",
+        "revision",
+        "engine",
+        "protocol_version",
+        "prelude"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "engine": {
+                "const": "wireguard"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "protocol_version": {
+                "const": "1"
+              }
+            },
+            "not": {
+              "required": [
+                "awg"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "engine": {
+                "const": "amneziawg"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "awg"
+            ],
+            "properties": {
+              "protocol_version": {
+                "const": "3.1"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "engine": {
+          "enum": [
+            "wireguard",
+            "amneziawg"
+          ]
+        },
+        "protocol_version": {
+          "enum": [
+            "1",
+            "3.1"
+          ]
+        },
+        "profile_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "engine",
+        "protocol_version",
+        "profile_version"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "engine": {
+                "const": "wireguard"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "protocol_version": {
+                "const": "1"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "engine": {
+                "const": "amneziawg"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "protocol_version": {
+                "const": "3.1"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "engines": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        }
+      },
+      "required": [
+        "version",
+        "engines"
+      ]
+    },
+    "Control": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "kind": {
+          "enum": [
+            "challenge",
+            "echo",
+            "prepare",
+            "prepared",
+            "commit",
+            "committed"
+          ]
+        },
+        "account_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^\\S+$"
+        },
+        "network_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^\\S+$"
+        },
+        "source_node_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^\\S+$"
+        },
+        "destination_node_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^\\S+$"
+        },
+        "source_public_key": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+          "minLength": 44,
+          "maxLength": 44,
+          "not": {
+            "const": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          }
+        },
+        "destination_public_key": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+          "minLength": 44,
+          "maxLength": 44,
+          "not": {
+            "const": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          }
+        },
+        "source_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709551615
+        },
+        "destination_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709551615
+        },
+        "network_revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709551615
+        },
+        "profile_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "candidate_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$",
+          "not": {
+            "const": "00000000000000000000000000000000"
+          }
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+          "minLength": 44,
+          "maxLength": 44,
+          "not": {
+            "const": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          }
+        }
+      },
+      "required": [
+        "version",
+        "kind",
+        "account_id",
+        "network_id",
+        "source_node_id",
+        "destination_node_id",
+        "source_public_key",
+        "destination_public_key",
+        "source_generation",
+        "destination_generation",
+        "network_revision",
+        "profile_digest",
+        "candidate_id",
+        "nonce"
+      ]
+    }
+  },
+  "description": "Shape validation only. Go SDK additionally checks canonical base64, byte/combined limits, nonoverlapping ranges, distinct identities and proposer/acknowledger ordering; current authorization/signature/path/replay are caller responsibilities."
+}

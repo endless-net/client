@@ -279,6 +279,32 @@ message Peer {
   string selected_endpoint = 6;
   google.protobuf.Timestamp last_transition_at = 7;
   string selection_reason_key = 8;
+  PeerTransportStatus transport = 9;
+}
+
+// Public observation only: no raw profile, obfuscation key, nonce or network
+// fingerprint. A selected transport is not evidence of application availability.
+enum TransportSearchState {
+  TRANSPORT_SEARCH_STATE_UNSPECIFIED = 0;
+  TRANSPORT_SEARCH_STATE_IDLE = 1;
+  TRANSPORT_SEARCH_STATE_SEARCHING = 2;
+  TRANSPORT_SEARCH_STATE_BACKOFF = 3;
+  TRANSPORT_SEARCH_STATE_UNSUPPORTED = 4;
+  TRANSPORT_SEARCH_STATE_EXHAUSTED = 5;
+}
+
+message PeerTransportStatus {
+  string peer_id = 1;
+  PathKind selected_path = 2;
+  string engine = 3;
+  string protocol_version = 4;
+  string transport_profile_id = 5;
+  uint64 transport_profile_revision = 6;
+  TransportSearchState search_state = 7;
+  // Finite Client-owned reason key, never an upstream/raw error string.
+  string reason_key = 8;
+  google.protobuf.Timestamp checked_at = 9;
+  google.protobuf.Timestamp next_search_at = 10;
 }
 
 message AgentStatus {
@@ -336,6 +362,7 @@ message Status {
   // Observable on the initial snapshot, including for a newly attached UI.
   ConnectionPhase connection_phase = 26;
   CredentialStatus credential = 28;
+  repeated PeerTransportStatus peer_transports = 29;
 }
 
 message TunnelPeer {
