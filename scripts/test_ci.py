@@ -15,6 +15,119 @@ spec.loader.exec_module(ci)
 
 
 class PublicCI(unittest.TestCase):
+    def crypto_fixture(self, root):
+        entries = []
+        originals = {}
+        for module, directory in ci.CRYPTO_SOURCES.items():
+            worker = b"\nfunc (d *Device) RoutineEncryption() {\n crypto()\n}\n"
+            files = {"LICENSE": b"MIT fixture", "device/noise.go": b"unchanged crypto", "device/send.go": b"original queue" + worker}
+            where = root / directory
+            for name, data in files.items():
+                (where / name).parent.mkdir(parents=True, exist_ok=True)
+                (where / name).write_bytes(data)
+            patched = b"annotated queue" + worker
+            (where / "device/send.go").write_bytes(patched)
+            entries.append({"path": module, "version": "v3.1.0" if module.endswith("/v3") else "v0.1.0",
+                            "directory": directory, "sum": "h1:fixture", "go_mod_sum": "h1:modfixture",
+                            "origin": {"VCS": "git", "Hash": "a" * 40},
+                            "upstream_files": {n: ci.hashlib.sha256(d).hexdigest() for n, d in files.items()},
+                            "patched_files": {"device/send.go": ci.hashlib.sha256(patched).hexdigest()}})
+            originals[module] = files
+        (root / "third_party/sources.json").write_text(json.dumps({"schema": 1, "modules": entries}))
+        metadata = {"Require": [{"Path": e["path"], "Version": e["version"]} for e in entries],
+                    "Replace": [{"Old": {"Path": e["path"]}, "New": {"Path": "./" + e["directory"]}} for e in entries]}
+        return entries, originals, metadata
+
+
+    def test_crypto_sources_reject_tampering_and_unreviewed_paths(self):
+        for failure in (None, "tamper", "extra", "noise", "pin", "missing", "traversal", "symlink", "crypto-worker"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                entries, originals, metadata = self.crypto_fixture(root)
+                entry = entries[0]
+                where = root / entry["directory"]
+                if failure == "tamper":
+                    (where / "device/noise.go").write_bytes(b"changed")
+                elif failure == "extra":
+                    (where / "injected.go").write_bytes(b"extra")
+                elif failure == "noise":
+                    entry["patched_files"]["device/noise.go"] = entry["upstream_files"]["device/noise.go"]
+                elif failure == "pin":
+                    metadata["Require"][0]["Version"] = "v9.0.0"
+                elif failure == "missing":
+                    (root / "third_party/sources.json").unlink()
+                elif failure == "traversal":
+                    entry["upstream_files"]["../escaped.go"] = "b" * 64
+                elif failure == "symlink":
+                    if os.name != "posix":
+                        continue
+                    (where / "link.go").symlink_to(where / "device/noise.go")
+                elif failure == "crypto-worker":
+                    changed = (where / "device/send.go").read_bytes().replace(b"crypto()", b"changed()")
+                    (where / "device/send.go").write_bytes(changed)
+                    entry["patched_files"]["device/send.go"] = ci.hashlib.sha256(changed).hexdigest()
+                if failure not in ("missing",):
+                    (root / "third_party/sources.json").write_text(json.dumps({"schema": 1, "modules": entries}))
+                if failure:
+                    with self.assertRaises(ValueError):
+                        if failure == "crypto-worker":
+                            ci.verify_crypto_module(root, entry, originals[entry["path"]])
+                        else:
+                            ci.verify_crypto_sources(root, metadata, fetch=False)
+                else:
+                    self.assertEqual(ci.verify_crypto_sources(root, metadata, fetch=False), entries)
+                    for e in entries:
+                        ci.verify_crypto_module(root, e, originals[e["path"]])
+                    notices = ci.crypto_notices(root)
+                    self.assertEqual(set(notices), {"crypto-sources.json", "licenses/amneziawg-LICENSE.txt", "licenses/wireguard-LICENSE.txt"})
+                    self.assertEqual(notices["licenses/amneziawg-LICENSE.txt"][0], b"MIT fixture")
+                    self.assertEqual(json.loads(notices["crypto-sources.json"][0])[0]["patched_files"], entry["patched_files"])
+
+
+    def test_upstream_module_zip_checks_go_content_hash_and_inventory(self):
+        module, version = "example.org/fixture", "v0.1.0"
+        files = {"LICENSE": b"MIT fixture", "README.md": b"not shipped", ".github/test.yml": b"not shipped", "device/noise.go": b"crypto"}
+        digest = ci.hashlib.sha256()
+        data = ci.io.BytesIO()
+        with ci.zipfile.ZipFile(data, "w") as archive:
+            for name, content in sorted(files.items()):
+                full = module + "@" + version + "/" + name
+                archive.writestr(full, content)
+                digest.update((ci.hashlib.sha256(content).hexdigest() + "  " + full + "\n").encode())
+        checksum = "h1:" + ci.base64.b64encode(digest.digest()).decode()
+        self.assertEqual(ci.module_zip_files(data.getvalue(), module, version, checksum),
+                         {k: v for k, v in files.items() if k in {"LICENSE", "device/noise.go"}})
+        with self.assertRaisesRegex(ValueError, "h1 mismatch"):
+            ci.module_zip_files(data.getvalue(), module, version, "h1:wrong")
+        with self.assertRaisesRegex(ValueError, "invalid upstream module path"):
+            ci.module_zip_files(data.getvalue(), "example.org/other", version, checksum)
+
+
+    def test_upstream_crypto_audit_uses_original_versions_outside_checkout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            entries, _, _ = self.crypto_fixture(root)
+            (root / "go.mod").write_text("module fixture\n")
+            calls = []
+            def record(args, **kwargs):
+                where = kwargs["cwd"]
+                self.assertFalse(where.is_relative_to(root))
+                self.assertEqual(kwargs["env"]["GOWORK"], "off")
+                if args[0] == "govulncheck":
+                    self.assertEqual(args, ["govulncheck", "-scan=package", "./..."])
+                    source = (where / "audit.go").read_text()
+                    for entry in entries:
+                        self.assertIn(entry["path"] + "/device", source)
+                calls.append(args)
+                return ""
+            with patch.object(ci, "command", side_effect=record):
+                ci.audit_upstream_crypto(root, entries)
+            for entry in entries:
+                self.assertIn("-dropreplace=" + entry["path"], calls[0])
+            self.assertEqual(calls[1], ["go", "mod", "download", *[e["path"] for e in entries]])
+            self.assertEqual((root / "go.mod").read_text(), "module fixture\n")
+
+
     @unittest.skipUnless(os.name == "posix", "Bash fetch contract runs in Ubuntu CI")
     def test_private_api_fetch_denies_before_download_without_leaving_helper(self):
         script = Path(__file__).with_name("fetch-private-api.sh").resolve()
@@ -144,7 +257,7 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
                 (root / "cmd/client/main_windows.go").write_text(
                     'const clientAPIRevision = "' + revision + '"\n'
                     'const clientContractSHA256 = "' + digest + '"\n', encoding="utf-8")
-                module = {"Version": "v0.3.0", "Dir": str(sdk)}
+                module = {"Version": "v0.4.0", "Dir": str(sdk)}
                 download = {"Origin": {"Hash": revision}, "Dir": str(sdk)}
                 if failure == "origin":
                     download["Origin"]["Hash"] = "b" * 40

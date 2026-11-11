@@ -5,11 +5,13 @@ go 1.27.4
 require (
 	connectrpc.com/connect v1.19.1
 	github.com/Microsoft/go-winio v0.6.3
+	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260814
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/endless-net/billing/api v0.5.0
-	github.com/endless-net/client/api v0.3.0
-	github.com/endless-net/coordinator/api v0.8.1
+	github.com/endless-net/client/api v0.4.0
+	github.com/endless-net/coordinator/api v0.10.0
 	github.com/endless-net/identity/api v0.2.0
+	github.com/endless-net/relay/api v0.4.0
 	github.com/endless-net/signing/api v0.1.0
 	github.com/google/uuid v1.6.0
 	github.com/tailscale/wf v0.0.0-20240214030419-6fbb0a674ee6
@@ -31,7 +33,6 @@ require (
 require (
 	github.com/BurntSushi/toml v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/endless-net/relay/api v0.3.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -50,3 +51,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	honnef.co/go/tools v0.3.2 // indirect
 )
+
+replace github.com/amnezia-vpn/amneziawg-go/v3 => ./third_party/vendor/amneziawg
+
+replace github.com/tailscale/wireguard-go => ./third_party/vendor/wireguard

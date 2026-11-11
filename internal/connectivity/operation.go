@@ -30,10 +30,36 @@ func (b *OperationBudget) Active() bool {
 }
 
 func NewOperationBudget(clock Clock, profile string, generation uint64, receipt ClockSample, duration time.Duration) (*OperationBudget, error) {
-	if clock == nil || !identifier(profile) || generation == 0 || !receipt.valid() || duration <= 0 || duration > 30*time.Second || receipt.Uptime > time.Duration(1<<63-1)-duration {
+	return newCounterBudget(clock, profile, generation, receipt, duration, 30*time.Second)
+}
+
+func newCounterBudget(clock Clock, profile string, generation uint64, receipt ClockSample, duration, maximum time.Duration) (*OperationBudget, error) {
+	if clock == nil || !identifier(profile) || generation == 0 || !receipt.valid() || duration <= 0 || duration > maximum || receipt.Uptime > time.Duration(1<<63-1)-duration {
 		return nil, ErrConfig
 	}
 	return &OperationBudget{clock: clock, profile: profile, generation: generation, receipt: receipt, last: receipt, duration: duration}, nil
+}
+
+// RetryDelay cannot be used as a Connect/restore operation or completed as an
+// access outcome. It only measures the approved background-search cooldown.
+type RetryDelay struct{ budget *OperationBudget }
+
+func NewRetryDelay(clock Clock, profile string, generation uint64, receipt ClockSample, duration time.Duration) (*RetryDelay, error) {
+	if duration < 15*time.Second || duration > 300*time.Second {
+		return nil, ErrConfig
+	}
+	b, err := newCounterBudget(clock, profile, generation, receipt, duration, 300*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return &RetryDelay{budget: b}, nil
+}
+
+func (d *RetryDelay) Remaining() (time.Duration, error) {
+	if d == nil {
+		return 0, ErrConfig
+	}
+	return d.budget.Remaining()
 }
 
 func (b *OperationBudget) remainingLocked() (time.Duration, error) {

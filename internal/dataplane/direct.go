@@ -29,6 +29,7 @@ type DirectPath struct {
 type directPeer struct {
 	id, public string
 	endpoint   netip.AddrPort
+	binding    primaryPeerBinding
 	token      uint64
 }
 type directConfig struct {
@@ -81,12 +82,12 @@ func (t *directTracker) configure(peers []coordinator.Peer) error {
 		var key [32]byte
 		copy(key[:], raw)
 		old, exists := t.peers[key]
-		binding := directPeer{id: p.ID, public: p.PublicKey, endpoint: endpoint}
+		binding := directPeer{id: p.ID, public: p.PublicKey, endpoint: endpoint, binding: bindingForPrimaryPeer(p)}
 		state := directState{peer: binding}
 		if exists {
 			state.session = old.session
 			state.current = old.current
-			if old.peer.endpoint == endpoint && old.peer.id == p.ID {
+			if old.peer.endpoint == endpoint && old.peer.id == p.ID && old.peer.binding == binding.binding {
 				state = old
 				binding = old.peer
 			}

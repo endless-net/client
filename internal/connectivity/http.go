@@ -120,6 +120,9 @@ func validAnnouncement(p state.Profile, r coordinator.UpdateNodeEndpointRequest)
 	if p.Connection == nil || r.Generation == 0 || r.Generation != p.Connection.EndpointGeneration || len(r.Candidates) != 0 {
 		return false
 	}
+	if r.Transport != nil && (r.Transport.IntentGeneration != p.Connection.Generation || coordinator.ValidateTransportAdvertisement(*r.Transport) != nil) {
+		return false
+	}
 	want := "offline"
 	if p.Connection.Intent == state.IntentConnected {
 		want = "online"

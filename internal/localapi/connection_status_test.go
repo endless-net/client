@@ -50,6 +50,11 @@ func TestConnectionStatusRequiresCurrentGenerationMeasuredApplyAndPath(t *testin
 		t.Fatal(err)
 	}
 	online := connectivity.LocalObservation{Known: true, Applied: true, Permission: connectivity.Permission{NewFlows: true, ExistingFlows: true}, DirectPaths: 1, MapRevision: 8, Address: "100.64.0.7", PeerCount: 1}
+	online.PeerTransports = []*clientv0.PeerTransportStatus{{PeerId: "peer", SelectedPath: clientv0.PathKind_PATH_KIND_DIRECT, Engine: "amneziawg", ProtocolVersion: "3.1", TransportProfileId: "profile", TransportProfileRevision: 7, SearchState: clientv0.TransportSearchState_TRANSPORT_SEARCH_STATE_IDLE, ReasonKey: "client.transport.direct"}}
+	relay := online
+	relay.DirectPaths, relay.RelayPaths = 0, 1
+	unsupported := relay
+	unsupported.PeerTransports = []*clientv0.PeerTransportStatus{{PeerId: "peer", SelectedPath: clientv0.PathKind_PATH_KIND_RELAY, Engine: "wireguard", ProtocolVersion: "1", SearchState: clientv0.TransportSearchState_TRANSPORT_SEARCH_STATE_UNSUPPORTED, ReasonKey: "client.transport.capabilities_incompatible"}}
 	for _, tc := range []struct {
 		name      string
 		phase     connectivity.Phase
@@ -60,6 +65,9 @@ func TestConnectionStatusRequiresCurrentGenerationMeasuredApplyAndPath(t *testin
 	}{
 		{"pending", connectivity.PhaseConnecting, connectivity.LocalObservation{}, false, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTING},
 		{"applied_path", connectivity.PhaseConnected, online, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
+		{"applied_relay", connectivity.PhaseConnected, relay, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
+		{"relay_with_unsupported_direct", connectivity.PhaseConnected, unsupported, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
+		{"unsupported_stale_generation", connectivity.PhaseConnected, unsupported, true, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
 		{"busy_unknown", connectivity.PhaseConnected, connectivity.LocalObservation{}, false, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
 		{"stale_generation", connectivity.PhaseConnected, online, true, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
 		{"listener_without_path", connectivity.PhaseConnected, connectivity.LocalObservation{Known: true, Applied: true, Permission: online.Permission}, false, clientv0.ServiceState_SERVICE_STATE_DEGRADED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
@@ -79,11 +87,25 @@ func TestConnectionStatusRequiresCurrentGenerationMeasuredApplyAndPath(t *testin
 			if err != nil || got.Status.ServiceState != tc.want || got.Status.ConnectionPhase != tc.wantPhase || got.Status.Intent.DesiredState != clientv0.DesiredState_DESIRED_STATE_CONNECTED {
 				t.Fatal("intent, application and path conflated", got, err)
 			}
-			if tc.stale && (got.Status.MapRevision != 0 || got.Status.Agent != nil) {
+			if tc.stale && (got.Status.MapRevision != 0 || got.Status.Agent != nil || len(got.Status.PeerTransports) != 0) {
 				t.Fatal("stale backend generation leaked into current snapshot")
+			}
+			if !tc.stale && tc.local.Known && tc.local.Applied && (got.Status.Agent == nil || got.Status.Agent.RelayPathCount != tc.local.RelayPaths || got.Status.Agent.DirectPathCount != tc.local.DirectPaths) {
+				t.Fatal("measured path counts were lost in the producer IPC projection")
 			}
 			if got.Status.ControlState == clientv0.ControlState_CONTROL_STATE_READY && got.Status.ServiceState != clientv0.ServiceState_SERVICE_STATE_CONNECTED {
 				t.Fatal("unconfirmed path claimed ready control")
+			}
+			if !tc.stale && tc.local.Known && tc.local.Applied && len(tc.local.PeerTransports) > 0 {
+				expected := tc.local.PeerTransports[0]
+				if len(got.Status.PeerTransports) != 1 || got.Status.PeerTransports[0].TransportProfileRevision != expected.TransportProfileRevision || got.Status.PeerTransports[0].SearchState != expected.SearchState || got.Status.PeerTransports[0].SelectedPath != expected.SelectedPath || got.Status.PeerTransports[0].ReasonKey != expected.ReasonKey {
+					t.Fatal("public profile observation lost", got)
+				}
+				engine := expected.Engine
+				got.Status.PeerTransports[0].Engine = "reader mutation"
+				if tc.local.PeerTransports[0].Engine != engine {
+					t.Fatal("IPC response aliased runtime snapshot")
+				}
 			}
 		})
 	}

@@ -3,6 +3,7 @@ package connectivity
 import (
 	"time"
 
+	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/state"
 )
 
@@ -41,12 +42,13 @@ const (
 // grant, credential, key, native handle or journal contents. Unknown during a
 // native transition is intentional: status reads must not wait on an SDK call.
 type LocalObservation struct {
-	Known, Applied         bool
-	Permission             Permission
-	MapRevision            uint64
-	Address                string
-	PeerCount, DirectPaths uint32
-	GeneratedAt            time.Time
+	Known, Applied                     bool
+	Permission                         Permission
+	MapRevision                        uint64
+	Address                            string
+	PeerCount, DirectPaths, RelayPaths uint32
+	GeneratedAt                        time.Time
+	PeerTransports                     []*clientv0.PeerTransportStatus
 }
 
 type Observation struct {

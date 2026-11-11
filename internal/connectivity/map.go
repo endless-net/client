@@ -166,6 +166,10 @@ func (Map) GoString() string { return "[verified connectivity map]" }
 
 func (m Map) Denied() bool { return m.denied }
 
+// IntentGeneration is this verifier's protected local intent binding, not an
+// assertion taken from a peer advertisement or the map's optional profiles.
+func (m Map) IntentGeneration() uint64 { return m.generation }
+
 // CheckBinding fences a verified result against the latest protected local
 // profile. It neither verifies new input nor restores authority from a cursor.
 func (m Map) CheckBinding(p state.Profile, generation uint64) error {
@@ -283,6 +287,9 @@ func (v *Verifier) verify(parent context.Context, raw []byte, previous *state.Ma
 		return empty, ErrResync
 	}
 	denied := value.Node.Status == "revoked"
+	if relayMap(*value, trust, now) != nil {
+		return empty, ErrMap
+	}
 	if v.profile(*value, now, denied) != nil {
 		return empty, ErrMap
 	}
@@ -317,7 +324,7 @@ func wireGuardKey(value string) bool {
 
 func (v *Verifier) profile(value coordinator.NetworkMapSnapshot, now time.Time, denied bool) error {
 	n := value.Network
-	if len(value.STUNEndpoints)+len(value.Relays) != 0 || value.RelayCredential != nil || n.IPv6CIDR != "" || len(n.DNS) != 0 || n.DNSConfig != nil || n.ClientPolicy != nil || len(n.Applications)+len(n.Services)+len(n.SharePeerGrants) != 0 || value.Node.AssignedIPv6 != "" || len(value.Node.AdvertisedIPs) != 0 || len(value.Peers) > v.config.MaxPeers {
+	if len(value.STUNEndpoints) != 0 || n.IPv6CIDR != "" || len(n.DNS) != 0 || n.DNSConfig != nil || n.ClientPolicy != nil || len(n.Applications)+len(n.Services)+len(n.SharePeerGrants) != 0 || value.Node.AssignedIPv6 != "" || len(value.Node.AdvertisedIPs) != 0 || len(value.Peers) > v.config.MaxPeers {
 		return ErrMap
 	}
 	prefix, err := netip.ParsePrefix(n.CIDR)

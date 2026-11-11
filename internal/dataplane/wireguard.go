@@ -37,16 +37,42 @@ type wireGuardDevice interface {
 // Closing it stops these handles; it does not prove native route/filter removal.
 // There is deliberately no raw UAPI, private-key getter or IpcGet diagnostic API.
 type Engine struct {
-	mu         sync.Mutex
-	device     wireGuardDevice
-	maxPeers   int
-	listenPort uint16
-	bind       *leaseBind
-	public     string
-	peers      map[string]bool
-	closed     bool
-	direct     *directTracker
-	lease      *connectivity.Lease
+	mu          sync.Mutex
+	device      wireGuardDevice
+	maxPeers    int
+	listenPort  uint16
+	bind        *leaseBind
+	public      string
+	peers       map[string]bool
+	bindings    map[string]primaryPeerBinding
+	closed      bool
+	direct      *directTracker
+	lease       *connectivity.Lease
+	reservation *engineReservation
+}
+
+type primaryPeerBinding struct {
+	node, prefix string
+	generation   uint64
+}
+
+func primaryPeerBindings(peers []coordinator.Peer) map[string]primaryPeerBinding {
+	result := make(map[string]primaryPeerBinding, len(peers))
+	for _, p := range peers {
+		result[p.PublicKey] = bindingForPrimaryPeer(p)
+	}
+	return result
+}
+
+func bindingForPrimaryPeer(p coordinator.Peer) primaryPeerBinding {
+	b := primaryPeerBinding{node: p.ID}
+	if len(p.AllowedIPs) == 1 {
+		b.prefix = p.AllowedIPs[0]
+	}
+	if p.Transport != nil {
+		b.generation = p.Transport.PeerAdvertisement.IntentGeneration
+	}
+	return b
 }
 
 func (*Engine) String() string   { return "[WireGuard engine]" }
@@ -118,7 +144,14 @@ func (e *Engine) apply(ctx context.Context, snapshot coordinator.NetworkMapSnaps
 		}
 		return ErrConfiguration
 	}
-	config, public, peers, err := configuration(snapshot, private, e.public, e.peers, e.maxPeers, e.listenPort)
+	nextBindings := primaryPeerBindings(snapshot.Peers)
+	reset := make(map[string]bool)
+	for key, previous := range e.bindings {
+		if next, exists := nextBindings[key]; exists && previous != next {
+			reset[key] = true
+		}
+	}
+	config, public, peers, err := configurationWithResets(snapshot, private, e.public, e.peers, e.maxPeers, e.listenPort, reset)
 	if err != nil {
 		e.close()
 		return err
@@ -146,7 +179,7 @@ func (e *Engine) apply(ctx context.Context, snapshot coordinator.NetworkMapSnaps
 		e.close()
 		return ErrEngine
 	}
-	e.public, e.peers = public, peers
+	e.public, e.peers, e.bindings = public, peers, nextBindings
 	return nil
 }
 
@@ -155,7 +188,11 @@ func (e *Engine) close() {
 		e.closed = true
 		e.direct.close()
 		e.device.Close()
+		if e.reservation != nil {
+			e.reservation.release()
+		}
 		e.peers = nil
+		e.bindings = nil
 	}
 }
 
@@ -165,6 +202,13 @@ func (e *Engine) Close() { e.mu.Lock(); defer e.mu.Unlock(); e.close() }
 // prefixes to UAPI. ACLs stay at the packet boundary; AllowedIPs is never used
 // as a substitute for direction/protocol/port authorization.
 func configuration(m coordinator.NetworkMapSnapshot, private []byte, previousPublic string, previous map[string]bool, maxPeers int, listenPort uint16) ([]byte, string, map[string]bool, error) {
+	return configurationWithResets(m, private, previousPublic, previous, maxPeers, listenPort, nil)
+}
+
+// A changed identity/address/intent requires peer.Stop and drained crypto
+// workers before rebuilding the same public-key slot. Endpoint-only refreshes
+// retain the existing session. This uses the pinned engine's own remove/add UAPI.
+func configurationWithResets(m coordinator.NetworkMapSnapshot, private []byte, previousPublic string, previous map[string]bool, maxPeers int, listenPort uint16, reset map[string]bool) ([]byte, string, map[string]bool, error) {
 	key, err := ecdh.X25519().NewPrivateKey(private)
 	if err != nil || len(private) != 32 || bytes.Equal(private, make([]byte, 32)) || maxPeers <= 0 || listenPort == 0 || len(m.Peers) > maxPeers || m.Node.Status == "revoked" {
 		return nil, "", nil, ErrConfiguration
@@ -204,7 +248,7 @@ func configuration(m coordinator.NetworkMapSnapshot, private []byte, previousPub
 	}
 	removed := make([]string, 0, len(previous))
 	for p := range previous {
-		if !peers[p] {
+		if !peers[p] || reset[p] {
 			removed = append(removed, p)
 		}
 	}

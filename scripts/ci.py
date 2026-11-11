@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import gzip
 import hashlib
 import io
@@ -20,6 +21,12 @@ import zipfile
 TAG = re.compile(r"(?:api/)?v0\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 MODULE_KINDS = {"go", "dart", "flutter", "json"}
 ARTIFACT_KINDS = {"go", "source", "flutter-web", "flutter-desktop"}
+CRYPTO_SOURCES = {
+    "github.com/amnezia-vpn/amneziawg-go/v3": "third_party/vendor/amneziawg",
+    "github.com/tailscale/wireguard-go": "third_party/vendor/wireguard",
+}
+CRYPTO_PATCHES = {"device/device.go", "device/peer.go", "device/send.go",
+                  "device/receive.go", "device/packet_hooks.go"}
 
 
 def strict_pairs(pairs):
@@ -40,6 +47,154 @@ def command(args, cwd=None, capture=False, env=None):
                             stdout=subprocess.PIPE if capture else None,
                             text=capture)
     return result.stdout.strip() if capture else ""
+
+
+def module_zip_files(data, module, version, expected_sum):
+    """Go dirhash.Hash1/HashZip: sorted content hashes, not ZIP encoding metadata."""
+    prefix = module + "@" + version + "/"
+    digest = hashlib.sha256()
+    result = {}
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        names = archive.namelist()
+        if len(names) != len(set(names)):
+            raise ValueError("duplicate upstream module entry")
+        for name in sorted(names):
+            if "\n" in name or not name.startswith(prefix):
+                raise ValueError("invalid upstream module path")
+            content = archive.read(name)
+            digest.update((hashlib.sha256(content).hexdigest() + "  " + name + "\n").encode())
+            relative = name[len(prefix):]
+            if (not relative or ".." in Path(relative).parts or "\\" in relative):
+                raise ValueError("invalid upstream source path")
+            if archive.getinfo(name).is_dir():
+                continue
+            if ".github" not in Path(relative).parts and Path(relative).suffix.lower() != ".md":
+                result[relative] = content
+    actual_sum = "h1:" + base64.b64encode(digest.digest()).decode()
+    if actual_sum != expected_sum:
+        raise ValueError("upstream module h1 mismatch")
+    return result
+
+
+def verify_crypto_module(root, entry, upstream):
+    directory = local(root, entry["directory"])
+    expected = {name: hashlib.sha256(data).hexdigest() for name, data in upstream.items()}
+    if entry["upstream_files"] != expected:
+        raise ValueError("upstream file inventory differs from pinned ZIP")
+    if not set(entry["patched_files"]).issubset(CRYPTO_PATCHES):
+        raise ValueError("patch outside packet metadata paths")
+    files = {path.relative_to(directory).as_posix(): path for path in directory.rglob("*") if path.is_file()}
+    if set(files) != set(expected) | set(entry["patched_files"]):
+        raise ValueError("third-party source inventory differs")
+    for name, path in files.items():
+        if path.is_symlink() or local(directory, name) != path.resolve():
+            raise ValueError("third-party source symlink")
+        wanted = entry["patched_files"].get(name, expected.get(name))
+        if hashlib.sha256(path.read_bytes()).hexdigest() != wanted:
+            raise ValueError("third-party source checksum differs: " + name)
+    if "LICENSE" not in expected:
+        raise ValueError("upstream license absent")
+    # The two queue files also contain cryptographic workers. They must remain
+    # byte-identical: metadata belongs before encryption and after source checks.
+    for name, method in (("device/send.go", "RoutineEncryption"),
+                         ("device/receive.go", "RoutineDecryption")):
+        original = upstream.get(name)
+        if original is None:
+            continue
+        def worker(data):
+            functions = re.split(rb"(?m)(?=^func )", data)
+            matches = [f for f in functions if re.match(rb"func [^\n]*\b" + method.encode() + rb"\(", f)]
+            if len(matches) != 1:
+                raise ValueError("upstream crypto worker absent or ambiguous")
+            # Trailing comments for the next method are outside this worker.
+            return matches[0][:matches[0].rfind(b"\n}") + 2]
+        if worker(original) != worker(files[name].read_bytes()):
+            raise ValueError("cryptographic worker changed: " + method)
+
+
+def verify_crypto_sources(root, metadata, fetch=True):
+    manifest = root / "third_party/sources.json"
+    replacements = {x["Old"]["Path"]: x["New"] for x in metadata.get("Replace") or []}
+    selected = set(replacements) & set(CRYPTO_SOURCES)
+    if not manifest.exists():
+        if selected:
+            raise ValueError("crypto replacement has no source manifest")
+        return []
+    data = load_json(manifest)
+    entries = data.get("modules", [])
+    if set(data) != {"schema", "modules"} or data["schema"] != 1 or len(entries) != len(CRYPTO_SOURCES):
+        raise ValueError("invalid crypto source manifest")
+    requires = {x["Path"]: x["Version"] for x in metadata.get("Require") or []}
+    if {x["path"] for x in entries} != set(CRYPTO_SOURCES) or selected != set(CRYPTO_SOURCES):
+        raise ValueError("crypto source/replacement modules differ")
+    for entry in entries:
+        if set(entry) != {"path", "version", "directory", "sum", "go_mod_sum", "origin", "upstream_files", "patched_files"}:
+            raise ValueError("invalid crypto module record")
+        path = entry["path"]
+        directory = CRYPTO_SOURCES[path]
+        if (entry["directory"] != directory or requires.get(path) != entry["version"]
+                or replacements[path] != {"Path": "./" + directory}
+                or entry["origin"].get("VCS") != "git"
+                or not re.fullmatch(r"[0-9a-f]{40}", entry["origin"].get("Hash", ""))):
+            raise ValueError("crypto pin/provenance differs")
+        if (not set(entry["patched_files"]).issubset(CRYPTO_PATCHES)
+                or "LICENSE" not in entry["upstream_files"]):
+            raise ValueError("invalid crypto patch inventory")
+        for files in (entry["upstream_files"], entry["patched_files"]):
+            for name, digest in files.items():
+                local(local(root, directory), name)
+                if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                    raise ValueError("invalid crypto source digest")
+        if fetch:
+            downloaded = json.loads(command(["go", "mod", "download", "-json", path + "@" + entry["version"]], cwd=root, capture=True, env=go_environment()))
+            if downloaded["Sum"] != entry["sum"] or downloaded["GoModSum"] != entry["go_mod_sum"]:
+                raise ValueError("published crypto checksum differs")
+            if downloaded.get("Origin") != entry["origin"]:
+                raise ValueError("published crypto origin differs")
+            upstream = module_zip_files(Path(downloaded["Zip"]).read_bytes(), path, entry["version"], entry["sum"])
+            verify_crypto_module(root, entry, upstream)
+        else:
+            # Build still checks every shipped source byte, without a second fetch.
+            expected = dict(entry["upstream_files"], **entry["patched_files"])
+            folder = local(root, directory)
+            actual = {p.relative_to(folder).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                      for p in folder.rglob("*") if p.is_file() and not p.is_symlink()}
+            if actual != expected or any(p.is_symlink() for p in folder.rglob("*")):
+                raise ValueError("crypto build sources differ")
+    return entries
+
+
+def audit_upstream_crypto(root, entries):
+    # govulncheck treats a local replacement as an unversioned local module.
+    # Scan the original modules with the same dependency pins as a second gate.
+    with tempfile.TemporaryDirectory(prefix="endlessnet-crypto-audit-") as temporary:
+        where = Path(temporary)
+        for name in ("go.mod", "go.sum"):
+            if (root / name).exists():
+                (where / name).write_bytes((root / name).read_bytes())
+        command(["go", "mod", "edit", "-module=endlessnet.invalid/crypto-audit",
+                 *["-dropreplace=" + x["path"] for x in entries]], cwd=where, env=go_environment())
+        imports = "\n".join('_ "' + x["path"] + '/device"' for x in entries)
+        (where / "audit.go").write_text("package audit\nimport (\n" + imports + "\n)\n", encoding="utf-8")
+        command(["go", "mod", "download", *[x["path"] for x in entries]], cwd=where, env=go_environment())
+        # Package scanning covers every imported upstream crypto package, even
+        # without a reachable call from this blank-import audit module. A module
+        # scan alone also fails on unrelated packages never shipped by Client.
+        command(["govulncheck", "-scan=package", "./..."], cwd=where, env=go_environment())
+
+
+def crypto_notices(root):
+    manifest = root / "third_party/sources.json"
+    if not manifest.exists():
+        return {}
+    entries = load_json(manifest)["modules"]
+    result = {}
+    for entry in entries:
+        name = Path(entry["directory"]).name
+        result["licenses/" + name + "-LICENSE.txt"] = (local(root, entry["directory"] + "/LICENSE").read_bytes(), 0o644)
+    provenance = [{key: x[key] for key in ("path", "version", "sum", "origin", "patched_files")} for x in entries]
+    result["crypto-sources.json"] = ((json.dumps(provenance, sort_keys=True) + "\n").encode(), 0o644)
+    return result
 
 
 def local(root, value):
@@ -173,10 +328,10 @@ def verify_client_contract(root):
     module = json.loads(command(["go", "list", "-m", "-json",
                                  "github.com/endless-net/client/api"], cwd=root,
                                 capture=True, env=env))
-    if module.get("Replace") or module.get("Version") != "v0.3.0":
+    if module.get("Replace") or module.get("Version") != "v0.4.0":
         raise ValueError("Client SDK pin differs from compiled identity")
     downloaded = json.loads(command(["go", "mod", "download", "-json",
-                                     "github.com/endless-net/client/api@v0.3.0"],
+                                     "github.com/endless-net/client/api@v0.4.0"],
                                     cwd=root, capture=True, env=env))
     if downloaded.get("Origin", {}).get("Hash") != revisions[0]:
         raise ValueError("Client SDK origin differs from compiled identity")
@@ -201,6 +356,7 @@ def check(root, profile, lint_config=None):
                 raise ValueError("first-party replace is forbidden")
             if module["path"] == ".":
                 verify_client_contract(root)
+            crypto = verify_crypto_sources(where, metadata)
             for args in (
                 ["goimports", "-l", "."],
             ):
@@ -211,6 +367,8 @@ def check(root, profile, lint_config=None):
             command(["golangci-lint", "run", "--config", str(config), "./...", "--timeout", "1m"], cwd=where, env=env)
             command(["go", "test", "-short", "./..."], cwd=where, env=env)
             command(["govulncheck", "./..."], cwd=where, env=env)
+            if crypto:
+                audit_upstream_crypto(where, crypto)
         elif kind in {"dart", "flutter"}:
             sdk = "flutter" if kind == "flutter" else "dart"
             command([sdk, "pub", "get", "--enforce-lockfile"], cwd=where)
@@ -344,8 +502,12 @@ def build(root, profile, output, tag=None):
     if not selected:
         raise ValueError("selected release has no artifacts")
     sha = clean_commit(root)
+    if (root / "third_party/sources.json").exists() and any(a["kind"] == "go" for a in selected):
+        metadata = json.loads(command(["go", "mod", "edit", "-json"], cwd=root,
+                                      capture=True, env=go_environment()))
+        verify_crypto_sources(root, metadata, fetch=False)
     windows_client = any(a["kind"] == "go" and a.get("package") == "./cmd/client"
-                         and a.get("target", {}).get("os") == "windows" for a in selected)
+                           and a.get("target", {}).get("os") == "windows" for a in selected)
     if windows_client:
         verify_client_contract(root)
         build_date = command(["git", "show", "-s", "--format=%cI", sha], cwd=root, capture=True)
@@ -374,6 +536,7 @@ def build(root, profile, output, tag=None):
                 command(["go", "build", "-trimpath", "-buildvcs=false", *metadata, "-o", str(binary),
                          artifact["package"]], cwd=local(root, artifact["module"]), env=env)
                 entries = {executable: (binary.read_bytes(), 0o755)}
+                entries.update(crypto_notices(root))
                 if artifact.get("package") == "./cmd/client" and target["os"] == "windows":
                     entries.update(wintun_files(root, target))
         else:

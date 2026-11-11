@@ -142,7 +142,7 @@ func (f *mapFixture) sign(t *testing.T, previous *state.MapCursor, issued, expir
 		t.Fatal(err)
 	}
 	hash := sha256.Sum256(payload)
-	f.value.MapSignature = &coordinator.MapSignature{Version: 5, Algorithm: "ed25519-network-map-v5", KeyID: key, IssuedAt: issued, ExpiresAt: expires, PayloadHash: hex.EncodeToString(hash[:]), Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(f.mapPrivate, payload))}
+	f.value.MapSignature = &coordinator.MapSignature{Version: 7, Algorithm: "ed25519-network-map-v7", KeyID: key, IssuedAt: issued, ExpiresAt: expires, PayloadHash: hex.EncodeToString(hash[:]), Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(f.mapPrivate, payload))}
 	event := coordinator.MapStreamEvent{Type: "snapshot", ProtocolVersion: 3, Capabilities: []string{"snapshot", "signed-delta", "checkpoint", "resync", "heartbeat"}, EventID: "map:" + f.value.MapSignature.PayloadHash, To: f.value.Revision, Snapshot: &f.value, ResultSignature: f.value.MapSignature}
 	if previous != nil {
 		event.Type = "resync"

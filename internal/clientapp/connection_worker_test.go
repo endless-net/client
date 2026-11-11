@@ -221,6 +221,17 @@ func testConnectionWorker(t *testing.T, s *state.Store, h *workerHarness) *Conne
 	return w
 }
 
+func TestConnectionWorkerCancelledBeforeStartIsNotFailedCleanup(t *testing.T) {
+	s, backend := workerStore(t)
+	w := testConnectionWorker(t, s, &workerHarness{})
+	before := bytes.Clone(backend.data)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := w.Run(ctx); err != context.Canceled || w.used || w.running || !bytes.Equal(before, backend.data) {
+		t.Fatal("pre-start cancellation acquired a worker or became a cleanup failure", err)
+	}
+}
+
 type workerFixtureClock struct{}
 
 func (workerFixtureClock) Sample() (connectivity.ClockSample, error) {

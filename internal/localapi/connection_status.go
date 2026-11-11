@@ -8,6 +8,7 @@ import (
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -113,6 +114,12 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 			r.OverlayAddresses = []string{local.Address}
 		}
 		r.Agent = &clientv0.AgentStatus{SnapshotState: clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS, MapRevision: local.MapRevision, ConnectionPaused: !local.Permission.NewFlows, NodeId: r.NodeId, NetworkId: p.Attempt.NetworkID, OverlayAddresses: append([]string(nil), r.OverlayAddresses...), PeerCount: local.PeerCount, GeneratedAt: timestamppb.New(local.GeneratedAt), DirectPathCount: local.DirectPaths}
+		r.Agent.RelayPathCount = local.RelayPaths
+		for _, transport := range local.PeerTransports {
+			if transport != nil {
+				r.PeerTransports = append(r.PeerTransports, proto.Clone(transport).(*clientv0.PeerTransportStatus))
+			}
+		}
 		if local.Permission.NewFlows {
 			r.Agent.SnapshotState = clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT
 		}
@@ -145,7 +152,7 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_OFFLINE_CACHE
 		}
-		if local.Permission.NewFlows && local.DirectPaths > 0 {
+		if local.Permission.NewFlows && (local.DirectPaths > 0 || local.RelayPaths > 0) {
 			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_CONNECTED
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_READY

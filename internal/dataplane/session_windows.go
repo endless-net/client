@@ -22,10 +22,15 @@ type WindowsSessionConfig struct {
 	ListenPort                                                         uint16
 	RouteMetric                                                        uint32
 	DADPollInterval, TransactionWait, ApplyTimeout                     time.Duration
+	RelayDialTimeout, RelayIOTimeout, RelayHeartbeatInterval           time.Duration
+	ProbeInterval, RelayRetryInterval                                  time.Duration
 }
 
 func (c WindowsSessionConfig) Validate() error {
-	if c.MaxPeers <= 0 || c.MaxGrants <= 0 || c.MaxProtected <= 0 || c.MaxInventoryRows <= 0 || c.MaxInterfaces <= 0 || c.MTU < 576 || c.MTU > 65535 || c.ListenPort == 0 || c.DADPollInterval <= 0 || c.ApplyTimeout <= 0 || c.ApplyTimeout > 30*time.Second || c.TransactionWait <= 0 || c.TransactionWait%time.Millisecond != 0 || c.TransactionWait/time.Millisecond > time.Duration(1<<32-1) {
+	if (RelayConfig{DialTimeout: c.RelayDialTimeout, IOTimeout: c.RelayIOTimeout, HeartbeatInterval: c.RelayHeartbeatInterval, Now: time.Now}).Validate() != nil || c.ProbeInterval < time.Millisecond || c.ProbeInterval > 30*time.Second || c.RelayRetryInterval < time.Millisecond || c.RelayRetryInterval > 30*time.Second {
+		return ErrConfiguration
+	}
+	if c.MaxPeers <= 0 || c.MaxGrants <= 0 || c.MaxProtected <= 0 || c.MaxInventoryRows <= 0 || c.MaxInterfaces <= 0 || c.MTU < 576 || c.MTU > relayMTUMax || c.ListenPort == 0 || c.DADPollInterval <= 0 || c.ApplyTimeout <= 0 || c.ApplyTimeout > 30*time.Second || c.TransactionWait <= 0 || c.TransactionWait%time.Millisecond != 0 || c.TransactionWait/time.Millisecond > time.Duration(1<<32-1) {
 		return ErrConfiguration
 	}
 	return nil
@@ -41,6 +46,8 @@ type WindowsSession struct {
 	generation       uint64
 	config           WindowsSessionConfig
 	lease            *connectivity.Lease
+	resources        *TransportResources
+	primary          *engineReservation
 	lifetime         context.Context
 	created          connectivity.ClockSample
 	clock            connectivity.Clock
@@ -51,6 +58,9 @@ type WindowsSession struct {
 	tunnel           *WindowsTUN
 	filters          *WindowsFilters
 	engine           *Engine
+	packets          *packetSwitch
+	supervisor       *transportSupervisor
+	adsChanged       chan struct{}
 	started, stopped bool
 	current          connectivity.Map
 	policy           FilterPlan
@@ -60,6 +70,7 @@ type WindowsSession struct {
 	identity         func(uint64) (adapterIdentity, error)
 	setMTU           func(context.Context, state.AdapterRecord, int) error
 	makeBind         func() conn.Bind
+	networkContext   func(context.Context, []byte) (string, error)
 }
 
 func (*WindowsSession) String() string   { return "[Windows connectivity session]" }
@@ -67,8 +78,8 @@ func (*WindowsSession) GoString() string { return "[Windows connectivity session
 
 // NewWindowsSession binds authority to the daemon worker's lifetime, not an IPC
 // request or UI window. Start receives its own finite operation context.
-func NewWindowsSession(parent context.Context, store *state.Store, clock connectivity.Clock, profileID string, generation uint64, config WindowsSessionConfig) (*WindowsSession, error) {
-	if parent == nil || store == nil || clock == nil || generation == 0 || config.Validate() != nil {
+func NewWindowsSession(parent context.Context, store *state.Store, clock connectivity.Clock, profileID string, generation uint64, config WindowsSessionConfig, resources *TransportResources) (*WindowsSession, error) {
+	if parent == nil || store == nil || clock == nil || generation == 0 || config.Validate() != nil || resources == nil || resources.budget == nil || resources.budget.maxPeers != config.MaxPeers {
 		return nil, ErrConfiguration
 	}
 	cleanup, err := NewWindowsCleanup(store, WindowsCleanupConfig{MaxInventoryRows: config.MaxInventoryRows, MaxInterfaces: config.MaxInterfaces, MaxProtected: config.MaxProtected, TransactionWait: config.TransactionWait})
@@ -98,7 +109,9 @@ func NewWindowsSession(parent context.Context, store *state.Store, clock connect
 		cancel()
 		return nil, err
 	}
-	return &WindowsSession{store: store, profileID: profileID, id: id.String(), generation: generation, config: config, lease: lease, lifetime: lifetime, created: created, clock: clock, cancel: cancel, ip: ip, cleanup: cleanup, createTUN: factory.Create, makeFilters: NewWindowsFilters, planFilters: PrepareFilterPlan, identity: nativeTUNAPI{}.identity, setMTU: setOwnedMTU, makeBind: func() conn.Bind { return conn.NewStdNetBind() }}, nil
+	return &WindowsSession{store: store, profileID: profileID, id: id.String(), generation: generation, config: config, lease: lease, resources: resources, lifetime: lifetime, created: created, clock: clock, cancel: cancel, ip: ip, cleanup: cleanup, adsChanged: make(chan struct{}, 1), createTUN: factory.Create, makeFilters: NewWindowsFilters, planFilters: PrepareFilterPlan, identity: nativeTUNAPI{}.identity, setMTU: setOwnedMTU, makeBind: func() conn.Bind { return conn.NewStdNetBind() }, networkContext: func(ctx context.Context, key []byte) (string, error) {
+		return windowsTransportContext(ctx, key, config.MaxInventoryRows, config.MaxInterfaces)
+	}}, nil
 }
 
 func clearSessionKeys(value state.State) {
@@ -311,6 +324,12 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if err := s.lease.Confirm(m); err != nil {
 		return err
 	}
+	// Reserve before the first native effect. An old generation whose workers
+	// have not stopped must still occupy its slot, even after lease revocation.
+	s.primary, err = s.resources.budget.reserve(s.lease, "", enginePrimary)
+	if err != nil {
+		return err
+	}
 	prepared, err := PreparedWindowsAdapter(s.id)
 	if err != nil {
 		return err
@@ -413,10 +432,15 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if s.lease.Permissions().ClockUnsafe {
 		return connectivity.ErrClock
 	}
-	s.engine, err = NewEngine(s.tunnel, s.makeBind(), s.config.MaxPeers, s.config.ListenPort, s.lease)
+	s.packets, err = newPacketSwitch(s.lifetime, s.tunnel, s.lease, m, s.config.MTU, s.config.MaxPeers)
 	if err != nil {
 		return err
 	}
+	s.engine, err = NewEngine(wireGuardPort{s.packets.primary}, s.makeBind(), s.config.MaxPeers, s.config.ListenPort, s.lease)
+	if err != nil {
+		return err
+	}
+	s.engine.reservation, s.primary = s.primary, nil
 	if err := s.engine.Apply(apply, m, current.Keys.WireGuardPrivate); err != nil {
 		return err
 	}
@@ -430,6 +454,21 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 		return err
 	}
 	s.current, s.policy = m, plan
+	s.supervisor, err = newTransportSupervisor(s.lifetime, m, s.lease, s.clock, s.profileID, s.generation, current.Keys.WireGuardPrivate, s.resources.budget, s.packets, s.engine, supervisorConfig{relay: RelayConfig{DialTimeout: s.config.RelayDialTimeout, IOTimeout: s.config.RelayIOTimeout, HeartbeatInterval: s.config.RelayHeartbeatInterval, Now: func() time.Time {
+		sample, err := s.clock.Sample()
+		if err != nil {
+			return time.Time{}
+		}
+		return sample.Wall
+	}}, probeInterval: s.config.ProbeInterval, retry: s.config.RelayRetryInterval, mtu: s.config.MTU, maxPeers: s.config.MaxPeers, hintStore: s.store, networkContext: s.networkContext, advertise: func() {
+		select {
+		case s.adsChanged <- struct{}{}:
+		default:
+		}
+	}}, nil)
+	if err != nil {
+		return err
+	}
 	resumed, err := s.resumeSource(sourceEpoch)
 	if err != nil {
 		return err
@@ -454,6 +493,12 @@ func (s *WindowsSession) activationFence(ctx context.Context, m connectivity.Map
 
 func (s *WindowsSession) releaseHandles() error {
 	var err error
+	// With no engine constructed there are no workers to wait for, including
+	// when native cleanup itself fails. Engine owns the slot after transfer.
+	if s.primary != nil {
+		s.primary.release()
+		s.primary = nil
+	}
 	// Remove dynamic exceptions before closing the adapter, preventing recycled
 	// interface identities from inheriting this process's old permits.
 	if s.filters != nil {
@@ -462,7 +507,13 @@ func (s *WindowsSession) releaseHandles() error {
 		}
 	}
 	if s.engine != nil {
+		if s.supervisor != nil {
+			s.supervisor.Close()
+		}
 		s.engine.Close()
+	}
+	if s.packets != nil {
+		err = errors.Join(err, s.packets.Close())
 	}
 	if s.tunnel != nil {
 		err = errors.Join(err, s.tunnel.Close())

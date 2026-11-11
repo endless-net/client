@@ -219,6 +219,9 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 		return err
 	}
 	defer clear(current.Keys.WireGuardPrivate)
+	if err := s.packets.Update(m); err != nil {
+		return err
+	}
 	if err := s.engine.Apply(ctx, m, current.Keys.WireGuardPrivate); err != nil {
 		return err
 	}
@@ -229,6 +232,9 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 		return err
 	}
 	s.current, s.policy = m, plan
+	if s.supervisor != nil {
+		s.supervisor.Update(m)
+	}
 	resumed, err := s.resumeSource(sourceEpoch)
 	if err != nil {
 		return err

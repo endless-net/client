@@ -11,7 +11,7 @@ func (s *WindowsSession) ConnectionLocal() connectivity.LocalObservation {
 		return connectivity.LocalObservation{Permission: s.lease.Permissions()}
 	}
 	defer s.mu.Unlock()
-	if !s.started || s.stopped || s.engine == nil {
+	if !s.started || s.stopped || s.engine == nil || s.packets.Err() != nil {
 		return connectivity.LocalObservation{Permission: s.lease.Permissions()}
 	}
 	m, err := s.current.Snapshot()
@@ -23,11 +23,22 @@ func (s *WindowsSession) ConnectionLocal() connectivity.LocalObservation {
 		return connectivity.LocalObservation{}
 	}
 	v := connectivity.LocalObservation{Known: true, Applied: true, MapRevision: m.Revision.Network, Address: m.Node.AssignedIP, PeerCount: uint32(len(m.Peers)), GeneratedAt: m.MapSignature.IssuedAt}
+	choices := s.packets.outputChoices()
 	for _, path := range paths {
-		if path.Authenticated {
+		if _, overridden := choices[path.PeerID]; path.Authenticated && !overridden {
+			v.DirectPaths++
+		}
+	}
+	for _, choice := range choices {
+		if choice == peerRouteRelay {
+			v.RelayPaths++
+		} else if choice == peerRouteDirect {
 			v.DirectPaths++
 		}
 	}
 	v.Permission = s.lease.Permissions()
+	if s.supervisor != nil {
+		v.PeerTransports = s.supervisor.transportStatuses(s.current)
+	}
 	return v
 }

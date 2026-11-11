@@ -111,7 +111,7 @@ func TestWindowsExplicitInitializationCLI(t *testing.T) {
 	binary, c := initializationCLI(t), stateFixtureConfig(t)
 	path := filepath.Join(c.StateDirectory, "state.bin")
 	for _, arguments := range [][]string{{"init-state", "--force"}, {"reset"}, {"--init-state"}} {
-		if output, err := invokeInitializationCLI(t, binary, c, arguments...); err == nil || !bytes.Contains(output, []byte("client command rejected")) {
+		if output, err := invokeInitializationCLI(t, binary, c, arguments...); err == nil || bytes.Contains(output, []byte(c.StateDirectory)) {
 			t.Fatalf("unknown/force command accepted: %v: %s", err, output)
 		}
 		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
@@ -142,6 +142,21 @@ func TestWindowsExplicitInitializationCLI(t *testing.T) {
 		if err != nil || !bytes.Equal(retained, original) {
 			t.Fatal("initialization overwrote existing state", err)
 		}
+	}
+}
+
+func TestWindowsInstallerConfigurationValidationDoesNotWriteState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("explicit CLI process fixture")
+	}
+	binary := initializationCLI(t)
+	c := stateFixtureConfig(t)
+	path := filepath.Join(c.StateDirectory, "state.bin")
+	if output, err := invokeInitializationCLI(t, binary, c, "validate-config"); err != nil || !bytes.Contains(output, []byte("client configuration valid")) {
+		t.Fatalf("configuration validation failed: %v: %s", err, output)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("validation created state", err)
 	}
 }
 

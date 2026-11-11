@@ -6,15 +6,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/endless-net/client/api/transport"
+
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
 
-func pendingEndpointFixture(t *testing.T, s *Store, now time.Time) coordinator.UpdateNodeEndpointRequest {
+func pendingEndpointFixture(t *testing.T, s *Store, now time.Time, ads ...*coordinator.TransportAdvertisement) coordinator.UpdateNodeEndpointRequest {
 	t.Helper()
 	if err := connectionChange(s, func(c *ConnectionState) { _, _ = c.AcceptIntent(IntentConnected, now) }); err != nil {
 		t.Fatal(err)
 	}
 	request := coordinator.UpdateNodeEndpointRequest{Endpoint: "192.0.2.1:51820", Generation: 1, TTL: "30s", Status: "online"}
+	if len(ads) != 0 {
+		request.Transport = ads[0]
+	}
 	raw, err := json.Marshal(request)
 	if err != nil {
 		t.Fatal(err)
@@ -26,6 +31,25 @@ func pendingEndpointFixture(t *testing.T, s *Store, now time.Time) coordinator.U
 		t.Fatal(err)
 	}
 	return request
+}
+
+func TestEndpointTransportReceiptSurvivesIndependentDecodeAndStaysImmutable(t *testing.T) {
+	s, _, now := registeredStateFixture(t)
+	ad := &coordinator.TransportAdvertisement{IntentGeneration: 1, Capabilities: transport.Capabilities{Version: 1, Engines: []transport.Capability{{Engine: transport.WireGuard, ProtocolVersion: "1", ProfileVersion: 1}}}, Endpoints: []coordinator.TransportEndpoint{}}
+	request := pendingEndpointFixture(t, s, now, ad)
+	ack := coordinator.UpdateNodeEndpointResponse{SchemaVersion: 2, NodeID: "node", NetworkID: "network", Endpoint: request.Endpoint, Generation: 1, Online: true, UpdatedAt: now, ExpiresAt: now.Add(30 * time.Second), Revision: coordinator.MapRevision{Network: 2}, Transport: ad}
+	if err := connectionChange(s, func(c *ConnectionState) { c.EndpointRequest.Sent = true }); err != nil {
+		t.Fatal(err)
+	}
+	if err := connectionChange(s, func(c *ConnectionState) { c.EndpointRequest.Receipt = &ack }); err != nil {
+		t.Fatal(err)
+	}
+	if err := connectionChange(s, func(*ConnectionState) {}); err != nil {
+		t.Fatal("nested transport pointer addresses blocked an independent state update", err)
+	}
+	if err := connectionChange(s, func(c *ConnectionState) { c.EndpointRequest.Receipt.Revision.Network++ }); !errors.Is(err, ErrCorrupt) {
+		t.Fatal("original ACK could be rewritten", err)
+	}
 }
 
 func TestEndpointRequestIsFrozenBeforeSendAndOriginalACKIsImmutable(t *testing.T) {

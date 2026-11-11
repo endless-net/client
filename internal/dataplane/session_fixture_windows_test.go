@@ -104,7 +104,7 @@ func sessionSignedFixtureAt(t *testing.T, now time.Time) (*state.Store, *cleanup
 		t.Fatal(err)
 	}
 	hash := sha256.Sum256(payload)
-	snapshot.MapSignature = &coordinator.MapSignature{Version: 5, Algorithm: "ed25519-network-map-v5", KeyID: trust.KeyID, IssuedAt: now, ExpiresAt: expires, PayloadHash: hex.EncodeToString(hash[:]), Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(mapKey, payload))}
+	snapshot.MapSignature = &coordinator.MapSignature{Version: 7, Algorithm: "ed25519-network-map-v7", KeyID: trust.KeyID, IssuedAt: now, ExpiresAt: expires, PayloadHash: hex.EncodeToString(hash[:]), Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(mapKey, payload))}
 	event := coordinator.MapStreamEvent{Type: "snapshot", ProtocolVersion: 3, Capabilities: []string{"snapshot", "signed-delta", "checkpoint", "resync", "heartbeat"}, EventID: "map:" + snapshot.MapSignature.PayloadHash, To: snapshot.Revision, Snapshot: &snapshot, ResultSignature: snapshot.MapSignature}
 	raw, err = json.Marshal(event)
 	if err != nil {
@@ -168,11 +168,16 @@ func beginSessionDisconnect(value *state.State, p *state.Profile) (bool, error) 
 func wiredSessionFixtureAt(t *testing.T, now time.Time) (*WindowsSession, *state.Store, *cleanupSlot, connectivity.Map, *mockIPAPI, *mockFilterAPI, *mockFilterAPI, *factoryTUN, *sessionClock) {
 	t.Helper()
 	store, slot, clock, m := sessionSignedFixtureAt(t, now)
-	s, err := NewWindowsSession(context.Background(), store, clock, cleanupProfile, 3, WindowsSessionConfig{MaxPeers: 8, MaxGrants: 16, MaxProtected: 16, MaxInterfaces: 256, MaxInventoryRows: 256, MTU: 1420, ListenPort: 51820, RouteMetric: 7, DADPollInterval: time.Millisecond, TransactionWait: 100 * time.Millisecond, ApplyTimeout: time.Second})
+	resources, err := NewTransportResources(8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewWindowsSession(context.Background(), store, clock, cleanupProfile, 3, WindowsSessionConfig{MaxPeers: 8, MaxGrants: 16, MaxProtected: 16, MaxInterfaces: 256, MaxInventoryRows: 256, MTU: 1420, ListenPort: 51820, RouteMetric: 7, DADPollInterval: time.Millisecond, TransactionWait: 100 * time.Millisecond, ApplyTimeout: time.Second, RelayDialTimeout: time.Second, RelayIOTimeout: 3 * time.Second, RelayHeartbeatInterval: time.Second, ProbeInterval: 10 * time.Millisecond, RelayRetryInterval: 20 * time.Millisecond}, resources)
 	if err != nil {
 		t.Fatal(err)
 	}
 	key, _ := canonicalGUID(s.id)
+	s.networkContext = func(context.Context, []byte) (string, error) { return "", nil }
 	prepared, _ := PreparedWindowsAdapter(s.id)
 	tunnel := &factoryTUN{inertTUN: newInertTUN(), luid: 12345}
 	tunAPI := &mockTUNAPI{row: adapterIdentity{GUID: key, LUID: 12345, Index: 17, Name: prepared.Name, Type: 53}, device: tunnel}

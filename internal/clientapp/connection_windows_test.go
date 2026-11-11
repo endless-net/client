@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/netip"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -60,6 +61,9 @@ type connectionNativeFixture struct {
 	starts, stops, waits, epochs atomic.Uint64
 	refreshes, offlines          atomic.Uint64
 	wrongPort                    bool
+	refreshError                 atomic.Pointer[error]
+	advertisement                atomic.Pointer[coordinator.TransportAdvertisement]
+	advertisementChanged         chan struct{}
 }
 
 func (n *connectionNativeFixture) Start(ctx context.Context, m connectivity.Map) error {
@@ -76,6 +80,9 @@ func (n *connectionNativeFixture) Restore(ctx context.Context, m connectivity.Ma
 }
 func (n *connectionNativeFixture) Refresh(ctx context.Context, m connectivity.Map) error {
 	err := connectivity.PersistCursor(ctx, n.store, 1, m)
+	if err != nil {
+		n.refreshError.Store(&err)
+	}
 	if err == nil {
 		n.refreshes.Add(1)
 	}
@@ -87,7 +94,7 @@ func (n *connectionNativeFixture) Stop(context.Context) error {
 	n.stops.Add(1)
 	return nil
 }
-func (n *connectionNativeFixture) WaitDirect(ctx context.Context, _ time.Duration) error {
+func (n *connectionNativeFixture) WaitPaths(ctx context.Context, _ time.Duration) error {
 	value, err := n.store.Load(ctx)
 	if err != nil {
 		return err
@@ -100,7 +107,7 @@ func (n *connectionNativeFixture) WaitDirect(ctx context.Context, _ time.Duratio
 	n.waits.Add(1)
 	return nil
 }
-func (n *connectionNativeFixture) ProbeDirect(context.Context) error { return nil }
+func (n *connectionNativeFixture) ProbePaths(context.Context) error { return nil }
 func (n *connectionNativeFixture) BoundPort() (uint16, error) {
 	if !n.bound.Load() {
 		return 0, dataplane.ErrClosed
@@ -109,6 +116,17 @@ func (n *connectionNativeFixture) BoundPort() (uint16, error) {
 		return 51821, nil
 	}
 	return 51820, nil
+}
+
+func (n *connectionNativeFixture) TransportAdvertisement(netip.Addr) (coordinator.TransportAdvertisement, error) {
+	if ad := n.advertisement.Load(); ad != nil {
+		return *ad, nil
+	}
+	return coordinator.TransportAdvertisement{IntentGeneration: 1, Capabilities: dataplane.TransportCapabilities(), Endpoints: []coordinator.TransportEndpoint{}}, nil
+}
+
+func (n *connectionNativeFixture) AdvertisementSignal() <-chan struct{} {
+	return n.advertisementChanged
 }
 func (n *connectionNativeFixture) BlockSource() uint64 { return n.epochs.Add(1) }
 func (n *connectionNativeFixture) RevokeSource()       { n.revoked.Store(true) }
@@ -122,7 +140,7 @@ type endpointClockFunc func() (connectivity.ClockSample, error)
 func (f endpointClockFunc) Sample() (connectivity.ClockSample, error) { return f() }
 
 func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeDirect(t *testing.T) {
-	for _, mode := range []string{"expired", "changed", "current", "uncertain_next", "expired_next", "budget"} {
+	for _, mode := range []string{"expired", "changed", "current", "capability_changed", "uncertain_next", "expired_next", "budget"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newConnectionBackendFixture(t)
 			f.config.EndpointTTL = 120 * time.Second
@@ -146,6 +164,13 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeDirect(t *
 				endpoint = "192.0.2.99:51821"
 			}
 			input := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint, Generation: 1, TTL: f.config.EndpointTTL.String(), Status: "online"}
+			if mode == "current" {
+				ad, err := f.native.TransportAdvertisement(f.config.Endpoint.Addr())
+				if err != nil {
+					t.Fatal(err)
+				}
+				input.Transport = &ad
+			}
 			if err := connectivity.PrepareEndpoint(context.Background(), f.store, workerProfile, 1, input); err != nil {
 				t.Fatal(err)
 			}
@@ -166,10 +191,13 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeDirect(t *
 			original := bytes.Clone(value.Profiles[workerProfile].Connection.EndpointRequest.Request)
 			f.originals[1] = original
 			updated := time.Now().UTC().Add(-time.Second)
-			if mode != "current" && mode != "changed" {
+			if mode != "current" && mode != "changed" && mode != "capability_changed" {
 				updated = updated.Add(-120 * time.Second)
 			}
 			f.acks[1] = coordinator.UpdateNodeEndpointResponse{SchemaVersion: 2, NodeID: "node", NetworkID: "network", Endpoint: endpoint, Generation: 1, Online: true, UpdatedAt: updated, ExpiresAt: updated.Add(f.config.EndpointTTL), Revision: coordinator.MapRevision{Network: 1}}
+			ack := f.acks[1]
+			ack.Transport = input.Transport
+			f.acks[1] = ack
 			if mode == "expired_next" {
 				ack := f.acks[1]
 				ack.Generation = 2
@@ -306,6 +334,8 @@ func newConnectionBackendFixture(t *testing.T) *connectionBackendFixture {
 				ack = coordinator.UpdateNodeEndpointResponse{SchemaVersion: 2, NodeID: "node", NetworkID: "network", Endpoint: input.Endpoint, Generation: input.Generation, Online: input.Status == "online", UpdatedAt: updated, ExpiresAt: updated.Add(ttl), Revision: coordinator.MapRevision{Network: revision.Load()}}
 				fixture.acks[input.Generation] = ack
 			}
+			ack.Transport = input.Transport
+			fixture.acks[input.Generation] = ack
 			lose := fixture.loseSecond && input.Generation == 2 && !fixture.lost
 			if lose {
 				fixture.lost = true
@@ -351,7 +381,7 @@ func newConnectionBackendFixture(t *testing.T) *connectionBackendFixture {
 			return nil, err
 		}
 		hash := sha256.Sum256(payload)
-		m.MapSignature = &coordinator.MapSignature{Version: 5, Algorithm: "ed25519-network-map-v5", KeyID: mapBundle.ActiveKeyID, IssuedAt: issued, ExpiresAt: expires, PayloadHash: hex.EncodeToString(hash[:]), Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(mapKey, payload))}
+		m.MapSignature = &coordinator.MapSignature{Version: 7, Algorithm: "ed25519-network-map-v7", KeyID: mapBundle.ActiveKeyID, IssuedAt: issued, ExpiresAt: expires, PayloadHash: hex.EncodeToString(hash[:]), Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(mapKey, payload))}
 		event := coordinator.MapStreamEvent{Type: "snapshot", ProtocolVersion: 3, Capabilities: []string{"snapshot", "signed-delta", "checkpoint", "resync", "heartbeat"}, EventID: "map:" + m.MapSignature.PayloadHash, To: m.Revision, Snapshot: &m, ResultSignature: m.MapSignature}
 		body, err := json.Marshal(event)
 		if err != nil {
@@ -369,7 +399,7 @@ func newConnectionBackendFixture(t *testing.T) *connectionBackendFixture {
 		t.Fatal(err)
 	}
 	fixture.transport = transport
-	fixture.config = WindowsConnectionConfig{Verifier: connectivity.VerifierConfig{Announcements: connectionAnnouncement{announcement}, Now: time.Now, Clock: workerFixtureClock{}, CallTimeout: time.Second, MaxBytes: 65536, MaxPeers: 8, MaxRules: 16, MaxCredentialBytes: 8192}, Native: dataplane.WindowsSessionConfig{MaxPeers: 8, MaxGrants: 16, MaxProtected: 16, MaxInventoryRows: 256, MaxInterfaces: 256, MTU: 1420, ListenPort: 51820, RouteMetric: 7, DADPollInterval: time.Millisecond, TransactionWait: 100 * time.Millisecond, ApplyTimeout: time.Second}, Endpoint: netip.MustParseAddrPort("192.0.2.1:51820"), EndpointTTL: 200 * time.Millisecond, RenewalInterval: 20 * time.Millisecond, RetryInterval: 20 * time.Millisecond, ProbeInterval: 10 * time.Millisecond, WriteBudget: time.Second, MaxQueuedMaps: 8}
+	fixture.config = WindowsConnectionConfig{Verifier: connectivity.VerifierConfig{Announcements: connectionAnnouncement{announcement}, Now: time.Now, Clock: workerFixtureClock{}, CallTimeout: time.Second, MaxBytes: 65536, MaxPeers: 8, MaxRules: 16, MaxCredentialBytes: 8192}, Native: dataplane.WindowsSessionConfig{MaxPeers: 8, MaxGrants: 16, MaxProtected: 16, MaxInventoryRows: 256, MaxInterfaces: 256, MTU: 1420, ListenPort: 51820, RouteMetric: 7, DADPollInterval: time.Millisecond, TransactionWait: 100 * time.Millisecond, ApplyTimeout: time.Second, RelayDialTimeout: time.Second, RelayIOTimeout: 3 * time.Second, RelayHeartbeatInterval: time.Second, ProbeInterval: 10 * time.Millisecond, RelayRetryInterval: 20 * time.Millisecond}, Endpoint: netip.MustParseAddrPort("192.0.2.1:51820"), EndpointTTL: 200 * time.Millisecond, RenewalInterval: 20 * time.Millisecond, RetryInterval: 20 * time.Millisecond, ProbeInterval: 10 * time.Millisecond, WriteBudget: time.Second, MaxQueuedMaps: 8}
 	fixture.factory = &windowsConnections{store: fixture.store, transport: transport, config: fixture.config, stream: transport.StreamSnapshot, cleanup: func(context.Context, string) error { return nil }, makeNative: func(context.Context, string, uint64) (windowsConnectionNative, error) { return fixture.native, nil }}
 	return fixture
 }
@@ -418,6 +448,48 @@ func TestWindowsConnectionDriverUsesSDKMapBoundPortEndpointACKBeforePath(t *test
 	}
 	if p.Attempt.NodeID != "node" || p.Connection.Generation != 1 {
 		t.Fatal("connect changed registration/generation")
+	}
+}
+
+func TestPreparedListenerSignalPublishesBeforePeriodicRenewal(t *testing.T) {
+	f := newConnectionBackendFixture(t)
+	f.factory.config.EndpointTTL = 120 * time.Second
+	f.factory.config.RenewalInterval = time.Minute
+	f.native.advertisementChanged = make(chan struct{}, 1)
+	owner, err := f.factory.newOwner(t.Context(), workerProfile, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := owner.(*windowsConnection)
+	t.Cleanup(func() { _ = d.Disconnect(workerCallContext(t)) })
+	if err := d.Connect(backendOperation(t, f), false); err != nil {
+		t.Fatal(err)
+	}
+	ad, err := f.native.TransportAdvertisement(f.config.Endpoint.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ad.Endpoints = []coordinator.TransportEndpoint{{ProfileID: "prepared", ProfileDigest: strings.Repeat("1", 64), Endpoint: "192.0.2.1:51821"}}
+	f.native.advertisement.Store(&ad)
+	f.native.advertisementChanged <- struct{}{}
+	deadline := time.NewTimer(time.Second)
+	defer deadline.Stop()
+	for {
+		select {
+		case generation := <-f.patches:
+			if generation < 2 {
+				continue
+			}
+			f.mu.Lock()
+			request := f.requests[len(f.requests)-1]
+			f.mu.Unlock()
+			if request.Transport == nil || len(request.Transport.Endpoints) != 1 || request.Transport.Endpoints[0] != ad.Endpoints[0] {
+				t.Fatal("listener update lost actual profile/port binding")
+			}
+			return
+		case <-deadline.C:
+			t.Fatal("listener waited for periodic renewal")
+		}
 	}
 }
 
@@ -482,7 +554,10 @@ func TestWindowsConnectionDriverReconnectsWithFullSnapshotWithoutResettingCursor
 	for f.native.refreshes.Load() == 0 {
 		select {
 		case <-ctx.Done():
-			t.Fatal("source did not reconnect/apply full snapshot")
+			if cause := f.native.refreshError.Load(); cause != nil {
+				t.Fatal("source refresh failed", *cause)
+			}
+			t.Fatalf("source did not reconnect/apply full snapshot: %T %#v offline=%d revoked=%v", d.result(), d.result(), f.native.offlines.Load(), f.native.revoked.Load())
 		case <-tick.C:
 		}
 	}
@@ -537,6 +612,67 @@ func TestWindowsConnectionDriverQueueOverflowRevokesWithoutBlocking(t *testing.T
 	}
 	if err := d.enqueue(f.native, connectionFrame{}); !errors.Is(err, ErrConnectionWorker) || !f.native.revoked.Load() {
 		t.Fatal("bounded source queue dropped frame without revoke", err)
+	}
+}
+
+func TestTerminalSourceFailurePurgesHintsButOldGenerationCannotPurgeNewIntent(t *testing.T) {
+	f := newConnectionBackendFixture(t)
+	value, err := f.store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clearConnectionKeys(value)
+	p := value.Profiles[workerProfile]
+	local, err := ecdh.X25519().NewPrivateKey(p.Keys.WireGuardPrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer, err := ecdh.X25519().NewPrivateKey(bytes.Repeat([]byte{94}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	hint := state.TransportHint{Key: state.TransportHintKey{LocalProfileID: workerProfile, AccountID: p.Attempt.AccountID, NetworkID: p.Attempt.NetworkID, LocalNodeID: p.Attempt.NodeID, PeerNodeID: "peer", LocalPublicKey: base64.StdEncoding.EncodeToString(local.PublicKey().Bytes()), PeerPublicKey: base64.StdEncoding.EncodeToString(peer.PublicKey().Bytes()), ContextDigest: strings.Repeat("1", 64), Engine: "wireguard", ProtocolVersion: "1", TransportProfileID: "profile", ProfileVersion: 1, ProfileDigest: strings.Repeat("2", 64)}, SucceededAt: now, ExpiresAt: now.Add(state.TransportHintTTL), StableSpan: 5 * time.Second, SuccessfulProbes: 3}
+	if err := f.store.Update(t.Context(), value.Revision, func(next *state.State) error { return next.RecordTransportSuccess(hint, now) }); err != nil {
+		t.Fatal(err)
+	}
+	owner, err := f.factory.newOwner(t.Context(), workerProfile, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := owner.(*windowsConnection)
+	defer d.cancel()
+	d.failSource(f.native, connectivity.ErrRevoked)
+	if err := d.applyMaps(t.Context(), false, f.native); !errors.Is(err, connectivity.ErrRevoked) {
+		t.Fatal("terminal source outcome changed", err)
+	}
+	value, err = f.store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clearConnectionKeys(value)
+	if len(value.TransportHints) != 0 || !f.native.revoked.Load() {
+		t.Fatal("terminal source left cached priority")
+	}
+	if err := f.store.Update(t.Context(), value.Revision, func(next *state.State) error {
+		if err := next.RecordTransportSuccess(hint, now); err != nil {
+			return err
+		}
+		p := next.Profiles[workerProfile]
+		_, err := p.Connection.BeginRequestedAttempt(state.IntentDisconnected, now, state.ConnectionRequest{InstanceID: p.Connection.Request.InstanceID, Revision: next.Revision})
+		next.Profiles[workerProfile] = p
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	d.invalidateTransportHints()
+	value, err = f.store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clearConnectionKeys(value)
+	if len(value.TransportHints) != 1 || value.Profiles[workerProfile].Connection.Generation != 2 {
+		t.Fatal("late generation purged a later intent's metadata")
 	}
 }
 

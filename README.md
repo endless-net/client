@@ -1,5 +1,137 @@
 # client
 
+## Connectivity007 — транспортные компоненты в работе
+
+Client закрепляет опубликованные Client API `v0.4.0`, Coordinator API `v0.10.0`
+и Relay API `v0.4.0`. Проверка map v7 отдельно проверяет Relay credential по
+текущему RELAY_CREDENTIAL trust purpose, субъекту и исходному сроку карты.
+`RelayTransport` использует producer wire codecs, TLS 1.3/hostname verification,
+ограниченные deadlines и текущие peer/lease gates. TLS Ready подтверждает только
+соединение с Relay; зашифрованный peer frame ещё должен пройти AEAD/replay/source
+проверку движка. Новая карта не продлевает bearer уже открытого сокета.
+
+`relayMux` разделяет один TLS frame reader на bounded peer queues
+(16 frames/64KiB на peer, общий max из MaxPeers). `relayCipher` сохраняет отдельный
+baseline WireGuard канал для fallback и typed prepare/commit; его виртуальный
+порт не открывает UDP listener и не публикуется как Direct endpoint. Control
+проверяет текущие signed pair/generations/profile и исходную revision запроса, передаётся через
+неблокирующую bounded очередь supervisor. TLS Ready ещё не выбирает Relay path.
+
+`peerCipher` и виртуальные TUN adapters поддерживают существующий WireGuard и
+AmneziaWG 3.1 (`github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260814`, MIT).
+Декларативные параметры компилируются в закрытый whitelist UAPI; crypto timers
+сохраняют upstream defaults, implicit junk отключён. Отдельный candidate bind
+исполняет bounded prelude (literal/CSPRNG), учитывает входящий/исходящий probe
+traffic с IPv4/UDP headers в 64KiB/candidate/cycle и проверяет исходные30s/3s.
+Raw UAPI/CPS и downloaded executable code не принимаются.
+Очередь виртуального канала ограничена 16 frames/64KiB; закрытие канала не
+закрывает общий native TUN. AWG initial Read ждёт применения профиля и перечитывает
+S4 offset перед первым пакетом; prepared endpoint refresh не меняет listen port.
+
+Unit tests используют настоящую pinned криптографию WG/AWG поверх memory datagrams
+и проверяют replay/source fences; native Windows unit/race/build также пройдены.
+Direct factory требует verified current pair/profile assignment; numeric IPv4
+endpoint берётся из map, listener port должен быть подтверждён её локальным
+advertisement. Map renewal неизменного scope пары не сбрасывает срок/nonce;
+смена grants/endpoints/identities/intent/profile отменяет пробу. Global revision
+может меняться быстрее RTT: Echo/ACK сохраняет исходную revision запроса,
+receiver проверяет текущую authority и границы от последней semantic смены до
+current revision. Возврат прежних параметров не оживляет отменённую пробу.
+Nonce challenge/echo использует опубликованный strict Control codec внутри
+IPv4/UDP port0 и перехватывается в sink отдельного Direct cipher после
+AEAD/replay/source checks. Каждый attempt выбирает собственный CSPRNG nonce;
+peer-selected nonce и duplicate echo не создают новое подтверждение. Служебный
+port0, включая malformed control, не передаётся приложению/OS.
+История Direct принимает независимые own-nonce доказательства только одного
+candidate/cycle; квалификация требует ≥3 подтверждений на интервале≥5s и ещё
+действительную последнюю пробу. Повтор не меняет окно. Relay health имеет
+отдельный тип доказательства, собственную challenge/echo и исходные сроки;
+TLS Ready и ответы по Relay не квалифицируют Direct. Истечение Direct профиля
+само по себе не отменяет отдельную текущую Relay authority.
+Candidate negotiation сериализует prepare/prepared и commit/committed через
+текущий Relay cipher. Меньший NodeID — инициатор; точные nonce transcripts,
+квалификация Direct и current pair scope обязательны для activation token.
+Lost ACK не создаёт outgoing activation у инициатора; early commit ждёт local
+qualification, повторы не продлевают probe/cycle. Physical Direct mode принимает
+single-use activation token и разрешает app queue только при current scope.
+После qualified отправленного commit можно удержать receive-only eligibility:
+это не разрешает app output. Завершение search budget не обрывает уже подтверждённый
+data channel; expiry/revoke/endpoint change по-прежнему запрещают I/O.
+Пакеты с устаревшим epoch отбрасываются из virtual queue до чтения движком.
+`peerRoute` выбирает ровно один исходящий канал, принимает только собственную
+Relay health proof или bilateral Direct activation, применяет hysteresis30s и
+немедленный fallback при отказе. Смена выбора инвалидирует queued epoch;
+неудачная отправка не повторяет тот же payload через другой движок.
+Общий `TransportResources` создаётся один раз в Windows connection factory и
+сохраняется между intent generations: ≤2*MaxPeers+2 engines, ≤2 transient engines
+и ≤2 own pending probes. Legacy primary включён в этот предел; reservation
+предшествует native effects и освобождается после фактического engine Close.
+Relay/Direct factories и probes используют этот ledger и подключены к supervisor.
+Retained receive-only Direct
+продолжает занимать место.
+Protected State format4 хранит success metadata без transport parameters/keys:
+глобально≤256 hints, original success TTL24h, exact pair/context/profile binding,
+RTT и stable span/count. Удалённые bindings, failure, неизвестный контекст и
+clock rollback снимают приоритет; чтение/restart не продлевают TTL. Прямая
+миграция formats1/2/3 сохраняет keys, enrollment, intent/resources и revoke journal.
+Хранилище само не подтверждает достижимость. Supervisor подключает отдельный
+coalescing worker: один OS/Store вызов≤3s, current profile/intent и полный
+разрешённый набор pair/profile перед каждым commit. Lookup меняет порядок свежих
+проб; success записывается после own qualification и bilateral activation.
+Source error/unknown context удаляют приоритет, TTL при чтении не продлевается.
+Windows source использует NetworkGUID/interface GUID default IPv4 interfaces
+и локальный HMAC-SHA256; zero GUID не наследует старую сеть. Raw SSID/IP и
+network fingerprint не выдаются UI. Terminal source failure запрещает I/O до
+bounded metadata purge; старый intent не меняет hints следующего поколения.
+WindowsSession уже использует `packetSwitch`: единственный native TUN reader,
+bounded virtual port для primary WG и общий current pair/lease ingress boundary.
+Выбранный peerRoute не дублирует payload через primary при ошибке/отсутствии proof;
+старый primary queue epoch не переживает замену маршрута. Isolated cipher sink
+фиксирует node IDs/keys/IPs/generations и не сохраняется при смене этой привязки;
+port0, malformed control и foreign source не выходят в OS. Directed stateful ACL
+остаётся в native WFP. Primary Close закрывает только virtual port; Stop снимает
+dynamic permits до закрытия общего native reader. Identity/address/remote intent
+change пересоздаёт primary WG peer с остановкой старых crypto workers; endpoint
+refresh сохраняет peer/session и требует нового endpoint proof.
+`transportSupervisor` уже создаётся production WindowsSession, сохраняется при
+coalesced initial source transition и принимает Refresh. Он владеет actual TLS
+transport/mux/reserved WG channels, global probe admission и own-nonce health.
+Перед первыми health probes создаются максимум два ещё неподтверждённых канала;
+большая peer set не задерживает первый Relay из-за создания всех остальных engines.
+Own peer proof выбирает Relay при отсутствии primary Direct; TLS Ready не выбирает
+путь. `WaitPaths` сохраняет исходный Connect budget и принимает Direct или Relay;
+periodic monitoring не объявляет отказ из-за Direct0 при работающем Relay.
+Agent IPC передаёт отдельный relay_path_count. Missed health reply не разрывает
+известную WG session только из-за удалённого offline gate; upstream session loss
+снимает прежнюю proof и требует новую собственную challenge/echo.
+Endpoint worker публикует compiled WG1/AWG3.1 capabilities. Historical ACK
+восстанавливается исходными bytes/generation, затем отсутствие текущего
+advertisement требует следующего explicit announcement. Пока actual Direct
+listeners не подготовлены, endpoints — пустой набор, без выдуманных портов.
+Новые обязательные ENV: `ENDLESSNET_CLIENT_CONNECTION_RELAY_DIAL_TIMEOUT`,
+`ENDLESSNET_CLIENT_CONNECTION_RELAY_IO_TIMEOUT`,
+`ENDLESSNET_CLIENT_CONNECTION_RELAY_HEARTBEAT_INTERVAL`. Defaults отсутствуют;
+ограничения producer heartbeat и IOTimeout>HeartbeatInterval проверяются до SCM/I/O.
+Общий MTU теперь≤65504, что выведено из максимального Relay frame и WG overhead.
+Direct actor готовит listeners, немедленно сигнализирует endpoint worker и ждёт
+подписанного подтверждения настоящего порта. Общий search receipt≤30s не
+обновляется при смене кандидата; каждый кандидат имеет отдельный wire budget.
+Поиск, bilateral activation, selected Direct health и backoff15–300s работают
+при сохранении Relay. TLS dial вынесен из actor, поэтому не задерживает Direct
+receipts. Временная source/map пауза не исчерпывает ещё не проверенный профиль;
+незавершённое применение карты повторяется после открытия gate.
+Первые Relay handshakes инициирует меньший NodeID; обе стороны затем обязаны
+получить собственный Echo. Session observer устанавливается до запуска WG peers:
+upstream не воспроизводит прошлые события для позднего callback.
+Status.peer_transports передаёт UI текущие публичные path/engine/profile revision,
+search/backoff и finite reason key. Snapshot отделён от actor, stale generation
+и временный fence не выдают старый путь за текущий. Пустой набор профилей не
+объявляется доказательством необходимости обновить binary.
+Итоговая сверка бюджета повторных проб retained channels и поведения при частой
+общей NetworkRevision ещё требуется. Memory crypto fixtures
+проверяют обычный WG и блокировку WG с выбором AWG, сохраняя Relay payload;
+сквозная работа установленной пары при реальной фильтрации не подтверждена.
+
 ## Connectivity005 — локальное состояние
 
 Protected state format2 хранит last Connect/Disconnect intent, поколения и журнал
@@ -259,3 +391,37 @@ controller/panel test через настоящий pipe. Нужны explicit
 `ENDLESSNET_CLIENT_UI_OWNER_APP` и `ENDLESSNET_CLIENT_UI_FLUTTER_ROOT`; обычные
 Client build/unit checks не требуют UI или Flutter. Два lifetimes сохраняют
 Client keys/request/deadlines и UI correlation journal без второго enrollment.
+
+## Установка на Ubuntu
+
+Для Ubuntu26.04 LTS amd64 используется существующий APT-репозиторий.
+Из checkout Client запустите `sudo sh scripts/install.sh`.
+[Скрипт](scripts/install.sh) подключает signed-by источник и вызывает
+`apt-get install endlessnet-client`; запуск службы выполняет сам пакет.
+Это APT-установка без ручной распаковки или сборки бинарника.
+Проверка команд без изменения системы: `python3 -B scripts/test_install.py`
+в Ubuntu26.04. Проверка реальной установки на отдельном хосте ещё требуется.
+
+Скрипт также устанавливает команду `endlessnet` в `/usr/local/bin`.
+Проверка обновлений: `sudo endlessnet check-updates`.
+Команда обновляет APT-индекс, показывает установленную/доступную версии и
+спрашивает подтверждение. Только ответ `y`/`yes`/`да` запускает APT upgrade;
+отмена и EOF ничего не устанавливают. Данные пакета не удаляются.
+Unit-проверка команды: `python3 -B scripts/test_endlessnet.py`.
+
+## Подключение Windows-установщика
+
+Внутренние entrypoints `installed-init` и `installed-run` требуют SYSTEM и
+читают REG_MULTI_SZ `Environment` из собственного SCM service key.
+`installed-init` использует существующую строгую инициализацию: существующий
+state не заменяется. MSI должен вызывать её только для новой установки.
+`installed-run` запускает тот же Windows runtime с этими настройками.
+
+`ENDLESSNET_CLIENT_RUNTIME_INSTANCE_FILE` задаёт путь публичного файла UUID
+текущего IPC instance. Parent создаёт MSI: SYSTEM/Admin могут писать, UI может
+читать; каталог state остаётся закрытым. UUID публикуется после IPC startup
+и удаляется при остановке только если принадлежит текущему процессу.
+Это адрес подключения, а не подтверждение identity или прав пользователя.
+
+Для builder доступен `validate-config`: проверяет текущие environment settings
+и build identity без открытия/создания state и без запуска службы.

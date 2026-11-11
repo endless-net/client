@@ -131,6 +131,9 @@ func (w *ConnectionWorker) RunWindows(ctx context.Context, maxRows, maxInterface
 	if maxRows <= 0 || maxInterfaces <= 0 {
 		return ErrConnectionWorker
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	power := windows.NewLazySystemDLL("powrprof.dll")
 	register := power.NewProc("PowerRegisterSuspendResumeNotification")
 	unregister := power.NewProc("PowerUnregisterSuspendResumeNotification")

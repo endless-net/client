@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"net/netip"
+	"reflect"
 	"strings"
 	"time"
 	"unicode"
@@ -119,7 +120,7 @@ func validEndpointRequest(p Profile) bool {
 		return false
 	}
 	r, err := coordinator.DecodeUpdateNodeEndpointRequest(pending.Request, len(pending.Request))
-	if err != nil || r.Generation != c.EndpointGeneration {
+	if err != nil || r.Generation != c.EndpointGeneration || r.Transport != nil && r.Transport.IntentGeneration != pending.IntentGeneration {
 		return false
 	}
 	want := "offline"
@@ -164,7 +165,7 @@ func endpointRequestUpdate(before, after *ConnectionState) bool {
 		return false
 	}
 	if b.Receipt != nil {
-		return a.Receipt != nil && *b.Receipt == *a.Receipt
+		return a.Receipt != nil && reflect.DeepEqual(b.Receipt, a.Receipt)
 	}
 	return true
 }

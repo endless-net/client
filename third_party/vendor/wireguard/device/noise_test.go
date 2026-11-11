@@ -1,0 +1,455 @@
+/* SPDX-License-Identifier: MIT
+ *
+ * Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
+ */
+
+package device
+
+import (
+	"bytes"
+	"encoding/binary"
+	"net/netip"
+	"testing"
+
+	"github.com/tailscale/wireguard-go/conn"
+	"github.com/tailscale/wireguard-go/tun/tuntest"
+	"golang.org/x/crypto/poly1305"
+)
+
+func TestCurveWrappers(t *testing.T) {
+	sk1, err := newPrivateKey()
+	assertNil(t, err)
+
+	sk2, err := newPrivateKey()
+	assertNil(t, err)
+
+	pk1 := sk1.publicKey()
+	pk2 := sk2.publicKey()
+
+	ss1, err1 := sk1.sharedSecret(pk2)
+	ss2, err2 := sk2.sharedSecret(pk1)
+
+	if ss1 != ss2 || err1 != nil || err2 != nil {
+		t.Fatal("Failed to compute shared secet")
+	}
+}
+
+func randDevice(t *testing.T) *Device {
+	sk, err := newPrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tun := tuntest.NewChannelTUN()
+	logger := NewLogger(LogLevelError, "")
+	device := NewDevice(tun.TUN(), conn.NewDefaultBind(), logger)
+	device.SetPrivateKey(sk)
+	return device
+}
+
+func assertNil(t *testing.T, err error) {
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertEqual(t *testing.T, a, b []byte) {
+	if !bytes.Equal(a, b) {
+		t.Fatal(a, "!=", b)
+	}
+}
+
+type initAwareEP struct {
+	calledWith *[32]byte
+}
+
+var _ conn.Endpoint = (*initAwareEP)(nil)
+var _ conn.InitiationAwareEndpoint = (*initAwareEP)(nil)
+
+func (i *initAwareEP) ClearSrc()           {}
+func (i *initAwareEP) SrcToString() string { return "" }
+func (i *initAwareEP) DstToString() string { return "" }
+func (i *initAwareEP) DstToBytes() []byte  { return nil }
+func (i *initAwareEP) DstIP() netip.Addr   { return netip.Addr{} }
+func (i *initAwareEP) SrcIP() netip.Addr   { return netip.Addr{} }
+
+func (i *initAwareEP) InitiationMessagePublicKey(peerPublicKey [32]byte) {
+	calledWith := [32]byte{}
+	copy(calledWith[:], peerPublicKey[:])
+	i.calledWith = &calledWith
+}
+
+func TestNoiseHandshake(t *testing.T) {
+	dev1 := randDevice(t)
+	dev2 := randDevice(t)
+
+	defer dev1.Close()
+	defer dev2.Close()
+
+	peer1, err := dev2.NewPeer(dev1.staticIdentity.privateKey.publicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer2, err := dev1.NewPeer(dev2.staticIdentity.privateKey.publicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer1.Start()
+	peer2.Start()
+
+	assertEqual(
+		t,
+		peer1.handshake.precomputedStaticStatic[:],
+		peer2.handshake.precomputedStaticStatic[:],
+	)
+
+	/* simulate handshake */
+
+	// initiation message
+
+	t.Log("exchange initiation message")
+
+	msg1, err := dev1.CreateMessageInitiation(peer2)
+	assertNil(t, err)
+
+	packet := make([]byte, 0, 256)
+	writer := bytes.NewBuffer(packet)
+	err = binary.Write(writer, binary.LittleEndian, msg1)
+	assertNil(t, err)
+	initEP := &initAwareEP{}
+	peer := dev2.ConsumeMessageInitiation(msg1, initEP)
+	if peer == nil {
+		t.Fatal("handshake failed at initiation message")
+	}
+	if initEP.calledWith == nil {
+		t.Fatal("initAwareEP never called")
+	}
+	if *initEP.calledWith != dev1.staticIdentity.publicKey {
+		t.Fatal("initAwareEP called with unexpected public key")
+	}
+
+	assertEqual(
+		t,
+		peer1.handshake.chainKey[:],
+		peer2.handshake.chainKey[:],
+	)
+
+	assertEqual(
+		t,
+		peer1.handshake.hash[:],
+		peer2.handshake.hash[:],
+	)
+
+	// response message
+
+	t.Log("exchange response message")
+
+	msg2, err := dev2.CreateMessageResponse(peer1)
+	assertNil(t, err)
+
+	peer = dev1.ConsumeMessageResponse(msg2)
+	if peer == nil {
+		t.Fatal("handshake failed at response message")
+	}
+
+	assertEqual(
+		t,
+		peer1.handshake.chainKey[:],
+		peer2.handshake.chainKey[:],
+	)
+
+	assertEqual(
+		t,
+		peer1.handshake.hash[:],
+		peer2.handshake.hash[:],
+	)
+
+	// key pairs
+
+	t.Log("deriving keys")
+
+	err = peer1.BeginSymmetricSession()
+	if err != nil {
+		t.Fatal("failed to derive keypair for peer 1", err)
+	}
+
+	err = peer2.BeginSymmetricSession()
+	if err != nil {
+		t.Fatal("failed to derive keypair for peer 2", err)
+	}
+
+	key1 := peer1.keypairs.next.Load()
+	key2 := peer2.keypairs.current
+
+	// encrypting / decryption test
+
+	t.Log("test key pairs")
+
+	func() {
+		testMsg := []byte("wireguard test message 1")
+		var err error
+		var out []byte
+		var nonce [12]byte
+		out = key1.send.Seal(out, nonce[:], testMsg, nil)
+		out, err = key2.receive.Open(out[:0], nonce[:], out, nil)
+		assertNil(t, err)
+		assertEqual(t, out, testMsg)
+	}()
+
+	func() {
+		testMsg := []byte("wireguard test message 2")
+		var err error
+		var out []byte
+		var nonce [12]byte
+		out = key2.send.Seal(out, nonce[:], testMsg, nil)
+		out, err = key1.receive.Open(out[:0], nonce[:], out, nil)
+		assertNil(t, err)
+		assertEqual(t, out, testMsg)
+	}()
+}
+
+func TestHybridHandshake(t *testing.T) {
+	dev1 := randDevice(t)
+	dev2 := randDevice(t)
+
+	defer dev1.Close()
+	defer dev2.Close()
+
+	peer1, err := dev2.NewPeer(dev1.staticIdentity.privateKey.publicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer1.SetHybridHandshake(true)
+	peer2, err := dev1.NewPeer(dev2.staticIdentity.privateKey.publicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer2.SetHybridHandshake(true)
+	peer1.Start()
+	peer2.Start()
+
+	// Handshake initiation
+	msg1, err := dev1.CreateMessageInitiation(peer2)
+	assertNil(t, err)
+	if !msg1.HasKEM {
+		t.Fatal("hybrid handshake initiation has no KEM key")
+	}
+	var zeroKey [NoiseKEMEncapsulationKeySize + poly1305.TagSize]byte
+	if msg1.EphemeralKEM == zeroKey {
+		// An all zeros public key is technically a structurally valid ML-KEM
+		// encapsulation key according to FIPS 203, however, it's a "trivial"
+		// public key which would send the secret value in cleartext if used,
+		// and one that is overwhelmingly unlikely to be produced when generating
+		// ML-KEM keypairs correctly.
+		t.Fatal("hybrid handshake initiation KEM key is all zeros")
+	}
+
+	initEP := &initAwareEP{}
+	peer := dev2.ConsumeMessageInitiation(msg1, initEP)
+	if peer == nil {
+		t.Fatal("handshake failed at initiation message")
+	}
+	if initEP.calledWith == nil {
+		t.Fatal("initAwareEP never called")
+	}
+	if *initEP.calledWith != dev1.staticIdentity.publicKey {
+		t.Fatal("initAwareEP called with unexpected public key")
+	}
+
+	assertEqual(
+		t,
+		peer1.handshake.chainKey[:],
+		peer2.handshake.chainKey[:],
+	)
+
+	assertEqual(
+		t,
+		peer1.handshake.hash[:],
+		peer2.handshake.hash[:],
+	)
+
+	// Handshake response
+	msg2, err := dev2.CreateMessageResponse(peer1)
+	assertNil(t, err)
+	if !msg2.HasKEM {
+		t.Fatal("hybrid handshake response has no KEM key")
+	}
+	var zeroCiphertext [NoiseKEMCiphertextSize + poly1305.TagSize]byte
+	if msg2.EphemeralKEM == zeroCiphertext {
+		t.Fatal("hybrid handshake response KEM ciphertext is all zeros")
+	}
+
+	peer = dev1.ConsumeMessageResponse(msg2)
+	if peer == nil {
+		t.Fatal("handshake failed at response message")
+	}
+
+	assertEqual(
+		t,
+		peer1.handshake.chainKey[:],
+		peer2.handshake.chainKey[:],
+	)
+
+	assertEqual(
+		t,
+		peer1.handshake.hash[:],
+		peer2.handshake.hash[:],
+	)
+
+	// Start session
+	err = peer1.BeginSymmetricSession()
+	if err != nil {
+		t.Fatal("failed to derive keypair for peer 1", err)
+	}
+
+	err = peer2.BeginSymmetricSession()
+	if err != nil {
+		t.Fatal("failed to derive keypair for peer 2", err)
+	}
+
+	key1 := peer1.keypairs.next.Load()
+	key2 := peer2.keypairs.current
+
+	func() {
+		testMsg := []byte("wireguard test message 1")
+		var err error
+		var out []byte
+		var nonce [12]byte
+		out = key1.send.Seal(out, nonce[:], testMsg, nil)
+		out, err = key2.receive.Open(out[:0], nonce[:], out, nil)
+		assertNil(t, err)
+		assertEqual(t, out, testMsg)
+	}()
+
+	func() {
+		testMsg := []byte("wireguard test message 2")
+		var err error
+		var out []byte
+		var nonce [12]byte
+		out = key2.send.Seal(out, nonce[:], testMsg, nil)
+		out, err = key1.receive.Open(out[:0], nonce[:], out, nil)
+		assertNil(t, err)
+		assertEqual(t, out, testMsg)
+	}()
+}
+
+func TestHybridInitiatorOnly(t *testing.T) {
+	dev1 := randDevice(t)
+	dev2 := randDevice(t)
+
+	defer dev1.Close()
+	defer dev2.Close()
+
+	peer1, err := dev2.NewPeer(dev1.staticIdentity.privateKey.publicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer2, err := dev1.NewPeer(dev2.staticIdentity.privateKey.publicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer2.SetHybridHandshake(true)
+	peer1.Start()
+	peer2.Start()
+
+	// Handshake initiation
+	msg1, err := dev1.CreateMessageInitiation(peer2)
+	assertNil(t, err)
+	if !msg1.HasKEM {
+		t.Fatal("hybrid handshake initiation has no KEM key")
+	}
+
+	initEP := &initAwareEP{}
+	peer := dev2.ConsumeMessageInitiation(msg1, initEP)
+	if peer != nil {
+		t.Fatal("responder accepted hybrid handshake when configured not to")
+	}
+}
+
+func TestHybridResponderOnly(t *testing.T) {
+	dev1 := randDevice(t)
+	dev2 := randDevice(t)
+
+	defer dev1.Close()
+	defer dev2.Close()
+
+	peer1, err := dev2.NewPeer(dev1.staticIdentity.privateKey.publicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer1.SetHybridHandshake(true)
+	peer2, err := dev1.NewPeer(dev2.staticIdentity.privateKey.publicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer1.Start()
+	peer2.Start()
+
+	// Handshake initiation
+	msg1, err := dev1.CreateMessageInitiation(peer2)
+	assertNil(t, err)
+	if msg1.HasKEM {
+		t.Fatal("classical handshake initiation has KEM key")
+	}
+
+	initEP := &initAwareEP{}
+	peer := dev2.ConsumeMessageInitiation(msg1, initEP)
+	if peer != nil {
+		t.Fatal("responder accepted classical handshake when configured for hybrid handshake")
+	}
+}
+
+func TestRetryEncoding(t *testing.T) {
+	init := MessageInitiation{Type: MessageInitiationType}
+	bs := make([]byte, MessageInitiationSize)
+	init.marshal(bs)
+	if got, want := binary.LittleEndian.Uint32(bs), uint32(MessageInitiationType); got != want {
+		t.Fatalf("wrong message type for classical initiation: got %v, want %v ", got, want)
+	}
+
+	resp := MessageResponse{Type: MessageResponseType}
+	bs = make([]byte, MessageResponseSize)
+	resp.marshal(bs)
+	if got, want := binary.LittleEndian.Uint32(bs), uint32(MessageResponseType); got != want {
+		t.Fatalf("wrong message type for classical response: got %v, want %v ", got, want)
+	}
+
+	init = MessageInitiation{Type: MessageInitiationType, HasKEM: true}
+	bs = make([]byte, MessageHybridInitiationSize)
+	init.marshal(bs)
+	if got, want := binary.LittleEndian.Uint32(bs), uint32(MessageInitiationType); got != want {
+		t.Fatalf("wrong message type for hybrid initiation: got %v, want %v ", got, want)
+	}
+	if PacketIsRetry(bs) {
+		t.Fatal("packet is retry, want non-retry")
+	}
+
+	resp = MessageResponse{Type: MessageResponseType, HasKEM: true}
+	bs = make([]byte, MessageHybridResponseSize)
+	resp.marshal(bs)
+	if got, want := binary.LittleEndian.Uint32(bs), uint32(MessageResponseType); got != want {
+		t.Fatalf("wrong message type for hybrid response: got %v, want %v ", got, want)
+	}
+	if PacketIsRetry(bs) {
+		t.Fatal("packet is retry, want non-retry")
+	}
+
+	init = MessageInitiation{Type: MessageInitiationType, HasKEM: true, IsRetry: true}
+	bs = make([]byte, MessageHybridInitiationSize)
+	init.marshal(bs)
+	if got, want := binary.LittleEndian.Uint32(bs), uint32(MessageInitiationType)|handshakeRetryMask; got != want {
+		t.Fatalf("wrong message type for hybrid initiation with retry: got %v, want %v ", got, want)
+	}
+	if !PacketIsRetry(bs) {
+		t.Fatal("packet is non-retry, want retry")
+	}
+
+	resp = MessageResponse{Type: MessageResponseType, HasKEM: true, IsRetry: true}
+	bs = make([]byte, MessageHybridResponseSize)
+	resp.marshal(bs)
+	if got, want := binary.LittleEndian.Uint32(bs), uint32(MessageResponseType)|handshakeRetryMask; got != want {
+		t.Fatalf("wrong message type for hybrid response with retry: got %v, want %v ", got, want)
+	}
+	if !PacketIsRetry(bs) {
+		t.Fatal("packet is non-retry, want retry")
+	}
+}

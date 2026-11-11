@@ -105,9 +105,11 @@ type State struct {
 	OwnerSID        string
 	ActiveProfileID string
 	Profiles        map[string]Profile
+	TransportHints  []TransportHint `json:",omitempty"`
+	HintObservedAt  time.Time       `json:",omitempty"`
 }
 
-const CurrentVersion uint32 = 3
+const CurrentVersion uint32 = 4
 
 func (s State) Validate(installation string) error {
 	if s.Version != CurrentVersion || !validID(s.InstallationID) || s.InstallationID != installation || s.Revision == 0 || (len(s.Profiles) == 0) != (s.OwnerSID == "") {
@@ -120,6 +122,9 @@ func (s State) Validate(installation string) error {
 		if _, ok := s.Profiles[s.ActiveProfileID]; !ok {
 			return ErrCorrupt
 		}
+	}
+	if validateTransportHints(s) != nil {
+		return ErrCorrupt
 	}
 	for id, p := range s.Profiles {
 		if validateRevocations(s.OwnerSID, p) != nil {
@@ -333,6 +338,9 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 			return err
 		}
 		if after.Version != before.Version || after.InstallationID != before.InstallationID || after.Revision != before.Revision || (before.OwnerSID != "" && after.OwnerSID != before.OwnerSID) {
+			return ErrCorrupt
+		}
+		if after.HintObservedAt.Before(before.HintObservedAt) {
 			return ErrCorrupt
 		}
 		for id, p := range before.Profiles {

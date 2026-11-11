@@ -30,6 +30,7 @@ type Lease struct {
 	generation                     uint64
 	last                           ClockSample
 	cursor                         *state.MapCursor
+	current                        Map
 	deadline                       time.Duration
 	expires                        time.Time
 	active, online, revoked, fault bool
@@ -39,6 +40,9 @@ type Lease struct {
 	sourceBlocked                  bool
 	sourceChanged                  chan struct{}
 }
+
+func (*Lease) String() string   { return "[private connectivity lease]" }
+func (*Lease) GoString() string { return "[private connectivity lease]" }
 
 func NewLease(ctx context.Context, clock Clock, profileID string, generation uint64) (*Lease, error) {
 	if ctx == nil || ctx.Err() != nil || clock == nil || !identifier(profileID) || generation == 0 {
@@ -99,6 +103,7 @@ func (l *Lease) Confirm(m Map) error {
 	}
 	if m.Denied() {
 		l.cursor = &cursor
+		l.current = m
 		l.revoked = true
 		l.active = false
 		l.online = false
@@ -128,6 +133,7 @@ func (l *Lease) Confirm(m Map) error {
 		return ErrExpired
 	}
 	l.cursor = &cursor
+	l.current = m
 	l.deadline = deadline
 	l.expires = m.ExpiresAt()
 	l.active = true
@@ -244,4 +250,21 @@ func (l *Lease) Permit(existing bool) bool {
 		return p.ExistingFlows
 	}
 	return p.NewFlows
+}
+
+// MatchesMap binds an adapter to this intent's most recently confirmed map.
+// It is not a traffic grant; every I/O still checks Permissions.
+func (l *Lease) MatchesMap(m Map) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.cursor != nil && l.profileID == m.profileID && l.generation == m.generation && *l.cursor == m.Cursor()
+}
+
+// CurrentMap returns only the last immutable verifier result accepted by this
+// intent. It grants no traffic: expiry, revocation and source/native fences
+// still require Permissions. Snapshot remains detached from the sealed result.
+func (l *Lease) CurrentMap() Map {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.current
 }

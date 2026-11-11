@@ -31,6 +31,8 @@ func TestWindowsAssemblyDoesNotAcquireStateOrPipeDuringConstruction(t *testing.T
 	e := configEnvironment()
 	directory := filepath.Join(t.TempDir(), "not-created")
 	e["ENDLESSNET_CLIENT_STATE_DIRECTORY"] = directory
+	instancePath := filepath.Join(filepath.Dir(directory), "runtime-instance")
+	e["ENDLESSNET_CLIENT_RUNTIME_INSTANCE_FILE"] = instancePath
 	c, err := ParseWindows(e)
 	if err != nil {
 		t.Fatal(err)
@@ -40,6 +42,9 @@ func TestWindowsAssemblyDoesNotAcquireStateOrPipeDuringConstruction(t *testing.T
 	r, err := NewWindows(c, build, digest, &logs)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Stat(instancePath); !os.IsNotExist(err) {
+		t.Fatal("constructor published an instance before service startup")
 	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)

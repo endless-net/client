@@ -3,6 +3,7 @@ package connectivity
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -52,6 +53,45 @@ func leaseFixture(t *testing.T, ttl time.Duration) (*mapFixture, Map, *leaseCloc
 		t.Fatal(err)
 	}
 	return f, m, clock, l, cancel
+}
+
+func TestLeaseCurrentMapExposesOnlyAcceptedImmutableResultAndDoesNotGrantTraffic(t *testing.T) {
+	_, m, _, l, cancel := leaseFixture(t, 30*time.Second)
+	defer cancel()
+	if !l.CurrentMap().ExpiresAt().IsZero() {
+		t.Fatal("new lease exposed unconfirmed input")
+	}
+	if err := l.Confirm(m); err != nil {
+		t.Fatal(err)
+	}
+	for _, rendered := range []string{fmt.Sprint(l), fmt.Sprintf("%+v", l), fmt.Sprintf("%#v", l)} {
+		if rendered != "[private connectivity lease]" {
+			t.Fatal("lease formatting exposed retained sealed state")
+		}
+	}
+	view, err := l.CurrentMap().Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := view.Node.ID
+	view.Node.ID = "foreign"
+	copy, err := l.CurrentMap().Snapshot()
+	if err != nil || copy.Node.ID != original {
+		t.Fatal("reader mutated confirmed map", err)
+	}
+	bad := m
+	bad.profileID = "foreign"
+	if l.Confirm(bad) == nil || l.CurrentMap().Cursor() != m.Cursor() {
+		t.Fatal("rejected input replaced confirmed map")
+	}
+	l.Unavailable()
+	if l.CurrentMap().Cursor() != m.Cursor() || l.Permissions().NewFlows {
+		t.Fatal("map availability implied online authority")
+	}
+	l.Revoke()
+	if l.Permissions().ExistingFlows {
+		t.Fatal("retained sealed map bypassed revocation")
+	}
 }
 
 func TestLeaseOfflinePreservesOnlyExistingFlowsUntilOriginalExpiry(t *testing.T) {

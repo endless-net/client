@@ -57,7 +57,7 @@ func nextSessionMap(t *testing.T, s *WindowsSession, previous connectivity.Map, 
 		t.Fatal(err)
 	}
 	hash := sha256.Sum256(payload)
-	snapshot.MapSignature = &coordinator.MapSignature{Version: 5, Algorithm: "ed25519-network-map-v5", KeyID: trust.KeyID, IssuedAt: sample.Wall, ExpiresAt: expires, PayloadHash: hex.EncodeToString(hash[:]), Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(key, payload))}
+	snapshot.MapSignature = &coordinator.MapSignature{Version: 7, Algorithm: "ed25519-network-map-v7", KeyID: trust.KeyID, IssuedAt: sample.Wall, ExpiresAt: expires, PayloadHash: hex.EncodeToString(hash[:]), Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(key, payload))}
 	event := coordinator.MapStreamEvent{Type: "resync", ProtocolVersion: 3, Capabilities: []string{"snapshot", "signed-delta", "checkpoint", "resync", "heartbeat"}, EventID: "map:" + snapshot.MapSignature.PayloadHash, From: previous.Cursor().Revision, To: snapshot.Revision, Snapshot: &snapshot, ResultSignature: snapshot.MapSignature}
 	if p.Connection.MapCursor == nil {
 		event.Type = "snapshot"

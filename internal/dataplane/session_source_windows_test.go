@@ -24,12 +24,16 @@ func TestSourceChangeDuringNativeBindRetainsResourcesWithoutLateTraffic(t *testi
 	if s.lease.Permissions().NewFlows || s.lease.Permissions().ExistingFlows || ip.createdAddresses != 1 || s.current.Cursor() != m.Cursor() {
 		t.Fatal("stale native completion reopened source gate or forgot receipts")
 	}
+	if s.supervisor == nil {
+		t.Fatal("superseded first apply lost the session's transport supervisor")
+	}
+	originalSupervisor := s.supervisor
 	clock.advance(time.Second)
 	next := nextSessionMap(t, s, m, clock, func(*coordinator.NetworkMapSnapshot) {})
 	if err := s.Refresh(WithSourceEpoch(context.Background(), nextEpoch), next); err != nil {
 		t.Fatal(err)
 	}
-	if !s.lease.Permissions().NewFlows || ip.createdAddresses != 1 {
+	if !s.lease.Permissions().NewFlows || ip.createdAddresses != 1 || s.supervisor != originalSupervisor {
 		t.Fatal("fresh source did not resume same owned resources")
 	}
 	if err := b.Complete(); err != nil {

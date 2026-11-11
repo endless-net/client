@@ -37,9 +37,11 @@ type windowsConnectionNative interface {
 	Refresh(context.Context, connectivity.Map) error
 	Offline(context.Context) error
 	Stop(context.Context) error
-	WaitDirect(context.Context, time.Duration) error
-	ProbeDirect(context.Context) error
+	WaitPaths(context.Context, time.Duration) error
+	ProbePaths(context.Context) error
 	BoundPort() (uint16, error)
+	TransportAdvertisement(netip.Addr) (coordinator.TransportAdvertisement, error)
+	AdvertisementSignal() <-chan struct{}
 	BlockSource() uint64
 	RevokeSource()
 	ConnectionLocal() connectivity.LocalObservation
@@ -66,12 +68,16 @@ func NewWindowsConnectionFactory(store *state.Store, transport *connectivity.Tra
 	if err != nil {
 		return nil, err
 	}
+	resources, err := dataplane.NewTransportResources(c.Native.MaxPeers)
+	if err != nil {
+		return nil, err
+	}
 	f := &windowsConnections{store: store, transport: transport, config: c, stream: transport.StreamSnapshot}
 	f.endpoint = func() (netip.AddrPort, error) {
 		return underlayEndpoint(c.Endpoint, c.Native.MaxInventoryRows, c.Native.MaxInterfaces)
 	}
 	f.makeNative = func(ctx context.Context, profile string, generation uint64) (windowsConnectionNative, error) {
-		return dataplane.NewWindowsSession(ctx, store, c.Verifier.Clock, profile, generation, c.Native)
+		return dataplane.NewWindowsSession(ctx, store, c.Verifier.Clock, profile, generation, c.Native, resources)
 	}
 	f.cleanup = func(ctx context.Context, profile string) error {
 		value, err := store.Load(ctx)
@@ -203,7 +209,7 @@ func (d *windowsConnection) Connect(operation context.Context, restore bool) err
 	case <-operation.Done():
 		return operation.Err()
 	case <-d.applied:
-		if err := native.WaitDirect(operation, d.factory.config.ProbeInterval); err != nil {
+		if err := native.WaitPaths(operation, d.factory.config.ProbeInterval); err != nil {
 			return nativeConnectionFailure(err, connectivity.FailurePath)
 		}
 		return connectivity.CheckOperation(operation)
@@ -245,6 +251,37 @@ func (d *windowsConnection) failSource(native windowsConnectionNative, err error
 	select {
 	case d.fatal <- err:
 	default:
+	}
+}
+
+// Terminal source failure revokes traffic before this bounded metadata write.
+// A later intent cannot lose its hints to this old generation's callback.
+func (d *windowsConnection) invalidateTransportHints() {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(d.lifetime), d.factory.config.WriteBudget)
+	defer cancel()
+	for ctx.Err() == nil {
+		value, _, err := d.profileAt(ctx)
+		if err != nil {
+			return
+		}
+		err = d.factory.store.Update(ctx, value.Revision, func(next *state.State) error {
+			p := next.Profiles[d.profile]
+			if next.ActiveProfileID != d.profile || p.Connection == nil || p.Connection.Generation != d.generation {
+				return state.ErrStale
+			}
+			kept := next.TransportHints[:0]
+			for _, hint := range next.TransportHints {
+				if hint.Key.LocalProfileID != d.profile {
+					kept = append(kept, hint)
+				}
+			}
+			next.TransportHints = kept
+			return nil
+		})
+		clearConnectionKeys(value)
+		if !errors.Is(err, state.ErrStale) && !errors.Is(err, state.ErrUncertain) {
+			return
+		}
 	}
 }
 
@@ -309,6 +346,7 @@ func (d *windowsConnection) readMaps(native windowsConnectionNative) {
 }
 
 func (d *windowsConnection) applyMaps(initial context.Context, restore bool, native windowsConnectionNative) error {
+	advertisements := native.AdvertisementSignal()
 	renew := time.NewTicker(d.factory.config.RenewalInterval)
 	defer renew.Stop()
 	probe := time.NewTicker(d.factory.config.ProbeInterval)
@@ -319,6 +357,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 		case <-d.lifetime.Done():
 			return d.lifetime.Err()
 		case err := <-d.fatal:
+			d.invalidateTransportHints()
 			return err
 		case frame := <-d.frames:
 			ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.Native.ApplyTimeout)
@@ -379,16 +418,25 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 					return err
 				}
 			}
+		case <-advertisements:
+			if started {
+				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
+				err := d.announce(ctx, true, native)
+				cancel()
+				if err != nil && !errors.Is(err, connectivity.ErrEndpointUncertain) && !errors.Is(err, connectivity.ErrUnavailable) {
+					return err
+				}
+			}
 		case <-probe.C:
 			if started {
 				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
-				err := native.ProbeDirect(ctx)
+				err := native.ProbePaths(ctx)
 				cancel()
 				if err != nil && !errors.Is(err, dataplane.ErrNoAuthority) {
 					return nativeConnectionFailure(err, connectivity.FailurePath)
 				}
 				local := native.ConnectionLocal()
-				if local.Known && local.Permission.NewFlows && local.PeerCount > 0 && local.DirectPaths == 0 {
+				if local.Known && local.Permission.NewFlows && local.PeerCount > 0 && local.DirectPaths == 0 && local.RelayPaths == 0 {
 					return connectivity.FailurePath
 				}
 			}
@@ -410,6 +458,14 @@ func (d *windowsConnection) announce(ctx context.Context, online bool, native wi
 		if err != nil {
 			return connectivity.FailurePath
 		}
+	}
+	var desired *coordinator.TransportAdvertisement
+	if online {
+		ad, err := native.TransportAdvertisement(endpoint.Addr())
+		if err != nil {
+			return nativeConnectionFailure(err, connectivity.FailurePath)
+		}
+		desired = &ad
 	}
 	// At most one frozen recovery and one explicit current announcement. An
 	// uncertain response is never retried here, nor does recovery renew a lease.
@@ -441,7 +497,7 @@ func (d *windowsConnection) announce(ctx context.Context, online bool, native wi
 				return state.ErrStale
 			}
 			endpointGeneration++
-			r := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint.String(), Generation: endpointGeneration, TTL: d.factory.config.EndpointTTL.String(), Status: status}
+			r := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint.String(), Generation: endpointGeneration, TTL: d.factory.config.EndpointTTL.String(), Status: status, Transport: desired}
 			if err := connectivity.PrepareEndpoint(ctx, d.factory.store, d.profile, d.generation, r); err != nil {
 				return err
 			}
@@ -456,7 +512,8 @@ func (d *windowsConnection) announce(ctx context.Context, online bool, native wi
 		if err := announcementContext(ctx); err != nil {
 			return err
 		}
-		if !online || receipt.Online && receipt.Endpoint == endpoint.String() && receipt.ExpiresAt.After(d.factory.config.Verifier.Now()) {
+		current := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint.String(), Generation: receipt.Generation, TTL: d.factory.config.EndpointTTL.String(), Status: status, Transport: desired}
+		if !online || receipt.Online && receipt.Endpoint == endpoint.String() && receipt.ExpiresAt.After(d.factory.config.Verifier.Now()) && coordinator.ValidateEndpointReceipt(current, receipt, p.Attempt.NodeID, p.Attempt.NetworkID) == nil {
 			return nil
 		}
 	}

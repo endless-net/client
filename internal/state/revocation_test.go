@@ -73,7 +73,7 @@ func TestV2UpgradePreservesKeysConnectionAndDoesNotInventRevoke(t *testing.T) {
 	}
 	after, err := s.Load(t.Context())
 	old, newProfile := before.Profiles[profileID], after.Profiles[profileID]
-	if err != nil || after.Version != 3 || after.Revision != before.Revision+1 || !bytes.Equal(old.Keys.IdentityPrivate, newProfile.Keys.IdentityPrivate) || !bytes.Equal(old.Keys.WireGuardPrivate, newProfile.Keys.WireGuardPrivate) || *old.Connection != *newProfile.Connection || len(newProfile.RemoteRevocations) != 0 {
+	if err != nil || after.Version != CurrentVersion || after.Revision != before.Revision+1 || !bytes.Equal(old.Keys.IdentityPrivate, newProfile.Keys.IdentityPrivate) || !bytes.Equal(old.Keys.WireGuardPrivate, newProfile.Keys.WireGuardPrivate) || *old.Connection != *newProfile.Connection || len(newProfile.RemoteRevocations) != 0 {
 		t.Fatal("v2 migration reset data or created a remote command", err)
 	}
 }

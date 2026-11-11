@@ -42,7 +42,7 @@ func TestWindowsDirectWaitFencesCurrentIntentAndLeavesCompletionToWorker(t *test
 		t.Fatal(err)
 	}
 	injectSessionPath(t, s)
-	if err := s.WaitDirect(operation, time.Millisecond); err != nil {
+	if err := s.WaitPaths(operation, time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 	if !b.Active() {
@@ -60,7 +60,7 @@ func TestWindowsDirectWaitFencesCurrentIntentAndLeavesCompletionToWorker(t *test
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.WaitDirect(operation, time.Millisecond); !errors.Is(err, state.ErrStale) || s.lease.Permissions().ExistingFlows {
+	if err := s.WaitPaths(operation, time.Millisecond); !errors.Is(err, state.ErrStale) || s.lease.Permissions().ExistingFlows {
 		t.Fatal("late observed path ignored newer Disconnect", err)
 	}
 }
@@ -74,7 +74,7 @@ func TestWindowsDirectWaitDoesNotBlockConcurrentStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
-	go func() { done <- s.WaitDirect(operation, time.Millisecond) }()
+	go func() { done <- s.WaitPaths(operation, time.Millisecond) }()
 	if err := s.Stop(cleanupContext(t)); err != nil {
 		t.Fatal(err)
 	}

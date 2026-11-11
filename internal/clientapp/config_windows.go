@@ -28,6 +28,7 @@ type Config struct {
 	ApprovalBase        string        `env:"APPROVAL_BASE,required"`
 	InstallationID      string        `env:"INSTALLATION_ID,required"`
 	StateDirectory      string        `env:"STATE_DIRECTORY,required"`
+	RuntimeInstanceFile string        `env:"RUNTIME_INSTANCE_FILE"`
 	ServiceSID          string        `env:"SERVICE_SID,required"`
 	AllowedSIDs         []string      `env:"ALLOWED_SIDS,required"`
 	DefaultProfileID    string        `env:"DEFAULT_PROFILE_ID,required"`
@@ -123,6 +124,9 @@ func controlOrigin(value string) bool {
 }
 
 func (c Config) Validate() error {
+	if c.RuntimeInstanceFile != "" && (!stateDirectory(c.RuntimeInstanceFile) || c.RuntimeInstanceFile == c.StateDirectory) {
+		return ErrConfig
+	}
 	if !approvalmodel.ValidBase(c.ApprovalBase) {
 		return ErrConfig
 	}

@@ -10,9 +10,29 @@ import (
 	"testing"
 	"time"
 
+	transportprofile "github.com/endless-net/client/api/transport"
+
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
+
+func TestEndpointAdvertisementCannotChangeProtectedIntentGeneration(t *testing.T) {
+	f := newMapFixture(t)
+	store, _ := cursorStore(t, f)
+	before, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ad := &coordinator.TransportAdvertisement{IntentGeneration: 2, Capabilities: transportprofile.Capabilities{Version: 1, Engines: []transportprofile.Capability{{Engine: transportprofile.WireGuard, ProtocolVersion: "1", ProfileVersion: 1}}}, Endpoints: []coordinator.TransportEndpoint{}}
+	request := coordinator.UpdateNodeEndpointRequest{Endpoint: "192.0.2.1:51820", Generation: 1, Status: "online", TTL: "30s", Transport: ad}
+	if err := PrepareEndpoint(t.Context(), store, f.profile.ID, 1, request); !errors.Is(err, ErrConfig) {
+		t.Fatal("advertisement changed local intent", err)
+	}
+	after, err := store.Load(t.Context())
+	if err != nil || before.Revision != after.Revision {
+		t.Fatal("invalid advertisement changed protected state", err)
+	}
+}
 
 func endpointACK(t *testing.T, f *mapFixture, request *http.Request, generation uint64) *http.Response {
 	t.Helper()

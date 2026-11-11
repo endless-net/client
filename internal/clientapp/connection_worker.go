@@ -443,9 +443,13 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 
 func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 	w.mu.Lock()
-	if w.used || ctx.Err() != nil {
+	if w.used {
 		w.mu.Unlock()
 		return ErrConnectionWorker
+	}
+	if err := ctx.Err(); err != nil {
+		w.mu.Unlock()
+		return err
 	}
 	w.used, w.running = true, true
 	w.announceLocked()
