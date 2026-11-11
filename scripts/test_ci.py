@@ -68,6 +68,12 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "repo"
             sha = self.committed_checkout(root)
+            defaults = root / "packaging/windows/install-defaults.json"
+            defaults.parent.mkdir(parents=True)
+            defaults.write_bytes(b"{}")
+            ci.command(["git", "add", "packaging"], cwd=root)
+            ci.command(["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--quiet", "-m", "default settings fixture"], cwd=root)
+            sha = ci.command(["git", "rev-parse", "HEAD"], cwd=root, capture=True)
             date = ci.command(["git", "show", "-s", "--format=%cI", sha], cwd=root, capture=True)
             profile = {"component": "client", "artifacts": [{
                 "release": "runtime", "kind": "go", "name": "client", "module": ".",
@@ -88,8 +94,9 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
                 verify.assert_called_once_with(root)
                 driver.assert_called_once_with(root, {"os": "windows", "arch": "amd64"})
             with ci.zipfile.ZipFile(root / ".artifacts/client-v0.7.0-windows-amd64.zip") as archive:
-                self.assertEqual(set(archive.namelist()), {"client.exe", *native})
+                self.assertEqual(set(archive.namelist()), {"client.exe", "install-defaults.json", *native})
                 self.assertEqual(archive.read("wintun.dll"), b"pinned dll fixture")
+                self.assertEqual(archive.read("install-defaults.json"), b"{}")
 
     def test_wintun_pins_archive_entries_and_license_without_network(self):
         for failure in (None, "archive", "size", "dll", "license", "duplicate"):

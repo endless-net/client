@@ -376,6 +376,7 @@ def build(root, profile, output, tag=None):
                 entries = {executable: (binary.read_bytes(), 0o755)}
                 if artifact.get("package") == "./cmd/client" and target["os"] == "windows":
                     entries.update(wintun_files(root, target))
+                    entries["install-defaults.json"] = (local(root, "packaging/windows/install-defaults.json").read_bytes(), 0o644)
         else:
             raise ValueError("Flutter native packaging is supplied by its native workflow")
         write_archive(destination, entries)

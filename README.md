@@ -293,3 +293,8 @@ state не заменяется. MSI должен вызывать её толь
 
 Для builder доступен `validate-config`: проверяет текущие environment settings
 и build identity без открытия/создания state и без запуска службы.
+
+Windows runtime artifact содержит `install-defaults.json` с внутренними значениями
+для обычного установщика. Пользователь не заполняет environment/ServiceProfile:
+общий сервер задаётся поставкой, а SID, адрес интерфейса и Installation ID
+определяются на целевой машине. Установщик проверяет результат настоящим Client.
