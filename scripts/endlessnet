@@ -1,0 +1,35 @@
+#!/bin/sh
+# EndlessNet: explicit updates of the APT-managed Client package.
+set -eu
+export LC_ALL=C
+
+fail() { printf '%s\n' "$*" >&2; exit 1; }
+[ "$#" -eq 1 ] && [ "$1" = check-updates ] || fail 'Использование: sudo endlessnet check-updates'
+[ "$(id -u)" -eq 0 ] || fail 'Запустите команду через sudo.'
+installed=$(dpkg-query -W -f='${db:Status-Status} ${Version}' endlessnet-client) || fail 'Пакет endlessnet-client не установлен.'
+case "$installed" in
+  'installed '*) installed=${installed#installed } ;;
+  *) fail 'Пакет endlessnet-client не настроен. Проверьте состояние APT.' ;;
+esac
+apt-get -o APT::Update::Error-Mode=any update
+policy=$(apt-cache policy endlessnet-client) || fail 'Не удалось прочитать доступную версию из APT.'
+candidate=$(printf '%s\n' "$policy" | awk '$1 == "Candidate:" { print $2 }')
+[ -n "$candidate" ] && [ "$candidate" != '(none)' ] || fail 'В APT нет доступной версии endlessnet-client.'
+printf 'Установлена: %s; доступна: %s\n' "$installed" "$candidate"
+if dpkg --compare-versions "$candidate" gt "$installed"; then
+  printf 'Установить обновление через APT? [y/N] '
+  answer=''
+  read -r answer || answer=''
+  case "$answer" in
+    y|Y|yes|YES|да|Да) ;;
+    *) printf '%s\n' 'Обновление отменено.'; exit 0 ;;
+  esac
+  apt-get install --only-upgrade -y "endlessnet-client=$candidate"
+  actual=$(dpkg-query -W -f='${db:Status-Status} ${Version}' endlessnet-client)
+  [ "$actual" = "installed $candidate" ] || fail 'APT завершился без установки выбранной версии.'
+  printf 'Client обновлён до %s.\n' "$candidate"
+else
+  result=$?
+  [ "$result" -eq 1 ] || fail 'Не удалось сравнить версии пакета.'
+  printf '%s\n' 'Обновлений нет.'
+fi

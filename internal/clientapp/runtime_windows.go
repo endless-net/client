@@ -143,6 +143,13 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			r.workers, err = NewWorkers(lc, shutdown, t.Signals(), r.ipc.Run, worker.Run, func(ctx context.Context) error {
 				return r.connection.RunWindows(ctx, c.MaxInventoryRows, c.MaxInterfaces)
 			})
+			if err == nil && c.RuntimeInstanceFile != "" {
+				lc.Append(t.Signals().hook("ipc", func(ctx context.Context) error {
+					return publishRuntimeInstance(ctx, c.RuntimeInstanceFile, instance, c.StateLockRetry)
+				}, func(context.Context) error {
+					return removeRuntimeInstance(c.RuntimeInstanceFile, instance)
+				}))
+			}
 			return err
 		}))
 	if r.App.Err() != nil {

@@ -25,15 +25,30 @@ var version, commit, buildDate string
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With("service", "client", "component", "app", "client_api_revision", clientAPIRevision)
-	initialize := len(os.Args) == 2 && os.Args[1] == "init-state"
-	if len(os.Args) > 1 && !initialize {
+	mode := ""
+	if len(os.Args) == 2 {
+		mode = os.Args[1]
+	}
+	initialize := mode == "init-state" || mode == "installed-init"
+	installed := mode == "installed-run" || mode == "installed-init"
+	validate := mode == "validate-config"
+	if len(os.Args) > 2 || (len(os.Args) > 1 && !initialize && !installed && !validate) {
 		logger.Error("client command rejected")
 		os.Exit(1)
 	}
 	environment := map[string]string{}
-	for _, entry := range os.Environ() {
-		if key, value, ok := strings.Cut(entry, "="); ok {
-			environment[key] = value
+	if installed {
+		var err error
+		environment, err = installedEnvironment()
+		if err != nil {
+			logger.Error("installed client configuration rejected")
+			os.Exit(1)
+		}
+	} else {
+		for _, entry := range os.Environ() {
+			if key, value, ok := strings.Cut(entry, "="); ok {
+				environment[key] = value
+			}
 		}
 	}
 	c, err := clientapp.ParseWindows(environment)
@@ -53,6 +68,10 @@ func main() {
 			os.Exit(1)
 		}
 		logger.Info("client empty state initialized")
+		return
+	}
+	if validate {
+		logger.Info("client configuration valid")
 		return
 	}
 	app, err := clientapp.NewWindows(c, &clientv0.BuildIdentity{Version: version, Commit: commit, BuildDate: buildDate, Platform: clientv0.Platform_PLATFORM_WINDOWS, Architecture: runtime.GOARCH}, [32]byte(digest), os.Stderr)

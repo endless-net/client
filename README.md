@@ -259,3 +259,37 @@ controller/panel test через настоящий pipe. Нужны explicit
 `ENDLESSNET_CLIENT_UI_OWNER_APP` и `ENDLESSNET_CLIENT_UI_FLUTTER_ROOT`; обычные
 Client build/unit checks не требуют UI или Flutter. Два lifetimes сохраняют
 Client keys/request/deadlines и UI correlation journal без второго enrollment.
+
+## Установка на Ubuntu
+
+Для Ubuntu26.04 LTS amd64 используется существующий APT-репозиторий.
+Из checkout Client запустите `sudo sh scripts/install.sh`.
+[Скрипт](scripts/install.sh) подключает signed-by источник и вызывает
+`apt-get install endlessnet-client`; запуск службы выполняет сам пакет.
+Это APT-установка без ручной распаковки или сборки бинарника.
+Проверка команд без изменения системы: `python3 -B scripts/test_install.py`
+в Ubuntu26.04. Проверка реальной установки на отдельном хосте ещё требуется.
+
+Скрипт также устанавливает команду `endlessnet` в `/usr/local/bin`.
+Проверка обновлений: `sudo endlessnet check-updates`.
+Команда обновляет APT-индекс, показывает установленную/доступную версии и
+спрашивает подтверждение. Только ответ `y`/`yes`/`да` запускает APT upgrade;
+отмена и EOF ничего не устанавливают. Данные пакета не удаляются.
+Unit-проверка команды: `python3 -B scripts/test_endlessnet.py`.
+
+## Подключение Windows-установщика
+
+Внутренние entrypoints `installed-init` и `installed-run` требуют SYSTEM и
+читают REG_MULTI_SZ `Environment` из собственного SCM service key.
+`installed-init` использует существующую строгую инициализацию: существующий
+state не заменяется. MSI должен вызывать её только для новой установки.
+`installed-run` запускает тот же Windows runtime с этими настройками.
+
+`ENDLESSNET_CLIENT_RUNTIME_INSTANCE_FILE` задаёт путь публичного файла UUID
+текущего IPC instance. Parent создаёт MSI: SYSTEM/Admin могут писать, UI может
+читать; каталог state остаётся закрытым. UUID публикуется после IPC startup
+и удаляется при остановке только если принадлежит текущему процессу.
+Это адрес подключения, а не подтверждение identity или прав пользователя.
+
+Для builder доступен `validate-config`: проверяет текущие environment settings
+и build identity без открытия/создания state и без запуска службы.

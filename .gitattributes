@@ -1,3 +1,5 @@
 # Сохранять точные проверенные байты контрактов и сгенерированных SDK.
 * whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 api/** -text
+/scripts/install.sh text eol=lf
+/scripts/endlessnet text eol=lf
