@@ -191,6 +191,9 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 			if err = makeExecutor().Ensure(context.Background(), loginProfile, 1); err != nil || actor.calls != wantSessions || nodeCalls != wantNodes {
 				t.Fatal("healthy credential caused another renewal", err)
 			}
+			if mode == "valid" {
+				assertRenewedEndpointReceipt(t, f.store, after, f.now)
+			}
 		})
 	}
 }
@@ -206,4 +209,49 @@ func (f *registrationFixture) announcementNodeKey(t *testing.T) string {
 		t.Fatal("fixture trust missing")
 	}
 	return trust.NodeCredentialTrustBundle.ActiveKeyID
+}
+
+func assertRenewedEndpointReceipt(t *testing.T, store *state.Store, original state.Profile, now time.Time) {
+	t.Helper()
+	change := func(fn func(*state.Profile)) error {
+		current, e := store.Load(t.Context())
+		if e != nil {
+			return e
+		}
+		return store.Update(t.Context(), current.Revision, func(s *state.State) error {
+			p := s.Profiles[loginProfile]
+			fn(&p)
+			s.Profiles[loginProfile] = p
+			return nil
+		})
+	}
+	request := coordinator.UpdateNodeEndpointRequest{Endpoint: "192.0.2.1:51820", Generation: 1, TTL: "30s", Status: "online"}
+	raw, e := json.Marshal(request)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = change(func(p *state.Profile) {
+		_, _ = p.Connection.NextEndpointGeneration()
+		p.Connection.EndpointRequest = &state.EndpointRequest{IntentGeneration: p.Connection.Generation, Request: raw}
+	}); e != nil {
+		t.Fatal(e)
+	}
+	if e = change(func(p *state.Profile) { p.Connection.EndpointRequest.Sent = true }); e != nil {
+		t.Fatal(e)
+	}
+	ack := coordinator.UpdateNodeEndpointResponse{SchemaVersion: 2, NodeID: original.Attempt.NodeID, NetworkID: original.Attempt.NetworkID, Endpoint: request.Endpoint, Generation: 1, Online: true, UpdatedAt: now, ExpiresAt: now.Add(30 * time.Second), Revision: coordinator.MapRevision{Network: 2}}
+	if !ack.ExpiresAt.After(original.Attempt.CredentialEnds) {
+		t.Fatal("fixture does not exercise renewed lifetime")
+	}
+	if e = change(func(p *state.Profile) { p.Connection.EndpointRequest.Receipt = &ack }); e != nil {
+		t.Fatal("valid current credential endpoint ACK rejected", e)
+	}
+	current, e := store.Load(t.Context())
+	if e != nil {
+		t.Fatal(e)
+	}
+	p := current.Profiles[loginProfile]
+	if !reflect.DeepEqual(p.Attempt, original.Attempt) || p.Secrets != original.Secrets || !reflect.DeepEqual(p.ActiveNodeCredential, original.ActiveNodeCredential) || !reflect.DeepEqual(p.Connection.EndpointRequest.Receipt, &ack) {
+		t.Fatal("endpoint adoption rewrote original history or current authority")
+	}
 }

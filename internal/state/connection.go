@@ -131,7 +131,8 @@ func validEndpointRequest(p Profile) bool {
 		return false
 	}
 	if pending.Receipt != nil {
-		return pending.Sent && coordinator.ValidateEndpointReceipt(r, *pending.Receipt, p.Attempt.NodeID, p.Attempt.NetworkID) == nil && !pending.Receipt.ExpiresAt.After(p.Attempt.CredentialEnds)
+		_, credentialEnds, err := p.CurrentNodeCredential()
+		return err == nil && pending.Sent && coordinator.ValidateEndpointReceipt(r, *pending.Receipt, p.Attempt.NodeID, p.Attempt.NetworkID) == nil && !pending.Receipt.ExpiresAt.After(credentialEnds)
 	}
 	return true
 }
