@@ -463,7 +463,7 @@ Client и CLI должны быть собраны с одним опублик�
 проверяет x64 PE и сравнивает exact descriptor SHA256 через `client print-contract`
 и `endlessnet --print-contract`. Неподдерживаемый режим или несовпадение дают отказ.
 Затем запускается настоящий `client.exe validate-config` без изменения
-SCM/state. Общий сервер по умолчанию — `https://endlessnet.ru`; необязательный
+SCM/state. Общий API по умолчанию — `https://api.endlessnet.ru`; необязательный
 `-Server` принимает только HTTPS origin. Пользовательские JSON-профили не нужны.
 
 MSI содержит только Client, CLI, Wintun и его лицензию, добавляет каталог CLI в
