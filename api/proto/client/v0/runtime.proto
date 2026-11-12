@@ -154,6 +154,12 @@ message EnrollmentAttempt {
   // Public refresh hint: 1..30 seconds while pending/uncertain, 0 terminal.
   // Client core separately respects Identity/Coordinator poll hints.
   uint32 poll_after_seconds = 17;
+  // Immutable original Enroll inputs, owner-visible for exact request_id replay
+  // after a CLI restart. These read-only fields never update enrollment intent.
+  // Consumers must reject unspecified mode/empty hostname for up recovery;
+  // do not guess workstation, read private state or create a new request_id.
+  EnrollmentMode mode = 18;
+  string hostname = 19;
 }
 
 message ConnectionIntent {

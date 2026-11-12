@@ -221,6 +221,8 @@ class EnrollmentAttempt extends $pb.GeneratedMessage {
     $0.Timestamp? approvalExpiresAt,
     $0.Timestamp? recoveryDeadline,
     $core.int? pollAfterSeconds,
+    EnrollmentMode? mode,
+    $core.String? hostname,
   }) {
     final result = create();
     if (attemptId != null) result.attemptId = attemptId;
@@ -240,6 +242,8 @@ class EnrollmentAttempt extends $pb.GeneratedMessage {
     if (approvalExpiresAt != null) result.approvalExpiresAt = approvalExpiresAt;
     if (recoveryDeadline != null) result.recoveryDeadline = recoveryDeadline;
     if (pollAfterSeconds != null) result.pollAfterSeconds = pollAfterSeconds;
+    if (mode != null) result.mode = mode;
+    if (hostname != null) result.hostname = hostname;
     return result;
   }
 
@@ -284,6 +288,9 @@ class EnrollmentAttempt extends $pb.GeneratedMessage {
         subBuilder: $0.Timestamp.create)
     ..aI(17, _omitFieldNames ? '' : 'pollAfterSeconds',
         fieldType: $pb.PbFieldType.OU3)
+    ..aE<EnrollmentMode>(18, _omitFieldNames ? '' : 'mode',
+        enumValues: EnrollmentMode.values)
+    ..aOS(19, _omitFieldNames ? '' : 'hostname')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -479,6 +486,28 @@ class EnrollmentAttempt extends $pb.GeneratedMessage {
   $core.bool hasPollAfterSeconds() => $_has(16);
   @$pb.TagNumber(17)
   void clearPollAfterSeconds() => $_clearField(17);
+
+  /// Immutable original Enroll inputs, owner-visible for exact request_id replay
+  /// after a CLI restart. These read-only fields never update enrollment intent.
+  /// Consumers must reject unspecified mode/empty hostname for up recovery;
+  /// do not guess workstation, read private state or create a new request_id.
+  @$pb.TagNumber(18)
+  EnrollmentMode get mode => $_getN(17);
+  @$pb.TagNumber(18)
+  set mode(EnrollmentMode value) => $_setField(18, value);
+  @$pb.TagNumber(18)
+  $core.bool hasMode() => $_has(17);
+  @$pb.TagNumber(18)
+  void clearMode() => $_clearField(18);
+
+  @$pb.TagNumber(19)
+  $core.String get hostname => $_getSZ(18);
+  @$pb.TagNumber(19)
+  set hostname($core.String value) => $_setString(18, value);
+  @$pb.TagNumber(19)
+  $core.bool hasHostname() => $_has(18);
+  @$pb.TagNumber(19)
+  void clearHostname() => $_clearField(19);
 }
 
 class ConnectionIntent extends $pb.GeneratedMessage {

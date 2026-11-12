@@ -92,5 +92,40 @@
     "generated_files": 20,
     "descriptor_sha256": "f4f8508e0fef93cca33313d211d138df98faca7b688a59d1263ce0d8fd4b95b6",
     "generation_environment": "Ubuntu26.04.1 / Go1.27.3 / Buf1.50.0 / pinned local plugins / Dart3.13.5; two byte-identical generations"
+  },
+  "system_003_current_lookup": {
+    "status": "api-release-candidate",
+    "target_api_tag": "api/v0.5.0",
+    "baseline_tag": "api/v0.4.0",
+    "baseline_revision": "c1872645fd91dc8a48cf98f2b843b46b82a1a285",
+    "runtime_adopted": false,
+    "request": "GetEnrollmentAttemptRequest.selector.current = 4 (bool, true only)",
+    "access": "OS owner only; no initial ownership claim",
+    "profile": "specified profile or active profile when omitted",
+    "errors": {
+      "missing_attempt": "NotFound",
+      "foreign_owner": "PermissionDenied",
+      "false_or_absent_typed_selector": "InvalidArgument"
+    },
+    "binary_oneof": "standard Protobuf last-wins; no custom codec or strict raw-wire rejection claim",
+    "purpose": "reattach to original daemon attempt after lost reply/CLI restart, no local file journal or blind Enroll retry",
+    "side_effects": false,
+    "secrets_exported": false,
+    "generated_manifest_sha256": "644d58cb3e43b3c6a7f6d95e1521dd91198b295bfd14fc3a98ad448616d83afa",
+    "generated_files": 20,
+    "descriptor_sha256": "b57f96e0768571364ef88dc08f5b06375a52ac38eceabee9267a902ceb526817",
+    "generation_environment": "Ubuntu26.04.1 / Go1.27.4 / Buf1.50.0 / pinned local plugins / Dart3.13.5",
+    "original_enroll_inputs": {
+      "mode": {
+        "field": 18,
+        "type": "EnrollmentMode"
+      },
+      "hostname": {
+        "field": 19,
+        "type": "string"
+      },
+      "semantics": "owner-only immutable original Enroll inputs, exact request_id/mode/hostname retry binding; no mutation",
+      "up_validation": "missing/unsupported mode or empty hostname -> explicit error, never guess default mode/hostname or create new request_id"
+    }
   }
 }

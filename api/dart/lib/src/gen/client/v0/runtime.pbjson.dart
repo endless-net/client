@@ -477,6 +477,15 @@ const EnrollmentAttempt$json = {
       '5': 13,
       '10': 'pollAfterSeconds'
     },
+    {
+      '1': 'mode',
+      '3': 18,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.EnrollmentMode',
+      '10': 'mode'
+    },
+    {'1': 'hostname', '3': 19, '4': 1, '5': 9, '10': 'hostname'},
   ],
   '8': [
     {'1': '_account_id'},
@@ -503,7 +512,9 @@ final $typed_data.Uint8List enrollmentAttemptDescriptor = $convert.base64Decode(
     '9hdBgPIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBSEWFwcHJvdmFsRXhwaXJlc0F0'
     'EkcKEXJlY292ZXJ5X2RlYWRsaW5lGBAgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcF'
     'IQcmVjb3ZlcnlEZWFkbGluZRIsChJwb2xsX2FmdGVyX3NlY29uZHMYESABKA1SEHBvbGxBZnRl'
-    'clNlY29uZHNCDQoLX2FjY291bnRfaWRCDQoLX25ldHdvcmtfaWRCCgoIX25vZGVfaWQ=');
+    'clNlY29uZHMSLQoEbW9kZRgSIAEoDjIZLmNsaWVudC52MC5FbnJvbGxtZW50TW9kZVIEbW9kZR'
+    'IaCghob3N0bmFtZRgTIAEoCVIIaG9zdG5hbWVCDQoLX2FjY291bnRfaWRCDQoLX25ldHdvcmtf'
+    'aWRCCgoIX25vZGVfaWQ=');
 
 @$core.Deprecated('Use connectionIntentDescriptor instead')
 const ConnectionIntent$json = {

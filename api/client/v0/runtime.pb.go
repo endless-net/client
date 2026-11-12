@@ -1014,8 +1014,14 @@ type EnrollmentAttempt struct {
 	// Public refresh hint: 1..30 seconds while pending/uncertain, 0 terminal.
 	// Client core separately respects Identity/Coordinator poll hints.
 	PollAfterSeconds uint32 `protobuf:"varint,17,opt,name=poll_after_seconds,json=pollAfterSeconds,proto3" json:"poll_after_seconds,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Immutable original Enroll inputs, owner-visible for exact request_id replay
+	// after a CLI restart. These read-only fields never update enrollment intent.
+	// Consumers must reject unspecified mode/empty hostname for up recovery;
+	// do not guess workstation, read private state or create a new request_id.
+	Mode          EnrollmentMode `protobuf:"varint,18,opt,name=mode,proto3,enum=client.v0.EnrollmentMode" json:"mode,omitempty"`
+	Hostname      string         `protobuf:"bytes,19,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *EnrollmentAttempt) Reset() {
@@ -1165,6 +1171,20 @@ func (x *EnrollmentAttempt) GetPollAfterSeconds() uint32 {
 		return x.PollAfterSeconds
 	}
 	return 0
+}
+
+func (x *EnrollmentAttempt) GetMode() EnrollmentMode {
+	if x != nil {
+		return x.Mode
+	}
+	return EnrollmentMode_ENROLLMENT_MODE_UNSPECIFIED
+}
+
+func (x *EnrollmentAttempt) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
 }
 
 type ConnectionIntent struct {
@@ -3521,7 +3541,7 @@ const file_client_v0_runtime_proto_rawDesc = "" +
 	"\n" +
 	"network_id\x18\x03 \x01(\tR\tnetworkId\x12!\n" +
 	"\fnetwork_name\x18\x04 \x01(\tR\vnetworkName\x128\n" +
-	"\vrestriction\x18\x05 \x01(\v2\x16.client.v0.RestrictionR\vrestriction\"\xaa\a\n" +
+	"\vrestriction\x18\x05 \x01(\v2\x16.client.v0.RestrictionR\vrestriction\"\xf5\a\n" +
 	"\x11EnrollmentAttempt\x12\x1d\n" +
 	"\n" +
 	"attempt_id\x18\x01 \x01(\tR\tattemptId\x12\x1d\n" +
@@ -3546,7 +3566,9 @@ const file_client_v0_runtime_proto_rawDesc = "" +
 	"\x10login_expires_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\x0eloginExpiresAt\x12J\n" +
 	"\x13approval_expires_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\x11approvalExpiresAt\x12G\n" +
 	"\x11recovery_deadline\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\x10recoveryDeadline\x12,\n" +
-	"\x12poll_after_seconds\x18\x11 \x01(\rR\x10pollAfterSecondsB\r\n" +
+	"\x12poll_after_seconds\x18\x11 \x01(\rR\x10pollAfterSeconds\x12-\n" +
+	"\x04mode\x18\x12 \x01(\x0e2\x19.client.v0.EnrollmentModeR\x04mode\x12\x1a\n" +
+	"\bhostname\x18\x13 \x01(\tR\bhostnameB\r\n" +
 	"\v_account_idB\r\n" +
 	"\v_network_idB\n" +
 	"\n" +
@@ -3980,81 +4002,82 @@ var file_client_v0_runtime_proto_depIdxs = []int32{
 	41, // 9: client.v0.EnrollmentAttempt.login_expires_at:type_name -> google.protobuf.Timestamp
 	41, // 10: client.v0.EnrollmentAttempt.approval_expires_at:type_name -> google.protobuf.Timestamp
 	41, // 11: client.v0.EnrollmentAttempt.recovery_deadline:type_name -> google.protobuf.Timestamp
-	2,  // 12: client.v0.ConnectionIntent.desired_state:type_name -> client.v0.DesiredState
-	41, // 13: client.v0.ConnectionIntent.updated_at:type_name -> google.protobuf.Timestamp
-	42, // 14: client.v0.Network.selection:type_name -> client.v0.Restriction
-	8,  // 15: client.v0.Profile.state:type_name -> client.v0.ProfileState
-	42, // 16: client.v0.Profile.selection:type_name -> client.v0.Restriction
-	11, // 17: client.v0.CredentialStatus.state:type_name -> client.v0.CredentialState
-	41, // 18: client.v0.CredentialStatus.expires_at:type_name -> google.protobuf.Timestamp
-	41, // 19: client.v0.CredentialStatus.warning_at:type_name -> google.protobuf.Timestamp
-	42, // 20: client.v0.CredentialStatus.recovery:type_name -> client.v0.Restriction
-	6,  // 21: client.v0.Session.state:type_name -> client.v0.SessionState
-	41, // 22: client.v0.Session.expires_at:type_name -> google.protobuf.Timestamp
-	41, // 23: client.v0.Session.warning_at:type_name -> google.protobuf.Timestamp
-	42, // 24: client.v0.Session.renewal:type_name -> client.v0.Restriction
-	0,  // 25: client.v0.Recovery.state:type_name -> client.v0.ServiceState
-	44, // 26: client.v0.Recovery.failure:type_name -> client.v0.Failure
-	4,  // 27: client.v0.PathCandidate.kind:type_name -> client.v0.PathKind
-	5,  // 28: client.v0.PathCandidate.health:type_name -> client.v0.PathHealth
-	45, // 29: client.v0.PathCandidate.rtt:type_name -> google.protobuf.Duration
-	41, // 30: client.v0.PathCandidate.checked_at:type_name -> google.protobuf.Timestamp
-	41, // 31: client.v0.PathCandidate.last_reachable_at:type_name -> google.protobuf.Timestamp
-	26, // 32: client.v0.Peer.candidates:type_name -> client.v0.PathCandidate
-	4,  // 33: client.v0.Peer.selected_path:type_name -> client.v0.PathKind
-	41, // 34: client.v0.Peer.last_transition_at:type_name -> google.protobuf.Timestamp
-	28, // 35: client.v0.Peer.transport:type_name -> client.v0.PeerTransportStatus
-	4,  // 36: client.v0.PeerTransportStatus.selected_path:type_name -> client.v0.PathKind
-	13, // 37: client.v0.PeerTransportStatus.search_state:type_name -> client.v0.TransportSearchState
-	41, // 38: client.v0.PeerTransportStatus.checked_at:type_name -> google.protobuf.Timestamp
-	41, // 39: client.v0.PeerTransportStatus.next_search_at:type_name -> google.protobuf.Timestamp
-	3,  // 40: client.v0.AgentStatus.snapshot_state:type_name -> client.v0.AgentSnapshotState
-	41, // 41: client.v0.AgentStatus.generated_at:type_name -> google.protobuf.Timestamp
-	25, // 42: client.v0.AgentStatus.selected_relay:type_name -> client.v0.Endpoint
-	44, // 43: client.v0.AgentStatus.last_failure:type_name -> client.v0.Failure
-	44, // 44: client.v0.ControlProbe.failure:type_name -> client.v0.Failure
-	30, // 45: client.v0.ControlProbe.attempts:type_name -> client.v0.ControlProbe
-	43, // 46: client.v0.Status.metadata:type_name -> client.v0.SnapshotMetadata
-	0,  // 47: client.v0.Status.service_state:type_name -> client.v0.ServiceState
-	1,  // 48: client.v0.Status.control_state:type_name -> client.v0.ControlState
-	17, // 49: client.v0.Status.intent:type_name -> client.v0.ConnectionIntent
-	19, // 50: client.v0.Status.network:type_name -> client.v0.Network
-	18, // 51: client.v0.Status.stored_state:type_name -> client.v0.StoredStatePresence
-	23, // 52: client.v0.Status.recovery:type_name -> client.v0.Recovery
-	22, // 53: client.v0.Status.session:type_name -> client.v0.Session
-	29, // 54: client.v0.Status.agent:type_name -> client.v0.AgentStatus
-	30, // 55: client.v0.Status.control:type_name -> client.v0.ControlProbe
-	25, // 56: client.v0.Status.stun_endpoints:type_name -> client.v0.Endpoint
-	25, // 57: client.v0.Status.relay_endpoints:type_name -> client.v0.Endpoint
-	44, // 58: client.v0.Status.failures:type_name -> client.v0.Failure
-	12, // 59: client.v0.Status.connection_phase:type_name -> client.v0.ConnectionPhase
-	21, // 60: client.v0.Status.credential:type_name -> client.v0.CredentialStatus
-	28, // 61: client.v0.Status.peer_transports:type_name -> client.v0.PeerTransportStatus
-	41, // 62: client.v0.TunnelPeer.latest_handshake:type_name -> google.protobuf.Timestamp
-	45, // 63: client.v0.TunnelPeer.persistent_keepalive:type_name -> google.protobuf.Duration
-	32, // 64: client.v0.TunnelInspection.peers:type_name -> client.v0.TunnelPeer
-	44, // 65: client.v0.TunnelInspection.failure:type_name -> client.v0.Failure
-	44, // 66: client.v0.Interface.failure:type_name -> client.v0.Failure
-	44, // 67: client.v0.RouteInspection.failure:type_name -> client.v0.Failure
-	45, // 68: client.v0.DnsDiagnostics.ttl:type_name -> google.protobuf.Duration
-	37, // 69: client.v0.DnsDiagnostics.records:type_name -> client.v0.DnsRecord
-	41, // 70: client.v0.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
-	43, // 71: client.v0.Diagnostics.metadata:type_name -> client.v0.SnapshotMetadata
-	46, // 72: client.v0.Diagnostics.client:type_name -> client.v0.BuildIdentity
-	31, // 73: client.v0.Diagnostics.status:type_name -> client.v0.Status
-	33, // 74: client.v0.Diagnostics.tunnel:type_name -> client.v0.TunnelInspection
-	34, // 75: client.v0.Diagnostics.interfaces:type_name -> client.v0.Interface
-	35, // 76: client.v0.Diagnostics.routes:type_name -> client.v0.RouteInspection
-	36, // 77: client.v0.Diagnostics.route_conflicts:type_name -> client.v0.RouteConflict
-	38, // 78: client.v0.Diagnostics.dns:type_name -> client.v0.DnsDiagnostics
-	39, // 79: client.v0.Diagnostics.recent_logs:type_name -> client.v0.LogEntry
-	44, // 80: client.v0.Diagnostics.failures:type_name -> client.v0.Failure
-	27, // 81: client.v0.Diagnostics.peers:type_name -> client.v0.Peer
-	82, // [82:82] is the sub-list for method output_type
-	82, // [82:82] is the sub-list for method input_type
-	82, // [82:82] is the sub-list for extension type_name
-	82, // [82:82] is the sub-list for extension extendee
-	0,  // [0:82] is the sub-list for field type_name
+	7,  // 12: client.v0.EnrollmentAttempt.mode:type_name -> client.v0.EnrollmentMode
+	2,  // 13: client.v0.ConnectionIntent.desired_state:type_name -> client.v0.DesiredState
+	41, // 14: client.v0.ConnectionIntent.updated_at:type_name -> google.protobuf.Timestamp
+	42, // 15: client.v0.Network.selection:type_name -> client.v0.Restriction
+	8,  // 16: client.v0.Profile.state:type_name -> client.v0.ProfileState
+	42, // 17: client.v0.Profile.selection:type_name -> client.v0.Restriction
+	11, // 18: client.v0.CredentialStatus.state:type_name -> client.v0.CredentialState
+	41, // 19: client.v0.CredentialStatus.expires_at:type_name -> google.protobuf.Timestamp
+	41, // 20: client.v0.CredentialStatus.warning_at:type_name -> google.protobuf.Timestamp
+	42, // 21: client.v0.CredentialStatus.recovery:type_name -> client.v0.Restriction
+	6,  // 22: client.v0.Session.state:type_name -> client.v0.SessionState
+	41, // 23: client.v0.Session.expires_at:type_name -> google.protobuf.Timestamp
+	41, // 24: client.v0.Session.warning_at:type_name -> google.protobuf.Timestamp
+	42, // 25: client.v0.Session.renewal:type_name -> client.v0.Restriction
+	0,  // 26: client.v0.Recovery.state:type_name -> client.v0.ServiceState
+	44, // 27: client.v0.Recovery.failure:type_name -> client.v0.Failure
+	4,  // 28: client.v0.PathCandidate.kind:type_name -> client.v0.PathKind
+	5,  // 29: client.v0.PathCandidate.health:type_name -> client.v0.PathHealth
+	45, // 30: client.v0.PathCandidate.rtt:type_name -> google.protobuf.Duration
+	41, // 31: client.v0.PathCandidate.checked_at:type_name -> google.protobuf.Timestamp
+	41, // 32: client.v0.PathCandidate.last_reachable_at:type_name -> google.protobuf.Timestamp
+	26, // 33: client.v0.Peer.candidates:type_name -> client.v0.PathCandidate
+	4,  // 34: client.v0.Peer.selected_path:type_name -> client.v0.PathKind
+	41, // 35: client.v0.Peer.last_transition_at:type_name -> google.protobuf.Timestamp
+	28, // 36: client.v0.Peer.transport:type_name -> client.v0.PeerTransportStatus
+	4,  // 37: client.v0.PeerTransportStatus.selected_path:type_name -> client.v0.PathKind
+	13, // 38: client.v0.PeerTransportStatus.search_state:type_name -> client.v0.TransportSearchState
+	41, // 39: client.v0.PeerTransportStatus.checked_at:type_name -> google.protobuf.Timestamp
+	41, // 40: client.v0.PeerTransportStatus.next_search_at:type_name -> google.protobuf.Timestamp
+	3,  // 41: client.v0.AgentStatus.snapshot_state:type_name -> client.v0.AgentSnapshotState
+	41, // 42: client.v0.AgentStatus.generated_at:type_name -> google.protobuf.Timestamp
+	25, // 43: client.v0.AgentStatus.selected_relay:type_name -> client.v0.Endpoint
+	44, // 44: client.v0.AgentStatus.last_failure:type_name -> client.v0.Failure
+	44, // 45: client.v0.ControlProbe.failure:type_name -> client.v0.Failure
+	30, // 46: client.v0.ControlProbe.attempts:type_name -> client.v0.ControlProbe
+	43, // 47: client.v0.Status.metadata:type_name -> client.v0.SnapshotMetadata
+	0,  // 48: client.v0.Status.service_state:type_name -> client.v0.ServiceState
+	1,  // 49: client.v0.Status.control_state:type_name -> client.v0.ControlState
+	17, // 50: client.v0.Status.intent:type_name -> client.v0.ConnectionIntent
+	19, // 51: client.v0.Status.network:type_name -> client.v0.Network
+	18, // 52: client.v0.Status.stored_state:type_name -> client.v0.StoredStatePresence
+	23, // 53: client.v0.Status.recovery:type_name -> client.v0.Recovery
+	22, // 54: client.v0.Status.session:type_name -> client.v0.Session
+	29, // 55: client.v0.Status.agent:type_name -> client.v0.AgentStatus
+	30, // 56: client.v0.Status.control:type_name -> client.v0.ControlProbe
+	25, // 57: client.v0.Status.stun_endpoints:type_name -> client.v0.Endpoint
+	25, // 58: client.v0.Status.relay_endpoints:type_name -> client.v0.Endpoint
+	44, // 59: client.v0.Status.failures:type_name -> client.v0.Failure
+	12, // 60: client.v0.Status.connection_phase:type_name -> client.v0.ConnectionPhase
+	21, // 61: client.v0.Status.credential:type_name -> client.v0.CredentialStatus
+	28, // 62: client.v0.Status.peer_transports:type_name -> client.v0.PeerTransportStatus
+	41, // 63: client.v0.TunnelPeer.latest_handshake:type_name -> google.protobuf.Timestamp
+	45, // 64: client.v0.TunnelPeer.persistent_keepalive:type_name -> google.protobuf.Duration
+	32, // 65: client.v0.TunnelInspection.peers:type_name -> client.v0.TunnelPeer
+	44, // 66: client.v0.TunnelInspection.failure:type_name -> client.v0.Failure
+	44, // 67: client.v0.Interface.failure:type_name -> client.v0.Failure
+	44, // 68: client.v0.RouteInspection.failure:type_name -> client.v0.Failure
+	45, // 69: client.v0.DnsDiagnostics.ttl:type_name -> google.protobuf.Duration
+	37, // 70: client.v0.DnsDiagnostics.records:type_name -> client.v0.DnsRecord
+	41, // 71: client.v0.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
+	43, // 72: client.v0.Diagnostics.metadata:type_name -> client.v0.SnapshotMetadata
+	46, // 73: client.v0.Diagnostics.client:type_name -> client.v0.BuildIdentity
+	31, // 74: client.v0.Diagnostics.status:type_name -> client.v0.Status
+	33, // 75: client.v0.Diagnostics.tunnel:type_name -> client.v0.TunnelInspection
+	34, // 76: client.v0.Diagnostics.interfaces:type_name -> client.v0.Interface
+	35, // 77: client.v0.Diagnostics.routes:type_name -> client.v0.RouteInspection
+	36, // 78: client.v0.Diagnostics.route_conflicts:type_name -> client.v0.RouteConflict
+	38, // 79: client.v0.Diagnostics.dns:type_name -> client.v0.DnsDiagnostics
+	39, // 80: client.v0.Diagnostics.recent_logs:type_name -> client.v0.LogEntry
+	44, // 81: client.v0.Diagnostics.failures:type_name -> client.v0.Failure
+	27, // 82: client.v0.Diagnostics.peers:type_name -> client.v0.Peer
+	83, // [83:83] is the sub-list for method output_type
+	83, // [83:83] is the sub-list for method input_type
+	83, // [83:83] is the sub-list for extension type_name
+	83, // [83:83] is the sub-list for extension extendee
+	0,  // [0:83] is the sub-list for field type_name
 }
 
 func init() { file_client_v0_runtime_proto_init() }
