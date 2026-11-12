@@ -4,6 +4,7 @@ package dataplane
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -104,7 +105,7 @@ func (f *WindowsFilters) Replace(ctx context.Context, p FilterPlan) ([]state.Fil
 			p.rules = append(p.rules, r)
 		}
 	}
-	if err := f.api.begin(); err != nil {
+	if err := beginFilterTransaction(ctx, f.api); err != nil {
 		f.failed = true
 		return nil, classifyPolicyError(err)
 	}
@@ -286,4 +287,31 @@ func (f *WindowsFilters) close(ctx context.Context) error {
 	}
 	f.closed = true
 	return nil
+}
+
+// FWP_E_TIMEOUT means the transaction lock was not acquired, so no native
+// mutation has started. Continue that lock wait only within the caller's
+// original bounded context. Never replay Add/Delete/Commit or an unknown error.
+func beginFilterTransaction(ctx context.Context, api filterAPI) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := api.begin()
+		if err == nil {
+			if cancelled := ctx.Err(); cancelled != nil {
+				if api.abort() != nil {
+					return ErrPolicyUncertain
+				}
+				return cancelled
+			}
+			return nil
+		}
+		if !errors.Is(err, windows.Errno(windows.FWP_E_TIMEOUT)) {
+			return err
+		}
+		if _, bounded := ctx.Deadline(); !bounded {
+			return err
+		}
+	}
 }

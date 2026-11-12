@@ -68,7 +68,7 @@ func (g *persistentGuards) ensure(ctx context.Context, p FilterPlan, write Guard
 			return ErrPolicyCleanupRequired
 		}
 	}
-	if err := g.api.begin(); err != nil {
+	if err := beginFilterTransaction(ctx, g.api); err != nil {
 		g.failed = true
 		return classifyPolicyError(err)
 	}
@@ -167,7 +167,7 @@ func (g *persistentGuards) remove(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if err := g.api.begin(); err != nil {
+	if err := beginFilterTransaction(ctx, g.api); err != nil {
 		return classifyPolicyError(err)
 	}
 	finished := false

@@ -6,6 +6,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
+
+	"golang.org/x/sys/windows"
 
 	"github.com/endless-net/client/internal/state"
 	"github.com/tailscale/wf"
@@ -226,6 +229,72 @@ func TestPersistentGuardNativeFlagsExcludePersistentPermits(t *testing.T) {
 		arena.close()
 		if flags != want || r.Action == wf.ActionPermit && flags&1 != 0 {
 			t.Fatal("native lifetime/action flags changed")
+		}
+	}
+}
+
+type beginProbeAPI struct {
+	filterAPI
+	beginCall func() error
+	abortCall func() error
+}
+
+func (a beginProbeAPI) begin() error { return a.beginCall() }
+func (a beginProbeAPI) abort() error { return a.abortCall() }
+func TestFilterTransactionWaitUsesOnlyOriginalBoundedContext(t *testing.T) {
+	timeout := windows.Errno(windows.FWP_E_TIMEOUT)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	deadline, _ := ctx.Deadline()
+	calls := 0
+	api := beginProbeAPI{beginCall: func() error {
+		calls++
+		if current, _ := ctx.Deadline(); current != deadline {
+			t.Fatal("lock wait extended deadline")
+		}
+		if calls < 3 {
+			return timeout
+		}
+		return nil
+	}}
+	if err := beginFilterTransaction(ctx, api); err != nil || calls != 3 {
+		t.Fatal("definite lock timeout did not resume", err, calls)
+	}
+	for _, bounded := range []bool{false, true} {
+		calls = 0
+		cause := errors.New("unknown begin outcome")
+		if !bounded {
+			cause = timeout
+		}
+		api.beginCall = func() error { calls++; return cause }
+		parent := context.Background()
+		if bounded {
+			parent = ctx
+		}
+		if err := beginFilterTransaction(parent, api); !errors.Is(err, cause) || calls != 1 {
+			t.Fatal("unknown/unbounded acquisition retried", err, calls)
+		}
+	}
+	for _, acquired := range []bool{false, true} {
+		ctx, stop := context.WithTimeout(t.Context(), time.Second)
+		aborts := 0
+		calls = 0
+		api := beginProbeAPI{beginCall: func() error {
+			calls++
+			stop()
+			if acquired {
+				return nil
+			}
+			return timeout
+		}, abortCall: func() error { aborts++; return nil }}
+		err := beginFilterTransaction(ctx, api)
+		stop()
+		expectedAborts := 0
+		if acquired {
+			expectedAborts = 1
+		}
+		if !errors.Is(err, context.Canceled) || calls != 1 || aborts != expectedAborts {
+			t.Fatal("cancelled acquisition leaked transaction or replayed", err, calls, aborts)
 		}
 	}
 }
