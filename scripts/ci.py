@@ -453,8 +453,11 @@ def clean_commit(root):
     if checkout != root.resolve():
         raise ValueError("source must be the root of its committed Git checkout")
     sha = command(["git", "rev-parse", "--verify", "HEAD^{commit}"], cwd=root, capture=True)
-    if command(["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=root, capture=True):
-        raise ValueError("source checkout must be clean: tracked or untracked inputs changed")
+    status = command(["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=root, capture=True)
+    if status:
+        # Porcelain quotes control characters in paths. Report only status/path,
+        # never source diffs or file contents, while preserving the strict gate.
+        raise ValueError("source checkout must be clean: " + status.replace("\n", "; "))
     return sha
 
 

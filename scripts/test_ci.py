@@ -358,8 +358,10 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
                     self.committed_checkout(root)
                     (root / filename).write_text("changed input", encoding="utf-8")
                     with patch.object(ci, "archive_bytes") as archive:
-                        with self.assertRaisesRegex(ValueError, "clean"):
+                        with self.assertRaisesRegex(ValueError, "clean") as failure:
                             ci.build(root, self.source_profile(), root / ".artifacts", tag)
+                        self.assertIn(filename, str(failure.exception))
+                        self.assertNotIn("changed input", str(failure.exception))
                         archive.assert_not_called()
 
     def test_build_rejects_source_mutation_and_commit_change_during_compilation(self):
