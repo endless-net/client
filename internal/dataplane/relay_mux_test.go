@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"sync"
 	"testing"
@@ -117,6 +118,15 @@ func relayPipeFixtureFor(t *testing.T, f *candidateFixture) (*RelayTransport, *c
 	inject := func(peer string, raw []byte) {
 		t.Helper()
 		if err := write(&relay.ServerFrame{Type: relay.MessageServerFrame, ProtocolVersion: relay.Version, FromNodeID: peer, FromNetworkID: "network", Payload: raw}); err != nil {
+			// The remote cipher can finish a queued frame after the supervisor
+			// deliberately closes its transport. That is normal fixture teardown.
+			if errors.Is(err, io.ErrClosedPipe) {
+				select {
+				case <-transport.done:
+					return
+				default:
+				}
+			}
 			t.Fatal(err)
 		}
 	}

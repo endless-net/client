@@ -43,12 +43,17 @@ func adapterInfo(row winipcfg.MibIfRow2) adapterIdentity {
 }
 
 type tunAPI interface {
+	devicePresent(context.Context, windows.GUID, int) (bool, error)
 	interfaces() ([]adapterIdentity, error)
 	identity(uint64) (adapterIdentity, error)
 	create(string, windows.GUID, int) (nativeTUNDevice, error)
 }
 
 type nativeTUNAPI struct{}
+
+func (nativeTUNAPI) devicePresent(ctx context.Context, key windows.GUID, limit int) (bool, error) {
+	return windowsAdapterPresent(ctx, key, limit)
+}
 
 func (nativeTUNAPI) interfaces() ([]adapterIdentity, error) {
 	rows, err := winipcfg.GetIfTable2Ex(winipcfg.MibIfEntryNormal)
@@ -261,6 +266,12 @@ func (f *WindowsTUNFactory) ConfirmAbsent(ctx context.Context, record state.Adap
 		if row.GUID != key || row.LUID != record.LUID || row.Name != record.Name || adapterProof(row) != record.Fingerprint {
 			return ErrAdapterOwnership
 		}
+	}
+	present, err := f.api.devicePresent(ctx, key, f.maxInterfaces)
+	if err != nil {
+		return err
+	}
+	if present {
 		return ErrAdapterCleanupRequired
 	}
 	return ctx.Err()

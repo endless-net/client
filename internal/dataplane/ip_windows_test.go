@@ -16,6 +16,8 @@ import (
 )
 
 type mockIPAPI struct {
+	deviceMissing                                                    bool
+	deviceErr                                                        error
 	gone                                                             bool
 	key                                                              windows.GUID
 	addrs                                                            []winipcfg.MibUnicastIPAddressRow
@@ -23,6 +25,13 @@ type mockIPAPI struct {
 	createdAddresses, createdRoutes, deletedAddresses, deletedRoutes int
 	loseCreate, loseDelete                                           bool
 	afterCreate                                                      func()
+}
+
+func (m *mockIPAPI) devicePresent(ctx context.Context, _ windows.GUID, _ int) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	return !m.gone && !m.deviceMissing, m.deviceErr
 }
 
 func (m *mockIPAPI) guid(winipcfg.LUID) (*windows.GUID, error) {

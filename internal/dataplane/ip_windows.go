@@ -14,6 +14,7 @@ import (
 )
 
 type ipAPI interface {
+	devicePresent(context.Context, windows.GUID, int) (bool, error)
 	guid(winipcfg.LUID) (*windows.GUID, error)
 	addresses() ([]winipcfg.MibUnicastIPAddressRow, error)
 	routes() ([]winipcfg.MibIPforwardRow2, error)
@@ -26,6 +27,10 @@ type ipAPI interface {
 }
 
 type nativeIPAPI struct{}
+
+func (nativeIPAPI) devicePresent(ctx context.Context, key windows.GUID, limit int) (bool, error) {
+	return windowsAdapterPresent(ctx, key, limit)
+}
 
 func (nativeIPAPI) guid(l winipcfg.LUID) (*windows.GUID, error) { return l.GUID() }
 func (nativeIPAPI) addresses() ([]winipcfg.MibUnicastIPAddressRow, error) {
@@ -519,10 +524,16 @@ func (w *WindowsIP) confirmFilterCleanup(ctx context.Context, p FilterPlan) erro
 		if id == nil || *id != p.session {
 			return ErrPolicyOwnership
 		}
-		return ErrPolicyCleanupRequired // remove the owned adapter before guards
 	}
-	if !ipMissing(err) {
+	if err != nil && !ipMissing(err) {
 		return errors.Join(ErrPolicyUncertain, ipError(err))
+	}
+	present, err := w.api.devicePresent(ctx, p.session, w.maxRows)
+	if err != nil {
+		return errors.Join(ErrPolicyUncertain, err)
+	}
+	if present {
+		return ErrPolicyCleanupRequired
 	}
 	addresses, routes, err := w.inventory(ctx)
 	if err != nil {

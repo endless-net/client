@@ -31,12 +31,65 @@ func (t *factoryTUN) Close() error {
 }
 
 type mockTUNAPI struct {
+	deviceMissing                        bool
+	deviceWithoutMIB                     bool
+	deviceErr                            error
 	rows                                 []adapterIdentity
 	row                                  adapterIdentity
 	device                               *factoryTUN
 	creates, reads                       int
 	createErr, identityErr, inventoryErr error
 	onCreate                             func()
+}
+
+func (a *mockTUNAPI) devicePresent(ctx context.Context, key windows.GUID, _ int) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if a.deviceErr != nil {
+		return false, a.deviceErr
+	}
+	if a.deviceWithoutMIB {
+		return true, nil
+	}
+	for _, row := range a.rows {
+		if row.GUID == key && !a.deviceMissing {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func TestWindowsTUNCleanupDistinguishesPhantomMIBAndDevice(t *testing.T) {
+	f, api, prepared := tunFactoryFixture(t)
+	device, err := f.Create(context.Background(), prepared, 1420, func(context.Context, state.AdapterRecord) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.rows = []adapterIdentity{api.row}
+	api.deviceMissing = true
+	if err := f.ConfirmAbsent(context.Background(), device.Record()); err != nil {
+		t.Fatal("removed device with residual owned MIB prevented cleanup", err)
+	}
+	api.rows = nil
+	api.deviceWithoutMIB = true
+	if err := f.ConfirmAbsent(context.Background(), device.Record()); !errors.Is(err, ErrAdapterCleanupRequired) {
+		t.Fatal("missing MIB hid a still-installed device", err)
+	}
+	api.deviceWithoutMIB = false
+	api.rows = []adapterIdentity{api.row}
+	api.deviceErr = ErrAdapterPermission
+	if err := f.ConfirmAbsent(context.Background(), device.Record()); !errors.Is(err, ErrAdapterPermission) {
+		t.Fatal("unknown device inventory treated as absence", err)
+	}
+	api.deviceErr = nil
+	api.rows[0].GUID = windows.GUID{}
+	if err := f.ConfirmAbsent(context.Background(), device.Record()); !errors.Is(err, ErrAdapterOwnership) {
+		t.Fatal("PnP absence bypassed recycled LUID ownership", err)
+	}
+	if api.creates != 1 || api.device.closes != 0 {
+		t.Fatal("absence query changed a native adapter")
+	}
 }
 
 func (a *mockTUNAPI) interfaces() ([]adapterIdentity, error) {

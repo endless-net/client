@@ -10,6 +10,8 @@ import (
 
 	"github.com/endless-net/client/internal/state"
 	"github.com/tailscale/wf"
+	"golang.org/x/sys/windows"
+	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 )
 
 func TestWindowsPacketGuardsRejectRouteBypassWithoutBlockingOrdinaryNetwork(t *testing.T) {
@@ -120,5 +122,28 @@ func TestWindowsFilterGuardsCannotCloseUntilAdapterAndRowsAbsent(t *testing.T) {
 	native.forward = nil
 	if err := f.CloseAfterIPCleanup(context.Background(), ip); err != nil || api.closes != 1 {
 		t.Fatal("confirmed cleanup could not release guards", err)
+	}
+}
+
+func TestWindowsGuardCleanupRequiresDeviceAndRowsAbsentDespitePhantomMIB(t *testing.T) {
+	p := policyFixture(t, false)
+	native := &mockIPAPI{key: p.session, deviceMissing: true}
+	ip := &WindowsIP{api: native, maxRows: 128}
+	if err := ip.confirmFilterCleanup(context.Background(), p); err != nil {
+		t.Fatal("phantom MIB prevented confirmed device cleanup", err)
+	}
+	native.deviceErr = ErrAdapterPermission
+	if err := ip.confirmFilterCleanup(context.Background(), p); err == nil {
+		t.Fatal("unknown device inventory permitted guard cleanup")
+	}
+	native.deviceErr = nil
+	native.forward = []winipcfg.MibIPforwardRow2{testIPRoute(winipcfg.LUID(p.luid), "100.64.0.2/32", 7)}
+	if err := ip.confirmFilterCleanup(context.Background(), p); !errors.Is(err, ErrPolicyCleanupRequired) {
+		t.Fatal("residual IP route lost guards", err)
+	}
+	native.forward = nil
+	native.key = windows.GUID{}
+	if err := ip.confirmFilterCleanup(context.Background(), p); !errors.Is(err, ErrPolicyOwnership) {
+		t.Fatal("foreign identity lost guards", err)
 	}
 }
