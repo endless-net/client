@@ -261,7 +261,11 @@ func (w *ConnectionWorker) Reconcile(ctx context.Context, profile string, genera
 				}
 				return nil
 			case ConnectionFailed:
-				return v.Failure
+				// Retryable failure is provisional until the same owner has
+				// finished cleanup. The run loop keeps the original budget.
+				if !recoveryFailure(v.Failure) || !v.CleanupPending || v.CleanupFailure != nil {
+					return v.Failure
+				}
 			}
 		} else if v.Profile != "" && (v.Profile != profile || v.Generation > generation) {
 			return state.ErrStale
@@ -683,7 +687,11 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 					}
 				}
 			}
-			if latestAttempt {
+			// Successful cleanup followed by an admitted retry is one transition.
+			// Do not expose a terminal failure between cleanup and setTarget.
+			retryAfterCleanup := latestAttempt && r.finished && r.err == nil && operationOpen &&
+				desired.intent == state.IntentConnected && recoveryFailure(w.Observe().Failure)
+			if latestAttempt && !retryAfterCleanup {
 				w.result(r)
 			}
 			if r.finished {

@@ -195,3 +195,131 @@ func TestRecoveryNeverOverridesDisconnectedIntent(t *testing.T) {
 	case <-time.After(25 * time.Millisecond):
 	}
 }
+
+func TestReconcileWaitsForTransientCleanupAndOriginalAttemptRetry(t *testing.T) {
+	for _, failure := range []error{connectivity.FailurePath, connectivity.FailureControl} {
+		t.Run(failure.Error(), func(t *testing.T) {
+			s, _ := workerStore(t)
+			if err := workerIntent(t, s, state.IntentConnected, time.Now(), workerRuntime); err != nil {
+				t.Fatal(err)
+			}
+			before, err := s.Load(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			cleanup, connect := make(chan struct{}), make(chan struct{})
+			count := 0
+			h := &workerHarness{created: make(chan *workerSession, 8), setup: func(s *workerSession) {
+				count++
+				if count == 1 {
+					s.connectErr, s.cleanupGate = failure, cleanup
+				} else {
+					s.connectGate = connect
+				}
+			}}
+			w := testConnectionWorker(t, s, h)
+			startConnectionWorker(t, w)
+			first := awaitWorkerSession(t, h)
+			original := <-first.connectCalls
+			awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.Phase == ConnectionFailed && v.CleanupPending })
+			done := make(chan error, 1)
+			wait := workerCallContext(t)
+			go func() { done <- w.Reconcile(wait, workerProfile, 1, true) }()
+			select {
+			case err := <-done:
+				t.Fatal("intermediate failure escaped while cleanup can still allow retry", err)
+			case <-time.After(20 * time.Millisecond):
+			}
+			close(cleanup)
+			second := awaitWorkerSession(t, h)
+			retry := <-second.connectCalls
+			if !retry.restore || !retry.deadline.Equal(original.deadline) || first.lifetime.Err() == nil || second.generation != first.generation {
+				t.Fatal("retry reset deadline/generation or overlapped native owners")
+			}
+			select {
+			case err := <-done:
+				t.Fatal("cleanup completion escaped as terminal failure before retry", err)
+			default:
+			}
+			close(connect)
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("successful retry did not complete original wait")
+			}
+			after, err := s.Load(context.Background())
+			if err != nil || after.Revision != before.Revision || *after.Profiles[workerProfile].Connection.Request != *before.Profiles[workerProfile].Connection.Request || after.Profiles[workerProfile].Connection.Deadline != before.Profiles[workerProfile].Connection.Deadline {
+				t.Fatal("retry changed durable request or deadline", err)
+			}
+		})
+	}
+}
+
+func TestReconcileDoesNotWaitThroughSafetyOrCleanupFailure(t *testing.T) {
+	for _, failure := range []error{connectivity.FailureTrust, connectivity.FailureAccess, connectivity.FailureControl} {
+		t.Run(failure.Error(), func(t *testing.T) {
+			s, _ := workerStore(t)
+			if err := workerIntent(t, s, state.IntentConnected, time.Now(), workerRuntime); err != nil {
+				t.Fatal(err)
+			}
+			cleanup := make(chan struct{})
+			defer close(cleanup)
+			h := &workerHarness{created: make(chan *workerSession, 8), setup: func(s *workerSession) {
+				s.connectErr, s.cleanupGate = failure, cleanup
+				if failure == connectivity.FailureControl {
+					s.cleanupFailures.Store(2)
+				}
+			}}
+			w := testConnectionWorker(t, s, h)
+			startConnectionWorker(t, w)
+			awaitWorkerSession(t, h)
+			want := failure
+			if failure == connectivity.FailureControl {
+				want = ErrConnectionOperation
+			}
+			awaitWorkerView(t, w, func(v ConnectionObservation) bool {
+				return v.Phase == ConnectionFailed && errors.Is(v.Failure, want) && (failure != connectivity.FailureControl || v.CleanupFailure != nil)
+			})
+			if err := w.Reconcile(workerCallContext(t), workerProfile, 1, true); !errors.Is(err, want) {
+				t.Fatal("terminal failure hidden", err)
+			}
+			if len(h.created) != 0 {
+				t.Fatal("terminal failure retried")
+			}
+		})
+	}
+}
+
+func TestReconcileTransientWaitHonorsCancelAndOriginalBudget(t *testing.T) {
+	s, _ := workerStore(t)
+	accepted := time.Now().UTC()
+	if err := workerIntent(t, s, state.IntentConnected, accepted, workerRuntime); err != nil {
+		t.Fatal(err)
+	}
+	cleanup := make(chan struct{})
+	h := &workerHarness{created: make(chan *workerSession, 8), setup: func(s *workerSession) {
+		s.connectErr, s.cleanupGate = connectivity.FailureControl, cleanup
+	}}
+	w := testConnectionWorker(t, s, h)
+	clock := &workerMutableClock{sample: connectivity.ClockSample{Wall: accepted, Uptime: time.Duration(accepted.UnixNano()), UpperUptime: time.Duration(accepted.UnixNano()), Epoch: workerRuntime}}
+	w.config.Clock = clock
+	startConnectionWorker(t, w)
+	awaitWorkerSession(t, h)
+	awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.Phase == ConnectionFailed && v.CleanupPending })
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := w.Reconcile(ctx, workerProfile, 1, true); !errors.Is(err, context.Canceled) {
+		t.Fatal("transient wait ignored caller cancellation", err)
+	}
+	clock.advance(31*time.Second, 31*time.Second)
+	close(cleanup)
+	if err := w.Reconcile(workerCallContext(t), workerProfile, 1, true); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("cleanup extended original operation budget", err)
+	}
+	if len(h.created) != 0 {
+		t.Fatal("expired original attempt created another owner")
+	}
+}
