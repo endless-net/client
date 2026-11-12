@@ -41,6 +41,11 @@ class ServiceState extends $pb.ProtobufEnum {
   static const ServiceState SERVICE_STATE_NEEDS_LOGIN =
       ServiceState._(11, _omitEnumNames ? '' : 'SERVICE_STATE_NEEDS_LOGIN');
 
+  /// Fresh server authority and the native tunnel are ready, with zero peers in
+  /// the verified map. No peer path or peer traffic has been demonstrated.
+  static const ServiceState SERVICE_STATE_LOCAL_READY =
+      ServiceState._(12, _omitEnumNames ? '' : 'SERVICE_STATE_LOCAL_READY');
+
   static const $core.List<ServiceState> values = <ServiceState>[
     SERVICE_STATE_UNSPECIFIED,
     SERVICE_STATE_CONNECTED,
@@ -54,10 +59,11 @@ class ServiceState extends $pb.ProtobufEnum {
     SERVICE_STATE_RECOVERY_BLOCKED,
     SERVICE_STATE_POLICY_BLOCKED,
     SERVICE_STATE_NEEDS_LOGIN,
+    SERVICE_STATE_LOCAL_READY,
   ];
 
   static final $core.List<ServiceState?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 11);
+      $pb.ProtobufEnum.$_initByValueList(values, 12);
   static ServiceState? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 
@@ -435,16 +441,22 @@ class ConnectionPhase extends $pb.ProtobufEnum {
       ConnectionPhase._(
           4, _omitEnumNames ? '' : 'CONNECTION_PHASE_DISCONNECTING');
 
+  /// A sole-node tunnel is applied under current authority. Status.peer_count
+  /// must be zero. This is not CONNECTED evidence for an authenticated peer path.
+  static const ConnectionPhase CONNECTION_PHASE_LOCAL_READY = ConnectionPhase._(
+      5, _omitEnumNames ? '' : 'CONNECTION_PHASE_LOCAL_READY');
+
   static const $core.List<ConnectionPhase> values = <ConnectionPhase>[
     CONNECTION_PHASE_UNSPECIFIED,
     CONNECTION_PHASE_DISCONNECTED,
     CONNECTION_PHASE_CONNECTING,
     CONNECTION_PHASE_CONNECTED,
     CONNECTION_PHASE_DISCONNECTING,
+    CONNECTION_PHASE_LOCAL_READY,
   ];
 
   static final $core.List<ConnectionPhase?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 4);
+      $pb.ProtobufEnum.$_initByValueList(values, 5);
   static ConnectionPhase? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 

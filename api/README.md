@@ -253,3 +253,21 @@ Dependency security gate: `golang.org/x/net` закреплён на `v0.60.0` �
 findings GO-2026-6617/6612/6611/6603 в `v0.58.0`. Транзитивные
 `x/sys v0.48.0` и `x/text v0.42.0` и minimum Go1.26 согласованы в go.mod.
 Повторные результаты обязательного vulnerability scan фиксируются workspace.
+
+## Первое устройство003 — api/v0.6.0 candidate
+
+FR-023/SC-015: SERVICE_STATE_LOCAL_READY=12 и CONNECTION_PHASE_LOCAL_READY=5
+означают доказанную готовность локального туннеля при нуле peers в свежей
+авторизованной карте. ControlState READY, положительная map_revision и собственный
+overlay address относятся к текущему состоянию. Перед выдачей этих значений runtime
+проверяет actual owned adapter/MTU/address/WFP, engine/listener и current lease.
+Одного desired intent, ACK, cached map, регистрации или пустого списка discovery
+недостаточно. PeerCount должен быть0 именно в проверенной self-only карте.
+
+Up может успешно завершить локальную подготовку с текстом «туннель готов, других
+устройств нет». Это не CONNECTION_PHASE_CONNECTED и не подтверждение peer traffic.
+При наличии peers CONNECTED по-прежнему требует действующего разрешения и
+аутентифицированного пути. Offline/revoke/cleanup не сохраняют ложную local-ready
+готовность. Down/restart подчиняются прежним ownership/intent/current-state guards.
+Новых RPC, credentials, UI и выбора сети нет. Результат только typed state; runtime
+adoption/installed acceptance выполняются после producer publication и exact pins.

@@ -127,5 +127,19 @@
       "semantics": "owner-only immutable original Enroll inputs, exact request_id/mode/hostname retry binding; no mutation",
       "up_validation": "missing/unsupported mode or empty hostname -> explicit error, never guess default mode/hostname or create new request_id"
     }
+  },
+  "system_003_local_ready": {
+    "status": "api-release-candidate",
+    "target_api_tag": "api/v0.6.0",
+    "baseline_tag": "api/v0.5.0",
+    "baseline_revision": "b78b63d9ac9e3437207c358514a79792127616fa",
+    "runtime_adopted": false,
+    "service_state": "SERVICE_STATE_LOCAL_READY=12",
+    "connection_phase": "CONNECTION_PHASE_LOCAL_READY=5",
+    "semantics": "fresh authority plus actual native sole-node tunnel; zero verified peers; no peer path or traffic claim",
+    "generated_manifest_sha256": "debfa2974572ae80d2c0908a9b215f934e65d6619b960fe172415bfe42966fd8",
+    "descriptor_sha256": "b3ea18b22699e414d979e685dae6a639c0b3a1df787dadb63e09c87f4039ba17",
+    "generated_files": 20,
+    "generation_environment": "Ubuntu26.04 / Go1.27.4 / Buf1.50.0 / pinned local plugins / Dart3.13.5; two byte-identical generations"
   }
 }

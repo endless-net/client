@@ -22,6 +22,9 @@ enum ServiceState {
   SERVICE_STATE_RECOVERY_BLOCKED = 9;
   SERVICE_STATE_POLICY_BLOCKED = 10;
   SERVICE_STATE_NEEDS_LOGIN = 11;
+  // Fresh server authority and the native tunnel are ready, with zero peers in
+  // the verified map. No peer path or peer traffic has been demonstrated.
+  SERVICE_STATE_LOCAL_READY = 12;
 }
 
 enum ControlState {
@@ -227,6 +230,9 @@ enum ConnectionPhase {
   CONNECTION_PHASE_CONNECTING = 2;
   CONNECTION_PHASE_CONNECTED = 3;
   CONNECTION_PHASE_DISCONNECTING = 4;
+  // A sole-node tunnel is applied under current authority. Status.peer_count
+  // must be zero. This is not CONNECTED evidence for an authenticated peer path.
+  CONNECTION_PHASE_LOCAL_READY = 5;
 }
 
 message Session {

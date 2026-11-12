@@ -41,6 +41,9 @@ const (
 	ServiceState_SERVICE_STATE_RECOVERY_BLOCKED        ServiceState = 9
 	ServiceState_SERVICE_STATE_POLICY_BLOCKED          ServiceState = 10
 	ServiceState_SERVICE_STATE_NEEDS_LOGIN             ServiceState = 11
+	// Fresh server authority and the native tunnel are ready, with zero peers in
+	// the verified map. No peer path or peer traffic has been demonstrated.
+	ServiceState_SERVICE_STATE_LOCAL_READY ServiceState = 12
 )
 
 // Enum value maps for ServiceState.
@@ -58,6 +61,7 @@ var (
 		9:  "SERVICE_STATE_RECOVERY_BLOCKED",
 		10: "SERVICE_STATE_POLICY_BLOCKED",
 		11: "SERVICE_STATE_NEEDS_LOGIN",
+		12: "SERVICE_STATE_LOCAL_READY",
 	}
 	ServiceState_value = map[string]int32{
 		"SERVICE_STATE_UNSPECIFIED":             0,
@@ -72,6 +76,7 @@ var (
 		"SERVICE_STATE_RECOVERY_BLOCKED":        9,
 		"SERVICE_STATE_POLICY_BLOCKED":          10,
 		"SERVICE_STATE_NEEDS_LOGIN":             11,
+		"SERVICE_STATE_LOCAL_READY":             12,
 	}
 )
 
@@ -753,6 +758,9 @@ const (
 	ConnectionPhase_CONNECTION_PHASE_CONNECTING    ConnectionPhase = 2
 	ConnectionPhase_CONNECTION_PHASE_CONNECTED     ConnectionPhase = 3
 	ConnectionPhase_CONNECTION_PHASE_DISCONNECTING ConnectionPhase = 4
+	// A sole-node tunnel is applied under current authority. Status.peer_count
+	// must be zero. This is not CONNECTED evidence for an authenticated peer path.
+	ConnectionPhase_CONNECTION_PHASE_LOCAL_READY ConnectionPhase = 5
 )
 
 // Enum value maps for ConnectionPhase.
@@ -763,6 +771,7 @@ var (
 		2: "CONNECTION_PHASE_CONNECTING",
 		3: "CONNECTION_PHASE_CONNECTED",
 		4: "CONNECTION_PHASE_DISCONNECTING",
+		5: "CONNECTION_PHASE_LOCAL_READY",
 	}
 	ConnectionPhase_value = map[string]int32{
 		"CONNECTION_PHASE_UNSPECIFIED":   0,
@@ -770,6 +779,7 @@ var (
 		"CONNECTION_PHASE_CONNECTING":    2,
 		"CONNECTION_PHASE_CONNECTED":     3,
 		"CONNECTION_PHASE_DISCONNECTING": 4,
+		"CONNECTION_PHASE_LOCAL_READY":   5,
 	}
 )
 
@@ -3817,7 +3827,7 @@ const file_client_v0_runtime_proto_rawDesc = "" +
 	"\bfailures\x18\r \x03(\v2\x12.client.v0.FailureR\bfailures\x12\x1c\n" +
 	"\ttruncated\x18\x0e \x01(\bR\ttruncated\x12%\n" +
 	"\x05peers\x18\x0f \x03(\v2\x0f.client.v0.PeerR\x05peers\x122\n" +
-	"\x15default_route_present\x18\x10 \x01(\bR\x13defaultRoutePresent*\x93\x03\n" +
+	"\x15default_route_present\x18\x10 \x01(\bR\x13defaultRoutePresent*\xb2\x03\n" +
 	"\fServiceState\x12\x1d\n" +
 	"\x19SERVICE_STATE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17SERVICE_STATE_CONNECTED\x10\x01\x12\x1e\n" +
@@ -3831,7 +3841,8 @@ const file_client_v0_runtime_proto_rawDesc = "" +
 	"\x1eSERVICE_STATE_RECOVERY_BLOCKED\x10\t\x12 \n" +
 	"\x1cSERVICE_STATE_POLICY_BLOCKED\x10\n" +
 	"\x12\x1d\n" +
-	"\x19SERVICE_STATE_NEEDS_LOGIN\x10\v*\xef\x03\n" +
+	"\x19SERVICE_STATE_NEEDS_LOGIN\x10\v\x12\x1d\n" +
+	"\x19SERVICE_STATE_LOCAL_READY\x10\f*\xef\x03\n" +
 	"\fControlState\x12\x1d\n" +
 	"\x19CONTROL_STATE_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eCONTROL_STATE_PENDING_APPROVAL\x10\x01\x12\x1a\n" +
@@ -3911,13 +3922,14 @@ const file_client_v0_runtime_proto_rawDesc = "" +
 	"\x19CREDENTIAL_STATE_EXPIRING\x10\x03\x12\x1c\n" +
 	"\x18CREDENTIAL_STATE_EXPIRED\x10\x04\x12\x1d\n" +
 	"\x19CREDENTIAL_STATE_RENEWING\x10\x05\x12\x1c\n" +
-	"\x18CREDENTIAL_STATE_BLOCKED\x10\x06*\xbb\x01\n" +
+	"\x18CREDENTIAL_STATE_BLOCKED\x10\x06*\xdd\x01\n" +
 	"\x0fConnectionPhase\x12 \n" +
 	"\x1cCONNECTION_PHASE_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dCONNECTION_PHASE_DISCONNECTED\x10\x01\x12\x1f\n" +
 	"\x1bCONNECTION_PHASE_CONNECTING\x10\x02\x12\x1e\n" +
 	"\x1aCONNECTION_PHASE_CONNECTED\x10\x03\x12\"\n" +
-	"\x1eCONNECTION_PHASE_DISCONNECTING\x10\x04*\xf7\x01\n" +
+	"\x1eCONNECTION_PHASE_DISCONNECTING\x10\x04\x12 \n" +
+	"\x1cCONNECTION_PHASE_LOCAL_READY\x10\x05*\xf7\x01\n" +
 	"\x14TransportSearchState\x12&\n" +
 	"\"TRANSPORT_SEARCH_STATE_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bTRANSPORT_SEARCH_STATE_IDLE\x10\x01\x12$\n" +

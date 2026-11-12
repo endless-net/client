@@ -4,6 +4,29 @@ import 'package:protobuf/protobuf.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('sole node local readiness is distinct from peer connectivity', () {
+    final status = Status(
+      serviceState: ServiceState.SERVICE_STATE_LOCAL_READY,
+      controlState: ControlState.CONTROL_STATE_READY,
+      connectionPhase: ConnectionPhase.CONNECTION_PHASE_LOCAL_READY,
+      mapRevision: Int64(7),
+      overlayAddresses: ['100.96.0.1'],
+    );
+    final decoded = Status.fromBuffer(status.writeToBuffer());
+    expect(decoded.serviceState, ServiceState.SERVICE_STATE_LOCAL_READY);
+    expect(
+      decoded.connectionPhase,
+      ConnectionPhase.CONNECTION_PHASE_LOCAL_READY,
+    );
+    expect(
+      decoded.connectionPhase,
+      isNot(ConnectionPhase.CONNECTION_PHASE_CONNECTED),
+    );
+    expect(decoded.peerCount, 0);
+    expect(decoded.mapRevision, Int64(7));
+    expect(decoded.connectionPhase.value, 5);
+    expect(decoded.serviceState.value, 12);
+  });
   test('original mode and hostname support exact enrollment replay', () {
     final attempt = EnrollmentAttempt(
       requestId: '611fb038-329c-4de5-872a-89bcab17287a',

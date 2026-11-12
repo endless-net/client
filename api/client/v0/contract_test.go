@@ -35,6 +35,24 @@ func TestDescriptorAccessAndInitialClaim(t *testing.T) {
 	}
 }
 
+func TestSoleNodeReadinessIsDistinctFromPeerConnection(t *testing.T) {
+	local := &clientv0.Status{ServiceState: clientv0.ServiceState_SERVICE_STATE_LOCAL_READY, ControlState: clientv0.ControlState_CONTROL_STATE_READY, ConnectionPhase: clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY, MapRevision: 7, OverlayAddresses: []string{"100.96.0.1"}}
+	wire, err := proto.Marshal(local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded clientv0.Status
+	if err := proto.Unmarshal(wire, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.ConnectionPhase != clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY || decoded.ServiceState != clientv0.ServiceState_SERVICE_STATE_LOCAL_READY || decoded.PeerCount != 0 || decoded.MapRevision != 7 || decoded.ConnectionPhase == clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED {
+		t.Fatal("local tunnel readiness confused with peer connectivity")
+	}
+	if local.GetConnectionPhase().Number() != 5 || local.GetServiceState().Number() != 12 {
+		t.Fatal("sole-node wire values changed")
+	}
+}
+
 func TestMutationPresenceAndUnknownWire(t *testing.T) {
 	absent := &clientv0.PreferencesPatch{}
 	explicit := &clientv0.PreferencesPatch{AcceptDns: proto.Bool(false)}

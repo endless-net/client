@@ -31,6 +31,7 @@ const ServiceState$json = {
     {'1': 'SERVICE_STATE_RECOVERY_BLOCKED', '2': 9},
     {'1': 'SERVICE_STATE_POLICY_BLOCKED', '2': 10},
     {'1': 'SERVICE_STATE_NEEDS_LOGIN', '2': 11},
+    {'1': 'SERVICE_STATE_LOCAL_READY', '2': 12},
   ],
 };
 
@@ -43,7 +44,7 @@ final $typed_data.Uint8List serviceStateDescriptor = $convert.base64Decode(
     'Uk9WQUwQBhIpCiVTRVJWSUNFX1NUQVRFX1NFUlZFUl9JREVOVElUWV9DSEFOR0VEEAcSHAoYU0'
     'VSVklDRV9TVEFURV9SRUNPVkVSSU5HEAgSIgoeU0VSVklDRV9TVEFURV9SRUNPVkVSWV9CTE9D'
     'S0VEEAkSIAocU0VSVklDRV9TVEFURV9QT0xJQ1lfQkxPQ0tFRBAKEh0KGVNFUlZJQ0VfU1RBVE'
-    'VfTkVFRFNfTE9HSU4QCw==');
+    'VfTkVFRFNfTE9HSU4QCxIdChlTRVJWSUNFX1NUQVRFX0xPQ0FMX1JFQURZEAw=');
 
 @$core.Deprecated('Use controlStateDescriptor instead')
 const ControlState$json = {
@@ -277,6 +278,7 @@ const ConnectionPhase$json = {
     {'1': 'CONNECTION_PHASE_CONNECTING', '2': 2},
     {'1': 'CONNECTION_PHASE_CONNECTED', '2': 3},
     {'1': 'CONNECTION_PHASE_DISCONNECTING', '2': 4},
+    {'1': 'CONNECTION_PHASE_LOCAL_READY', '2': 5},
   ],
 };
 
@@ -285,7 +287,7 @@ final $typed_data.Uint8List connectionPhaseDescriptor = $convert.base64Decode(
     'Cg9Db25uZWN0aW9uUGhhc2USIAocQ09OTkVDVElPTl9QSEFTRV9VTlNQRUNJRklFRBAAEiEKHU'
     'NPTk5FQ1RJT05fUEhBU0VfRElTQ09OTkVDVEVEEAESHwobQ09OTkVDVElPTl9QSEFTRV9DT05O'
     'RUNUSU5HEAISHgoaQ09OTkVDVElPTl9QSEFTRV9DT05ORUNURUQQAxIiCh5DT05ORUNUSU9OX1'
-    'BIQVNFX0RJU0NPTk5FQ1RJTkcQBA==');
+    'BIQVNFX0RJU0NPTk5FQ1RJTkcQBBIgChxDT05ORUNUSU9OX1BIQVNFX0xPQ0FMX1JFQURZEAU=');
 
 @$core.Deprecated('Use transportSearchStateDescriptor instead')
 const TransportSearchState$json = {
