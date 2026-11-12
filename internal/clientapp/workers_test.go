@@ -3,9 +3,12 @@ package clientapp
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/endless-net/client/internal/state"
 
 	"go.uber.org/fx"
 )
@@ -26,6 +29,93 @@ func budget(t *testing.T) context.Context {
 }
 
 func waitCancelled(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }
+
+type shutdownDeadlineSession struct {
+	*workerSession
+	deadlines chan time.Time
+}
+
+func (s *shutdownDeadlineSession) Disconnect(ctx context.Context) error {
+	deadline, _ := ctx.Deadline()
+	s.deadlines <- deadline
+	return s.workerSession.Disconnect(ctx)
+}
+
+func TestWorkersStopUsesOriginalDeadlineForNativeCleanup(t *testing.T) {
+	for _, enough := range []bool{true, false} {
+		t.Run(map[bool]string{true: "remaining_stop_budget", false: "expired_stop_budget"}[enough], func(t *testing.T) {
+			store, _ := workerStore(t)
+			if err := workerIntent(t, store, state.IntentConnected, time.Now(), workerRuntime); err != nil {
+				t.Fatal(err)
+			}
+			gate := make(chan struct{})
+			var release sync.Once
+			unblock := func() { release.Do(func() { close(gate) }) }
+			defer unblock()
+			deadlines := make(chan time.Time, 8)
+			harness := &workerHarness{created: make(chan *workerSession, 8), setup: func(s *workerSession) { s.cleanupGate = gate }}
+			connection := testConnectionWorker(t, store, harness)
+			connection.factory = func(ctx context.Context, profile string, generation uint64) (ConnectionSession, error) {
+				base, err := harness.factory(ctx, profile, generation)
+				return &shutdownDeadlineSession{base.(*workerSession), deadlines}, err
+			}
+			h, shutdown := &hooks{}, &shutdown{}
+			workers, err := NewWorkers(h, shutdown, testSignals(t), waitCancelled, waitCancelled, connection.Run)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := h.hook.OnStart(budget(t)); err != nil {
+				t.Fatal(err)
+			}
+			awaitWorkerSession(t, harness)
+			awaitWorkerView(t, connection, func(v ConnectionObservation) bool { return v.Phase == ConnectionConnected })
+			duration := 750 * time.Millisecond
+			if !enough {
+				duration = 80 * time.Millisecond
+			}
+			stop, cancel := context.WithTimeout(context.Background(), duration)
+			defer cancel()
+			original, _ := stop.Deadline()
+			done := make(chan error, 1)
+			go func() { done <- h.hook.OnStop(stop) }()
+			defer func() {
+				unblock()
+				select {
+				case <-workers.done:
+				case <-time.After(time.Second):
+					t.Error("stop left workers running")
+				}
+			}()
+			select {
+			case actual := <-deadlines:
+				if !actual.Equal(original) {
+					t.Fatal("native cleanup reset or shortened the original stop deadline", actual, original)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("native cleanup did not start")
+			}
+			if enough {
+				select {
+				case err := <-done:
+					t.Fatal("background cleanup timeout truncated the remaining stop budget", err)
+				case <-time.After(connection.config.CleanupTimeout + 30*time.Millisecond):
+				}
+				unblock()
+			}
+			select {
+			case err := <-done:
+				if enough && err != nil || !enough && err == nil {
+					t.Fatal("cleanup outcome lost", enough, err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("native cleanup escaped stop bound")
+			}
+			if shutdown.calls.Load() != 0 {
+				t.Fatal("normal stop became an unexpected application shutdown")
+			}
+		})
+	}
+}
 
 func TestWorkersValidateWithoutStarting(t *testing.T) {
 	h, s := &hooks{}, &shutdown{}

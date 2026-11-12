@@ -6,12 +6,20 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"go.uber.org/fx"
 )
 
 var ErrWorkers = errors.New("client mandatory worker failed")
 var ErrLifecycle = errors.New("invalid client worker lifecycle")
+
+// workerShutdown carries the original Fx OnStop bound through cancellation.
+// An unexpected worker failure never grants this cleanup budget.
+type workerShutdown struct{ deadline time.Time }
+
+func (*workerShutdown) Error() string { return "client workers stopping" }
+func (*workerShutdown) Unwrap() error { return context.Canceled }
 
 // Workers binds enrollment, connection reconciliation and local IPC to one Fx
 // lifetime. Resource acquisition and IPC self-bootstrap belong to earlier
@@ -21,7 +29,7 @@ type Workers struct {
 	ipc, enrollment, connection func(context.Context) error
 	shutdown                    fx.Shutdowner
 	signals                     *Signals
-	cancel                      context.CancelFunc
+	cancel                      context.CancelCauseFunc
 	done                        chan struct{}
 	used, running, stopping     bool
 	failed                      bool
@@ -49,7 +57,7 @@ func (w *Workers) start(ctx context.Context) error {
 		return ErrLifecycle
 	}
 	w.used, w.running = true, true
-	runCtx, cancel := context.WithCancel(context.Background())
+	runCtx, cancel := context.WithCancelCause(context.Background())
 	w.cancel, w.done = cancel, make(chan struct{})
 	var joined sync.WaitGroup
 	joined.Add(3)
@@ -71,7 +79,7 @@ func (w *Workers) start(ctx context.Context) error {
 				}
 				if unexpected {
 					w.failed = true
-					w.cancel()
+					w.cancel(ErrWorkers)
 				}
 				w.mu.Unlock()
 				if unexpected {
@@ -98,10 +106,15 @@ func (w *Workers) stop(ctx context.Context) error {
 		w.mu.Unlock()
 		return nil
 	}
-	w.cancel()
+	deadline, bounded := ctx.Deadline()
+	cause := context.Canceled
+	if bounded {
+		cause = &workerShutdown{deadline: deadline}
+	}
+	w.cancel(cause)
 	done := w.done
 	w.mu.Unlock()
-	if _, bounded := ctx.Deadline(); !bounded {
+	if !bounded {
 		return ErrLifecycle
 	}
 	select {

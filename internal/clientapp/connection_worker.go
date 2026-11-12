@@ -67,6 +67,7 @@ type connectionTarget struct {
 
 type connectionJob struct {
 	target   connectionTarget
+	daemon   context.Context
 	lifetime context.Context
 	cancel   context.CancelFunc
 	previous ConnectionSession
@@ -425,7 +426,7 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 	job.cancel()
 	results <- connectionResult{job: job, err: err}
 	if session != nil {
-		cleanup, cancel := context.WithTimeout(context.Background(), w.config.CleanupTimeout)
+		cleanup, cancel := w.cleanupContext(job.daemon)
 		cleanupErr := session.Disconnect(cleanup)
 		if cleanupErr == nil {
 			cleanupErr = cleanup.Err()
@@ -443,6 +444,14 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 		retained = session
 	}
 	results <- connectionResult{job: job, finished: true, err: err, retained: retained}
+}
+
+func (w *ConnectionWorker) cleanupContext(daemon context.Context) (context.Context, context.CancelFunc) {
+	var shutdown *workerShutdown
+	if daemon != nil && errors.As(context.Cause(daemon), &shutdown) {
+		return context.WithDeadline(context.Background(), shutdown.deadline)
+	}
+	return context.WithTimeout(context.Background(), w.config.CleanupTimeout)
 }
 
 func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
@@ -494,6 +503,8 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 	// On shutdown no new owner is admitted. A misbehaving native operation cannot
 	// make daemon shutdown unbounded or cause a second concurrent owner.
 	defer func() {
+		cleanup, cancel := w.cleanupContext(ctx)
+		defer cancel()
 		w.mu.Lock()
 		w.running = false
 		if w.view.Profile != "" && w.view.Phase != ConnectionFailed {
@@ -504,8 +515,6 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 		w.mu.Unlock()
 		if current == nil {
 			if w.retired != nil {
-				cleanup, cancel := context.WithTimeout(context.Background(), w.config.CleanupTimeout)
-				defer cancel()
 				done := make(chan error, 1)
 				go func() { done <- w.retired.Disconnect(cleanup) }()
 				select {
@@ -529,8 +538,6 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 			return
 		}
 		current.cancel()
-		bound := time.NewTimer(w.config.CleanupTimeout)
-		defer bound.Stop()
 		for {
 			select {
 			case r := <-results:
@@ -542,7 +549,7 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 					}
 					return
 				}
-			case <-bound.C:
+			case <-cleanup.Done():
 				runErr = errors.Join(runErr, ErrLifecycle)
 				return
 			}
@@ -614,7 +621,7 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 			t := *pending
 			pending = nil
 			lifetime, cancel := context.WithCancel(ctx)
-			current = &connectionJob{target: t, lifetime: lifetime, cancel: cancel, previous: w.retired}
+			current = &connectionJob{target: t, daemon: ctx, lifetime: lifetime, cancel: cancel, previous: w.retired}
 			w.retired = nil
 			go w.runJob(current, results)
 		}
