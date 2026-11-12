@@ -82,7 +82,7 @@ func NewWindowsSession(parent context.Context, store *state.Store, clock connect
 	if parent == nil || store == nil || clock == nil || generation == 0 || config.Validate() != nil || resources == nil || resources.budget == nil || resources.budget.maxPeers != config.MaxPeers {
 		return nil, ErrConfiguration
 	}
-	cleanup, err := NewWindowsCleanup(store, WindowsCleanupConfig{MaxInventoryRows: config.MaxInventoryRows, MaxInterfaces: config.MaxInterfaces, MaxProtected: config.MaxProtected, TransactionWait: config.TransactionWait})
+	cleanup, err := NewWindowsCleanup(store, WindowsCleanupConfig{MaxInventoryRows: config.MaxInventoryRows, MaxInterfaces: config.MaxInterfaces, MaxProtected: config.MaxProtected, TransactionWait: config.TransactionWait, PollInterval: config.DADPollInterval})
 	if err != nil {
 		return nil, err
 	}

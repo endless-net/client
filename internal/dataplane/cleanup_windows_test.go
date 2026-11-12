@@ -87,7 +87,7 @@ func cleanupFixture(t *testing.T) (*WindowsCleanup, *cleanupMemoryStore, *mockIP
 			guardAPI.live[r.ID] = journal.Filters[i].ID
 		}
 	}
-	c := &WindowsCleanup{store: store, ip: &WindowsIP{api: ipAPI, maxRows: 128}, adapter: cleanupAdapterFunc(func(context.Context, state.AdapterRecord) error { return nil })}
+	c := &WindowsCleanup{poll: time.Millisecond, store: store, ip: &WindowsIP{api: ipAPI, maxRows: 128}, adapter: cleanupAdapterFunc(func(context.Context, state.AdapterRecord) error { return nil })}
 	c.guards = func(_ context.Context, j state.ResourceJournal) (recoveredGuards, error) {
 		if len(j.Addresses)+len(j.Routes) != 0 || j.Adapter.Phase != state.EffectRemoving {
 			t.Fatal("guards retired before IP journal acknowledgments")
@@ -153,7 +153,9 @@ func TestWindowsCleanupLiveForeignOrStaleStateStopsBeforeDeletion(t *testing.T) 
 	for _, failure := range []error{ErrAdapterCleanupRequired, ErrAdapterOwnership, ErrAdapterUncertain} {
 		c, store, ip, guards := cleanupFixture(t)
 		c.adapter = cleanupAdapterFunc(func(context.Context, state.AdapterRecord) error { return failure })
-		if err := c.Run(cleanupContext(t), cleanupProfile, policySession, 1); !errors.Is(err, failure) || store.writes != 0 || guards.removes != 0 || ip.deletedRoutes+ip.deletedAddresses != 0 {
+		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Millisecond)
+		defer cancel()
+		if err := c.Run(ctx, cleanupProfile, policySession, 1); !errors.Is(err, failure) || store.writes != 0 || guards.removes != 0 || ip.deletedRoutes+ip.deletedAddresses != 0 {
 			t.Fatal("live/foreign adapter bypassed barrier", err)
 		}
 	}
@@ -220,5 +222,23 @@ func TestWindowsCleanupCancellationAfterBFECommitKeepsUnacknowledgedJournal(t *t
 	guards.onCommit = nil
 	if err := c.Run(cleanupContext(t), cleanupProfile, policySession, 1); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCleanupWaitsForOwnedAdapterAbsenceWithoutNativeDeletion(t *testing.T) {
+	c, store, ip, _ := cleanupFixture(t)
+	calls := 0
+	c.adapter = cleanupAdapterFunc(func(ctx context.Context, _ state.AdapterRecord) error {
+		calls++
+		if calls < 3 {
+			return ErrAdapterCleanupRequired
+		}
+		return ctx.Err()
+	})
+	if err := c.Run(cleanupContext(t), cleanupProfile, policySession, 1); err != nil {
+		t.Fatal("async native removal was treated as permanent failure", err)
+	}
+	if calls < 3 || store.value.Profiles[cleanupProfile].Connection.Journal != nil || ip.createdAddresses+ip.createdRoutes != 0 {
+		t.Fatal("absence was not observed or resources recreated")
 	}
 }

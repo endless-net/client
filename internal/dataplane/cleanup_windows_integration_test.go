@@ -23,7 +23,7 @@ func TestWindowsPreparedJournalRecoveryReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	store, _, original := protectedCleanupStore(t, &state.ResourceJournal{ID: prepared.ID, Generation: 1, Adapter: &prepared})
-	cleanup, err := NewWindowsCleanup(store, WindowsCleanupConfig{MaxInventoryRows: 256, MaxInterfaces: 256, MaxProtected: 8, TransactionWait: 100 * time.Millisecond})
+	cleanup, err := NewWindowsCleanup(store, WindowsCleanupConfig{MaxInventoryRows: 256, MaxInterfaces: 256, MaxProtected: 8, TransactionWait: 100 * time.Millisecond, PollInterval: 10 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@ import (
 
 type WindowsCleanupConfig struct {
 	MaxInventoryRows, MaxInterfaces, MaxProtected int
-	TransactionWait                               time.Duration
+	TransactionWait, PollInterval                 time.Duration
 }
 
 type cleanupStore interface {
@@ -37,6 +37,7 @@ type recoveredGuards interface {
 // as authority. A still-present adapter halts cleanup before native deletion.
 type WindowsCleanup struct {
 	mu      sync.Mutex
+	poll    time.Duration
 	store   cleanupStore
 	ip      *WindowsIP
 	adapter adapterAbsence
@@ -47,7 +48,7 @@ func (*WindowsCleanup) String() string   { return "[Windows resource cleanup]" }
 func (*WindowsCleanup) GoString() string { return "[Windows resource cleanup]" }
 
 func NewWindowsCleanup(store *state.Store, config WindowsCleanupConfig) (*WindowsCleanup, error) {
-	if store == nil || config.MaxInventoryRows <= 0 || config.MaxInterfaces <= 0 || config.MaxProtected <= 0 || config.TransactionWait <= 0 || config.TransactionWait%time.Millisecond != 0 || config.TransactionWait/time.Millisecond > time.Duration(1<<32-1) {
+	if config.PollInterval <= 0 || store == nil || config.MaxInventoryRows <= 0 || config.MaxInterfaces <= 0 || config.MaxProtected <= 0 || config.TransactionWait <= 0 || config.TransactionWait%time.Millisecond != 0 || config.TransactionWait/time.Millisecond > time.Duration(1<<32-1) {
 		return nil, ErrConfiguration
 	}
 	ip, err := NewWindowsIP(config.MaxInventoryRows)
@@ -58,7 +59,7 @@ func NewWindowsCleanup(store *state.Store, config WindowsCleanupConfig) (*Window
 	if err != nil {
 		return nil, err
 	}
-	return &WindowsCleanup{store: store, ip: ip, adapter: adapter, guards: func(ctx context.Context, journal state.ResourceJournal) (recoveredGuards, error) {
+	return &WindowsCleanup{store: store, ip: ip, adapter: adapter, poll: config.PollInterval, guards: func(ctx context.Context, journal state.ResourceJournal) (recoveredGuards, error) {
 		return RecoverWindowsGuardCleanup(ctx, journal, config.TransactionWait, config.MaxProtected)
 	}}, nil
 }
@@ -195,7 +196,7 @@ func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, g
 	if j.Adapter == nil {
 		return c.retire(ctx, profileID, *j)
 	}
-	if err := c.adapter.ConfirmAbsent(ctx, *j.Adapter); err != nil {
+	if err := c.waitAdapterAbsent(ctx, *j.Adapter); err != nil {
 		return err
 	}
 	j, err = c.change(ctx, profileID, *j, markJournalRemoving)
@@ -232,7 +233,7 @@ func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, g
 	}
 	// Recheck after row reconciliation: a recycled identity never becomes
 	// permission to remove the old persistent guards.
-	if err := c.adapter.ConfirmAbsent(ctx, *j.Adapter); err != nil {
+	if err := c.waitAdapterAbsent(ctx, *j.Adapter); err != nil {
 		return err
 	}
 	if j.Adapter.LUID != 0 {
@@ -261,4 +262,26 @@ func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, g
 		return err
 	}
 	return c.retire(ctx, profileID, *j)
+}
+
+// Close releases the original creation handle; Windows may finish removing the
+// interface asynchronously. Observe only exact-owned presence until absence,
+// within the original context. Never delete/adopt an existing adapter here.
+func (c *WindowsCleanup) waitAdapterAbsent(ctx context.Context, record state.AdapterRecord) error {
+	for {
+		err := c.adapter.ConfirmAbsent(ctx, record)
+		if !errors.Is(err, ErrAdapterCleanupRequired) {
+			return err
+		}
+		if c.poll <= 0 {
+			return ErrConfiguration
+		}
+		timer := time.NewTimer(c.poll)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Join(err, ctx.Err())
+		case <-timer.C:
+		}
+	}
 }

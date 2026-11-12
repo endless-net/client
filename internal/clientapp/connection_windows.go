@@ -65,7 +65,7 @@ func NewWindowsConnectionFactory(store *state.Store, transport *connectivity.Tra
 	if store == nil || transport == nil || c.Verifier.Clock == nil || c.Verifier.Announcements == nil || c.Verifier.Now == nil || c.validateSettings() != nil {
 		return nil, ErrConnectionWorker
 	}
-	cleanup, err := dataplane.NewWindowsCleanup(store, dataplane.WindowsCleanupConfig{MaxInventoryRows: c.Native.MaxInventoryRows, MaxInterfaces: c.Native.MaxInterfaces, MaxProtected: c.Native.MaxProtected, TransactionWait: c.Native.TransactionWait})
+	cleanup, err := dataplane.NewWindowsCleanup(store, dataplane.WindowsCleanupConfig{MaxInventoryRows: c.Native.MaxInventoryRows, MaxInterfaces: c.Native.MaxInterfaces, MaxProtected: c.Native.MaxProtected, TransactionWait: c.Native.TransactionWait, PollInterval: c.Native.DADPollInterval})
 	if err != nil {
 		return nil, err
 	}
