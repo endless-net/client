@@ -77,6 +77,15 @@ func (c *Controller) wake(ctx context.Context, profile, attempt string) error {
 }
 
 func (c *Controller) dispatch(ctx context.Context, result *clientv0.EnrollmentAttempt) error {
+	if err := c.dispatchPending(ctx, result); err != nil {
+		return rpcError(err)
+	}
+	return nil
+}
+
+// Keep local CAS conflicts typed until the observation retry boundary. Public
+// mutation callers still use dispatch, which sanitizes all outgoing errors.
+func (c *Controller) dispatchPending(ctx context.Context, result *clientv0.EnrollmentAttempt) error {
 	if !pending(result.Phase) {
 		return nil
 	}
@@ -100,7 +109,7 @@ func (c *Controller) dispatch(ctx context.Context, result *clientv0.EnrollmentAt
 		result.Restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "client.enrollment.registration_unavailable", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_SUPPORT}
 		return nil
 	default:
-		return rpcError(err)
+		return err
 	}
 }
 

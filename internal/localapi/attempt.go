@@ -110,8 +110,11 @@ func (c *Controller) getObserved(ctx context.Context, p localipc.Principal, req 
 			return nil, rpcError(err)
 		}
 	}
-	if err = c.dispatch(ctx, result); err != nil {
-		return nil, err
+	if err = c.dispatchPending(ctx, result); err != nil {
+		if errors.Is(err, state.ErrStale) {
+			return nil, state.ErrStale
+		}
+		return nil, rpcError(err)
 	}
 	return &clientv0.GetEnrollmentAttemptResponse{Attempt: result}, nil
 }
