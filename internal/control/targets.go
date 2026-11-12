@@ -1,7 +1,6 @@
 package control
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -59,7 +58,7 @@ func (q *Targets) before(ctx context.Context, p state.Profile) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err != nil || a.Validate(q.config.Now()) != nil || a.Origin != p.ControlOrigin || a.KeyID != p.Trust.KeyID || a.ID != p.Trust.AnnouncementID || !bytes.Equal(a.Bundle, p.Trust.Bundle) {
+	if err != nil || !a.MatchesProfile(p, q.config.Now()) {
 		return ErrBootstrap
 	}
 	return nil

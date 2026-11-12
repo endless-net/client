@@ -37,15 +37,34 @@ func (c *Controller) wake(ctx context.Context, profile, attempt string) error {
 	if !ok || p.Attempt == nil || p.Attempt.AttemptID != attempt {
 		return state.ErrStale
 	}
-	if p.Trust.KeyID == "" {
-		return errTrustRequired
-	}
 	a, err := c.announcement(ctx, p.ControlOrigin)
 	if err != nil {
 		return err
 	}
-	if a.KeyID != p.Trust.KeyID || a.ID != p.Trust.AnnouncementID || !bytes.Equal(a.Bundle, p.Trust.Bundle) {
-		return errTrustChanged
+	if a.VerifiedAt(c.config.Now()) {
+		current, loadErr := c.store.Load(ctx)
+		if loadErr != nil {
+			return loadErr
+		}
+		err = c.store.Update(ctx, current.Revision, func(current *state.State) error {
+			latest, exists := current.Profiles[profile]
+			if !exists || latest.Attempt == nil || latest.Attempt.Binding != p.Attempt.Binding || current.BootstrapCheckpoints[p.ControlOrigin] != a.Checkpoint() || !a.VerifiedAt(c.config.Now()) {
+				return state.ErrStale
+			}
+			latest.Trust = state.ServerTrust{KeyID: a.KeyID, AnnouncementID: a.ID, Bundle: a.Bundle}
+			current.Profiles[profile] = latest
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	} else {
+		if p.Trust.KeyID == "" {
+			return errTrustRequired
+		}
+		if a.KeyID != p.Trust.KeyID || a.ID != p.Trust.AnnouncementID || !bytes.Equal(a.Bundle, p.Trust.Bundle) {
+			return errTrustChanged
+		}
 	}
 	err = c.runner.Wake(ctx, profile, attempt)
 	if errors.Is(err, control.ErrLoginPhaseUnsupported) {
@@ -158,7 +177,7 @@ func (c *Controller) trust(ctx context.Context, caller localipc.Principal, req *
 	changed := false
 	err = c.store.Update(ctx, req.Mutation.ExpectedRevision, func(current *state.State) error {
 		p, ok := current.Profiles[id]
-		if !ok || p.ControlOrigin != a.Origin || a.Validate(c.config.Now()) != nil {
+		if !ok || p.ControlOrigin != a.Origin || a.Validate(c.config.Now()) != nil || a.VerifiedAt(c.config.Now()) && current.BootstrapCheckpoints[a.Origin] != a.Checkpoint() {
 			return errConfirmation
 		}
 		if p.Trust.KeyID == a.KeyID && p.Trust.AnnouncementID == a.ID && bytes.Equal(p.Trust.Bundle, a.Bundle) {

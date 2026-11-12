@@ -72,7 +72,7 @@ func (d *DPAPI) Open(data []byte) ([]byte, error) {
 
 // WindowsBackend opens a pre-provisioned protected directory. It never repairs
 // permissions or initializes state at startup. All file operations are relative
-// to an os.Root directory handle, including atomic same-directory rename.
+// to held directory handles, including atomic same-directory rename.
 type WindowsBackend struct {
 	root       *os.Root
 	directory  *os.File
@@ -106,6 +106,58 @@ func OpenWindows(directory, serviceSID string, retry time.Duration) (*WindowsBac
 }
 
 func (b *WindowsBackend) Close() error { return errors.Join(b.directory.Close(), b.root.Close()) }
+
+// createPrivate sets ownership atomically with creation. LocalSystem under SCM
+// can have Administrators as its default owner; inherited SYSTEM-only access
+// alone therefore does not establish the required state-file ownership.
+func (b *WindowsBackend) createPrivate(name string) (*os.File, error) {
+	if name == "." || name == ".." || filepath.Base(name) != name || !filepath.IsLocal(name) || filepath.VolumeName(name) != "" {
+		return nil, ErrCorrupt
+	}
+	sddl := "O:" + b.serviceSID + "D:P(A;;FA;;;SY)"
+	if b.serviceSID != "S-1-5-18" {
+		sddl += "(A;;FA;;;" + b.serviceSID + ")"
+	}
+	sd, err := windows.SecurityDescriptorFromString(sddl)
+	if err != nil {
+		return nil, err
+	}
+	objectName, err := windows.NewNTUnicodeString(name)
+	if err != nil {
+		return nil, err
+	}
+	oa := windows.OBJECT_ATTRIBUTES{
+		RootDirectory: windows.Handle(b.directory.Fd()), ObjectName: objectName,
+		Attributes: windows.OBJ_CASE_INSENSITIVE, SecurityDescriptor: sd,
+	}
+	oa.Length = uint32(unsafe.Sizeof(oa))
+	var handle windows.Handle
+	var status windows.IO_STATUS_BLOCK
+	err = windows.NtCreateFile(&handle, windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE|windows.SYNCHRONIZE,
+		&oa, &status, nil, windows.FILE_ATTRIBUTE_NORMAL,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_CREATE,
+		windows.FILE_NON_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT|windows.FILE_OPEN_REPARSE_POINT, 0, 0)
+	runtime.KeepAlive(sd)
+	runtime.KeepAlive(objectName)
+	runtime.KeepAlive(b.directory)
+	if err != nil {
+		return nil, err
+	}
+	return os.NewFile(uintptr(handle), name), nil
+}
+
+func (b *WindowsBackend) openLock() (*os.File, error) {
+	f, err := b.root.OpenFile("state.lock", os.O_RDWR, 0)
+	if !errors.Is(err, os.ErrNotExist) {
+		return f, err
+	}
+	f, err = b.createPrivate("state.lock")
+	if errors.Is(err, windows.STATUS_OBJECT_NAME_COLLISION) {
+		// Another first writer won. Existing objects are only checked, never repaired.
+		return b.root.OpenFile("state.lock", os.O_RDWR, 0)
+	}
+	return f, err
+}
 
 func (b *WindowsBackend) check(file *os.File, directory bool) error {
 	var info windows.ByHandleFileInformation
@@ -156,7 +208,7 @@ func (b *WindowsBackend) Exclusive(ctx context.Context, fn func(Slot) error) (er
 	if b.check(b.directory, true) != nil {
 		return ErrCorrupt
 	}
-	f, err := b.root.OpenFile("state.lock", os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := b.openLock()
 	if err != nil {
 		return ErrCorrupt
 	}
@@ -221,7 +273,7 @@ func (s windowsSlot) Read(limit int64) ([]byte, error) {
 }
 func (s windowsSlot) Replace(data []byte) (err error) {
 	name := "state-" + rand.Text() + ".tmp"
-	f, err := s.backend.root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := s.backend.createPrivate(name)
 	if err != nil {
 		return ErrCorrupt
 	}

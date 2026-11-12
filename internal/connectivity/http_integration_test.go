@@ -3,7 +3,12 @@
 package connectivity
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +19,7 @@ import (
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	signing "github.com/endless-net/signing/api/contract"
 )
 
 func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T) {
@@ -31,13 +37,14 @@ func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T)
 	last := append(f.sign(t, &cursor, issued, issued.Add(time.Minute)), '\n')
 	firstReceived := make(chan struct{})
 	var keyCredentialLeak atomic.Bool
+	var bootstrapRaw []byte
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/server-key" {
 			if r.Header.Get("X-EndlessNet-Node-Credential") != "" || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
 				keyCredentialLeak.Store(true)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(f.trust.Bundle)
+			_, _ = w.Write(bootstrapRaw)
 			return
 		}
 		if r.URL.Path != "/maps/node/stream" || r.Header.Get("X-EndlessNet-Node-Credential") != f.profile.Secrets.NodeCredential {
@@ -68,7 +75,25 @@ func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T)
 	f.profile.ControlOrigin = server.URL
 	f.profile.Attempt.ControlOrigin = server.URL
 	f.profile.Trust = state.ServerTrust{KeyID: announcement.KeyID, AnnouncementID: announcement.ID, Bundle: announcement.Bundle}
-	bootstrap, err := control.NewBootstrap(server.Client(), 65536, f.config.Now)
+	private := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{73}, 32))
+	public := private.Public().(ed25519.PublicKey)
+	rootDigest := sha256.Sum256(public)
+	root := signing.BootstrapRoot{KeyID: "ed25519:" + base64.RawURLEncoding.EncodeToString(rootDigest[:]), PublicKey: public}
+	var bundles signing.ServerKeyResponse
+	if err := json.Unmarshal(f.trust.Bundle, &bundles); err != nil {
+		t.Fatal(err)
+	}
+	metadata := signing.BootstrapMetadata{Origin: server.URL, Revision: 1, IssuedAt: f.now.Add(-time.Second), ExpiresAt: f.now.Add(time.Minute), Bundles: bundles}
+	message, err := signing.BootstrapSigningBytes(metadata, root.KeyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrapRaw, err = json.Marshal(signing.SignedBootstrap{Version: 2, Purpose: "bootstrap", RootKeyID: root.KeyID, Metadata: metadata, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, message))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	protected, _ := cursorStore(t, f)
+	bootstrap, err := control.NewVerifiedBootstrap(server.Client(), 65536, f.config.Now, map[string]signing.BootstrapRoot{server.URL: root}, protected)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,6 +23,14 @@ func (c *Controller) GetEnrollmentAttempt(ctx context.Context, req *clientv0.Get
 func (c *Controller) get(ctx context.Context, p localipc.Principal, req *clientv0.GetEnrollmentAttemptRequest) (*clientv0.GetEnrollmentAttemptResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	if req != nil {
+		if selector, ok := req.Selector.(*clientv0.GetEnrollmentAttemptRequest_Current); ok {
+			if selector == nil || !selector.Current {
+				return nil, status.Error(codes.InvalidArgument, "current selector must be true")
+			}
+			return c.getCurrent(ctx, p, req)
+		}
+	}
 	if req == nil || ((req.GetAttemptId() == "") == (req.GetRequestId() == "")) || (req.GetAttemptId() != "" && !validID(req.GetAttemptId())) || (req.GetRequestId() != "" && !validID(req.GetRequestId())) {
 		return nil, status.Error(codes.InvalidArgument, "one enrollment selector required")
 	}
@@ -40,6 +48,23 @@ func (c *Controller) get(ctx context.Context, p localipc.Principal, req *clientv
 		}
 	}
 	return nil, rpcError(state.ErrStale)
+}
+
+// getCurrent is a pure owner-authorized snapshot. In particular a new CLI
+// lifetime cannot cause expiry/recovery mutations or remote work merely by reading.
+func (c *Controller) getCurrent(ctx context.Context, p localipc.Principal, req *clientv0.GetEnrollmentAttemptRequest) (*clientv0.GetEnrollmentAttemptResponse, error) {
+	snapshot, err := c.store.Load(ctx)
+	if err != nil {
+		return nil, rpcError(err)
+	}
+	if err := owner(&snapshot, p, false); err != nil {
+		return nil, err
+	}
+	profile, exists := snapshot.Profiles[profileID(req.Profile, snapshot.ActiveProfileID)]
+	if !exists || profile.Attempt == nil {
+		return nil, status.Error(codes.NotFound, "enrollment not found")
+	}
+	return &clientv0.GetEnrollmentAttemptResponse{Attempt: c.project(&snapshot, profile, *profile.Attempt)}, nil
 }
 
 func (c *Controller) getObserved(ctx context.Context, p localipc.Principal, req *clientv0.GetEnrollmentAttemptRequest) (*clientv0.GetEnrollmentAttemptResponse, error) {

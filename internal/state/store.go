@@ -84,6 +84,7 @@ type Profile struct {
 	Trust                          ServerTrust
 	Login                          LoginProgress
 	Registration                   RegistrationProgress
+	DefaultTarget                  *DefaultTargetProgress      `json:",omitempty"`
 	Approval                       *ApprovalProgress           `json:",omitempty"`
 	Connection                     *ConnectionState            `json:",omitempty"`
 	RemoteRevocations              map[string]RemoteRevocation `json:",omitempty"`
@@ -96,8 +97,14 @@ type Profile struct {
 	Hostname string
 }
 
+type BootstrapCheckpoint struct {
+	Revision uint64
+	Digest   [32]byte
+}
+
 type State struct {
-	Version uint32
+	Version              uint32
+	BootstrapCheckpoints map[string]BootstrapCheckpoint `json:",omitempty"`
 	// Stable local installation binding, distinct from the per-start IPC
 	// RuntimeInfo.instance_id. Restart never reseals keys under a new runtime ID.
 	InstallationID  string
@@ -109,7 +116,7 @@ type State struct {
 	HintObservedAt  time.Time       `json:",omitempty"`
 }
 
-const CurrentVersion uint32 = 4
+const CurrentVersion uint32 = 6
 
 func (s State) Validate(installation string) error {
 	if s.Version != CurrentVersion || !validID(s.InstallationID) || s.InstallationID != installation || s.Revision == 0 || (len(s.Profiles) == 0) != (s.OwnerSID == "") {
@@ -123,10 +130,19 @@ func (s State) Validate(installation string) error {
 			return ErrCorrupt
 		}
 	}
+	for origin, checkpoint := range s.BootstrapCheckpoints {
+		u, err := url.Parse(origin)
+		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.Host != strings.ToLower(u.Host) || u.String() != origin || u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery || checkpoint.Revision == 0 || checkpoint.Digest == [32]byte{} {
+			return ErrCorrupt
+		}
+	}
 	if validateTransportHints(s) != nil {
 		return ErrCorrupt
 	}
 	for id, p := range s.Profiles {
+		if validateDefaultTarget(p) != nil {
+			return ErrCorrupt
+		}
 		if validateRevocations(s.OwnerSID, p) != nil {
 			return ErrCorrupt
 		}
@@ -166,7 +182,7 @@ func (s State) Validate(installation string) error {
 			if !validID(p.Secrets.TransactionID) || len(p.Secrets.PollProof) < 32 || p.Login.CreatedAt.IsZero() || !p.Login.ExpiresAt.Equal(p.Login.CreatedAt.Add(enrollment.LoginTTL)) || p.Login.ReplayUntil.Before(p.Login.ExpiresAt.Add(720*time.Second)) {
 				return ErrCorrupt
 			}
-			if p.Login.VerificationURL != "" && p.Login.VerificationURL != p.ControlOrigin+"/auth/native-login/"+p.Secrets.TransactionID && p.Login.VerificationURL != p.ControlOrigin+"/api/v1/auth/native-login/"+p.Secrets.TransactionID {
+			if p.Login.VerificationURL != "" && p.Login.VerificationURL != enrollment.NativeConsentOrigin(p.ControlOrigin)+"/auth/native-login/"+p.Secrets.TransactionID && p.Login.VerificationURL != enrollment.NativeConsentOrigin(p.ControlOrigin)+"/api/v1/auth/native-login/"+p.Secrets.TransactionID {
 				return ErrCorrupt
 			}
 		} else if p.Secrets.PollProof != "" || !p.Login.CreatedAt.IsZero() || !p.Login.ExpiresAt.IsZero() || p.Login.VerificationURL != "" {
@@ -340,6 +356,12 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 		if after.Version != before.Version || after.InstallationID != before.InstallationID || after.Revision != before.Revision || (before.OwnerSID != "" && after.OwnerSID != before.OwnerSID) {
 			return ErrCorrupt
 		}
+		for origin, previous := range before.BootstrapCheckpoints {
+			next := after.BootstrapCheckpoints[origin]
+			if next.Revision < previous.Revision || next.Revision == previous.Revision && next.Digest != previous.Digest {
+				return ErrCorrupt
+			}
+		}
 		if after.HintObservedAt.Before(before.HintObservedAt) {
 			return ErrCorrupt
 		}
@@ -349,6 +371,9 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 				return ErrCorrupt
 			}
 			if revocationsUpdate(p, next) != nil {
+				return ErrCorrupt
+			}
+			if defaultTargetUpdate(p, next) != nil {
 				return ErrCorrupt
 			}
 			if connectionUpdate(p.Connection, next.Connection) != nil || !connectionRequestRevision(p.Connection, next.Connection, before.Revision) {
@@ -386,5 +411,45 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 		}
 		after.Revision++
 		return s.save(ctx, slot, after)
+	})
+}
+
+// AcceptBootstrap verifies against the latest per-origin high-water while holding
+// the protected backend lock. The callback performs only local cryptography.
+// No bundles may be used unless this returns nil, including after a lost ACK.
+func (s *Store) AcceptBootstrap(parent context.Context, origin string, verify func(BootstrapCheckpoint) (BootstrapCheckpoint, error)) error {
+	if verify == nil {
+		return ErrCorrupt
+	}
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+	return s.backend.Exclusive(ctx, func(slot Slot) error {
+		current, err := s.read(slot)
+		if err != nil {
+			return err
+		}
+		previous := current.BootstrapCheckpoints[origin]
+		next, err := verify(previous)
+		if err != nil {
+			return err
+		}
+		if next.Revision == 0 || next.Digest == [32]byte{} || next.Revision < previous.Revision || next.Revision == previous.Revision && next.Digest != previous.Digest {
+			return ErrCorrupt
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if next == previous {
+			return nil
+		}
+		if current.Revision == ^uint64(0) {
+			return ErrStale
+		}
+		if current.BootstrapCheckpoints == nil {
+			current.BootstrapCheckpoints = make(map[string]BootstrapCheckpoint)
+		}
+		current.BootstrapCheckpoints[origin] = next
+		current.Revision++
+		return s.save(ctx, slot, current)
 	})
 }

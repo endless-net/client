@@ -212,6 +212,7 @@ const GetEnrollmentAttemptRequest$json = {
     },
     {'1': 'attempt_id', '3': 2, '4': 1, '5': 9, '9': 0, '10': 'attemptId'},
     {'1': 'request_id', '3': 3, '4': 1, '5': 9, '9': 0, '10': 'requestId'},
+    {'1': 'current', '3': 4, '4': 1, '5': 8, '9': 0, '10': 'current'},
   ],
   '8': [
     {'1': 'selector'},
@@ -219,11 +220,11 @@ const GetEnrollmentAttemptRequest$json = {
 };
 
 /// Descriptor for `GetEnrollmentAttemptRequest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List getEnrollmentAttemptRequestDescriptor =
-    $convert.base64Decode(
-        'ChtHZXRFbnJvbGxtZW50QXR0ZW1wdFJlcXVlc3QSLwoHcHJvZmlsZRgBIAEoCzIVLmNsaWVudC'
-        '52MC5Qcm9maWxlUmVmUgdwcm9maWxlEh8KCmF0dGVtcHRfaWQYAiABKAlIAFIJYXR0ZW1wdElk'
-        'Eh8KCnJlcXVlc3RfaWQYAyABKAlIAFIJcmVxdWVzdElkQgoKCHNlbGVjdG9y');
+final $typed_data.Uint8List getEnrollmentAttemptRequestDescriptor = $convert.base64Decode(
+    'ChtHZXRFbnJvbGxtZW50QXR0ZW1wdFJlcXVlc3QSLwoHcHJvZmlsZRgBIAEoCzIVLmNsaWVudC'
+    '52MC5Qcm9maWxlUmVmUgdwcm9maWxlEh8KCmF0dGVtcHRfaWQYAiABKAlIAFIJYXR0ZW1wdElk'
+    'Eh8KCnJlcXVlc3RfaWQYAyABKAlIAFIJcmVxdWVzdElkEhoKB2N1cnJlbnQYBCABKAhIAFIHY3'
+    'VycmVudEIKCghzZWxlY3Rvcg==');
 
 @$core.Deprecated('Use getEnrollmentAttemptResponseDescriptor instead')
 const GetEnrollmentAttemptResponse$json = {

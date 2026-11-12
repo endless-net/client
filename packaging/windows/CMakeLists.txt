@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.15)
+project(EndlessNetClientInstaller LANGUAGES CXX)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+add_library(endlessnet_client_installer_actions SHARED installer_actions.cpp)
+target_compile_features(endlessnet_client_installer_actions PRIVATE cxx_std_17)
+target_compile_definitions(endlessnet_client_installer_actions PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_options(endlessnet_client_installer_actions PRIVATE /W4 /WX)
+target_link_libraries(endlessnet_client_installer_actions PRIVATE msi ole32 advapi32 shell32 iphlpapi ws2_32)

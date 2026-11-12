@@ -181,6 +181,12 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "repo"
             sha = self.committed_checkout(root)
+            defaults = root / "packaging/windows/install-defaults.json"
+            defaults.parent.mkdir(parents=True)
+            defaults.write_bytes(b"{}")
+            ci.command(["git", "add", "packaging"], cwd=root)
+            ci.command(["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--quiet", "-m", "default settings fixture"], cwd=root)
+            sha = ci.command(["git", "rev-parse", "HEAD"], cwd=root, capture=True)
             date = ci.command(["git", "show", "-s", "--format=%cI", sha], cwd=root, capture=True)
             profile = {"component": "client", "artifacts": [{
                 "release": "runtime", "kind": "go", "name": "client", "module": ".",
@@ -188,9 +194,13 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
             real_command = ci.command
             def compile_fixture(args, **kwargs):
                 if args[:2] == ["go", "build"]:
-                    flags = args[args.index("-ldflags") + 1]
-                    self.assertEqual(flags, "-X main.version=v0.7.0 -X main.commit=" + sha
-                                     + " -X main.buildDate=" + date)
+                    if args[-1] == "./cmd/client":
+                        flags = args[args.index("-ldflags") + 1]
+                        self.assertEqual(flags, "-X main.version=v0.7.0 -X main.commit=" + sha
+                                         + " -X main.buildDate=" + date)
+                    else:
+                        self.assertEqual(args[-1], "./cmd/endlessnet")
+                        self.assertNotIn("-ldflags", args)
                     self.assertEqual(kwargs["env"]["GOOS"], "windows")
                     Path(args[args.index("-o") + 1]).write_bytes(b"compiled fixture")
                     return ""
@@ -201,8 +211,10 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
                 verify.assert_called_once_with(root)
                 driver.assert_called_once_with(root, {"os": "windows", "arch": "amd64"})
             with ci.zipfile.ZipFile(root / ".artifacts/client-v0.7.0-windows-amd64.zip") as archive:
-                self.assertEqual(set(archive.namelist()), {"client.exe", *native})
+                self.assertEqual(set(archive.namelist()), {"client.exe", "endlessnet.exe", "install-defaults.json", *native})
+                self.assertEqual(archive.read("endlessnet.exe"), b"compiled fixture")
                 self.assertEqual(archive.read("wintun.dll"), b"pinned dll fixture")
+                self.assertEqual(archive.read("install-defaults.json"), b"{}")
 
     def test_wintun_pins_archive_entries_and_license_without_network(self):
         for failure in (None, "archive", "size", "dll", "license", "duplicate"):
@@ -245,7 +257,7 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
                     self.assertEqual(fetch.call_args.kwargs, {"timeout": 30})
 
     def test_client_contract_requires_exact_origin_resolved_module_and_descriptor(self):
-        for failure in (None, "origin", "descriptor", "replace", "directory", "version"):
+        for failure in (None, "origin", "descriptor", "replace", "directory", "version", "console"):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
                 (root / "cmd/client").mkdir(parents=True)
@@ -257,7 +269,10 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
                 (root / "cmd/client/main_windows.go").write_text(
                     'const clientAPIRevision = "' + revision + '"\n'
                     'const clientContractSHA256 = "' + digest + '"\n', encoding="utf-8")
-                module = {"Version": "v0.4.0", "Dir": str(sdk)}
+                (root / "cmd/endlessnet").mkdir(parents=True)
+                (root / "cmd/endlessnet/main_windows.go").write_text(
+                    'const contractSHA256 = "' + ("0" * 64 if failure == "console" else digest) + '"\n', encoding="utf-8")
+                module = {"Version": "v0.5.0", "Dir": str(sdk)}
                 download = {"Origin": {"Hash": revision}, "Dir": str(sdk)}
                 if failure == "origin":
                     download["Origin"]["Hash"] = "b" * 40

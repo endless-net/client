@@ -1,5 +1,47 @@
 # Client API: контрактный candidate
 
+## Current enrollment lookup — candidate api/v0.5.0
+
+003/FR-007/013/018: существующий `GetEnrollmentAttemptRequest.selector`
+расширен `bool current = 4`. Только `current=true` означает чтение текущей
+попытки заданного профиля; пустой `profile` означает активный профиль.
+Возвращается та же безопасная `EnrollmentAttempt`, в том числе terminal/uncertain
+outcome, без keys/native grants или новой mutation. Отсутствие попытки — NotFound;
+caller обязан быть текущим OS owner, чужой caller — PermissionDenied. Query не
+claim installation: initial ownership по-прежнему разрешена только Enroll/CreateProfile.
+`current=false` и отсутствие decoded selector означают InvalidArgument.
+
+Ровно один selector относится к decoded typed oneof/object. Для нескольких
+selector fields в binary wire применяется стандартный Protobuf last-wins;
+strict raw-wire rejection или custom codec не вводятся. Runtime обязан независимо
+проверить OS owner/profile, false/missing selector и отсутствие side effects.
+API descriptor/serialization tests не доказывают эту runtime авторизацию.
+
+Именно `current` — чистый snapshot: без Store.Update/expiry mutation, worker
+wake, remote I/O или claim. Existing lookup по request_id/attempt_id сохраняет
+свою прежнюю семантику; его reconciliation нельзя автоматически перенести на
+новую current-ветку. Это обязательная проверка при runtime adoption.
+
+`EnrollmentAttempt.mode = 18` и `hostname = 19` возвращают неизменные исходные
+значения Enroll в owner-only projection. После current read CLI может при
+необходимости повторить исходный Enroll с теми же request_id/mode/hostname,
+не угадывая workstation и не читая private store/journal. Это read-only данные,
+не новый способ изменения режима/имени. Unspecified/unsupported mode или пустое
+hostname в новой projection запрещают up recovery с явной ошибкой, без fallback
+к предположенным значениям или создания нового request_id. Runtime обязан
+сохранять exact retry binding; Go/Dart serialization этого enforcement не доказывает.
+
+Это позволяет новой CLI консоли после потерянного Enroll ACK найти исходную
+daemon attempt без собственного file journal и повторного Enroll с новым UUID.
+Client использует native login EndlessNet/Identity и не знает выбранный провайдер;
+упоминание обязательного VK удалено из Enroll schema comments.
+
+Baseline — опубликованный API4 `c1872645fd91dc8a48cf98f2b843b46b82a1a285`.
+Go/Dart SDK, `client.binpb`, `generated.sha256` и профиль в `toolchain.json`
+перегенерированы локальными pinned tools; поля request_id/attempt_id сохранены.
+Consumer handler/CLI, runtime pins и build digest не меняются до публикации
+immutable API0.5.0 и явной adoption; соседний api checkout не заменяет published pin.
+
 
 ## Дополнение007 — transport profile SDK и IPC, api/v0.4.0
 

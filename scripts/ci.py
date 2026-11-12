@@ -324,14 +324,17 @@ def verify_client_contract(root):
     digests = re.findall(r'const clientContractSHA256 = "([0-9a-f]{64})"', source)
     if len(revisions) != 1 or len(digests) != 1:
         raise ValueError("Client contract identity is ambiguous")
+    console = (root / "cmd/endlessnet/main_windows.go").read_text(encoding="utf-8")
+    if re.findall(r'const contractSHA256 = "([0-9a-f]{64})"', console) != digests:
+        raise ValueError("Console contract differs from Client service")
     env = go_environment()
     module = json.loads(command(["go", "list", "-m", "-json",
                                  "github.com/endless-net/client/api"], cwd=root,
                                 capture=True, env=env))
-    if module.get("Replace") or module.get("Version") != "v0.4.0":
+    if module.get("Replace") or module.get("Version") != "v0.5.0":
         raise ValueError("Client SDK pin differs from compiled identity")
     downloaded = json.loads(command(["go", "mod", "download", "-json",
-                                     "github.com/endless-net/client/api@v0.4.0"],
+                                     "github.com/endless-net/client/api@v0.5.0"],
                                     cwd=root, capture=True, env=env))
     if downloaded.get("Origin", {}).get("Hash") != revisions[0]:
         raise ValueError("Client SDK origin differs from compiled identity")
@@ -539,6 +542,11 @@ def build(root, profile, output, tag=None):
                 entries.update(crypto_notices(root))
                 if artifact.get("package") == "./cmd/client" and target["os"] == "windows":
                     entries.update(wintun_files(root, target))
+                    entries["install-defaults.json"] = (local(root, "packaging/windows/install-defaults.json").read_bytes(), 0o644)
+                    console = Path(temporary) / "endlessnet.exe"
+                    command(["go", "build", "-trimpath", "-buildvcs=false", "-o", str(console),
+                             "./cmd/endlessnet"], cwd=root, env=env)
+                    entries["endlessnet.exe"] = (console.read_bytes(), 0o755)
         else:
             raise ValueError("Flutter native packaging is supplied by its native workflow")
         write_archive(destination, entries)

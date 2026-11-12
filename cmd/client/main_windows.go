@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"os"
 	"regexp"
@@ -17,13 +18,17 @@ import (
 )
 
 // Packaging verifies these opaque pins against the resolved immutable SDK.
-const clientAPIRevision = "c1872645fd91dc8a48cf98f2b843b46b82a1a285"
-const clientContractSHA256 = "f4f8508e0fef93cca33313d211d138df98faca7b688a59d1263ce0d8fd4b95b6"
+const clientAPIRevision = "b78b63d9ac9e3437207c358514a79792127616fa"
+const clientContractSHA256 = "b57f96e0768571364ef88dc08f5b06375a52ac38eceabee9267a902ceb526817"
 
 // Set only by the owner build helper from the selected clean commit/tag.
 var version, commit, buildDate string
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "print-contract" {
+		_, _ = fmt.Fprintln(os.Stdout, clientContractSHA256)
+		return
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With("service", "client", "component", "app", "client_api_revision", clientAPIRevision)
 	mode := ""
 	if len(os.Args) == 2 {

@@ -34,7 +34,8 @@
       "kind": "json",
       "unit": [
         "test_install.py",
-        "test_endlessnet.py"
+        "test_endlessnet.py",
+        "test_windows_installer.py"
       ]
     }
   ],

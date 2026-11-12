@@ -87,6 +87,13 @@ func PrepareRegistration(p state.Profile) ([]byte, error) {
 	if coordinator.SetRegisterNodeIdentityProof(&request, ed25519.PrivateKey(p.Keys.IdentityPrivate)) != nil {
 		return nil, ErrRegistrationProtocol
 	}
+	if p.DefaultTarget != nil {
+		original, err := coordinator.DecodeEnsureDefaultEnrollmentTargetRequest([]byte(p.DefaultTarget.Request), coordinator.DefaultTargetMaxBytes)
+		receipt, receiptErr := coordinator.DecodeDefaultEnrollmentTarget([]byte(p.DefaultTarget.Receipt), coordinator.DefaultTargetMaxBytes)
+		if err != nil || receiptErr != nil || receipt.MatchRegistration(original, request, receipt.ResolvedAt) != nil {
+			return nil, ErrRegistrationProtocol
+		}
+	}
 	raw, err := json.Marshal(request)
 	if err != nil {
 		return nil, ErrRegistrationProtocol
@@ -109,6 +116,13 @@ func (r *Registration) Register(ctx context.Context, p state.Profile, original [
 	if err != nil {
 		return RegisteredResult{}, ErrRegistrationProtocol
 	}
+	if p.DefaultTarget != nil {
+		resolver, err := coordinator.DecodeEnsureDefaultEnrollmentTargetRequest([]byte(p.DefaultTarget.Request), coordinator.DefaultTargetMaxBytes)
+		receipt, receiptErr := coordinator.DecodeDefaultEnrollmentTarget([]byte(p.DefaultTarget.Receipt), coordinator.DefaultTargetMaxBytes)
+		if err != nil || receiptErr != nil || receipt.MatchRegistration(resolver, request, r.config.Now()) != nil {
+			return RegisteredResult{}, ErrRegistrationProtocol
+		}
+	}
 	remaining := p.Attempt.Deadline.Sub(r.config.Now())
 	for _, deadline := range []time.Time{p.Secrets.SessionExpiresAt, p.Attempt.RecoveryUntil} {
 		if !deadline.IsZero() && (deadline.Equal(p.Secrets.SessionExpiresAt) || p.Attempt.Uncertain) && deadline.Sub(r.config.Now()) < remaining {
@@ -124,9 +138,10 @@ func (r *Registration) Register(ctx context.Context, p state.Profile, original [
 	ctx, cancel := context.WithTimeout(ctx, remaining)
 	defer cancel()
 	a, err := r.announcements.Fetch(ctx, p.ControlOrigin)
-	if err != nil || a.Origin != p.ControlOrigin || a.Validate(r.config.Now()) != nil || a.KeyID != p.Trust.KeyID || a.ID != p.Trust.AnnouncementID || !bytes.Equal(a.Bundle, p.Trust.Bundle) {
+	if err != nil || !a.MatchesProfile(p, r.config.Now()) {
 		return RegisteredResult{}, ErrBootstrap
 	}
+	p.Trust = state.ServerTrust{KeyID: a.KeyID, AnnouncementID: a.ID, Bundle: a.Bundle}
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, p.ControlOrigin+"/nodes/register", bytes.NewReader(original))
 	if err != nil {
 		return RegisteredResult{}, ErrRegistrationProtocol
@@ -153,6 +168,9 @@ func (r *Registration) Register(ctx context.Context, p state.Profile, original [
 	result, err := coordinator.DecodeRegisterNodeResponse(raw, r.config.MaxResponseBytes)
 	if err != nil {
 		return RegisteredResult{}, ErrRegistrationProtocol
+	}
+	if !a.MatchesProfile(p, r.config.Now()) {
+		return RegisteredResult{}, ErrBootstrap
 	}
 	verified, err := r.verify(p, request, result)
 	if ctx.Err() != nil {

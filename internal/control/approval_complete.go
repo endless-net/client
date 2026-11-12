@@ -15,6 +15,7 @@ import (
 type ApprovalCompletion struct {
 	Snapshot   approvalmodel.Snapshot
 	Registered *RegisteredResult
+	trust      Announcement
 }
 
 func (ApprovalCompletion) String() string   { return "[private approval completion]" }
@@ -36,7 +37,8 @@ func (a *Approval) Complete(ctx context.Context, p state.Profile, original []byt
 	}
 	ctx, cancel := context.WithTimeout(ctx, remaining)
 	defer cancel()
-	raw, err := a.call(ctx, p, &previous, http.MethodPost, "/nodes/enrollment-requests/"+previous.Request.ID+"/complete", previous.PollToken, nil)
+	var proof Announcement
+	raw, err := a.call(ctx, &p, &proof, &previous, http.MethodPost, "/nodes/enrollment-requests/"+previous.Request.ID+"/complete", previous.PollToken, nil)
 	if err != nil {
 		return ApprovalCompletion{}, err
 	}
@@ -45,7 +47,7 @@ func (a *Approval) Complete(ctx context.Context, p state.Profile, original []byt
 	if err != nil || now.Before(previous.ObservedAt) || a.validate(q, p, v.Request, 0, now, false) != nil || !approvalSuccessor(previous.Request, v.Request) {
 		return ApprovalCompletion{}, approvalmodel.ErrProtocol
 	}
-	completion := ApprovalCompletion{Snapshot: approvalmodel.Snapshot{Request: v.Request, PollToken: previous.PollToken, ObservedAt: now}}
+	completion := ApprovalCompletion{trust: proof, Snapshot: approvalmodel.Snapshot{Request: v.Request, PollToken: previous.PollToken, ObservedAt: now}}
 	if v.Request.Status == "enrolled" {
 		result := v.Registration
 		if result == nil || result.Network.AccountID != v.Request.AccountID || result.Network.ID != v.Request.NetworkID || result.Node.ID != v.Request.NodeID || result.Node.Hostname != q.Hostname {

@@ -30,9 +30,10 @@ func (s *WindowsSession) ConnectionLocal() connectivity.LocalObservation {
 		}
 	}
 	for _, choice := range choices {
-		if choice == peerRouteRelay {
+		switch choice {
+		case peerRouteRelay:
 			v.RelayPaths++
-		} else if choice == peerRouteDirect {
+		case peerRouteDirect:
 			v.DirectPaths++
 		}
 	}

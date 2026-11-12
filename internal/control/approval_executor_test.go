@@ -460,3 +460,50 @@ func TestApprovalExecutorRechecksPurposeTrustAtLocalCredentialCommit(t *testing.
 		t.Fatal("failed commit check changed protected state")
 	}
 }
+
+func TestApprovalExecutorUsesVerifiedCompletionBundleAfterKeyRotation(t *testing.T) {
+	f, _ := newApprovalStateFixture(t, true)
+	current := f.announcement
+	// This unit fixture models the private proof returned by strict Fetch. Crypto,
+	// protected checkpoint and HTTP are exercised by bootstrap_signed_test.go.
+	current.verifiedID, current.verifiedOrigin = current.ID, current.Origin
+	current.verifiedFrom, current.verifiedUntil = f.now.Add(-time.Minute), f.now.Add(time.Hour)
+	var previous signing.ServerKeyResponse
+	if err := json.Unmarshal(current.Bundle, &previous); err != nil {
+		t.Fatal(err)
+	}
+	previous.NodeCredentialTrustBundle = fixture(t).NodeCredentialTrustBundle
+	old, err := DecodeAnnouncement(f.p.ControlOrigin, encode(t, previous), f.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.p.Trust = state.ServerTrust{KeyID: old.KeyID, AnnouncementID: old.ID, Bundle: old.Bundle}
+	f.approve()
+	a, err := f.p.Attempt.Approved(f.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.p.Attempt = &a
+	snapshot := f.pending()
+	snapshot.PollAfterSeconds = 0
+	f.p.Approval.Snapshot = &snapshot
+	e := f.approvalExecutor(t, nil)
+	p := f.p
+	p.RemoteInFlight, p.InFlightAt = true, f.now
+	f.enrolled(t)
+	claims, err := coordinator.DecodeNodeCredential(f.result.NodeCredential, 65536)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := RegisteredResult{AccountID: f.view.AccountID, NetworkID: f.view.NetworkID, NodeID: f.view.NodeID, Credential: f.result.NodeCredential, CredentialEnds: claims.ExpiresAt}
+	completion := ApprovalCompletion{Snapshot: f.pending(), Registered: &result, trust: current}
+	completion.Snapshot.PollAfterSeconds = 0
+	next, err := e.apply(p, completion, nil)
+	if err != nil || next.Attempt.Phase != enrollment.Registered || next.Secrets.NodeCredential != f.result.NodeCredential {
+		t.Fatal("new verified signing key permanently blocked by prior pin", err)
+	}
+	completion.trust.verifiedUntil = f.now
+	if next, err := e.apply(p, completion, nil); !errors.Is(err, ErrBootstrap) || next.Secrets.NodeCredential != "" {
+		t.Fatal("expired metadata reached local credential commit", err)
+	}
+}

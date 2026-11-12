@@ -393,7 +393,7 @@ func pending(p clientv0.EnrollmentPhase) bool {
 
 func (c *Controller) project(s *state.State, p state.Profile, a enrollment.Attempt) *clientv0.EnrollmentAttempt {
 	phases := map[enrollment.Phase]clientv0.EnrollmentPhase{enrollment.AwaitingLogin: clientv0.EnrollmentPhase_ENROLLMENT_PHASE_AWAITING_LOGIN, enrollment.ChoosingContext: clientv0.EnrollmentPhase_ENROLLMENT_PHASE_CHOOSING_CONTEXT, enrollment.Registering: clientv0.EnrollmentPhase_ENROLLMENT_PHASE_REGISTERING, enrollment.PendingApproval: clientv0.EnrollmentPhase_ENROLLMENT_PHASE_PENDING_APPROVAL, enrollment.Completing: clientv0.EnrollmentPhase_ENROLLMENT_PHASE_COMPLETING, enrollment.Registered: clientv0.EnrollmentPhase_ENROLLMENT_PHASE_REGISTERED, enrollment.Denied: clientv0.EnrollmentPhase_ENROLLMENT_PHASE_DENIED, enrollment.Cancelled: clientv0.EnrollmentPhase_ENROLLMENT_PHASE_CANCELLED, enrollment.Expired: clientv0.EnrollmentPhase_ENROLLMENT_PHASE_EXPIRED}
-	r := &clientv0.EnrollmentAttempt{AttemptId: a.AttemptID, RequestId: a.RequestID, ProfileId: p.ID, Phase: phases[a.Phase], Certainty: clientv0.EnrollmentCertainty_ENROLLMENT_CERTAINTY_KNOWN, CreatedAt: timestamppb.New(a.CreatedAt), Deadline: timestamppb.New(a.Deadline), LoginExpiresAt: timestamppb.New(a.LoginUntil), Metadata: &clientv0.SnapshotMetadata{InstanceId: c.config.RuntimeID, Revision: s.Revision, GeneratedAt: timestamppb.New(c.config.Now())}}
+	r := &clientv0.EnrollmentAttempt{Mode: clientv0.EnrollmentMode(p.Mode), Hostname: p.Hostname, AttemptId: a.AttemptID, RequestId: a.RequestID, ProfileId: p.ID, Phase: phases[a.Phase], Certainty: clientv0.EnrollmentCertainty_ENROLLMENT_CERTAINTY_KNOWN, CreatedAt: timestamppb.New(a.CreatedAt), Deadline: timestamppb.New(a.Deadline), LoginExpiresAt: timestamppb.New(a.LoginUntil), Metadata: &clientv0.SnapshotMetadata{InstanceId: c.config.RuntimeID, Revision: s.Revision, GeneratedAt: timestamppb.New(c.config.Now())}}
 	if !a.ApprovalUntil.IsZero() {
 		r.ApprovalExpiresAt = timestamppb.New(a.ApprovalUntil)
 	}
@@ -422,6 +422,9 @@ func (c *Controller) project(s *state.State, p state.Profile, a enrollment.Attem
 	}
 	if p.Registration.BlockedReason != "" {
 		r.Restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: p.Registration.BlockedReason, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_SUPPORT}
+	}
+	if p.DefaultTarget != nil && p.DefaultTarget.BlockedReason != "" {
+		r.Restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: p.DefaultTarget.BlockedReason, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_SUPPORT}
 	}
 	switch a.Phase {
 	case enrollment.Denied:

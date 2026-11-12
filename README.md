@@ -1,8 +1,23 @@
 # client
 
+## Windows без UI
+
+Установите standalone MSI на Windows11 x64 и выполните `endlessnet up`.
+Консоль покажет HTTPS-ссылку EndlessNet: подтвердите вход и добавление компьютера
+в браузере, в том числе на другом устройстве. Сервер назначает личный Account и
+дефолтную сеть; CLI не просит выбирать сеть. Успех подтверждается только фактическим
+Connected. `endlessnet status` показывает этап, `endlessnet down` отключает туннель
+без удаления регистрации; закрытие консоли не останавливает службу.
+
+Официальный API — `https://api.endlessnet.ru`, вход — `https://admin.endlessnet.ru`.
+Обычная установка не требует JSON-профилей. Встроенный публичный root проверяет
+подписанный bootstrap; root из сетевого ответа не принимается. Ключи устройства
+и grants хранятся только в защищённом состоянии службы. Текущие права и лимиты
+проверяются сервером отдельно от наличия личного Account.
+
 ## Connectivity007 — транспортные компоненты в работе
 
-Client закрепляет опубликованные Client API `v0.4.0`, Coordinator API `v0.10.0`
+Client закрепляет опубликованные Client API `v0.5.0`, Coordinator API `v0.11.0`
 и Relay API `v0.4.0`. Проверка map v7 отдельно проверяет Relay credential по
 текущему RELAY_CREDENTIAL trust purpose, субъекту и исходному сроку карты.
 `RelayTransport` использует producer wire codecs, TLS 1.3/hostname verification,
@@ -425,3 +440,55 @@ state не заменяется. MSI должен вызывать её толь
 
 Для builder доступен `validate-config`: проверяет текущие environment settings
 и build identity без открытия/создания state и без запуска службы.
+
+Windows runtime artifact содержит `install-defaults.json` с внутренними значениями
+для обычного установщика. Пользователь не заполняет environment/ServiceProfile:
+общий сервер задаётся поставкой, а SID, адрес интерфейса и Installation ID
+определяются на целевой машине. Установщик проверяет результат настоящим Client.
+
+## Самостоятельный Windows Client без UI
+
+`scripts/build-windows-installer.ps1` собирает MSI службы и консольного
+`endlessnet.exe` без Flutter/Client UI. Нужны Windows, CMake/MSVC, Python и WiX7,
+готовый Windows x64 runtime bundle с `install-defaults.json` и собранный CLI:
+
+```powershell
+go build -o C:\Temp\endlessnet.exe ./cmd/endlessnet
+./scripts/build-windows-installer.ps1 -ClientBundle C:\Temp\client-bundle `
+  -Cli C:\Temp\endlessnet.exe -Version v0.9.0 -OutputDir C:\Temp\client-msi
+```
+
+Это пример версии для локальной сборки, не объявление опубликованного релиза.
+Client и CLI должны быть собраны с одним опубликованным Client API; builder
+проверяет x64 PE и сравнивает exact descriptor SHA256 через `client print-contract`
+и `endlessnet --print-contract`. Неподдерживаемый режим или несовпадение дают отказ.
+Затем запускается настоящий `client.exe validate-config` без изменения
+SCM/state. Общий сервер по умолчанию — `https://endlessnet.ru`; необязательный
+`-Server` принимает только HTTPS origin. Пользовательские JSON-профили не нужны.
+
+MSI содержит только Client, CLI, Wintun и его лицензию, добавляет каталог CLI в
+системный PATH и устанавливает одну службу `endlessnet-client` под SYSTEM.
+Windows11 x64, текущий IPv4 интерфейс и SID установившего пользователя проверяются
+на целевой машине. Модель текущего runtime требует единственный default IPv4
+интерфейс и адрес; неоднозначность отклоняется, NAT-адрес не выдумывается.
+Установка через UAC с другой учётной записью назначает доступ её фактическому SID;
+имя пользователя не угадывается. При обновлении существующий разрешённый SID
+и настройки службы сохраняются; endpoint вычисляется по текущему интерфейсу.
+
+Protected state и InstallationID сохраняются при удалении/обновлении; state
+доступен только SYSTEM. `installed-init` вызывается только для новой установки,
+существующий state не сбрасывается. Путь с reparse point или чужая существующая
+служба дают отказ. У standalone MSI собственный UpgradeCode: сначала необходимо
+штатно удалить прежнюю общую установку EndlessNet через Windows, сохранив данные;
+два продукта не могут одновременно владеть одной службой. Добавление UI к этой
+поставке потребует отдельного согласования установщиков, не запуска второго daemon.
+
+По умолчанию получается неподписанный development MSI. `-Sign` требует доступный
+publisher certificate и подписывает MSI, не меняя доверенные хранилища Windows.
+Production root, подписанный server bootstrap и серверное назначение дефолтной
+сети не создаются установщиком; их отсутствие не разрешает обход доверия.
+Сборка MSI не подтверждает готовность полного `endlessnet up` или соединения.
+
+Проверка packaging без установки: `python -B scripts/test_windows_installer.py`.
+Реальная установка/обновление и сохранение DPAPI identity требуют отдельной
+Windows-проверки; обычная сборка не запускает MSI и не меняет службу.

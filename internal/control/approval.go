@@ -50,7 +50,7 @@ func (a *Approval) Create(ctx context.Context, p state.Profile, original []byte,
 	if previous != nil && a.validatePrevious(q, p, *previous) != nil {
 		return approvalmodel.Snapshot{}, approvalmodel.ErrProtocol
 	}
-	raw, err := a.call(ctx, p, previous, http.MethodPost, "/nodes/enrollment-requests", "", original)
+	raw, err := a.call(ctx, &p, nil, previous, http.MethodPost, "/nodes/enrollment-requests", "", original)
 	if err != nil {
 		return approvalmodel.Snapshot{}, err
 	}
@@ -75,7 +75,7 @@ func (a *Approval) Poll(ctx context.Context, p state.Profile, original []byte, p
 	if previous.Request.Status == "pending" && a.registration.config.Now().Before(previous.ObservedAt.Add(time.Duration(previous.PollAfterSeconds)*time.Second)) {
 		return approvalmodel.Snapshot{}, ErrApprovalNotDue
 	}
-	raw, err := a.call(ctx, p, &previous, http.MethodGet, "/nodes/enrollment-requests/"+previous.Request.ID, previous.PollToken, nil)
+	raw, err := a.call(ctx, &p, nil, &previous, http.MethodGet, "/nodes/enrollment-requests/"+previous.Request.ID, previous.PollToken, nil)
 	if err != nil {
 		return approvalmodel.Snapshot{}, err
 	}
@@ -131,11 +131,11 @@ func approvalExpiry(s *approvalmodel.Snapshot) time.Time {
 	return s.Request.ExpiresAt
 }
 
-func (a *Approval) call(ctx context.Context, p state.Profile, previous *approvalmodel.Snapshot, method, path, token string, body []byte) ([]byte, error) {
+func (a *Approval) call(ctx context.Context, p *state.Profile, proof *Announcement, previous *approvalmodel.Snapshot, method, path, token string, body []byte) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	remaining := a.budget(p, previous)
+	remaining := a.budget(*p, previous)
 	if remaining <= 0 {
 		return nil, context.DeadlineExceeded
 	}
@@ -143,9 +143,10 @@ func (a *Approval) call(ctx context.Context, p state.Profile, previous *approval
 	defer cancel()
 	r := a.registration
 	current, err := r.announcements.Fetch(ctx, p.ControlOrigin)
-	if err != nil || current.Origin != p.ControlOrigin || current.Validate(r.config.Now()) != nil || current.KeyID != p.Trust.KeyID || current.ID != p.Trust.AnnouncementID || !bytes.Equal(current.Bundle, p.Trust.Bundle) {
+	if err != nil || !current.MatchesProfile(*p, r.config.Now()) {
 		return nil, ErrBootstrap
 	}
+	p.Trust = state.ServerTrust{KeyID: current.KeyID, AnnouncementID: current.ID, Bundle: current.Bundle}
 	req, err := http.NewRequestWithContext(ctx, method, p.ControlOrigin+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, approvalmodel.ErrProtocol
@@ -157,7 +158,7 @@ func (a *Approval) call(ctx context.Context, p state.Profile, previous *approval
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	if a.budget(p, previous) <= 0 {
+	if a.budget(*p, previous) <= 0 {
 		return nil, context.DeadlineExceeded
 	}
 	response, err := r.http.Do(req)
@@ -180,11 +181,14 @@ func (a *Approval) call(ctx context.Context, p state.Profile, previous *approval
 	if ctx.Err() != nil {
 		return nil, registrationCallError(ctx)
 	}
-	if a.budget(p, previous) <= 0 {
+	if a.budget(*p, previous) <= 0 {
 		return nil, context.DeadlineExceeded
 	}
-	if current.Validate(r.config.Now()) != nil {
+	if !current.MatchesProfile(*p, r.config.Now()) {
 		return nil, ErrBootstrap
+	}
+	if proof != nil {
+		*proof = current
 	}
 	return raw, nil
 }

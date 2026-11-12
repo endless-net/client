@@ -12,7 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"errors"
+
 	clientv0 "github.com/endless-net/client/api/client/v0"
+	"github.com/endless-net/client/internal/control"
 )
 
 func runtimeMetadata(t *testing.T) (*clientv0.BuildIdentity, [32]byte) {
@@ -58,6 +61,12 @@ func TestWindowsAssemblyDoesNotAcquireStateOrPipeDuringConstruction(t *testing.T
 	}
 	if r.connection == nil || r.connection.factory == nil || r.connection.config.RuntimeID != r.pipe.InstanceID || r.connection.running || r.workers.connection == nil || r.controller == nil {
 		t.Fatal("connection backend missing or started during construction")
+	}
+	if r.bootstrap == nil {
+		t.Fatal("runtime missing strict bootstrap source")
+	}
+	if announcement, err := r.bootstrap.Fetch(t.Context(), c.ControlOrigin); !errors.Is(err, control.ErrBootstrap) || announcement.VerifiedAt(time.Now()) {
+		t.Fatal("actual NewWindows accepted missing independently embedded root", err)
 	}
 	sample, err := r.connection.config.Clock.Sample()
 	if err != nil || sample.Epoch != r.pipe.InstanceID {

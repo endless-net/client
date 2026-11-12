@@ -54,8 +54,12 @@ func TestNetworkContextUsesStableIdentitiesAndNeverGuessesUnknownNetwork(t *test
 func TestNetworkContextSelectsOnlyBoundedDefaultIPv4Interfaces(t *testing.T) {
 	var physical, overlay winipcfg.MibIPforwardRow2
 	physical.InterfaceLUID, overlay.InterfaceLUID = 10, 20
-	physical.DestinationPrefix.SetPrefix(netip.MustParsePrefix("0.0.0.0/0"))
-	overlay.DestinationPrefix.SetPrefix(netip.MustParsePrefix("100.70.0.1/32"))
+	if err := physical.DestinationPrefix.SetPrefix(netip.MustParsePrefix("0.0.0.0/0")); err != nil {
+		t.Fatal(err)
+	}
+	if err := overlay.DestinationPrefix.SetPrefix(netip.MustParsePrefix("100.70.0.1/32")); err != nil {
+		t.Fatal(err)
+	}
 	set, err := defaultContextInterfaces([]winipcfg.MibIPforwardRow2{overlay, physical}, 2, 1)
 	if err != nil || len(set) != 1 || !set[10] || set[20] {
 		t.Fatal("overlay affected underlay context", err)

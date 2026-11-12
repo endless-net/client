@@ -225,7 +225,14 @@ func (e *ApprovalExecutor) apply(p state.Profile, result ApprovalCompletion, cal
 			if status != "enrolled" || r.AccountID != a.AccountID || r.NetworkID != a.NetworkID || r.NodeID != snapshot.Request.NodeID || r.Credential == "" || !r.CredentialEnds.After(now) {
 				return p, approvalmodel.ErrProtocol
 			}
-			public, err := e.remote.registration.credentialKey(p, r.Credential, now)
+			verificationProfile := p
+			if result.trust.verifiedID != "" {
+				if !result.trust.VerifiedAt(now) || result.trust.Origin != p.ControlOrigin {
+					return p, ErrBootstrap
+				}
+				verificationProfile.Trust = state.ServerTrust{KeyID: result.trust.KeyID, AnnouncementID: result.trust.ID, Bundle: result.trust.Bundle}
+			}
+			public, err := e.remote.registration.credentialKey(verificationProfile, r.Credential, now)
 			if err != nil {
 				return p, err
 			}

@@ -51,7 +51,7 @@ func (r *Revocations) call(ctx context.Context, p state.Profile, method, path st
 	ctx, cancel := context.WithTimeout(ctx, min(10*time.Second, p.Secrets.SessionExpiresAt.Sub(r.config.Now())))
 	defer cancel()
 	a, err := r.announcements.Fetch(ctx, p.ControlOrigin)
-	if err != nil || a.Validate(r.config.Now()) != nil || a.Origin != p.ControlOrigin || a.KeyID != p.Trust.KeyID || a.ID != p.Trust.AnnouncementID || !bytes.Equal(a.Bundle, p.Trust.Bundle) {
+	if err != nil || !a.MatchesProfile(p, r.config.Now()) {
 		return nil, nil, ErrBootstrap
 	}
 	if len(body) > r.config.MaxBytes || ctx.Err() != nil {

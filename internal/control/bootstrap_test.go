@@ -81,7 +81,8 @@ func TestBootstrapSDKAndCompleteAnnouncementBinding(t *testing.T) {
 
 func TestBootstrapBoundedPublicFetchAndNoRedirect(t *testing.T) {
 	now := time.Now().UTC()
-	raw := encode(t, fixture(t))
+	raw, root := signedFixture(t, "https://control.example", now, 1)
+	store, _ := bootstrapStore(t)
 	calls := 0
 	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
 		calls++
@@ -94,7 +95,7 @@ func TestBootstrapBoundedPublicFetchAndNoRedirect(t *testing.T) {
 		}
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw)), Request: r}, nil
 	})}
-	b, err := NewBootstrap(client, 1<<20, func() time.Time { return now })
+	b, err := NewVerifiedBootstrap(client, 1<<20, func() time.Time { return now }, map[string]signingcontract.BootstrapRoot{"https://control.example": root}, store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +109,7 @@ func TestBootstrapBoundedPublicFetchAndNoRedirect(t *testing.T) {
 	client.Transport = transport(func(r *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusTemporaryRedirect, Header: http.Header{"Location": []string{"https://other.example/server-key"}}, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
 	})
-	b, err = NewBootstrap(client, 1<<20, nil)
+	b, err = NewVerifiedBootstrap(client, 1<<20, nil, map[string]signingcontract.BootstrapRoot{"https://control.example": root}, store)
 	if err != nil {
 		t.Fatal(err)
 	}

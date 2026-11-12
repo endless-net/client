@@ -26,13 +26,14 @@ type loginJob struct {
 	recovered        bool
 }
 type LoginWorker struct {
-	executor     *LoginExecutor
-	registration *RegistrationExecutor
-	approval     *ApprovalExecutor
-	mu, run      sync.Mutex
-	jobs         map[string]loginJob
-	notify       chan struct{}
-	telemetry    *workerTelemetry
+	executor      *LoginExecutor
+	registration  *RegistrationExecutor
+	approval      *ApprovalExecutor
+	defaultTarget *DefaultTargetExecutor
+	mu, run       sync.Mutex
+	jobs          map[string]loginJob
+	notify        chan struct{}
+	telemetry     *workerTelemetry
 }
 
 // Construction starts no goroutine. The application owns Run and its lifetime.
@@ -75,6 +76,19 @@ func NewApprovalEnrollmentWorker(login *LoginExecutor, registration *Registratio
 	return w, nil
 }
 
+// NewDefaultEnrollmentWorker enables server-owned default resolution explicitly.
+func NewDefaultEnrollmentWorker(login *LoginExecutor, registration *RegistrationExecutor, approval *ApprovalExecutor, target *DefaultTargetExecutor, tracer trace.Tracer, meter metric.Meter, logger *slog.Logger) (*LoginWorker, error) {
+	if target == nil || login == nil || target.store != login.store {
+		return nil, ErrDefaultTargetProtocol
+	}
+	w, err := NewApprovalEnrollmentWorker(login, registration, approval, tracer, meter, logger)
+	if err != nil {
+		return nil, err
+	}
+	w.defaultTarget = target
+	return w, nil
+}
+
 func (w *LoginWorker) supports(p state.Profile) bool {
 	if p.Attempt == nil {
 		return false
@@ -82,7 +96,7 @@ func (w *LoginWorker) supports(p state.Profile) bool {
 	if p.Attempt.BrowserApproval {
 		return w.approval != nil && (p.Attempt.Phase == enrollment.PendingApproval || p.Attempt.Phase == enrollment.Completing)
 	}
-	return p.Attempt.Phase == enrollment.AwaitingLogin || p.Attempt.Phase == enrollment.Registering && w.registration != nil
+	return p.Attempt.Phase == enrollment.AwaitingLogin || p.Attempt.Phase == enrollment.Registering && w.registration != nil || p.Attempt.Phase == enrollment.ChoosingContext && w.defaultTarget != nil
 }
 
 func (w *LoginWorker) startable(p state.Profile) bool {
@@ -94,6 +108,9 @@ func (w *LoginWorker) startable(p state.Profile) bool {
 	}
 	if p.Attempt.Phase == enrollment.AwaitingLogin {
 		return p.Login.BlockedReason == ""
+	}
+	if p.Attempt.Phase == enrollment.ChoosingContext {
+		return p.DefaultTarget == nil || p.DefaultTarget.BlockedReason != "client.default_target.invalid_response"
 	}
 	return p.Registration.BlockedReason != "client.registration.invalid_response"
 }
@@ -116,7 +133,7 @@ func (w *LoginWorker) wake(ctx context.Context, profile, attempt string, recover
 	if !ok || p.Attempt == nil || p.Attempt.AttemptID != attempt {
 		return state.ErrStale
 	}
-	if p.Attempt.Phase == enrollment.ChoosingContext {
+	if p.Attempt.Phase == enrollment.ChoosingContext && w.defaultTarget == nil {
 		return nil
 	}
 	if !w.supports(p) {
@@ -258,6 +275,20 @@ func (w *LoginWorker) reconcile(ctx context.Context, job loginJob) (time.Time, e
 		if ok && p.Attempt != nil && p.Attempt.AttemptID == job.attempt && p.Attempt.Phase == enrollment.Registering {
 			return w.registration.Reconcile(ctx, job.profile, job.attempt)
 		}
+		if ok && p.Attempt != nil && p.Attempt.AttemptID == job.attempt && p.Attempt.Phase == enrollment.ChoosingContext && w.defaultTarget != nil {
+			return w.defaultTarget.Reconcile(ctx, job.profile, job.attempt)
+		}
 	}
-	return w.executor.Reconcile(ctx, job.profile, job.attempt)
+	due, err := w.executor.Reconcile(ctx, job.profile, job.attempt)
+	if err == nil && due.IsZero() && w.defaultTarget != nil {
+		s, readErr := w.executor.store.Load(ctx)
+		if readErr != nil {
+			return time.Time{}, readErr
+		}
+		p := s.Profiles[job.profile]
+		if p.Attempt != nil && p.Attempt.AttemptID == job.attempt && p.Attempt.Phase == enrollment.ChoosingContext {
+			return w.executor.config.Now(), nil
+		}
+	}
+	return due, err
 }

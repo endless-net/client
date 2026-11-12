@@ -30,6 +30,7 @@ type WindowsRuntime struct {
 	pipe       localipc.PipeConfig
 	telemetry  *Telemetry
 	state      *ProtectedState
+	bootstrap  *control.Bootstrap
 	http       *http.Client
 	ipc        *IPC
 	workers    *Workers
@@ -79,10 +80,11 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 				return err
 			}
 			lc.Append(t.Signals().hook("control_http", func(ctx context.Context) error { return ctx.Err() }, func(context.Context) error { r.http.CloseIdleConnections(); return nil }))
-			bootstrap, err := control.NewBootstrap(r.http, int64(c.MaxBootstrapBytes), time.Now)
+			bootstrap, err := control.NewVerifiedBootstrap(r.http, int64(c.MaxBootstrapBytes), time.Now, control.EmbeddedBootstrapRoots(), r.state.Store())
 			if err != nil {
 				return err
 			}
+			r.bootstrap = bootstrap
 			transport, err := connectivity.NewTransport(r.http, c.connectionHTTP())
 			if err != nil {
 				return err
@@ -120,7 +122,15 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			worker, err := t.NewApprovalEnrollmentWorker(login, register, approve)
+			defaultTarget, err := control.NewDefaultTarget(r.http, bootstrap, control.RegistrationConfig{MaxRequestBytes: c.MaxRequestBytes, MaxResponseBytes: c.MaxResponseBytes, MaxCredentialBytes: c.MaxCredentialBytes, Now: time.Now})
+			if err != nil {
+				return err
+			}
+			resolve, err := control.NewDefaultTargetExecutor(r.state.Store(), defaultTarget, control.RegistrationExecutorConfig{MaxCommitRetries: c.MaxCommitRetries, RetryInterval: c.RetryInterval, WriteBudget: c.WriteBudget, Now: time.Now})
+			if err != nil {
+				return err
+			}
+			worker, err := t.NewDefaultEnrollmentWorker(login, register, approve, resolve)
 			if err != nil {
 				return err
 			}

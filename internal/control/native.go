@@ -70,11 +70,8 @@ func NativeBinding(p state.Profile) (string, [32]byte, error) {
 }
 
 func (n *Native) trusted(ctx context.Context, p state.Profile) error {
-	if p.Trust.KeyID == "" {
-		return ErrBootstrap
-	}
 	a, err := n.announcements.Fetch(ctx, p.ControlOrigin)
-	if err != nil || a.Origin != p.ControlOrigin || a.Validate(n.now()) != nil || a.KeyID != p.Trust.KeyID || a.ID != p.Trust.AnnouncementID || !bytes.Equal(a.Bundle, p.Trust.Bundle) {
+	if err != nil || !a.MatchesProfile(p, n.now()) {
 		return ErrBootstrap
 	}
 	return nil
@@ -168,7 +165,7 @@ func (n *Native) validate(p state.Profile, t *identityapi.NativeLoginTransaction
 	switch t.State {
 	case identityapi.NativeLoginState_NATIVE_LOGIN_STATE_PENDING:
 		a := t.GetBrowserAction()
-		if a == nil || a.ExpiresAt == nil || a.ExpiresAt.CheckValid() != nil || !a.ExpiresAt.AsTime().Equal(t.ExpiresAt.AsTime()) || a.VerificationUrl != p.ControlOrigin+n.consentPrefix+t.TransactionId || t.PollAfterSeconds == 0 || !n.now().Before(t.ExpiresAt.AsTime()) {
+		if a == nil || a.ExpiresAt == nil || a.ExpiresAt.CheckValid() != nil || !a.ExpiresAt.AsTime().Equal(t.ExpiresAt.AsTime()) || a.VerificationUrl != enrollment.NativeConsentOrigin(p.ControlOrigin)+n.consentPrefix+t.TransactionId || t.PollAfterSeconds == 0 || !n.now().Before(t.ExpiresAt.AsTime()) {
 			return ErrNativeProtocol
 		}
 	case identityapi.NativeLoginState_NATIVE_LOGIN_STATE_AUTHORIZED:

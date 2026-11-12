@@ -4,6 +4,73 @@ import 'package:protobuf/protobuf.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('original mode and hostname support exact enrollment replay', () {
+    final attempt = EnrollmentAttempt(
+      requestId: '611fb038-329c-4de5-872a-89bcab17287a',
+      mode: EnrollmentMode.ENROLLMENT_MODE_SERVER,
+      hostname: 'host',
+    );
+    final decoded = EnrollmentAttempt.fromBuffer(attempt.writeToBuffer());
+    final retry = EnrollRequest(
+      requestId: decoded.requestId,
+      mode: decoded.mode,
+      hostname: decoded.hostname,
+    );
+    expect(retry.requestId, attempt.requestId);
+    expect(retry.mode, EnrollmentMode.ENROLLMENT_MODE_SERVER);
+    expect(retry.hostname, 'host');
+    expect(
+      EnrollmentAttempt(
+        mode: EnrollmentMode.ENROLLMENT_MODE_SERVER,
+        hostname: 'host',
+      ).writeToBuffer(),
+      [0x90, 0x01, 0x02, 0x9a, 0x01, 0x04, 0x68, 0x6f, 0x73, 0x74],
+    );
+    expect(
+      EnrollmentAttempt().mode,
+      EnrollmentMode.ENROLLMENT_MODE_UNSPECIFIED,
+    );
+    expect(EnrollmentAttempt().hostname, '');
+  });
+  test(
+    'current enrollment lookup preserves oneof presence and shared wire',
+    () {
+      for (final value in [true, false]) {
+        final lookup = GetEnrollmentAttemptRequest(current: value);
+        final wire = lookup.writeToBuffer();
+        expect(wire, [0x20, value ? 1 : 0]);
+        final decoded = GetEnrollmentAttemptRequest.fromBuffer(wire);
+        expect(
+          decoded.whichSelector(),
+          GetEnrollmentAttemptRequest_Selector.current,
+        );
+        expect(decoded.current, value);
+        expect(decoded.hasRequestId(), isFalse);
+        expect(decoded.hasAttemptId(), isFalse);
+      }
+      expect(
+        GetEnrollmentAttemptRequest().whichSelector(),
+        GetEnrollmentAttemptRequest_Selector.notSet,
+      );
+    },
+  );
+
+  test('binary lookup selectors use standard protobuf last wins', () {
+    final current = GetEnrollmentAttemptRequest(current: true).writeToBuffer();
+    final request = GetEnrollmentAttemptRequest(
+      requestId: 'request-fixture',
+    ).writeToBuffer();
+    final decoded = GetEnrollmentAttemptRequest.fromBuffer([
+      ...current,
+      ...request,
+    ]);
+    expect(
+      decoded.whichSelector(),
+      GetEnrollmentAttemptRequest_Selector.requestId,
+    );
+    expect(decoded.requestId, 'request-fixture');
+    expect(decoded.hasCurrent(), isFalse);
+  });
   test('mutation scope and exact revision survive serialization', () {
     final original = SelectExitNodeRequest(
       mutation: MutationContext(

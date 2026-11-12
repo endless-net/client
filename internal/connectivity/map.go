@@ -79,10 +79,8 @@ func newBinding(p state.Profile, c VerifierConfig, connected bool) (*Verifier, e
 	if err != nil {
 		return nil, ErrConfig
 	}
-	anchor := control.Announcement{Origin: p.ControlOrigin, KeyID: p.Trust.KeyID, ID: p.Trust.AnnouncementID, Bundle: p.Trust.Bundle}
-	if anchor.Validate(c.Now()) != nil {
-		return nil, ErrTrust
-	}
+	// Stored trust is only an identity cursor. Fresh root verification in
+	// trusted() precedes all key use, allowing an expired old pin to refresh.
 	floor, err := copyCursor(p.Connection.MapCursor)
 	if err != nil {
 		return nil, err
@@ -123,8 +121,8 @@ func (v *Verifier) currentTrust(parent context.Context, scope string) (signing.S
 	}
 	now := v.config.Now()
 	// An HTTPS response or a new self-consistent bundle is not an authorized
-	// rotation. The existing explicit trust action must approve its full ID.
-	if err != nil || announcement.Origin != v.origin || announcement.ID != v.anchorID || announcement.Validate(now) != nil {
+	// rotation. Only the strict root-verified source can approve a newer bundle.
+	if err != nil || announcement.Origin != v.origin || (announcement.ID != v.anchorID && !announcement.VerifiedAt(now)) || announcement.Validate(now) != nil {
 		return empty, ErrTrust
 	}
 	var trust signing.ServerKeyResponse

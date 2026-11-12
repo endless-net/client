@@ -10,3 +10,10 @@ func (t *Telemetry) NewApprovalEnrollmentWorker(login *control.LoginExecutor, re
 	}
 	return control.NewApprovalEnrollmentWorker(login, registration, approval, t.traces.Tracer("endlessnet/client"), t.metrics.Meter("endlessnet/client"), t.signals.logger)
 }
+
+func (t *Telemetry) NewDefaultEnrollmentWorker(login *control.LoginExecutor, registration *control.RegistrationExecutor, approval *control.ApprovalExecutor, target *control.DefaultTargetExecutor) (*control.LoginWorker, error) {
+	if t == nil || !t.signals.valid() {
+		return nil, ErrSignals
+	}
+	return control.NewDefaultEnrollmentWorker(login, registration, approval, target, t.traces.Tracer("endlessnet/client"), t.metrics.Meter("endlessnet/client"), t.signals.logger)
+}
