@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // UpService uses the published owner-only projection, never a local journal or
@@ -51,6 +52,14 @@ func runUp(ctx context.Context, service UpService, initial *clientv0.Status, out
 		}
 		if attempt.ProfileId != initial.ActiveProfileId || attempt.Metadata.Revision < initial.Metadata.Revision {
 			return errors.New("профиль изменился; повторите endlessnet up после проверки status")
+		}
+		if attempt.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_REGISTERED {
+			if attempt.GetNodeId() == "" || attempt.GetNodeId() != initial.NodeId {
+				return errors.New("служба вернула другое зарегистрированное устройство")
+			}
+			before := proto.Clone(initial).(*clientv0.Status)
+			before.Metadata.Revision = attempt.Metadata.Revision
+			return connectUp(ctx, service, before, out)
 		}
 		request.Mutation.ExpectedRevision = attempt.Metadata.Revision
 		request.Profile = &clientv0.ProfileRef{ProfileId: attempt.ProfileId}
@@ -137,7 +146,7 @@ func checkAttempt(a *clientv0.EnrollmentAttempt, runtime string) error {
 	if a == nil || a.GetMetadata().GetInstanceId() != runtime || a.Metadata.Revision == 0 || a.RequestId == "" || a.AttemptId == "" || a.ProfileId == "" || a.Mode < clientv0.EnrollmentMode_ENROLLMENT_MODE_WORKSTATION || a.Mode > clientv0.EnrollmentMode_ENROLLMENT_MODE_INTERACTIVE || a.Hostname == "" || a.Deadline == nil || !a.Deadline.IsValid() {
 		return errors.New("неполные исходные данные регистрации; автоматическое восстановление остановлено")
 	}
-	if !time.Now().Before(a.Deadline.AsTime()) || a.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_EXPIRED || a.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_CANCELLED || a.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_DENIED {
+	if a.Phase != clientv0.EnrollmentPhase_ENROLLMENT_PHASE_REGISTERED && !time.Now().Before(a.Deadline.AsTime()) || a.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_EXPIRED || a.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_CANCELLED || a.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_DENIED {
 		return errors.New("попытка регистрации завершена; новая попытка автоматически не создаётся")
 	}
 	return nil

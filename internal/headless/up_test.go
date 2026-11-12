@@ -204,3 +204,38 @@ func TestUpRegisteredUsesCurrentConnectBasisAndActualStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestUpRegisteredDegradedDiscoveryUsesConnectWithoutReenrollment(t *testing.T) {
+	for _, kind := range []string{"valid", "foreign-node", "foreign-profile", "stale-revision"} {
+		t.Run(kind, func(t *testing.T) {
+			before := snapshot(clientv0.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED, 7, clientv0.DesiredState_DESIRED_STATE_DISCONNECTED)
+			before.ControlState = clientv0.ControlState_CONTROL_STATE_DEGRADED
+			before.NodeId = "node"
+			a := upAttempt()
+			a.Phase = clientv0.EnrollmentPhase_ENROLLMENT_PHASE_REGISTERED
+			a.NodeId = proto.String("node")
+			a.Deadline = timestamppb.New(time.Now().Add(-time.Hour))
+			switch kind {
+			case "foreign-node":
+				a.NodeId = proto.String("foreign")
+			case "foreign-profile":
+				a.ProfileId = "foreign"
+			case "stale-revision":
+				a.Metadata.Revision = 6
+			}
+			after := snapshot(clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED, 9, clientv0.DesiredState_DESIRED_STATE_CONNECTED)
+			f := &upFake{fakeService: &fakeService{snapshots: []*clientv0.Status{before, after}}, current: a}
+			err := Run(t.Context(), f, "up", &bytes.Buffer{})
+			if kind == "valid" {
+				if err != nil || f.connectCalls != 1 || f.connected.Mutation.ExpectedRevision != 8 {
+					t.Fatal("registered recovery did not connect using current basis", err)
+				}
+			} else if err == nil || f.connected != nil {
+				t.Fatal("foreign recovery accepted")
+			}
+			if f.started != nil {
+				t.Fatal("completed enrollment was replayed")
+			}
+		})
+	}
+}
