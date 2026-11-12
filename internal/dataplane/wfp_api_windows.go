@@ -17,6 +17,10 @@ import (
 // owner's IPv4 ALE rules. In particular FWPM_FILTER0's context is one aligned
 // 16-byte union, not adjacent rawContext/providerContextKey fields.
 // https://learn.microsoft.com/en-us/windows/win32/api/fwpmtypes/ns-fwpmtypes-fwpm_filter0
+// Explicit nonzero priority keeps the BFE roundtrip deterministic. On Windows 11,
+// requests with weight 0 or 1 were observed returning weight 11 instead.
+const nativeSublayerWeight uint16 = 0x100
+
 type nativeDisplay struct{ Name, Description *uint16 }
 type nativeBlob struct {
 	Size uint32
@@ -207,7 +211,7 @@ func (a *nativeFilterAPI) sublayer(key windows.GUID) error {
 	}
 	// Relative priority within this owner's sublayer is defined by rule
 	// weights. Soft permits preserve firewall vetoes in other sublayers.
-	sub := nativeSublayer{Key: key, Display: nativeDisplay{Name: name}, Flags: 1}
+	sub := nativeSublayer{Key: key, Display: nativeDisplay{Name: name}, Flags: 1, Weight: nativeSublayerWeight}
 	return a.call("FwpmSubLayerAdd0", uintptr(a.handle), uintptr(unsafe.Pointer(&sub)), 0)
 }
 func (a *nativeFilterAPI) checkSublayer(key windows.GUID) error {
@@ -222,7 +226,7 @@ func (a *nativeFilterAPI) checkSublayer(key windows.GUID) error {
 	if err != nil {
 		return err
 	}
-	if actual == nil || actual.Key != key || actual.Flags != 1 || actual.Provider != nil || actual.ProviderData.Size != 0 || actual.Weight != 0 || !sameNativeText(actual.Display.Name, name, 128) || !emptyNativeText(actual.Display.Description) {
+	if actual == nil || actual.Key != key || actual.Flags != 1 || actual.Provider != nil || actual.ProviderData.Size != 0 || actual.Weight != nativeSublayerWeight || !sameNativeText(actual.Display.Name, name, 128) || !emptyNativeText(actual.Display.Description) {
 		return ErrPolicyOwnership
 	}
 	return nil
