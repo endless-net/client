@@ -7,6 +7,7 @@ import (
 	"errors"
 
 	"github.com/endless-net/client/internal/connectivity"
+	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/dataplane"
 	"github.com/endless-net/client/internal/state"
 )
@@ -18,6 +19,12 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 		return nil
 	}
 	switch {
+	case errors.Is(err, control.ErrCredentialsLogin):
+		return connectivity.FailureLogin
+	case errors.Is(err, control.ErrCredentialsExpired):
+		return connectivity.FailureCredential
+	case errors.Is(err, control.ErrBootstrap), errors.Is(err, control.ErrCredentialsProtocol):
+		return connectivity.FailureTrust
 	case errors.Is(err, dataplane.ErrAdapterPermission), errors.Is(err, dataplane.ErrIPPermission), errors.Is(err, dataplane.ErrPolicyPermission):
 		return connectivity.FailurePermission
 	case errors.Is(err, dataplane.ErrAdapterConflict), errors.Is(err, dataplane.ErrIPConflict), errors.Is(err, dataplane.ErrAdapterOwnership), errors.Is(err, dataplane.ErrIPOwnership), errors.Is(err, dataplane.ErrPolicyOwnership):

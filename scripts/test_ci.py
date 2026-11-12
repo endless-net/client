@@ -314,7 +314,7 @@ exit "$FIXTURE_DOWNLOAD_EXIT"
                 (root / "cmd/endlessnet").mkdir(parents=True)
                 (root / "cmd/endlessnet/main_windows.go").write_text(
                     'const contractSHA256 = "' + ("0" * 64 if failure == "console" else digest) + '"\n', encoding="utf-8")
-                module = {"Version": "v0.5.0", "Dir": str(sdk)}
+                module = {"Version": "v0.6.0", "Dir": str(sdk)}
                 download = {"Origin": {"Hash": revision}, "Dir": str(sdk)}
                 if failure == "origin":
                     download["Origin"]["Hash"] = "b" * 40

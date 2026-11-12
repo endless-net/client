@@ -65,7 +65,10 @@ func (s *WindowsSession) WaitPaths(parent context.Context, probeInterval time.Du
 		if err := e.ProbeDirect(ctx); err != nil && !errors.Is(err, ErrNoAuthority) {
 			return err
 		}
-		if s.lease.Permissions().NewFlows && s.pathReady(e) {
+		s.mu.Lock()
+		sole := s.soleNodeReady(e)
+		s.mu.Unlock()
+		if s.lease.Permissions().NewFlows && (sole || s.pathReady(e)) {
 			break
 		}
 		select {
@@ -96,10 +99,24 @@ func (s *WindowsSession) WaitPaths(parent context.Context, probeInterval time.Du
 	if !s.lease.Permissions().NewFlows {
 		return ErrNoAuthority
 	}
-	if !s.pathReady(e) {
+	if !s.soleNodeReady(e) && !s.pathReady(e) {
 		return ErrNoAuthority
 	}
 	return nil
+}
+
+// Caller holds s.mu. Empty discovery/path tables are insufficient: current is
+// a verified map that passed native application, listener and source fences.
+func (s *WindowsSession) soleNodeReady(e *Engine) bool {
+	if !s.started || s.stopped || s.engine != e || e == nil || s.tunnel == nil || s.filters == nil || s.ip == nil || s.packets == nil || s.packets.Err() != nil || !s.lease.Permissions().NewFlows || s.current.Denied() {
+		return false
+	}
+	m, err := s.current.Snapshot()
+	if err != nil || len(m.Peers) != 0 || m.Revision.Network == 0 || m.Node.AssignedIP == "" {
+		return false
+	}
+	_, err = e.BoundPort()
+	return err == nil
 }
 
 func (s *WindowsSession) pathReady(e *Engine) bool {

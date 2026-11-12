@@ -8,8 +8,8 @@ require (
 	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260814
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/endless-net/billing/api v0.5.0
-	github.com/endless-net/client/api v0.5.0
-	github.com/endless-net/coordinator/api v0.11.0
+	github.com/endless-net/client/api v0.6.0
+	github.com/endless-net/coordinator/api v0.12.0
 	github.com/endless-net/identity/api v0.2.0
 	github.com/endless-net/relay/api v0.4.0
 	github.com/endless-net/signing/api v0.2.0

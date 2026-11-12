@@ -27,6 +27,47 @@ type upFake struct {
 	connectCalls    int
 }
 
+func TestUpAcceptsVerifiedSoleNodeReadyAndRejectsIncompleteClaims(t *testing.T) {
+	for _, name := range []string{"valid", "already-ready", "missing-agent", "missing-map", "missing-address", "peer-present", "stale-agent"} {
+		t.Run(name, func(t *testing.T) {
+			before := snapshot(clientv0.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED, 7, clientv0.DesiredState_DESIRED_STATE_DISCONNECTED)
+			after := snapshot(clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY, 8, clientv0.DesiredState_DESIRED_STATE_CONNECTED)
+			after.ServiceState = clientv0.ServiceState_SERVICE_STATE_LOCAL_READY
+			after.ControlState = clientv0.ControlState_CONTROL_STATE_READY
+			after.MapRevision = 3
+			after.OverlayAddresses = []string{"100.96.0.1"}
+			after.Agent = &clientv0.AgentStatus{SnapshotState: clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT, MapRevision: 3}
+			switch name {
+			case "already-ready":
+				before = proto.Clone(after).(*clientv0.Status)
+			case "missing-agent":
+				after.Agent = nil
+			case "missing-map":
+				after.MapRevision = 0
+			case "missing-address":
+				after.OverlayAddresses = nil
+			case "peer-present":
+				after.PeerCount = 1
+			case "stale-agent":
+				after.Agent.SnapshotState = clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS
+			}
+			f := &upFake{fakeService: &fakeService{snapshots: []*clientv0.Status{before, after}}}
+			var out bytes.Buffer
+			err := Run(t.Context(), f, "up", &out)
+			valid := name == "valid" || name == "already-ready"
+			if (err == nil) != valid {
+				t.Fatal("unproved local readiness accepted", err)
+			}
+			if valid && !strings.Contains(out.String(), "Туннель готов, других устройств нет.") {
+				t.Fatal("sole-node result not explained")
+			}
+			if name == "already-ready" && f.connectCalls != 0 {
+				t.Fatal("healthy local-ready repeated Connect")
+			}
+		})
+	}
+}
+
 func (f *upFake) GetEnrollmentAttempt(_ context.Context, req *clientv0.GetEnrollmentAttemptRequest, _ ...grpc.CallOption) (*clientv0.GetEnrollmentAttemptResponse, error) {
 	f.lookups = append(f.lookups, proto.Clone(req).(*clientv0.GetEnrollmentAttemptRequest))
 	if req.GetCurrent() {

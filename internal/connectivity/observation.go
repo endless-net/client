@@ -23,6 +23,7 @@ const (
 	FailureTrust
 	FailureCredential
 	FailureRevoked
+	FailureLogin
 )
 
 func (FailureKind) Error() string { return "connection failure" }
@@ -43,6 +44,7 @@ const (
 // native transition is intentional: status reads must not wait on an SDK call.
 type LocalObservation struct {
 	Known, Applied                     bool
+	SoleNodeReady                      bool
 	Permission                         Permission
 	MapRevision                        uint64
 	Address                            string

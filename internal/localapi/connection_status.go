@@ -42,6 +42,8 @@ func connectionDetails(err error) *clientv0.Failure {
 		f.Code, f.ReasonKey, f.Retryable = clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "client.connection.trust_required", false
 	case connectivity.FailureCredential:
 		f.Code, f.ReasonKey, f.Retryable = clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "client.connection.credential_expired", false
+	case connectivity.FailureLogin:
+		f.Code, f.ReasonKey, f.Retryable = clientv0.ErrorCode_ERROR_CODE_NEEDS_LOGIN, "client.connection.login_required", false
 	case connectivity.FailureRevoked:
 		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "client.connection.registration_revoked", clientv0.ActionOwner_ACTION_OWNER_ACCESS_ADMINISTRATOR, false
 	default:
@@ -155,6 +157,11 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 		if local.Permission.NewFlows && (local.DirectPaths > 0 || local.RelayPaths > 0) {
 			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_CONNECTED
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED
+			r.ControlState = clientv0.ControlState_CONTROL_STATE_READY
+		}
+		if local.Permission.NewFlows && local.SoleNodeReady && local.PeerCount == 0 && local.DirectPaths == 0 && local.RelayPaths == 0 && local.MapRevision > 0 && local.Address != "" {
+			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_LOCAL_READY
+			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_READY
 		}
 	case connectivity.PhaseFailed:

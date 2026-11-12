@@ -21,6 +21,7 @@ type WindowsConnectionConfig struct {
 	Endpoint                                                                netip.AddrPort
 	EndpointTTL, RenewalInterval, RetryInterval, ProbeInterval, WriteBudget time.Duration
 	MaxQueuedMaps                                                           int
+	PrepareCredentials                                                      func(context.Context, string, uint64) error
 }
 
 // validateSettings performs no I/O and needs no runtime clock or trust provider.
@@ -184,6 +185,11 @@ func (d *windowsConnection) Connect(operation context.Context, restore bool) err
 	}
 	if err := d.factory.cleanup(operation, d.profile); err != nil {
 		return nativeConnectionFailure(err, connectivity.FailureCleanup)
+	}
+	if prepare := d.factory.config.PrepareCredentials; prepare != nil {
+		if err := prepare(operation, d.profile, d.generation); err != nil {
+			return nativeConnectionFailure(err, connectivity.FailureControl)
+		}
 	}
 	native, err := d.factory.makeNative(d.lifetime, d.profile, d.generation)
 	if err != nil {

@@ -8,9 +8,43 @@ import (
 	"testing"
 	"time"
 
+	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/state"
+	coordinator "github.com/endless-net/coordinator/api/enrollment"
 	"github.com/tailscale/wireguard-go/device"
 )
+
+func TestWindowsSoleNodeRequiresVerifiedMapAppliedResourcesAndCurrentLease(t *testing.T) {
+	s, _, _, original, _, _, _, _, clock := wiredSessionFixture(t)
+	if s.soleNodeReady(nil) {
+		t.Fatal("empty discovery invented local readiness")
+	}
+	empty := nextSessionMap(t, s, original, clock, func(snapshot *coordinator.NetworkMapSnapshot) { snapshot.Peers = []coordinator.Peer{} })
+	parent, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	operation, _ := sessionFixtureOperation(t, s, parent, false)
+	if err := s.Start(operation, empty); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Stop(cleanupContext(t)) }()
+	if err := s.WaitPaths(operation, time.Millisecond); err != nil {
+		t.Fatal("verified sole-node tunnel did not become ready", err)
+	}
+	local := s.ConnectionLocal()
+	if !local.SoleNodeReady || !local.Known || !local.Applied || local.PeerCount != 0 || local.DirectPaths != 0 || local.RelayPaths != 0 || !local.Permission.NewFlows {
+		t.Fatal("local readiness or path counts fabricated", local)
+	}
+	clock.advance(2 * time.Minute)
+	if s.ConnectionLocal().SoleNodeReady {
+		t.Fatal("expired map retained local readiness")
+	}
+	s.mu.Lock()
+	s.current = connectivity.Map{}
+	s.mu.Unlock()
+	if s.ConnectionLocal().SoleNodeReady {
+		t.Fatal("unknown map treated as a verified empty map")
+	}
+}
 
 // Path callbacks are injected in these native-owner tests. Actual cryptography
 // and UDP delivery are tested separately by the engine's transport fixtures.

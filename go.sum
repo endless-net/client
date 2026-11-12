@@ -28,10 +28,14 @@ github.com/endless-net/client/api v0.4.0 h1:AxS3jsVVLyn6LXbMgYlgV+i1UEQSBJlZZsNt
 github.com/endless-net/client/api v0.4.0/go.mod h1:IVj2p7eLqMHPbvHQN6wrWUcOlSCIoxF44ZUI7CAHDWM=
 github.com/endless-net/client/api v0.5.0 h1:vHfx3hdLB6p51uxQ8Lj/UNhKfpU7HDCDyRD27sI2m3U=
 github.com/endless-net/client/api v0.5.0/go.mod h1:IVj2p7eLqMHPbvHQN6wrWUcOlSCIoxF44ZUI7CAHDWM=
+github.com/endless-net/client/api v0.6.0 h1:ySuUiCriYPYbI36rKcNbUjAvzgnAm3IWYCPSGRhPgtY=
+github.com/endless-net/client/api v0.6.0/go.mod h1:IVj2p7eLqMHPbvHQN6wrWUcOlSCIoxF44ZUI7CAHDWM=
 github.com/endless-net/coordinator/api v0.10.0 h1:13WJNNILrl3YNEhWZjcGs5Ktrrcb+Ws+r94Y7ViOf4M=
 github.com/endless-net/coordinator/api v0.10.0/go.mod h1:yLAfwUj4WS82s0sJcHXRxLPBR8D1fhD+n+UJx5l+SZI=
 github.com/endless-net/coordinator/api v0.11.0 h1:+ukqX4uzKGLUMnE3ikpzXQEX4W+Geg8wfX62jyv6iOw=
 github.com/endless-net/coordinator/api v0.11.0/go.mod h1:yLAfwUj4WS82s0sJcHXRxLPBR8D1fhD+n+UJx5l+SZI=
+github.com/endless-net/coordinator/api v0.12.0 h1:x3TEdojWY9vQ9fIDDpAGWFWRDzfbQifYdrumkl0ymGw=
+github.com/endless-net/coordinator/api v0.12.0/go.mod h1:yLAfwUj4WS82s0sJcHXRxLPBR8D1fhD+n+UJx5l+SZI=
 github.com/endless-net/identity/api v0.2.0 h1:C22dS+eK6Jfa9rjqjChQ17L8o2399SFOilZLkc0+17k=
 github.com/endless-net/identity/api v0.2.0/go.mod h1:DmcpvdsQoo846mg2LL9jtscR9CK2GJuSIZsjMwe6eMQ=
 github.com/endless-net/relay/api v0.4.0 h1:f6szHbFk3/xuWqfTVyrg0wq5x+xMxk+WFDrRZZ2yzeM=

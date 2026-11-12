@@ -65,10 +65,11 @@ func newBinding(p state.Profile, c VerifierConfig, connected bool) (*Verifier, e
 	if p.Connection == nil || p.Connection.Generation == 0 || p.Connection.Intent != state.IntentConnected && p.Connection.Intent != state.IntentDisconnected || connected && p.Connection.Intent != state.IntentConnected || p.Attempt != nil && !pathID(p.Attempt.NodeID) {
 		return nil, ErrConfig
 	}
-	if p.Attempt != nil && c.Now != nil && (p.Attempt.CredentialEnds.IsZero() || !p.Attempt.CredentialEnds.After(c.Now())) {
+	credential, credentialEnds, credentialErr := p.CurrentNodeCredential()
+	if p.Attempt != nil && c.Now != nil && (credentialErr != nil || credentialEnds.IsZero() || !credentialEnds.After(c.Now())) {
 		return nil, ErrCredentialExpired
 	}
-	if c.Announcements == nil || c.Now == nil || c.MaxBytes < 1 || c.MaxPeers < 1 || c.MaxRules < 1 || c.MaxCredentialBytes < 1 || c.CallTimeout < time.Millisecond || c.CallTimeout > 30*time.Second || p.Attempt == nil || p.Attempt.Validate() != nil || p.Attempt.Phase != enrollment.Registered || p.Attempt.Uncertain || p.Attempt.ProfileID != p.ID || p.Attempt.ControlOrigin != p.ControlOrigin || p.Trust.AnnouncementID == "" || p.Secrets.NodeCredential == "" {
+	if c.Announcements == nil || c.Now == nil || c.MaxBytes < 1 || c.MaxPeers < 1 || c.MaxRules < 1 || c.MaxCredentialBytes < 1 || c.CallTimeout < time.Millisecond || c.CallTimeout > 30*time.Second || p.Attempt == nil || p.Attempt.Validate() != nil || p.Attempt.Phase != enrollment.Registered || p.Attempt.Uncertain || p.Attempt.ProfileID != p.ID || p.Attempt.ControlOrigin != p.ControlOrigin || p.Trust.AnnouncementID == "" || credentialErr != nil || credential == "" {
 		return nil, ErrConfig
 	}
 	fingerprint, err := p.Keys.Fingerprint()
@@ -85,7 +86,7 @@ func newBinding(p state.Profile, c VerifierConfig, connected bool) (*Verifier, e
 	if err != nil {
 		return nil, err
 	}
-	return &Verifier{config: c, profileID: p.ID, origin: p.ControlOrigin, account: p.Attempt.AccountID, network: p.Attempt.NetworkID, node: p.Attempt.NodeID, public: base64.StdEncoding.EncodeToString(private.PublicKey().Bytes()), credential: p.Secrets.NodeCredential, credentialEnds: p.Attempt.CredentialEnds, anchorID: p.Trust.AnnouncementID, generation: p.Connection.Generation, floor: floor}, nil
+	return &Verifier{config: c, profileID: p.ID, origin: p.ControlOrigin, account: p.Attempt.AccountID, network: p.Attempt.NetworkID, node: p.Attempt.NodeID, public: base64.StdEncoding.EncodeToString(private.PublicKey().Bytes()), credential: credential, credentialEnds: credentialEnds, anchorID: p.Trust.AnnouncementID, generation: p.Connection.Generation, floor: floor}, nil
 }
 
 func (v *Verifier) previous(cursor *state.MapCursor) (*state.MapCursor, error) {

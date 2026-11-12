@@ -90,7 +90,13 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 				return err
 			}
 			lc.Append(t.Signals().hook("control_http", func(ctx context.Context) error { return ctx.Err() }, func(context.Context) error { transport.CloseIdleConnections(); return nil }))
-			factory, err := NewWindowsConnectionFactory(r.state.Store(), transport, c.connectionDriver(clock, bootstrap))
+			credentials, err := control.NewCredentials(r.state.Store(), r.http, bootstrap, control.RegistrationConfig{MaxRequestBytes: c.MaxRequestBytes, MaxResponseBytes: c.MaxResponseBytes, MaxCredentialBytes: c.MaxCredentialBytes, Now: time.Now}, control.RegistrationExecutorConfig{MaxCommitRetries: c.MaxCommitRetries, RetryInterval: c.RetryInterval, WriteBudget: c.WriteBudget, Now: time.Now})
+			if err != nil {
+				return err
+			}
+			driver := c.connectionDriver(clock, bootstrap)
+			driver.PrepareCredentials = credentials.Ensure
+			factory, err := NewWindowsConnectionFactory(r.state.Store(), transport, driver)
 			if err != nil {
 				return err
 			}

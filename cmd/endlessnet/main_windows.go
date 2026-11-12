@@ -14,8 +14,8 @@ import (
 	"github.com/endless-net/client/internal/headless"
 )
 
-// Exact published Client API0.5.0 descriptor; no compatibility negotiation.
-const contractSHA256 = "b57f96e0768571364ef88dc08f5b06375a52ac38eceabee9267a902ceb526817"
+// Exact published Client API0.6.0 descriptor; no compatibility negotiation.
+const contractSHA256 = "b3ea18b22699e414d979e685dae6a639c0b3a1df787dadb63e09c87f4039ba17"
 
 func main() {
 	if err := run(); err != nil {

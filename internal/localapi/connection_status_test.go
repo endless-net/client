@@ -28,6 +28,7 @@ func TestRecoveryFailuresRemainDistinctAndSafe(t *testing.T) {
 		connectivity.FailureRevoked:    "client.connection.registration_revoked",
 		connectivity.FailurePath:       "client.connection.path_unconfirmed",
 		connectivity.FailureCleanup:    "client.connection.cleanup_unconfirmed",
+		connectivity.FailureLogin:      "client.connection.login_required",
 	} {
 		f := observedConnectionFailure(kind)
 		if f == nil || f.ReasonKey != reason {
@@ -51,6 +52,11 @@ func TestConnectionStatusRequiresCurrentGenerationMeasuredApplyAndPath(t *testin
 	}
 	online := connectivity.LocalObservation{Known: true, Applied: true, Permission: connectivity.Permission{NewFlows: true, ExistingFlows: true}, DirectPaths: 1, MapRevision: 8, Address: "100.64.0.7", PeerCount: 1}
 	online.PeerTransports = []*clientv0.PeerTransportStatus{{PeerId: "peer", SelectedPath: clientv0.PathKind_PATH_KIND_DIRECT, Engine: "amneziawg", ProtocolVersion: "3.1", TransportProfileId: "profile", TransportProfileRevision: 7, SearchState: clientv0.TransportSearchState_TRANSPORT_SEARCH_STATE_IDLE, ReasonKey: "client.transport.direct"}}
+	sole := connectivity.LocalObservation{Known: true, Applied: true, SoleNodeReady: true, Permission: online.Permission, MapRevision: 8, Address: "100.64.0.7"}
+	soleOffline := sole
+	soleOffline.Permission = connectivity.Permission{ExistingFlows: true}
+	soleWithPeer := sole
+	soleWithPeer.PeerCount = 1
 	relay := online
 	relay.DirectPaths, relay.RelayPaths = 0, 1
 	unsupported := relay
@@ -64,6 +70,10 @@ func TestConnectionStatusRequiresCurrentGenerationMeasuredApplyAndPath(t *testin
 		wantPhase clientv0.ConnectionPhase
 	}{
 		{"pending", connectivity.PhaseConnecting, connectivity.LocalObservation{}, false, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTING},
+		{"verified_sole_node", connectivity.PhaseConnected, sole, false, clientv0.ServiceState_SERVICE_STATE_LOCAL_READY, clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY},
+		{"stale_sole_node", connectivity.PhaseConnected, sole, true, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
+		{"offline_sole_node", connectivity.PhaseConnected, soleOffline, false, clientv0.ServiceState_SERVICE_STATE_DEGRADED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
+		{"peer_without_authenticated_path", connectivity.PhaseConnected, soleWithPeer, false, clientv0.ServiceState_SERVICE_STATE_DEGRADED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
 		{"applied_path", connectivity.PhaseConnected, online, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
 		{"applied_relay", connectivity.PhaseConnected, relay, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
 		{"relay_with_unsupported_direct", connectivity.PhaseConnected, unsupported, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
@@ -93,7 +103,7 @@ func TestConnectionStatusRequiresCurrentGenerationMeasuredApplyAndPath(t *testin
 			if !tc.stale && tc.local.Known && tc.local.Applied && (got.Status.Agent == nil || got.Status.Agent.RelayPathCount != tc.local.RelayPaths || got.Status.Agent.DirectPathCount != tc.local.DirectPaths) {
 				t.Fatal("measured path counts were lost in the producer IPC projection")
 			}
-			if got.Status.ControlState == clientv0.ControlState_CONTROL_STATE_READY && got.Status.ServiceState != clientv0.ServiceState_SERVICE_STATE_CONNECTED {
+			if got.Status.ControlState == clientv0.ControlState_CONTROL_STATE_READY && got.Status.ServiceState != clientv0.ServiceState_SERVICE_STATE_CONNECTED && got.Status.ServiceState != clientv0.ServiceState_SERVICE_STATE_LOCAL_READY {
 				t.Fatal("unconfirmed path claimed ready control")
 			}
 			if !tc.stale && tc.local.Known && tc.local.Applied && len(tc.local.PeerTransports) > 0 {

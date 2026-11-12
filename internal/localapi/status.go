@@ -40,22 +40,24 @@ func (c *Controller) snapshot(ctx context.Context, caller localipc.Principal) (*
 	r.Hostname = profile.Hostname
 	r.ServiceState = clientv0.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT
 	r.ControlState = clientv0.ControlState_CONTROL_STATE_NOT_REGISTERED
-	r.StoredState = &clientv0.StoredStatePresence{IdentityPrivateKeyPresent: len(profile.Keys.IdentityPrivate) != 0, TunnelPrivateKeyPresent: len(profile.Keys.WireGuardPrivate) != 0, TokenPresent: profile.Secrets.Access != ""}
-	r.StoredState.NodeCredentialPresent = profile.Secrets.NodeCredential != ""
-	if profile.Attempt != nil && profile.Secrets.NodeCredential != "" {
+	session, _ := profile.CurrentSession()
+	credential, credentialEnds, _ := profile.CurrentNodeCredential()
+	r.StoredState = &clientv0.StoredStatePresence{IdentityPrivateKeyPresent: len(profile.Keys.IdentityPrivate) != 0, TunnelPrivateKeyPresent: len(profile.Keys.WireGuardPrivate) != 0, TokenPresent: session.Access != ""}
+	r.StoredState.NodeCredentialPresent = credential != ""
+	if profile.Attempt != nil && credential != "" {
 		r.Credential = &clientv0.CredentialStatus{State: clientv0.CredentialState_CREDENTIAL_STATE_UNSPECIFIED}
-		if !profile.Attempt.CredentialEnds.IsZero() {
-			r.Credential.ExpiresAt = timestamppb.New(profile.Attempt.CredentialEnds)
+		if !credentialEnds.IsZero() {
+			r.Credential.ExpiresAt = timestamppb.New(credentialEnds)
 			r.Credential.State = clientv0.CredentialState_CREDENTIAL_STATE_VALID
-			if !c.config.Now().Before(profile.Attempt.CredentialEnds) {
+			if !c.config.Now().Before(credentialEnds) {
 				r.Credential.State = clientv0.CredentialState_CREDENTIAL_STATE_EXPIRED
 			}
 		}
 	}
 	r.StoredState.DeviceFingerprintPresent = profile.Attempt != nil && profile.Attempt.DeviceKeyHash != [32]byte{}
-	if profile.Secrets.Access != "" && !profile.Secrets.SessionExpiresAt.IsZero() {
-		r.Session = &clientv0.Session{State: clientv0.SessionState_SESSION_STATE_ACTIVE, ExpiresAt: timestamppb.New(profile.Secrets.SessionExpiresAt)}
-		if !c.config.Now().Before(profile.Secrets.SessionExpiresAt) {
+	if session.Access != "" && !session.ExpiresAt.IsZero() {
+		r.Session = &clientv0.Session{State: clientv0.SessionState_SESSION_STATE_ACTIVE, ExpiresAt: timestamppb.New(session.ExpiresAt)}
+		if !c.config.Now().Before(session.ExpiresAt) {
 			r.Session.State = clientv0.SessionState_SESSION_STATE_EXPIRED
 		}
 	}

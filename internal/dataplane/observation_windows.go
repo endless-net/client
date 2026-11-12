@@ -38,6 +38,7 @@ func (s *WindowsSession) ConnectionLocal() connectivity.LocalObservation {
 		}
 	}
 	v.Permission = s.lease.Permissions()
+	v.SoleNodeReady = s.soleNodeReady(s.engine)
 	if s.supervisor != nil {
 		v.PeerTransports = s.supervisor.transportStatuses(s.current)
 	}

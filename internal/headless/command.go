@@ -97,6 +97,11 @@ func writeStatus(out io.Writer, s *clientv0.Status) error {
 	if err != nil {
 		return err
 	}
+	if s.ServiceState == clientv0.ServiceState_SERVICE_STATE_LOCAL_READY && s.ConnectionPhase == clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY {
+		if _, err := fmt.Fprintln(out, "Туннель готов, других устройств нет."); err != nil {
+			return err
+		}
+	}
 	for _, failure := range s.Failures {
 		message := failureMessage(failure.GetReasonKey())
 		if _, err := fmt.Fprintln(out, "Причина: "+message); err != nil {
@@ -120,6 +125,8 @@ func failureMessage(reason string) string {
 		return "Обнаружен конфликт сетевых ресурсов. Обратитесь к администратору устройства."
 	case "client.connection.credential_expired":
 		return "Срок действия учётных данных устройства истёк."
+	case "client.connection.login_required":
+		return "Для обновления подключения требуется снова войти в EndlessNet."
 	case "client.connection.registration_revoked":
 		return "Регистрация устройства отозвана администратором."
 	case "client.connection.deadline":

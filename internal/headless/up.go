@@ -28,7 +28,7 @@ type UpService interface {
 }
 
 func runUp(ctx context.Context, service UpService, initial *clientv0.Status, out io.Writer) error {
-	if initial.ControlState == clientv0.ControlState_CONTROL_STATE_REGISTERED {
+	if initial.ControlState == clientv0.ControlState_CONTROL_STATE_REGISTERED || initial.ControlState == clientv0.ControlState_CONTROL_STATE_READY {
 		return connectUp(ctx, service, initial, out)
 	}
 	var attempt *clientv0.EnrollmentAttempt
@@ -148,7 +148,7 @@ func connectUp(ctx context.Context, service UpService, before *clientv0.Status, 
 		return errors.New("нет зарегистрированного активного профиля")
 	}
 	var connectErr error
-	if before.ConnectionPhase != clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED || before.GetIntent().GetDesiredState() != clientv0.DesiredState_DESIRED_STATE_CONNECTED {
+	if !connectionReady(before) || before.GetIntent().GetDesiredState() != clientv0.DesiredState_DESIRED_STATE_CONNECTED {
 		call, cancel := context.WithTimeout(ctx, 30*time.Second)
 		_, err := service.Connect(call, &clientv0.ConnectRequest{Mutation: &clientv0.MutationContext{ExpectedInstanceId: before.Metadata.InstanceId, ExpectedRevision: before.Metadata.Revision}, Profile: &clientv0.ProfileRef{ProfileId: before.ActiveProfileId}})
 		cancel()
@@ -167,7 +167,7 @@ func connectUp(ctx context.Context, service UpService, before *clientv0.Status, 
 		return publicError(err)
 	}
 	after := response.GetStatus()
-	if after == nil || after.GetMetadata().GetInstanceId() != before.Metadata.InstanceId || after.Metadata.Revision < before.Metadata.Revision || after.ActiveProfileId != before.ActiveProfileId || after.ControlState != clientv0.ControlState_CONTROL_STATE_REGISTERED || after.ConnectionPhase != clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED || after.GetIntent().GetDesiredState() != clientv0.DesiredState_DESIRED_STATE_CONNECTED {
+	if after == nil || after.GetMetadata().GetInstanceId() != before.Metadata.InstanceId || after.Metadata.Revision < before.Metadata.Revision || after.ActiveProfileId != before.ActiveProfileId || (after.ControlState != clientv0.ControlState_CONTROL_STATE_REGISTERED && after.ControlState != clientv0.ControlState_CONTROL_STATE_READY) || !connectionReady(after) || after.GetIntent().GetDesiredState() != clientv0.DesiredState_DESIRED_STATE_CONNECTED {
 		if after != nil && after.GetMetadata().GetInstanceId() == before.Metadata.InstanceId && after.Metadata.Revision >= before.Metadata.Revision && after.ActiveProfileId == before.ActiveProfileId && len(after.Failures) > 0 {
 			if err := writeStatus(out, after); err != nil {
 				return err
@@ -179,4 +179,14 @@ func connectUp(ctx context.Context, service UpService, before *clientv0.Status, 
 		return errors.New("соединение пока не подтверждено; проверьте endlessnet status")
 	}
 	return writeStatus(out, after)
+}
+
+func connectionReady(s *clientv0.Status) bool {
+	if s == nil {
+		return false
+	}
+	if s.ConnectionPhase == clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED {
+		return true
+	}
+	return s.ServiceState == clientv0.ServiceState_SERVICE_STATE_LOCAL_READY && s.ConnectionPhase == clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY && s.ControlState == clientv0.ControlState_CONTROL_STATE_READY && s.PeerCount == 0 && s.MapRevision > 0 && len(s.OverlayAddresses) > 0 && s.Agent != nil && s.Agent.SnapshotState == clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT && s.Agent.DirectPathCount == 0 && s.Agent.RelayPathCount == 0
 }
