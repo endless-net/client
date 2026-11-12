@@ -15,6 +15,48 @@ spec.loader.exec_module(ci)
 
 
 class PublicCI(unittest.TestCase):
+    def test_crypto_origin_cold_proxy_info_and_warm_reply_require_exact_provenance(self):
+        origin = {"VCS": "git", "URL": "https://github.com/example/crypto",
+                  "Hash": "a" * 40, "Ref": "refs/tags/v0.1.0"}
+        entry = {"path": "example.org/crypto", "version": "v0.1.0", "origin": origin}
+        for failure in (None, "cold", "reply-hash", "reply-vcs", "reply-url", "reply-ref",
+                        "info-hash", "info-vcs", "info-url", "info-ref", "missing-origin",
+                        "missing-info", "wrong-info-version", "wrong-reply-version", "wrong-path", "null-reply-origin", "extra-origin"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                info = {"Version": entry["version"], "Origin": dict(origin)}
+                path = Path(temporary) / "module.info"
+                downloaded = {"Path": entry["path"], "Version": entry["version"],
+                              "Info": str(path), "Origin": dict(origin)}
+                if failure == "cold":
+                    del downloaded["Origin"]
+                elif failure and failure.startswith("reply-") and failure != "wrong-reply-version":
+                    key = {"hash": "Hash", "vcs": "VCS", "url": "URL", "ref": "Ref"}[failure[6:]]
+                    downloaded["Origin"][key] = "different"
+                elif failure and failure.startswith("info-"):
+                    key = {"hash": "Hash", "vcs": "VCS", "url": "URL", "ref": "Ref"}[failure[5:]]
+                    info["Origin"][key] = "different"
+                elif failure == "missing-origin":
+                    del info["Origin"]
+                    del downloaded["Origin"]
+                elif failure == "missing-info":
+                    del downloaded["Info"]
+                elif failure == "wrong-info-version":
+                    info["Version"] = "v9.0.0"
+                elif failure == "wrong-reply-version":
+                    downloaded["Version"] = "v9.0.0"
+                elif failure == "wrong-path":
+                    downloaded["Path"] = "example.org/other"
+                elif failure == "null-reply-origin":
+                    downloaded["Origin"] = None
+                elif failure == "extra-origin":
+                    info["Origin"]["TagSum"] = "unreviewed"
+                path.write_text(json.dumps(info), encoding="utf-8")
+                if failure in (None, "cold"):
+                    ci.verify_crypto_origin(downloaded, entry)
+                else:
+                    with self.assertRaises(ValueError):
+                        ci.verify_crypto_origin(downloaded, entry)
+
     def crypto_fixture(self, root):
         entries = []
         originals = {}

@@ -112,6 +112,23 @@ def verify_crypto_module(root, entry, upstream):
             raise ValueError("cryptographic worker changed: " + method)
 
 
+def verify_crypto_origin(downloaded, entry):
+    # On a cold proxy cache Go copies ModuleJSON.Origin before DownloadModule
+    # creates Info; that first JSON reply can omit Origin although the fetched
+    # .info already has it. Read that same download's metadata, without another
+    # fetch or weakening any manifest provenance field. A contradictory reply
+    # is never overridden by the cache file.
+    if (downloaded.get("Path") != entry["path"] or downloaded.get("Version") != entry["version"]
+            or "Origin" in downloaded and downloaded["Origin"] != entry["origin"]):
+        raise ValueError("published crypto origin differs: " + entry["path"])
+    info_path = downloaded.get("Info")
+    if not isinstance(info_path, str) or not info_path:
+        raise ValueError("published crypto info missing: " + entry["path"])
+    info = load_json(Path(info_path))
+    if not isinstance(info, dict) or info.get("Version") != entry["version"] or info.get("Origin") != entry["origin"]:
+        raise ValueError("published crypto origin differs: " + entry["path"])
+
+
 def verify_crypto_sources(root, metadata, fetch=True):
     manifest = root / "third_party/sources.json"
     replacements = {x["Old"]["Path"]: x["New"] for x in metadata.get("Replace") or []}
@@ -149,8 +166,7 @@ def verify_crypto_sources(root, metadata, fetch=True):
             downloaded = json.loads(command(["go", "mod", "download", "-json", path + "@" + entry["version"]], cwd=root, capture=True, env=go_environment()))
             if downloaded["Sum"] != entry["sum"] or downloaded["GoModSum"] != entry["go_mod_sum"]:
                 raise ValueError("published crypto checksum differs")
-            if downloaded.get("Origin") != entry["origin"]:
-                raise ValueError("published crypto origin differs")
+            verify_crypto_origin(downloaded, entry)
             upstream = module_zip_files(Path(downloaded["Zip"]).read_bytes(), path, entry["version"], entry["sum"])
             verify_crypto_module(root, entry, upstream)
         else:
