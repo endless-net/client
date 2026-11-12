@@ -232,28 +232,53 @@ func TestServiceGuardNarrowsPhysicalWriteDeadlineAndNeverWritesAfterQuota(t *tes
 		t.Fatal(err)
 	}
 	socket := c.bind.socket.(*candidateSocketFixture)
-	if err := c.bind.SendGuarded([][]byte{bytes.Repeat([]byte{8}, 317)}, endpoint, []func(int) error{guard}); err != nil {
+	allowed := bytes.Repeat([]byte{8}, 317)
+	if err := c.bind.SendGuarded([][]byte{allowed}, endpoint, []func(int) error{guard}); err != nil {
 		t.Fatal(err)
 	}
 	sample, _ := f.clock.Sample()
 	socket.mu.Lock()
-	deadline, count := socket.deadline, len(socket.writes)
+	var deadline time.Time
+	allowedWrites := 0
+	for i, packet := range socket.writes {
+		if bytes.Equal(packet.raw, allowed) {
+			allowedWrites++
+			deadline = socket.writeDeadlines[i]
+		}
+	}
 	socket.mu.Unlock()
-	if deadline.After(sample.Wall.Add(time.Second)) {
+	if allowedWrites != 1 || deadline.IsZero() || deadline.After(sample.Wall.Add(time.Second)) {
 		t.Fatal("specific original probe deadline replaced by fresh three seconds", deadline, sample.Wall)
 	}
 	window := c.serviceWindow
 	if err := window.charge(transport.MaxProbeBytes - window.wire.consumed()); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.bind.SendGuarded([][]byte{{3, 4}}, endpoint, []func(int) error{guard}); !errors.Is(err, ErrProbeBudget) {
+	// The fixture runs a live engine: authorized handshake/rekey writes may
+	// interleave even after service quota exhaustion. Exercise that interleaving
+	// deterministically, and identify the rejected physical frame itself rather
+	// than mistaking every unrelated socket write for a service-quota bypass.
+	independent := []byte("independent authorized ciphertext")
+	if err := c.bind.Send([][]byte{independent}, endpoint); err != nil {
+		t.Fatal("service quota stopped independent ciphertext", err)
+	}
+	rejected := []byte{3, 4}
+	if err := c.bind.SendGuarded([][]byte{rejected}, endpoint, []func(int) error{guard}); !errors.Is(err, ErrProbeBudget) {
 		t.Fatal("exhausted service budget reached physical sender", err)
 	}
 	socket.mu.Lock()
-	after := len(socket.writes)
+	rejectedWrites, independentWrites := 0, 0
+	for _, packet := range socket.writes {
+		if bytes.Equal(packet.raw, rejected) {
+			rejectedWrites++
+		}
+		if bytes.Equal(packet.raw, independent) {
+			independentWrites++
+		}
+	}
 	socket.mu.Unlock()
-	if after != count {
-		t.Fatal("quota-rejected service ciphertext reached socket")
+	if rejectedWrites != 0 || independentWrites != 1 {
+		t.Fatal("quota-rejected frame reached socket or independent ciphertext was lost", rejectedWrites, independentWrites)
 	}
 	if err := c.bind.Send([][]byte{{5}}, endpoint); err != nil {
 		t.Fatal("probe quota stopped ordinary ciphertext", err)

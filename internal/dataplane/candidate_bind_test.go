@@ -26,6 +26,7 @@ type candidateSocketFixture struct {
 	done           chan struct{}
 	once           sync.Once
 	writes         []candidateDatagram
+	writeDeadlines []time.Time
 	deadline       time.Time
 	beforeDeadline func()
 	wrote          chan struct{}
@@ -52,6 +53,7 @@ func (s *candidateSocketFixture) WriteToUDPAddrPort(raw []byte, address netip.Ad
 	default:
 	}
 	s.writes = append(s.writes, candidateDatagram{bytes.Clone(raw), address})
+	s.writeDeadlines = append(s.writeDeadlines, s.deadline)
 	forward := s.forward
 	s.mu.Unlock()
 	select {
