@@ -160,6 +160,9 @@ bool PreserveServiceSettings(MSIHANDLE session) {
     const auto property = L"ENSET_" + name;
     // Endpoint is always observed from this machine's current interface.
     if (name == L"ENDLESSNET_CLIENT_CONNECTION_ENDPOINT") continue;
+    // The producer owns this lifecycle bound; retain the validated package
+    // value so upgrades receive stop-budget fixes rather than an old default.
+    if (name == L"ENDLESSNET_CLIENT_STOP_TIMEOUT") continue;
     // Preserve only fields in this package, never introduce arbitrary registry
     // properties. New producer settings retain their validated package value.
     if (PropertyPresent(session, property.c_str()) &&
