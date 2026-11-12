@@ -153,6 +153,11 @@ func connectUp(ctx context.Context, service UpService, before *clientv0.Status, 
 		_, err := service.Connect(call, &clientv0.ConnectRequest{Mutation: &clientv0.MutationContext{ExpectedInstanceId: before.Metadata.InstanceId, ExpectedRevision: before.Metadata.Revision}, Profile: &clientv0.ProfileRef{ProfileId: before.ActiveProfileId}})
 		cancel()
 		if err != nil && status.Code(err) != codes.Unavailable && status.Code(err) != codes.DeadlineExceeded && status.Code(err) != codes.Canceled {
+			if len(before.Failures) > 0 {
+				if writeErr := writeStatus(out, before); writeErr != nil {
+					return writeErr
+				}
+			}
 			return publicError(err)
 		}
 		connectErr = err
@@ -163,6 +168,11 @@ func connectUp(ctx context.Context, service UpService, before *clientv0.Status, 
 	}
 	after := response.GetStatus()
 	if after == nil || after.GetMetadata().GetInstanceId() != before.Metadata.InstanceId || after.Metadata.Revision < before.Metadata.Revision || after.ActiveProfileId != before.ActiveProfileId || after.ControlState != clientv0.ControlState_CONTROL_STATE_REGISTERED || after.ConnectionPhase != clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED || after.GetIntent().GetDesiredState() != clientv0.DesiredState_DESIRED_STATE_CONNECTED {
+		if after != nil && after.GetMetadata().GetInstanceId() == before.Metadata.InstanceId && after.Metadata.Revision >= before.Metadata.Revision && after.ActiveProfileId == before.ActiveProfileId && len(after.Failures) > 0 {
+			if err := writeStatus(out, after); err != nil {
+				return err
+			}
+		}
 		if connectErr != nil {
 			return publicError(connectErr)
 		}

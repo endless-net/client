@@ -177,8 +177,14 @@ func openFilterAPI(wait time.Duration, dynamic bool) (*nativeFilterAPI, error) {
 //go:uintptrescapes
 func (a *nativeFilterAPI) call(name string, args ...uintptr) error {
 	status, _, _ := a.procs[name].Call(args...)
-	if status != 0 {
-		return windows.Errno(status)
+	return filterCallStatus(status)
+}
+
+func filterCallStatus(status uintptr) error {
+	// WFP returns a DWORD. LazyProc.Call exposes a machine word, whose upper
+	// bits may be sign-extended on Win64 (observed for FWP_E_FILTER_NOT_FOUND).
+	if code := uint32(status); code != 0 {
+		return windows.Errno(code)
 	}
 	return nil
 }

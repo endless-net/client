@@ -77,6 +77,18 @@ func TestUpLostConnectAckReadsActualStateWithoutRepeatingMutation(t *testing.T) 
 	}
 }
 
+func TestUpLostConnectAckReportsObservedLocalFailure(t *testing.T) {
+	before := snapshot(clientv0.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED, 7, clientv0.DesiredState_DESIRED_STATE_DISCONNECTED)
+	after := snapshot(clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED, 8, clientv0.DesiredState_DESIRED_STATE_CONNECTED)
+	after.ServiceState = clientv0.ServiceState_SERVICE_STATE_ERROR
+	after.Failures = []*clientv0.Failure{{ReasonKey: "client.connection.apply_failed"}}
+	f := &upFake{fakeService: &fakeService{snapshots: []*clientv0.Status{before, after}}, connectErr: status.Error(codes.Unavailable, "private diagnostic")}
+	var out bytes.Buffer
+	if err := Run(t.Context(), f, "up", &out); err == nil || f.connectCalls != 1 || f.reads != 2 || !strings.Contains(out.String(), "Не удалось настроить сетевой туннель Windows") || strings.Contains(out.String(), "private diagnostic") {
+		t.Fatal("lost ACK hid observed failure or repeated mutation", err)
+	}
+}
+
 func upAttempt() *clientv0.EnrollmentAttempt {
 	return &clientv0.EnrollmentAttempt{RequestId: "original-request", AttemptId: "original-attempt", ProfileId: "profile", Mode: clientv0.EnrollmentMode_ENROLLMENT_MODE_SERVER, Hostname: "original-host", Phase: clientv0.EnrollmentPhase_ENROLLMENT_PHASE_AWAITING_LOGIN, Deadline: timestamppb.New(time.Now().Add(time.Minute)), Metadata: &clientv0.SnapshotMetadata{InstanceId: "runtime", Revision: 8}, PollAfterSeconds: 1}
 }

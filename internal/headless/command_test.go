@@ -22,6 +22,24 @@ type fakeService struct {
 	disconnectErr error
 }
 
+func TestStatusExplainsConnectionFailuresWithoutEchoingUnknownText(t *testing.T) {
+	s := snapshot(clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED, 8, clientv0.DesiredState_DESIRED_STATE_CONNECTED)
+	s.ServiceState = clientv0.ServiceState_SERVICE_STATE_ERROR
+	s.Failures = []*clientv0.Failure{{ReasonKey: "client.connection.apply_failed"}, {ReasonKey: "client.connection.cleanup_unconfirmed"}, {ReasonKey: "private-token\nspoofed-status", FieldPaths: []string{"secret"}}}
+	var out bytes.Buffer
+	if err := Run(t.Context(), &fakeService{snapshots: []*clientv0.Status{s}}, "status", &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"Не удалось настроить сетевой туннель Windows", "Очистка сетевых ресурсов не подтверждена"} {
+		if !strings.Contains(out.String(), text) {
+			t.Fatal("missing actionable failure")
+		}
+	}
+	if strings.Contains(out.String(), "private-token") || strings.Contains(out.String(), "spoofed-status") || strings.Contains(out.String(), "secret") {
+		t.Fatal("arbitrary diagnostic leaked")
+	}
+}
+
 func (f *fakeService) GetStatus(ctx context.Context, _ *clientv0.GetStatusRequest, _ ...grpc.CallOption) (*clientv0.GetStatusResponse, error) {
 	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 30*time.Second {
 		return nil, errors.New("missing call budget")

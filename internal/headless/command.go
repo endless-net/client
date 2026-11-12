@@ -94,7 +94,45 @@ func writeStatus(out io.Writer, s *clientv0.Status) error {
 	// Deliberately expose only typed, public state. Do not print raw RPC messages,
 	// diagnostics, session fields, arbitrary server text or private configuration.
 	_, err := fmt.Fprintf(out, "Служба: %s\nРегистрация: %s\nСоединение: %s\n", s.ServiceState, s.ControlState, s.ConnectionPhase)
-	return err
+	if err != nil {
+		return err
+	}
+	for _, failure := range s.Failures {
+		message := failureMessage(failure.GetReasonKey())
+		if _, err := fmt.Fprintln(out, "Причина: "+message); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func failureMessage(reason string) string {
+	switch reason {
+	case "client.connection.apply_failed":
+		return "Не удалось настроить сетевой туннель Windows. Вход уже подтверждён; повторная авторизация не требуется."
+	case "client.connection.cleanup_unconfirmed":
+		return "Очистка сетевых ресурсов не подтверждена. Требуется проверка администратором устройства."
+	case "client.connection.path_unconfirmed":
+		return "Сетевой путь к другим устройствам пока не подтверждён."
+	case "client.connection.permission_required":
+		return "Службе не хватает прав для настройки сети. Обратитесь к администратору устройства."
+	case "client.connection.resource_conflict":
+		return "Обнаружен конфликт сетевых ресурсов. Обратитесь к администратору устройства."
+	case "client.connection.credential_expired":
+		return "Срок действия учётных данных устройства истёк."
+	case "client.connection.registration_revoked":
+		return "Регистрация устройства отозвана администратором."
+	case "client.connection.deadline":
+		return "Истекло время ожидания подключения."
+	case "client.connection.clock_unsafe":
+		return "Не удалось подтвердить корректность времени устройства."
+	case "client.connection.access_denied":
+		return "Подключение запрещено действующей политикой доступа."
+	case "client.connection.trust_required":
+		return "Не удалось проверить доверие к серверу."
+	default:
+		return "Соединение не готово. Проверьте состояние службы и сервера."
+	}
 }
 
 func publicError(err error) error {
