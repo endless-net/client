@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -67,6 +68,24 @@ func TestWindowsAssemblyDoesNotAcquireStateOrPipeDuringConstruction(t *testing.T
 	}
 	if announcement, err := r.bootstrap.Fetch(t.Context(), c.ControlOrigin); !errors.Is(err, control.ErrBootstrap) || announcement.VerifiedAt(time.Now()) {
 		t.Fatal("actual NewWindows accepted missing independently embedded root", err)
+	}
+	// Exercise the actual composition's embedded-catalog lookup without a live
+	// request, private root key, initialized store or SCM operation. Only this
+	// fixture-owned HTTP transport changes; the production catalog stays intact.
+	observed, ok := r.http.Transport.(*observedHTTP)
+	if !ok {
+		t.Fatal("runtime missing observed public HTTP transport")
+	}
+	calls := 0
+	observed.base = roundTrip(func(request *http.Request) (*http.Response, error) {
+		calls++
+		if request.Method != http.MethodGet || request.URL.String() != "https://api.endlessnet.ru/server-key" {
+			t.Fatal("production assembly selected another bootstrap origin")
+		}
+		return nil, errors.New("synthetic bootstrap transport refusal")
+	})
+	if announcement, err := r.bootstrap.Fetch(t.Context(), "https://api.endlessnet.ru"); !errors.Is(err, control.ErrBootstrap) || announcement.VerifiedAt(time.Now()) || calls != 1 {
+		t.Fatal("production assembly failed embedded origin lookup or accepted failed transport", calls, err)
 	}
 	sample, err := r.connection.config.Clock.Sample()
 	if err != nil || sample.Epoch != r.pipe.InstanceID {
