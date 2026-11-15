@@ -52,6 +52,8 @@ enum Capability {
   CAPABILITY_RUNTIME_LIFECYCLE = 15;
   CAPABILITY_UPDATE_DISCOVERY = 16;
   CAPABILITY_SUPPORT_INFO = 17;
+  // Explicit same-user browser login, separate from seamless renewal.
+  CAPABILITY_SESSION_LOGIN = 18;
 }
 
 enum Availability {
@@ -195,10 +197,6 @@ message CleanupResult {
   bool local_registration_removed = 2;
 }
 
-message RenewalResult {
-  google.protobuf.Timestamp expires_at = 1;
-}
-
 message BundleResult {
   // Opaque, caller-bound handle; never an arbitrary filesystem path.
   string bundle_id = 1;
@@ -207,15 +205,6 @@ message BundleResult {
   uint64 size_bytes = 4;
   string sha256 = 5;
   bool reused = 6;
-}
-
-// Browser challenge belongs to enrollment or session renewal, never to a
-// generic command journal. The user code is issued by the identity provider.
-message BrowserLoginChallenge {
-  string user_code = 1;
-  string verification_uri = 2;
-  string verification_uri_complete = 3;
-  google.protobuf.Timestamp expires_at = 4;
 }
 
 message PageRequest {

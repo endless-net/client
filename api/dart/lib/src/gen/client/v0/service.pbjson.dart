@@ -1403,6 +1403,14 @@ const GetSessionResponse$json = {
       '6': '.client.v0.SnapshotMetadata',
       '10': 'metadata'
     },
+    {
+      '1': 'login_attempt',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.SessionLoginAttempt',
+      '10': 'loginAttempt'
+    },
   ],
 };
 
@@ -1410,11 +1418,12 @@ const GetSessionResponse$json = {
 final $typed_data.Uint8List getSessionResponseDescriptor = $convert.base64Decode(
     'ChJHZXRTZXNzaW9uUmVzcG9uc2USLAoHc2Vzc2lvbhgBIAEoCzISLmNsaWVudC52MC5TZXNzaW'
     '9uUgdzZXNzaW9uEjcKCG1ldGFkYXRhGAIgASgLMhsuY2xpZW50LnYwLlNuYXBzaG90TWV0YWRh'
-    'dGFSCG1ldGFkYXRh');
+    'dGFSCG1ldGFkYXRhEkMKDWxvZ2luX2F0dGVtcHQYAyABKAsyHi5jbGllbnQudjAuU2Vzc2lvbk'
+    'xvZ2luQXR0ZW1wdFIMbG9naW5BdHRlbXB0');
 
-@$core.Deprecated('Use renewSessionRequestDescriptor instead')
-const RenewSessionRequest$json = {
-  '1': 'RenewSessionRequest',
+@$core.Deprecated('Use startSessionLoginRequestDescriptor instead')
+const StartSessionLoginRequest$json = {
+  '1': 'StartSessionLoginRequest',
   '2': [
     {
       '1': 'mutation',
@@ -1432,62 +1441,40 @@ const RenewSessionRequest$json = {
       '6': '.client.v0.ProfileRef',
       '10': 'profile'
     },
+    {'1': 'request_id', '3': 3, '4': 1, '5': 9, '10': 'requestId'},
   ],
 };
 
-/// Descriptor for `RenewSessionRequest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List renewSessionRequestDescriptor = $convert.base64Decode(
-    'ChNSZW5ld1Nlc3Npb25SZXF1ZXN0EjYKCG11dGF0aW9uGAEgASgLMhouY2xpZW50LnYwLk11dG'
-    'F0aW9uQ29udGV4dFIIbXV0YXRpb24SLwoHcHJvZmlsZRgCIAEoCzIVLmNsaWVudC52MC5Qcm9m'
-    'aWxlUmVmUgdwcm9maWxl');
+/// Descriptor for `StartSessionLoginRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List startSessionLoginRequestDescriptor = $convert.base64Decode(
+    'ChhTdGFydFNlc3Npb25Mb2dpblJlcXVlc3QSNgoIbXV0YXRpb24YASABKAsyGi5jbGllbnQudj'
+    'AuTXV0YXRpb25Db250ZXh0UghtdXRhdGlvbhIvCgdwcm9maWxlGAIgASgLMhUuY2xpZW50LnYw'
+    'LlByb2ZpbGVSZWZSB3Byb2ZpbGUSHQoKcmVxdWVzdF9pZBgDIAEoCVIJcmVxdWVzdElk');
 
-@$core.Deprecated('Use renewSessionResponseDescriptor instead')
-const RenewSessionResponse$json = {
-  '1': 'RenewSessionResponse',
+@$core.Deprecated('Use startSessionLoginResponseDescriptor instead')
+const StartSessionLoginResponse$json = {
+  '1': 'StartSessionLoginResponse',
   '2': [
     {
-      '1': 'renewal',
+      '1': 'attempt',
       '3': 1,
       '4': 1,
       '5': 11,
-      '6': '.client.v0.RenewalResult',
-      '9': 0,
-      '10': 'renewal'
+      '6': '.client.v0.SessionLoginAttempt',
+      '10': 'attempt'
     },
-    {
-      '1': 'browser_login',
-      '3': 2,
-      '4': 1,
-      '5': 11,
-      '6': '.client.v0.BrowserLoginChallenge',
-      '9': 0,
-      '10': 'browserLogin'
-    },
-    {
-      '1': 'continuity',
-      '3': 3,
-      '4': 1,
-      '5': 14,
-      '6': '.client.v0.ConnectionContinuity',
-      '10': 'continuity'
-    },
-  ],
-  '8': [
-    {'1': 'result'},
   ],
 };
 
-/// Descriptor for `RenewSessionResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List renewSessionResponseDescriptor = $convert.base64Decode(
-    'ChRSZW5ld1Nlc3Npb25SZXNwb25zZRI0CgdyZW5ld2FsGAEgASgLMhguY2xpZW50LnYwLlJlbm'
-    'V3YWxSZXN1bHRIAFIHcmVuZXdhbBJHCg1icm93c2VyX2xvZ2luGAIgASgLMiAuY2xpZW50LnYw'
-    'LkJyb3dzZXJMb2dpbkNoYWxsZW5nZUgAUgxicm93c2VyTG9naW4SPwoKY29udGludWl0eRgDIA'
-    'EoDjIfLmNsaWVudC52MC5Db25uZWN0aW9uQ29udGludWl0eVIKY29udGludWl0eUIICgZyZXN1'
-    'bHQ=');
+/// Descriptor for `StartSessionLoginResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List startSessionLoginResponseDescriptor =
+    $convert.base64Decode(
+        'ChlTdGFydFNlc3Npb25Mb2dpblJlc3BvbnNlEjgKB2F0dGVtcHQYASABKAsyHi5jbGllbnQudj'
+        'AuU2Vzc2lvbkxvZ2luQXR0ZW1wdFIHYXR0ZW1wdA==');
 
-@$core.Deprecated('Use waitSessionRenewalRequestDescriptor instead')
-const WaitSessionRenewalRequest$json = {
-  '1': 'WaitSessionRenewalRequest',
+@$core.Deprecated('Use getSessionLoginRequestDescriptor instead')
+const GetSessionLoginRequest$json = {
+  '1': 'GetSessionLoginRequest',
   '2': [
     {
       '1': 'profile',
@@ -1497,45 +1484,42 @@ const WaitSessionRenewalRequest$json = {
       '6': '.client.v0.ProfileRef',
       '10': 'profile'
     },
-    {'1': 'user_code', '3': 2, '4': 1, '5': 9, '10': 'userCode'},
+    {'1': 'attempt_id', '3': 2, '4': 1, '5': 9, '9': 0, '10': 'attemptId'},
+    {'1': 'request_id', '3': 3, '4': 1, '5': 9, '9': 0, '10': 'requestId'},
+    {'1': 'current', '3': 4, '4': 1, '5': 8, '9': 0, '10': 'current'},
+  ],
+  '8': [
+    {'1': 'selector'},
   ],
 };
 
-/// Descriptor for `WaitSessionRenewalRequest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List waitSessionRenewalRequestDescriptor =
-    $convert.base64Decode(
-        'ChlXYWl0U2Vzc2lvblJlbmV3YWxSZXF1ZXN0Ei8KB3Byb2ZpbGUYASABKAsyFS5jbGllbnQudj'
-        'AuUHJvZmlsZVJlZlIHcHJvZmlsZRIbCgl1c2VyX2NvZGUYAiABKAlSCHVzZXJDb2Rl');
+/// Descriptor for `GetSessionLoginRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getSessionLoginRequestDescriptor = $convert.base64Decode(
+    'ChZHZXRTZXNzaW9uTG9naW5SZXF1ZXN0Ei8KB3Byb2ZpbGUYASABKAsyFS5jbGllbnQudjAuUH'
+    'JvZmlsZVJlZlIHcHJvZmlsZRIfCgphdHRlbXB0X2lkGAIgASgJSABSCWF0dGVtcHRJZBIfCgpy'
+    'ZXF1ZXN0X2lkGAMgASgJSABSCXJlcXVlc3RJZBIaCgdjdXJyZW50GAQgASgISABSB2N1cnJlbn'
+    'RCCgoIc2VsZWN0b3I=');
 
-@$core.Deprecated('Use waitSessionRenewalResponseDescriptor instead')
-const WaitSessionRenewalResponse$json = {
-  '1': 'WaitSessionRenewalResponse',
+@$core.Deprecated('Use getSessionLoginResponseDescriptor instead')
+const GetSessionLoginResponse$json = {
+  '1': 'GetSessionLoginResponse',
   '2': [
     {
-      '1': 'renewal',
+      '1': 'attempt',
       '3': 1,
       '4': 1,
       '5': 11,
-      '6': '.client.v0.RenewalResult',
-      '10': 'renewal'
-    },
-    {
-      '1': 'continuity',
-      '3': 2,
-      '4': 1,
-      '5': 14,
-      '6': '.client.v0.ConnectionContinuity',
-      '10': 'continuity'
+      '6': '.client.v0.SessionLoginAttempt',
+      '10': 'attempt'
     },
   ],
 };
 
-/// Descriptor for `WaitSessionRenewalResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List waitSessionRenewalResponseDescriptor =
+/// Descriptor for `GetSessionLoginResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getSessionLoginResponseDescriptor =
     $convert.base64Decode(
-        'ChpXYWl0U2Vzc2lvblJlbmV3YWxSZXNwb25zZRIyCgdyZW5ld2FsGAEgASgLMhguY2xpZW50Ln'
-        'YwLlJlbmV3YWxSZXN1bHRSB3JlbmV3YWwSPwoKY29udGludWl0eRgCIAEoDjIfLmNsaWVudC52'
-        'MC5Db25uZWN0aW9uQ29udGludWl0eVIKY29udGludWl0eQ==');
+        'ChdHZXRTZXNzaW9uTG9naW5SZXNwb25zZRI4CgdhdHRlbXB0GAEgASgLMh4uY2xpZW50LnYwLl'
+        'Nlc3Npb25Mb2dpbkF0dGVtcHRSB2F0dGVtcHQ=');
 
 @$core.Deprecated('Use listExitNodesRequestDescriptor instead')
 const ListExitNodesRequest$json = {

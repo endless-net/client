@@ -52,8 +52,8 @@ const (
 	ClientService_RenameProfile_FullMethodName             = "/client.v0.ClientService/RenameProfile"
 	ClientService_RemoveProfile_FullMethodName             = "/client.v0.ClientService/RemoveProfile"
 	ClientService_GetSession_FullMethodName                = "/client.v0.ClientService/GetSession"
-	ClientService_RenewSession_FullMethodName              = "/client.v0.ClientService/RenewSession"
-	ClientService_WaitSessionRenewal_FullMethodName        = "/client.v0.ClientService/WaitSessionRenewal"
+	ClientService_StartSessionLogin_FullMethodName         = "/client.v0.ClientService/StartSessionLogin"
+	ClientService_GetSessionLogin_FullMethodName           = "/client.v0.ClientService/GetSessionLogin"
 	ClientService_ListExitNodes_FullMethodName             = "/client.v0.ClientService/ListExitNodes"
 	ClientService_GetExitNode_FullMethodName               = "/client.v0.ClientService/GetExitNode"
 	ClientService_SelectExitNode_FullMethodName            = "/client.v0.ClientService/SelectExitNode"
@@ -133,10 +133,11 @@ type ClientServiceClient interface {
 	RemoveProfile(ctx context.Context, in *RemoveProfileRequest, opts ...grpc.CallOption) (*RemoveProfileResponse, error)
 	// UF-17: expiry, warning deadline and renewal availability.
 	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*GetSessionResponse, error)
-	// UF-17: no caller-supplied callback URL or browser credential.
-	RenewSession(ctx context.Context, in *RenewSessionRequest, opts ...grpc.CallOption) (*RenewSessionResponse, error)
-	// Complete an identity-provider browser login started by RenewSession.
-	WaitSessionRenewal(ctx context.Context, in *WaitSessionRenewalRequest, opts ...grpc.CallOption) (*WaitSessionRenewalResponse, error)
+	// Explicit same-user login of a registered profile; never Enroll/Connect.
+	// Persist the request UUID before dispatch. Exact retries keep one attempt.
+	StartSessionLogin(ctx context.Context, in *StartSessionLoginRequest, opts ...grpc.CallOption) (*StartSessionLoginResponse, error)
+	// Pure owner snapshot: no claim, mutation, remote I/O or worker wake.
+	GetSessionLogin(ctx context.Context, in *GetSessionLoginRequest, opts ...grpc.CallOption) (*GetSessionLoginResponse, error)
 	// UF-08: list authorized consumer-side egress choices.
 	ListExitNodes(ctx context.Context, in *ListExitNodesRequest, opts ...grpc.CallOption) (*ListExitNodesResponse, error)
 	// UF-08: requested/effective selection, LAN policy and apply outcome.
@@ -482,20 +483,20 @@ func (c *clientServiceClient) GetSession(ctx context.Context, in *GetSessionRequ
 	return out, nil
 }
 
-func (c *clientServiceClient) RenewSession(ctx context.Context, in *RenewSessionRequest, opts ...grpc.CallOption) (*RenewSessionResponse, error) {
+func (c *clientServiceClient) StartSessionLogin(ctx context.Context, in *StartSessionLoginRequest, opts ...grpc.CallOption) (*StartSessionLoginResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RenewSessionResponse)
-	err := c.cc.Invoke(ctx, ClientService_RenewSession_FullMethodName, in, out, cOpts...)
+	out := new(StartSessionLoginResponse)
+	err := c.cc.Invoke(ctx, ClientService_StartSessionLogin_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *clientServiceClient) WaitSessionRenewal(ctx context.Context, in *WaitSessionRenewalRequest, opts ...grpc.CallOption) (*WaitSessionRenewalResponse, error) {
+func (c *clientServiceClient) GetSessionLogin(ctx context.Context, in *GetSessionLoginRequest, opts ...grpc.CallOption) (*GetSessionLoginResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(WaitSessionRenewalResponse)
-	err := c.cc.Invoke(ctx, ClientService_WaitSessionRenewal_FullMethodName, in, out, cOpts...)
+	out := new(GetSessionLoginResponse)
+	err := c.cc.Invoke(ctx, ClientService_GetSessionLogin_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -696,10 +697,11 @@ type ClientServiceServer interface {
 	RemoveProfile(context.Context, *RemoveProfileRequest) (*RemoveProfileResponse, error)
 	// UF-17: expiry, warning deadline and renewal availability.
 	GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error)
-	// UF-17: no caller-supplied callback URL or browser credential.
-	RenewSession(context.Context, *RenewSessionRequest) (*RenewSessionResponse, error)
-	// Complete an identity-provider browser login started by RenewSession.
-	WaitSessionRenewal(context.Context, *WaitSessionRenewalRequest) (*WaitSessionRenewalResponse, error)
+	// Explicit same-user login of a registered profile; never Enroll/Connect.
+	// Persist the request UUID before dispatch. Exact retries keep one attempt.
+	StartSessionLogin(context.Context, *StartSessionLoginRequest) (*StartSessionLoginResponse, error)
+	// Pure owner snapshot: no claim, mutation, remote I/O or worker wake.
+	GetSessionLogin(context.Context, *GetSessionLoginRequest) (*GetSessionLoginResponse, error)
 	// UF-08: list authorized consumer-side egress choices.
 	ListExitNodes(context.Context, *ListExitNodesRequest) (*ListExitNodesResponse, error)
 	// UF-08: requested/effective selection, LAN policy and apply outcome.
@@ -826,11 +828,11 @@ func (UnimplementedClientServiceServer) RemoveProfile(context.Context, *RemovePr
 func (UnimplementedClientServiceServer) GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSession not implemented")
 }
-func (UnimplementedClientServiceServer) RenewSession(context.Context, *RenewSessionRequest) (*RenewSessionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RenewSession not implemented")
+func (UnimplementedClientServiceServer) StartSessionLogin(context.Context, *StartSessionLoginRequest) (*StartSessionLoginResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartSessionLogin not implemented")
 }
-func (UnimplementedClientServiceServer) WaitSessionRenewal(context.Context, *WaitSessionRenewalRequest) (*WaitSessionRenewalResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method WaitSessionRenewal not implemented")
+func (UnimplementedClientServiceServer) GetSessionLogin(context.Context, *GetSessionLoginRequest) (*GetSessionLoginResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSessionLogin not implemented")
 }
 func (UnimplementedClientServiceServer) ListExitNodes(context.Context, *ListExitNodesRequest) (*ListExitNodesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListExitNodes not implemented")
@@ -1425,38 +1427,38 @@ func _ClientService_GetSession_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ClientService_RenewSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RenewSessionRequest)
+func _ClientService_StartSessionLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartSessionLoginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientServiceServer).RenewSession(ctx, in)
+		return srv.(ClientServiceServer).StartSessionLogin(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ClientService_RenewSession_FullMethodName,
+		FullMethod: ClientService_StartSessionLogin_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ClientServiceServer).RenewSession(ctx, req.(*RenewSessionRequest))
+		return srv.(ClientServiceServer).StartSessionLogin(ctx, req.(*StartSessionLoginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ClientService_WaitSessionRenewal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(WaitSessionRenewalRequest)
+func _ClientService_GetSessionLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSessionLoginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientServiceServer).WaitSessionRenewal(ctx, in)
+		return srv.(ClientServiceServer).GetSessionLogin(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ClientService_WaitSessionRenewal_FullMethodName,
+		FullMethod: ClientService_GetSessionLogin_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ClientServiceServer).WaitSessionRenewal(ctx, req.(*WaitSessionRenewalRequest))
+		return srv.(ClientServiceServer).GetSessionLogin(ctx, req.(*GetSessionLoginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1819,12 +1821,12 @@ var ClientService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ClientService_GetSession_Handler,
 		},
 		{
-			MethodName: "RenewSession",
-			Handler:    _ClientService_RenewSession_Handler,
+			MethodName: "StartSessionLogin",
+			Handler:    _ClientService_StartSessionLogin_Handler,
 		},
 		{
-			MethodName: "WaitSessionRenewal",
-			Handler:    _ClientService_WaitSessionRenewal_Handler,
+			MethodName: "GetSessionLogin",
+			Handler:    _ClientService_GetSessionLogin_Handler,
 		},
 		{
 			MethodName: "ListExitNodes",

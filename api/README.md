@@ -1,5 +1,59 @@
 # Client API: контрактный candidate
 
+## Повторный вход того же пользователя — candidate api/v0.7.0
+
+003/FR-016/022, CMP-CLIENT-003/005/014: `StartSessionLogin` и `GetSessionLogin`
+заменяют legacy `RenewSession`/`WaitSessionRenewal` hard cutover. Provider
+`user_code`, `BrowserLoginChallenge` и `RenewalResult` удалены; fallback и
+поддержки старой пары нет. `GetSession` остаётся read-only и дополнительно
+возвращает последнюю сохраняемую `SessionLoginAttempt`, если она есть.
+
+Start принимает `MutationContext`, необязательный `ProfileRef` (пустой — активный
+профиль) и canonical lowercase nonzero request UUID, сохранённый caller до
+dispatch. Только текущий OS owner зарегистрированного профиля может начать вход;
+initial ownership claim запрещён. Один request связан с owner/profile и одной
+durable attempt. Точный повтор возвращает её до проверки устаревшей revision,
+не создавая новые proof/transaction/deadline; изменённая привязка конфликтует.
+Новая команда проходит current instance/revision CAS; до deadline текущей попытки
+новый UUID конфликтует. После deadline только отдельное явное действие может
+начать fresh login с новым UUID, сохранив прежний unknown результат. Поздний ответ
+старого worker не принимается вместо новой попытки. Start не выполняет Enroll
+или Connect и не меняет pending SessionRefresh/NodeRenewal.
+
+GetSessionLogin принимает ровно один decoded selector `attempt_id`, `request_id`
+или `current=true`. Missing/false current и invalid UUID — InvalidArgument;
+отсутствующая попытка — NotFound, чужой OS owner — PermissionDenied.
+Protobuf binary oneof сохраняет стандартный last-wins. Query — чистое чтение:
+без Store.Update/expiry mutation, worker wake, remote I/O и ownership claim.
+После lost reply caller сначала читает исходный request; новый UUID автоматически
+не создаётся. GetSession позволяет UI восстановить последнюю попытку после reopen.
+Прежние request IDs и публичные результаты сохраняются для exact lookup/replay;
+нехватка существующего protected-state budget отвергает новый Start до dispatch,
+без eviction прежних результатов или reset регистрации.
+
+Проекция содержит только публичные IDs, phase, metadata, исходные created/deadline,
+доверенную HTTPS browser action с server expiry, restriction/reason, poll hint
+и `Session` после подтверждённого same-user adoption. Локальный login budget
+не более существующих10min; server expiry может его уменьшить, restart/retry
+не продлевают. Browser action присутствует только в AWAITING_CONFIRMATION.
+PREPARING/UNCERTAIN не являются успехом, SUCCEEDED подтверждает только сессию
+того же пользователя. Node credential, enrollment receipt/keys и сетевые права
+не меняются этой операцией; успешный Node renewal проверяется отдельно.
+UNCERTAIN после deadline может иметь poll=0: это не утверждение remote failure.
+Публичный poll hint1..30s, terminal/no further polling —0.
+
+`CAPABILITY_SESSION_LOGIN=18` независима от seamless session renewal. Runtime
+объявляет её только после реализации. Go helpers `ValidateStartSessionLoginRequest`
+и `ValidateGetSessionLoginRequest` проверяют typed shape, canonical IDs, presence
+CAS и unknown fields. Они не подтверждают OS auth, current CAS, durable replay,
+доверие URL или same-user authority. Эти проверки обязательны в runtime.
+
+Baseline api/v0.6.0 `72817ee22ba3017643f551a03a85f313ae7621e7`; consumer pin и
+runtime build digest не меняются до checked immutable API release. Ни schema,
+ни Go/Dart serialization tests не доказывают установленный повторный вход.
+Identity/Coordinator contracts не меняются. Истёкший неизвестный Node renewal
+не сбрасывается и не получает расширение replay/TTL ради нового входа.
+
 ## Current enrollment lookup — candidate api/v0.5.0
 
 003/FR-007/013/018: существующий `GetEnrollmentAttemptRequest.selector`

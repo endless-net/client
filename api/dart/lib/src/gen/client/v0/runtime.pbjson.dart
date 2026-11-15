@@ -289,6 +289,30 @@ final $typed_data.Uint8List connectionPhaseDescriptor = $convert.base64Decode(
     'RUNUSU5HEAISHgoaQ09OTkVDVElPTl9QSEFTRV9DT05ORUNURUQQAxIiCh5DT05ORUNUSU9OX1'
     'BIQVNFX0RJU0NPTk5FQ1RJTkcQBBIgChxDT05ORUNUSU9OX1BIQVNFX0xPQ0FMX1JFQURZEAU=');
 
+@$core.Deprecated('Use sessionLoginPhaseDescriptor instead')
+const SessionLoginPhase$json = {
+  '1': 'SessionLoginPhase',
+  '2': [
+    {'1': 'SESSION_LOGIN_PHASE_UNSPECIFIED', '2': 0},
+    {'1': 'SESSION_LOGIN_PHASE_PREPARING', '2': 1},
+    {'1': 'SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION', '2': 2},
+    {'1': 'SESSION_LOGIN_PHASE_SUCCEEDED', '2': 3},
+    {'1': 'SESSION_LOGIN_PHASE_DENIED', '2': 4},
+    {'1': 'SESSION_LOGIN_PHASE_EXPIRED', '2': 5},
+    {'1': 'SESSION_LOGIN_PHASE_FAILED', '2': 6},
+    {'1': 'SESSION_LOGIN_PHASE_UNCERTAIN', '2': 7},
+  ],
+};
+
+/// Descriptor for `SessionLoginPhase`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List sessionLoginPhaseDescriptor = $convert.base64Decode(
+    'ChFTZXNzaW9uTG9naW5QaGFzZRIjCh9TRVNTSU9OX0xPR0lOX1BIQVNFX1VOU1BFQ0lGSUVEEA'
+    'ASIQodU0VTU0lPTl9MT0dJTl9QSEFTRV9QUkVQQVJJTkcQARItCilTRVNTSU9OX0xPR0lOX1BI'
+    'QVNFX0FXQUlUSU5HX0NPTkZJUk1BVElPThACEiEKHVNFU1NJT05fTE9HSU5fUEhBU0VfU1VDQ0'
+    'VFREVEEAMSHgoaU0VTU0lPTl9MT0dJTl9QSEFTRV9ERU5JRUQQBBIfChtTRVNTSU9OX0xPR0lO'
+    'X1BIQVNFX0VYUElSRUQQBRIeChpTRVNTSU9OX0xPR0lOX1BIQVNFX0ZBSUxFRBAGEiEKHVNFU1'
+    'NJT05fTE9HSU5fUEhBU0VfVU5DRVJUQUlOEAc=');
+
 @$core.Deprecated('Use transportSearchStateDescriptor instead')
 const TransportSearchState$json = {
   '1': 'TransportSearchState',
@@ -800,6 +824,115 @@ final $typed_data.Uint8List sessionDescriptor = $convert.base64Decode(
     'FybmluZ0F0EjAKB3JlbmV3YWwYBCABKAsyFi5jbGllbnQudjAuUmVzdHJpY3Rpb25SB3JlbmV3'
     'YWwSPAoac2VhbWxlc3NfcmVuZXdhbF9zdXBwb3J0ZWQYBSABKAhSGHNlYW1sZXNzUmVuZXdhbF'
     'N1cHBvcnRlZA==');
+
+@$core.Deprecated('Use sessionLoginBrowserActionDescriptor instead')
+const SessionLoginBrowserAction$json = {
+  '1': 'SessionLoginBrowserAction',
+  '2': [
+    {'1': 'verification_url', '3': 1, '4': 1, '5': 9, '10': 'verificationUrl'},
+    {
+      '1': 'expires_at',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'expiresAt'
+    },
+  ],
+};
+
+/// Descriptor for `SessionLoginBrowserAction`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List sessionLoginBrowserActionDescriptor = $convert.base64Decode(
+    'ChlTZXNzaW9uTG9naW5Ccm93c2VyQWN0aW9uEikKEHZlcmlmaWNhdGlvbl91cmwYASABKAlSD3'
+    'ZlcmlmaWNhdGlvblVybBI5CgpleHBpcmVzX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRp'
+    'bWVzdGFtcFIJZXhwaXJlc0F0');
+
+@$core.Deprecated('Use sessionLoginAttemptDescriptor instead')
+const SessionLoginAttempt$json = {
+  '1': 'SessionLoginAttempt',
+  '2': [
+    {'1': 'attempt_id', '3': 1, '4': 1, '5': 9, '10': 'attemptId'},
+    {'1': 'request_id', '3': 2, '4': 1, '5': 9, '10': 'requestId'},
+    {'1': 'profile_id', '3': 3, '4': 1, '5': 9, '10': 'profileId'},
+    {
+      '1': 'phase',
+      '3': 4,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.SessionLoginPhase',
+      '10': 'phase'
+    },
+    {
+      '1': 'metadata',
+      '3': 5,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.SnapshotMetadata',
+      '10': 'metadata'
+    },
+    {
+      '1': 'created_at',
+      '3': 6,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'createdAt'
+    },
+    {
+      '1': 'deadline',
+      '3': 7,
+      '4': 1,
+      '5': 11,
+      '6': '.google.protobuf.Timestamp',
+      '10': 'deadline'
+    },
+    {
+      '1': 'browser_action',
+      '3': 8,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.SessionLoginBrowserAction',
+      '10': 'browserAction'
+    },
+    {
+      '1': 'restriction',
+      '3': 9,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.Restriction',
+      '10': 'restriction'
+    },
+    {
+      '1': 'session',
+      '3': 10,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.Session',
+      '10': 'session'
+    },
+    {
+      '1': 'poll_after_seconds',
+      '3': 11,
+      '4': 1,
+      '5': 13,
+      '10': 'pollAfterSeconds'
+    },
+  ],
+};
+
+/// Descriptor for `SessionLoginAttempt`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List sessionLoginAttemptDescriptor = $convert.base64Decode(
+    'ChNTZXNzaW9uTG9naW5BdHRlbXB0Eh0KCmF0dGVtcHRfaWQYASABKAlSCWF0dGVtcHRJZBIdCg'
+    'pyZXF1ZXN0X2lkGAIgASgJUglyZXF1ZXN0SWQSHQoKcHJvZmlsZV9pZBgDIAEoCVIJcHJvZmls'
+    'ZUlkEjIKBXBoYXNlGAQgASgOMhwuY2xpZW50LnYwLlNlc3Npb25Mb2dpblBoYXNlUgVwaGFzZR'
+    'I3CghtZXRhZGF0YRgFIAEoCzIbLmNsaWVudC52MC5TbmFwc2hvdE1ldGFkYXRhUghtZXRhZGF0'
+    'YRI5CgpjcmVhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcFIJY3JlYX'
+    'RlZEF0EjYKCGRlYWRsaW5lGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcFIIZGVh'
+    'ZGxpbmUSSwoOYnJvd3Nlcl9hY3Rpb24YCCABKAsyJC5jbGllbnQudjAuU2Vzc2lvbkxvZ2luQn'
+    'Jvd3NlckFjdGlvblINYnJvd3NlckFjdGlvbhI4CgtyZXN0cmljdGlvbhgJIAEoCzIWLmNsaWVu'
+    'dC52MC5SZXN0cmljdGlvblILcmVzdHJpY3Rpb24SLAoHc2Vzc2lvbhgKIAEoCzISLmNsaWVudC'
+    '52MC5TZXNzaW9uUgdzZXNzaW9uEiwKEnBvbGxfYWZ0ZXJfc2Vjb25kcxgLIAEoDVIQcG9sbEFm'
+    'dGVyU2Vjb25kcw==');
 
 @$core.Deprecated('Use recoveryDescriptor instead')
 const Recovery$json = {

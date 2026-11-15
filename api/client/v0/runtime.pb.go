@@ -810,6 +810,72 @@ func (ConnectionPhase) EnumDescriptor() ([]byte, []int) {
 	return file_client_v0_runtime_proto_rawDescGZIP(), []int{12}
 }
 
+// Explicit login of the original registered user. This never creates a Node,
+// replaces enrollment identity or implies successful Node credential renewal.
+type SessionLoginPhase int32
+
+const (
+	SessionLoginPhase_SESSION_LOGIN_PHASE_UNSPECIFIED           SessionLoginPhase = 0
+	SessionLoginPhase_SESSION_LOGIN_PHASE_PREPARING             SessionLoginPhase = 1
+	SessionLoginPhase_SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION SessionLoginPhase = 2
+	SessionLoginPhase_SESSION_LOGIN_PHASE_SUCCEEDED             SessionLoginPhase = 3
+	SessionLoginPhase_SESSION_LOGIN_PHASE_DENIED                SessionLoginPhase = 4
+	SessionLoginPhase_SESSION_LOGIN_PHASE_EXPIRED               SessionLoginPhase = 5
+	SessionLoginPhase_SESSION_LOGIN_PHASE_FAILED                SessionLoginPhase = 6
+	SessionLoginPhase_SESSION_LOGIN_PHASE_UNCERTAIN             SessionLoginPhase = 7
+)
+
+// Enum value maps for SessionLoginPhase.
+var (
+	SessionLoginPhase_name = map[int32]string{
+		0: "SESSION_LOGIN_PHASE_UNSPECIFIED",
+		1: "SESSION_LOGIN_PHASE_PREPARING",
+		2: "SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION",
+		3: "SESSION_LOGIN_PHASE_SUCCEEDED",
+		4: "SESSION_LOGIN_PHASE_DENIED",
+		5: "SESSION_LOGIN_PHASE_EXPIRED",
+		6: "SESSION_LOGIN_PHASE_FAILED",
+		7: "SESSION_LOGIN_PHASE_UNCERTAIN",
+	}
+	SessionLoginPhase_value = map[string]int32{
+		"SESSION_LOGIN_PHASE_UNSPECIFIED":           0,
+		"SESSION_LOGIN_PHASE_PREPARING":             1,
+		"SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION": 2,
+		"SESSION_LOGIN_PHASE_SUCCEEDED":             3,
+		"SESSION_LOGIN_PHASE_DENIED":                4,
+		"SESSION_LOGIN_PHASE_EXPIRED":               5,
+		"SESSION_LOGIN_PHASE_FAILED":                6,
+		"SESSION_LOGIN_PHASE_UNCERTAIN":             7,
+	}
+)
+
+func (x SessionLoginPhase) Enum() *SessionLoginPhase {
+	p := new(SessionLoginPhase)
+	*p = x
+	return p
+}
+
+func (x SessionLoginPhase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SessionLoginPhase) Descriptor() protoreflect.EnumDescriptor {
+	return file_client_v0_runtime_proto_enumTypes[13].Descriptor()
+}
+
+func (SessionLoginPhase) Type() protoreflect.EnumType {
+	return &file_client_v0_runtime_proto_enumTypes[13]
+}
+
+func (x SessionLoginPhase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SessionLoginPhase.Descriptor instead.
+func (SessionLoginPhase) EnumDescriptor() ([]byte, []int) {
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{13}
+}
+
 // Public observation only: no raw profile, obfuscation key, nonce or network
 // fingerprint. A selected transport is not evidence of application availability.
 type TransportSearchState int32
@@ -854,11 +920,11 @@ func (x TransportSearchState) String() string {
 }
 
 func (TransportSearchState) Descriptor() protoreflect.EnumDescriptor {
-	return file_client_v0_runtime_proto_enumTypes[13].Descriptor()
+	return file_client_v0_runtime_proto_enumTypes[14].Descriptor()
 }
 
 func (TransportSearchState) Type() protoreflect.EnumType {
-	return &file_client_v0_runtime_proto_enumTypes[13]
+	return &file_client_v0_runtime_proto_enumTypes[14]
 }
 
 func (x TransportSearchState) Number() protoreflect.EnumNumber {
@@ -867,7 +933,7 @@ func (x TransportSearchState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TransportSearchState.Descriptor instead.
 func (TransportSearchState) EnumDescriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{13}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{14}
 }
 
 type EnrollmentBrowserAction struct {
@@ -1706,6 +1772,189 @@ func (x *Session) GetSeamlessRenewalSupported() bool {
 	return false
 }
 
+type SessionLoginBrowserAction struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Trusted HTTPS URL from native Identity login; no bearer/proof/provider code.
+	VerificationUrl string                 `protobuf:"bytes,1,opt,name=verification_url,json=verificationUrl,proto3" json:"verification_url,omitempty"`
+	ExpiresAt       *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SessionLoginBrowserAction) Reset() {
+	*x = SessionLoginBrowserAction{}
+	mi := &file_client_v0_runtime_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionLoginBrowserAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionLoginBrowserAction) ProtoMessage() {}
+
+func (x *SessionLoginBrowserAction) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_runtime_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionLoginBrowserAction.ProtoReflect.Descriptor instead.
+func (*SessionLoginBrowserAction) Descriptor() ([]byte, []int) {
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *SessionLoginBrowserAction) GetVerificationUrl() string {
+	if x != nil {
+		return x.VerificationUrl
+	}
+	return ""
+}
+
+func (x *SessionLoginBrowserAction) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+type SessionLoginAttempt struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	AttemptId string                 `protobuf:"bytes,1,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	RequestId string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	ProfileId string                 `protobuf:"bytes,3,opt,name=profile_id,json=profileId,proto3" json:"profile_id,omitempty"`
+	Phase     SessionLoginPhase      `protobuf:"varint,4,opt,name=phase,proto3,enum=client.v0.SessionLoginPhase" json:"phase,omitempty"`
+	Metadata  *SnapshotMetadata      `protobuf:"bytes,5,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// Original local bound, at most 10 minutes; server expiry may shorten it.
+	// Neither duplicate Start nor restart extends this deadline.
+	Deadline *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=deadline,proto3" json:"deadline,omitempty"`
+	// Present only while awaiting current browser confirmation.
+	BrowserAction *SessionLoginBrowserAction `protobuf:"bytes,8,opt,name=browser_action,json=browserAction,proto3" json:"browser_action,omitempty"`
+	Restriction   *Restriction               `protobuf:"bytes,9,opt,name=restriction,proto3" json:"restriction,omitempty"`
+	// Only SUCCEEDED, after durable same-user adoption. Not a Node receipt.
+	Session *Session `protobuf:"bytes,10,opt,name=session,proto3" json:"session,omitempty"`
+	// 1..30 while further polling is possible; 0 terminal/no further polling.
+	// UNCERTAIN may remain after deadline with 0; never infer remote failure.
+	PollAfterSeconds uint32 `protobuf:"varint,11,opt,name=poll_after_seconds,json=pollAfterSeconds,proto3" json:"poll_after_seconds,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SessionLoginAttempt) Reset() {
+	*x = SessionLoginAttempt{}
+	mi := &file_client_v0_runtime_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionLoginAttempt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionLoginAttempt) ProtoMessage() {}
+
+func (x *SessionLoginAttempt) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_runtime_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionLoginAttempt.ProtoReflect.Descriptor instead.
+func (*SessionLoginAttempt) Descriptor() ([]byte, []int) {
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SessionLoginAttempt) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+func (x *SessionLoginAttempt) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *SessionLoginAttempt) GetProfileId() string {
+	if x != nil {
+		return x.ProfileId
+	}
+	return ""
+}
+
+func (x *SessionLoginAttempt) GetPhase() SessionLoginPhase {
+	if x != nil {
+		return x.Phase
+	}
+	return SessionLoginPhase_SESSION_LOGIN_PHASE_UNSPECIFIED
+}
+
+func (x *SessionLoginAttempt) GetMetadata() *SnapshotMetadata {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *SessionLoginAttempt) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *SessionLoginAttempt) GetDeadline() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Deadline
+	}
+	return nil
+}
+
+func (x *SessionLoginAttempt) GetBrowserAction() *SessionLoginBrowserAction {
+	if x != nil {
+		return x.BrowserAction
+	}
+	return nil
+}
+
+func (x *SessionLoginAttempt) GetRestriction() *Restriction {
+	if x != nil {
+		return x.Restriction
+	}
+	return nil
+}
+
+func (x *SessionLoginAttempt) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
+func (x *SessionLoginAttempt) GetPollAfterSeconds() uint32 {
+	if x != nil {
+		return x.PollAfterSeconds
+	}
+	return 0
+}
+
 type Recovery struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	State         ServiceState           `protobuf:"varint,1,opt,name=state,proto3,enum=client.v0.ServiceState" json:"state,omitempty"`
@@ -1716,7 +1965,7 @@ type Recovery struct {
 
 func (x *Recovery) Reset() {
 	*x = Recovery{}
-	mi := &file_client_v0_runtime_proto_msgTypes[9]
+	mi := &file_client_v0_runtime_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1728,7 +1977,7 @@ func (x *Recovery) String() string {
 func (*Recovery) ProtoMessage() {}
 
 func (x *Recovery) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[9]
+	mi := &file_client_v0_runtime_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1741,7 +1990,7 @@ func (x *Recovery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Recovery.ProtoReflect.Descriptor instead.
 func (*Recovery) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{9}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Recovery) GetState() ServiceState {
@@ -1773,7 +2022,7 @@ type ServerIdentity struct {
 
 func (x *ServerIdentity) Reset() {
 	*x = ServerIdentity{}
-	mi := &file_client_v0_runtime_proto_msgTypes[10]
+	mi := &file_client_v0_runtime_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1785,7 +2034,7 @@ func (x *ServerIdentity) String() string {
 func (*ServerIdentity) ProtoMessage() {}
 
 func (x *ServerIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[10]
+	mi := &file_client_v0_runtime_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1798,7 +2047,7 @@ func (x *ServerIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerIdentity.ProtoReflect.Descriptor instead.
 func (*ServerIdentity) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{10}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ServerIdentity) GetProfileId() string {
@@ -1855,7 +2104,7 @@ type Endpoint struct {
 
 func (x *Endpoint) Reset() {
 	*x = Endpoint{}
-	mi := &file_client_v0_runtime_proto_msgTypes[11]
+	mi := &file_client_v0_runtime_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1867,7 +2116,7 @@ func (x *Endpoint) String() string {
 func (*Endpoint) ProtoMessage() {}
 
 func (x *Endpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[11]
+	mi := &file_client_v0_runtime_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1880,7 +2129,7 @@ func (x *Endpoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Endpoint.ProtoReflect.Descriptor instead.
 func (*Endpoint) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{11}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Endpoint) GetId() string {
@@ -1931,7 +2180,7 @@ type PathCandidate struct {
 
 func (x *PathCandidate) Reset() {
 	*x = PathCandidate{}
-	mi := &file_client_v0_runtime_proto_msgTypes[12]
+	mi := &file_client_v0_runtime_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1943,7 +2192,7 @@ func (x *PathCandidate) String() string {
 func (*PathCandidate) ProtoMessage() {}
 
 func (x *PathCandidate) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[12]
+	mi := &file_client_v0_runtime_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1956,7 +2205,7 @@ func (x *PathCandidate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PathCandidate.ProtoReflect.Descriptor instead.
 func (*PathCandidate) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{12}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PathCandidate) GetKind() PathKind {
@@ -2060,7 +2309,7 @@ type Peer struct {
 
 func (x *Peer) Reset() {
 	*x = Peer{}
-	mi := &file_client_v0_runtime_proto_msgTypes[13]
+	mi := &file_client_v0_runtime_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2072,7 +2321,7 @@ func (x *Peer) String() string {
 func (*Peer) ProtoMessage() {}
 
 func (x *Peer) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[13]
+	mi := &file_client_v0_runtime_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2085,7 +2334,7 @@ func (x *Peer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Peer.ProtoReflect.Descriptor instead.
 func (*Peer) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{13}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Peer) GetId() string {
@@ -2170,7 +2419,7 @@ type PeerTransportStatus struct {
 
 func (x *PeerTransportStatus) Reset() {
 	*x = PeerTransportStatus{}
-	mi := &file_client_v0_runtime_proto_msgTypes[14]
+	mi := &file_client_v0_runtime_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2182,7 +2431,7 @@ func (x *PeerTransportStatus) String() string {
 func (*PeerTransportStatus) ProtoMessage() {}
 
 func (x *PeerTransportStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[14]
+	mi := &file_client_v0_runtime_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2195,7 +2444,7 @@ func (x *PeerTransportStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerTransportStatus.ProtoReflect.Descriptor instead.
 func (*PeerTransportStatus) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{14}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PeerTransportStatus) GetPeerId() string {
@@ -2292,7 +2541,7 @@ type AgentStatus struct {
 
 func (x *AgentStatus) Reset() {
 	*x = AgentStatus{}
-	mi := &file_client_v0_runtime_proto_msgTypes[15]
+	mi := &file_client_v0_runtime_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2304,7 +2553,7 @@ func (x *AgentStatus) String() string {
 func (*AgentStatus) ProtoMessage() {}
 
 func (x *AgentStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[15]
+	mi := &file_client_v0_runtime_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2317,7 +2566,7 @@ func (x *AgentStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentStatus.ProtoReflect.Descriptor instead.
 func (*AgentStatus) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{15}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AgentStatus) GetSnapshotState() AgentSnapshotState {
@@ -2445,7 +2694,7 @@ type ControlProbe struct {
 
 func (x *ControlProbe) Reset() {
 	*x = ControlProbe{}
-	mi := &file_client_v0_runtime_proto_msgTypes[16]
+	mi := &file_client_v0_runtime_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2457,7 +2706,7 @@ func (x *ControlProbe) String() string {
 func (*ControlProbe) ProtoMessage() {}
 
 func (x *ControlProbe) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[16]
+	mi := &file_client_v0_runtime_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2470,7 +2719,7 @@ func (x *ControlProbe) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ControlProbe.ProtoReflect.Descriptor instead.
 func (*ControlProbe) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{16}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ControlProbe) GetOk() bool {
@@ -2544,7 +2793,7 @@ type Status struct {
 
 func (x *Status) Reset() {
 	*x = Status{}
-	mi := &file_client_v0_runtime_proto_msgTypes[17]
+	mi := &file_client_v0_runtime_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2556,7 +2805,7 @@ func (x *Status) String() string {
 func (*Status) ProtoMessage() {}
 
 func (x *Status) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[17]
+	mi := &file_client_v0_runtime_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2569,7 +2818,7 @@ func (x *Status) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Status.ProtoReflect.Descriptor instead.
 func (*Status) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{17}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Status) GetMetadata() *SnapshotMetadata {
@@ -2770,7 +3019,7 @@ type TunnelPeer struct {
 
 func (x *TunnelPeer) Reset() {
 	*x = TunnelPeer{}
-	mi := &file_client_v0_runtime_proto_msgTypes[18]
+	mi := &file_client_v0_runtime_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2782,7 +3031,7 @@ func (x *TunnelPeer) String() string {
 func (*TunnelPeer) ProtoMessage() {}
 
 func (x *TunnelPeer) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[18]
+	mi := &file_client_v0_runtime_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2795,7 +3044,7 @@ func (x *TunnelPeer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelPeer.ProtoReflect.Descriptor instead.
 func (*TunnelPeer) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{18}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *TunnelPeer) GetPeerId() string {
@@ -2868,7 +3117,7 @@ type TunnelInspection struct {
 
 func (x *TunnelInspection) Reset() {
 	*x = TunnelInspection{}
-	mi := &file_client_v0_runtime_proto_msgTypes[19]
+	mi := &file_client_v0_runtime_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2880,7 +3129,7 @@ func (x *TunnelInspection) String() string {
 func (*TunnelInspection) ProtoMessage() {}
 
 func (x *TunnelInspection) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[19]
+	mi := &file_client_v0_runtime_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2893,7 +3142,7 @@ func (x *TunnelInspection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelInspection.ProtoReflect.Descriptor instead.
 func (*TunnelInspection) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{19}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *TunnelInspection) GetOk() bool {
@@ -2953,7 +3202,7 @@ type Interface struct {
 
 func (x *Interface) Reset() {
 	*x = Interface{}
-	mi := &file_client_v0_runtime_proto_msgTypes[20]
+	mi := &file_client_v0_runtime_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2965,7 +3214,7 @@ func (x *Interface) String() string {
 func (*Interface) ProtoMessage() {}
 
 func (x *Interface) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[20]
+	mi := &file_client_v0_runtime_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2978,7 +3227,7 @@ func (x *Interface) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Interface.ProtoReflect.Descriptor instead.
 func (*Interface) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{20}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *Interface) GetName() string {
@@ -3043,7 +3292,7 @@ type RouteInspection struct {
 
 func (x *RouteInspection) Reset() {
 	*x = RouteInspection{}
-	mi := &file_client_v0_runtime_proto_msgTypes[21]
+	mi := &file_client_v0_runtime_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3055,7 +3304,7 @@ func (x *RouteInspection) String() string {
 func (*RouteInspection) ProtoMessage() {}
 
 func (x *RouteInspection) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[21]
+	mi := &file_client_v0_runtime_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3068,7 +3317,7 @@ func (x *RouteInspection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteInspection.ProtoReflect.Descriptor instead.
 func (*RouteInspection) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{21}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RouteInspection) GetTarget() string {
@@ -3118,7 +3367,7 @@ type RouteConflict struct {
 
 func (x *RouteConflict) Reset() {
 	*x = RouteConflict{}
-	mi := &file_client_v0_runtime_proto_msgTypes[22]
+	mi := &file_client_v0_runtime_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3130,7 +3379,7 @@ func (x *RouteConflict) String() string {
 func (*RouteConflict) ProtoMessage() {}
 
 func (x *RouteConflict) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[22]
+	mi := &file_client_v0_runtime_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3143,7 +3392,7 @@ func (x *RouteConflict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteConflict.ProtoReflect.Descriptor instead.
 func (*RouteConflict) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{22}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *RouteConflict) GetOverlayCidr() string {
@@ -3187,7 +3436,7 @@ type DnsRecord struct {
 
 func (x *DnsRecord) Reset() {
 	*x = DnsRecord{}
-	mi := &file_client_v0_runtime_proto_msgTypes[23]
+	mi := &file_client_v0_runtime_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3199,7 +3448,7 @@ func (x *DnsRecord) String() string {
 func (*DnsRecord) ProtoMessage() {}
 
 func (x *DnsRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[23]
+	mi := &file_client_v0_runtime_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3212,7 +3461,7 @@ func (x *DnsRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DnsRecord.ProtoReflect.Descriptor instead.
 func (*DnsRecord) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{23}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *DnsRecord) GetNodeId() string {
@@ -3262,7 +3511,7 @@ type DnsDiagnostics struct {
 
 func (x *DnsDiagnostics) Reset() {
 	*x = DnsDiagnostics{}
-	mi := &file_client_v0_runtime_proto_msgTypes[24]
+	mi := &file_client_v0_runtime_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3274,7 +3523,7 @@ func (x *DnsDiagnostics) String() string {
 func (*DnsDiagnostics) ProtoMessage() {}
 
 func (x *DnsDiagnostics) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[24]
+	mi := &file_client_v0_runtime_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3287,7 +3536,7 @@ func (x *DnsDiagnostics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DnsDiagnostics.ProtoReflect.Descriptor instead.
 func (*DnsDiagnostics) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{24}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *DnsDiagnostics) GetSearchDomain() string {
@@ -3329,7 +3578,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_client_v0_runtime_proto_msgTypes[25]
+	mi := &file_client_v0_runtime_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3341,7 +3590,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[25]
+	mi := &file_client_v0_runtime_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3354,7 +3603,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{25}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *LogEntry) GetTimestamp() *timestamppb.Timestamp {
@@ -3395,7 +3644,7 @@ type Diagnostics struct {
 
 func (x *Diagnostics) Reset() {
 	*x = Diagnostics{}
-	mi := &file_client_v0_runtime_proto_msgTypes[26]
+	mi := &file_client_v0_runtime_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3407,7 +3656,7 @@ func (x *Diagnostics) String() string {
 func (*Diagnostics) ProtoMessage() {}
 
 func (x *Diagnostics) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[26]
+	mi := &file_client_v0_runtime_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3420,7 +3669,7 @@ func (x *Diagnostics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Diagnostics.ProtoReflect.Descriptor instead.
 func (*Diagnostics) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{26}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *Diagnostics) GetMetadata() *SnapshotMetadata {
@@ -3632,7 +3881,28 @@ const file_client_v0_runtime_proto_rawDesc = "" +
 	"\n" +
 	"warning_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\twarningAt\x120\n" +
 	"\arenewal\x18\x04 \x01(\v2\x16.client.v0.RestrictionR\arenewal\x12<\n" +
-	"\x1aseamless_renewal_supported\x18\x05 \x01(\bR\x18seamlessRenewalSupported\"g\n" +
+	"\x1aseamless_renewal_supported\x18\x05 \x01(\bR\x18seamlessRenewalSupported\"\x81\x01\n" +
+	"\x19SessionLoginBrowserAction\x12)\n" +
+	"\x10verification_url\x18\x01 \x01(\tR\x0fverificationUrl\x129\n" +
+	"\n" +
+	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xb5\x04\n" +
+	"\x13SessionLoginAttempt\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x01 \x01(\tR\tattemptId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\x12\x1d\n" +
+	"\n" +
+	"profile_id\x18\x03 \x01(\tR\tprofileId\x122\n" +
+	"\x05phase\x18\x04 \x01(\x0e2\x1c.client.v0.SessionLoginPhaseR\x05phase\x127\n" +
+	"\bmetadata\x18\x05 \x01(\v2\x1b.client.v0.SnapshotMetadataR\bmetadata\x129\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x126\n" +
+	"\bdeadline\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\x12K\n" +
+	"\x0ebrowser_action\x18\b \x01(\v2$.client.v0.SessionLoginBrowserActionR\rbrowserAction\x128\n" +
+	"\vrestriction\x18\t \x01(\v2\x16.client.v0.RestrictionR\vrestriction\x12,\n" +
+	"\asession\x18\n" +
+	" \x01(\v2\x12.client.v0.SessionR\asession\x12,\n" +
+	"\x12poll_after_seconds\x18\v \x01(\rR\x10pollAfterSeconds\"g\n" +
 	"\bRecovery\x12-\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x17.client.v0.ServiceStateR\x05state\x12,\n" +
 	"\afailure\x18\x02 \x01(\v2\x12.client.v0.FailureR\afailure\"\xe9\x01\n" +
@@ -3929,7 +4199,16 @@ const file_client_v0_runtime_proto_rawDesc = "" +
 	"\x1bCONNECTION_PHASE_CONNECTING\x10\x02\x12\x1e\n" +
 	"\x1aCONNECTION_PHASE_CONNECTED\x10\x03\x12\"\n" +
 	"\x1eCONNECTION_PHASE_DISCONNECTING\x10\x04\x12 \n" +
-	"\x1cCONNECTION_PHASE_LOCAL_READY\x10\x05*\xf7\x01\n" +
+	"\x1cCONNECTION_PHASE_LOCAL_READY\x10\x05*\xb1\x02\n" +
+	"\x11SessionLoginPhase\x12#\n" +
+	"\x1fSESSION_LOGIN_PHASE_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dSESSION_LOGIN_PHASE_PREPARING\x10\x01\x12-\n" +
+	")SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION\x10\x02\x12!\n" +
+	"\x1dSESSION_LOGIN_PHASE_SUCCEEDED\x10\x03\x12\x1e\n" +
+	"\x1aSESSION_LOGIN_PHASE_DENIED\x10\x04\x12\x1f\n" +
+	"\x1bSESSION_LOGIN_PHASE_EXPIRED\x10\x05\x12\x1e\n" +
+	"\x1aSESSION_LOGIN_PHASE_FAILED\x10\x06\x12!\n" +
+	"\x1dSESSION_LOGIN_PHASE_UNCERTAIN\x10\a*\xf7\x01\n" +
 	"\x14TransportSearchState\x12&\n" +
 	"\"TRANSPORT_SEARCH_STATE_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bTRANSPORT_SEARCH_STATE_IDLE\x10\x01\x12$\n" +
@@ -3950,146 +4229,157 @@ func file_client_v0_runtime_proto_rawDescGZIP() []byte {
 	return file_client_v0_runtime_proto_rawDescData
 }
 
-var file_client_v0_runtime_proto_enumTypes = make([]protoimpl.EnumInfo, 14)
-var file_client_v0_runtime_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_client_v0_runtime_proto_enumTypes = make([]protoimpl.EnumInfo, 15)
+var file_client_v0_runtime_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_client_v0_runtime_proto_goTypes = []any{
-	(ServiceState)(0),               // 0: client.v0.ServiceState
-	(ControlState)(0),               // 1: client.v0.ControlState
-	(DesiredState)(0),               // 2: client.v0.DesiredState
-	(AgentSnapshotState)(0),         // 3: client.v0.AgentSnapshotState
-	(PathKind)(0),                   // 4: client.v0.PathKind
-	(PathHealth)(0),                 // 5: client.v0.PathHealth
-	(SessionState)(0),               // 6: client.v0.SessionState
-	(EnrollmentMode)(0),             // 7: client.v0.EnrollmentMode
-	(ProfileState)(0),               // 8: client.v0.ProfileState
-	(EnrollmentPhase)(0),            // 9: client.v0.EnrollmentPhase
-	(EnrollmentCertainty)(0),        // 10: client.v0.EnrollmentCertainty
-	(CredentialState)(0),            // 11: client.v0.CredentialState
-	(ConnectionPhase)(0),            // 12: client.v0.ConnectionPhase
-	(TransportSearchState)(0),       // 13: client.v0.TransportSearchState
-	(*EnrollmentBrowserAction)(nil), // 14: client.v0.EnrollmentBrowserAction
-	(*EnrollmentTarget)(nil),        // 15: client.v0.EnrollmentTarget
-	(*EnrollmentAttempt)(nil),       // 16: client.v0.EnrollmentAttempt
-	(*ConnectionIntent)(nil),        // 17: client.v0.ConnectionIntent
-	(*StoredStatePresence)(nil),     // 18: client.v0.StoredStatePresence
-	(*Network)(nil),                 // 19: client.v0.Network
-	(*Profile)(nil),                 // 20: client.v0.Profile
-	(*CredentialStatus)(nil),        // 21: client.v0.CredentialStatus
-	(*Session)(nil),                 // 22: client.v0.Session
-	(*Recovery)(nil),                // 23: client.v0.Recovery
-	(*ServerIdentity)(nil),          // 24: client.v0.ServerIdentity
-	(*Endpoint)(nil),                // 25: client.v0.Endpoint
-	(*PathCandidate)(nil),           // 26: client.v0.PathCandidate
-	(*Peer)(nil),                    // 27: client.v0.Peer
-	(*PeerTransportStatus)(nil),     // 28: client.v0.PeerTransportStatus
-	(*AgentStatus)(nil),             // 29: client.v0.AgentStatus
-	(*ControlProbe)(nil),            // 30: client.v0.ControlProbe
-	(*Status)(nil),                  // 31: client.v0.Status
-	(*TunnelPeer)(nil),              // 32: client.v0.TunnelPeer
-	(*TunnelInspection)(nil),        // 33: client.v0.TunnelInspection
-	(*Interface)(nil),               // 34: client.v0.Interface
-	(*RouteInspection)(nil),         // 35: client.v0.RouteInspection
-	(*RouteConflict)(nil),           // 36: client.v0.RouteConflict
-	(*DnsRecord)(nil),               // 37: client.v0.DnsRecord
-	(*DnsDiagnostics)(nil),          // 38: client.v0.DnsDiagnostics
-	(*LogEntry)(nil),                // 39: client.v0.LogEntry
-	(*Diagnostics)(nil),             // 40: client.v0.Diagnostics
-	(*timestamppb.Timestamp)(nil),   // 41: google.protobuf.Timestamp
-	(*Restriction)(nil),             // 42: client.v0.Restriction
-	(*SnapshotMetadata)(nil),        // 43: client.v0.SnapshotMetadata
-	(*Failure)(nil),                 // 44: client.v0.Failure
-	(*durationpb.Duration)(nil),     // 45: google.protobuf.Duration
-	(*BuildIdentity)(nil),           // 46: client.v0.BuildIdentity
+	(ServiceState)(0),                 // 0: client.v0.ServiceState
+	(ControlState)(0),                 // 1: client.v0.ControlState
+	(DesiredState)(0),                 // 2: client.v0.DesiredState
+	(AgentSnapshotState)(0),           // 3: client.v0.AgentSnapshotState
+	(PathKind)(0),                     // 4: client.v0.PathKind
+	(PathHealth)(0),                   // 5: client.v0.PathHealth
+	(SessionState)(0),                 // 6: client.v0.SessionState
+	(EnrollmentMode)(0),               // 7: client.v0.EnrollmentMode
+	(ProfileState)(0),                 // 8: client.v0.ProfileState
+	(EnrollmentPhase)(0),              // 9: client.v0.EnrollmentPhase
+	(EnrollmentCertainty)(0),          // 10: client.v0.EnrollmentCertainty
+	(CredentialState)(0),              // 11: client.v0.CredentialState
+	(ConnectionPhase)(0),              // 12: client.v0.ConnectionPhase
+	(SessionLoginPhase)(0),            // 13: client.v0.SessionLoginPhase
+	(TransportSearchState)(0),         // 14: client.v0.TransportSearchState
+	(*EnrollmentBrowserAction)(nil),   // 15: client.v0.EnrollmentBrowserAction
+	(*EnrollmentTarget)(nil),          // 16: client.v0.EnrollmentTarget
+	(*EnrollmentAttempt)(nil),         // 17: client.v0.EnrollmentAttempt
+	(*ConnectionIntent)(nil),          // 18: client.v0.ConnectionIntent
+	(*StoredStatePresence)(nil),       // 19: client.v0.StoredStatePresence
+	(*Network)(nil),                   // 20: client.v0.Network
+	(*Profile)(nil),                   // 21: client.v0.Profile
+	(*CredentialStatus)(nil),          // 22: client.v0.CredentialStatus
+	(*Session)(nil),                   // 23: client.v0.Session
+	(*SessionLoginBrowserAction)(nil), // 24: client.v0.SessionLoginBrowserAction
+	(*SessionLoginAttempt)(nil),       // 25: client.v0.SessionLoginAttempt
+	(*Recovery)(nil),                  // 26: client.v0.Recovery
+	(*ServerIdentity)(nil),            // 27: client.v0.ServerIdentity
+	(*Endpoint)(nil),                  // 28: client.v0.Endpoint
+	(*PathCandidate)(nil),             // 29: client.v0.PathCandidate
+	(*Peer)(nil),                      // 30: client.v0.Peer
+	(*PeerTransportStatus)(nil),       // 31: client.v0.PeerTransportStatus
+	(*AgentStatus)(nil),               // 32: client.v0.AgentStatus
+	(*ControlProbe)(nil),              // 33: client.v0.ControlProbe
+	(*Status)(nil),                    // 34: client.v0.Status
+	(*TunnelPeer)(nil),                // 35: client.v0.TunnelPeer
+	(*TunnelInspection)(nil),          // 36: client.v0.TunnelInspection
+	(*Interface)(nil),                 // 37: client.v0.Interface
+	(*RouteInspection)(nil),           // 38: client.v0.RouteInspection
+	(*RouteConflict)(nil),             // 39: client.v0.RouteConflict
+	(*DnsRecord)(nil),                 // 40: client.v0.DnsRecord
+	(*DnsDiagnostics)(nil),            // 41: client.v0.DnsDiagnostics
+	(*LogEntry)(nil),                  // 42: client.v0.LogEntry
+	(*Diagnostics)(nil),               // 43: client.v0.Diagnostics
+	(*timestamppb.Timestamp)(nil),     // 44: google.protobuf.Timestamp
+	(*Restriction)(nil),               // 45: client.v0.Restriction
+	(*SnapshotMetadata)(nil),          // 46: client.v0.SnapshotMetadata
+	(*Failure)(nil),                   // 47: client.v0.Failure
+	(*durationpb.Duration)(nil),       // 48: google.protobuf.Duration
+	(*BuildIdentity)(nil),             // 49: client.v0.BuildIdentity
 }
 var file_client_v0_runtime_proto_depIdxs = []int32{
-	41, // 0: client.v0.EnrollmentBrowserAction.expires_at:type_name -> google.protobuf.Timestamp
-	42, // 1: client.v0.EnrollmentTarget.restriction:type_name -> client.v0.Restriction
+	44, // 0: client.v0.EnrollmentBrowserAction.expires_at:type_name -> google.protobuf.Timestamp
+	45, // 1: client.v0.EnrollmentTarget.restriction:type_name -> client.v0.Restriction
 	9,  // 2: client.v0.EnrollmentAttempt.phase:type_name -> client.v0.EnrollmentPhase
 	10, // 3: client.v0.EnrollmentAttempt.certainty:type_name -> client.v0.EnrollmentCertainty
-	43, // 4: client.v0.EnrollmentAttempt.metadata:type_name -> client.v0.SnapshotMetadata
-	41, // 5: client.v0.EnrollmentAttempt.created_at:type_name -> google.protobuf.Timestamp
-	41, // 6: client.v0.EnrollmentAttempt.deadline:type_name -> google.protobuf.Timestamp
-	14, // 7: client.v0.EnrollmentAttempt.browser_action:type_name -> client.v0.EnrollmentBrowserAction
-	42, // 8: client.v0.EnrollmentAttempt.restriction:type_name -> client.v0.Restriction
-	41, // 9: client.v0.EnrollmentAttempt.login_expires_at:type_name -> google.protobuf.Timestamp
-	41, // 10: client.v0.EnrollmentAttempt.approval_expires_at:type_name -> google.protobuf.Timestamp
-	41, // 11: client.v0.EnrollmentAttempt.recovery_deadline:type_name -> google.protobuf.Timestamp
+	46, // 4: client.v0.EnrollmentAttempt.metadata:type_name -> client.v0.SnapshotMetadata
+	44, // 5: client.v0.EnrollmentAttempt.created_at:type_name -> google.protobuf.Timestamp
+	44, // 6: client.v0.EnrollmentAttempt.deadline:type_name -> google.protobuf.Timestamp
+	15, // 7: client.v0.EnrollmentAttempt.browser_action:type_name -> client.v0.EnrollmentBrowserAction
+	45, // 8: client.v0.EnrollmentAttempt.restriction:type_name -> client.v0.Restriction
+	44, // 9: client.v0.EnrollmentAttempt.login_expires_at:type_name -> google.protobuf.Timestamp
+	44, // 10: client.v0.EnrollmentAttempt.approval_expires_at:type_name -> google.protobuf.Timestamp
+	44, // 11: client.v0.EnrollmentAttempt.recovery_deadline:type_name -> google.protobuf.Timestamp
 	7,  // 12: client.v0.EnrollmentAttempt.mode:type_name -> client.v0.EnrollmentMode
 	2,  // 13: client.v0.ConnectionIntent.desired_state:type_name -> client.v0.DesiredState
-	41, // 14: client.v0.ConnectionIntent.updated_at:type_name -> google.protobuf.Timestamp
-	42, // 15: client.v0.Network.selection:type_name -> client.v0.Restriction
+	44, // 14: client.v0.ConnectionIntent.updated_at:type_name -> google.protobuf.Timestamp
+	45, // 15: client.v0.Network.selection:type_name -> client.v0.Restriction
 	8,  // 16: client.v0.Profile.state:type_name -> client.v0.ProfileState
-	42, // 17: client.v0.Profile.selection:type_name -> client.v0.Restriction
+	45, // 17: client.v0.Profile.selection:type_name -> client.v0.Restriction
 	11, // 18: client.v0.CredentialStatus.state:type_name -> client.v0.CredentialState
-	41, // 19: client.v0.CredentialStatus.expires_at:type_name -> google.protobuf.Timestamp
-	41, // 20: client.v0.CredentialStatus.warning_at:type_name -> google.protobuf.Timestamp
-	42, // 21: client.v0.CredentialStatus.recovery:type_name -> client.v0.Restriction
+	44, // 19: client.v0.CredentialStatus.expires_at:type_name -> google.protobuf.Timestamp
+	44, // 20: client.v0.CredentialStatus.warning_at:type_name -> google.protobuf.Timestamp
+	45, // 21: client.v0.CredentialStatus.recovery:type_name -> client.v0.Restriction
 	6,  // 22: client.v0.Session.state:type_name -> client.v0.SessionState
-	41, // 23: client.v0.Session.expires_at:type_name -> google.protobuf.Timestamp
-	41, // 24: client.v0.Session.warning_at:type_name -> google.protobuf.Timestamp
-	42, // 25: client.v0.Session.renewal:type_name -> client.v0.Restriction
-	0,  // 26: client.v0.Recovery.state:type_name -> client.v0.ServiceState
-	44, // 27: client.v0.Recovery.failure:type_name -> client.v0.Failure
-	4,  // 28: client.v0.PathCandidate.kind:type_name -> client.v0.PathKind
-	5,  // 29: client.v0.PathCandidate.health:type_name -> client.v0.PathHealth
-	45, // 30: client.v0.PathCandidate.rtt:type_name -> google.protobuf.Duration
-	41, // 31: client.v0.PathCandidate.checked_at:type_name -> google.protobuf.Timestamp
-	41, // 32: client.v0.PathCandidate.last_reachable_at:type_name -> google.protobuf.Timestamp
-	26, // 33: client.v0.Peer.candidates:type_name -> client.v0.PathCandidate
-	4,  // 34: client.v0.Peer.selected_path:type_name -> client.v0.PathKind
-	41, // 35: client.v0.Peer.last_transition_at:type_name -> google.protobuf.Timestamp
-	28, // 36: client.v0.Peer.transport:type_name -> client.v0.PeerTransportStatus
-	4,  // 37: client.v0.PeerTransportStatus.selected_path:type_name -> client.v0.PathKind
-	13, // 38: client.v0.PeerTransportStatus.search_state:type_name -> client.v0.TransportSearchState
-	41, // 39: client.v0.PeerTransportStatus.checked_at:type_name -> google.protobuf.Timestamp
-	41, // 40: client.v0.PeerTransportStatus.next_search_at:type_name -> google.protobuf.Timestamp
-	3,  // 41: client.v0.AgentStatus.snapshot_state:type_name -> client.v0.AgentSnapshotState
-	41, // 42: client.v0.AgentStatus.generated_at:type_name -> google.protobuf.Timestamp
-	25, // 43: client.v0.AgentStatus.selected_relay:type_name -> client.v0.Endpoint
-	44, // 44: client.v0.AgentStatus.last_failure:type_name -> client.v0.Failure
-	44, // 45: client.v0.ControlProbe.failure:type_name -> client.v0.Failure
-	30, // 46: client.v0.ControlProbe.attempts:type_name -> client.v0.ControlProbe
-	43, // 47: client.v0.Status.metadata:type_name -> client.v0.SnapshotMetadata
-	0,  // 48: client.v0.Status.service_state:type_name -> client.v0.ServiceState
-	1,  // 49: client.v0.Status.control_state:type_name -> client.v0.ControlState
-	17, // 50: client.v0.Status.intent:type_name -> client.v0.ConnectionIntent
-	19, // 51: client.v0.Status.network:type_name -> client.v0.Network
-	18, // 52: client.v0.Status.stored_state:type_name -> client.v0.StoredStatePresence
-	23, // 53: client.v0.Status.recovery:type_name -> client.v0.Recovery
-	22, // 54: client.v0.Status.session:type_name -> client.v0.Session
-	29, // 55: client.v0.Status.agent:type_name -> client.v0.AgentStatus
-	30, // 56: client.v0.Status.control:type_name -> client.v0.ControlProbe
-	25, // 57: client.v0.Status.stun_endpoints:type_name -> client.v0.Endpoint
-	25, // 58: client.v0.Status.relay_endpoints:type_name -> client.v0.Endpoint
-	44, // 59: client.v0.Status.failures:type_name -> client.v0.Failure
-	12, // 60: client.v0.Status.connection_phase:type_name -> client.v0.ConnectionPhase
-	21, // 61: client.v0.Status.credential:type_name -> client.v0.CredentialStatus
-	28, // 62: client.v0.Status.peer_transports:type_name -> client.v0.PeerTransportStatus
-	41, // 63: client.v0.TunnelPeer.latest_handshake:type_name -> google.protobuf.Timestamp
-	45, // 64: client.v0.TunnelPeer.persistent_keepalive:type_name -> google.protobuf.Duration
-	32, // 65: client.v0.TunnelInspection.peers:type_name -> client.v0.TunnelPeer
-	44, // 66: client.v0.TunnelInspection.failure:type_name -> client.v0.Failure
-	44, // 67: client.v0.Interface.failure:type_name -> client.v0.Failure
-	44, // 68: client.v0.RouteInspection.failure:type_name -> client.v0.Failure
-	45, // 69: client.v0.DnsDiagnostics.ttl:type_name -> google.protobuf.Duration
-	37, // 70: client.v0.DnsDiagnostics.records:type_name -> client.v0.DnsRecord
-	41, // 71: client.v0.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
-	43, // 72: client.v0.Diagnostics.metadata:type_name -> client.v0.SnapshotMetadata
-	46, // 73: client.v0.Diagnostics.client:type_name -> client.v0.BuildIdentity
-	31, // 74: client.v0.Diagnostics.status:type_name -> client.v0.Status
-	33, // 75: client.v0.Diagnostics.tunnel:type_name -> client.v0.TunnelInspection
-	34, // 76: client.v0.Diagnostics.interfaces:type_name -> client.v0.Interface
-	35, // 77: client.v0.Diagnostics.routes:type_name -> client.v0.RouteInspection
-	36, // 78: client.v0.Diagnostics.route_conflicts:type_name -> client.v0.RouteConflict
-	38, // 79: client.v0.Diagnostics.dns:type_name -> client.v0.DnsDiagnostics
-	39, // 80: client.v0.Diagnostics.recent_logs:type_name -> client.v0.LogEntry
-	44, // 81: client.v0.Diagnostics.failures:type_name -> client.v0.Failure
-	27, // 82: client.v0.Diagnostics.peers:type_name -> client.v0.Peer
-	83, // [83:83] is the sub-list for method output_type
-	83, // [83:83] is the sub-list for method input_type
-	83, // [83:83] is the sub-list for extension type_name
-	83, // [83:83] is the sub-list for extension extendee
-	0,  // [0:83] is the sub-list for field type_name
+	44, // 23: client.v0.Session.expires_at:type_name -> google.protobuf.Timestamp
+	44, // 24: client.v0.Session.warning_at:type_name -> google.protobuf.Timestamp
+	45, // 25: client.v0.Session.renewal:type_name -> client.v0.Restriction
+	44, // 26: client.v0.SessionLoginBrowserAction.expires_at:type_name -> google.protobuf.Timestamp
+	13, // 27: client.v0.SessionLoginAttempt.phase:type_name -> client.v0.SessionLoginPhase
+	46, // 28: client.v0.SessionLoginAttempt.metadata:type_name -> client.v0.SnapshotMetadata
+	44, // 29: client.v0.SessionLoginAttempt.created_at:type_name -> google.protobuf.Timestamp
+	44, // 30: client.v0.SessionLoginAttempt.deadline:type_name -> google.protobuf.Timestamp
+	24, // 31: client.v0.SessionLoginAttempt.browser_action:type_name -> client.v0.SessionLoginBrowserAction
+	45, // 32: client.v0.SessionLoginAttempt.restriction:type_name -> client.v0.Restriction
+	23, // 33: client.v0.SessionLoginAttempt.session:type_name -> client.v0.Session
+	0,  // 34: client.v0.Recovery.state:type_name -> client.v0.ServiceState
+	47, // 35: client.v0.Recovery.failure:type_name -> client.v0.Failure
+	4,  // 36: client.v0.PathCandidate.kind:type_name -> client.v0.PathKind
+	5,  // 37: client.v0.PathCandidate.health:type_name -> client.v0.PathHealth
+	48, // 38: client.v0.PathCandidate.rtt:type_name -> google.protobuf.Duration
+	44, // 39: client.v0.PathCandidate.checked_at:type_name -> google.protobuf.Timestamp
+	44, // 40: client.v0.PathCandidate.last_reachable_at:type_name -> google.protobuf.Timestamp
+	29, // 41: client.v0.Peer.candidates:type_name -> client.v0.PathCandidate
+	4,  // 42: client.v0.Peer.selected_path:type_name -> client.v0.PathKind
+	44, // 43: client.v0.Peer.last_transition_at:type_name -> google.protobuf.Timestamp
+	31, // 44: client.v0.Peer.transport:type_name -> client.v0.PeerTransportStatus
+	4,  // 45: client.v0.PeerTransportStatus.selected_path:type_name -> client.v0.PathKind
+	14, // 46: client.v0.PeerTransportStatus.search_state:type_name -> client.v0.TransportSearchState
+	44, // 47: client.v0.PeerTransportStatus.checked_at:type_name -> google.protobuf.Timestamp
+	44, // 48: client.v0.PeerTransportStatus.next_search_at:type_name -> google.protobuf.Timestamp
+	3,  // 49: client.v0.AgentStatus.snapshot_state:type_name -> client.v0.AgentSnapshotState
+	44, // 50: client.v0.AgentStatus.generated_at:type_name -> google.protobuf.Timestamp
+	28, // 51: client.v0.AgentStatus.selected_relay:type_name -> client.v0.Endpoint
+	47, // 52: client.v0.AgentStatus.last_failure:type_name -> client.v0.Failure
+	47, // 53: client.v0.ControlProbe.failure:type_name -> client.v0.Failure
+	33, // 54: client.v0.ControlProbe.attempts:type_name -> client.v0.ControlProbe
+	46, // 55: client.v0.Status.metadata:type_name -> client.v0.SnapshotMetadata
+	0,  // 56: client.v0.Status.service_state:type_name -> client.v0.ServiceState
+	1,  // 57: client.v0.Status.control_state:type_name -> client.v0.ControlState
+	18, // 58: client.v0.Status.intent:type_name -> client.v0.ConnectionIntent
+	20, // 59: client.v0.Status.network:type_name -> client.v0.Network
+	19, // 60: client.v0.Status.stored_state:type_name -> client.v0.StoredStatePresence
+	26, // 61: client.v0.Status.recovery:type_name -> client.v0.Recovery
+	23, // 62: client.v0.Status.session:type_name -> client.v0.Session
+	32, // 63: client.v0.Status.agent:type_name -> client.v0.AgentStatus
+	33, // 64: client.v0.Status.control:type_name -> client.v0.ControlProbe
+	28, // 65: client.v0.Status.stun_endpoints:type_name -> client.v0.Endpoint
+	28, // 66: client.v0.Status.relay_endpoints:type_name -> client.v0.Endpoint
+	47, // 67: client.v0.Status.failures:type_name -> client.v0.Failure
+	12, // 68: client.v0.Status.connection_phase:type_name -> client.v0.ConnectionPhase
+	22, // 69: client.v0.Status.credential:type_name -> client.v0.CredentialStatus
+	31, // 70: client.v0.Status.peer_transports:type_name -> client.v0.PeerTransportStatus
+	44, // 71: client.v0.TunnelPeer.latest_handshake:type_name -> google.protobuf.Timestamp
+	48, // 72: client.v0.TunnelPeer.persistent_keepalive:type_name -> google.protobuf.Duration
+	35, // 73: client.v0.TunnelInspection.peers:type_name -> client.v0.TunnelPeer
+	47, // 74: client.v0.TunnelInspection.failure:type_name -> client.v0.Failure
+	47, // 75: client.v0.Interface.failure:type_name -> client.v0.Failure
+	47, // 76: client.v0.RouteInspection.failure:type_name -> client.v0.Failure
+	48, // 77: client.v0.DnsDiagnostics.ttl:type_name -> google.protobuf.Duration
+	40, // 78: client.v0.DnsDiagnostics.records:type_name -> client.v0.DnsRecord
+	44, // 79: client.v0.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
+	46, // 80: client.v0.Diagnostics.metadata:type_name -> client.v0.SnapshotMetadata
+	49, // 81: client.v0.Diagnostics.client:type_name -> client.v0.BuildIdentity
+	34, // 82: client.v0.Diagnostics.status:type_name -> client.v0.Status
+	36, // 83: client.v0.Diagnostics.tunnel:type_name -> client.v0.TunnelInspection
+	37, // 84: client.v0.Diagnostics.interfaces:type_name -> client.v0.Interface
+	38, // 85: client.v0.Diagnostics.routes:type_name -> client.v0.RouteInspection
+	39, // 86: client.v0.Diagnostics.route_conflicts:type_name -> client.v0.RouteConflict
+	41, // 87: client.v0.Diagnostics.dns:type_name -> client.v0.DnsDiagnostics
+	42, // 88: client.v0.Diagnostics.recent_logs:type_name -> client.v0.LogEntry
+	47, // 89: client.v0.Diagnostics.failures:type_name -> client.v0.Failure
+	30, // 90: client.v0.Diagnostics.peers:type_name -> client.v0.Peer
+	91, // [91:91] is the sub-list for method output_type
+	91, // [91:91] is the sub-list for method input_type
+	91, // [91:91] is the sub-list for extension type_name
+	91, // [91:91] is the sub-list for extension extendee
+	0,  // [0:91] is the sub-list for field type_name
 }
 
 func init() { file_client_v0_runtime_proto_init() }
@@ -4104,8 +4394,8 @@ func file_client_v0_runtime_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v0_runtime_proto_rawDesc), len(file_client_v0_runtime_proto_rawDesc)),
-			NumEnums:      14,
-			NumMessages:   27,
+			NumEnums:      15,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

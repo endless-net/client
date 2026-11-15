@@ -108,6 +108,10 @@ class Capability extends $pb.ProtobufEnum {
   static const Capability CAPABILITY_SUPPORT_INFO =
       Capability._(17, _omitEnumNames ? '' : 'CAPABILITY_SUPPORT_INFO');
 
+  /// Explicit same-user browser login, separate from seamless renewal.
+  static const Capability CAPABILITY_SESSION_LOGIN =
+      Capability._(18, _omitEnumNames ? '' : 'CAPABILITY_SESSION_LOGIN');
+
   static const $core.List<Capability> values = <Capability>[
     CAPABILITY_UNSPECIFIED,
     CAPABILITY_ENROLLMENT,
@@ -127,10 +131,11 @@ class Capability extends $pb.ProtobufEnum {
     CAPABILITY_RUNTIME_LIFECYCLE,
     CAPABILITY_UPDATE_DISCOVERY,
     CAPABILITY_SUPPORT_INFO,
+    CAPABILITY_SESSION_LOGIN,
   ];
 
   static final $core.List<Capability?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 17);
+      $pb.ProtobufEnum.$_initByValueList(values, 18);
   static Capability? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 

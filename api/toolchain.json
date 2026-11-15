@@ -141,5 +141,35 @@
     "descriptor_sha256": "b3ea18b22699e414d979e685dae6a639c0b3a1df787dadb63e09c87f4039ba17",
     "generated_files": 20,
     "generation_environment": "Ubuntu26.04 / Go1.27.4 / Buf1.50.0 / pinned local plugins / Dart3.13.5; two byte-identical generations"
+  },
+  "system_003_session_login": {
+    "status": "api-release-candidate",
+    "target_api_tag": "api/v0.7.0",
+    "baseline_tag": "api/v0.6.0",
+    "baseline_revision": "72817ee22ba3017643f551a03a85f313ae7621e7",
+    "runtime_adopted": false,
+    "scope": "provider-neutral same-user explicit native login of a registered profile; no Enroll/Connect/Node credential claim",
+    "rpc_cutover": {
+      "removed": [
+        "RenewSession",
+        "WaitSessionRenewal"
+      ],
+      "added": [
+        "StartSessionLogin",
+        "GetSessionLogin"
+      ],
+      "current_projection": "GetSessionResponse.login_attempt"
+    },
+    "capability": "CAPABILITY_SESSION_LOGIN=18",
+    "access": "OS owner only; no initial ownership claim",
+    "lookup": "decoded oneof attempt_id/request_id/current=true; pure snapshot; standard binary last-wins",
+    "input_validation": "Go typed-shape validators; canonical nonzero lowercase UUIDs; unknown fields rejected; runtime authority/replay/CAS enforced separately",
+    "deadlines": "original local login bound at most 600s; authoritative server expiry may shorten; no retry/restart extension",
+    "retention": "persist request IDs and public outcomes within existing protected-state capacity; reject new start before dispatch on capacity failure; no eviction/reset",
+    "secrets_exported": false,
+    "generated_manifest_sha256": "72211ae791221cd754ccefd6dd522dfe5dc36a52e5276219ac40f75c927aa551",
+    "descriptor_sha256": "89d0be4956ad399cdae24065f32016db210c19ad593ae1b1d29351ddfc00c933",
+    "generated_files": 20,
+    "generation_environment": "Ubuntu26.04.1 / Go1.27.4 / Buf1.50.0 / pinned local plugins / Dart3.13.5; two byte-identical generations"
   }
 }

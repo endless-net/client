@@ -3732,10 +3732,12 @@ class GetSessionResponse extends $pb.GeneratedMessage {
   factory GetSessionResponse({
     $2.Session? session,
     $1.SnapshotMetadata? metadata,
+    $2.SessionLoginAttempt? loginAttempt,
   }) {
     final result = create();
     if (session != null) result.session = session;
     if (metadata != null) result.metadata = metadata;
+    if (loginAttempt != null) result.loginAttempt = loginAttempt;
     return result;
   }
 
@@ -3756,6 +3758,8 @@ class GetSessionResponse extends $pb.GeneratedMessage {
         subBuilder: $2.Session.create)
     ..aOM<$1.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
         subBuilder: $1.SnapshotMetadata.create)
+    ..aOM<$2.SessionLoginAttempt>(3, _omitFieldNames ? '' : 'loginAttempt',
+        subBuilder: $2.SessionLoginAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3798,56 +3802,72 @@ class GetSessionResponse extends $pb.GeneratedMessage {
   void clearMetadata() => $_clearField(2);
   @$pb.TagNumber(2)
   $1.SnapshotMetadata ensureMetadata() => $_ensure(1);
+
+  /// Current persisted attempt when present; reading never starts a login.
+  @$pb.TagNumber(3)
+  $2.SessionLoginAttempt get loginAttempt => $_getN(2);
+  @$pb.TagNumber(3)
+  set loginAttempt($2.SessionLoginAttempt value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasLoginAttempt() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearLoginAttempt() => $_clearField(3);
+  @$pb.TagNumber(3)
+  $2.SessionLoginAttempt ensureLoginAttempt() => $_ensure(2);
 }
 
-class RenewSessionRequest extends $pb.GeneratedMessage {
-  factory RenewSessionRequest({
+class StartSessionLoginRequest extends $pb.GeneratedMessage {
+  factory StartSessionLoginRequest({
     $1.MutationContext? mutation,
     $1.ProfileRef? profile,
+    $core.String? requestId,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
     if (profile != null) result.profile = profile;
+    if (requestId != null) result.requestId = requestId;
     return result;
   }
 
-  RenewSessionRequest._();
+  StartSessionLoginRequest._();
 
-  factory RenewSessionRequest.fromBuffer($core.List<$core.int> data,
+  factory StartSessionLoginRequest.fromBuffer($core.List<$core.int> data,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromBuffer(data, registry);
-  factory RenewSessionRequest.fromJson($core.String json,
+  factory StartSessionLoginRequest.fromJson($core.String json,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromJson(json, registry);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
-      _omitMessageNames ? '' : 'RenewSessionRequest',
+      _omitMessageNames ? '' : 'StartSessionLoginRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
     ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
         subBuilder: $1.MutationContext.create)
     ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
         subBuilder: $1.ProfileRef.create)
+    ..aOS(3, _omitFieldNames ? '' : 'requestId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  RenewSessionRequest clone() => deepCopy();
+  StartSessionLoginRequest clone() => deepCopy();
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  RenewSessionRequest copyWith(void Function(RenewSessionRequest) updates) =>
-      super.copyWith((message) => updates(message as RenewSessionRequest))
-          as RenewSessionRequest;
+  StartSessionLoginRequest copyWith(
+          void Function(StartSessionLoginRequest) updates) =>
+      super.copyWith((message) => updates(message as StartSessionLoginRequest))
+          as StartSessionLoginRequest;
 
   @$core.override
   $pb.BuilderInfo get info_ => _i;
 
   @$core.pragma('dart2js:noInline')
-  static RenewSessionRequest create() => RenewSessionRequest._();
+  static StartSessionLoginRequest create() => StartSessionLoginRequest._();
   @$core.override
-  RenewSessionRequest createEmptyInstance() => create();
+  StartSessionLoginRequest createEmptyInstance() => create();
   @$core.pragma('dart2js:noInline')
-  static RenewSessionRequest getDefault() => _defaultInstance ??=
-      $pb.GeneratedMessage.$_defaultFor<RenewSessionRequest>(create);
-  static RenewSessionRequest? _defaultInstance;
+  static StartSessionLoginRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<StartSessionLoginRequest>(create);
+  static StartSessionLoginRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
   $1.MutationContext get mutation => $_getN(0);
@@ -3870,159 +3890,152 @@ class RenewSessionRequest extends $pb.GeneratedMessage {
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
   $1.ProfileRef ensureProfile() => $_ensure(1);
+
+  /// Canonical UUID persisted before dispatch; bound to owner/profile.
+  /// Matching retry returns the original attempt before stale CAS rejection;
+  /// changed binding conflicts. A new request must satisfy current CAS.
+  @$pb.TagNumber(3)
+  $core.String get requestId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set requestId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRequestId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRequestId() => $_clearField(3);
 }
 
-enum RenewSessionResponse_Result { renewal, browserLogin, notSet }
-
-class RenewSessionResponse extends $pb.GeneratedMessage {
-  factory RenewSessionResponse({
-    $1.RenewalResult? renewal,
-    $1.BrowserLoginChallenge? browserLogin,
-    $1.ConnectionContinuity? continuity,
+class StartSessionLoginResponse extends $pb.GeneratedMessage {
+  factory StartSessionLoginResponse({
+    $2.SessionLoginAttempt? attempt,
   }) {
     final result = create();
-    if (renewal != null) result.renewal = renewal;
-    if (browserLogin != null) result.browserLogin = browserLogin;
-    if (continuity != null) result.continuity = continuity;
+    if (attempt != null) result.attempt = attempt;
     return result;
   }
 
-  RenewSessionResponse._();
+  StartSessionLoginResponse._();
 
-  factory RenewSessionResponse.fromBuffer($core.List<$core.int> data,
+  factory StartSessionLoginResponse.fromBuffer($core.List<$core.int> data,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromBuffer(data, registry);
-  factory RenewSessionResponse.fromJson($core.String json,
+  factory StartSessionLoginResponse.fromJson($core.String json,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromJson(json, registry);
 
-  static const $core.Map<$core.int, RenewSessionResponse_Result>
-      _RenewSessionResponse_ResultByTag = {
-    1: RenewSessionResponse_Result.renewal,
-    2: RenewSessionResponse_Result.browserLogin,
-    0: RenewSessionResponse_Result.notSet
-  };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
-      _omitMessageNames ? '' : 'RenewSessionResponse',
+      _omitMessageNames ? '' : 'StartSessionLoginResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..oo(0, [1, 2])
-    ..aOM<$1.RenewalResult>(1, _omitFieldNames ? '' : 'renewal',
-        subBuilder: $1.RenewalResult.create)
-    ..aOM<$1.BrowserLoginChallenge>(2, _omitFieldNames ? '' : 'browserLogin',
-        subBuilder: $1.BrowserLoginChallenge.create)
-    ..aE<$1.ConnectionContinuity>(3, _omitFieldNames ? '' : 'continuity',
-        enumValues: $1.ConnectionContinuity.values)
+    ..aOM<$2.SessionLoginAttempt>(1, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $2.SessionLoginAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  RenewSessionResponse clone() => deepCopy();
+  StartSessionLoginResponse clone() => deepCopy();
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  RenewSessionResponse copyWith(void Function(RenewSessionResponse) updates) =>
-      super.copyWith((message) => updates(message as RenewSessionResponse))
-          as RenewSessionResponse;
+  StartSessionLoginResponse copyWith(
+          void Function(StartSessionLoginResponse) updates) =>
+      super.copyWith((message) => updates(message as StartSessionLoginResponse))
+          as StartSessionLoginResponse;
 
   @$core.override
   $pb.BuilderInfo get info_ => _i;
 
   @$core.pragma('dart2js:noInline')
-  static RenewSessionResponse create() => RenewSessionResponse._();
+  static StartSessionLoginResponse create() => StartSessionLoginResponse._();
   @$core.override
-  RenewSessionResponse createEmptyInstance() => create();
+  StartSessionLoginResponse createEmptyInstance() => create();
   @$core.pragma('dart2js:noInline')
-  static RenewSessionResponse getDefault() => _defaultInstance ??=
-      $pb.GeneratedMessage.$_defaultFor<RenewSessionResponse>(create);
-  static RenewSessionResponse? _defaultInstance;
+  static StartSessionLoginResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<StartSessionLoginResponse>(create);
+  static StartSessionLoginResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  @$pb.TagNumber(2)
-  RenewSessionResponse_Result whichResult() =>
-      _RenewSessionResponse_ResultByTag[$_whichOneof(0)]!;
+  $2.SessionLoginAttempt get attempt => $_getN(0);
   @$pb.TagNumber(1)
-  @$pb.TagNumber(2)
-  void clearResult() => $_clearField($_whichOneof(0));
-
+  set attempt($2.SessionLoginAttempt value) => $_setField(1, value);
   @$pb.TagNumber(1)
-  $1.RenewalResult get renewal => $_getN(0);
+  $core.bool hasAttempt() => $_has(0);
   @$pb.TagNumber(1)
-  set renewal($1.RenewalResult value) => $_setField(1, value);
+  void clearAttempt() => $_clearField(1);
   @$pb.TagNumber(1)
-  $core.bool hasRenewal() => $_has(0);
-  @$pb.TagNumber(1)
-  void clearRenewal() => $_clearField(1);
-  @$pb.TagNumber(1)
-  $1.RenewalResult ensureRenewal() => $_ensure(0);
-
-  @$pb.TagNumber(2)
-  $1.BrowserLoginChallenge get browserLogin => $_getN(1);
-  @$pb.TagNumber(2)
-  set browserLogin($1.BrowserLoginChallenge value) => $_setField(2, value);
-  @$pb.TagNumber(2)
-  $core.bool hasBrowserLogin() => $_has(1);
-  @$pb.TagNumber(2)
-  void clearBrowserLogin() => $_clearField(2);
-  @$pb.TagNumber(2)
-  $1.BrowserLoginChallenge ensureBrowserLogin() => $_ensure(1);
-
-  /// Set for a direct renewal; browser renewal reports continuity when it ends.
-  @$pb.TagNumber(3)
-  $1.ConnectionContinuity get continuity => $_getN(2);
-  @$pb.TagNumber(3)
-  set continuity($1.ConnectionContinuity value) => $_setField(3, value);
-  @$pb.TagNumber(3)
-  $core.bool hasContinuity() => $_has(2);
-  @$pb.TagNumber(3)
-  void clearContinuity() => $_clearField(3);
+  $2.SessionLoginAttempt ensureAttempt() => $_ensure(0);
 }
 
-class WaitSessionRenewalRequest extends $pb.GeneratedMessage {
-  factory WaitSessionRenewalRequest({
+enum GetSessionLoginRequest_Selector { attemptId, requestId, current, notSet }
+
+class GetSessionLoginRequest extends $pb.GeneratedMessage {
+  factory GetSessionLoginRequest({
     $1.ProfileRef? profile,
-    $core.String? userCode,
+    $core.String? attemptId,
+    $core.String? requestId,
+    $core.bool? current,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
-    if (userCode != null) result.userCode = userCode;
+    if (attemptId != null) result.attemptId = attemptId;
+    if (requestId != null) result.requestId = requestId;
+    if (current != null) result.current = current;
     return result;
   }
 
-  WaitSessionRenewalRequest._();
+  GetSessionLoginRequest._();
 
-  factory WaitSessionRenewalRequest.fromBuffer($core.List<$core.int> data,
+  factory GetSessionLoginRequest.fromBuffer($core.List<$core.int> data,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromBuffer(data, registry);
-  factory WaitSessionRenewalRequest.fromJson($core.String json,
+  factory GetSessionLoginRequest.fromJson($core.String json,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromJson(json, registry);
 
+  static const $core.Map<$core.int, GetSessionLoginRequest_Selector>
+      _GetSessionLoginRequest_SelectorByTag = {
+    2: GetSessionLoginRequest_Selector.attemptId,
+    3: GetSessionLoginRequest_Selector.requestId,
+    4: GetSessionLoginRequest_Selector.current,
+    0: GetSessionLoginRequest_Selector.notSet
+  };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
-      _omitMessageNames ? '' : 'WaitSessionRenewalRequest',
+      _omitMessageNames ? '' : 'GetSessionLoginRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
+    ..oo(0, [2, 3, 4])
     ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
         subBuilder: $1.ProfileRef.create)
-    ..aOS(2, _omitFieldNames ? '' : 'userCode')
+    ..aOS(2, _omitFieldNames ? '' : 'attemptId')
+    ..aOS(3, _omitFieldNames ? '' : 'requestId')
+    ..aOB(4, _omitFieldNames ? '' : 'current')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  WaitSessionRenewalRequest clone() => deepCopy();
+  GetSessionLoginRequest clone() => deepCopy();
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  WaitSessionRenewalRequest copyWith(
-          void Function(WaitSessionRenewalRequest) updates) =>
-      super.copyWith((message) => updates(message as WaitSessionRenewalRequest))
-          as WaitSessionRenewalRequest;
+  GetSessionLoginRequest copyWith(
+          void Function(GetSessionLoginRequest) updates) =>
+      super.copyWith((message) => updates(message as GetSessionLoginRequest))
+          as GetSessionLoginRequest;
 
   @$core.override
   $pb.BuilderInfo get info_ => _i;
 
   @$core.pragma('dart2js:noInline')
-  static WaitSessionRenewalRequest create() => WaitSessionRenewalRequest._();
+  static GetSessionLoginRequest create() => GetSessionLoginRequest._();
   @$core.override
-  WaitSessionRenewalRequest createEmptyInstance() => create();
+  GetSessionLoginRequest createEmptyInstance() => create();
   @$core.pragma('dart2js:noInline')
-  static WaitSessionRenewalRequest getDefault() => _defaultInstance ??=
-      $pb.GeneratedMessage.$_defaultFor<WaitSessionRenewalRequest>(create);
-  static WaitSessionRenewalRequest? _defaultInstance;
+  static GetSessionLoginRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetSessionLoginRequest>(create);
+  static GetSessionLoginRequest? _defaultInstance;
+
+  @$pb.TagNumber(2)
+  @$pb.TagNumber(3)
+  @$pb.TagNumber(4)
+  GetSessionLoginRequest_Selector whichSelector() =>
+      _GetSessionLoginRequest_SelectorByTag[$_whichOneof(0)]!;
+  @$pb.TagNumber(2)
+  @$pb.TagNumber(3)
+  @$pb.TagNumber(4)
+  void clearSelector() => $_clearField($_whichOneof(0));
 
   @$pb.TagNumber(1)
   $1.ProfileRef get profile => $_getN(0);
@@ -4035,87 +4048,90 @@ class WaitSessionRenewalRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(1)
   $1.ProfileRef ensureProfile() => $_ensure(0);
 
-  /// Identity-provider user code returned by RenewSession.
   @$pb.TagNumber(2)
-  $core.String get userCode => $_getSZ(1);
+  $core.String get attemptId => $_getSZ(1);
   @$pb.TagNumber(2)
-  set userCode($core.String value) => $_setString(1, value);
+  set attemptId($core.String value) => $_setString(1, value);
   @$pb.TagNumber(2)
-  $core.bool hasUserCode() => $_has(1);
+  $core.bool hasAttemptId() => $_has(1);
   @$pb.TagNumber(2)
-  void clearUserCode() => $_clearField(2);
+  void clearAttemptId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get requestId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set requestId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRequestId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRequestId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get current => $_getBF(3);
+  @$pb.TagNumber(4)
+  set current($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasCurrent() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearCurrent() => $_clearField(4);
 }
 
-class WaitSessionRenewalResponse extends $pb.GeneratedMessage {
-  factory WaitSessionRenewalResponse({
-    $1.RenewalResult? renewal,
-    $1.ConnectionContinuity? continuity,
+class GetSessionLoginResponse extends $pb.GeneratedMessage {
+  factory GetSessionLoginResponse({
+    $2.SessionLoginAttempt? attempt,
   }) {
     final result = create();
-    if (renewal != null) result.renewal = renewal;
-    if (continuity != null) result.continuity = continuity;
+    if (attempt != null) result.attempt = attempt;
     return result;
   }
 
-  WaitSessionRenewalResponse._();
+  GetSessionLoginResponse._();
 
-  factory WaitSessionRenewalResponse.fromBuffer($core.List<$core.int> data,
+  factory GetSessionLoginResponse.fromBuffer($core.List<$core.int> data,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromBuffer(data, registry);
-  factory WaitSessionRenewalResponse.fromJson($core.String json,
+  factory GetSessionLoginResponse.fromJson($core.String json,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromJson(json, registry);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
-      _omitMessageNames ? '' : 'WaitSessionRenewalResponse',
+      _omitMessageNames ? '' : 'GetSessionLoginResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.RenewalResult>(1, _omitFieldNames ? '' : 'renewal',
-        subBuilder: $1.RenewalResult.create)
-    ..aE<$1.ConnectionContinuity>(2, _omitFieldNames ? '' : 'continuity',
-        enumValues: $1.ConnectionContinuity.values)
+    ..aOM<$2.SessionLoginAttempt>(1, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $2.SessionLoginAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  WaitSessionRenewalResponse clone() => deepCopy();
+  GetSessionLoginResponse clone() => deepCopy();
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  WaitSessionRenewalResponse copyWith(
-          void Function(WaitSessionRenewalResponse) updates) =>
-      super.copyWith(
-              (message) => updates(message as WaitSessionRenewalResponse))
-          as WaitSessionRenewalResponse;
+  GetSessionLoginResponse copyWith(
+          void Function(GetSessionLoginResponse) updates) =>
+      super.copyWith((message) => updates(message as GetSessionLoginResponse))
+          as GetSessionLoginResponse;
 
   @$core.override
   $pb.BuilderInfo get info_ => _i;
 
   @$core.pragma('dart2js:noInline')
-  static WaitSessionRenewalResponse create() => WaitSessionRenewalResponse._();
+  static GetSessionLoginResponse create() => GetSessionLoginResponse._();
   @$core.override
-  WaitSessionRenewalResponse createEmptyInstance() => create();
+  GetSessionLoginResponse createEmptyInstance() => create();
   @$core.pragma('dart2js:noInline')
-  static WaitSessionRenewalResponse getDefault() => _defaultInstance ??=
-      $pb.GeneratedMessage.$_defaultFor<WaitSessionRenewalResponse>(create);
-  static WaitSessionRenewalResponse? _defaultInstance;
+  static GetSessionLoginResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetSessionLoginResponse>(create);
+  static GetSessionLoginResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.RenewalResult get renewal => $_getN(0);
+  $2.SessionLoginAttempt get attempt => $_getN(0);
   @$pb.TagNumber(1)
-  set renewal($1.RenewalResult value) => $_setField(1, value);
+  set attempt($2.SessionLoginAttempt value) => $_setField(1, value);
   @$pb.TagNumber(1)
-  $core.bool hasRenewal() => $_has(0);
+  $core.bool hasAttempt() => $_has(0);
   @$pb.TagNumber(1)
-  void clearRenewal() => $_clearField(1);
+  void clearAttempt() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.RenewalResult ensureRenewal() => $_ensure(0);
-
-  @$pb.TagNumber(2)
-  $1.ConnectionContinuity get continuity => $_getN(1);
-  @$pb.TagNumber(2)
-  set continuity($1.ConnectionContinuity value) => $_setField(2, value);
-  @$pb.TagNumber(2)
-  $core.bool hasContinuity() => $_has(1);
-  @$pb.TagNumber(2)
-  void clearContinuity() => $_clearField(2);
+  $2.SessionLoginAttempt ensureAttempt() => $_ensure(0);
 }
 
 class ListExitNodesRequest extends $pb.GeneratedMessage {

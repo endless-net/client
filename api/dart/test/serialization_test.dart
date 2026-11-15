@@ -4,6 +4,71 @@ import 'package:protobuf/protobuf.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('session login has durable correlation without provider codes', () {
+    const requestId = '611fb038-329c-4de5-872a-89bcab17287a';
+    final start = StartSessionLoginRequest(
+      mutation: MutationContext(
+        expectedInstanceId: 'instance-fixture',
+        expectedRevision: Int64(7),
+      ),
+      requestId: requestId,
+    );
+    expect(
+      start
+          .writeToBuffer()
+          .map((v) => v.toRadixString(16).padLeft(2, '0'))
+          .join(),
+      '0a140a10696e7374616e63652d6669787475726510071a2436313166623033382d333239632d346465352d383732612d383962636162313732383761',
+    );
+    final decoded = StartSessionLoginRequest.fromBuffer(start.writeToBuffer());
+    expect(decoded.requestId, requestId);
+    expect(decoded.mutation.expectedRevision, Int64(7));
+    final attempt = SessionLoginAttempt(
+      attemptId: '3d8bdf1c-b741-438e-b908-471e4e2a60da',
+      requestId: requestId,
+      profileId: '127c154d-e193-4994-9e42-26cd53ddf358',
+      phase: SessionLoginPhase.SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION,
+      browserAction: SessionLoginBrowserAction(
+        verificationUrl:
+            'https://admin.example/api/v1/auth/native-login/3d8bdf1c-b741-438e-b908-471e4e2a60da',
+      ),
+      pollAfterSeconds: 1,
+    );
+    final response = GetSessionResponse(loginAttempt: attempt);
+    final restored = GetSessionResponse.fromBuffer(response.writeToBuffer());
+    expect(restored.loginAttempt.requestId, requestId);
+    expect(
+      restored.loginAttempt.phase,
+      SessionLoginPhase.SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION,
+    );
+    expect(restored.loginAttempt.hasSession(), isFalse);
+    expect(Capability.CAPABILITY_SESSION_LOGIN.value, 18);
+  });
+  test('session login lookup retains selector presence and last wins', () {
+    for (final value in [true, false]) {
+      final lookup = GetSessionLoginRequest(current: value);
+      expect(lookup.writeToBuffer(), [0x20, value ? 1 : 0]);
+      final decoded = GetSessionLoginRequest.fromBuffer(lookup.writeToBuffer());
+      expect(decoded.whichSelector(), GetSessionLoginRequest_Selector.current);
+      expect(decoded.current, value);
+      expect(decoded.hasRequestId(), isFalse);
+      expect(decoded.hasAttemptId(), isFalse);
+    }
+    expect(
+      GetSessionLoginRequest().whichSelector(),
+      GetSessionLoginRequest_Selector.notSet,
+    );
+    final request = GetSessionLoginRequest(
+      requestId: '611fb038-329c-4de5-872a-89bcab17287a',
+    );
+    final decoded = GetSessionLoginRequest.fromBuffer([
+      ...GetSessionLoginRequest(current: true).writeToBuffer(),
+      ...request.writeToBuffer(),
+    ]);
+    expect(decoded.whichSelector(), GetSessionLoginRequest_Selector.requestId);
+    expect(decoded.requestId, request.requestId);
+    expect(decoded.hasCurrent(), isFalse);
+  });
   test('sole node local readiness is distinct from peer connectivity', () {
     final status = Status(
       serviceState: ServiceState.SERVICE_STATE_LOCAL_READY,

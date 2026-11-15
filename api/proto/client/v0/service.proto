@@ -133,12 +133,13 @@ service ClientService {
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse) {
     option (access) = ACCESS_OWNER;
   }
-  // UF-17: no caller-supplied callback URL or browser credential.
-  rpc RenewSession(RenewSessionRequest) returns (RenewSessionResponse) {
+  // Explicit same-user login of a registered profile; never Enroll/Connect.
+  // Persist the request UUID before dispatch. Exact retries keep one attempt.
+  rpc StartSessionLogin(StartSessionLoginRequest) returns (StartSessionLoginResponse) {
     option (access) = ACCESS_OWNER;
   }
-  // Complete an identity-provider browser login started by RenewSession.
-  rpc WaitSessionRenewal(WaitSessionRenewalRequest) returns (WaitSessionRenewalResponse) {
+  // Pure owner snapshot: no claim, mutation, remote I/O or worker wake.
+  rpc GetSessionLogin(GetSessionLoginRequest) returns (GetSessionLoginResponse) {
     option (access) = ACCESS_OWNER;
   }
   // UF-08: list authorized consumer-side egress choices.
@@ -478,31 +479,36 @@ message GetSessionRequest {
 message GetSessionResponse {
   Session session = 1;
   SnapshotMetadata metadata = 2;
+  // Current persisted attempt when present; reading never starts a login.
+  SessionLoginAttempt login_attempt = 3;
 }
 
-message RenewSessionRequest {
+message StartSessionLoginRequest {
   MutationContext mutation = 1;
   ProfileRef profile = 2;
+  // Canonical UUID persisted before dispatch; bound to owner/profile.
+  // Matching retry returns the original attempt before stale CAS rejection;
+  // changed binding conflicts. A new request must satisfy current CAS.
+  string request_id = 3;
 }
 
-message RenewSessionResponse {
-  oneof result {
-    RenewalResult renewal = 1;
-    BrowserLoginChallenge browser_login = 2;
-  }
-  // Set for a direct renewal; browser renewal reports continuity when it ends.
-  ConnectionContinuity continuity = 3;
+message StartSessionLoginResponse {
+  SessionLoginAttempt attempt = 1;
 }
 
-message WaitSessionRenewalRequest {
+message GetSessionLoginRequest {
   ProfileRef profile = 1;
-  // Identity-provider user code returned by RenewSession.
-  string user_code = 2;
+  // Exactly one decoded selector; standard Protobuf last-wins on binary wire.
+  // Missing/false current -> InvalidArgument; missing attempt -> NotFound.
+  oneof selector {
+    string attempt_id = 2;
+    string request_id = 3;
+    bool current = 4;
+  }
 }
 
-message WaitSessionRenewalResponse {
-  RenewalResult renewal = 1;
-  ConnectionContinuity continuity = 2;
+message GetSessionLoginResponse {
+  SessionLoginAttempt attempt = 1;
 }
 
 message ListExitNodesRequest {

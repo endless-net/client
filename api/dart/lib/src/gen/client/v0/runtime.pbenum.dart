@@ -463,6 +463,53 @@ class ConnectionPhase extends $pb.ProtobufEnum {
   const ConnectionPhase._(super.value, super.name);
 }
 
+/// Explicit login of the original registered user. This never creates a Node,
+/// replaces enrollment identity or implies successful Node credential renewal.
+class SessionLoginPhase extends $pb.ProtobufEnum {
+  static const SessionLoginPhase SESSION_LOGIN_PHASE_UNSPECIFIED =
+      SessionLoginPhase._(
+          0, _omitEnumNames ? '' : 'SESSION_LOGIN_PHASE_UNSPECIFIED');
+  static const SessionLoginPhase SESSION_LOGIN_PHASE_PREPARING =
+      SessionLoginPhase._(
+          1, _omitEnumNames ? '' : 'SESSION_LOGIN_PHASE_PREPARING');
+  static const SessionLoginPhase SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION =
+      SessionLoginPhase._(
+          2, _omitEnumNames ? '' : 'SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION');
+  static const SessionLoginPhase SESSION_LOGIN_PHASE_SUCCEEDED =
+      SessionLoginPhase._(
+          3, _omitEnumNames ? '' : 'SESSION_LOGIN_PHASE_SUCCEEDED');
+  static const SessionLoginPhase SESSION_LOGIN_PHASE_DENIED =
+      SessionLoginPhase._(
+          4, _omitEnumNames ? '' : 'SESSION_LOGIN_PHASE_DENIED');
+  static const SessionLoginPhase SESSION_LOGIN_PHASE_EXPIRED =
+      SessionLoginPhase._(
+          5, _omitEnumNames ? '' : 'SESSION_LOGIN_PHASE_EXPIRED');
+  static const SessionLoginPhase SESSION_LOGIN_PHASE_FAILED =
+      SessionLoginPhase._(
+          6, _omitEnumNames ? '' : 'SESSION_LOGIN_PHASE_FAILED');
+  static const SessionLoginPhase SESSION_LOGIN_PHASE_UNCERTAIN =
+      SessionLoginPhase._(
+          7, _omitEnumNames ? '' : 'SESSION_LOGIN_PHASE_UNCERTAIN');
+
+  static const $core.List<SessionLoginPhase> values = <SessionLoginPhase>[
+    SESSION_LOGIN_PHASE_UNSPECIFIED,
+    SESSION_LOGIN_PHASE_PREPARING,
+    SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION,
+    SESSION_LOGIN_PHASE_SUCCEEDED,
+    SESSION_LOGIN_PHASE_DENIED,
+    SESSION_LOGIN_PHASE_EXPIRED,
+    SESSION_LOGIN_PHASE_FAILED,
+    SESSION_LOGIN_PHASE_UNCERTAIN,
+  ];
+
+  static final $core.List<SessionLoginPhase?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 7);
+  static SessionLoginPhase? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const SessionLoginPhase._(super.value, super.name);
+}
+
 /// Public observation only: no raw profile, obfuscation key, nonce or network
 /// fingerprint. A selected transport is not evidence of application availability.
 class TransportSearchState extends $pb.ProtobufEnum {

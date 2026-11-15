@@ -121,12 +121,12 @@ const (
 	// ClientServiceGetSessionProcedure is the fully-qualified name of the ClientService's GetSession
 	// RPC.
 	ClientServiceGetSessionProcedure = "/client.v0.ClientService/GetSession"
-	// ClientServiceRenewSessionProcedure is the fully-qualified name of the ClientService's
-	// RenewSession RPC.
-	ClientServiceRenewSessionProcedure = "/client.v0.ClientService/RenewSession"
-	// ClientServiceWaitSessionRenewalProcedure is the fully-qualified name of the ClientService's
-	// WaitSessionRenewal RPC.
-	ClientServiceWaitSessionRenewalProcedure = "/client.v0.ClientService/WaitSessionRenewal"
+	// ClientServiceStartSessionLoginProcedure is the fully-qualified name of the ClientService's
+	// StartSessionLogin RPC.
+	ClientServiceStartSessionLoginProcedure = "/client.v0.ClientService/StartSessionLogin"
+	// ClientServiceGetSessionLoginProcedure is the fully-qualified name of the ClientService's
+	// GetSessionLogin RPC.
+	ClientServiceGetSessionLoginProcedure = "/client.v0.ClientService/GetSessionLogin"
 	// ClientServiceListExitNodesProcedure is the fully-qualified name of the ClientService's
 	// ListExitNodes RPC.
 	ClientServiceListExitNodesProcedure = "/client.v0.ClientService/ListExitNodes"
@@ -230,10 +230,11 @@ type ClientServiceClient interface {
 	RemoveProfile(context.Context, *connect.Request[v0.RemoveProfileRequest]) (*connect.Response[v0.RemoveProfileResponse], error)
 	// UF-17: expiry, warning deadline and renewal availability.
 	GetSession(context.Context, *connect.Request[v0.GetSessionRequest]) (*connect.Response[v0.GetSessionResponse], error)
-	// UF-17: no caller-supplied callback URL or browser credential.
-	RenewSession(context.Context, *connect.Request[v0.RenewSessionRequest]) (*connect.Response[v0.RenewSessionResponse], error)
-	// Complete an identity-provider browser login started by RenewSession.
-	WaitSessionRenewal(context.Context, *connect.Request[v0.WaitSessionRenewalRequest]) (*connect.Response[v0.WaitSessionRenewalResponse], error)
+	// Explicit same-user login of a registered profile; never Enroll/Connect.
+	// Persist the request UUID before dispatch. Exact retries keep one attempt.
+	StartSessionLogin(context.Context, *connect.Request[v0.StartSessionLoginRequest]) (*connect.Response[v0.StartSessionLoginResponse], error)
+	// Pure owner snapshot: no claim, mutation, remote I/O or worker wake.
+	GetSessionLogin(context.Context, *connect.Request[v0.GetSessionLoginRequest]) (*connect.Response[v0.GetSessionLoginResponse], error)
 	// UF-08: list authorized consumer-side egress choices.
 	ListExitNodes(context.Context, *connect.Request[v0.ListExitNodesRequest]) (*connect.Response[v0.ListExitNodesResponse], error)
 	// UF-08: requested/effective selection, LAN policy and apply outcome.
@@ -453,16 +454,16 @@ func NewClientServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(clientServiceMethods.ByName("GetSession")),
 			connect.WithClientOptions(opts...),
 		),
-		renewSession: connect.NewClient[v0.RenewSessionRequest, v0.RenewSessionResponse](
+		startSessionLogin: connect.NewClient[v0.StartSessionLoginRequest, v0.StartSessionLoginResponse](
 			httpClient,
-			baseURL+ClientServiceRenewSessionProcedure,
-			connect.WithSchema(clientServiceMethods.ByName("RenewSession")),
+			baseURL+ClientServiceStartSessionLoginProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("StartSessionLogin")),
 			connect.WithClientOptions(opts...),
 		),
-		waitSessionRenewal: connect.NewClient[v0.WaitSessionRenewalRequest, v0.WaitSessionRenewalResponse](
+		getSessionLogin: connect.NewClient[v0.GetSessionLoginRequest, v0.GetSessionLoginResponse](
 			httpClient,
-			baseURL+ClientServiceWaitSessionRenewalProcedure,
-			connect.WithSchema(clientServiceMethods.ByName("WaitSessionRenewal")),
+			baseURL+ClientServiceGetSessionLoginProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("GetSessionLogin")),
 			connect.WithClientOptions(opts...),
 		),
 		listExitNodes: connect.NewClient[v0.ListExitNodesRequest, v0.ListExitNodesResponse](
@@ -578,8 +579,8 @@ type clientServiceClient struct {
 	renameProfile             *connect.Client[v0.RenameProfileRequest, v0.RenameProfileResponse]
 	removeProfile             *connect.Client[v0.RemoveProfileRequest, v0.RemoveProfileResponse]
 	getSession                *connect.Client[v0.GetSessionRequest, v0.GetSessionResponse]
-	renewSession              *connect.Client[v0.RenewSessionRequest, v0.RenewSessionResponse]
-	waitSessionRenewal        *connect.Client[v0.WaitSessionRenewalRequest, v0.WaitSessionRenewalResponse]
+	startSessionLogin         *connect.Client[v0.StartSessionLoginRequest, v0.StartSessionLoginResponse]
+	getSessionLogin           *connect.Client[v0.GetSessionLoginRequest, v0.GetSessionLoginResponse]
 	listExitNodes             *connect.Client[v0.ListExitNodesRequest, v0.ListExitNodesResponse]
 	getExitNode               *connect.Client[v0.GetExitNodeRequest, v0.GetExitNodeResponse]
 	selectExitNode            *connect.Client[v0.SelectExitNodeRequest, v0.SelectExitNodeResponse]
@@ -745,14 +746,14 @@ func (c *clientServiceClient) GetSession(ctx context.Context, req *connect.Reque
 	return c.getSession.CallUnary(ctx, req)
 }
 
-// RenewSession calls client.v0.ClientService.RenewSession.
-func (c *clientServiceClient) RenewSession(ctx context.Context, req *connect.Request[v0.RenewSessionRequest]) (*connect.Response[v0.RenewSessionResponse], error) {
-	return c.renewSession.CallUnary(ctx, req)
+// StartSessionLogin calls client.v0.ClientService.StartSessionLogin.
+func (c *clientServiceClient) StartSessionLogin(ctx context.Context, req *connect.Request[v0.StartSessionLoginRequest]) (*connect.Response[v0.StartSessionLoginResponse], error) {
+	return c.startSessionLogin.CallUnary(ctx, req)
 }
 
-// WaitSessionRenewal calls client.v0.ClientService.WaitSessionRenewal.
-func (c *clientServiceClient) WaitSessionRenewal(ctx context.Context, req *connect.Request[v0.WaitSessionRenewalRequest]) (*connect.Response[v0.WaitSessionRenewalResponse], error) {
-	return c.waitSessionRenewal.CallUnary(ctx, req)
+// GetSessionLogin calls client.v0.ClientService.GetSessionLogin.
+func (c *clientServiceClient) GetSessionLogin(ctx context.Context, req *connect.Request[v0.GetSessionLoginRequest]) (*connect.Response[v0.GetSessionLoginResponse], error) {
+	return c.getSessionLogin.CallUnary(ctx, req)
 }
 
 // ListExitNodes calls client.v0.ClientService.ListExitNodes.
@@ -882,10 +883,11 @@ type ClientServiceHandler interface {
 	RemoveProfile(context.Context, *connect.Request[v0.RemoveProfileRequest]) (*connect.Response[v0.RemoveProfileResponse], error)
 	// UF-17: expiry, warning deadline and renewal availability.
 	GetSession(context.Context, *connect.Request[v0.GetSessionRequest]) (*connect.Response[v0.GetSessionResponse], error)
-	// UF-17: no caller-supplied callback URL or browser credential.
-	RenewSession(context.Context, *connect.Request[v0.RenewSessionRequest]) (*connect.Response[v0.RenewSessionResponse], error)
-	// Complete an identity-provider browser login started by RenewSession.
-	WaitSessionRenewal(context.Context, *connect.Request[v0.WaitSessionRenewalRequest]) (*connect.Response[v0.WaitSessionRenewalResponse], error)
+	// Explicit same-user login of a registered profile; never Enroll/Connect.
+	// Persist the request UUID before dispatch. Exact retries keep one attempt.
+	StartSessionLogin(context.Context, *connect.Request[v0.StartSessionLoginRequest]) (*connect.Response[v0.StartSessionLoginResponse], error)
+	// Pure owner snapshot: no claim, mutation, remote I/O or worker wake.
+	GetSessionLogin(context.Context, *connect.Request[v0.GetSessionLoginRequest]) (*connect.Response[v0.GetSessionLoginResponse], error)
 	// UF-08: list authorized consumer-side egress choices.
 	ListExitNodes(context.Context, *connect.Request[v0.ListExitNodesRequest]) (*connect.Response[v0.ListExitNodesResponse], error)
 	// UF-08: requested/effective selection, LAN policy and apply outcome.
@@ -1101,16 +1103,16 @@ func NewClientServiceHandler(svc ClientServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(clientServiceMethods.ByName("GetSession")),
 		connect.WithHandlerOptions(opts...),
 	)
-	clientServiceRenewSessionHandler := connect.NewUnaryHandler(
-		ClientServiceRenewSessionProcedure,
-		svc.RenewSession,
-		connect.WithSchema(clientServiceMethods.ByName("RenewSession")),
+	clientServiceStartSessionLoginHandler := connect.NewUnaryHandler(
+		ClientServiceStartSessionLoginProcedure,
+		svc.StartSessionLogin,
+		connect.WithSchema(clientServiceMethods.ByName("StartSessionLogin")),
 		connect.WithHandlerOptions(opts...),
 	)
-	clientServiceWaitSessionRenewalHandler := connect.NewUnaryHandler(
-		ClientServiceWaitSessionRenewalProcedure,
-		svc.WaitSessionRenewal,
-		connect.WithSchema(clientServiceMethods.ByName("WaitSessionRenewal")),
+	clientServiceGetSessionLoginHandler := connect.NewUnaryHandler(
+		ClientServiceGetSessionLoginProcedure,
+		svc.GetSessionLogin,
+		connect.WithSchema(clientServiceMethods.ByName("GetSessionLogin")),
 		connect.WithHandlerOptions(opts...),
 	)
 	clientServiceListExitNodesHandler := connect.NewUnaryHandler(
@@ -1253,10 +1255,10 @@ func NewClientServiceHandler(svc ClientServiceHandler, opts ...connect.HandlerOp
 			clientServiceRemoveProfileHandler.ServeHTTP(w, r)
 		case ClientServiceGetSessionProcedure:
 			clientServiceGetSessionHandler.ServeHTTP(w, r)
-		case ClientServiceRenewSessionProcedure:
-			clientServiceRenewSessionHandler.ServeHTTP(w, r)
-		case ClientServiceWaitSessionRenewalProcedure:
-			clientServiceWaitSessionRenewalHandler.ServeHTTP(w, r)
+		case ClientServiceStartSessionLoginProcedure:
+			clientServiceStartSessionLoginHandler.ServeHTTP(w, r)
+		case ClientServiceGetSessionLoginProcedure:
+			clientServiceGetSessionLoginHandler.ServeHTTP(w, r)
 		case ClientServiceListExitNodesProcedure:
 			clientServiceListExitNodesHandler.ServeHTTP(w, r)
 		case ClientServiceGetExitNodeProcedure:
@@ -1412,12 +1414,12 @@ func (UnimplementedClientServiceHandler) GetSession(context.Context, *connect.Re
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.GetSession is not implemented"))
 }
 
-func (UnimplementedClientServiceHandler) RenewSession(context.Context, *connect.Request[v0.RenewSessionRequest]) (*connect.Response[v0.RenewSessionResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.RenewSession is not implemented"))
+func (UnimplementedClientServiceHandler) StartSessionLogin(context.Context, *connect.Request[v0.StartSessionLoginRequest]) (*connect.Response[v0.StartSessionLoginResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.StartSessionLogin is not implemented"))
 }
 
-func (UnimplementedClientServiceHandler) WaitSessionRenewal(context.Context, *connect.Request[v0.WaitSessionRenewalRequest]) (*connect.Response[v0.WaitSessionRenewalResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.WaitSessionRenewal is not implemented"))
+func (UnimplementedClientServiceHandler) GetSessionLogin(context.Context, *connect.Request[v0.GetSessionLoginRequest]) (*connect.Response[v0.GetSessionLoginResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.GetSessionLogin is not implemented"))
 }
 
 func (UnimplementedClientServiceHandler) ListExitNodes(context.Context, *connect.Request[v0.ListExitNodesRequest]) (*connect.Response[v0.ListExitNodesResponse], error) {

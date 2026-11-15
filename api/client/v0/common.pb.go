@@ -159,6 +159,8 @@ const (
 	Capability_CAPABILITY_RUNTIME_LIFECYCLE Capability = 15
 	Capability_CAPABILITY_UPDATE_DISCOVERY  Capability = 16
 	Capability_CAPABILITY_SUPPORT_INFO      Capability = 17
+	// Explicit same-user browser login, separate from seamless renewal.
+	Capability_CAPABILITY_SESSION_LOGIN Capability = 18
 )
 
 // Enum value maps for Capability.
@@ -182,6 +184,7 @@ var (
 		15: "CAPABILITY_RUNTIME_LIFECYCLE",
 		16: "CAPABILITY_UPDATE_DISCOVERY",
 		17: "CAPABILITY_SUPPORT_INFO",
+		18: "CAPABILITY_SESSION_LOGIN",
 	}
 	Capability_value = map[string]int32{
 		"CAPABILITY_UNSPECIFIED":       0,
@@ -202,6 +205,7 @@ var (
 		"CAPABILITY_RUNTIME_LIFECYCLE": 15,
 		"CAPABILITY_UPDATE_DISCOVERY":  16,
 		"CAPABILITY_SUPPORT_INFO":      17,
+		"CAPABILITY_SESSION_LOGIN":     18,
 	}
 )
 
@@ -1295,50 +1299,6 @@ func (x *CleanupResult) GetLocalRegistrationRemoved() bool {
 	return false
 }
 
-type RenewalResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RenewalResult) Reset() {
-	*x = RenewalResult{}
-	mi := &file_client_v0_common_proto_msgTypes[12]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RenewalResult) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RenewalResult) ProtoMessage() {}
-
-func (x *RenewalResult) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_common_proto_msgTypes[12]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RenewalResult.ProtoReflect.Descriptor instead.
-func (*RenewalResult) Descriptor() ([]byte, []int) {
-	return file_client_v0_common_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *RenewalResult) GetExpiresAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.ExpiresAt
-	}
-	return nil
-}
-
 type BundleResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Opaque, caller-bound handle; never an arbitrary filesystem path.
@@ -1354,7 +1314,7 @@ type BundleResult struct {
 
 func (x *BundleResult) Reset() {
 	*x = BundleResult{}
-	mi := &file_client_v0_common_proto_msgTypes[13]
+	mi := &file_client_v0_common_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1366,7 +1326,7 @@ func (x *BundleResult) String() string {
 func (*BundleResult) ProtoMessage() {}
 
 func (x *BundleResult) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_common_proto_msgTypes[13]
+	mi := &file_client_v0_common_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1379,7 +1339,7 @@ func (x *BundleResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BundleResult.ProtoReflect.Descriptor instead.
 func (*BundleResult) Descriptor() ([]byte, []int) {
-	return file_client_v0_common_proto_rawDescGZIP(), []int{13}
+	return file_client_v0_common_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *BundleResult) GetBundleId() string {
@@ -1424,76 +1384,6 @@ func (x *BundleResult) GetReused() bool {
 	return false
 }
 
-// Browser challenge belongs to enrollment or session renewal, never to a
-// generic command journal. The user code is issued by the identity provider.
-type BrowserLoginChallenge struct {
-	state                   protoimpl.MessageState `protogen:"open.v1"`
-	UserCode                string                 `protobuf:"bytes,1,opt,name=user_code,json=userCode,proto3" json:"user_code,omitempty"`
-	VerificationUri         string                 `protobuf:"bytes,2,opt,name=verification_uri,json=verificationUri,proto3" json:"verification_uri,omitempty"`
-	VerificationUriComplete string                 `protobuf:"bytes,3,opt,name=verification_uri_complete,json=verificationUriComplete,proto3" json:"verification_uri_complete,omitempty"`
-	ExpiresAt               *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
-}
-
-func (x *BrowserLoginChallenge) Reset() {
-	*x = BrowserLoginChallenge{}
-	mi := &file_client_v0_common_proto_msgTypes[14]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *BrowserLoginChallenge) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*BrowserLoginChallenge) ProtoMessage() {}
-
-func (x *BrowserLoginChallenge) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_common_proto_msgTypes[14]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use BrowserLoginChallenge.ProtoReflect.Descriptor instead.
-func (*BrowserLoginChallenge) Descriptor() ([]byte, []int) {
-	return file_client_v0_common_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *BrowserLoginChallenge) GetUserCode() string {
-	if x != nil {
-		return x.UserCode
-	}
-	return ""
-}
-
-func (x *BrowserLoginChallenge) GetVerificationUri() string {
-	if x != nil {
-		return x.VerificationUri
-	}
-	return ""
-}
-
-func (x *BrowserLoginChallenge) GetVerificationUriComplete() string {
-	if x != nil {
-		return x.VerificationUriComplete
-	}
-	return ""
-}
-
-func (x *BrowserLoginChallenge) GetExpiresAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.ExpiresAt
-	}
-	return nil
-}
-
 type PageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PageSize      uint32                 `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`   // 0 = 100; max 500.
@@ -1504,7 +1394,7 @@ type PageRequest struct {
 
 func (x *PageRequest) Reset() {
 	*x = PageRequest{}
-	mi := &file_client_v0_common_proto_msgTypes[15]
+	mi := &file_client_v0_common_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1516,7 +1406,7 @@ func (x *PageRequest) String() string {
 func (*PageRequest) ProtoMessage() {}
 
 func (x *PageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_common_proto_msgTypes[15]
+	mi := &file_client_v0_common_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1529,7 +1419,7 @@ func (x *PageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PageRequest.ProtoReflect.Descriptor instead.
 func (*PageRequest) Descriptor() ([]byte, []int) {
-	return file_client_v0_common_proto_rawDescGZIP(), []int{15}
+	return file_client_v0_common_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *PageRequest) GetPageSize() uint32 {
@@ -1556,7 +1446,7 @@ type PageResponse struct {
 
 func (x *PageResponse) Reset() {
 	*x = PageResponse{}
-	mi := &file_client_v0_common_proto_msgTypes[16]
+	mi := &file_client_v0_common_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1568,7 +1458,7 @@ func (x *PageResponse) String() string {
 func (*PageResponse) ProtoMessage() {}
 
 func (x *PageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_common_proto_msgTypes[16]
+	mi := &file_client_v0_common_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1581,7 +1471,7 @@ func (x *PageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PageResponse.ProtoReflect.Descriptor instead.
 func (*PageResponse) Descriptor() ([]byte, []int) {
-	return file_client_v0_common_proto_rawDescGZIP(), []int{16}
+	return file_client_v0_common_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PageResponse) GetNextPageToken() string {
@@ -1694,10 +1584,7 @@ const file_client_v0_common_proto_rawDesc = "" +
 	"selectedId\"\x82\x01\n" +
 	"\rCleanupResult\x123\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2\x19.client.v0.CleanupOutcomeR\aoutcome\x12<\n" +
-	"\x1alocal_registration_removed\x18\x02 \x01(\bR\x18localRegistrationRemoved\"J\n" +
-	"\rRenewalResult\x129\n" +
-	"\n" +
-	"expires_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xf0\x01\n" +
+	"\x1alocal_registration_removed\x18\x02 \x01(\bR\x18localRegistrationRemoved\"\xf0\x01\n" +
 	"\fBundleResult\x12\x1b\n" +
 	"\tbundle_id\x18\x01 \x01(\tR\bbundleId\x129\n" +
 	"\n" +
@@ -1707,13 +1594,7 @@ const file_client_v0_common_proto_rawDesc = "" +
 	"\n" +
 	"size_bytes\x18\x04 \x01(\x04R\tsizeBytes\x12\x16\n" +
 	"\x06sha256\x18\x05 \x01(\tR\x06sha256\x12\x16\n" +
-	"\x06reused\x18\x06 \x01(\bR\x06reused\"\xd6\x01\n" +
-	"\x15BrowserLoginChallenge\x12\x1b\n" +
-	"\tuser_code\x18\x01 \x01(\tR\buserCode\x12)\n" +
-	"\x10verification_uri\x18\x02 \x01(\tR\x0fverificationUri\x12:\n" +
-	"\x19verification_uri_complete\x18\x03 \x01(\tR\x17verificationUriComplete\x129\n" +
-	"\n" +
-	"expires_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"I\n" +
+	"\x06reused\x18\x06 \x01(\bR\x06reused\"I\n" +
 	"\vPageRequest\x12\x1b\n" +
 	"\tpage_size\x18\x01 \x01(\rR\bpageSize\x12\x1d\n" +
 	"\n" +
@@ -1732,7 +1613,7 @@ const file_client_v0_common_proto_rawDesc = "" +
 	"\x0ePLATFORM_MACOS\x10\x02\x12\x12\n" +
 	"\x0ePLATFORM_LINUX\x10\x03\x12\x14\n" +
 	"\x10PLATFORM_ANDROID\x10\x04\x12\x10\n" +
-	"\fPLATFORM_IOS\x10\x05*\x92\x04\n" +
+	"\fPLATFORM_IOS\x10\x05*\xb0\x04\n" +
 	"\n" +
 	"Capability\x12\x1a\n" +
 	"\x16CAPABILITY_UNSPECIFIED\x10\x00\x12\x19\n" +
@@ -1753,7 +1634,8 @@ const file_client_v0_common_proto_rawDesc = "" +
 	"\x1bCAPABILITY_MANAGED_SETTINGS\x10\x0e\x12 \n" +
 	"\x1cCAPABILITY_RUNTIME_LIFECYCLE\x10\x0f\x12\x1f\n" +
 	"\x1bCAPABILITY_UPDATE_DISCOVERY\x10\x10\x12\x1b\n" +
-	"\x17CAPABILITY_SUPPORT_INFO\x10\x11*\xd7\x01\n" +
+	"\x17CAPABILITY_SUPPORT_INFO\x10\x11\x12\x1c\n" +
+	"\x18CAPABILITY_SESSION_LOGIN\x10\x12*\xd7\x01\n" +
 	"\fAvailability\x12\x1c\n" +
 	"\x18AVAILABILITY_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16AVAILABILITY_AVAILABLE\x10\x01\x12\x1c\n" +
@@ -1824,7 +1706,7 @@ func file_client_v0_common_proto_rawDescGZIP() []byte {
 }
 
 var file_client_v0_common_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
-var file_client_v0_common_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_client_v0_common_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_client_v0_common_proto_goTypes = []any{
 	(Access)(0),                        // 0: client.v0.Access
 	(Platform)(0),                      // 1: client.v0.Platform
@@ -1846,14 +1728,12 @@ var file_client_v0_common_proto_goTypes = []any{
 	(*ProfileResult)(nil),              // 17: client.v0.ProfileResult
 	(*SelectionResult)(nil),            // 18: client.v0.SelectionResult
 	(*CleanupResult)(nil),              // 19: client.v0.CleanupResult
-	(*RenewalResult)(nil),              // 20: client.v0.RenewalResult
-	(*BundleResult)(nil),               // 21: client.v0.BundleResult
-	(*BrowserLoginChallenge)(nil),      // 22: client.v0.BrowserLoginChallenge
-	(*PageRequest)(nil),                // 23: client.v0.PageRequest
-	(*PageResponse)(nil),               // 24: client.v0.PageResponse
-	(*timestamppb.Timestamp)(nil),      // 25: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),        // 26: google.protobuf.Duration
-	(*descriptorpb.MethodOptions)(nil), // 27: google.protobuf.MethodOptions
+	(*BundleResult)(nil),               // 20: client.v0.BundleResult
+	(*PageRequest)(nil),                // 21: client.v0.PageRequest
+	(*PageResponse)(nil),               // 22: client.v0.PageResponse
+	(*timestamppb.Timestamp)(nil),      // 23: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),        // 24: google.protobuf.Duration
+	(*descriptorpb.MethodOptions)(nil), // 25: google.protobuf.MethodOptions
 }
 var file_client_v0_common_proto_depIdxs = []int32{
 	3,  // 0: client.v0.Restriction.availability:type_name -> client.v0.Availability
@@ -1865,24 +1745,22 @@ var file_client_v0_common_proto_depIdxs = []int32{
 	10, // 6: client.v0.RuntimeInfo.build:type_name -> client.v0.BuildIdentity
 	9,  // 7: client.v0.RuntimeInfo.capabilities:type_name -> client.v0.CapabilityStatus
 	0,  // 8: client.v0.RuntimeInfo.caller_access:type_name -> client.v0.Access
-	25, // 9: client.v0.SnapshotMetadata.generated_at:type_name -> google.protobuf.Timestamp
+	23, // 9: client.v0.SnapshotMetadata.generated_at:type_name -> google.protobuf.Timestamp
 	5,  // 10: client.v0.Failure.code:type_name -> client.v0.ErrorCode
-	26, // 11: client.v0.Failure.retry_after:type_name -> google.protobuf.Duration
+	24, // 11: client.v0.Failure.retry_after:type_name -> google.protobuf.Duration
 	4,  // 12: client.v0.Failure.action_owner:type_name -> client.v0.ActionOwner
 	7,  // 13: client.v0.CleanupResult.outcome:type_name -> client.v0.CleanupOutcome
-	25, // 14: client.v0.RenewalResult.expires_at:type_name -> google.protobuf.Timestamp
-	25, // 15: client.v0.BundleResult.created_at:type_name -> google.protobuf.Timestamp
-	25, // 16: client.v0.BundleResult.expires_at:type_name -> google.protobuf.Timestamp
-	25, // 17: client.v0.BrowserLoginChallenge.expires_at:type_name -> google.protobuf.Timestamp
-	12, // 18: client.v0.PageResponse.metadata:type_name -> client.v0.SnapshotMetadata
-	27, // 19: client.v0.access:extendee -> google.protobuf.MethodOptions
-	27, // 20: client.v0.allows_initial_ownership_claim:extendee -> google.protobuf.MethodOptions
-	0,  // 21: client.v0.access:type_name -> client.v0.Access
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	21, // [21:22] is the sub-list for extension type_name
-	19, // [19:21] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	23, // 14: client.v0.BundleResult.created_at:type_name -> google.protobuf.Timestamp
+	23, // 15: client.v0.BundleResult.expires_at:type_name -> google.protobuf.Timestamp
+	12, // 16: client.v0.PageResponse.metadata:type_name -> client.v0.SnapshotMetadata
+	25, // 17: client.v0.access:extendee -> google.protobuf.MethodOptions
+	25, // 18: client.v0.allows_initial_ownership_claim:extendee -> google.protobuf.MethodOptions
+	0,  // 19: client.v0.access:type_name -> client.v0.Access
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	19, // [19:20] is the sub-list for extension type_name
+	17, // [17:19] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_client_v0_common_proto_init() }
@@ -1896,7 +1774,7 @@ func file_client_v0_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v0_common_proto_rawDesc), len(file_client_v0_common_proto_rawDesc)),
 			NumEnums:      8,
-			NumMessages:   17,
+			NumMessages:   15,
 			NumExtensions: 2,
 			NumServices:   0,
 		},

@@ -282,20 +282,21 @@ class ClientServiceClient extends $grpc.Client {
     return $createUnaryCall(_$getSession, request, options: options);
   }
 
-  /// UF-17: no caller-supplied callback URL or browser credential.
-  $grpc.ResponseFuture<$0.RenewSessionResponse> renewSession(
-    $0.RenewSessionRequest request, {
+  /// Explicit same-user login of a registered profile; never Enroll/Connect.
+  /// Persist the request UUID before dispatch. Exact retries keep one attempt.
+  $grpc.ResponseFuture<$0.StartSessionLoginResponse> startSessionLogin(
+    $0.StartSessionLoginRequest request, {
     $grpc.CallOptions? options,
   }) {
-    return $createUnaryCall(_$renewSession, request, options: options);
+    return $createUnaryCall(_$startSessionLogin, request, options: options);
   }
 
-  /// Complete an identity-provider browser login started by RenewSession.
-  $grpc.ResponseFuture<$0.WaitSessionRenewalResponse> waitSessionRenewal(
-    $0.WaitSessionRenewalRequest request, {
+  /// Pure owner snapshot: no claim, mutation, remote I/O or worker wake.
+  $grpc.ResponseFuture<$0.GetSessionLoginResponse> getSessionLogin(
+    $0.GetSessionLoginRequest request, {
     $grpc.CallOptions? options,
   }) {
-    return $createUnaryCall(_$waitSessionRenewal, request, options: options);
+    return $createUnaryCall(_$getSessionLogin, request, options: options);
   }
 
   /// UF-08: list authorized consumer-side egress choices.
@@ -557,16 +558,16 @@ class ClientServiceClient extends $grpc.Client {
           '/client.v0.ClientService/GetSession',
           ($0.GetSessionRequest value) => value.writeToBuffer(),
           $0.GetSessionResponse.fromBuffer);
-  static final _$renewSession =
-      $grpc.ClientMethod<$0.RenewSessionRequest, $0.RenewSessionResponse>(
-          '/client.v0.ClientService/RenewSession',
-          ($0.RenewSessionRequest value) => value.writeToBuffer(),
-          $0.RenewSessionResponse.fromBuffer);
-  static final _$waitSessionRenewal = $grpc.ClientMethod<
-          $0.WaitSessionRenewalRequest, $0.WaitSessionRenewalResponse>(
-      '/client.v0.ClientService/WaitSessionRenewal',
-      ($0.WaitSessionRenewalRequest value) => value.writeToBuffer(),
-      $0.WaitSessionRenewalResponse.fromBuffer);
+  static final _$startSessionLogin = $grpc.ClientMethod<
+          $0.StartSessionLoginRequest, $0.StartSessionLoginResponse>(
+      '/client.v0.ClientService/StartSessionLogin',
+      ($0.StartSessionLoginRequest value) => value.writeToBuffer(),
+      $0.StartSessionLoginResponse.fromBuffer);
+  static final _$getSessionLogin =
+      $grpc.ClientMethod<$0.GetSessionLoginRequest, $0.GetSessionLoginResponse>(
+          '/client.v0.ClientService/GetSessionLogin',
+          ($0.GetSessionLoginRequest value) => value.writeToBuffer(),
+          $0.GetSessionLoginResponse.fromBuffer);
   static final _$listExitNodes =
       $grpc.ClientMethod<$0.ListExitNodesRequest, $0.ListExitNodesResponse>(
           '/client.v0.ClientService/ListExitNodes',
@@ -895,24 +896,24 @@ abstract class ClientServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.GetSessionRequest.fromBuffer(value),
         ($0.GetSessionResponse value) => value.writeToBuffer()));
-    $addMethod(
-        $grpc.ServiceMethod<$0.RenewSessionRequest, $0.RenewSessionResponse>(
-            'RenewSession',
-            renewSession_Pre,
-            false,
-            false,
-            ($core.List<$core.int> value) =>
-                $0.RenewSessionRequest.fromBuffer(value),
-            ($0.RenewSessionResponse value) => value.writeToBuffer()));
-    $addMethod($grpc.ServiceMethod<$0.WaitSessionRenewalRequest,
-            $0.WaitSessionRenewalResponse>(
-        'WaitSessionRenewal',
-        waitSessionRenewal_Pre,
+    $addMethod($grpc.ServiceMethod<$0.StartSessionLoginRequest,
+            $0.StartSessionLoginResponse>(
+        'StartSessionLogin',
+        startSessionLogin_Pre,
         false,
         false,
         ($core.List<$core.int> value) =>
-            $0.WaitSessionRenewalRequest.fromBuffer(value),
-        ($0.WaitSessionRenewalResponse value) => value.writeToBuffer()));
+            $0.StartSessionLoginRequest.fromBuffer(value),
+        ($0.StartSessionLoginResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetSessionLoginRequest,
+            $0.GetSessionLoginResponse>(
+        'GetSessionLogin',
+        getSessionLogin_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetSessionLoginRequest.fromBuffer(value),
+        ($0.GetSessionLoginResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.ListExitNodesRequest, $0.ListExitNodesResponse>(
             'ListExitNodes',
@@ -1294,23 +1295,23 @@ abstract class ClientServiceBase extends $grpc.Service {
   $async.Future<$0.GetSessionResponse> getSession(
       $grpc.ServiceCall call, $0.GetSessionRequest request);
 
-  $async.Future<$0.RenewSessionResponse> renewSession_Pre(
+  $async.Future<$0.StartSessionLoginResponse> startSessionLogin_Pre(
       $grpc.ServiceCall $call,
-      $async.Future<$0.RenewSessionRequest> $request) async {
-    return renewSession($call, await $request);
+      $async.Future<$0.StartSessionLoginRequest> $request) async {
+    return startSessionLogin($call, await $request);
   }
 
-  $async.Future<$0.RenewSessionResponse> renewSession(
-      $grpc.ServiceCall call, $0.RenewSessionRequest request);
+  $async.Future<$0.StartSessionLoginResponse> startSessionLogin(
+      $grpc.ServiceCall call, $0.StartSessionLoginRequest request);
 
-  $async.Future<$0.WaitSessionRenewalResponse> waitSessionRenewal_Pre(
+  $async.Future<$0.GetSessionLoginResponse> getSessionLogin_Pre(
       $grpc.ServiceCall $call,
-      $async.Future<$0.WaitSessionRenewalRequest> $request) async {
-    return waitSessionRenewal($call, await $request);
+      $async.Future<$0.GetSessionLoginRequest> $request) async {
+    return getSessionLogin($call, await $request);
   }
 
-  $async.Future<$0.WaitSessionRenewalResponse> waitSessionRenewal(
-      $grpc.ServiceCall call, $0.WaitSessionRenewalRequest request);
+  $async.Future<$0.GetSessionLoginResponse> getSessionLogin(
+      $grpc.ServiceCall call, $0.GetSessionLoginRequest request);
 
   $async.Future<$0.ListExitNodesResponse> listExitNodes_Pre(
       $grpc.ServiceCall $call,

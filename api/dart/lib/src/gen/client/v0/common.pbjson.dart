@@ -72,6 +72,7 @@ const Capability$json = {
     {'1': 'CAPABILITY_RUNTIME_LIFECYCLE', '2': 15},
     {'1': 'CAPABILITY_UPDATE_DISCOVERY', '2': 16},
     {'1': 'CAPABILITY_SUPPORT_INFO', '2': 17},
+    {'1': 'CAPABILITY_SESSION_LOGIN', '2': 18},
   ],
 };
 
@@ -86,7 +87,8 @@ final $typed_data.Uint8List capabilityDescriptor = $convert.base64Decode(
     'U0lPTl9SRU5FV0FMEAsSGgoWQ0FQQUJJTElUWV9QUkVGRVJFTkNFUxAMEhgKFENBUEFCSUxJVF'
     'lfUkVTT1VSQ0VTEA0SHwobQ0FQQUJJTElUWV9NQU5BR0VEX1NFVFRJTkdTEA4SIAocQ0FQQUJJ'
     'TElUWV9SVU5USU1FX0xJRkVDWUNMRRAPEh8KG0NBUEFCSUxJVFlfVVBEQVRFX0RJU0NPVkVSWR'
-    'AQEhsKF0NBUEFCSUxJVFlfU1VQUE9SVF9JTkZPEBE=');
+    'AQEhsKF0NBUEFCSUxJVFlfU1VQUE9SVF9JTkZPEBESHAoYQ0FQQUJJTElUWV9TRVNTSU9OX0xP'
+    'R0lOEBI=');
 
 @$core.Deprecated('Use availabilityDescriptor instead')
 const Availability$json = {
@@ -524,26 +526,6 @@ final $typed_data.Uint8List cleanupResultDescriptor = $convert.base64Decode(
     'NvbWVSB291dGNvbWUSPAoabG9jYWxfcmVnaXN0cmF0aW9uX3JlbW92ZWQYAiABKAhSGGxvY2Fs'
     'UmVnaXN0cmF0aW9uUmVtb3ZlZA==');
 
-@$core.Deprecated('Use renewalResultDescriptor instead')
-const RenewalResult$json = {
-  '1': 'RenewalResult',
-  '2': [
-    {
-      '1': 'expires_at',
-      '3': 1,
-      '4': 1,
-      '5': 11,
-      '6': '.google.protobuf.Timestamp',
-      '10': 'expiresAt'
-    },
-  ],
-};
-
-/// Descriptor for `RenewalResult`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List renewalResultDescriptor = $convert.base64Decode(
-    'Cg1SZW5ld2FsUmVzdWx0EjkKCmV4cGlyZXNfYXQYASABKAsyGi5nb29nbGUucHJvdG9idWYuVG'
-    'ltZXN0YW1wUglleHBpcmVzQXQ=');
-
 @$core.Deprecated('Use bundleResultDescriptor instead')
 const BundleResult$json = {
   '1': 'BundleResult',
@@ -578,37 +560,6 @@ final $typed_data.Uint8List bundleResultDescriptor = $convert.base64Decode(
     'ZXNfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wUglleHBpcmVzQXQSHQoKc2'
     'l6ZV9ieXRlcxgEIAEoBFIJc2l6ZUJ5dGVzEhYKBnNoYTI1NhgFIAEoCVIGc2hhMjU2EhYKBnJl'
     'dXNlZBgGIAEoCFIGcmV1c2Vk');
-
-@$core.Deprecated('Use browserLoginChallengeDescriptor instead')
-const BrowserLoginChallenge$json = {
-  '1': 'BrowserLoginChallenge',
-  '2': [
-    {'1': 'user_code', '3': 1, '4': 1, '5': 9, '10': 'userCode'},
-    {'1': 'verification_uri', '3': 2, '4': 1, '5': 9, '10': 'verificationUri'},
-    {
-      '1': 'verification_uri_complete',
-      '3': 3,
-      '4': 1,
-      '5': 9,
-      '10': 'verificationUriComplete'
-    },
-    {
-      '1': 'expires_at',
-      '3': 4,
-      '4': 1,
-      '5': 11,
-      '6': '.google.protobuf.Timestamp',
-      '10': 'expiresAt'
-    },
-  ],
-};
-
-/// Descriptor for `BrowserLoginChallenge`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List browserLoginChallengeDescriptor = $convert.base64Decode(
-    'ChVCcm93c2VyTG9naW5DaGFsbGVuZ2USGwoJdXNlcl9jb2RlGAEgASgJUgh1c2VyQ29kZRIpCh'
-    'B2ZXJpZmljYXRpb25fdXJpGAIgASgJUg92ZXJpZmljYXRpb25VcmkSOgoZdmVyaWZpY2F0aW9u'
-    'X3VyaV9jb21wbGV0ZRgDIAEoCVIXdmVyaWZpY2F0aW9uVXJpQ29tcGxldGUSOQoKZXhwaXJlc1'
-    '9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBSCWV4cGlyZXNBdA==');
 
 @$core.Deprecated('Use pageRequestDescriptor instead')
 const PageRequest$json = {

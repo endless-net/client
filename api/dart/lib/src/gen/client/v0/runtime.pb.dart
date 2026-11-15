@@ -1235,6 +1235,277 @@ class Session extends $pb.GeneratedMessage {
   void clearSeamlessRenewalSupported() => $_clearField(5);
 }
 
+class SessionLoginBrowserAction extends $pb.GeneratedMessage {
+  factory SessionLoginBrowserAction({
+    $core.String? verificationUrl,
+    $0.Timestamp? expiresAt,
+  }) {
+    final result = create();
+    if (verificationUrl != null) result.verificationUrl = verificationUrl;
+    if (expiresAt != null) result.expiresAt = expiresAt;
+    return result;
+  }
+
+  SessionLoginBrowserAction._();
+
+  factory SessionLoginBrowserAction.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SessionLoginBrowserAction.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SessionLoginBrowserAction',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'verificationUrl')
+    ..aOM<$0.Timestamp>(2, _omitFieldNames ? '' : 'expiresAt',
+        subBuilder: $0.Timestamp.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SessionLoginBrowserAction clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SessionLoginBrowserAction copyWith(
+          void Function(SessionLoginBrowserAction) updates) =>
+      super.copyWith((message) => updates(message as SessionLoginBrowserAction))
+          as SessionLoginBrowserAction;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SessionLoginBrowserAction create() => SessionLoginBrowserAction._();
+  @$core.override
+  SessionLoginBrowserAction createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SessionLoginBrowserAction getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SessionLoginBrowserAction>(create);
+  static SessionLoginBrowserAction? _defaultInstance;
+
+  /// Trusted HTTPS URL from native Identity login; no bearer/proof/provider code.
+  @$pb.TagNumber(1)
+  $core.String get verificationUrl => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set verificationUrl($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasVerificationUrl() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearVerificationUrl() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $0.Timestamp get expiresAt => $_getN(1);
+  @$pb.TagNumber(2)
+  set expiresAt($0.Timestamp value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasExpiresAt() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearExpiresAt() => $_clearField(2);
+  @$pb.TagNumber(2)
+  $0.Timestamp ensureExpiresAt() => $_ensure(1);
+}
+
+class SessionLoginAttempt extends $pb.GeneratedMessage {
+  factory SessionLoginAttempt({
+    $core.String? attemptId,
+    $core.String? requestId,
+    $core.String? profileId,
+    SessionLoginPhase? phase,
+    $1.SnapshotMetadata? metadata,
+    $0.Timestamp? createdAt,
+    $0.Timestamp? deadline,
+    SessionLoginBrowserAction? browserAction,
+    $1.Restriction? restriction,
+    Session? session,
+    $core.int? pollAfterSeconds,
+  }) {
+    final result = create();
+    if (attemptId != null) result.attemptId = attemptId;
+    if (requestId != null) result.requestId = requestId;
+    if (profileId != null) result.profileId = profileId;
+    if (phase != null) result.phase = phase;
+    if (metadata != null) result.metadata = metadata;
+    if (createdAt != null) result.createdAt = createdAt;
+    if (deadline != null) result.deadline = deadline;
+    if (browserAction != null) result.browserAction = browserAction;
+    if (restriction != null) result.restriction = restriction;
+    if (session != null) result.session = session;
+    if (pollAfterSeconds != null) result.pollAfterSeconds = pollAfterSeconds;
+    return result;
+  }
+
+  SessionLoginAttempt._();
+
+  factory SessionLoginAttempt.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SessionLoginAttempt.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SessionLoginAttempt',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'attemptId')
+    ..aOS(2, _omitFieldNames ? '' : 'requestId')
+    ..aOS(3, _omitFieldNames ? '' : 'profileId')
+    ..aE<SessionLoginPhase>(4, _omitFieldNames ? '' : 'phase',
+        enumValues: SessionLoginPhase.values)
+    ..aOM<$1.SnapshotMetadata>(5, _omitFieldNames ? '' : 'metadata',
+        subBuilder: $1.SnapshotMetadata.create)
+    ..aOM<$0.Timestamp>(6, _omitFieldNames ? '' : 'createdAt',
+        subBuilder: $0.Timestamp.create)
+    ..aOM<$0.Timestamp>(7, _omitFieldNames ? '' : 'deadline',
+        subBuilder: $0.Timestamp.create)
+    ..aOM<SessionLoginBrowserAction>(8, _omitFieldNames ? '' : 'browserAction',
+        subBuilder: SessionLoginBrowserAction.create)
+    ..aOM<$1.Restriction>(9, _omitFieldNames ? '' : 'restriction',
+        subBuilder: $1.Restriction.create)
+    ..aOM<Session>(10, _omitFieldNames ? '' : 'session',
+        subBuilder: Session.create)
+    ..aI(11, _omitFieldNames ? '' : 'pollAfterSeconds',
+        fieldType: $pb.PbFieldType.OU3)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SessionLoginAttempt clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SessionLoginAttempt copyWith(void Function(SessionLoginAttempt) updates) =>
+      super.copyWith((message) => updates(message as SessionLoginAttempt))
+          as SessionLoginAttempt;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SessionLoginAttempt create() => SessionLoginAttempt._();
+  @$core.override
+  SessionLoginAttempt createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SessionLoginAttempt getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SessionLoginAttempt>(create);
+  static SessionLoginAttempt? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get attemptId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set attemptId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAttemptId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAttemptId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get requestId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set requestId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasRequestId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearRequestId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get profileId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set profileId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasProfileId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearProfileId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  SessionLoginPhase get phase => $_getN(3);
+  @$pb.TagNumber(4)
+  set phase(SessionLoginPhase value) => $_setField(4, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPhase() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPhase() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $1.SnapshotMetadata get metadata => $_getN(4);
+  @$pb.TagNumber(5)
+  set metadata($1.SnapshotMetadata value) => $_setField(5, value);
+  @$pb.TagNumber(5)
+  $core.bool hasMetadata() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearMetadata() => $_clearField(5);
+  @$pb.TagNumber(5)
+  $1.SnapshotMetadata ensureMetadata() => $_ensure(4);
+
+  @$pb.TagNumber(6)
+  $0.Timestamp get createdAt => $_getN(5);
+  @$pb.TagNumber(6)
+  set createdAt($0.Timestamp value) => $_setField(6, value);
+  @$pb.TagNumber(6)
+  $core.bool hasCreatedAt() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearCreatedAt() => $_clearField(6);
+  @$pb.TagNumber(6)
+  $0.Timestamp ensureCreatedAt() => $_ensure(5);
+
+  /// Original local bound, at most 10 minutes; server expiry may shorten it.
+  /// Neither duplicate Start nor restart extends this deadline.
+  @$pb.TagNumber(7)
+  $0.Timestamp get deadline => $_getN(6);
+  @$pb.TagNumber(7)
+  set deadline($0.Timestamp value) => $_setField(7, value);
+  @$pb.TagNumber(7)
+  $core.bool hasDeadline() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearDeadline() => $_clearField(7);
+  @$pb.TagNumber(7)
+  $0.Timestamp ensureDeadline() => $_ensure(6);
+
+  /// Present only while awaiting current browser confirmation.
+  @$pb.TagNumber(8)
+  SessionLoginBrowserAction get browserAction => $_getN(7);
+  @$pb.TagNumber(8)
+  set browserAction(SessionLoginBrowserAction value) => $_setField(8, value);
+  @$pb.TagNumber(8)
+  $core.bool hasBrowserAction() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearBrowserAction() => $_clearField(8);
+  @$pb.TagNumber(8)
+  SessionLoginBrowserAction ensureBrowserAction() => $_ensure(7);
+
+  @$pb.TagNumber(9)
+  $1.Restriction get restriction => $_getN(8);
+  @$pb.TagNumber(9)
+  set restriction($1.Restriction value) => $_setField(9, value);
+  @$pb.TagNumber(9)
+  $core.bool hasRestriction() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearRestriction() => $_clearField(9);
+  @$pb.TagNumber(9)
+  $1.Restriction ensureRestriction() => $_ensure(8);
+
+  /// Only SUCCEEDED, after durable same-user adoption. Not a Node receipt.
+  @$pb.TagNumber(10)
+  Session get session => $_getN(9);
+  @$pb.TagNumber(10)
+  set session(Session value) => $_setField(10, value);
+  @$pb.TagNumber(10)
+  $core.bool hasSession() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearSession() => $_clearField(10);
+  @$pb.TagNumber(10)
+  Session ensureSession() => $_ensure(9);
+
+  /// 1..30 while further polling is possible; 0 terminal/no further polling.
+  /// UNCERTAIN may remain after deadline with 0; never infer remote failure.
+  @$pb.TagNumber(11)
+  $core.int get pollAfterSeconds => $_getIZ(10);
+  @$pb.TagNumber(11)
+  set pollAfterSeconds($core.int value) => $_setUnsignedInt32(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasPollAfterSeconds() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearPollAfterSeconds() => $_clearField(11);
+}
+
 class Recovery extends $pb.GeneratedMessage {
   factory Recovery({
     ServiceState? state,

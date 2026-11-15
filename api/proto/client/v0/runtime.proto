@@ -245,6 +245,45 @@ message Session {
   bool seamless_renewal_supported = 5;
 }
 
+// Explicit login of the original registered user. This never creates a Node,
+// replaces enrollment identity or implies successful Node credential renewal.
+enum SessionLoginPhase {
+  SESSION_LOGIN_PHASE_UNSPECIFIED = 0;
+  SESSION_LOGIN_PHASE_PREPARING = 1;
+  SESSION_LOGIN_PHASE_AWAITING_CONFIRMATION = 2;
+  SESSION_LOGIN_PHASE_SUCCEEDED = 3;
+  SESSION_LOGIN_PHASE_DENIED = 4;
+  SESSION_LOGIN_PHASE_EXPIRED = 5;
+  SESSION_LOGIN_PHASE_FAILED = 6;
+  SESSION_LOGIN_PHASE_UNCERTAIN = 7;
+}
+
+message SessionLoginBrowserAction {
+  // Trusted HTTPS URL from native Identity login; no bearer/proof/provider code.
+  string verification_url = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message SessionLoginAttempt {
+  string attempt_id = 1;
+  string request_id = 2;
+  string profile_id = 3;
+  SessionLoginPhase phase = 4;
+  SnapshotMetadata metadata = 5;
+  google.protobuf.Timestamp created_at = 6;
+  // Original local bound, at most 10 minutes; server expiry may shorten it.
+  // Neither duplicate Start nor restart extends this deadline.
+  google.protobuf.Timestamp deadline = 7;
+  // Present only while awaiting current browser confirmation.
+  SessionLoginBrowserAction browser_action = 8;
+  Restriction restriction = 9;
+  // Only SUCCEEDED, after durable same-user adoption. Not a Node receipt.
+  Session session = 10;
+  // 1..30 while further polling is possible; 0 terminal/no further polling.
+  // UNCERTAIN may remain after deadline with 0; never infer remote failure.
+  uint32 poll_after_seconds = 11;
+}
+
 message Recovery {
   ServiceState state = 1;
   Failure failure = 2;
