@@ -19,6 +19,8 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 		return nil
 	}
 	switch {
+	case errors.Is(err, control.ErrNodeRenewalUnresolved):
+		return connectivity.FailureNodeRenewal
 	case errors.Is(err, control.ErrCredentialsLogin):
 		return connectivity.FailureLogin
 	case errors.Is(err, control.ErrCredentialsExpired):

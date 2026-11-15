@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/endless-net/client/internal/connectivity"
+	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/dataplane"
 )
 
@@ -18,6 +19,7 @@ func TestNativeConnectionFailuresKeepSafeActionableCategory(t *testing.T) {
 		fallback connectivity.FailureKind
 		want     error
 	}{
+		{control.ErrNodeRenewalUnresolved, connectivity.FailureApply, connectivity.FailureNodeRenewal},
 		{dataplane.ErrAdapterPermission, connectivity.FailureApply, connectivity.FailurePermission},
 		{dataplane.ErrIPPermission, connectivity.FailureApply, connectivity.FailurePermission},
 		{dataplane.ErrPolicyPermission, connectivity.FailureApply, connectivity.FailurePermission},

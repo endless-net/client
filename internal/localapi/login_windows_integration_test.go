@@ -34,6 +34,7 @@ type nativeHTTPFixture struct {
 	mu         sync.Mutex
 	tx         *identityapi.NativeLoginTransaction
 	authorized bool
+	relogin    bool
 }
 
 func (f *nativeHTTPFixture) StartNativeLogin(ctx context.Context, r *connect.Request[identityapi.StartNativeLoginRequest]) (*connect.Response[identityapi.StartNativeLoginResponse], error) {
@@ -44,7 +45,15 @@ func (f *nativeHTTPFixture) StartNativeLogin(ctx context.Context, r *connect.Req
 		return nil, err
 	}
 	p := s.Profiles[s.ActiveProfileID]
-	if !p.RemoteInFlight || r.Header().Get("Authorization") != "Bearer "+p.Secrets.RequestProof {
+	proof := p.Secrets.RequestProof
+	sent := p.RemoteInFlight
+	if f.relogin {
+		sent = p.SessionLogin != nil && !p.SessionLogin.InFlightAt.IsZero()
+		if p.SessionLogin != nil {
+			proof = p.SessionLogin.RequestProof
+		}
+	}
+	if !sent || r.Header().Get("Authorization") != "Bearer "+proof {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("fixture proof/send marker missing"))
 	}
 	if f.tx == nil {
@@ -67,6 +76,11 @@ func (f *nativeHTTPFixture) GetNativeLogin(_ context.Context, r *connect.Request
 	t.State = identityapi.NativeLoginState_NATIVE_LOGIN_STATE_AUTHORIZED
 	t.PollAfterSeconds = 0
 	t.Outcome = &identityapi.NativeLoginTransaction_Result{Result: &identityapi.NativeLoginResult{Session: &sessionv1.UserSession{SessionId: "native-session", UserId: "native-user", State: sessionv1.UserSessionState_USER_SESSION_STATE_ACTIVE, ExpiresAt: timestamppb.New(time.Now().Add(time.Hour)), RenewalSupported: true}, AccessBearer: strings.Repeat("a", 43), RenewalAuthorization: &sessionv1.SessionRenewalAuthorization{Bearer: strings.Repeat("n", 43), ExpiresAt: timestamppb.New(time.Now().Add(24 * time.Hour))}}}
+	if f.relogin {
+		t.GetResult().Session.SessionId = "new-native-session"
+		t.GetResult().AccessBearer = strings.Repeat("x", 43)
+		t.GetResult().RenewalAuthorization.Bearer = strings.Repeat("y", 43)
+	}
 	return connect.NewResponse(&identityapi.GetNativeLoginResponse{Transaction: t}), nil
 }
 func (*nativeHTTPFixture) CancelNativeLogin(context.Context, *connect.Request[identityapi.CancelNativeLoginRequest]) (*connect.Response[identityapi.CancelNativeLoginResponse], error) {

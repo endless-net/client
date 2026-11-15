@@ -37,6 +37,8 @@ type Runner interface {
 type Config struct {
 	Revocations                                       RevocationSource
 	Connections                                       ConnectionRunner
+	SessionLogins                                     Runner
+	MaxSessionLogins                                  int
 	ConnectionClock                                   connectivity.Clock
 	ConnectionObservations                            connectivity.ObservationSource
 	WatchInterval                                     time.Duration
@@ -80,6 +82,9 @@ func clearProfileKeys(s state.State) {
 }
 
 func New(store *state.Store, runner Runner, config Config) (*Controller, error) {
+	if config.SessionLogins != nil && config.MaxSessionLogins <= 0 {
+		return nil, state.ErrCorrupt
+	}
 	if config.WatchInterval < time.Millisecond || config.WatchInterval > 10*time.Second {
 		return nil, state.ErrCorrupt
 	}
@@ -138,6 +143,8 @@ func rpcError(err error) error {
 		code, typed, reason = codes.Aborted, clientv0.ErrorCode_ERROR_CODE_STALE_STATE, "client.state.stale"
 	case errors.Is(err, state.ErrUncertain):
 		reason = "client.state.write_uncertain"
+	case errors.Is(err, state.ErrCapacity):
+		code, typed, reason = codes.ResourceExhausted, clientv0.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED, "client.state.capacity"
 	case errors.Is(err, context.Canceled):
 		code, typed, reason = codes.Canceled, clientv0.ErrorCode_ERROR_CODE_CANCELLED, "client.operation.cancelled"
 	case errors.Is(err, context.DeadlineExceeded):
@@ -225,6 +232,17 @@ func (c *Controller) runtimeInfo(ctx context.Context, p localipc.Principal) (*cl
 		access = clientv0.Access_ACCESS_ADMINISTRATOR
 	}
 	capabilities := enrollmentCapabilities(s, p, c.config.Build.Platform)
+	if c.config.SessionLogins != nil {
+		restriction := &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_PERMISSION_REQUIRED, ReasonKey: "client.owner.required", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}
+		if s.OwnerSID != "" && s.OwnerSID == p.SID {
+			restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "client.session.registration_required", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}
+			profile := s.Profiles[s.ActiveProfileID]
+			if profile.Attempt != nil && profile.Attempt.Phase == enrollment.Registered {
+				restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_AVAILABLE}
+			}
+		}
+		capabilities = append(capabilities, &clientv0.CapabilityStatus{Capability: clientv0.Capability_CAPABILITY_SESSION_LOGIN, Restriction: restriction, Platform: c.config.Build.Platform})
+	}
 	if c.config.Connections != nil && c.config.ConnectionObservations != nil {
 		restriction := &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_PERMISSION_REQUIRED, ReasonKey: "client.owner.required", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}
 		if s.OwnerSID != "" && s.OwnerSID == p.SID {

@@ -27,6 +27,7 @@ func (*workerShutdown) Unwrap() error { return context.Canceled }
 type Workers struct {
 	mu                          sync.Mutex
 	ipc, enrollment, connection func(context.Context) error
+	sessionLogin                func(context.Context) error
 	shutdown                    fx.Shutdowner
 	signals                     *Signals
 	cancel                      context.CancelCauseFunc
@@ -36,13 +37,19 @@ type Workers struct {
 }
 
 // NewWorkers starts nothing and copies no private application implementation.
-// All three loops are mandatory and must return on context cancellation. Fx must be
+// All configured loops are mandatory and must return on context cancellation. Fx must be
 // configured with explicit startup/stop budgets by the complete application.
-func NewWorkers(lifecycle fx.Lifecycle, shutdown fx.Shutdowner, signals *Signals, ipc, enrollment, connection func(context.Context) error) (*Workers, error) {
+func NewWorkers(lifecycle fx.Lifecycle, shutdown fx.Shutdowner, signals *Signals, ipc, enrollment, connection func(context.Context) error, sessionLogin ...func(context.Context) error) (*Workers, error) {
+	if len(sessionLogin) > 1 || len(sessionLogin) == 1 && sessionLogin[0] == nil {
+		return nil, ErrLifecycle
+	}
 	if lifecycle == nil || shutdown == nil || !signals.valid() || ipc == nil || enrollment == nil || connection == nil {
 		return nil, ErrLifecycle
 	}
 	w := &Workers{ipc: ipc, enrollment: enrollment, connection: connection, shutdown: shutdown, signals: signals}
+	if len(sessionLogin) == 1 {
+		w.sessionLogin = sessionLogin[0]
+	}
 	lifecycle.Append(signals.hook("workers", w.start, w.stop))
 	return w, nil
 }
@@ -60,11 +67,18 @@ func (w *Workers) start(ctx context.Context) error {
 	runCtx, cancel := context.WithCancelCause(context.Background())
 	w.cancel, w.done = cancel, make(chan struct{})
 	var joined sync.WaitGroup
-	joined.Add(3)
-	for _, worker := range []struct {
+	loops := []struct {
 		component string
 		run       func(context.Context) error
-	}{{"ipc", w.ipc}, {"enrollment", w.enrollment}, {"connection", w.connection}} {
+	}{{"ipc", w.ipc}, {"enrollment", w.enrollment}, {"connection", w.connection}}
+	if w.sessionLogin != nil {
+		loops = append(loops, struct {
+			component string
+			run       func(context.Context) error
+		}{"session_login", w.sessionLogin})
+	}
+	joined.Add(len(loops))
+	for _, worker := range loops {
 		go func() {
 			defer joined.Done()
 			_ = w.signals.observe(runCtx, worker.component, "run", func(ctx context.Context) error {

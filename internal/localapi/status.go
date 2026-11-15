@@ -56,10 +56,7 @@ func (c *Controller) snapshot(ctx context.Context, caller localipc.Principal) (*
 	}
 	r.StoredState.DeviceFingerprintPresent = profile.Attempt != nil && profile.Attempt.DeviceKeyHash != [32]byte{}
 	if session.Access != "" && !session.ExpiresAt.IsZero() {
-		r.Session = &clientv0.Session{State: clientv0.SessionState_SESSION_STATE_ACTIVE, ExpiresAt: timestamppb.New(session.ExpiresAt)}
-		if !c.config.Now().Before(session.ExpiresAt) {
-			r.Session.State = clientv0.SessionState_SESSION_STATE_EXPIRED
-		}
+		r.Session = c.projectSession(session)
 	}
 	if profile.Attempt != nil {
 		a := profile.Attempt

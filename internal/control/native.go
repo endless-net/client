@@ -3,10 +3,6 @@ package control
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/binary"
 	"errors"
 	"net/http"
 	"strings"
@@ -46,26 +42,10 @@ func NewNative(client *http.Client, announcements Announcements, maxBytes int, c
 // NativeBinding implements the caller-owned digest of its durable attempt.
 // Ordered fields/uint32 lengths are specified by published native_login.proto.
 func NativeBinding(p state.Profile) (string, [32]byte, error) {
-	if p.Attempt == nil || p.Attempt.Validate() != nil {
+	public, digest, err := state.NativeLoginBinding(p)
+	if err != nil {
 		return "", [32]byte{}, ErrNativeProtocol
 	}
-	fingerprint, err := p.Keys.Fingerprint()
-	if err != nil || fingerprint != p.Attempt.DeviceKeyHash || p.ID != p.Attempt.ProfileID || p.ControlOrigin != p.Attempt.ControlOrigin {
-		return "", [32]byte{}, ErrNativeProtocol
-	}
-	public := "enp_" + base64.RawURLEncoding.EncodeToString(p.Keys.IdentityPrivate[ed25519.SeedSize:])
-	h := sha256.New()
-	for _, field := range []string{"endlessnet-native-login-003-v1", p.ControlOrigin, p.ID, p.Attempt.AttemptID, p.Attempt.RequestID, public} {
-		if uint64(len(field)) > uint64(^uint32(0)) {
-			return "", [32]byte{}, ErrNativeProtocol
-		}
-		var size [4]byte
-		binary.BigEndian.PutUint32(size[:], uint32(len(field)))
-		_, _ = h.Write(size[:])
-		_, _ = h.Write([]byte(field))
-	}
-	var digest [32]byte
-	copy(digest[:], h.Sum(nil))
 	return public, digest, nil
 }
 

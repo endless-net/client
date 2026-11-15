@@ -91,11 +91,18 @@ type nativeFixtureServer struct {
 	tx                                            *identityapi.NativeLoginTransaction
 	starts, gets, created                         int
 	lostStart, authorized, badBinding, loseResult bool
+	relogin, foreignUser                          bool
 }
 
 func (s *nativeFixtureServer) inFlight(ctx context.Context) {
 	s.t.Helper()
 	current, err := s.store.Load(ctx)
+	if s.relogin {
+		if err != nil || current.Profiles[loginProfile].SessionLogin == nil || current.Profiles[loginProfile].SessionLogin.InFlightAt.IsZero() {
+			s.t.Fatal("re-login RPC before durable marker", err)
+		}
+		return
+	}
 	if err != nil || !current.Profiles[loginProfile].RemoteInFlight || current.Profiles[loginProfile].InFlightAt.IsZero() {
 		s.t.Fatal("RPC before durable send marker", err)
 	}
@@ -109,6 +116,14 @@ func (s *nativeFixtureServer) result() *identityapi.NativeLoginTransaction {
 		t.State = identityapi.NativeLoginState_NATIVE_LOGIN_STATE_AUTHORIZED
 		t.PollAfterSeconds = 0
 		t.Outcome = &identityapi.NativeLoginTransaction_Result{Result: &identityapi.NativeLoginResult{Session: &sessionv1.UserSession{SessionId: "native-session", UserId: "native-user", State: sessionv1.UserSessionState_USER_SESSION_STATE_ACTIVE, RenewalSupported: true, ExpiresAt: timestamppb.New(s.now.Add(time.Hour))}, AccessBearer: strings.Repeat("a", 43), RenewalAuthorization: &sessionv1.SessionRenewalAuthorization{Bearer: strings.Repeat("n", 43), ExpiresAt: timestamppb.New(s.now.Add(24 * time.Hour))}}}
+		if s.relogin {
+			t.GetResult().Session.SessionId = "relogin-session"
+			t.GetResult().AccessBearer = strings.Repeat("x", 43)
+			t.GetResult().RenewalAuthorization.Bearer = strings.Repeat("y", 43)
+		}
+		if s.foreignUser {
+			t.GetResult().Session.UserId = "foreign-user"
+		}
 	}
 	return t
 }
@@ -121,7 +136,11 @@ func (s *nativeFixtureServer) StartNativeLogin(ctx context.Context, q *connect.R
 		default:
 		}
 	}
-	if q.Header().Get("Authorization") != "Bearer "+strings.Repeat("r", 43) {
+	proof := strings.Repeat("r", 43)
+	if s.relogin {
+		proof = strings.Repeat("q", 43)
+	}
+	if q.Header().Get("Authorization") != "Bearer "+proof {
 		s.t.Fatal("wrong Start credential")
 	}
 	if s.tx == nil {

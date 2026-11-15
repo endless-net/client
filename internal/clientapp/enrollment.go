@@ -1,6 +1,16 @@
 package clientapp
 
-import "github.com/endless-net/client/internal/control"
+import (
+	"github.com/endless-net/client/internal/control"
+	"github.com/endless-net/client/internal/state"
+)
+
+func (t *Telemetry) NewSessionLoginWorker(store *state.Store, native *control.Native, config control.LoginConfig) (*control.SessionLoginWorker, error) {
+	if t == nil || !t.signals.valid() {
+		return nil, ErrSignals
+	}
+	return control.NewSessionLoginWorker(store, native, config, t.traces.Tracer("endlessnet/client"), t.metrics.Meter("endlessnet/client"), t.signals.logger)
+}
 
 // NewApprovalEnrollmentWorker binds the explicit browser class to the same
 // application providers. A product command must separately persist that class.

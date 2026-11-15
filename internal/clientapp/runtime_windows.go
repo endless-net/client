@@ -112,6 +112,10 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
+			sessionLogin, err := t.NewSessionLoginWorker(r.state.Store(), native, control.LoginConfig{MaxPending: c.MaxPending, MaxCommitRetries: c.MaxCommitRetries, RetryInterval: c.RetryInterval, WriteBudget: c.WriteBudget, Now: time.Now})
+			if err != nil {
+				return err
+			}
 			registration, err := control.NewRegistration(r.http, bootstrap, control.RegistrationConfig{MaxRequestBytes: c.MaxRequestBytes, MaxResponseBytes: c.MaxResponseBytes, MaxCredentialBytes: c.MaxCredentialBytes, Now: time.Now})
 			if err != nil {
 				return err
@@ -148,7 +152,7 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{Revocations: revocations, Connections: r.connection, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
+			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{Revocations: revocations, Connections: r.connection, SessionLogins: sessionLogin, MaxSessionLogins: c.MaxPending, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
 			if err != nil {
 				return err
 			}
@@ -158,7 +162,7 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			}
 			r.workers, err = NewWorkers(lc, shutdown, t.Signals(), r.ipc.Run, worker.Run, func(ctx context.Context) error {
 				return r.connection.RunWindows(ctx, c.MaxInventoryRows, c.MaxInterfaces)
-			})
+			}, sessionLogin.Run)
 			if err == nil && c.RuntimeInstanceFile != "" {
 				lc.Append(t.Signals().hook("ipc", func(ctx context.Context) error {
 					return publishRuntimeInstance(ctx, c.RuntimeInstanceFile, instance, c.StateLockRetry)

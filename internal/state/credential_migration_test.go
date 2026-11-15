@@ -29,7 +29,7 @@ func TestV6CredentialUpgradePreservesInitialDataWithoutInventingRenewal(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.Version != 7 || after.Revision != before.Revision+1 || !reflect.DeepEqual(before.Profiles, after.Profiles) || before.InstallationID != after.InstallationID || before.OwnerSID != after.OwnerSID {
+	if after.Version != CurrentVersion || after.Revision != before.Revision+1 || !reflect.DeepEqual(before.Profiles, after.Profiles) || before.InstallationID != after.InstallationID || before.OwnerSID != after.OwnerSID {
 		t.Fatal("upgrade changed registration, identity or initial credential")
 	}
 	p := after.Profiles[profileID]

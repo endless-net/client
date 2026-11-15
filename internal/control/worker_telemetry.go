@@ -14,35 +14,43 @@ import (
 )
 
 type workerTelemetry struct {
-	tracer   trace.Tracer
-	logger   *slog.Logger
-	events   metric.Int64Counter
-	depth    metric.Int64Gauge
-	jobs     metric.Int64Counter
-	duration metric.Float64Histogram
+	component string
+	tracer    trace.Tracer
+	logger    *slog.Logger
+	events    metric.Int64Counter
+	depth     metric.Int64Gauge
+	jobs      metric.Int64Counter
+	duration  metric.Float64Histogram
 }
 
 func newWorkerTelemetry(tracer trace.Tracer, meter metric.Meter, logger *slog.Logger) (*workerTelemetry, error) {
+	return newNamedWorkerTelemetry(tracer, meter, logger, "enrollment")
+}
+
+func newNamedWorkerTelemetry(tracer trace.Tracer, meter metric.Meter, logger *slog.Logger, component string) (*workerTelemetry, error) {
+	if component != "enrollment" && component != "session_login" {
+		return nil, ErrNativeProtocol
+	}
 	if tracer == nil || meter == nil || logger == nil {
 		return nil, ErrNativeProtocol
 	}
-	events, err := meter.Int64Counter("client.enrollment.queue.events")
+	events, err := meter.Int64Counter("client." + component + ".queue.events")
 	if err != nil {
 		return nil, ErrNativeProtocol
 	}
-	depth, err := meter.Int64Gauge("client.enrollment.queue.depth")
+	depth, err := meter.Int64Gauge("client." + component + ".queue.depth")
 	if err != nil {
 		return nil, ErrNativeProtocol
 	}
-	jobs, err := meter.Int64Counter("client.enrollment.jobs")
+	jobs, err := meter.Int64Counter("client." + component + ".jobs")
 	if err != nil {
 		return nil, ErrNativeProtocol
 	}
-	duration, err := meter.Float64Histogram("client.enrollment.job.duration", metric.WithUnit("s"))
+	duration, err := meter.Float64Histogram("client."+component+".job.duration", metric.WithUnit("s"))
 	if err != nil {
 		return nil, ErrNativeProtocol
 	}
-	return &workerTelemetry{tracer: tracer, logger: logger, events: events, depth: depth, jobs: jobs, duration: duration}, nil
+	return &workerTelemetry{component: component, tracer: tracer, logger: logger, events: events, depth: depth, jobs: jobs, duration: duration}, nil
 }
 
 func (t *workerTelemetry) queued(ctx context.Context, outcome string, depth int) {
@@ -65,7 +73,7 @@ func (t *workerTelemetry) start(ctx context.Context, job loginJob) (context.Cont
 	if job.cause.IsValid() {
 		options = append(options, trace.WithLinks(trace.Link{SpanContext: job.cause}))
 	}
-	_, span := t.tracer.Start(ctx, "client.enrollment.job", options...)
+	_, span := t.tracer.Start(ctx, "client."+t.component+".job", options...)
 	// Preserve the application's cancellation/deadline and all non-telemetry
 	// context values even if a supplied tracer returns a different context.
 	ctx = trace.ContextWithSpan(ctx, span)
@@ -89,7 +97,7 @@ func (t *workerTelemetry) start(ctx context.Context, job loginJob) (context.Cont
 			}
 		}
 		if outcome == "failure" || outcome == "deadline" {
-			span.SetStatus(codes.Error, "client.enrollment.job.failed")
+			span.SetStatus(codes.Error, "client."+t.component+".job.failed")
 		}
 		span.SetAttributes(attribute.String("outcome", outcome))
 		labels := metric.WithAttributes(attribute.String("outcome", outcome), attribute.Bool("recovered", job.recovered))
@@ -99,10 +107,10 @@ func (t *workerTelemetry) start(ctx context.Context, job loginJob) (context.Cont
 		if outcome == "failure" || outcome == "deadline" {
 			level = slog.LevelWarn
 		}
-		fields := []any{"component", "enrollment", "outcome", outcome, "recovered", job.recovered}
+		fields := []any{"component", t.component, "outcome", outcome, "recovered", job.recovered}
 		if sc := span.SpanContext(); sc.IsValid() {
 			fields = append(fields, "trace_id", sc.TraceID().String(), "span_id", sc.SpanID().String())
 		}
-		t.logger.Log(ctx, level, "client.enrollment.job", fields...)
+		t.logger.Log(ctx, level, "client."+t.component+".job", fields...)
 	}
 }

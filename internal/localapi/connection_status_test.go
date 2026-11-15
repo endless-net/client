@@ -22,13 +22,14 @@ type observedConnection struct {
 
 func TestRecoveryFailuresRemainDistinctAndSafe(t *testing.T) {
 	for kind, reason := range map[connectivity.FailureKind]string{
-		connectivity.FailureTrust:      "client.connection.trust_required",
-		connectivity.FailureCredential: "client.connection.credential_expired",
-		connectivity.FailureAccess:     "client.connection.access_denied",
-		connectivity.FailureRevoked:    "client.connection.registration_revoked",
-		connectivity.FailurePath:       "client.connection.path_unconfirmed",
-		connectivity.FailureCleanup:    "client.connection.cleanup_unconfirmed",
-		connectivity.FailureLogin:      "client.connection.login_required",
+		connectivity.FailureTrust:       "client.connection.trust_required",
+		connectivity.FailureCredential:  "client.connection.credential_expired",
+		connectivity.FailureNodeRenewal: "client.connection.node_renewal_unresolved",
+		connectivity.FailureAccess:      "client.connection.access_denied",
+		connectivity.FailureRevoked:     "client.connection.registration_revoked",
+		connectivity.FailurePath:        "client.connection.path_unconfirmed",
+		connectivity.FailureCleanup:     "client.connection.cleanup_unconfirmed",
+		connectivity.FailureLogin:       "client.connection.login_required",
 	} {
 		f := observedConnectionFailure(kind)
 		if f == nil || f.ReasonKey != reason {

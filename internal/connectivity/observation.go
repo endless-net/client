@@ -24,6 +24,7 @@ const (
 	FailureCredential
 	FailureRevoked
 	FailureLogin
+	FailureNodeRenewal
 )
 
 func (FailureKind) Error() string { return "connection failure" }

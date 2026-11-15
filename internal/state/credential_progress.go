@@ -82,26 +82,29 @@ func credentialProgressUpdate(before, after Profile) error {
 	if before.SessionRefresh != nil {
 		old, next := before.SessionRefresh, after.SessionRefresh
 		if next == nil {
-			return ErrCorrupt
-		}
-		if next.RequestID != old.RequestID {
-			if before.ActiveSession == nil || before.ActiveSession.RequestID != old.RequestID {
+			if !nativeSessionAdoption(before, after) || !reflect.DeepEqual(after.SessionRefreshHistory[old.RequestID], old) {
 				return ErrCorrupt
 			}
 		} else {
-			if old.ExpectedSessionID != next.ExpectedSessionID || old.UserID != next.UserID || old.Renewal != next.Renewal || !old.CreatedAt.Equal(next.CreatedAt) || !old.Deadline.Equal(next.Deadline) || !old.SentAt.IsZero() && !old.SentAt.Equal(next.SentAt) || old.OperationID != "" && (old.OperationID != next.OperationID || old.PollAuthorization != next.PollAuthorization || !old.ReplayUntil.Equal(next.ReplayUntil)) {
-				return ErrCorrupt
-			}
-			if before.ActiveSession != nil && before.ActiveSession.RequestID == old.RequestID && !reflect.DeepEqual(old, next) {
-				return ErrCorrupt
-			}
-			if len(old.Operation) != 0 {
-				var op sessionv1.SessionRenewal
-				if proto.Unmarshal(old.Operation, &op) != nil {
+			if next.RequestID != old.RequestID {
+				if before.ActiveSession == nil || before.ActiveSession.RequestID != old.RequestID {
 					return ErrCorrupt
 				}
-				if op.State != sessionv1.SessionRenewalState_SESSION_RENEWAL_STATE_WAITING_FOR_USER && !reflect.DeepEqual(old, next) {
+			} else {
+				if old.ExpectedSessionID != next.ExpectedSessionID || old.UserID != next.UserID || old.Renewal != next.Renewal || !old.CreatedAt.Equal(next.CreatedAt) || !old.Deadline.Equal(next.Deadline) || !old.SentAt.IsZero() && !old.SentAt.Equal(next.SentAt) || old.OperationID != "" && (old.OperationID != next.OperationID || old.PollAuthorization != next.PollAuthorization || !old.ReplayUntil.Equal(next.ReplayUntil)) {
 					return ErrCorrupt
+				}
+				if before.ActiveSession != nil && before.ActiveSession.RequestID == old.RequestID && !reflect.DeepEqual(old, next) {
+					return ErrCorrupt
+				}
+				if len(old.Operation) != 0 {
+					var op sessionv1.SessionRenewal
+					if proto.Unmarshal(old.Operation, &op) != nil {
+						return ErrCorrupt
+					}
+					if op.State != sessionv1.SessionRenewalState_SESSION_RENEWAL_STATE_WAITING_FOR_USER && !reflect.DeepEqual(old, next) {
+						return ErrCorrupt
+					}
 				}
 			}
 		}

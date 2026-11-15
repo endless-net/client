@@ -26,6 +26,7 @@ var (
 	ErrCorrupt   = errors.New("client state invalid or inaccessible")
 	ErrStale     = errors.New("client state revision changed")
 	ErrUncertain = errors.New("client state write outcome uncertain; reload required")
+	ErrCapacity  = errors.New("client protected state capacity exceeded")
 	uuid         = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 )
 
@@ -81,10 +82,13 @@ type Profile struct {
 	Keys                           Keys
 	Attempt                        *enrollment.Attempt
 	Secrets                        RemoteSecrets
-	ActiveSession                  *ActiveSession        `json:",omitempty"`
-	ActiveNodeCredential           *ActiveNodeCredential `json:",omitempty"`
-	SessionRefresh                 *SessionRefresh       `json:",omitempty"`
-	NodeRenewal                    *NodeRenewal          `json:",omitempty"`
+	ActiveSession                  *ActiveSession                 `json:",omitempty"`
+	ActiveNodeCredential           *ActiveNodeCredential          `json:",omitempty"`
+	SessionRefresh                 *SessionRefresh                `json:",omitempty"`
+	NodeRenewal                    *NodeRenewal                   `json:",omitempty"`
+	SessionLogin                   *SessionLogin                  `json:",omitempty"`
+	SessionLoginHistory            map[string]SessionLoginReceipt `json:",omitempty"`
+	SessionRefreshHistory          map[string]*SessionRefresh     `json:",omitempty"`
 	Trust                          ServerTrust
 	Login                          LoginProgress
 	Registration                   RegistrationProgress
@@ -120,7 +124,7 @@ type State struct {
 	HintObservedAt  time.Time       `json:",omitempty"`
 }
 
-const CurrentVersion uint32 = 7
+const CurrentVersion uint32 = 8
 
 func (s State) Validate(installation string) error {
 	if s.Version != CurrentVersion || !validID(s.InstallationID) || s.InstallationID != installation || s.Revision == 0 || (len(s.Profiles) == 0) != (s.OwnerSID == "") {
@@ -144,6 +148,9 @@ func (s State) Validate(installation string) error {
 		return ErrCorrupt
 	}
 	for id, p := range s.Profiles {
+		if validateSessionLogins(p) != nil {
+			return ErrCorrupt
+		}
 		if validateActiveCredentials(p) != nil {
 			return ErrCorrupt
 		}
@@ -292,10 +299,13 @@ func (s *Store) save(ctx context.Context, slot Slot, state State) error {
 		return ErrCorrupt
 	}
 	plain, err := json.Marshal(state)
-	if err != nil || int64(len(plain)) > s.maxPlain {
+	if err != nil {
 		return ErrCorrupt
 	}
 	defer clear(plain)
+	if int64(len(plain)) > s.maxPlain {
+		return ErrCapacity
+	}
 	cipher, err := s.protector.Seal(plain)
 	if err != nil || int64(len(cipher)) > s.maxCipher {
 		return ErrCorrupt
@@ -381,6 +391,9 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 				return ErrCorrupt
 			}
 			if activeCredentialsUpdate(p, next) != nil {
+				return ErrCorrupt
+			}
+			if sessionLoginsUpdate(p, next) != nil {
 				return ErrCorrupt
 			}
 			if credentialProgressUpdate(p, next) != nil {

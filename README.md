@@ -6,7 +6,8 @@
 Консоль покажет HTTPS-ссылку EndlessNet: подтвердите вход и добавление компьютера
 в браузере, в том числе на другом устройстве. Сервер назначает личный Account и
 дефолтную сеть; CLI не просит выбирать сеть. Успех подтверждается только фактическим
-Connected. `endlessnet status` показывает этап, `endlessnet down` отключает туннель
+Connected либо LOCAL_READY для единственного устройства без peers; LOCAL_READY
+не подтверждает peer traffic. `endlessnet status` показывает этап, `endlessnet down` отключает туннель
 без удаления регистрации; закрытие консоли не останавливает службу.
 
 Официальный API — `https://api.endlessnet.ru`, вход — `https://admin.endlessnet.ru`.
@@ -15,9 +16,32 @@ Connected. `endlessnet status` показывает этап, `endlessnet down` 
 и grants хранятся только в защищённом состоянии службы. Текущие права и лимиты
 проверяются сервером отдельно от наличия личного Account.
 
+## Повторный вход зарегистрированного устройства
+
+Owner-only IPC api/v0.7.0 предоставляет StartSessionLogin/GetSessionLogin и
+GetSession с текущей сохраняемой попыткой. UI сохраняет request UUID до Start,
+показывает доверенную native login ссылку и после reopen читает прежний результат.
+Queries не меняют state, не запускают remote polling и не claim ownership.
+Точный Start replay сохраняет request/proof/deadline даже после restart службы.
+Закрытие UI не отменяет попытку и не выполняет Disconnect.
+
+Принимается только свежая сессия исходного пользователя; initial enrollment
+receipt, Node и ключи сохраняются. Прямой переход protected state v1–v7→v8
+сохраняет прежние данные и deadlines. Неизвестный SessionRefresh при принятии
+новой сессии сохраняется отдельно с точными входами/outcome. Сам вход не вызывает
+Connect и не доказывает успешный Node renewal. Истёкший либо связанный с другой
+сессией unknown Node renewal даёт отдельный `client.connection.node_renewal_unresolved`;
+его request, predecessor и сроки не переписываются, новый Node не создаётся.
+
+Авторизация HTTP/trust, bounded worker lifetime и атомарное принятие результата
+остаются у службы. Private native credentials/proofs не выходят в IPC или UI.
+Очередь ограничена существующим MaxPending; original login/recovery budgets
+не продлеваются. Capacity failure не удаляет прежние результаты и не даёт grants.
+Наличие SDK/исходников не заменяет установленную приёмку Client/UI.
+
 ## Connectivity007 — транспортные компоненты в работе
 
-Client закрепляет опубликованные Client API `v0.5.0`, Coordinator API `v0.11.0`
+Client закрепляет опубликованные Client API `v0.7.0`, Coordinator API `v0.12.0`
 и Relay API `v0.4.0`. Проверка map v7 отдельно проверяет Relay credential по
 текущему RELAY_CREDENTIAL trust purpose, субъекту и исходному сроку карты.
 `RelayTransport` использует producer wire codecs, TLS 1.3/hostname verification,

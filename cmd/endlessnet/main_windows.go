@@ -15,7 +15,7 @@ import (
 )
 
 // Exact published Client API0.6.0 descriptor; no compatibility negotiation.
-const contractSHA256 = "b3ea18b22699e414d979e685dae6a639c0b3a1df787dadb63e09c87f4039ba17"
+const contractSHA256 = "89d0be4956ad399cdae24065f32016db210c19ad593ae1b1d29351ddfc00c933"
 
 func main() {
 	if err := run(); err != nil {

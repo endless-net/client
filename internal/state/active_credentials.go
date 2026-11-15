@@ -7,8 +7,10 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/endless-net/client/internal/enrollment"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 	sessionv1 "github.com/endless-net/identity/api/session/v1"
+	identityapi "github.com/endless-net/identity/api/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -17,6 +19,7 @@ import (
 type ActiveSession struct {
 	RequestID, PreviousSessionID, PreviousRenewalSHA256 string
 	Operation                                           []byte
+	Native                                              *NativeSession `json:",omitempty"`
 }
 
 type SessionCredentials struct {
@@ -45,6 +48,24 @@ func (p Profile) CurrentSession() (SessionCredentials, error) {
 		return SessionCredentials{Access: p.Secrets.Access, Renewal: p.Secrets.Renewal, SessionID: p.Secrets.SessionID, UserID: p.Secrets.UserID, ExpiresAt: p.Secrets.SessionExpiresAt, RenewalExpiresAt: p.Secrets.RenewalExpiresAt}, nil
 	}
 	a := p.ActiveSession
+	if a.Native != nil {
+		if len(a.Operation) != 0 || a.RequestID != a.Native.Binding.RequestID || a.PreviousRenewalSHA256 == "" {
+			return SessionCredentials{}, ErrCorrupt
+		}
+		tx, err := nativeTransaction(p, a.Native.Binding, a.Native.CreatedAt, a.Native.Transaction)
+		if err != nil || tx.State != identityapi.NativeLoginState_NATIVE_LOGIN_STATE_AUTHORIZED {
+			return SessionCredentials{}, ErrCorrupt
+		}
+		r := tx.GetResult()
+		deadline := a.Native.CreatedAt.Add(enrollment.LoginTTL)
+		if tx.ExpiresAt.AsTime().Before(deadline) {
+			deadline = tx.ExpiresAt.AsTime()
+		}
+		if a.Native.AdoptedAt.Before(a.Native.CreatedAt) || !a.Native.AdoptedAt.Before(deadline) || !a.Native.AdoptedAt.Before(r.Session.ExpiresAt.AsTime()) || !a.Native.AdoptedAt.Before(r.RenewalAuthorization.ExpiresAt.AsTime()) {
+			return SessionCredentials{}, ErrCorrupt
+		}
+		return SessionCredentials{Access: r.AccessBearer, Renewal: r.RenewalAuthorization.Bearer, SessionID: r.Session.SessionId, UserID: r.Session.UserId, ExpiresAt: r.Session.ExpiresAt.AsTime(), RenewalExpiresAt: r.RenewalAuthorization.ExpiresAt.AsTime()}, nil
+	}
 	var op sessionv1.SessionRenewal
 	if len(a.Operation) == 0 || len(a.Operation) > 65536 || proto.Unmarshal(a.Operation, &op) != nil || len(op.ProtoReflect().GetUnknown()) != 0 || sessionv1.ValidateSessionRenewal(&op, &sessionv1.RenewSessionRequest{RequestId: a.RequestID, ExpectedSessionId: a.PreviousSessionID}, nil) != nil || op.State != sessionv1.SessionRenewalState_SESSION_RENEWAL_STATE_SUCCEEDED {
 		return SessionCredentials{}, ErrCorrupt
@@ -125,7 +146,11 @@ func activeCredentialsUpdate(before, after Profile) error {
 			return err
 		}
 		next := after.ActiveSession
-		if after.SessionRefresh == nil || after.SessionRefresh.RequestID != next.RequestID || !bytes.Equal(after.SessionRefresh.Operation, next.Operation) {
+		if next.Native != nil {
+			if !nativeSessionAdoption(before, after) {
+				return ErrCorrupt
+			}
+		} else if after.SessionRefresh == nil || after.SessionRefresh.RequestID != next.RequestID || !bytes.Equal(after.SessionRefresh.Operation, next.Operation) {
 			return ErrCorrupt
 		}
 		if next.PreviousSessionID != previous.SessionID || next.PreviousRenewalSHA256 != CredentialDigest(previous.Renewal) || before.ActiveSession != nil && next.RequestID == before.ActiveSession.RequestID {

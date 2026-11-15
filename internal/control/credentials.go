@@ -26,6 +26,7 @@ import (
 
 var ErrCredentialsLogin = errors.New("current user login required")
 var ErrCredentialsExpired = errors.New("credential renewal command expired")
+var ErrNodeRenewalUnresolved = errors.New("node credential renewal outcome unresolved")
 var ErrCredentialsProtocol = errors.New("credential renewal response invalid")
 var ErrCredentialsUnavailable = errors.New("credential renewal outcome unavailable")
 
@@ -303,7 +304,14 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 	}
 	r := *p.NodeRenewal
 	if !c.config.Now().Before(r.Deadline) {
-		return ErrCredentialsExpired
+		return ErrNodeRenewalUnresolved
+	}
+	frozen, decodeErr := coordinator.DecodeRegisterNodeRequest([]byte(r.Request), c.remote.config.MaxRequestBytes)
+	if decodeErr != nil {
+		return ErrCredentialsProtocol
+	}
+	if frozen.SessionTokenBinding != coordinator.RegistrationSessionTokenBinding(current.Access) {
+		return ErrNodeRenewalUnresolved
 	}
 	call, stop := context.WithTimeout(ctx, min(r.Deadline.Sub(c.config.Now()), 30*time.Second))
 	defer stop()

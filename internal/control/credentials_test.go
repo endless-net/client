@@ -63,7 +63,7 @@ func (s *sessionRotationFixture) RenewSession(ctx context.Context, r *connect.Re
 }
 
 func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testing.T) {
-	for _, mode := range []string{"valid", "lost-session", "lost-node", "lost-session-save", "lost-node-save", "foreign-session", "foreign-node", "signature"} {
+	for _, mode := range []string{"valid", "lost-session", "lost-node", "expired-node", "lost-session-save", "lost-node-save", "foreign-session", "foreign-node", "signature"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newRegistrationFixture(t)
 			f.sign(t, f.announcementNodeKey(t), "node:register", f.now.Add(-time.Minute))
@@ -124,7 +124,7 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 				} else if !bytes.Equal(raw, originalNode) {
 					t.Fatal("node retry changed original bytes")
 				}
-				if mode == "lost-node" && nodeCalls == 1 {
+				if (mode == "lost-node" || mode == "expired-node") && nodeCalls == 1 {
 					return nil, errors.New("secret lost node result")
 				}
 				request, err := coordinator.DecodeRegisterNodeRequest(raw, 65536)
@@ -155,6 +155,27 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 				return e
 			}
 			err = makeExecutor().Ensure(context.Background(), loginProfile, 1)
+			if mode == "expired-node" {
+				if err == nil {
+					t.Fatal("lost node result reported success")
+				}
+				pending, loadErr := f.store.Load(t.Context())
+				if loadErr != nil {
+					t.Fatal(loadErr)
+				}
+				f.now = f.now.Add(11 * time.Minute)
+				if err := makeExecutor().Ensure(t.Context(), loginProfile, 1); !errors.Is(err, ErrNodeRenewalUnresolved) {
+					t.Fatal("expired unknown Node renewal misclassified", err)
+				}
+				after, loadErr := f.store.Load(t.Context())
+				if loadErr != nil {
+					t.Fatal(loadErr)
+				}
+				if nodeCalls != 1 || actor.calls != 1 || !reflect.DeepEqual(pending.Profiles[loginProfile].NodeRenewal, after.Profiles[loginProfile].NodeRenewal) || after.Profiles[loginProfile].Secrets != baseline.Profiles[loginProfile].Secrets {
+					t.Fatal("expired request retried/reset or enrollment changed")
+				}
+				return
+			}
 			if strings.HasPrefix(mode, "lost-") {
 				if err == nil {
 					t.Fatal("unknown result reported success")
