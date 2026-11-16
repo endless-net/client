@@ -23,12 +23,19 @@ const workerRuntime = "0ddc5a0a-090a-4939-a5f5-de63278d2830"
 const workerOldRuntime = "d2159714-8243-430b-89e5-e0e1dec57201"
 
 type workerMemory struct {
-	mu   sync.Mutex
-	data []byte
-	lose atomic.Bool
+	mu            sync.Mutex
+	data          []byte
+	lose          atomic.Bool
+	readTimeout   atomic.Bool
+	timedOutReads atomic.Uint64
 }
 
 func (b *workerMemory) Exclusive(ctx context.Context, fn func(state.Slot) error) error {
+	if b.readTimeout.Load() {
+		<-ctx.Done()
+		b.timedOutReads.Add(1)
+		return ctx.Err()
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -328,6 +335,41 @@ func TestConnectionWorkerDuplicateWaitDoesNotOwnSessionLifetime(t *testing.T) {
 	if after.Revision != before.Revision || *after.Profiles[workerProfile].Connection.Request != *before.Profiles[workerProfile].Connection.Request || after.Profiles[workerProfile].Connection.Deadline != before.Profiles[workerProfile].Connection.Deadline || len(h.created) != 0 {
 		t.Fatal("duplicate changed durable attempt or created another owner")
 	}
+}
+
+func TestConnectionWorkerKeepsOnlineOwnerAcrossPollReadTimeout(t *testing.T) {
+	s, backend := workerStore(t)
+	if err := workerIntent(t, s, state.IntentConnected, time.Now().UTC(), workerRuntime); err != nil {
+		t.Fatal(err)
+	}
+	h := &workerHarness{created: make(chan *workerSession, 8)}
+	w := testConnectionWorker(t, s, h)
+	_, done := startConnectionWorker(t, w)
+	owner := awaitWorkerSession(t, h)
+	awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.Phase == ConnectionConnected })
+	backend.readTimeout.Store(true)
+	defer backend.readTimeout.Store(false)
+	until := time.NewTimer(time.Second)
+	defer until.Stop()
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for backend.timedOutReads.Load() < 2 {
+		select {
+		case err := <-done:
+			t.Fatal("poll timeout stopped mandatory worker", err)
+		case <-until.C:
+			t.Fatal("poll read was not retried")
+		case <-tick.C:
+		}
+	}
+	backend.readTimeout.Store(false)
+	if owner.lifetime.Err() != nil || len(owner.cleanupCalls) != 0 || len(h.created) != 0 {
+		t.Fatal("poll retry replaced or cancelled online owner")
+	}
+	if err := workerIntent(t, s, state.IntentDisconnected, time.Now().UTC(), workerRuntime); err != nil {
+		t.Fatal(err)
+	}
+	awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.Phase == ConnectionDisconnected })
 }
 
 func TestConnectionWorkerSupersessionWaitsForOldCleanupAndCoalescesLatestIntent(t *testing.T) {

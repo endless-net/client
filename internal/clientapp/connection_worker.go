@@ -579,6 +579,13 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 			t, err := w.target(readCtx)
 			cancel()
 			if err != nil {
+				if !operationOpen && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
+					// A bounded background read can time out under local contention.
+					// Keep the existing owner; its signed lease still bounds authority.
+					// The next poll rechecks durable intent, including Disconnect.
+					load = false
+					continue
+				}
 				if operationOpen && desired != nil && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) && !time.Now().Before(desired.deadline) {
 					if current != nil {
 						current.cancel()

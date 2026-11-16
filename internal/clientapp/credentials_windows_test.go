@@ -386,6 +386,25 @@ func TestOnlineSessionRenewsIndependentlyOfNode(t *testing.T) {
 	}
 }
 
+func TestOnlineMetadataReadTimeoutDoesNotStopCredentialOrEndpointLoop(t *testing.T) {
+	f, d := newOnlineRenewalFixture(t, "valid")
+	backend := f.f.backend
+	probes := f.f.native.probes.Load()
+	backend.readTimeout.Store(true)
+	defer backend.readTimeout.Store(false)
+	awaitCredentialCondition(t, func() bool { return backend.timedOutReads.Load() >= 2 })
+	backend.readTimeout.Store(false)
+	awaitCredentialCondition(t, func() bool { return f.f.native.probes.Load() > probes+2 })
+	select {
+	case <-d.done:
+		t.Fatal("local metadata timeout stopped an authorized native owner", d.result())
+	default:
+	}
+	if f.f.native.starts.Load() != 1 || f.f.native.stops.Load() != 0 || f.f.native.revoked.Load() {
+		t.Fatal("metadata retry changed native owner")
+	}
+}
+
 func TestOnlineRenewalWaitsForAdmittedNativeMapApply(t *testing.T) {
 	f, d := newOnlineRenewalFixture(t, "valid")
 	entered, release, finished := make(chan struct{}), make(chan struct{}), make(chan error, 1)

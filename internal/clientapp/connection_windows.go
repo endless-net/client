@@ -454,7 +454,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
 				err := d.announceCurrent(ctx, native)
 				cancel()
-				if err != nil && !errors.Is(err, connectivity.ErrEndpointUncertain) && !errors.Is(err, connectivity.ErrUnavailable) {
+				if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, connectivity.ErrEndpointUncertain) && !errors.Is(err, connectivity.ErrUnavailable) {
 					return err
 				}
 			}
@@ -463,7 +463,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
 				err := d.announceCurrent(ctx, native)
 				cancel()
-				if err != nil && !errors.Is(err, connectivity.ErrEndpointUncertain) && !errors.Is(err, connectivity.ErrUnavailable) {
+				if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, connectivity.ErrEndpointUncertain) && !errors.Is(err, connectivity.ErrUnavailable) {
 					return err
 				}
 			}
@@ -472,6 +472,10 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
 				err := native.ProbePaths(ctx)
 				cancel()
+				if errors.Is(err, context.DeadlineExceeded) && d.lifetime.Err() == nil {
+					// Unknown on this tick; signed lease/packet guards remain strict.
+					continue
+				}
 				if err != nil && !errors.Is(err, dataplane.ErrNoAuthority) {
 					return nativeConnectionFailure(err, connectivity.FailurePath)
 				}

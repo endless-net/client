@@ -119,6 +119,10 @@ func (d *windowsConnection) maintainCredentials(native windowsConnectionNative) 
 		}
 		plan, err := d.credentialPlan(&schedule)
 		if err != nil {
+			if d.lifetime.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
+				timer.Reset(d.factory.config.RetryInterval)
+				continue
+			}
 			if d.lifetime.Err() == nil {
 				d.failSource(native, nativeConnectionFailure(err, connectivity.FailureControl))
 			}

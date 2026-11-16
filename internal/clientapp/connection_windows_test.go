@@ -256,6 +256,7 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeDirect(t *
 }
 
 type connectionBackendFixture struct {
+	backend      *workerMemory
 	now          func() time.Time
 	checkRequest func(*http.Request)
 	store        *state.Store
@@ -302,7 +303,7 @@ func newConnectionBackendFixturePrepared(t *testing.T, prepare func(*state.Profi
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture.store, _ = workerStorePrepared(t, func(p *state.Profile) {
+	fixture.store, fixture.backend = workerStorePrepared(t, func(p *state.Profile) {
 		if prepare != nil {
 			prepare(p)
 		}
