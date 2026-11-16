@@ -96,6 +96,7 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			}
 			driver := c.connectionDriver(clock, bootstrap)
 			driver.PrepareCredentials = credentials.Ensure
+			driver.RefreshCredentials = credentials.Refresh
 			factory, err := NewWindowsConnectionFactory(r.state.Store(), transport, driver)
 			if err != nil {
 				return err

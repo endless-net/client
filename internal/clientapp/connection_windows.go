@@ -22,6 +22,7 @@ type WindowsConnectionConfig struct {
 	EndpointTTL, RenewalInterval, RetryInterval, ProbeInterval, WriteBudget time.Duration
 	MaxQueuedMaps                                                           int
 	PrepareCredentials                                                      func(context.Context, string, uint64) error
+	RefreshCredentials                                                      func(context.Context, string, uint64, bool, bool) error
 }
 
 // validateSettings performs no I/O and needs no runtime clock or trust provider.
@@ -114,19 +115,26 @@ type connectionFrame struct {
 }
 
 type windowsConnection struct {
-	factory    *windowsConnections
-	profile    string
-	generation uint64
-	lifetime   context.Context
-	cancel     context.CancelFunc
-	mu         sync.Mutex
-	native     windowsConnectionNative
-	used       bool
-	done       chan struct{}
-	loopErr    error
-	frames     chan connectionFrame
-	fatal      chan error
-	applied    chan struct{}
+	factory              *windowsConnections
+	profile              string
+	generation           uint64
+	lifetime             context.Context
+	cancel               context.CancelFunc
+	mu                   sync.Mutex
+	credentialMu         sync.RWMutex
+	mapMu                sync.Mutex
+	mapApplyMu           sync.Mutex
+	mapCancel            context.CancelCauseFunc
+	mapResume, mapParked chan struct{}
+	credentialsReady     chan struct{}
+	credentialsStarted   chan struct{}
+	native               windowsConnectionNative
+	used                 bool
+	done                 chan struct{}
+	loopErr              error
+	frames               chan connectionFrame
+	fatal                chan error
+	applied              chan struct{}
 }
 
 func (*windowsConnection) String() string   { return "[private Windows connection]" }
@@ -147,7 +155,7 @@ func (f *windowsConnections) newOwner(lifetime context.Context, profile string, 
 		return nil, ErrConnectionWorker
 	}
 	ctx, cancel := context.WithCancel(lifetime)
-	return &windowsConnection{factory: f, profile: profile, generation: generation, lifetime: ctx, cancel: cancel, frames: make(chan connectionFrame, f.config.MaxQueuedMaps), fatal: make(chan error, 1), applied: make(chan struct{}, 1)}, nil
+	return &windowsConnection{factory: f, profile: profile, generation: generation, lifetime: ctx, cancel: cancel, frames: make(chan connectionFrame, f.config.MaxQueuedMaps), fatal: make(chan error, 1), applied: make(chan struct{}, 1), credentialsReady: make(chan struct{}), credentialsStarted: make(chan struct{})}, nil
 }
 
 func (d *windowsConnection) profileAt(ctx context.Context) (state.State, state.Profile, error) {
@@ -201,11 +209,14 @@ func (d *windowsConnection) Connect(operation context.Context, restore bool) err
 	done := d.done
 	d.mu.Unlock()
 	readerDone := make(chan struct{})
+	credentialsDone := make(chan struct{})
 	go func() { defer close(readerDone); d.readMaps(native) }()
+	go func() { defer close(credentialsDone); d.maintainCredentials(native) }()
 	go func() {
 		err := d.applyMaps(operation, restore, native)
 		d.cancel()
 		<-readerDone
+		<-credentialsDone
 		d.mu.Lock()
 		d.loopErr = err
 		d.mu.Unlock()
@@ -215,6 +226,15 @@ func (d *windowsConnection) Connect(operation context.Context, restore bool) err
 	case <-operation.Done():
 		return operation.Err()
 	case <-d.applied:
+		if d.factory.config.RefreshCredentials != nil {
+			select {
+			case <-operation.Done():
+				return operation.Err()
+			case <-done:
+				return d.result()
+			case <-d.credentialsStarted:
+			}
+		}
 		if err := native.WaitPaths(operation, d.factory.config.ProbeInterval); err != nil {
 			return nativeConnectionFailure(err, connectivity.FailurePath)
 		}
@@ -306,7 +326,8 @@ func (d *windowsConnection) readMaps(native windowsConnectionNative) {
 		if d.lifetime.Err() != nil {
 			return
 		}
-		read, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
+		streamContext, streamCancel := d.beginMapStream()
+		read, cancel := context.WithTimeout(streamContext, d.factory.config.WriteBudget)
 		value, p, err := d.profileAt(read)
 		var verifier *connectivity.Verifier
 		var cursor *state.MapCursor
@@ -321,7 +342,7 @@ func (d *windowsConnection) readMaps(native windowsConnectionNative) {
 		}
 		cancel()
 		if err == nil {
-			err = d.factory.stream(d.lifetime, verifier, cursor, func(ctx context.Context, m connectivity.Map) error {
+			err = d.factory.stream(streamContext, verifier, cursor, func(ctx context.Context, m connectivity.Map) error {
 				epoch := native.BlockSource()
 				if m.Denied() {
 					d.failSource(native, connectivity.ErrRevoked)
@@ -330,8 +351,16 @@ func (d *windowsConnection) readMaps(native windowsConnectionNative) {
 				return d.enqueue(native, connectionFrame{ctx: ctx, value: m, epoch: epoch})
 			})
 		}
+		d.mapMu.Lock()
+		handoff := errors.Is(context.Cause(streamContext), errCredentialHandoff)
+		d.mapCancel = nil
+		d.mapMu.Unlock()
+		streamCancel(nil)
 		if d.lifetime.Err() != nil {
 			return
+		}
+		if handoff {
+			continue
 		}
 		epoch := native.BlockSource()
 		if !transientMapError(err) {
@@ -366,22 +395,25 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 			d.invalidateTransportHints()
 			return err
 		case frame := <-d.frames:
+			d.mapApplyMu.Lock()
+			if frame.ctx != nil && frame.ctx.Err() != nil {
+				d.mapApplyMu.Unlock()
+				continue
+			}
 			ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.Native.ApplyTimeout)
 			ctx = dataplane.WithSourceEpoch(ctx, frame.epoch)
 			if frame.err != nil {
 				if started {
 					err := native.Offline(ctx)
 					cancel()
+					d.mapApplyMu.Unlock()
 					if err != nil {
 						return nativeConnectionFailure(err, connectivity.FailureApply)
 					}
 				} else {
 					cancel()
+					d.mapApplyMu.Unlock()
 				}
-				continue
-			}
-			if frame.ctx.Err() != nil {
-				cancel()
 				continue
 			}
 			var err error
@@ -402,6 +434,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 			}
 			stop()
 			cancel()
+			d.mapApplyMu.Unlock()
 			if err != nil && !errors.Is(err, connectivity.ErrReplay) {
 				return nativeConnectionFailure(err, connectivity.FailureApply)
 			}
@@ -410,6 +443,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				if err := d.announce(initial, true, native); err != nil {
 					return err
 				}
+				close(d.credentialsReady)
 				select {
 				case d.applied <- struct{}{}:
 				default:
@@ -418,7 +452,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 		case <-renew.C:
 			if started {
 				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
-				err := d.announce(ctx, true, native)
+				err := d.announceCurrent(ctx, native)
 				cancel()
 				if err != nil && !errors.Is(err, connectivity.ErrEndpointUncertain) && !errors.Is(err, connectivity.ErrUnavailable) {
 					return err
@@ -427,7 +461,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 		case <-advertisements:
 			if started {
 				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
-				err := d.announce(ctx, true, native)
+				err := d.announceCurrent(ctx, native)
 				cancel()
 				if err != nil && !errors.Is(err, connectivity.ErrEndpointUncertain) && !errors.Is(err, connectivity.ErrUnavailable) {
 					return err
@@ -448,6 +482,16 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 			}
 		}
 	}
+}
+
+// Endpoint requests never race a credential-head transition. A parked renewal
+// must not stall native map apply/probe; the next timer uses the latest state.
+func (d *windowsConnection) announceCurrent(ctx context.Context, native windowsConnectionNative) error {
+	if !d.credentialMu.TryRLock() {
+		return nil
+	}
+	defer d.credentialMu.RUnlock()
+	return d.announce(ctx, true, native)
 }
 
 func (d *windowsConnection) announce(ctx context.Context, online bool, native windowsConnectionNative) error {

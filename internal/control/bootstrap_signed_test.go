@@ -7,6 +7,7 @@ import (
 	"crypto/cipher"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -38,6 +39,52 @@ func bootstrapStore(t *testing.T) (*state.Store, *memory) {
 		t.Fatal(err)
 	}
 	return store, backend
+}
+
+func TestBootstrapRenewalDistinguishesOutageFromRejectedTrust(t *testing.T) {
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	good, root := signedFixture(t, "https://control.example", now, 1)
+	for _, mode := range []string{"transport", "503", "429", "tls", "redirect", "malformed", "401"} {
+		t.Run(mode, func(t *testing.T) {
+			store, _ := bootstrapStore(t)
+			client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
+				if mode == "transport" {
+					return nil, io.ErrUnexpectedEOF
+				}
+				if mode == "tls" {
+					return nil, x509.HostnameError{Certificate: &x509.Certificate{DNSNames: []string{"foreign.example"}}, Host: "control.example"}
+				}
+				status, body := 200, good
+				if mode == "503" {
+					status = 503
+				}
+				if mode == "429" {
+					status = 429
+				}
+				if mode == "401" {
+					status = 401
+				}
+				if mode == "malformed" {
+					body = []byte(`{"invalid":true}`)
+				}
+				header := http.Header{"Content-Type": {"application/json"}}
+				if mode == "redirect" {
+					status = 302
+					header.Set("Location", "https://foreign.example/server-key")
+				}
+				return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(bytes.NewReader(body)), Request: r}, nil
+			})}
+			source, err := NewVerifiedBootstrap(client, 1<<20, func() time.Time { return now }, map[string]signing.BootstrapRoot{"https://control.example": root}, store)
+			if err != nil {
+				t.Fatal(err)
+			}
+			value, err := source.Fetch(t.Context(), "https://control.example")
+			transient := mode == "transport" || mode == "503" || mode == "429"
+			if !errors.Is(err, ErrBootstrap) || errors.Is(err, ErrBootstrapUnavailable) != transient || value.VerifiedAt(now) {
+				t.Fatal("outage/trust boundary changed", mode, err)
+			}
+		})
+	}
 }
 
 func signedFixture(t *testing.T, origin string, now time.Time, revision uint64) ([]byte, signing.BootstrapRoot) {

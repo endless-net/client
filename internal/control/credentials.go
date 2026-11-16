@@ -85,6 +85,9 @@ func (c *Credentials) save(ctx context.Context, id string, generation uint64, ch
 
 func (c *Credentials) trusted(ctx context.Context, p state.Profile) (Announcement, error) {
 	a, err := c.remote.announcements.Fetch(ctx, p.ControlOrigin)
+	if errors.Is(err, ErrBootstrapUnavailable) {
+		return Announcement{}, ErrCredentialsUnavailable
+	}
 	if err != nil || !a.MatchesProfile(p, c.config.Now()) {
 		return Announcement{}, ErrBootstrap
 	}
@@ -92,9 +95,15 @@ func (c *Credentials) trusted(ctx context.Context, p state.Profile) (Announcemen
 }
 
 // Ensure prepares an existing registered device before native effects. Remote
-// calls are single dispatches; explicit Connect retry/restart resumes frozen IDs.
+// calls are single dispatches; admitted retry/restart resumes frozen IDs.
 // Successful session/credential adoption never mutates initial login or receipt.
 func (c *Credentials) Ensure(ctx context.Context, id string, generation uint64) error {
+	return c.Refresh(ctx, id, generation, false, false)
+}
+
+// Refresh also admits proactive rotation chosen by the connection's scheduler.
+// Every retry retains the original persisted request and its original deadline.
+func (c *Credentials) Refresh(ctx context.Context, id string, generation uint64, session, node bool) error {
 	if !c.mu.TryLock() {
 		return state.ErrStale
 	}
@@ -108,16 +117,40 @@ func (c *Credentials) Ensure(ctx context.Context, id string, generation uint64) 
 		return err
 	}
 	pending := p.NodeRenewal != nil && (p.ActiveNodeCredential == nil || p.ActiveNodeCredential.Request != p.NodeRenewal.Request)
-	if ends.After(c.config.Now()) && !pending {
-		return nil
+	// A frozen Node command is bound to its original user-session bearer. Never
+	// rotate that bearer before recovering the command's original result.
+	if pending {
+		if err = c.ensureNode(ctx, id, generation); err != nil {
+			return err
+		}
+		node = false
+		_, p, err = c.load(ctx, id, generation)
+		if err != nil {
+			return err
+		}
+		_, ends, err = p.CurrentNodeCredential()
+		if err != nil {
+			return err
+		}
 	}
-	if err = c.ensureSession(ctx, id, generation); err != nil {
+	node = node || !ends.After(c.config.Now())
+	current, err := p.CurrentSession()
+	if err != nil {
 		return err
 	}
-	return c.ensureNode(ctx, id, generation)
+	// Reserve enough session lifetime for a newly frozen Node operation, rather
+	// than expiring its bearer in the middle of a lost-response recovery.
+	session = session || node && !current.ExpiresAt.After(c.config.Now().Add(coordinator.NodeRenewalExecutionTTL))
+	if err = c.ensureSession(ctx, id, generation, session); err != nil {
+		return err
+	}
+	if node {
+		return c.ensureNode(ctx, id, generation)
+	}
+	return nil
 }
 
-func (c *Credentials) ensureSession(ctx context.Context, id string, generation uint64) error {
+func (c *Credentials) ensureSession(ctx context.Context, id string, generation uint64, renew bool) error {
 	_, p, err := c.load(ctx, id, generation)
 	if err != nil {
 		return err
@@ -127,7 +160,7 @@ func (c *Credentials) ensureSession(ctx context.Context, id string, generation u
 		return err
 	}
 	pending := p.SessionRefresh != nil && (p.ActiveSession == nil || p.ActiveSession.RequestID != p.SessionRefresh.RequestID)
-	if current.ExpiresAt.After(c.config.Now()) && !pending {
+	if current.ExpiresAt.After(c.config.Now()) && !pending && !renew {
 		return nil
 	}
 	if !pending {
@@ -248,6 +281,10 @@ func credentialCallError(ctx context.Context, err error) error {
 	if connect.CodeOf(err) == connect.CodeUnauthenticated || connect.CodeOf(err) == connect.CodePermissionDenied {
 		return ErrCredentialsLogin
 	}
+	switch connect.CodeOf(err) {
+	case connect.CodeInvalidArgument, connect.CodeDataLoss, connect.CodeUnimplemented, connect.CodeFailedPrecondition:
+		return ErrCredentialsProtocol
+	}
 	return ErrCredentialsUnavailable
 }
 
@@ -349,6 +386,12 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return ErrCredentialsLogin
+	}
+	if response.StatusCode == http.StatusBadRequest {
+		return ErrCredentialsProtocol
+	}
+	if response.StatusCode == http.StatusConflict {
+		return ErrNodeRenewalUnresolved
 	}
 	media, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" || response.StatusCode != http.StatusOK {

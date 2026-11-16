@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,6 +22,10 @@ import (
 )
 
 var ErrBootstrap = errors.New("server trust announcement unavailable")
+
+// Still classifies as ErrBootstrap for existing callers. Renewal can distinguish
+// a transport outage from rejected signed trust without accepting either as trust.
+var ErrBootstrapUnavailable = errors.Join(ErrBootstrap, errors.New("bootstrap transport unavailable"))
 
 type Announcement struct {
 	Origin, KeyID, ID           string
@@ -135,15 +141,28 @@ func (b *Bootstrap) Fetch(ctx context.Context, origin string) (Announcement, err
 	r.Header.Set("Accept", "application/json")
 	response, err := b.client.Do(r)
 	if err != nil {
-		return Announcement{}, ErrBootstrap
+		var verification *tls.CertificateVerificationError
+		var authority x509.UnknownAuthorityError
+		var invalid x509.CertificateInvalidError
+		var hostname x509.HostnameError
+		if errors.Is(err, ErrBootstrap) || errors.As(err, &verification) || errors.As(err, &authority) || errors.As(err, &invalid) || errors.As(err, &hostname) {
+			return Announcement{}, ErrBootstrap
+		}
+		return Announcement{}, ErrBootstrapUnavailable
 	}
 	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode >= http.StatusInternalServerError || response.StatusCode == http.StatusTooManyRequests {
+		return Announcement{}, ErrBootstrapUnavailable
+	}
 	media, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" || response.StatusCode != http.StatusOK {
 		return Announcement{}, ErrBootstrap
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, b.maxBytes+1))
-	if err != nil || int64(len(data)) > b.maxBytes {
+	if err != nil {
+		return Announcement{}, ErrBootstrapUnavailable
+	}
+	if int64(len(data)) > b.maxBytes {
 		return Announcement{}, ErrBootstrap
 	}
 	if ctx.Err() != nil {

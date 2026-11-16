@@ -60,8 +60,10 @@ type connectionNativeFixture struct {
 	started, bound, revoked      atomic.Bool
 	starts, stops, waits, epochs atomic.Uint64
 	refreshes, offlines          atomic.Uint64
+	probes                       atomic.Uint64
 	wrongPort                    bool
 	refreshError                 atomic.Pointer[error]
+	refreshHook                  func(context.Context) error
 	advertisement                atomic.Pointer[coordinator.TransportAdvertisement]
 	advertisementChanged         chan struct{}
 }
@@ -79,6 +81,11 @@ func (n *connectionNativeFixture) Restore(ctx context.Context, m connectivity.Ma
 	return n.Start(ctx, m)
 }
 func (n *connectionNativeFixture) Refresh(ctx context.Context, m connectivity.Map) error {
+	if n.refreshHook != nil {
+		if err := n.refreshHook(ctx); err != nil {
+			return err
+		}
+	}
 	err := connectivity.PersistCursor(ctx, n.store, 1, m)
 	if err != nil {
 		n.refreshError.Store(&err)
@@ -107,7 +114,7 @@ func (n *connectionNativeFixture) WaitPaths(ctx context.Context, _ time.Duration
 	n.waits.Add(1)
 	return nil
 }
-func (n *connectionNativeFixture) ProbePaths(context.Context) error { return nil }
+func (n *connectionNativeFixture) ProbePaths(context.Context) error { n.probes.Add(1); return nil }
 func (n *connectionNativeFixture) BoundPort() (uint16, error) {
 	if !n.bound.Load() {
 		return 0, dataplane.ErrClosed
@@ -249,32 +256,39 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeDirect(t *
 }
 
 type connectionBackendFixture struct {
-	store      *state.Store
-	native     *connectionNativeFixture
-	factory    *windowsConnections
-	config     WindowsConnectionConfig
-	transport  *connectivity.Transport
-	mu         sync.Mutex
-	requests   []coordinator.UpdateNodeEndpointRequest
-	originals  map[uint64][]byte
-	acks       map[uint64]coordinator.UpdateNodeEndpointResponse
-	loseSecond bool
-	lost       bool
-	patches    chan uint64
-	streamBody *connectionStreamBody
-	afterACK   func(coordinator.UpdateNodeEndpointResponse)
+	now          func() time.Time
+	checkRequest func(*http.Request)
+	store        *state.Store
+	native       *connectionNativeFixture
+	factory      *windowsConnections
+	config       WindowsConnectionConfig
+	transport    *connectivity.Transport
+	mu           sync.Mutex
+	requests     []coordinator.UpdateNodeEndpointRequest
+	originals    map[uint64][]byte
+	acks         map[uint64]coordinator.UpdateNodeEndpointResponse
+	loseSecond   bool
+	lost         bool
+	patches      chan uint64
+	streamBody   *connectionStreamBody
+	afterACK     func(coordinator.UpdateNodeEndpointResponse)
 }
 
 func newConnectionBackendFixture(t *testing.T) *connectionBackendFixture {
+	return newConnectionBackendFixturePrepared(t, nil, time.Second)
+}
+
+func newConnectionBackendFixturePrepared(t *testing.T, prepare func(*state.Profile), idle time.Duration) *connectionBackendFixture {
 	t.Helper()
 	fixture := &connectionBackendFixture{originals: map[uint64][]byte{}, acks: map[uint64]coordinator.UpdateNodeEndpointResponse{}, patches: make(chan uint64, 32)}
+	fixture.now = time.Now
 	now := time.Now().UTC()
 	bundle := func(seed byte) (signing.BootstrapTrustBundle, ed25519.PrivateKey) {
 		key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{seed}, 32))
 		pub := key.Public().(ed25519.PublicKey)
 		hash := sha256.Sum256(pub)
 		id := "ed25519:" + base64.RawURLEncoding.EncodeToString(hash[:])
-		before, after := now.Add(-time.Hour), now.Add(2*time.Hour)
+		before, after := now.Add(-time.Hour), now.Add(24*time.Hour)
 		return signing.BootstrapTrustBundle{Version: 1, ActiveKeyID: id, Keys: []signing.BootstrapTrustKey{{KeyID: id, Algorithm: "ed25519", PublicKey: base64.RawURLEncoding.EncodeToString(pub), NotBefore: &before, NotAfter: &after}}}, key
 	}
 	mapBundle, mapKey := bundle(61)
@@ -289,6 +303,9 @@ func newConnectionBackendFixture(t *testing.T) *connectionBackendFixture {
 		t.Fatal(err)
 	}
 	fixture.store, _ = workerStorePrepared(t, func(p *state.Profile) {
+		if prepare != nil {
+			prepare(p)
+		}
 		p.Trust = state.ServerTrust{KeyID: announcement.KeyID, AnnouncementID: announcement.ID, Bundle: announcement.Bundle}
 		scopes := []string{"node:register", "node:map", "node:endpoint"}
 		payload, err := coordinator.NodeCredentialSigningPayload(nodeBundle.ActiveKeyID, p.Attempt.NetworkID, p.Attempt.NodeID, scopes, p.Attempt.CredentialEnds)
@@ -308,6 +325,9 @@ func newConnectionBackendFixture(t *testing.T) *connectionBackendFixture {
 	fixture.native = &connectionNativeFixture{store: fixture.store}
 	var revision atomic.Uint64
 	trip := roundTrip(func(request *http.Request) (*http.Response, error) {
+		if fixture.checkRequest != nil {
+			fixture.checkRequest(request)
+		}
 		if request.Method == http.MethodPatch {
 			if !fixture.native.bound.Load() {
 				return nil, errors.New("announcement before socket receipt")
@@ -329,7 +349,7 @@ func newConnectionBackendFixture(t *testing.T) *connectionBackendFixture {
 			fixture.originals[input.Generation] = bytes.Clone(raw)
 			ack, exists := fixture.acks[input.Generation]
 			if !exists {
-				updated := time.Now().UTC()
+				updated := fixture.now().UTC()
 				ttl, _ := time.ParseDuration(input.TTL)
 				ack = coordinator.UpdateNodeEndpointResponse{SchemaVersion: 2, NodeID: "node", NetworkID: "network", Endpoint: input.Endpoint, Generation: input.Generation, Online: input.Status == "online", UpdatedAt: updated, ExpiresAt: updated.Add(ttl), Revision: coordinator.MapRevision{Network: revision.Load()}}
 				fixture.acks[input.Generation] = ack
@@ -372,7 +392,7 @@ func newConnectionBackendFixture(t *testing.T) *connectionBackendFixture {
 			return nil, err
 		}
 		peer, _ := ecdh.X25519().NewPrivateKey(bytes.Repeat([]byte{12}, 32))
-		issued := time.Now().UTC()
+		issued := fixture.now().UTC()
 		expires := issued.Add(time.Minute)
 		version := revision.Add(1)
 		m := coordinator.NetworkMapSnapshot{Revision: coordinator.MapRevision{Network: version}, Network: coordinator.Network{ID: "network", AccountID: "account", CIDR: "100.64.0.0/24", Revision: version}, Node: coordinator.Node{ID: "node", NetworkID: "network", PublicKey: base64.StdEncoding.EncodeToString(private.PublicKey().Bytes()), AssignedIP: "100.64.0.1", ApprovalState: "approved", Status: "online"}, Peers: []coordinator.Peer{{ID: "peer", NetworkID: "network", PublicKey: base64.StdEncoding.EncodeToString(peer.PublicKey().Bytes()), Endpoint: "192.0.2.2:51820", EndpointGeneration: 1, EndpointExpiresAt: &expires, AllowedIPs: []string{"100.64.0.2/32"}, ACLRestricted: true, ACLGrants: []coordinator.ACLGrant{{DestinationCIDRs: []string{"100.64.0.2/32"}, AllowedPorts: []coordinator.ACLPort{{Protocol: "tcp", Port: 443}}}}}}}
@@ -394,7 +414,7 @@ func newConnectionBackendFixture(t *testing.T) *connectionBackendFixture {
 		fixture.mu.Unlock()
 		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/x-ndjson"}, "X-EndlessNet-Map-Protocol": {"3"}, "X-EndlessNet-Map-Capabilities": {"snapshot,signed-delta,checkpoint,resync,heartbeat"}}, Body: stream, Request: request}, nil
 	})
-	transport, err := connectivity.NewTransport(&http.Client{Transport: trip}, connectivity.HTTPConfig{CallTimeout: time.Second, StreamDuration: 2 * time.Second, ReadIdleTimeout: time.Second, MaxRequestBytes: 65536, MaxResponseBytes: 65536, MaxRecords: 8, MaxCalls: 1, MaxStreams: 1})
+	transport, err := connectivity.NewTransport(&http.Client{Transport: trip}, connectivity.HTTPConfig{CallTimeout: time.Second, StreamDuration: 2 * idle, ReadIdleTimeout: idle, MaxRequestBytes: 65536, MaxResponseBytes: 65536, MaxRecords: 8, MaxCalls: 1, MaxStreams: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
