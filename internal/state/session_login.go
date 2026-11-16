@@ -351,7 +351,7 @@ func sessionLoginsUpdate(before, after Profile) error {
 			return ErrCorrupt
 		}
 	}
-	if next.Phase == SessionLoginSucceeded && !nativeSessionAdoption(before, after) {
+	if next.Phase == SessionLoginSucceeded && old.Phase != SessionLoginSucceeded && !nativeSessionAdoption(before, after) {
 		return ErrCorrupt
 	}
 	return nil

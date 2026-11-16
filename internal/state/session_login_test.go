@@ -123,6 +123,37 @@ func adoptLogin(t *testing.T, p *Profile, now time.Time, user string) {
 	}
 }
 
+func TestSucceededSessionAllowsConnectionCommandsAndKeepsTerminalReceiptImmutable(t *testing.T) {
+	store, backend, now := sessionLoginFixture(t)
+	preparedLogin(t, store, now)
+	if err := changeLoginProfile(t, store, func(p *Profile) { adoptLogin(t, p, now, "original-user") }); err != nil {
+		t.Fatal(err)
+	}
+	before, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, intent := range []DesiredIntent{IntentConnected, IntentDisconnected} {
+		if err := beginConnectionRequest(store, intent, now.Add(time.Duration(i+2)*time.Second)); err != nil {
+			t.Fatalf("connection command after successful login: %v", err)
+		}
+		current, err := store.Load(t.Context())
+		if err != nil || current.Profiles[profileID].Connection.Intent != intent || !reflect.DeepEqual(before.Profiles[profileID].SessionLogin, current.Profiles[profileID].SessionLogin) || !reflect.DeepEqual(before.Profiles[profileID].ActiveSession, current.Profiles[profileID].ActiveSession) {
+			t.Fatal("connection command changed accepted session", err)
+		}
+	}
+	committed := bytes.Clone(backend.data)
+	for _, mutate := range []func(*Profile){
+		func(p *Profile) { p.SessionLogin.Phase = SessionLoginDenied },
+		func(p *Profile) { p.SessionLogin.RequestProof = strings.Repeat("x", 43) },
+		func(p *Profile) { p.SessionLogin.Deadline = p.SessionLogin.Deadline.Add(time.Second) },
+	} {
+		if err := changeLoginProfile(t, store, mutate); !errors.Is(err, ErrCorrupt) || !bytes.Equal(committed, backend.data) {
+			t.Fatal("terminal login changed after unrelated state update", err)
+		}
+	}
+}
+
 func TestV7SessionLoginUpgradePreservesUnknownRenewalAndIdentity(t *testing.T) {
 	store, backend, _ := sessionLoginFixture(t)
 	before, err := store.Load(t.Context())
