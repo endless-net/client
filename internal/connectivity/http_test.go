@@ -321,13 +321,20 @@ func TestTransportRequiresBoundedPublicHTTPPolicy(t *testing.T) {
 }
 
 func TestStreamSnapshotWaitsForActualIssuedTimeWithoutGrantingEarlyAuthority(t *testing.T) {
-	for _, name := range []string{"valid", "cancel", "far-future", "bad-signature"} {
+	for _, name := range []string{"valid", "resync", "cancel", "far-future", "bad-signature"} {
 		t.Run(name, func(t *testing.T) {
 			f := newMapFixture(t)
-			base, started := f.now, time.Now()
-			f.config.Now = func() time.Time { return base.Add(time.Since(started)) }
+			base := f.now
+			var started time.Time
+			elapsedNow := func() time.Duration {
+				if started.IsZero() {
+					return 0
+				}
+				return time.Since(started)
+			}
+			f.config.Now = func() time.Time { return base.Add(elapsedNow()) }
 			f.config.Clock = clockFunc(func() (ClockSample, error) {
-				elapsed := time.Since(started)
+				elapsed := elapsedNow()
 				return ClockSample{Wall: base.Add(elapsed), Uptime: time.Hour + elapsed, UpperUptime: time.Hour + elapsed, Epoch: "fixture-runtime"}, nil
 			})
 			issued := base.Add(50 * time.Millisecond)
@@ -335,6 +342,9 @@ func TestStreamSnapshotWaitsForActualIssuedTimeWithoutGrantingEarlyAuthority(t *
 				issued = base.Add(2 * time.Second)
 			}
 			raw := f.sign(t, nil, issued, base.Add(30*time.Second))
+			if name == "resync" {
+				raw = []byte(strings.ReplaceAll(string(raw), `"type":"snapshot"`, `"type":"resync"`))
+			}
 			if name == "bad-signature" {
 				raw = []byte(strings.ReplaceAll(string(raw), f.value.MapSignature.Signature, strings.Repeat("A", len(f.value.MapSignature.Signature))))
 			}
@@ -345,6 +355,7 @@ func TestStreamSnapshotWaitsForActualIssuedTimeWithoutGrantingEarlyAuthority(t *
 			if _, err = v.VerifySnapshot(context.Background(), raw, nil); !errors.Is(err, ErrMap) {
 				t.Fatal("pure verifier accepted future signature", err)
 			}
+			started = time.Now()
 			transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
 				return mapResponse(r, io.NopCloser(bytes.NewReader(append(raw, '\n')))), nil
 			})
@@ -363,7 +374,7 @@ func TestStreamSnapshotWaitsForActualIssuedTimeWithoutGrantingEarlyAuthority(t *
 				}
 				return done
 			})
-			if name == "valid" {
+			if name == "valid" || name == "resync" {
 				if calls != 1 || !errors.Is(err, done) {
 					t.Fatal("bounded current snapshot not received", calls, err)
 				}

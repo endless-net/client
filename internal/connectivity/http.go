@@ -352,7 +352,7 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 // actual clock. Untrusted timestamps never reach receive or extend a deadline.
 func (t *Transport) waitSnapshotIssuedAt(ctx context.Context, v *Verifier, raw []byte) error {
 	event, err := coordinator.DecodeMapStreamEvent(raw, v.config.MaxBytes)
-	if err != nil || event.Type != "snapshot" || event.Snapshot == nil || event.Snapshot.MapSignature == nil {
+	if err != nil || event.Type != "snapshot" && event.Type != "resync" || event.Snapshot == nil || event.Snapshot.MapSignature == nil {
 		return nil // The verifier owns malformed records and other event types.
 	}
 	delay := event.Snapshot.MapSignature.IssuedAt.Sub(v.config.Now())
