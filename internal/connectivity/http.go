@@ -311,6 +311,9 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 		}
 		var m Map
 		var err error
+		if err = t.waitSnapshotIssuedAt(ctx, v, raw); err != nil {
+			return err
+		}
 		if full {
 			m, err = v.VerifySnapshot(ctx, raw, cursor)
 		} else {
@@ -342,6 +345,31 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 		cursor = &next
 	}
 	return ErrUnavailable
+}
+
+// A server clock can be slightly ahead without granting authority yet. Wait
+// within the existing call budget, then run the unchanged verifier against the
+// actual clock. Untrusted timestamps never reach receive or extend a deadline.
+func (t *Transport) waitSnapshotIssuedAt(ctx context.Context, v *Verifier, raw []byte) error {
+	event, err := coordinator.DecodeMapStreamEvent(raw, v.config.MaxBytes)
+	if err != nil || event.Type != "snapshot" || event.Snapshot == nil || event.Snapshot.MapSignature == nil {
+		return nil // The verifier owns malformed records and other event types.
+	}
+	delay := event.Snapshot.MapSignature.IssuedAt.Sub(v.config.Now())
+	if delay <= 0 {
+		return nil
+	}
+	if delay > t.config.CallTimeout {
+		return ErrMap
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func streamContextError(ctx context.Context) error {

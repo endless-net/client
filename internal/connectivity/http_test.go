@@ -319,3 +319,63 @@ func TestTransportRequiresBoundedPublicHTTPPolicy(t *testing.T) {
 		t.Fatal("unbounded config accepted")
 	}
 }
+
+func TestStreamSnapshotWaitsForActualIssuedTimeWithoutGrantingEarlyAuthority(t *testing.T) {
+	for _, name := range []string{"valid", "cancel", "far-future", "bad-signature"} {
+		t.Run(name, func(t *testing.T) {
+			f := newMapFixture(t)
+			base, started := f.now, time.Now()
+			f.config.Now = func() time.Time { return base.Add(time.Since(started)) }
+			f.config.Clock = clockFunc(func() (ClockSample, error) {
+				elapsed := time.Since(started)
+				return ClockSample{Wall: base.Add(elapsed), Uptime: time.Hour + elapsed, UpperUptime: time.Hour + elapsed, Epoch: "fixture-runtime"}, nil
+			})
+			issued := base.Add(50 * time.Millisecond)
+			if name == "far-future" {
+				issued = base.Add(2 * time.Second)
+			}
+			raw := f.sign(t, nil, issued, base.Add(30*time.Second))
+			if name == "bad-signature" {
+				raw = []byte(strings.ReplaceAll(string(raw), f.value.MapSignature.Signature, strings.Repeat("A", len(f.value.MapSignature.Signature))))
+			}
+			v, err := NewVerifier(f.profile, f.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = v.VerifySnapshot(context.Background(), raw, nil); !errors.Is(err, ErrMap) {
+				t.Fatal("pure verifier accepted future signature", err)
+			}
+			transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
+				return mapResponse(r, io.NopCloser(bytes.NewReader(append(raw, '\n')))), nil
+			})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if name == "cancel" {
+				timer := time.AfterFunc(10*time.Millisecond, cancel)
+				defer timer.Stop()
+			}
+			calls := 0
+			done := errors.New("received verified map")
+			err = transport.StreamSnapshot(ctx, v, nil, func(_ context.Context, m Map) error {
+				calls++
+				if f.config.Now().Before(issued) || m.snapshot.MapSignature.IssuedAt != issued {
+					t.Fatal("early or altered authority")
+				}
+				return done
+			})
+			if name == "valid" {
+				if calls != 1 || !errors.Is(err, done) {
+					t.Fatal("bounded current snapshot not received", calls, err)
+				}
+				return
+			}
+			want := ErrMap
+			if name == "cancel" {
+				want = context.Canceled
+			}
+			if calls != 0 || !errors.Is(err, want) {
+				t.Fatal("unsafe snapshot received", calls, err)
+			}
+		})
+	}
+}
