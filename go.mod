@@ -9,7 +9,7 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/endless-net/billing/api v0.5.0
 	github.com/endless-net/client/api v0.7.0
-	github.com/endless-net/coordinator/api v0.12.0
+	github.com/endless-net/coordinator/api v0.13.0
 	github.com/endless-net/identity/api v0.2.0
 	github.com/endless-net/relay/api v0.4.0
 	github.com/endless-net/signing/api v0.2.0

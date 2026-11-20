@@ -63,7 +63,7 @@ func (s *sessionRotationFixture) RenewSession(ctx context.Context, r *connect.Re
 }
 
 func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testing.T) {
-	for _, mode := range []string{"valid", "lost-session", "lost-node", "expired-node", "lost-session-save", "lost-node-save", "foreign-session", "foreign-node", "signature"} {
+	for _, mode := range []string{"valid", "lost-session", "lost-node", "expired-node", "recover-node", "lost-recovery", "lost-session-save", "lost-node-save", "foreign-session", "foreign-node", "signature"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newRegistrationFixture(t)
 			f.sign(t, f.announcementNodeKey(t), "node:register", f.now.Add(-time.Minute))
@@ -119,17 +119,27 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 				if pending == nil || pending.SentAt.IsZero() || pending.Request != string(raw) || r.Header.Get("Authorization") != "Bearer "+strings.Repeat("n", 43) || r.Header.Get("Cookie") != "" {
 					t.Fatal("node RPC before frozen marker/current session")
 				}
+				request, err := coordinator.DecodeRegisterNodeRequest(raw, 65536)
+				if err != nil {
+					t.Fatal(err)
+				}
+				recovering := mode == "expired-node" || mode == "recover-node" || mode == "lost-recovery"
 				if originalNode == nil {
+					originalNode = bytes.Clone(raw)
+				} else if recovering {
+					source, err := coordinator.DecodeRegisterNodeRequest(originalNode, 65536)
+					if err != nil || request.IdempotencyID != coordinator.NodeRenewalRecoveryID(source.IdempotencyID) {
+						t.Fatal("recovery does not link the lost operation", err)
+					}
 					originalNode = bytes.Clone(raw)
 				} else if !bytes.Equal(raw, originalNode) {
 					t.Fatal("node retry changed original bytes")
 				}
-				if (mode == "lost-node" || mode == "expired-node") && nodeCalls == 1 {
+				if (recovering || mode == "lost-node") && nodeCalls == 1 || mode == "lost-recovery" && nodeCalls == 2 {
 					return nil, errors.New("secret lost node result")
 				}
-				request, err := coordinator.DecodeRegisterNodeRequest(raw, 65536)
-				if err != nil {
-					t.Fatal(err)
+				if mode == "expired-node" {
+					return &http.Response{StatusCode: 409, Body: http.NoBody, Request: r}, nil
 				}
 				if request.IdempotencyID == f.p.Secrets.RegistrationID || request.NodeCredential != f.p.Secrets.NodeCredential || request.RegistrationBinding != f.result.RegistrationBinding {
 					t.Fatal("renewal changed registration/predecessor")
@@ -155,28 +165,34 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 				return e
 			}
 			err = makeExecutor().Ensure(context.Background(), loginProfile, 1)
-			if mode == "expired-node" {
+			recovering := mode == "expired-node" || mode == "recover-node" || mode == "lost-recovery"
+			if recovering {
 				if err == nil {
 					t.Fatal("lost node result reported success")
 				}
-				pending, loadErr := f.store.Load(t.Context())
-				if loadErr != nil {
-					t.Fatal(loadErr)
-				}
 				f.now = f.now.Add(11 * time.Minute)
-				if err := makeExecutor().Ensure(t.Context(), loginProfile, 1); !errors.Is(err, ErrNodeRenewalUnresolved) {
-					t.Fatal("expired unknown Node renewal misclassified", err)
+				err = makeExecutor().Ensure(t.Context(), loginProfile, 1)
+				if mode == "expired-node" {
+					if !errors.Is(err, ErrNodeRenewalUnresolved) || nodeCalls != 2 || actor.calls != 1 {
+						t.Fatal("unconfirmed recovery did not fail closed", err)
+					}
+					after, loadErr := f.store.Load(t.Context())
+					profile := after.Profiles[loginProfile]
+					if loadErr != nil || profile.ActiveNodeCredential != nil || profile.NodeRenewal == nil ||
+						profile.Secrets != baseline.Profiles[loginProfile].Secrets {
+						t.Fatal("unknown outcome granted authority or changed enrollment", loadErr)
+					}
+					return
 				}
-				after, loadErr := f.store.Load(t.Context())
-				if loadErr != nil {
-					t.Fatal(loadErr)
+				if mode == "lost-recovery" {
+					if err == nil {
+						t.Fatal("lost recovery reported success")
+					}
+					f.now = f.now.Add(11 * time.Minute)
+					err = makeExecutor().Ensure(t.Context(), loginProfile, 1)
 				}
-				if nodeCalls != 1 || actor.calls != 1 || !reflect.DeepEqual(pending.Profiles[loginProfile].NodeRenewal, after.Profiles[loginProfile].NodeRenewal) || after.Profiles[loginProfile].Secrets != baseline.Profiles[loginProfile].Secrets {
-					t.Fatal("expired request retried/reset or enrollment changed")
-				}
-				return
 			}
-			if strings.HasPrefix(mode, "lost-") {
+			if strings.HasPrefix(mode, "lost-") && !recovering {
 				if err == nil {
 					t.Fatal("unknown result reported success")
 				}
@@ -203,8 +219,11 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 			if mode == "lost-session" {
 				wantSessions = 2
 			}
-			if mode == "lost-node" {
+			switch mode {
+			case "lost-node", "recover-node":
 				wantNodes = 2
+			case "lost-recovery":
+				wantNodes = 3
 			}
 			if actor.calls != wantSessions || nodeCalls != wantNodes {
 				t.Fatal("hidden remote retry/duplicate", actor.calls, nodeCalls)

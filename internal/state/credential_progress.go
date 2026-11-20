@@ -125,7 +125,8 @@ func credentialProgressUpdate(before, after Profile) error {
 			return ErrCorrupt
 		}
 		if old.Request != next.Request {
-			if before.ActiveNodeCredential == nil || before.ActiveNodeCredential.Request != old.Request || old.Response == "" {
+			adopted := before.ActiveNodeCredential != nil && before.ActiveNodeCredential.Request == old.Request && old.Response != ""
+			if !adopted && !validNodeRecoveryTransition(before, old, next) {
 				return ErrCorrupt
 			}
 		} else if !old.CreatedAt.Equal(next.CreatedAt) || !old.Deadline.Equal(next.Deadline) || !old.SentAt.IsZero() && !old.SentAt.Equal(next.SentAt) || old.Response != "" && old.Response != next.Response {
@@ -143,4 +144,23 @@ func credentialProgressUpdate(before, after Profile) error {
 		}
 	}
 	return nil
+}
+
+func validNodeRecoveryTransition(profile Profile, old, next *NodeRenewal) bool {
+	if old.Response != "" || old.SentAt.IsZero() || next.CreatedAt.Before(old.Deadline) {
+		return false
+	}
+	source, err := coordinator.DecodeRegisterNodeRequest([]byte(old.Request), 65536)
+	if err != nil || source.IdempotencyID == "" {
+		return false
+	}
+	request, err := coordinator.DecodeRegisterNodeRequest([]byte(next.Request), 65536)
+	if err != nil || request.IdempotencyID != coordinator.NodeRenewalRecoveryID(source.IdempotencyID) ||
+		request.NodeCredential != source.NodeCredential || request.RegistrationBinding != source.RegistrationBinding {
+		return false
+	}
+	current, err := profile.CurrentSession()
+	return err == nil && next.CreatedAt.Before(current.ExpiresAt) &&
+		!next.Deadline.After(current.ExpiresAt) &&
+		request.SessionTokenBinding == coordinator.RegistrationSessionTokenBinding(current.Access)
 }

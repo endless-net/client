@@ -40,6 +40,7 @@ type onlineRenewalFixture struct {
 	offset                  atomic.Int64
 	mu                      sync.Mutex
 	head, access, grant     string
+	lastCommand, lastWire   string
 	nodes                   map[string][]byte
 	sessions                map[string]*sessionv1.RenewSessionResponse
 	nodeCalls, sessionCalls int
@@ -172,15 +173,19 @@ func (f *onlineRenewalFixture) node(r *http.Request) (*http.Response, error) {
 	}
 	response := f.nodes[request.IdempotencyID]
 	if response == nil {
-		if request.NodeCredential != f.head || r.Header.Get("Authorization") != "Bearer "+f.access {
-			f.t.Error("rotation used wrong head/session")
+		recovery := f.mode == "expired-unknown" && f.lastCommand != "" &&
+			request.IdempotencyID == coordinator.NodeRenewalRecoveryID(f.lastCommand) &&
+			request.NodeCredential == f.lastWire
+		if !recovery && request.NodeCredential != f.head || r.Header.Get("Authorization") != "Bearer "+f.access {
+			f.mu.Unlock()
+			return nil, errors.New("rotation used wrong head/session")
 		}
 		previous, err := coordinator.DecodeNodeCredential(f.head, 8192)
 		if err != nil {
 			f.mu.Unlock()
 			return nil, err
 		}
-		if !f.now().Before(previous.ExpiresAt) {
+		if !recovery && !f.now().Before(previous.ExpiresAt) {
 			f.t.Error("renewal started after expiry")
 		}
 		key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{62}, 32))
@@ -207,6 +212,7 @@ func (f *onlineRenewalFixture) node(r *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 		f.nodes[request.IdempotencyID] = response
+		f.lastCommand, f.lastWire = request.IdempotencyID, request.NodeCredential
 		f.head = credential
 	}
 	f.mu.Unlock()
@@ -461,7 +467,7 @@ func TestOnlineRenewalWaitsForAdmittedNativeMapApply(t *testing.T) {
 	}
 }
 
-func TestOnlineExpiredUnknownRenewalKeepsOriginalCommand(t *testing.T) {
+func TestOnlineExpiredUnknownRenewalRecoversSameDevice(t *testing.T) {
 	f, d := newOnlineRenewalFixture(t, "expired-unknown")
 	awaitCredentialCondition(t, func() bool { return f.f.native.probes.Load() > 0 })
 	f.offset.Store(int64(25 * time.Minute))
@@ -471,25 +477,37 @@ func TestOnlineExpiredUnknownRenewalKeepsOriginalCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer clearConnectionKeys(before)
-	f.offset.Store(int64(36 * time.Minute))
-	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
-	defer cancel()
-	if err := d.Serve(ctx); !errors.Is(err, connectivity.FailureNodeRenewal) {
-		t.Fatal("unknown operation expiry hidden", err)
+	original := before.Profiles[workerProfile]
+	frozen, err := coordinator.DecodeRegisterNodeRequest([]byte(original.NodeRenewal.Request), 16384)
+	if err != nil {
+		t.Fatal(err)
 	}
+	f.offset.Store(int64(36 * time.Minute))
+	awaitCredentialCondition(t, func() bool { return f.f.native.refreshes.Load() >= 1 })
 	after, err := f.f.store.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer clearConnectionKeys(after)
-	if !reflect.DeepEqual(before.Profiles[workerProfile].NodeRenewal, after.Profiles[workerProfile].NodeRenewal) || after.Profiles[workerProfile].ActiveNodeCredential != nil {
-		t.Fatal("expired unknown operation reset or adopted")
+	current := after.Profiles[workerProfile]
+	if current.ActiveNodeCredential == nil || current.Secrets != original.Secrets ||
+		!reflect.DeepEqual(current.Attempt, original.Attempt) || !reflect.DeepEqual(current.Keys, original.Keys) {
+		t.Fatal("recovery changed the device or failed to adopt the new credential")
+	}
+	recovered, err := coordinator.DecodeRegisterNodeRequest([]byte(current.ActiveNodeCredential.Request), 16384)
+	if err != nil || recovered.IdempotencyID != coordinator.NodeRenewalRecoveryID(frozen.IdempotencyID) {
+		t.Fatal("recovery lost its predecessor operation", err)
 	}
 	f.mu.Lock()
 	calls := f.nodeCalls
 	f.mu.Unlock()
-	if calls != 1 {
-		t.Fatal("expired command dispatched again", calls)
+	if calls != 2 {
+		t.Fatal("recovery dispatched duplicate commands", calls)
+	}
+	select {
+	case <-d.done:
+		t.Fatal("recovery terminated the native owner", d.result())
+	default:
 	}
 }
 

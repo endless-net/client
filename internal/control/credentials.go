@@ -102,7 +102,7 @@ func (c *Credentials) Ensure(ctx context.Context, id string, generation uint64) 
 }
 
 // Refresh also admits proactive rotation chosen by the connection's scheduler.
-// Every retry retains the original persisted request and its original deadline.
+// Retries retain the frozen request and deadline. Recovery creates a separately bound command.
 func (c *Credentials) Refresh(ctx context.Context, id string, generation uint64, session, node bool) error {
 	if !c.mu.TryLock() {
 		return state.ErrStale
@@ -117,9 +117,21 @@ func (c *Credentials) Refresh(ctx context.Context, id string, generation uint64,
 		return err
 	}
 	pending := p.NodeRenewal != nil && (p.ActiveNodeCredential == nil || p.ActiveNodeCredential.Request != p.NodeRenewal.Request)
-	// A frozen Node command is bound to its original user-session bearer. Never
-	// rotate that bearer before recovering the command's original result.
 	if pending {
+		now := c.config.Now()
+		if !now.Before(p.NodeRenewal.Deadline) {
+			if p.NodeRenewal.SentAt.IsZero() {
+				return ErrNodeRenewalUnresolved
+			}
+			current, err := p.CurrentSession()
+			if err != nil {
+				return err
+			}
+			if err = c.ensureSession(ctx, id, generation, session || !current.ExpiresAt.After(now.Add(coordinator.NodeRenewalExecutionTTL))); err != nil {
+				return err
+			}
+			session = false
+		}
 		if err = c.ensureNode(ctx, id, generation); err != nil {
 			return err
 		}
@@ -301,7 +313,20 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 		return ErrCredentialsLogin
 	}
 	pending := p.NodeRenewal != nil && (p.ActiveNodeCredential == nil || p.ActiveNodeCredential.Request != p.NodeRenewal.Request)
-	if !pending {
+	now := c.config.Now().UTC()
+	recovery := pending && !now.Before(p.NodeRenewal.Deadline)
+	if !pending || recovery {
+		operationID := uuid.NewString()
+		if recovery {
+			if p.NodeRenewal.SentAt.IsZero() {
+				return ErrNodeRenewalUnresolved
+			}
+			source, err := coordinator.DecodeRegisterNodeRequest([]byte(p.NodeRenewal.Request), c.remote.config.MaxRequestBytes)
+			if err != nil || source.IdempotencyID == "" {
+				return ErrCredentialsProtocol
+			}
+			operationID = coordinator.NodeRenewalRecoveryID(source.IdempotencyID)
+		}
 		previous, _, err := p.CurrentNodeCredential()
 		if err != nil {
 			return err
@@ -310,7 +335,7 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 		if err != nil {
 			return ErrCredentialsProtocol
 		}
-		request := coordinator.RegisterNodeRequest{SchemaVersion: 2, IdempotencyID: uuid.NewString(), AccountID: p.Attempt.AccountID, NetworkID: p.Attempt.NetworkID, Hostname: initial.Hostname, PublicKey: initial.PublicKey, DeviceFingerprint: initial.DeviceFingerprint, NodeCredential: previous, RegistrationBinding: coordinator.RegistrationIdentityProofBinding(initial), SessionTokenBinding: coordinator.RegistrationSessionTokenBinding(current.Access)}
+		request := coordinator.RegisterNodeRequest{SchemaVersion: 2, IdempotencyID: operationID, AccountID: p.Attempt.AccountID, NetworkID: p.Attempt.NetworkID, Hostname: initial.Hostname, PublicKey: initial.PublicKey, DeviceFingerprint: initial.DeviceFingerprint, NodeCredential: previous, RegistrationBinding: coordinator.RegistrationIdentityProofBinding(initial), SessionTokenBinding: coordinator.RegistrationSessionTokenBinding(current.Access)}
 		if coordinator.SetRegisterNodeIdentityProof(&request, ed25519.PrivateKey(p.Keys.IdentityPrivate)) != nil {
 			return ErrCredentialsProtocol
 		}
@@ -318,7 +343,6 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 		if err != nil || len(raw) > c.remote.config.MaxRequestBytes {
 			return ErrCredentialsProtocol
 		}
-		now := c.config.Now().UTC()
 		deadline := now.Add(coordinator.NodeRenewalExecutionTTL)
 		if current.ExpiresAt.Before(deadline) {
 			deadline = current.ExpiresAt
@@ -347,9 +371,16 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 	if decodeErr != nil {
 		return ErrCredentialsProtocol
 	}
-	if frozen.SessionTokenBinding != coordinator.RegistrationSessionTokenBinding(current.Access) {
+	current, err = p.CurrentSession()
+	if err != nil {
+		return err
+	}
+	if r.SentAt.IsZero() && frozen.SessionTokenBinding != coordinator.RegistrationSessionTokenBinding(current.Access) {
 		return ErrNodeRenewalUnresolved
 	}
+	// Coordinator authorizes a known frozen command against the current
+	// same-user session, without changing the signed inputs.
+
 	call, stop := context.WithTimeout(ctx, min(r.Deadline.Sub(c.config.Now()), 30*time.Second))
 	defer stop()
 	if _, err = c.trusted(call, p); err != nil {
@@ -367,10 +398,6 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 			return err
 		}
 		r.SentAt = sent
-	}
-	current, err = p.CurrentSession()
-	if err != nil {
-		return err
 	}
 	httpRequest, err := http.NewRequestWithContext(call, http.MethodPost, p.ControlOrigin+"/nodes/register", bytes.NewBufferString(r.Request))
 	if err != nil {
