@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/endless-net/client/internal/state"
@@ -134,6 +135,76 @@ type blockingBody struct {
 
 func (b *blockingBody) Read([]byte) (int, error) { <-b.closed; return 0, io.ErrClosedPipe }
 func (b *blockingBody) Close() error             { b.once.Do(func() { close(b.closed) }); return nil }
+
+type streamDeadlineReader struct{ ctx context.Context }
+
+func (r streamDeadlineReader) Read([]byte) (int, error) {
+	<-r.ctx.Done()
+	return 0, r.ctx.Err()
+}
+
+func TestStreamRotationRequiresOwnDeadlineAndVerifiedMap(t *testing.T) {
+	for _, name := range []string{"scheduled", "parent-deadline", "credential-deadline", "early-eof", "idle", "heartbeat-only", "partial-record"} {
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				f := newMapFixture(t)
+				expiry := f.now.Add(time.Minute)
+				if name == "credential-deadline" {
+					expiry = f.profile.Attempt.CredentialEnds
+					f.now = expiry.Add(-500 * time.Millisecond)
+					f.value.Peers[0].EndpointExpiresAt = &expiry
+				}
+				v, err := NewVerifier(f.profile, f.config)
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw := append(f.sign(t, nil, f.now, expiry), '\n')
+				transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
+					body := io.MultiReader(bytes.NewReader(raw), streamDeadlineReader{ctx: r.Context()})
+					switch name {
+					case "early-eof":
+						body = bytes.NewReader(raw)
+					case "idle":
+						return mapResponse(r, &blockingBody{closed: make(chan struct{})}), nil
+					case "heartbeat-only":
+						event, err := json.Marshal(coordinator.MapStreamEvent{Type: "heartbeat", ProtocolVersion: 3, Capabilities: []string{"snapshot", "signed-delta", "checkpoint", "resync", "heartbeat"}, EventID: "heartbeat"})
+						if err != nil {
+							t.Fatal(err)
+						}
+						body = io.MultiReader(bytes.NewReader(append(event, '\n')), streamDeadlineReader{ctx: r.Context()})
+					case "partial-record":
+						body = io.MultiReader(bytes.NewReader(raw), strings.NewReader("{"), streamDeadlineReader{ctx: r.Context()})
+					}
+					return mapResponse(r, io.NopCloser(body)), nil
+				})
+				ctx := context.Background()
+				want := ErrUnavailable
+				switch name {
+				case "scheduled":
+					want = ErrStreamRotation
+				case "parent-deadline":
+					parent, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+					defer cancel()
+					ctx = parent
+					want = context.DeadlineExceeded
+				case "credential-deadline", "partial-record":
+					want = context.DeadlineExceeded
+				case "idle", "heartbeat-only":
+					transport.config.ReadIdleTimeout = 500 * time.Millisecond
+				}
+				received := 0
+				err = transport.StreamSnapshot(ctx, v, nil, func(context.Context, Map) error { received++; return nil })
+				wantReceived := 1
+				if name == "idle" || name == "heartbeat-only" {
+					wantReceived = 0
+				}
+				if !errors.Is(err, want) || received != wantReceived || len(transport.activeStreams) != 0 {
+					t.Fatalf("stream result = %v, maps = %d, active streams = %d; want %v, %d, 0", err, received, len(transport.activeStreams), want, wantReceived)
+				}
+			})
+		})
+	}
+}
 
 func TestTransportRejectsBadStreamsAndBoundsIdleRecordsAndCapacity(t *testing.T) {
 	for _, name := range []string{"protocol", "capabilities", "media", "encoding", "oversize", "truncated", "denied", "outage", "records", "capacity", "idle", "header-timeout"} {

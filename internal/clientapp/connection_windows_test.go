@@ -593,6 +593,84 @@ func TestWindowsConnectionDriverReconnectsWithFullSnapshotWithoutResettingCursor
 	}
 }
 
+func TestWindowsConnectionDriverRotatesMapStreamWithoutEnteringOffline(t *testing.T) {
+	for _, name := range []string{"replacement-works", "replacement-unavailable"} {
+		t.Run(name, func(t *testing.T) {
+			f := newConnectionBackendFixture(t)
+			f.factory.config.RetryInterval = 30 * time.Second
+			f.factory.config.RenewalInterval = time.Minute
+			rotate := make(chan struct{})
+			replacing := make(chan struct{})
+			allowReplacement := make(chan struct{})
+			stream := f.factory.stream
+			calls := 0
+			f.factory.stream = func(ctx context.Context, v *connectivity.Verifier, cursor *state.MapCursor, receive func(context.Context, connectivity.Map) error) error {
+				calls++
+				if calls == 1 {
+					return stream(ctx, v, cursor, func(ctx context.Context, m connectivity.Map) error {
+						if err := receive(ctx, m); err != nil {
+							return err
+						}
+						select {
+						case <-rotate:
+							return connectivity.ErrStreamRotation
+						case <-ctx.Done():
+							return ctx.Err()
+						}
+					})
+				}
+				close(replacing)
+				select {
+				case <-allowReplacement:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				if name == "replacement-unavailable" {
+					return connectivity.ErrUnavailable
+				}
+				return stream(ctx, v, cursor, receive)
+			}
+			owner, err := f.factory.newOwner(t.Context(), workerProfile, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			d := owner.(*windowsConnection)
+			t.Cleanup(func() { _ = d.Disconnect(workerCallContext(t)) })
+			if err := d.Connect(backendOperation(t, f), false); err != nil {
+				t.Fatal(err)
+			}
+			close(rotate)
+			ctx := workerCallContext(t)
+			select {
+			case <-replacing:
+			case <-ctx.Done():
+				t.Fatal("scheduled rotation waited for the outage retry interval")
+			}
+			if f.native.epochs.Load() != 1 || f.native.offlines.Load() != 0 || f.native.revoked.Load() {
+				t.Fatal("scheduled rotation degraded the current source while opening its replacement")
+			}
+			close(allowReplacement)
+			tick := time.NewTicker(time.Millisecond)
+			defer tick.Stop()
+			for f.native.refreshes.Load() == 0 && f.native.offlines.Load() == 0 {
+				select {
+				case <-ctx.Done():
+					t.Fatal("replacement result never reached the native owner")
+				case <-tick.C:
+				}
+			}
+			wantOffline, wantRefresh := uint64(0), uint64(1)
+			if name == "replacement-unavailable" {
+				wantOffline, wantRefresh = 1, 0
+			}
+			if f.native.offlines.Load() != wantOffline || f.native.refreshes.Load() != wantRefresh ||
+				f.native.epochs.Load() != 2 || f.native.starts.Load() != 1 || f.native.revoked.Load() {
+				t.Fatal("replacement failed to preserve the owner or select its expected source policy")
+			}
+		})
+	}
+}
+
 func TestWindowsConnectionDriverRejectsBindMismatchBeforeAnnouncementOrPath(t *testing.T) {
 	f := newConnectionBackendFixture(t)
 	f.native.wrongPort = true

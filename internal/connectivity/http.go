@@ -23,6 +23,7 @@ import (
 
 var (
 	ErrUnavailable       = errors.New("connectivity control plane unavailable")
+	ErrStreamRotation    = errors.New("scheduled map stream rotation")
 	ErrDenied            = errors.New("connectivity access denied")
 	ErrRevoked           = errors.New("connectivity access explicitly revoked")
 	ErrEndpointUncertain = errors.New("endpoint announcement outcome uncertain")
@@ -50,12 +51,13 @@ func NewTransport(client *http.Client, c HTTPConfig) (*Transport, error) {
 	if err != nil {
 		return nil, ErrConfig
 	}
-	streamInput := *calls
-	streamInput.Timeout = c.StreamDuration
-	streams, err := control.RestrictedHTTPClient(&streamInput, c.StreamDuration)
+	streams, err := control.RestrictedHTTPClient(calls, c.StreamDuration)
 	if err != nil {
 		return nil, ErrConfig
 	}
+	// The request context owns the stream deadline and distinguishes rotation
+	// from cancellation, credential expiry and transport failures.
+	streams.Timeout = 0
 	return &Transport{calls: calls, streams: streams, config: c, activeCalls: make(chan struct{}, c.MaxCalls), activeStreams: make(chan struct{}, c.MaxStreams)}, nil
 }
 
@@ -214,6 +216,8 @@ func copyCursor(cursor *state.MapCursor) (*state.MapCursor, error) {
 // Stream processes one record at a time without an unbounded queue or retry.
 // Receive must persist/fence the cursor before apply and respect its context.
 // A callback error closes this stream; heartbeat/replay never invoke Receive.
+// ErrStreamRotation asks the caller to start a replacement immediately, with
+// no change to the existing signed lease.
 func (t *Transport) Stream(parent context.Context, v *Verifier, previous *state.MapCursor, receive func(context.Context, Map) error) error {
 	return t.stream(parent, v, previous, receive, false)
 }
@@ -242,13 +246,15 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 		return ErrUnavailable
 	}
 	duration := t.config.StreamDuration
-	if remaining := v.credentialEnds.Sub(v.config.Now()); remaining < duration {
+	deadlineCause := ErrStreamRotation
+	if remaining := v.credentialEnds.Sub(v.config.Now()); remaining <= duration {
 		duration = remaining
+		deadlineCause = context.DeadlineExceeded
 	}
 	if duration < time.Millisecond {
 		return ErrDenied
 	}
-	timed, stop := context.WithTimeout(parent, duration)
+	timed, stop := context.WithTimeoutCause(parent, duration, deadlineCause)
 	defer stop()
 	ctx, abort := context.WithCancelCause(timed)
 	defer abort(nil)
@@ -290,14 +296,36 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 		return ErrMap
 	}
 	reader := bufio.NewReaderSize(response.Body, t.config.MaxResponseBytes+1)
+	receivedMap := false
+	firstMapBy := time.Now().Add(t.config.ReadIdleTimeout)
 	for count := 0; count < t.config.MaxRecords; count++ {
 		if ctx.Err() != nil {
 			return streamContextError(ctx)
 		}
-		timer := time.AfterFunc(t.config.ReadIdleTimeout, func() { abort(ErrUnavailable); closeBody() })
+		idle := t.config.ReadIdleTimeout
+		if full && !receivedMap {
+			// Heartbeats and replays cannot keep a replacement waiting for a
+			// fresh, signed snapshot past the initial read budget.
+			idle = time.Until(firstMapBy)
+			if idle <= 0 {
+				return ErrUnavailable
+			}
+		}
+		var timer *time.Timer
+		if deadline, _ := ctx.Deadline(); idle < time.Until(deadline) {
+			timer = time.AfterFunc(idle, func() { abort(ErrUnavailable); closeBody() })
+		}
 		raw, readErr := reader.ReadSlice('\n')
-		timer.Stop()
+		if timer != nil {
+			timer.Stop()
+		}
 		if ctx.Err() != nil {
+			// Only our own limit may rotate a stream that delivered a verified
+			// map. EOF, partial records and independent I/O errors are failures.
+			if receivedMap && len(raw) == 0 && context.Cause(ctx) == ErrStreamRotation &&
+				(errors.Is(readErr, ErrStreamRotation) || errors.Is(readErr, context.DeadlineExceeded) || errors.Is(readErr, context.Canceled)) {
+				return ErrStreamRotation
+			}
 			return streamContextError(ctx)
 		}
 		if len(raw) > t.config.MaxResponseBytes || errors.Is(readErr, bufio.ErrBufferFull) {
@@ -341,6 +369,7 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 		if callbackErr != nil {
 			return callbackErr
 		}
+		receivedMap = true
 		next := m.Cursor()
 		cursor = &next
 	}

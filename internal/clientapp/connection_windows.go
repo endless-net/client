@@ -359,7 +359,9 @@ func (d *windowsConnection) readMaps(native windowsConnectionNative) {
 		if d.lifetime.Err() != nil {
 			return
 		}
-		if handoff {
+		if handoff || errors.Is(err, connectivity.ErrStreamRotation) {
+			// Rotation keeps the signed lease as-is. A replacement failure
+			// still takes the normal offline or terminal path below.
 			continue
 		}
 		epoch := native.BlockSource()
