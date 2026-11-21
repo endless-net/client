@@ -436,6 +436,20 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 	if err != nil {
 		return ErrCredentialsProtocol
 	}
+	// Keep the same receipt and deadline if the server clock is ahead.
+	// Wait for local time before checking trust or accepting the credential.
+	if delay := result.IssuedAt.Sub(c.config.Now()); delay > 0 {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-call.Done():
+			return call.Err()
+		case <-timer.C:
+		}
+	}
+	if err := call.Err(); err != nil {
+		return err
+	}
 	announcement, err := c.trusted(call, p)
 	if err != nil {
 		return err

@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"connectrpc.com/connect"
@@ -63,9 +64,16 @@ func (s *sessionRotationFixture) RenewSession(ctx context.Context, r *connect.Re
 }
 
 func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testing.T) {
-	for _, mode := range []string{"valid", "lost-session", "lost-node", "expired-node", "recover-node", "lost-recovery", "lost-session-save", "lost-node-save", "foreign-session", "foreign-node", "signature"} {
-		t.Run(mode, func(t *testing.T) {
+	for _, mode := range []string{"valid", "lost-session", "lost-node", "expired-node", "recover-node", "lost-recovery", "lost-session-save", "lost-node-save", "foreign-session", "foreign-node", "signature", "future-issued", "future-issued-timeout"} {
+		run := func(t *testing.T) {
 			f := newRegistrationFixture(t)
+			var responseTime time.Time
+			clock := func() time.Time {
+				if !responseTime.IsZero() {
+					return f.now.Add(time.Since(responseTime))
+				}
+				return f.now
+			}
 			f.sign(t, f.announcementNodeKey(t), "node:register", f.now.Add(-time.Minute))
 			f.p.Attempt.Phase = enrollment.Registered
 			f.p.Attempt.NodeID = "node"
@@ -146,6 +154,10 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 				}
 				f.sign(t, f.announcementNodeKey(t), "node:register", f.now.Add(time.Hour))
 				response := coordinator.NodeCredentialRenewalResponse{SchemaVersion: 1, IdempotencyID: request.IdempotencyID, RenewalBinding: coordinator.RegistrationIdentityProofBinding(request), RegistrationBinding: request.RegistrationBinding, PreviousCredentialSHA256: coordinator.NodeCredentialSHA256(request.NodeCredential), NetworkID: "network", NodeID: "node", NodeCredential: f.result.NodeCredential, IssuedAt: f.now, ExpiresAt: f.now.Add(time.Hour)}
+				if strings.HasPrefix(mode, "future-issued") {
+					responseTime = time.Now()
+					response.IssuedAt = f.now.Add(time.Second)
+				}
 				if mode == "foreign-node" {
 					response.NodeID = "foreign"
 				}
@@ -158,13 +170,26 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 				return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(encode(t, response))), Request: r}, nil
 			})}
 			makeExecutor := func() *Credentials {
-				e, err := NewCredentials(f.store, client, staticAnnouncement{f.announcement}, RegistrationConfig{MaxRequestBytes: 16384, MaxResponseBytes: 65536, MaxCredentialBytes: 8192, Now: func() time.Time { return f.now }}, RegistrationExecutorConfig{MaxCommitRetries: 3, RetryInterval: time.Second, WriteBudget: time.Second, Now: func() time.Time { return f.now }})
+				e, err := NewCredentials(f.store, client, staticAnnouncement{f.announcement}, RegistrationConfig{MaxRequestBytes: 16384, MaxResponseBytes: 65536, MaxCredentialBytes: 8192, Now: clock}, RegistrationExecutorConfig{MaxCommitRetries: 3, RetryInterval: time.Second, WriteBudget: time.Second, Now: clock})
 				if err != nil {
 					t.Fatal(err)
 				}
 				return e
 			}
-			err = makeExecutor().Ensure(context.Background(), loginProfile, 1)
+			ctx := t.Context()
+			if mode == "future-issued-timeout" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
+				defer cancel()
+			}
+			err = makeExecutor().Ensure(ctx, loginProfile, 1)
+			if mode == "future-issued-timeout" {
+				after, loadErr := f.store.Load(t.Context())
+				if !errors.Is(err, context.DeadlineExceeded) || loadErr != nil || after.Profiles[loginProfile].ActiveNodeCredential != nil || nodeCalls != 1 {
+					t.Fatal("future credential exceeded its budget or was adopted", err, loadErr, nodeCalls)
+				}
+				return
+			}
 			recovering := mode == "expired-node" || mode == "recover-node" || mode == "lost-recovery"
 			if recovering {
 				if err == nil {
@@ -233,6 +258,13 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 			}
 			if mode == "valid" {
 				assertRenewedEndpointReceipt(t, f.store, after, f.now)
+			}
+		}
+		t.Run(mode, func(t *testing.T) {
+			if strings.HasPrefix(mode, "future-issued") {
+				synctest.Test(t, run)
+			} else {
+				run(t)
 			}
 		})
 	}
