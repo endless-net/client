@@ -195,7 +195,9 @@ func (t *Transport) UpdateEndpoint(parent context.Context, p state.Profile, c Ve
 		return empty, ErrEndpointUncertain
 	}
 	result, err := coordinator.DecodeUpdateNodeEndpointResponse(raw, t.config.MaxResponseBytes)
-	if err != nil || coordinator.ValidateEndpointReceipt(input, result, binding.node, binding.network) != nil || result.UpdatedAt.After(c.Now()) || result.ExpiresAt.After(binding.credentialEnds) {
+	// This acknowledgement reports discovery state. Its timestamp uses the
+	// server clock and never supplies authority to start or extend traffic.
+	if err != nil || coordinator.ValidateEndpointReceipt(input, result, binding.node, binding.network) != nil || result.ExpiresAt.After(binding.credentialEnds) {
 		return empty, ErrEndpointUncertain
 	}
 	return result, nil
