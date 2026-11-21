@@ -120,6 +120,59 @@ func signedSource(t *testing.T, raw *[]byte, now *time.Time, root signing.Bootst
 	return source
 }
 
+func TestConnectionBootstrapSharesOnlyCurrentVerifiedAnnouncement(t *testing.T) {
+	const origin = "https://control.example"
+	now := time.Date(2026, 11, 22, 0, 0, 0, 0, time.UTC)
+	raw, root := signedFixture(t, origin, now, 11)
+	store, _ := bootstrapStore(t)
+	calls := 0
+	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw)), Request: r}, nil
+	})}
+	source, err := NewVerifiedBootstrap(client, 1<<20, func() time.Time { return now }, map[string]signing.BootstrapRoot{origin: root}, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	startup, finish := context.WithCancel(t.Context())
+	defer finish()
+	scoped := source.ForConnection(startup, origin)
+	for range 3 {
+		first, err := scoped.Fetch(t.Context(), origin)
+		if err != nil || !first.VerifiedAt(now) || first.Checkpoint().Revision != 11 {
+			t.Fatal("valid bootstrap was rejected", err)
+		}
+		first.Bundle[0] ^= 0xff
+	}
+	if calls != 1 {
+		t.Fatal("expected one GET for startup", calls)
+	}
+	if _, err := scoped.Fetch(t.Context(), "https://other.example"); !errors.Is(err, ErrBootstrap) || calls != 1 {
+		t.Fatal("startup bootstrap crossed origins", err)
+	}
+	raw, _ = signedFixture(t, origin, now, 12)
+	if _, err := source.Fetch(t.Context(), origin); err != nil {
+		t.Fatal(err)
+	}
+	if current, err := scoped.Fetch(t.Context(), origin); err != nil || current.Checkpoint().Revision != 12 || calls != 3 {
+		t.Fatal("startup reused a superseded checkpoint", err, calls)
+	}
+	now = now.Add(time.Hour)
+	if _, err := scoped.Fetch(t.Context(), origin); !errors.Is(err, ErrBootstrap) || calls != 4 {
+		t.Fatal("startup accepted expired bootstrap", err, calls)
+	}
+	raw, _ = signedFixture(t, origin, now, 13)
+	finish()
+	for range 2 {
+		if current, err := scoped.Fetch(t.Context(), origin); err != nil || current.Checkpoint().Revision != 13 {
+			t.Fatal("background fetch was rejected", err)
+		}
+	}
+	if calls != 6 {
+		t.Fatal("bootstrap outlived connection scope", calls)
+	}
+}
+
 func TestSignedBootstrapRootTimeOriginAndSignatureRefusals(t *testing.T) {
 	now := time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)
 	good, root := signedFixture(t, "https://control.example", now, 7)

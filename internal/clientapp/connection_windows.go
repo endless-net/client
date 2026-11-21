@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/connectivity"
+	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/dataplane"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
@@ -116,6 +117,7 @@ type connectionFrame struct {
 
 type windowsConnection struct {
 	factory              *windowsConnections
+	verifier             connectivity.VerifierConfig
 	profile              string
 	generation           uint64
 	lifetime             context.Context
@@ -155,7 +157,7 @@ func (f *windowsConnections) newOwner(lifetime context.Context, profile string, 
 		return nil, ErrConnectionWorker
 	}
 	ctx, cancel := context.WithCancel(lifetime)
-	return &windowsConnection{factory: f, profile: profile, generation: generation, lifetime: ctx, cancel: cancel, frames: make(chan connectionFrame, f.config.MaxQueuedMaps), fatal: make(chan error, 1), applied: make(chan struct{}, 1), credentialsReady: make(chan struct{}), credentialsStarted: make(chan struct{})}, nil
+	return &windowsConnection{factory: f, verifier: f.config.Verifier, profile: profile, generation: generation, lifetime: ctx, cancel: cancel, frames: make(chan connectionFrame, f.config.MaxQueuedMaps), fatal: make(chan error, 1), applied: make(chan struct{}, 1), credentialsReady: make(chan struct{}), credentialsStarted: make(chan struct{})}, nil
 }
 
 func (d *windowsConnection) profileAt(ctx context.Context) (state.State, state.Profile, error) {
@@ -202,6 +204,11 @@ func (d *windowsConnection) Connect(operation context.Context, restore bool) err
 	native, err := d.factory.makeNative(d.lifetime, d.profile, d.generation)
 	if err != nil {
 		return nativeConnectionFailure(err, connectivity.FailureApply)
+	}
+	if bootstrap, ok := d.verifier.Announcements.(*control.Bootstrap); ok {
+		initial, finish := context.WithCancel(operation)
+		defer finish()
+		d.verifier.Announcements = bootstrap.ForConnection(initial, p.ControlOrigin)
 	}
 	d.mu.Lock()
 	d.native = native
@@ -335,7 +342,7 @@ func (d *windowsConnection) readMaps(native windowsConnectionNative) {
 			if p.Connection.Intent != state.IntentConnected {
 				err = state.ErrStale
 			} else {
-				verifier, err = connectivity.NewVerifier(p, d.factory.config.Verifier)
+				verifier, err = connectivity.NewVerifier(p, d.verifier)
 				cursor = p.Connection.MapCursor
 			}
 			clearConnectionKeys(value)
@@ -561,7 +568,11 @@ func (d *windowsConnection) announce(ctx context.Context, online bool, native wi
 		if err := announcementContext(ctx); err != nil {
 			return err
 		}
-		receipt, err := connectivity.SendEndpoint(ctx, d.factory.store, d.factory.transport, d.factory.config.Verifier, d.profile, d.generation, endpointGeneration)
+		verifier := d.factory.config.Verifier
+		if online {
+			verifier = d.verifier
+		}
+		receipt, err := connectivity.SendEndpoint(ctx, d.factory.store, d.factory.transport, verifier, d.profile, d.generation, endpointGeneration)
 		if err != nil {
 			return err
 		}
