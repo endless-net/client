@@ -145,6 +145,35 @@ func TestRecoveryAutomaticallyHandlesPathLossButNotSafetyFailures(t *testing.T) 
 	}
 }
 
+func TestRecoveryPreservesPrimaryFailureWhenCleanupFails(t *testing.T) {
+	s, _ := workerStore(t)
+	if err := workerIntent(t, s, state.IntentConnected, time.Now(), workerRuntime); err != nil {
+		t.Fatal(err)
+	}
+	h := &workerHarness{created: make(chan *workerSession, 8)}
+	loss := make(chan error, 1)
+	w := testConnectionWorker(t, s, h)
+	w.factory = func(ctx context.Context, p string, g uint64) (ConnectionSession, error) {
+		base, err := h.factory(ctx, p, g)
+		return &recoveryLostSession{base.(*workerSession), loss}, err
+	}
+	startConnectionWorker(t, w)
+	owner := awaitWorkerSession(t, h)
+	awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.Phase == ConnectionConnected })
+	owner.cleanupFailures.Store(1)
+	loss <- connectivity.FailurePath
+	v := awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.CleanupFailure != nil })
+	if v.Phase != ConnectionFailed || v.Failure != connectivity.FailurePath || v.CleanupFailure != ErrConnectionOperation || !v.CleanupPending {
+		t.Fatalf("primary or cleanup failure lost: %+v", v)
+	}
+	if err := w.Reconcile(workerCallContext(t), workerProfile, 1, true); !errors.Is(err, connectivity.FailurePath) {
+		t.Fatal("reconcile did not return the primary failure", err)
+	}
+	if len(h.created) != 0 {
+		t.Fatal("a new owner started before cleanup was confirmed")
+	}
+}
+
 func TestRecoveryDisconnectPreemptsBlockedRestore(t *testing.T) {
 	s, _ := workerStore(t)
 	if err := workerIntent(t, s, state.IntentConnected, time.Now(), workerRuntime); err != nil {
@@ -276,14 +305,10 @@ func TestReconcileDoesNotWaitThroughSafetyOrCleanupFailure(t *testing.T) {
 			w := testConnectionWorker(t, s, h)
 			startConnectionWorker(t, w)
 			awaitWorkerSession(t, h)
-			want := failure
-			if failure == connectivity.FailureControl {
-				want = ErrConnectionOperation
-			}
 			awaitWorkerView(t, w, func(v ConnectionObservation) bool {
-				return v.Phase == ConnectionFailed && errors.Is(v.Failure, want) && (failure != connectivity.FailureControl || v.CleanupFailure != nil)
+				return v.Phase == ConnectionFailed && errors.Is(v.Failure, failure) && (failure != connectivity.FailureControl || v.CleanupFailure != nil)
 			})
-			if err := w.Reconcile(workerCallContext(t), workerProfile, 1, true); !errors.Is(err, want) {
+			if err := w.Reconcile(workerCallContext(t), workerProfile, 1, true); !errors.Is(err, failure) {
 				t.Fatal("terminal failure hidden", err)
 			}
 			if len(h.created) != 0 {

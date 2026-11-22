@@ -80,6 +80,7 @@ type connectionResult struct {
 	job             *connectionJob
 	ready, finished bool
 	err             error
+	primaryErr      error
 	retained        ConnectionSession
 	observer        connectivity.LocalObservationSource
 	maintainSession bool
@@ -343,7 +344,10 @@ func (w *ConnectionWorker) result(r connectionResult) {
 	if r.observer != nil {
 		w.observer = r.observer
 	}
-	if r.err != nil && w.view.Phase != ConnectionFailed {
+	if r.primaryErr != nil {
+		w.view.Phase = ConnectionFailed
+		w.view.Failure = connectionOperationError(r.primaryErr)
+	} else if r.err != nil && w.view.Phase != ConnectionFailed {
 		w.view.Phase = ConnectionFailed
 		w.view.Failure = connectionOperationError(r.err)
 	} else if w.view.Phase != ConnectionFailed {
@@ -441,6 +445,7 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 	// Cancellation revokes packet authority before potentially slow cleanup.
 	job.cancel()
 	results <- connectionResult{job: job, err: err, maintainSession: sessionMaintenanceAllowed(err)}
+	var primaryErr error
 	if session != nil {
 		cleanup, cancel := w.cleanupContext(job.daemon)
 		cleanupErr := session.Disconnect(cleanup)
@@ -448,8 +453,12 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 			cleanupErr = cleanup.Err()
 		}
 		cancel()
-		// Keep the original failure, but cleanup failure must remain observable.
 		if cleanupErr != nil {
+			// A recovery can reset the observation while this owner cleans up.
+			// Carry its failure with the cleanup result unless it was just canceled.
+			if !errors.Is(err, context.Canceled) {
+				primaryErr = err
+			}
 			err = cleanupErr
 		} else {
 			err = nil
@@ -459,7 +468,7 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 	if err != nil {
 		retained = session
 	}
-	results <- connectionResult{job: job, finished: true, err: err, retained: retained}
+	results <- connectionResult{job: job, finished: true, err: err, primaryErr: primaryErr, retained: retained}
 }
 
 func (w *ConnectionWorker) cleanupContext(daemon context.Context) (context.Context, context.CancelFunc) {
@@ -749,10 +758,14 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 				current.cancel()
 				// A failed cleanup retains its sole owner; never hide it behind a
 				// fresh attempt or start another native owner concurrently.
-				if r.retained != nil && desired != nil && desired.attempt > 0 && sameConnectionTarget(*desired, current.target) {
+				if r.retained != nil && latestTarget {
 					pending, operationOpen = nil, false
+					if deadlineTimer != nil {
+						deadlineTimer.Stop()
+						deadlineTimer = nil
+					}
 					if !latestAttempt {
-						w.result(connectionResult{job: &connectionJob{target: *desired}, finished: true, err: connectivity.FailureCleanup})
+						w.result(connectionResult{job: &connectionJob{target: *desired}, finished: true, err: r.err, primaryErr: r.primaryErr})
 					}
 				} else if latestAttempt && operationOpen && desired.intent == state.IntentConnected {
 					if err := desired.budget.Check(); err != nil {
