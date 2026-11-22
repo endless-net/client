@@ -25,13 +25,10 @@ func (s *Signals) HTTPTransport(base http.RoundTripper) (http.RoundTripper, erro
 	}
 	// Preserve the existing native control adapters' rejection of workload
 	// credentials and disabled server-certificate verification.
-	if transport, ok := base.(*http.Transport); ok && transport.TLSClientConfig != nil {
-		c := transport.TLSClientConfig
-		if c.InsecureSkipVerify || len(c.Certificates) != 0 || c.GetClientCertificate != nil {
+	if transport, ok := base.(*http.Transport); ok {
+		if c := transport.TLSClientConfig; c != nil && (c.InsecureSkipVerify || len(c.Certificates) != 0 || c.GetClientCertificate != nil) {
 			return nil, ErrSignals
 		}
-	}
-	if transport, ok := base.(*http.Transport); ok {
 		base = transport.Clone()
 	}
 	return &observedHTTP{base: base, signals: s}, nil

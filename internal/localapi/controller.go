@@ -104,6 +104,14 @@ func New(store *state.Store, runner Runner, config Config) (*Controller, error) 
 	return &Controller{store: store, runner: runner, config: config}, nil
 }
 
+func userFailure(code codes.Code, typed clientv0.ErrorCode, reason string) error {
+	s, err := status.New(code, reason).WithDetails(&clientv0.Failure{Code: typed, ReasonKey: reason, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER})
+	if err != nil {
+		return status.Error(code, reason)
+	}
+	return s.Err()
+}
+
 func rpcError(err error) error {
 	if failure := connectionDetails(err); failure != nil {
 		code := codes.Unavailable

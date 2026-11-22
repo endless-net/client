@@ -15,14 +15,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func sessionFailure(code codes.Code, typed clientv0.ErrorCode, reason string) error {
-	s, err := status.New(code, reason).WithDetails(&clientv0.Failure{Code: typed, ReasonKey: reason, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER})
-	if err != nil {
-		return status.Error(code, reason)
-	}
-	return s.Err()
-}
-
 func (c *Controller) StartSessionLogin(ctx context.Context, request *clientv0.StartSessionLoginRequest) (*clientv0.StartSessionLoginResponse, error) {
 	caller, err := localipc.Caller(ctx)
 	if err != nil {
@@ -33,7 +25,7 @@ func (c *Controller) StartSessionLogin(ctx context.Context, request *clientv0.St
 
 func (c *Controller) startSessionLogin(parent context.Context, caller localipc.Principal, request *clientv0.StartSessionLoginRequest) (*clientv0.StartSessionLoginResponse, error) {
 	if clientv0.ValidateStartSessionLoginRequest(request) != nil {
-		return nil, sessionFailure(codes.InvalidArgument, clientv0.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "client.session.invalid_input")
+		return nil, userFailure(codes.InvalidArgument, clientv0.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "client.session.invalid_input")
 	}
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
@@ -48,7 +40,7 @@ func (c *Controller) startSessionLogin(parent context.Context, caller localipc.P
 	id := profileID(request.Profile, s.ActiveProfileID)
 	p, ok := s.Profiles[id]
 	if !ok {
-		return nil, sessionFailure(codes.NotFound, clientv0.ErrorCode_ERROR_CODE_NOT_FOUND, "client.session.profile_not_found")
+		return nil, userFailure(codes.NotFound, clientv0.ErrorCode_ERROR_CODE_NOT_FOUND, "client.session.profile_not_found")
 	}
 	// Retained exact replay precedes instance/revision CAS and never wakes work.
 	for otherID, profile := range s.Profiles {
@@ -62,7 +54,7 @@ func (c *Controller) startSessionLogin(parent context.Context, caller localipc.P
 		}
 		if receipt != nil {
 			if otherID != id {
-				return nil, sessionFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_RESOURCE_CONFLICT, "client.session.binding_conflict")
+				return nil, userFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_RESOURCE_CONFLICT, "client.session.binding_conflict")
 			}
 			if profile.SessionLogin != nil && profile.SessionLogin.Binding.RequestID == request.RequestId {
 				return &clientv0.StartSessionLoginResponse{Attempt: c.projectCurrentSessionLogin(s, profile)}, nil
@@ -71,10 +63,10 @@ func (c *Controller) startSessionLogin(parent context.Context, caller localipc.P
 		}
 	}
 	if p.Attempt == nil || p.Attempt.Phase != enrollment.Registered || p.Secrets.UserID == "" {
-		return nil, sessionFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, "client.session.registration_required")
+		return nil, userFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, "client.session.registration_required")
 	}
 	if c.config.SessionLogins == nil {
-		return nil, sessionFailure(codes.Unimplemented, clientv0.ErrorCode_ERROR_CODE_UNSUPPORTED, "client.session.login_unavailable")
+		return nil, userFailure(codes.Unimplemented, clientv0.ErrorCode_ERROR_CODE_UNSUPPORTED, "client.session.login_unavailable")
 	}
 	if err = c.mutation(request.Mutation); err != nil {
 		return nil, err
@@ -86,7 +78,7 @@ func (c *Controller) startSessionLogin(parent context.Context, caller localipc.P
 		}
 		profile, exists := value.Profiles[id]
 		if !exists || profile.Attempt == nil || profile.Attempt.Phase != enrollment.Registered {
-			return sessionFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, "client.session.registration_required")
+			return userFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, "client.session.registration_required")
 		}
 		now := c.config.Now().UTC()
 		pending := 0
@@ -98,7 +90,7 @@ func (c *Controller) startSessionLogin(parent context.Context, caller localipc.P
 		if profile.SessionLogin != nil {
 			old := profile.SessionLogin
 			if now.Before(old.Deadline) || !old.Terminal() && old.Phase != state.SessionLoginUncertain {
-				return sessionFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_BUSY, "client.session.login_active")
+				return userFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_BUSY, "client.session.login_active")
 			}
 			if profile.SessionLoginHistory == nil {
 				profile.SessionLoginHistory = map[string]state.SessionLoginReceipt{}
@@ -106,7 +98,7 @@ func (c *Controller) startSessionLogin(parent context.Context, caller localipc.P
 			profile.SessionLoginHistory[old.Binding.RequestID] = old.Receipt()
 		}
 		if pending >= c.config.MaxSessionLogins {
-			return sessionFailure(codes.ResourceExhausted, clientv0.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED, "client.session.queue_full")
+			return userFailure(codes.ResourceExhausted, clientv0.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED, "client.session.queue_full")
 		}
 		attempt, err := randomID()
 		if err != nil {
@@ -135,7 +127,7 @@ func (c *Controller) startSessionLogin(parent context.Context, caller localipc.P
 		return nil, rpcError(err)
 	}
 	if err = c.config.SessionLogins.Wake(ctx, id, result.AttemptId); err != nil {
-		return nil, sessionFailure(codes.Unavailable, clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.session.queue_unavailable")
+		return nil, userFailure(codes.Unavailable, clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.session.queue_unavailable")
 	}
 	return &clientv0.StartSessionLoginResponse{Attempt: result}, nil
 }
@@ -150,7 +142,7 @@ func (c *Controller) GetSessionLogin(ctx context.Context, request *clientv0.GetS
 
 func (c *Controller) getSessionLogin(parent context.Context, caller localipc.Principal, request *clientv0.GetSessionLoginRequest) (*clientv0.GetSessionLoginResponse, error) {
 	if clientv0.ValidateGetSessionLoginRequest(request) != nil {
-		return nil, sessionFailure(codes.InvalidArgument, clientv0.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "client.session.invalid_input")
+		return nil, userFailure(codes.InvalidArgument, clientv0.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "client.session.invalid_input")
 	}
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
@@ -164,7 +156,7 @@ func (c *Controller) getSessionLogin(parent context.Context, caller localipc.Pri
 	}
 	p, ok := s.Profiles[profileID(request.Profile, s.ActiveProfileID)]
 	if !ok {
-		return nil, sessionFailure(codes.NotFound, clientv0.ErrorCode_ERROR_CODE_NOT_FOUND, "client.session.profile_not_found")
+		return nil, userFailure(codes.NotFound, clientv0.ErrorCode_ERROR_CODE_NOT_FOUND, "client.session.profile_not_found")
 	}
 	l := p.SessionLogin
 	if l != nil && (request.GetCurrent() || request.GetAttemptId() == l.Binding.AttemptID || request.GetRequestId() == l.Binding.RequestID) {
@@ -177,7 +169,7 @@ func (c *Controller) getSessionLogin(parent context.Context, caller localipc.Pri
 			}
 		}
 	}
-	return nil, sessionFailure(codes.NotFound, clientv0.ErrorCode_ERROR_CODE_NOT_FOUND, "client.session.login_not_found")
+	return nil, userFailure(codes.NotFound, clientv0.ErrorCode_ERROR_CODE_NOT_FOUND, "client.session.login_not_found")
 }
 
 func (c *Controller) projectSessionLoginReceipt(s state.State, r state.SessionLoginReceipt) *clientv0.SessionLoginAttempt {

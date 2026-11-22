@@ -28,7 +28,7 @@ func newEventQueue() *eventQueue {
 }
 
 func eventLimit() error {
-	return connectionFailure(codes.ResourceExhausted, clientv0.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED, "client.events.limit")
+	return userFailure(codes.ResourceExhausted, clientv0.ErrorCode_ERROR_CODE_LIMIT_EXCEEDED, "client.events.limit")
 }
 
 func (q *eventQueue) push(event *clientv0.WatchEventsResponse) error {

@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"strings"
 	"time"
 
-	clientv0 "github.com/endless-net/client/api/client/v0"
+	"github.com/endless-net/client/internal/localipc"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
@@ -17,19 +16,13 @@ import (
 	grpccodes "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 func ipcOperation(method string) string {
-	const prefix = "/client.v0.ClientService/"
-	if !strings.HasPrefix(method, prefix) {
-		return "unsupported"
+	if descriptor := localipc.MethodDescriptor(method); descriptor != nil {
+		return string(descriptor.Name())
 	}
-	name := strings.TrimPrefix(method, prefix)
-	if clientv0.File_client_v0_service_proto.Services().ByName("ClientService").Methods().ByName(protoreflect.Name(name)) == nil {
-		return "unsupported"
-	}
-	return name // Exact finite catalog from the pinned producer descriptor.
+	return "unsupported"
 }
 
 func rpcTraceContext(ctx context.Context) context.Context {

@@ -132,7 +132,7 @@ func (c *Controller) revokeNode(ctx context.Context, caller localipc.Principal, 
 	command, exists := p.RemoteRevocations[req.CommandId]
 	if exists {
 		if command.Request != request || command.CallerSID != caller.SID || command.UserID != p.Secrets.UserID || command.Hostname != req.Target.Hostname || command.AssignedIP != req.Target.AssignedIp || command.TargetStatus != req.Target.Status {
-			return nil, connectionFailure(codes.Aborted, clientv0.ErrorCode_ERROR_CODE_STALE_STATE, "client.revocation.command_conflict")
+			return nil, userFailure(codes.Aborted, clientv0.ErrorCode_ERROR_CODE_STALE_STATE, "client.revocation.command_conflict")
 		}
 	} else {
 		if s.Revision != req.Mutation.ExpectedRevision {
@@ -208,7 +208,7 @@ func (c *Controller) executeRevocation(ctx context.Context, caller localipc.Prin
 			return revocationProjection(profile, command, nil), nil
 		}
 		if errors.Is(err, control.ErrRevocationConflict) {
-			return nil, connectionFailure(codes.Aborted, clientv0.ErrorCode_ERROR_CODE_STALE_STATE, "client.revocation.command_conflict")
+			return nil, userFailure(codes.Aborted, clientv0.ErrorCode_ERROR_CODE_STALE_STATE, "client.revocation.command_conflict")
 		}
 		return nil, targetError(err)
 	}

@@ -55,17 +55,23 @@ type Observation struct {
 	Stream grpc.StreamServerInterceptor
 }
 
+// MethodDescriptor resolves a full gRPC method name against the pinned Client contract.
+func MethodDescriptor(method string) protoreflect.MethodDescriptor {
+	const prefix = "/client.v0.ClientService/"
+	name, ok := strings.CutPrefix(method, prefix)
+	if !ok {
+		return nil
+	}
+	service := clientv0.File_client_v0_service_proto.Services().ByName("ClientService")
+	return service.Methods().ByName(protoreflect.Name(name))
+}
+
 func Authorize(ctx context.Context, method string, readOwner OwnerReader) error {
 	caller, err := Caller(ctx)
 	if err != nil {
 		return err
 	}
-	const prefix = "/client.v0.ClientService/"
-	if !strings.HasPrefix(method, prefix) {
-		return status.Error(codes.PermissionDenied, "unknown local operation")
-	}
-	service := clientv0.File_client_v0_service_proto.Services().ByName("ClientService")
-	descriptor := service.Methods().ByName(protoreflect.Name(strings.TrimPrefix(method, prefix)))
+	descriptor := MethodDescriptor(method)
 	if descriptor == nil || !proto.HasExtension(descriptor.Options(), clientv0.E_Access) {
 		return status.Error(codes.PermissionDenied, "unknown local operation")
 	}

@@ -32,14 +32,6 @@ var errConnectionInactive = errors.New("connection profile inactive")
 var errConnectionUnsupported = errors.New("connection backend unavailable")
 var errConnectionRegistration = errors.New("connection registration required")
 
-func connectionFailure(code codes.Code, typed clientv0.ErrorCode, reason string) error {
-	s, err := status.New(code, reason).WithDetails(&clientv0.Failure{Code: typed, ReasonKey: reason, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER})
-	if err != nil {
-		return status.Error(code, reason)
-	}
-	return s.Err()
-}
-
 func (c *Controller) Connect(ctx context.Context, req *clientv0.ConnectRequest) (*clientv0.ConnectResponse, error) {
 	caller, err := localipc.Caller(ctx)
 	if err != nil {
@@ -139,11 +131,11 @@ func (c *Controller) connectionIntent(ctx context.Context, caller localipc.Princ
 	if err != nil && !errors.Is(err, errReplay) {
 		switch {
 		case errors.Is(err, errConnectionInactive):
-			return false, connectionFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_RESOURCE_CONFLICT, "client.connection.profile_inactive")
+			return false, userFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_RESOURCE_CONFLICT, "client.connection.profile_inactive")
 		case errors.Is(err, errConnectionUnsupported):
-			return false, connectionFailure(codes.Unimplemented, clientv0.ErrorCode_ERROR_CODE_UNSUPPORTED, "client.connection.unsupported")
+			return false, userFailure(codes.Unimplemented, clientv0.ErrorCode_ERROR_CODE_UNSUPPORTED, "client.connection.unsupported")
 		case errors.Is(err, errConnectionRegistration):
-			return false, connectionFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, "client.connection.registration_required")
+			return false, userFailure(codes.FailedPrecondition, clientv0.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, "client.connection.registration_required")
 		default:
 			return false, rpcError(err)
 		}

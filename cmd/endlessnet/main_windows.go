@@ -14,7 +14,7 @@ import (
 	"github.com/endless-net/client/internal/headless"
 )
 
-// Exact published Client API0.6.0 descriptor; no compatibility negotiation.
+// Contract digest is checked against the published SDK pin by scripts/ci.py.
 const contractSHA256 = "89d0be4956ad399cdae24065f32016db210c19ad593ae1b1d29351ddfc00c933"
 
 func main() {

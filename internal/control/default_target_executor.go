@@ -21,11 +21,8 @@ type DefaultTargetExecutor struct {
 }
 
 func NewDefaultTargetExecutor(store *state.Store, remote *DefaultTarget, config RegistrationExecutorConfig) (*DefaultTargetExecutor, error) {
-	if store == nil || remote == nil || config.MaxCommitRetries <= 0 || config.RetryInterval <= 0 || config.RetryInterval > 30*time.Second || config.WriteBudget <= 0 || config.WriteBudget > 30*time.Second {
+	if store == nil || remote == nil || !config.validateAndDefault() {
 		return nil, ErrDefaultTargetProtocol
-	}
-	if config.Now == nil {
-		config.Now = time.Now
 	}
 	return &DefaultTargetExecutor{store: store, remote: remote, config: config}, nil
 }

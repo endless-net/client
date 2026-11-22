@@ -17,6 +17,16 @@ type RegistrationExecutorConfig struct {
 	Now                        func() time.Time
 }
 
+func (c *RegistrationExecutorConfig) validateAndDefault() bool {
+	if c.MaxCommitRetries <= 0 || c.RetryInterval <= 0 || c.RetryInterval > 30*time.Second || c.WriteBudget <= 0 || c.WriteBudget > 30*time.Second {
+		return false
+	}
+	if c.Now == nil {
+		c.Now = time.Now
+	}
+	return true
+}
+
 type RegistrationExecutor struct {
 	run    sync.Mutex
 	store  *state.Store
@@ -25,11 +35,8 @@ type RegistrationExecutor struct {
 }
 
 func NewRegistrationExecutor(store *state.Store, remote *Registration, config RegistrationExecutorConfig) (*RegistrationExecutor, error) {
-	if store == nil || remote == nil || config.MaxCommitRetries <= 0 || config.RetryInterval <= 0 || config.RetryInterval > 30*time.Second || config.WriteBudget <= 0 || config.WriteBudget > 30*time.Second {
+	if store == nil || remote == nil || !config.validateAndDefault() {
 		return nil, ErrRegistrationProtocol
-	}
-	if config.Now == nil {
-		config.Now = time.Now
 	}
 	return &RegistrationExecutor{store: store, remote: remote, config: config}, nil
 }
