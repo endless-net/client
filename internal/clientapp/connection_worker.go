@@ -37,6 +37,8 @@ type ConnectionWorkerConfig struct {
 	Clock                                     connectivity.Clock
 	RuntimeID                                 string
 	ReadTimeout, PollInterval, CleanupTimeout time.Duration
+	RefreshSession                            func(context.Context, string, uint64) error
+	SessionRetryInterval                      time.Duration
 }
 
 type ConnectionPhase = connectivity.Phase
@@ -66,11 +68,12 @@ type connectionTarget struct {
 }
 
 type connectionJob struct {
-	target   connectionTarget
-	daemon   context.Context
-	lifetime context.Context
-	cancel   context.CancelFunc
-	previous ConnectionSession
+	target             connectionTarget
+	daemon             context.Context
+	lifetime           context.Context
+	cancel             context.CancelFunc
+	previous           ConnectionSession
+	sessionMaintenance *sessionMaintenance
 }
 
 type connectionResult struct {
@@ -79,6 +82,7 @@ type connectionResult struct {
 	err             error
 	retained        ConnectionSession
 	observer        connectivity.LocalObservationSource
+	maintainSession bool
 }
 
 // ConnectionWorker keeps one running owner and one latest durable target. Wakes
@@ -106,6 +110,9 @@ func (*ConnectionWorker) GoString() string { return "[private connection worker]
 func NewConnectionWorker(store *state.Store, factory ConnectionFactory, c ConnectionWorkerConfig) (*ConnectionWorker, error) {
 	id, err := uuid.Parse(c.RuntimeID)
 	if store == nil || factory == nil || c.Clock == nil || err != nil || id == uuid.Nil || id.String() != c.RuntimeID || c.ReadTimeout < time.Millisecond || c.ReadTimeout > 30*time.Second || c.PollInterval < time.Millisecond || c.PollInterval > 10*time.Second || c.CleanupTimeout < time.Millisecond || c.CleanupTimeout > 10*time.Second {
+		return nil, ErrConnectionWorker
+	}
+	if c.RefreshSession != nil && (c.SessionRetryInterval < time.Millisecond || c.SessionRetryInterval > 30*time.Second) {
 		return nil, ErrConnectionWorker
 	}
 	return &ConnectionWorker{store: store, factory: factory, config: c, wake: make(chan struct{}, 1), recovery: make(chan connectionTarget, 1), changed: make(chan struct{})}, nil
@@ -165,12 +172,7 @@ func (w *ConnectionWorker) target(ctx context.Context) (*connectionTarget, error
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		for _, p := range s.Profiles {
-			clear(p.Keys.IdentityPrivate)
-			clear(p.Keys.WireGuardPrivate)
-		}
-	}()
+	defer clearConnectionStateKeys(s)
 	if err := read.Err(); err != nil {
 		return nil, err
 	}
@@ -185,6 +187,13 @@ func (w *ConnectionWorker) target(ctx context.Context) (*connectionTarget, error
 		receipt = connectivity.ClockSample{Wall: c.AcceptedAt, Epoch: c.Request.ClockEpoch, Uptime: c.Request.Uptime, UpperUptime: c.Request.UpperUptime}
 	}
 	return &connectionTarget{profile: p.ID, generation: c.Generation, intent: c.Intent, restore: restore, receipt: receipt}, nil
+}
+
+func clearConnectionStateKeys(value state.State) {
+	for _, p := range value.Profiles {
+		clear(p.Keys.IdentityPrivate)
+		clear(p.Keys.WireGuardPrivate)
+	}
 }
 
 func (w *ConnectionWorker) prepareBudget(t *connectionTarget) error {
@@ -378,7 +387,14 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 		}
 		if err != nil {
 			job.cancel()
-			results <- connectionResult{job: job, finished: true, err: err, retained: job.previous}
+			results <- connectionResult{job: job, finished: true, err: err, retained: job.previous, maintainSession: true}
+			return
+		}
+	}
+	if t.intent == state.IntentConnected {
+		if err := job.sessionMaintenance.stop(op); err != nil {
+			job.cancel()
+			results <- connectionResult{job: job, finished: true, err: err, maintainSession: true}
 			return
 		}
 	}
@@ -424,7 +440,7 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 	}
 	// Cancellation revokes packet authority before potentially slow cleanup.
 	job.cancel()
-	results <- connectionResult{job: job, err: err}
+	results <- connectionResult{job: job, err: err, maintainSession: sessionMaintenanceAllowed(err)}
 	if session != nil {
 		cleanup, cancel := w.cleanupContext(job.daemon)
 		cleanupErr := session.Disconnect(cleanup)
@@ -472,6 +488,7 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 	results := make(chan connectionResult, 3)
 	var current *connectionJob
 	var desired, pending *connectionTarget
+	var maintenance *sessionMaintenance
 	var deadlineTimer *time.Timer
 	operationOpen := false
 	var retryAt time.Time
@@ -505,6 +522,14 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 	defer func() {
 		cleanup, cancel := w.cleanupContext(ctx)
 		defer cancel()
+		if maintenance != nil {
+			maintenance.cancel()
+			defer func() {
+				if maintenance.stop(cleanup) != nil {
+					runErr = errors.Join(runErr, ErrLifecycle)
+				}
+			}()
+		}
 		w.mu.Lock()
 		w.running = false
 		if w.view.Profile != "" && w.view.Phase != ConnectionFailed {
@@ -602,6 +627,9 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 				return connectionOperationError(err)
 			}
 			if t == nil && desired != nil || t != nil && (desired == nil || !sameConnectionTarget(*t, *desired)) {
+				if maintenance != nil {
+					maintenance.cancel()
+				}
 				desired, pending = t, t
 				w.setTarget(t)
 				if deadlineTimer != nil {
@@ -628,7 +656,7 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 			t := *pending
 			pending = nil
 			lifetime, cancel := context.WithCancel(ctx)
-			current = &connectionJob{target: t, daemon: ctx, lifetime: lifetime, cancel: cancel, previous: w.retired}
+			current = &connectionJob{target: t, daemon: ctx, lifetime: lifetime, cancel: cancel, previous: w.retired, sessionMaintenance: maintenance}
 			w.retired = nil
 			go w.runJob(current, results)
 		}
@@ -663,7 +691,15 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 			if current != r.job {
 				continue
 			}
-			latestAttempt := desired != nil && sameConnectionTarget(*desired, current.target) && desired.attempt == current.target.attempt
+			latestTarget := desired != nil && sameConnectionTarget(*desired, current.target)
+			if latestTarget && desired.intent == state.IntentConnected && r.maintainSession {
+				// A cancellation can arrive after the budget recorded a clock fault.
+				view := w.Observe()
+				if view.Phase != ConnectionFailed || sessionMaintenanceAllowed(view.Failure) {
+					maintenance = w.startSessionMaintenance(ctx, *desired, maintenance)
+				}
+			}
+			latestAttempt := latestTarget && desired.attempt == current.target.attempt
 			if latestAttempt && !r.finished && recoveryFailure(r.err) && !operationOpen && current.target.intent == state.IntentConnected {
 				beginRecovery()
 				latestAttempt = false

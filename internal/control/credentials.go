@@ -27,6 +27,7 @@ import (
 var ErrCredentialsLogin = errors.New("current user login required")
 var ErrCredentialsExpired = errors.New("credential renewal command expired")
 var ErrNodeRenewalUnresolved = errors.New("node credential renewal outcome unresolved")
+var ErrNodeRenewalPending = errors.New("node credential renewal can still be replayed")
 var ErrCredentialsProtocol = errors.New("credential renewal response invalid")
 var ErrCredentialsUnavailable = errors.New("credential renewal outcome unavailable")
 
@@ -101,6 +102,28 @@ func (c *Credentials) Ensure(ctx context.Context, id string, generation uint64) 
 	return c.Refresh(ctx, id, generation, false, false)
 }
 
+// RefreshSession rotates only the user session while a connected profile has no
+// live tunnel. Leave a still-replayable Node command bound to its original
+// bearer. Once its deadline passes, Connect can recover it with the new session.
+func (c *Credentials) RefreshSession(ctx context.Context, id string, generation uint64) error {
+	if !c.mu.TryLock() {
+		return state.ErrStale
+	}
+	defer c.mu.Unlock()
+	_, p, err := c.load(ctx, id, generation)
+	if err != nil {
+		return err
+	}
+	if pendingNodeRenewal(p) && c.config.Now().Before(p.NodeRenewal.Deadline) {
+		return ErrNodeRenewalPending
+	}
+	return c.ensureSession(ctx, id, generation, true)
+}
+
+func pendingNodeRenewal(p state.Profile) bool {
+	return p.NodeRenewal != nil && (p.ActiveNodeCredential == nil || p.ActiveNodeCredential.Request != p.NodeRenewal.Request)
+}
+
 // Refresh also admits proactive rotation chosen by the connection's scheduler.
 // Retries retain the frozen request and deadline. Recovery creates a separately bound command.
 func (c *Credentials) Refresh(ctx context.Context, id string, generation uint64, session, node bool) error {
@@ -116,8 +139,7 @@ func (c *Credentials) Refresh(ctx context.Context, id string, generation uint64,
 	if err != nil {
 		return err
 	}
-	pending := p.NodeRenewal != nil && (p.ActiveNodeCredential == nil || p.ActiveNodeCredential.Request != p.NodeRenewal.Request)
-	if pending {
+	if pendingNodeRenewal(p) {
 		now := c.config.Now()
 		if !now.Before(p.NodeRenewal.Deadline) {
 			if p.NodeRenewal.SentAt.IsZero() {
@@ -312,7 +334,7 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 	if !current.ExpiresAt.After(c.config.Now()) {
 		return ErrCredentialsLogin
 	}
-	pending := p.NodeRenewal != nil && (p.ActiveNodeCredential == nil || p.ActiveNodeCredential.Request != p.NodeRenewal.Request)
+	pending := pendingNodeRenewal(p)
 	now := c.config.Now().UTC()
 	recovery := pending && !now.Before(p.NodeRenewal.Deadline)
 	if !pending || recovery {

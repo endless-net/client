@@ -36,6 +36,7 @@ type onlineRenewalFixture struct {
 	sessionv1connect.UnimplementedSessionServiceHandler
 	t                       *testing.T
 	f                       *connectionBackendFixture
+	credentials             *control.Credentials
 	base                    time.Time
 	offset                  atomic.Int64
 	mu                      sync.Mutex
@@ -51,6 +52,25 @@ type onlineRenewalFixture struct {
 func (f *onlineRenewalFixture) now() time.Time { return f.base.Add(time.Duration(f.offset.Load())) }
 
 func newOnlineRenewalFixture(t *testing.T, mode string) (*onlineRenewalFixture, *windowsConnection) {
+	t.Helper()
+	f := newOnlineRenewalBackend(t, mode)
+	owner, err := f.f.factory.newOwner(context.Background(), workerProfile, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := owner.(*windowsConnection)
+	t.Cleanup(func() {
+		if err := d.Disconnect(workerCallContext(t)); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := d.Connect(backendOperation(t, f.f), false); err != nil {
+		t.Fatal("initial connect", err)
+	}
+	return f, d
+}
+
+func newOnlineRenewalBackend(t *testing.T, mode string) *onlineRenewalFixture {
 	t.Helper()
 	f := &onlineRenewalFixture{t: t, base: time.Now().UTC(), access: strings.Repeat("a", 43), grant: strings.Repeat("r", 43), nodes: map[string][]byte{}, sessions: map[string]*sessionv1.RenewSessionResponse{}, mode: mode, entered: make(chan struct{}, 1), release: make(chan struct{})}
 	f.f = newConnectionBackendFixturePrepared(t, func(p *state.Profile) {
@@ -119,20 +139,8 @@ func newOnlineRenewalFixture(t *testing.T, mode string) (*onlineRenewalFixture, 
 	}
 	f.f.factory.config.PrepareCredentials = c.Ensure
 	f.f.factory.config.RefreshCredentials = c.Refresh
-	owner, err := f.f.factory.newOwner(context.Background(), workerProfile, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d := owner.(*windowsConnection)
-	t.Cleanup(func() {
-		if err := d.Disconnect(workerCallContext(t)); err != nil {
-			t.Error(err)
-		}
-	})
-	if err := d.Connect(backendOperation(t, f.f), false); err != nil {
-		t.Fatal("initial connect", err)
-	}
-	return f, d
+	f.credentials = c
+	return f
 }
 
 func (f *onlineRenewalFixture) RenewSession(_ context.Context, r *connect.Request[sessionv1.RenewSessionRequest]) (*connect.Response[sessionv1.RenewSessionResponse], error) {
@@ -389,6 +397,105 @@ func TestOnlineSessionRenewsIndependentlyOfNode(t *testing.T) {
 	f.mu.Unlock()
 	if nodes != 0 || sessions != 1 || f.f.native.starts.Load() != 1 || f.f.native.stops.Load() != 0 || f.f.native.revoked.Load() {
 		t.Fatal("session-only refresh unnecessarily changed node transport", nodes, sessions)
+	}
+}
+
+type unconfirmedCleanupConnection struct {
+	*windowsConnection
+	started chan struct{}
+	fail    <-chan struct{}
+	called  bool
+}
+
+func (d *unconfirmedCleanupConnection) Disconnect(ctx context.Context) error {
+	if d.called {
+		return d.windowsConnection.Disconnect(ctx)
+	}
+	d.called = true
+	close(d.started)
+	select {
+	case <-d.fail:
+		return connectivity.FailureCleanup
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func TestConnectedIntentRenewsSessionDuringAndAfterUnconfirmedCleanup(t *testing.T) {
+	f := newOnlineRenewalBackend(t, "valid")
+	f.offset.Store(int64(time.Since(f.base)))
+	owners := make(chan *windowsConnection, 4)
+	cleanupStarted, cleanupFails := make(chan struct{}), make(chan struct{})
+	w, err := NewConnectionWorker(f.f.store, func(ctx context.Context, profile string, generation uint64) (ConnectionSession, error) {
+		session, err := f.f.factory.newOwner(ctx, profile, generation)
+		if err != nil {
+			return nil, err
+		}
+		owner := session.(*windowsConnection)
+		owners <- owner
+		if generation == 1 {
+			return &unconfirmedCleanupConnection{windowsConnection: owner, started: cleanupStarted, fail: cleanupFails}, nil
+		}
+		return owner, nil
+	}, ConnectionWorkerConfig{
+		Clock: f.f.factory.config.Verifier.Clock, RuntimeID: workerRuntime,
+		ReadTimeout: time.Second, PollInterval: 5 * time.Millisecond, CleanupTimeout: 2 * time.Second,
+		RefreshSession: f.credentials.RefreshSession, SessionRetryInterval: 5 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	startConnectionWorker(t, w)
+	awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.Phase == ConnectionConnected })
+	owner := <-owners
+	owner.failSource(f.f.native, connectivity.FailureControl)
+	select {
+	case <-cleanupStarted:
+	case <-time.After(time.Second):
+		t.Fatal("cleanup did not start")
+	}
+
+	checkRenewal := func(offset time.Duration, want int) {
+		t.Helper()
+		f.offset.Store(int64(offset))
+		awaitCredentialCondition(t, func() bool {
+			value, err := f.f.store.Load(t.Context())
+			if err != nil {
+				return false
+			}
+			defer clearConnectionKeys(value)
+			p := value.Profiles[workerProfile]
+			current, err := p.CurrentSession()
+			return err == nil && current.RenewalExpiresAt.Equal(f.now().Add(24*time.Hour)) &&
+				p.Connection.Intent == state.IntentConnected && p.Connection.Generation == 1
+		})
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if f.sessionCalls != want || f.nodeCalls != 0 || f.f.native.starts.Load() != 1 || !f.f.native.revoked.Load() || len(owners) != 0 {
+			t.Fatal("unexpected credential traffic or tunnel restart", f.sessionCalls, f.nodeCalls)
+		}
+	}
+	checkRenewal(61*time.Minute, 1)
+	close(cleanupFails)
+	awaitWorkerView(t, w, func(v ConnectionObservation) bool {
+		return v.Phase == ConnectionFailed && v.CleanupPending && v.CleanupFailure != nil
+	})
+	checkRenewal(122*time.Minute, 2)
+
+	if err := workerIntent(t, f.f.store, state.IntentDisconnected, f.now(), workerRuntime); err != nil {
+		t.Fatal(err)
+	}
+	awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.Phase == ConnectionDisconnected })
+	f.offset.Store(int64(183 * time.Minute))
+	select {
+	case <-time.After(50 * time.Millisecond):
+	case <-t.Context().Done():
+		t.Fatal(t.Context().Err())
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.sessionCalls != 2 || f.nodeCalls != 0 {
+		t.Fatal("credentials renewed after Disconnect", f.sessionCalls, f.nodeCalls)
 	}
 }
 

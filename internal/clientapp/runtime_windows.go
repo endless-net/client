@@ -101,7 +101,10 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			r.connection, err = NewConnectionWorker(r.state.Store(), factory, ConnectionWorkerConfig{Clock: clock, RuntimeID: instance, ReadTimeout: c.WriteBudget, PollInterval: c.PollInterval, CleanupTimeout: c.CleanupTimeout})
+			r.connection, err = NewConnectionWorker(r.state.Store(), factory, ConnectionWorkerConfig{
+				Clock: clock, RuntimeID: instance, ReadTimeout: c.WriteBudget, PollInterval: c.PollInterval, CleanupTimeout: c.CleanupTimeout,
+				RefreshSession: credentials.RefreshSession, SessionRetryInterval: driver.RetryInterval,
+			})
 			if err != nil {
 				return err
 			}

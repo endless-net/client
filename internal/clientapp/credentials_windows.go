@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/connectivity"
-	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/state"
 )
 
@@ -84,10 +83,6 @@ func (d *windowsConnection) credentialPlan(schedule *credentialSchedule) (creden
 		return credentialPlan{}, state.ErrStale
 	}
 	return schedule.plan(p, d.factory.config.Verifier.Now())
-}
-
-func credentialRetry(err error) bool {
-	return errors.Is(err, control.ErrCredentialsUnavailable) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, state.ErrUncertain) || errors.Is(err, state.ErrStale)
 }
 
 // One loop owns all credential calls and frozen replay. It does not block the
