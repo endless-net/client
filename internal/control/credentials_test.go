@@ -18,6 +18,8 @@ import (
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 	sessionv1 "github.com/endless-net/identity/api/session/v1"
 	"github.com/endless-net/identity/api/session/v1/sessionv1connect"
 	"google.golang.org/protobuf/proto"
@@ -107,7 +109,7 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 			nodeCalls := 0
 			var originalNode []byte
 			client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
-				if r.URL.Path != "/nodes/register" {
+				if r.URL.Path != publicqueryv1connect.EnrollmentServiceRegisterNodeProcedure {
 					w := httptest.NewRecorder()
 					sessionHandler.ServeHTTP(w, r)
 					response := w.Result()
@@ -115,28 +117,32 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 					return response, nil
 				}
 				nodeCalls++
-				raw, err := io.ReadAll(r.Body)
-				if err != nil {
-					t.Fatal(err)
-				}
+				message := &wire.RegisterNodeRequest{}
+				raw := readRPC(t, r, message)
 				stored, err := f.store.Load(r.Context())
 				if err != nil {
 					t.Fatal(err)
 				}
 				pending := stored.Profiles[loginProfile].NodeRenewal
-				if pending == nil || pending.SentAt.IsZero() || pending.Request != string(raw) || r.Header.Get("Authorization") != "Bearer "+strings.Repeat("n", 43) || r.Header.Get("Cookie") != "" {
+				if pending == nil || pending.SentAt.IsZero() || r.Header.Get("Authorization") != "Bearer "+strings.Repeat("n", 43) || r.Header.Get("Cookie") != "" {
 					t.Fatal("node RPC before frozen marker/current session")
 				}
-				request, err := coordinator.DecodeRegisterNodeRequest(raw, 65536)
+				request, err := coordinator.DecodeRegisterNodeRequest([]byte(pending.Request), 65536)
 				if err != nil {
 					t.Fatal(err)
+				}
+				renewal := message.GetRenewal()
+				if !proto.Equal(message.Proof, registrationProof(request)) || renewal == nil ||
+					renewal.NodeCredential != request.NodeCredential || renewal.RegistrationBinding != request.RegistrationBinding ||
+					renewal.SessionTokenBinding != request.SessionTokenBinding {
+					t.Fatal("renewal RPC changed the durable proof")
 				}
 				recovering := mode == "expired-node" || mode == "recover-node" || mode == "lost-recovery"
 				if originalNode == nil {
 					originalNode = bytes.Clone(raw)
 				} else if recovering {
-					source, err := coordinator.DecodeRegisterNodeRequest(originalNode, 65536)
-					if err != nil || request.IdempotencyID != coordinator.NodeRenewalRecoveryID(source.IdempotencyID) {
+					source := &wire.RegisterNodeRequest{}
+					if err := proto.Unmarshal(originalNode, source); err != nil || request.IdempotencyID != coordinator.NodeRenewalRecoveryID(source.GetProof().GetIdempotencyId()) {
 						t.Fatal("recovery does not link the lost operation", err)
 					}
 					originalNode = bytes.Clone(raw)
@@ -147,7 +153,8 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 					return nil, errors.New("secret lost node result")
 				}
 				if mode == "expired-node" {
-					return &http.Response{StatusCode: 409, Body: http.NoBody, Request: r}, nil
+					return &http.Response{StatusCode: 409, Header: http.Header{"Content-Type": {"application/json"}},
+						Body: io.NopCloser(strings.NewReader(`{"code":"aborted"}`)), Request: r}, nil
 				}
 				if request.IdempotencyID == f.p.Secrets.RegistrationID || request.NodeCredential != f.p.Secrets.NodeCredential || request.RegistrationBinding != f.result.RegistrationBinding {
 					t.Fatal("renewal changed registration/predecessor")
@@ -167,7 +174,12 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 				if mode == "lost-node-save" {
 					f.memory.lose = true
 				}
-				return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(encode(t, response))), Request: r}, nil
+				return rpcResponse(t, r, &wire.RegisterNodeResponse{Result: &wire.RegisterNodeResponse_Renewal{
+					Renewal: &wire.NodeCredentialRenewalReceipt{IdempotencyId: response.IdempotencyID, RenewalBinding: response.RenewalBinding,
+						RegistrationBinding: response.RegistrationBinding, PreviousCredentialSha256: response.PreviousCredentialSHA256,
+						NetworkId: response.NetworkID, NodeId: response.NodeID, NodeCredential: response.NodeCredential,
+						IssuedAt: timestamppb.New(response.IssuedAt), ExpiresAt: timestamppb.New(response.ExpiresAt)},
+				}}), nil
 			})}
 			makeExecutor := func() *Credentials {
 				e, err := NewCredentials(f.store, client, staticAnnouncement{f.announcement}, RegistrationConfig{MaxRequestBytes: 16384, MaxResponseBytes: 65536, MaxCredentialBytes: 8192, Now: clock}, RegistrationExecutorConfig{MaxCommitRetries: 3, RetryInterval: time.Second, WriteBudget: time.Second, Now: clock})

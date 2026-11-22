@@ -9,10 +9,10 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/endless-net/billing/api v0.5.0
 	github.com/endless-net/client/api v0.7.0
-	github.com/endless-net/coordinator/api v0.13.0
-	github.com/endless-net/identity/api v0.2.0
+	github.com/endless-net/coordinator/api v0.17.0
+	github.com/endless-net/identity/api v0.9.0
 	github.com/endless-net/relay/api v0.4.0
-	github.com/endless-net/signing/api v0.2.0
+	github.com/endless-net/signing/api v0.3.0
 	github.com/google/uuid v1.6.0
 	github.com/tailscale/wf v0.0.0-20240214030419-6fbb0a674ee6
 	github.com/tailscale/wireguard-go v0.0.0-20261028173945-db3888e688e9

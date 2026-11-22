@@ -1,17 +1,16 @@
 package control
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
 	signing "github.com/endless-net/signing/api/contract"
 )
 
@@ -46,11 +45,12 @@ func (f *registrationFixture) persisted(t *testing.T) state.Profile {
 func (f *registrationFixture) response(req *http.Request, t *testing.T) *http.Response {
 	t.Helper()
 	p := f.persisted(t)
-	raw, err := io.ReadAll(req.Body)
-	if err != nil || !p.RemoteInFlight || p.InFlightAt.IsZero() || p.Secrets.RegistrationRequest != string(raw) || !bytes.Equal(raw, f.original) {
-		t.Fatal("send before atomic original claim", err)
+	message := &wire.RegisterNodeRequest{}
+	readRPC(t, req, message)
+	if !p.RemoteInFlight || p.InFlightAt.IsZero() || p.Secrets.RegistrationRequest != string(f.original) || !matchesNativeProof(message, f.request) {
+		t.Fatal("send before atomic original claim")
 	}
-	return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(encode(t, f.result))), Request: req}
+	return rpcResponse(t, req, registrationMessage(f.result))
 }
 
 func TestRegistrationExecutorLostHTTPReplyAndRestartReusesOriginal(t *testing.T) {

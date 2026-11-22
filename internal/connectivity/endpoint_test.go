@@ -3,7 +3,6 @@ package connectivity
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 	transportprofile "github.com/endless-net/client/api/transport"
 
 	"github.com/endless-net/client/internal/state"
+	"github.com/endless-net/client/internal/testwire"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
 
@@ -37,11 +37,11 @@ func TestEndpointAdvertisementCannotChangeProtectedIntentGeneration(t *testing.T
 func endpointACK(t *testing.T, f *mapFixture, request *http.Request, generation uint64) *http.Response {
 	t.Helper()
 	ack := coordinator.UpdateNodeEndpointResponse{SchemaVersion: 2, NodeID: "node", NetworkID: "network", Endpoint: "192.0.2.1:51820", Generation: generation, Online: true, UpdatedAt: f.now, ExpiresAt: f.now.Add(30 * time.Second), Revision: coordinator.MapRevision{Network: 9007199254740993}}
-	raw, err := json.Marshal(ack)
+	raw, err := testwire.UnaryResponse(request, testwire.EndpointReceipt(ack))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &http.Response{StatusCode: 200, Request: request, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw))}
+	return raw
 }
 
 func TestEndpointExecutorRecoversOriginalRequestAndNeverRenewsKnownACK(t *testing.T) {

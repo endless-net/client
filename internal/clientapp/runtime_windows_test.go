@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
+
 	"errors"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
@@ -79,7 +81,7 @@ func TestWindowsAssemblyDoesNotAcquireStateOrPipeDuringConstruction(t *testing.T
 	calls := 0
 	observed.base = roundTrip(func(request *http.Request) (*http.Response, error) {
 		calls++
-		if request.Method != http.MethodGet || request.URL.String() != "https://api.endlessnet.ru/server-key" {
+		if request.Method != http.MethodPost || request.URL.String() != "https://api.endlessnet.ru"+signingapiconnect.BootstrapServiceGetBootstrapProcedure {
 			t.Fatal("production assembly selected another bootstrap origin")
 		}
 		return nil, errors.New("synthetic bootstrap transport refusal")

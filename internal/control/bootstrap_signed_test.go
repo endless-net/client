@@ -16,8 +16,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
+
 	"github.com/endless-net/client/internal/state"
 	signing "github.com/endless-net/signing/api/contract"
+	"google.golang.org/protobuf/proto"
 )
 
 func bootstrapStore(t *testing.T) (*state.Store, *memory) {
@@ -70,7 +73,7 @@ func TestBootstrapRenewalDistinguishesOutageFromRejectedTrust(t *testing.T) {
 				header := http.Header{"Content-Type": {"application/json"}}
 				if mode == "redirect" {
 					status = 302
-					header.Set("Location", "https://foreign.example/server-key")
+					header.Set("Location", "https://foreign.example"+signingapiconnect.BootstrapServiceGetBootstrapProcedure)
 				}
 				return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(bytes.NewReader(body)), Request: r}, nil
 			})}
@@ -111,7 +114,7 @@ func signedFixture(t *testing.T, origin string, now time.Time, revision uint64) 
 func signedSource(t *testing.T, raw *[]byte, now *time.Time, root signing.BootstrapRoot, store *state.Store) *Bootstrap {
 	t.Helper()
 	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(*raw)), Request: r}, nil
+		return bootstrapReply(r, *raw), nil
 	})}
 	source, err := NewVerifiedBootstrap(client, 1<<20, func() time.Time { return *now }, map[string]signing.BootstrapRoot{"https://control.example": root}, store)
 	if err != nil {
@@ -128,7 +131,7 @@ func TestConnectionBootstrapSharesOnlyCurrentVerifiedAnnouncement(t *testing.T) 
 	calls := 0
 	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
 		calls++
-		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw)), Request: r}, nil
+		return bootstrapReply(r, raw), nil
 	})}
 	source, err := NewVerifiedBootstrap(client, 1<<20, func() time.Time { return now }, map[string]signing.BootstrapRoot{origin: root}, store)
 	if err != nil {
@@ -310,4 +313,17 @@ func TestVerifiedRevisionRefreshDoesNotRequireOldProfilePinMatch(t *testing.T) {
 	if current.VerifiedAt(now.Add(2*time.Hour)) || current.VerifiedAt(now.Add(-2*time.Minute)) {
 		t.Fatal("retained verification ignored metadata time")
 	}
+}
+
+func bootstrapReply(r *http.Request, raw []byte) *http.Response {
+	if signed, err := signing.DecodeSignedBootstrap(raw); err == nil {
+		signature, _ := base64.RawURLEncoding.DecodeString(signed.Signature)
+		if message, err := signing.NewBootstrapResponse(signed.Metadata, signed.RootKeyID, signature); err == nil {
+			if encoded, err := proto.Marshal(message); err == nil {
+				raw = encoded
+			}
+		}
+	}
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/proto"}},
+		Body: io.NopCloser(bytes.NewReader(raw)), Request: r}
 }

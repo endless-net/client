@@ -4,12 +4,14 @@ package clientapp
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +20,13 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"connectrpc.com/connect"
+	"github.com/endless-net/client/internal/testwire"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
+	"google.golang.org/protobuf/proto"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	approvalmodel "github.com/endless-net/client/internal/approval"
@@ -33,6 +42,7 @@ import (
 // Consumer HTTPS fixture, not a Coordinator runtime or Management authority.
 // It saves one logical request/result before losing the selected first reply.
 type approvalRecoveryRemote struct {
+	publicqueryv1connect.UnimplementedEnrollmentServiceHandler
 	mu                         sync.Mutex
 	store                      *state.Store
 	profile, base, token, lost string
@@ -45,81 +55,98 @@ type approvalRecoveryRemote struct {
 	keyID                      string
 }
 
-func (f *approvalRecoveryRemote) serve(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	s, err := f.store.Load(r.Context())
+func (f *approvalRecoveryRemote) claimed(ctx context.Context, h http.Header) (coordinator.CreateNodeEnrollmentRequest, error) {
+	s, err := f.store.Load(ctx)
 	p := s.Profiles[f.profile]
-	if err != nil || p.Attempt == nil || !p.Attempt.BrowserApproval || !p.RemoteInFlight || p.InFlightAt.IsZero() || string(f.expected) != p.Secrets.RegistrationRequest || r.Header.Get("Cookie") != "" || r.Header.Get("X-EndlessNet-Node-Credential") != "" {
-		http.Error(w, "invalid durable browser claim", http.StatusPreconditionFailed)
-		return
+	if err != nil || p.Attempt == nil || !p.Attempt.BrowserApproval || !p.RemoteInFlight || p.InFlightAt.IsZero() ||
+		string(f.expected) != p.Secrets.RegistrationRequest || h.Get("Cookie") != "" || h.Get("X-EndlessNet-Node-Credential") != "" {
+		return coordinator.CreateNodeEnrollmentRequest{}, connect.NewError(connect.CodeFailedPrecondition, errors.New("invalid durable browser claim"))
 	}
 	q, err := coordinator.DecodeCreateNodeEnrollmentRequest(f.expected, 65536)
 	if err != nil || coordinator.VerifyRegisterNodeIdentityProof(q) != nil {
-		http.Error(w, "invalid original proof", http.StatusPreconditionFailed)
-		return
+		return coordinator.CreateNodeEnrollmentRequest{}, connect.NewError(connect.CodeFailedPrecondition, errors.New("invalid original proof"))
 	}
-	operation := ""
-	var response any
-	createPath := "/nodes/enrollment-requests"
-	if r.Method == http.MethodPost && r.URL.Path == createPath {
-		operation = "create"
-		raw, err := io.ReadAll(io.LimitReader(r.Body, 65537))
-		if err != nil || !bytes.Equal(raw, f.expected) || r.Header.Get("Authorization") != "" {
-			http.Error(w, "changed original Create", http.StatusPreconditionFailed)
-			return
-		}
-		response = coordinator.CreateNodeEnrollmentRequestResponse{Request: f.view, PollToken: f.token, PollAfterSeconds: 1}
-	} else {
-		if r.Header.Get("Authorization") != "Bearer "+f.token || r.ContentLength != 0 {
-			http.Error(w, "invalid original poll capability", http.StatusUnauthorized)
-			return
-		}
-		path := createPath + "/" + f.view.ID
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == path:
-			operation = "poll"
-			if f.view.Status == "pending" {
-				now := time.Now().UTC()
-				f.view.Status = "approved"
-				f.view.AccountID, f.view.NetworkID, f.view.NetworkName = "account", "network", "Resolved network"
-				f.view.ApprovedByUserID, f.view.ApprovedAt = "fixture-owner", &now
-			}
-			response = coordinator.NodeEnrollmentRequestStatusResponse{Request: f.view}
-		case r.Method == http.MethodPost && r.URL.Path == path+"/complete":
-			operation = "complete"
-			if f.result == nil {
-				now := time.Now().UTC()
-				claims := coordinator.NodeCredentialClaims{Version: 3, Algorithm: "ed25519-node-credential-v3", KeyID: f.keyID, NetworkID: f.view.NetworkID, NodeID: "node", Scopes: []string{"node:register"}, ExpiresAt: now.Add(time.Hour)}
-				payload, err := coordinator.NodeCredentialSigningPayload(f.keyID, claims.NetworkID, claims.NodeID, claims.Scopes, claims.ExpiresAt)
-				if err != nil {
-					http.Error(w, "invalid claim", http.StatusInternalServerError)
-					return
-				}
-				claims.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(f.key, payload))
-				raw, err := json.Marshal(claims)
-				if err != nil {
-					http.Error(w, "invalid claim", http.StatusInternalServerError)
-					return
-				}
-				f.view.Status, f.view.NodeID, f.view.CompletedAt = "enrolled", "node", &now
-				f.result = &coordinator.RegisterNodeResponse{SchemaVersion: 2, IdempotencyID: q.IdempotencyID, RegistrationBinding: coordinator.RegistrationIdentityProofBinding(q), Network: coordinator.Network{ID: f.view.NetworkID, AccountID: f.view.AccountID}, Node: coordinator.Node{ID: "node", NetworkID: f.view.NetworkID, UserID: "fixture-owner", Hostname: q.Hostname, IdentityPublicKey: q.IdentityPublicKey, PublicKey: q.PublicKey, DeviceFingerprint: q.DeviceFingerprint}, NodeCredential: "enc_" + base64.RawURLEncoding.EncodeToString(raw)}
-			}
-			response = coordinator.CompleteNodeEnrollmentRequestResponse{Request: f.view, Registration: f.result}
-		default:
-			http.NotFound(w, r)
-			return
-		}
-	}
-	f.calls[operation]++
-	if operation == f.lost && !f.replay {
-		http.Error(w, "lost original reply fixture", http.StatusServiceUnavailable)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
+	return q, nil
 }
 
+func (f *approvalRecoveryRemote) lostReply(operation string) error {
+	f.calls[operation]++
+	if operation == f.lost && !f.replay {
+		return connect.NewError(connect.CodeUnavailable, errors.New("lost original reply fixture"))
+	}
+	return nil
+}
+
+func (f *approvalRecoveryRemote) CreateNodeEnrollmentRequest(ctx context.Context, r *connect.Request[wire.CreateNodeEnrollmentRequestRequest]) (*connect.Response[wire.CreateNodeEnrollmentRequestResponse], error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	q, err := f.claimed(ctx, r.Header())
+	if err != nil {
+		return nil, err
+	}
+	if r.Header().Get("Authorization") != "" || !proto.Equal(r.Msg.Proof, testwire.DeviceProof(q)) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("changed original Create"))
+	}
+	if err := f.lostReply("create"); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&wire.CreateNodeEnrollmentRequestResponse{Request: testwire.EnrollmentView(f.view), PollToken: f.token, PollAfterSeconds: 1}), nil
+}
+
+func (f *approvalRecoveryRemote) GetNodeEnrollmentRequest(ctx context.Context, r *connect.Request[wire.GetNodeEnrollmentRequestRequest]) (*connect.Response[wire.GetNodeEnrollmentRequestResponse], error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, err := f.claimed(ctx, r.Header()); err != nil {
+		return nil, err
+	}
+	if r.Header().Get("Authorization") != "Bearer "+f.token || r.Msg.RequestId != f.view.ID {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid original poll capability"))
+	}
+	if f.view.Status == "pending" {
+		now := time.Now().UTC()
+		f.view.Status = "approved"
+		f.view.AccountID, f.view.NetworkID, f.view.NetworkName = "account", "network", "Resolved network"
+		f.view.ApprovedByUserID, f.view.ApprovedAt = "fixture-owner", &now
+	}
+	if err := f.lostReply("poll"); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&wire.GetNodeEnrollmentRequestResponse{Request: testwire.EnrollmentView(f.view)}), nil
+}
+
+func (f *approvalRecoveryRemote) CompleteNodeEnrollmentRequest(ctx context.Context, r *connect.Request[wire.CompleteNodeEnrollmentRequestRequest]) (*connect.Response[wire.CompleteNodeEnrollmentRequestResponse], error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	q, err := f.claimed(ctx, r.Header())
+	if err != nil {
+		return nil, err
+	}
+	if r.Header().Get("Authorization") != "Bearer "+f.token || r.Msg.RequestId != f.view.ID {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid original complete capability"))
+	}
+	if f.result == nil {
+		now := time.Now().UTC()
+		claims := coordinator.NodeCredentialClaims{Version: 3, Algorithm: "ed25519-node-credential-v3", KeyID: f.keyID, NetworkID: f.view.NetworkID, NodeID: "node", Scopes: []string{"node:register"}, ExpiresAt: now.Add(time.Hour)}
+		payload, err := coordinator.NodeCredentialSigningPayload(f.keyID, claims.NetworkID, claims.NodeID, claims.Scopes, claims.ExpiresAt)
+		if err != nil {
+			return nil, err
+		}
+		claims.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(f.key, payload))
+		raw, err := json.Marshal(claims)
+		if err != nil {
+			return nil, err
+		}
+		f.view.Status, f.view.NodeID, f.view.CompletedAt = "enrolled", "node", &now
+		f.result = &coordinator.RegisterNodeResponse{SchemaVersion: 2, IdempotencyID: q.IdempotencyID, RegistrationBinding: coordinator.RegistrationIdentityProofBinding(q),
+			Network:        coordinator.Network{ID: f.view.NetworkID, AccountID: f.view.AccountID},
+			Node:           coordinator.Node{ID: "node", NetworkID: f.view.NetworkID, UserID: "fixture-owner", Hostname: q.Hostname, IdentityPublicKey: q.IdentityPublicKey, PublicKey: q.PublicKey, DeviceFingerprint: q.DeviceFingerprint},
+			NodeCredential: "enc_" + base64.RawURLEncoding.EncodeToString(raw)}
+	}
+	if err := f.lostReply("complete"); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&wire.CompleteNodeEnrollmentRequestResponse{Request: testwire.EnrollmentView(f.view), Registration: testwire.Registration(*f.result)}), nil
+}
 func prepareBrowserRecoveryState(t *testing.T, c Config, bundle []byte, f *approvalRecoveryRemote) state.Profile {
 	t.Helper()
 	prepareRecoveryState(t, c, bundle, false)
@@ -211,27 +238,23 @@ func TestWindowsAssemblyRecoversOriginalBrowserCreateAndComplete(t *testing.T) {
 			}
 			projection := signing.ServerKeyResponse{TrustBundle: bundle(1), NodeCredentialTrustBundle: bundle(7), RelayTrustBundle: bundle(3)}
 			f.keyID = projection.NodeCredentialTrustBundle.ActiveKeyID
-			raw, err := json.Marshal(projection)
-			if err != nil {
-				t.Fatal(err)
-			}
 			mux := http.NewServeMux()
-			mux.HandleFunc("/server-key", func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write(raw)
-			})
-			mux.HandleFunc("/nodes/enrollment-requests", f.serve)
-			mux.HandleFunc("/nodes/enrollment-requests/", f.serve)
+			bootstrap := &recoveryBootstrap{}
+			path, handler := signingapiconnect.NewBootstrapServiceHandler(bootstrap)
+			mux.Handle(path, handler)
+			path, handler = publicqueryv1connect.NewEnrollmentServiceHandler(f)
+			mux.Handle(path, handler)
 			server := httptest.NewUnstartedServer(mux)
 			server.TLS = &tls.Config{MinVersion: tls.VersionTLS13}
 			server.StartTLS()
 			defer server.Close()
 			c.ControlOrigin = server.URL
+			raw, roots := bootstrap.prepare(t, c.ControlOrigin, projection)
 			original := prepareBrowserRecoveryState(t, c, raw, f)
 			var recovery time.Time
 			for cycle := range 2 {
 				build, digest := runtimeMetadata(t)
-				r, err := NewWindows(c, build, digest, io.Discard)
+				r, err := newWindows(c, build, digest, io.Discard, roots)
 				if err != nil {
 					t.Fatal(err)
 				}

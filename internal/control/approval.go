@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
-	"mime"
 	"net/http"
 	"time"
-	"unicode/utf8"
 
+	"connectrpc.com/connect"
 	approvalmodel "github.com/endless-net/client/internal/approval"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 )
 
 var ErrApprovalNotDue = errors.New("approval poll not due")
@@ -50,11 +50,22 @@ func (a *Approval) Create(ctx context.Context, p state.Profile, original []byte,
 	if previous != nil && a.validatePrevious(q, p, *previous) != nil {
 		return approvalmodel.Snapshot{}, approvalmodel.ErrProtocol
 	}
-	raw, err := a.call(ctx, &p, nil, previous, http.MethodPost, "/nodes/enrollment-requests", "", original)
+	var message *wire.CreateNodeEnrollmentRequestResponse
+	err = a.call(ctx, &p, nil, previous, func(ctx context.Context, client publicqueryv1connect.EnrollmentServiceClient) error {
+		response, err := client.CreateNodeEnrollmentRequest(ctx, connect.NewRequest(&wire.CreateNodeEnrollmentRequestRequest{Proof: registrationProof(q)}))
+		if err == nil {
+			message = response.Msg
+		}
+		return err
+	})
 	if err != nil {
 		return approvalmodel.Snapshot{}, err
 	}
-	v, err := coordinator.DecodeCreateNodeEnrollmentRequestResponse(raw, a.registration.config.MaxResponseBytes)
+	if !knownRPC(message.ProtoReflect()) {
+		return approvalmodel.Snapshot{}, approvalmodel.ErrProtocol
+	}
+	request, err := enrollmentView(message.Request)
+	v := coordinator.CreateNodeEnrollmentRequestResponse{Request: request, PollToken: message.PollToken, PollAfterSeconds: int(message.PollAfterSeconds)}
 	now := a.registration.config.Now()
 	if err != nil || !approvalToken(v.PollToken) || a.validate(q, p, v.Request, v.PollAfterSeconds, now, true) != nil {
 		return approvalmodel.Snapshot{}, approvalmodel.ErrProtocol
@@ -75,11 +86,22 @@ func (a *Approval) Poll(ctx context.Context, p state.Profile, original []byte, p
 	if previous.Request.Status == "pending" && a.registration.config.Now().Before(previous.ObservedAt.Add(time.Duration(previous.PollAfterSeconds)*time.Second)) {
 		return approvalmodel.Snapshot{}, ErrApprovalNotDue
 	}
-	raw, err := a.call(ctx, &p, nil, &previous, http.MethodGet, "/nodes/enrollment-requests/"+previous.Request.ID, previous.PollToken, nil)
+	var message *wire.GetNodeEnrollmentRequestResponse
+	err = a.call(ctx, &p, nil, &previous, func(ctx context.Context, client publicqueryv1connect.EnrollmentServiceClient) error {
+		response, err := client.GetNodeEnrollmentRequest(ctx, bearer(&wire.GetNodeEnrollmentRequestRequest{RequestId: previous.Request.ID}, previous.PollToken))
+		if err == nil {
+			message = response.Msg
+		}
+		return err
+	})
 	if err != nil {
 		return approvalmodel.Snapshot{}, err
 	}
-	v, err := coordinator.DecodeNodeEnrollmentRequestStatusResponse(raw, a.registration.config.MaxResponseBytes)
+	if !knownRPC(message.ProtoReflect()) {
+		return approvalmodel.Snapshot{}, approvalmodel.ErrProtocol
+	}
+	request, err := enrollmentView(message.Request)
+	v := coordinator.NodeEnrollmentRequestStatusResponse{Request: request, PollAfterSeconds: int(message.PollAfterSeconds)}
 	now := a.registration.config.Now()
 	if err != nil || now.Before(previous.ObservedAt) || a.validate(q, p, v.Request, v.PollAfterSeconds, now, false) != nil || !approvalSuccessor(previous.Request, v.Request) {
 		return approvalmodel.Snapshot{}, approvalmodel.ErrProtocol
@@ -131,66 +153,41 @@ func approvalExpiry(s *approvalmodel.Snapshot) time.Time {
 	return s.Request.ExpiresAt
 }
 
-func (a *Approval) call(ctx context.Context, p *state.Profile, proof *Announcement, previous *approvalmodel.Snapshot, method, path, token string, body []byte) ([]byte, error) {
+func (a *Approval) call(ctx context.Context, p *state.Profile, proof *Announcement, previous *approvalmodel.Snapshot, send func(context.Context, publicqueryv1connect.EnrollmentServiceClient) error) error {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return err
 	}
 	remaining := a.budget(*p, previous)
 	if remaining <= 0 {
-		return nil, context.DeadlineExceeded
+		return context.DeadlineExceeded
 	}
 	ctx, cancel := context.WithTimeout(ctx, remaining)
 	defer cancel()
 	r := a.registration
 	current, err := r.announcements.Fetch(ctx, p.ControlOrigin)
 	if err != nil || !current.MatchesProfile(*p, r.config.Now()) {
-		return nil, ErrBootstrap
+		return ErrBootstrap
 	}
 	p.Trust = state.ServerTrust{KeyID: current.KeyID, AnnouncementID: current.ID, Bundle: current.Bundle}
-	req, err := http.NewRequestWithContext(ctx, method, p.ControlOrigin+path, bytes.NewReader(body))
-	if err != nil {
-		return nil, approvalmodel.ErrProtocol
-	}
-	req.Header.Set("Accept", "application/json")
-	if method == http.MethodPost && len(body) > 0 {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
 	if a.budget(*p, previous) <= 0 {
-		return nil, context.DeadlineExceeded
+		return context.DeadlineExceeded
 	}
-	response, err := r.http.Do(req)
-	if err != nil {
-		return nil, registrationCallError(ctx)
-	}
-	defer func() { _ = response.Body.Close() }()
-	media, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	created := method == http.MethodPost && path == "/nodes/enrollment-requests" && response.StatusCode == http.StatusCreated
-	if err != nil || media != "application/json" || response.StatusCode != http.StatusOK && !created {
-		return nil, ErrRegistrationUnavailable
-	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, int64(r.config.MaxResponseBytes)+1))
-	if err != nil || len(raw) > r.config.MaxResponseBytes {
-		return nil, registrationCallError(ctx)
-	}
-	if !utf8.Valid(raw) {
-		return nil, approvalmodel.ErrProtocol
+	if err := send(ctx, r.rpc(p.ControlOrigin)); err != nil {
+		return registrationCallError(ctx)
 	}
 	if ctx.Err() != nil {
-		return nil, registrationCallError(ctx)
+		return registrationCallError(ctx)
 	}
 	if a.budget(*p, previous) <= 0 {
-		return nil, context.DeadlineExceeded
+		return context.DeadlineExceeded
 	}
 	if !current.MatchesProfile(*p, r.config.Now()) {
-		return nil, ErrBootstrap
+		return ErrBootstrap
 	}
 	if proof != nil {
 		*proof = current
 	}
-	return raw, nil
+	return nil
 }
 
 func approvalToken(token string) bool { return approvalmodel.ValidToken(token) }
@@ -199,4 +196,24 @@ func (a *Approval) validate(q coordinator.CreateNodeEnrollmentRequest, p state.P
 }
 func approvalSuccessor(old, next coordinator.NodeEnrollmentRequest) bool {
 	return approvalmodel.Successor(old, next)
+}
+
+func enrollmentView(m *wire.NodeEnrollmentRequest) (coordinator.NodeEnrollmentRequest, error) {
+	if m == nil {
+		return coordinator.NodeEnrollmentRequest{}, approvalmodel.ErrProtocol
+	}
+	d := mapDecoder{}
+	value := coordinator.NodeEnrollmentRequest{
+		ID: m.Id, Status: m.Status, AccountID: m.AccountId, NetworkID: m.NetworkId,
+		NetworkName: m.NetworkName, Hostname: m.Hostname, PublicKey: m.PublicKey,
+		IdentityPublicKey: m.IdentityPublicKey, DeviceFingerprint: m.DeviceFingerprint, Tags: m.Tags,
+		ApprovalURL: m.ApprovalUrl, ApprovedByUserID: m.ApprovedByUserId, RejectedByUserID: m.RejectedByUserId,
+		RejectionReason: m.RejectionReason, NodeID: m.NodeId, CreatedAt: d.timestamp(m.CreatedAt),
+		ExpiresAt: d.timestamp(m.ExpiresAt), ApprovedAt: d.optionalTime(m.ApprovedAt),
+		RejectedAt: d.optionalTime(m.RejectedAt), CompletedAt: d.optionalTime(m.CompletedAt),
+	}
+	if d.err != nil {
+		return coordinator.NodeEnrollmentRequest{}, approvalmodel.ErrProtocol
+	}
+	return value, nil
 }

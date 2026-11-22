@@ -17,6 +17,7 @@ import (
 	"github.com/endless-net/client/internal/localapi"
 	"github.com/endless-net/client/internal/localipc"
 	"github.com/endless-net/client/internal/windowsservice"
+	signing "github.com/endless-net/signing/api/contract"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 	"google.golang.org/protobuf/proto"
@@ -39,6 +40,10 @@ type WindowsRuntime struct {
 }
 
 func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output io.Writer) (*WindowsRuntime, error) {
+	return newWindows(c, build, digest, output, control.EmbeddedBootstrapRoots())
+}
+
+func newWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output io.Writer, bootstrapRoots map[string]signing.BootstrapRoot) (*WindowsRuntime, error) {
 	if c.Validate() != nil || build == nil || output == nil || digest == [32]byte{} || build.Version == "" || build.Commit == "" || build.Platform != clientv0.Platform_PLATFORM_WINDOWS || build.Architecture != runtime.GOARCH {
 		return nil, ErrConfig
 	}
@@ -80,7 +85,7 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 				return err
 			}
 			lc.Append(t.Signals().hook("control_http", func(ctx context.Context) error { return ctx.Err() }, func(context.Context) error { r.http.CloseIdleConnections(); return nil }))
-			bootstrap, err := control.NewVerifiedBootstrap(r.http, int64(c.MaxBootstrapBytes), time.Now, control.EmbeddedBootstrapRoots(), r.state.Store())
+			bootstrap, err := control.NewVerifiedBootstrap(r.http, int64(c.MaxBootstrapBytes), time.Now, bootstrapRoots, r.state.Store())
 			if err != nil {
 				return err
 			}

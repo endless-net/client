@@ -44,12 +44,7 @@ func TestWindowsUIAgainstActualOwnerChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var input struct {
-		Address          string `json:"address"`
-		CA               []byte `json:"ca"`
-		Bootstrap        []byte `json:"bootstrap"`
-		BrowserSimulator string `json:"browser_simulator"`
-	}
+	var input ownerChainFixture
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&input) != nil || decoder.Decode(new(any)) != io.EOF {
@@ -78,7 +73,7 @@ func TestWindowsUIAgainstActualOwnerChain(t *testing.T) {
 	var requestID, attemptID string
 	for cycle := range 2 {
 		build, digest := runtimeMetadata(t)
-		runtime, err := NewWindows(c, build, digest, io.Discard)
+		runtime, err := newWindows(c, build, digest, io.Discard, input.signingRoots(t, c.ControlOrigin))
 		if err != nil {
 			t.Fatal(err)
 		}

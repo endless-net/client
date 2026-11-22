@@ -10,6 +10,7 @@ import (
 	"github.com/endless-net/billing/api/public/v1/billingpublicapiconnect"
 	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 	"github.com/endless-net/identity/api/v1/identityapiconnect"
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -35,14 +36,13 @@ func (s *Signals) HTTPTransport(base http.RoundTripper) (http.RoundTripper, erro
 }
 
 func httpOperation(r *http.Request) string {
-	if r.Method == http.MethodGet && r.URL.Path == "/server-key" {
-		return "server_key"
-	}
 	if r.Method != http.MethodPost {
 		return "unsupported"
 	}
 	switch r.URL.Path {
-	case "/nodes/register":
+	case signingapiconnect.BootstrapServiceGetBootstrapProcedure:
+		return "server_key"
+	case publicqueryv1connect.EnrollmentServiceRegisterNodeProcedure:
 		return "register_node"
 	case identityapiconnect.NativeLoginServiceStartNativeLoginProcedure:
 		return "start_native_login"

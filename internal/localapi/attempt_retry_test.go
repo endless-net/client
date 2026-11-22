@@ -13,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
+	"google.golang.org/protobuf/proto"
+
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/localipc"
@@ -76,7 +79,7 @@ func observationSource(t *testing.T, c *Controller, now *time.Time, contentions 
 	s := &observationAnnouncements{remaining: contentions}
 	s.source, err = control.NewVerifiedBootstrap(&http.Client{Transport: bootstrapTransport(func(r *http.Request) (*http.Response, error) {
 		s.gets++
-		if r.Method != http.MethodGet || r.URL.String() != origin+"/server-key" || r.Header.Get("Authorization") != "" {
+		if r.Method != http.MethodPost || r.URL.String() != origin+signingapiconnect.BootstrapServiceGetBootstrapProcedure || r.Header.Get("Authorization") != "" {
 			t.Fatal("observation attempted a credential-bearing remote mutation")
 		}
 		metadata := signing.BootstrapMetadata{Origin: origin, Revision: uint64(s.gets), IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour), Bundles: bundles}
@@ -84,11 +87,15 @@ func observationSource(t *testing.T, c *Controller, now *time.Time, contentions 
 		if err != nil {
 			t.Fatal(err)
 		}
-		raw, err := json.Marshal(signing.SignedBootstrap{Version: 2, Purpose: "bootstrap", RootKeyID: root.KeyID, Metadata: metadata, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, message))})
+		response, err := signing.NewBootstrapResponse(metadata, root.KeyID, ed25519.Sign(private, message))
 		if err != nil {
 			t.Fatal(err)
 		}
-		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw)), Request: r}, nil
+		raw, err := proto.Marshal(response)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/proto"}}, Body: io.NopCloser(bytes.NewReader(raw)), Request: r}, nil
 	})}, 1<<20, c.config.Now, map[string]signing.BootstrapRoot{origin: root}, c.store)
 	if err != nil {
 		t.Fatal(err)

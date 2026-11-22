@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
+
 	signingcontract "github.com/endless-net/signing/api/contract"
 )
 
@@ -86,14 +88,14 @@ func TestBootstrapBoundedPublicFetchAndNoRedirect(t *testing.T) {
 	calls := 0
 	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
 		calls++
-		if r.Method != http.MethodGet || r.URL.String() != "https://control.example/server-key" || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
+		if r.Method != http.MethodPost || r.URL.String() != "https://control.example"+signingapiconnect.BootstrapServiceGetBootstrapProcedure || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
 			t.Fatal("bootstrap changed surface or sent user credentials")
 		}
 		deadline, ok := r.Context().Deadline()
 		if !ok || time.Until(deadline) > 30*time.Second {
 			t.Fatal("unbounded bootstrap")
 		}
-		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw)), Request: r}, nil
+		return bootstrapReply(r, raw), nil
 	})}
 	b, err := NewVerifiedBootstrap(client, 1<<20, func() time.Time { return now }, map[string]signingcontract.BootstrapRoot{"https://control.example": root}, store)
 	if err != nil {
@@ -107,7 +109,7 @@ func TestBootstrapBoundedPublicFetchAndNoRedirect(t *testing.T) {
 		t.Fatal("oversized bootstrap accepted")
 	}
 	client.Transport = transport(func(r *http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusTemporaryRedirect, Header: http.Header{"Location": []string{"https://other.example/server-key"}}, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
+		return &http.Response{StatusCode: http.StatusTemporaryRedirect, Header: http.Header{"Location": []string{"https://other.example" + signingapiconnect.BootstrapServiceGetBootstrapProcedure}}, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
 	})
 	b, err = NewVerifiedBootstrap(client, 1<<20, nil, map[string]signingcontract.BootstrapRoot{"https://control.example": root}, store)
 	if err != nil {

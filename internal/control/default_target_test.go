@@ -3,7 +3,6 @@ package control
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -14,6 +13,9 @@ import (
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type defaultFixture struct {
@@ -53,18 +55,17 @@ func defaultTargetFixture(t *testing.T) *defaultFixture {
 	f := &defaultFixture{login: login, server: server, clock: clock}
 	remote, err := NewDefaultTarget(&http.Client{Transport: transport(func(req *http.Request) (*http.Response, error) {
 		f.calls++
-		raw, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
+		message := &wire.EnsureDefaultEnrollmentTargetRequest{}
+		readRPC(t, req, message)
 		current, err := login.store.Load(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
 		p := current.Profiles[loginProfile]
-		if req.URL.Path != coordinator.DefaultTargetPath || req.Method != "POST" || req.Header.Get("Authorization") != "Bearer "+p.Secrets.Access || !p.RemoteInFlight || p.DefaultTarget == nil || p.DefaultTarget.Request != string(raw) {
+		if req.URL.Path != publicqueryv1connect.EnrollmentServiceEnsureDefaultEnrollmentTargetProcedure || req.Method != "POST" || req.Header.Get("Authorization") != "Bearer "+p.Secrets.Access || !p.RemoteInFlight || p.DefaultTarget == nil {
 			t.Fatal("resolver send before durable original/marker")
 		}
+		raw := []byte(p.DefaultTarget.Request)
 		if f.original == nil {
 			f.original = append([]byte(nil), raw...)
 		} else if !bytes.Equal(f.original, raw) {
@@ -73,6 +74,11 @@ func defaultTargetFixture(t *testing.T) *defaultFixture {
 		r, err := coordinator.DecodeEnsureDefaultEnrollmentTargetRequest(raw, coordinator.DefaultTargetMaxBytes)
 		if err != nil || coordinator.VerifyDefaultTargetIdentityProof(r) != nil {
 			t.Fatal("invalid proof", err)
+		}
+		if r.SchemaVersion != int(message.Version) || r.RequestID != message.RequestId || r.AttemptBindingSHA256 != message.AttemptBindingSha256 ||
+			r.IdentityPublicKey != message.IdentityPublicKey || r.IdentitySignature != message.IdentitySignature ||
+			r.SessionTokenBinding != message.SessionTokenBinding || !r.CreatedAt.Equal(message.CreatedAt.AsTime()) || !r.ExpiresAt.Equal(message.ExpiresAt.AsTime()) {
+			t.Fatal("resolver RPC changed the durable proof")
 		}
 		digest, err := coordinator.DefaultTargetRequestSHA256(r)
 		if err != nil {
@@ -84,11 +90,15 @@ func defaultTargetFixture(t *testing.T) *defaultFixture {
 		if f.beforeSend != nil {
 			f.beforeSend(req)
 		}
-		out, _ := json.Marshal(f.result)
+
 		if f.afterResponse != nil {
 			f.afterResponse()
 		}
-		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(out)), Request: req}, nil
+		return rpcResponse(t, req, &wire.EnsureDefaultEnrollmentTargetResponse{
+			RequestId: f.result.RequestID, RequestSha256: f.result.RequestSHA256, AccountId: f.result.AccountID,
+			NetworkId: f.result.NetworkID, Revision: f.result.Revision, ResolvedAt: timestamppb.New(f.result.ResolvedAt),
+			ExpiresAt: timestamppb.New(f.result.ExpiresAt),
+		}), nil
 	})}, login.native.announcements, RegistrationConfig{MaxRequestBytes: 16384, MaxResponseBytes: 65536, MaxCredentialBytes: 8192, Now: func() time.Time { return *clock }})
 	if err != nil {
 		t.Fatal(err)

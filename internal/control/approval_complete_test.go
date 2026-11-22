@@ -16,6 +16,8 @@ import (
 
 	"github.com/endless-net/client/internal/enrollment"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 	signing "github.com/endless-net/signing/api/contract"
 )
 
@@ -58,9 +60,10 @@ func TestApprovalCompleteVerifiesOriginalDeviceReceiptAndPurposeCredential(t *te
 		calls := 0
 		a := f.approval(t, func(req *http.Request) (*http.Response, error) {
 			calls++
-			body, err := io.ReadAll(req.Body)
+			message := &wire.CompleteNodeEnrollmentRequestRequest{}
+			readRPC(t, req, message)
 			deadline, bounded := req.Context().Deadline()
-			if err != nil || len(body) != 0 || req.ContentLength != 0 || req.Method != http.MethodPost || req.URL.String() != f.p.ControlOrigin+"/nodes/enrollment-requests/opaque-request-1/complete" || req.Header.Get("Authorization") != "Bearer "+f.token || req.Header.Get("Content-Type") != "" || req.Header.Get("Cookie") != "" || req.Header.Get("X-EndlessNet-Node-Credential") != "" || !bounded || time.Until(deadline) > 30*time.Second {
+			if message.RequestId != previous.Request.ID || req.URL.String() != f.p.ControlOrigin+publicqueryv1connect.EnrollmentServiceCompleteNodeEnrollmentRequestProcedure || req.Header.Get("Authorization") != "Bearer "+f.token || req.Header.Get("Cookie") != "" || req.Header.Get("X-EndlessNet-Node-Credential") != "" || !bounded || time.Until(deadline) > 30*time.Second {
 				t.Fatal("completion body, binding, credential class or budget changed")
 			}
 			return approvalResponse(t, req, coordinator.CompleteNodeEnrollmentRequestResponse{Request: f.view, Registration: &f.result}), nil
@@ -177,7 +180,9 @@ func TestApprovalCompleteKeepsApprovedWithoutRegistrationAndRecoversOriginalResu
 		if calls == 2 {
 			return nil, errors.New("secret-poll-session-node")
 		}
-		if req.Header.Get("Authorization") != "Bearer "+previous.PollToken || req.ContentLength != 0 {
+		message := &wire.CompleteNodeEnrollmentRequestRequest{}
+		readRPC(t, req, message)
+		if req.Header.Get("Authorization") != "Bearer "+previous.PollToken || message.RequestId != previous.Request.ID {
 			t.Fatal("recovery changed original authority or operation")
 		}
 		return approvalResponse(t, req, coordinator.CompleteNodeEnrollmentRequestResponse{Request: f.view, Registration: &f.result}), nil

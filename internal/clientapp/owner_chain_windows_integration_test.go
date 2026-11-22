@@ -5,14 +5,16 @@ package clientapp
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -21,13 +23,34 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
+	signing "github.com/endless-net/signing/api/contract"
+
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/localipc"
 	"github.com/endless-net/client/internal/state"
-	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
+
+type ownerChainFixture struct {
+	Address          string `json:"address"`
+	CA               []byte `json:"ca"`
+	Bootstrap        []byte `json:"bootstrap"`
+	BootstrapRoot    []byte `json:"bootstrap_root"`
+	BrowserSimulator string `json:"browser_simulator,omitempty"`
+}
+
+func (f ownerChainFixture) signingRoots(t *testing.T, origin string) map[string]signing.BootstrapRoot {
+	t.Helper()
+	if len(f.BootstrapRoot) != ed25519.PublicKeySize {
+		t.Fatal("fixture requires its independently provisioned Ed25519 bootstrap public key")
+	}
+	hash := sha256.Sum256(f.BootstrapRoot)
+	return map[string]signing.BootstrapRoot{origin: {KeyID: "ed25519:" + base64.RawURLEncoding.EncodeToString(hash[:]), PublicKey: ed25519.PublicKey(f.BootstrapRoot)}}
+}
 
 type ownerChainLostReply struct {
 	next http.RoundTripper
@@ -42,57 +65,44 @@ func assertOwnerChainNodeList(t *testing.T, client *http.Client, profile state.P
 	if profile.Attempt == nil || profile.Attempt.Phase != enrollment.Registered || profile.Secrets.Access == "" {
 		t.Fatal("registered native profile required for fresh node list")
 	}
-	get := func(network, access string) (int, []byte) {
+	sdk := publicqueryv1connect.NewNodeManagementServiceClient(client, profile.ControlOrigin, connect.WithReadMaxBytes(65536))
+	get := func(network, access string) (*wire.ListNodesResponse, error) {
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, profile.ControlOrigin+"/networks/"+url.PathEscape(network)+"/nodes", nil)
-		if err != nil {
-			t.Fatal("node list request invalid")
-		}
-		request.Header.Set("Cache-Control", "no-cache")
+		req := connect.NewRequest(&wire.ListNodesRequest{NetworkId: network})
+		req.Header().Set("Cache-Control", "no-cache")
 		if access != "" {
-			request.Header.Set("Authorization", "Bearer "+access)
+			req.Header().Set("Authorization", "Bearer "+access)
 		}
-		response, err := client.Do(request)
+		res, err := sdk.ListNodes(ctx, req)
 		if err != nil {
-			t.Fatal("fresh node list unavailable")
+			return nil, err
 		}
-		defer func() { _ = response.Body.Close() }()
-		raw, err := io.ReadAll(io.LimitReader(response.Body, 65537))
-		if err != nil || len(raw) > 65536 {
-			t.Fatal("fresh node list exceeded bound or failed")
-		}
-		return response.StatusCode, raw
+		return res.Msg, nil
 	}
-	for _, denied := range []struct{ network, access string }{
-		{profile.Attempt.NetworkID, ""}, {"foreign-network", profile.Secrets.Access},
-	} {
-		status, raw := get(denied.network, denied.access)
-		if (status != http.StatusUnauthorized && status != http.StatusForbidden && status != http.StatusNotFound) || bytes.Contains(raw, []byte(profile.Attempt.NodeID)) {
-			t.Fatal("unauthorized node list exposed registration", status)
+	for _, denied := range []struct{ network, access string }{{profile.Attempt.NetworkID, ""}, {"foreign-network", profile.Secrets.Access}} {
+		response, err := get(denied.network, denied.access)
+		code := connect.CodeOf(err)
+		if response != nil || code != connect.CodeUnauthenticated && code != connect.CodePermissionDenied && code != connect.CodeNotFound {
+			t.Fatal("unauthorized node list exposed registration", err)
 		}
 	}
-	status, raw := get(profile.Attempt.NetworkID, profile.Secrets.Access)
-	if status != http.StatusOK {
-		t.Fatal("fresh authorized node list rejected", status)
+	response, err := get(profile.Attempt.NetworkID, profile.Secrets.Access)
+	if err != nil || response.NetworkRevision == 0 {
+		t.Fatal("fresh authorized node list unavailable", err)
 	}
-	var nodes []coordinator.Node
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&nodes) != nil || decoder.Decode(new(any)) != io.EOF || nodes == nil {
-		t.Fatal("published Node[] decode failed")
-	}
+	nodes := response.Nodes
 	fingerprint, err := profile.Keys.Fingerprint()
 	if err != nil {
 		t.Fatal("protected device identity invalid")
 	}
 	matches := 0
 	for _, node := range nodes {
-		if node.NetworkID != profile.Attempt.NetworkID {
+		if node.NetworkId != profile.Attempt.NetworkID {
 			t.Fatal("fresh list included another Network")
 		}
-		if node.ID == profile.Attempt.NodeID || node.DeviceFingerprint == hex.EncodeToString(fingerprint[:]) {
-			if node.ID != profile.Attempt.NodeID || node.DeviceFingerprint != hex.EncodeToString(fingerprint[:]) || node.UserID != profile.Secrets.UserID {
+		if node.Id == profile.Attempt.NodeID || node.DeviceFingerprint == hex.EncodeToString(fingerprint[:]) {
+			if node.Id != profile.Attempt.NodeID || node.DeviceFingerprint != hex.EncodeToString(fingerprint[:]) || node.UserId != profile.Secrets.UserID {
 				t.Fatal("fresh list identity does not match Client registration")
 			}
 			matches++
@@ -104,11 +114,11 @@ func assertOwnerChainNodeList(t *testing.T, client *http.Client, profile state.P
 }
 
 func (f *ownerChainLostReply) RoundTrip(request *http.Request) (*http.Response, error) {
-	if request.URL.Path == "/nodes/register" && f.lost.Load() {
+	if request.URL.Path == publicqueryv1connect.EnrollmentServiceRegisterNodeProcedure && f.lost.Load() {
 		return nil, errors.New("isolated fixture registration link remains unavailable until restart")
 	}
 	response, err := f.next.RoundTrip(request)
-	if err == nil && request.URL.Path == "/nodes/register" && response.StatusCode == http.StatusOK && !f.lost.Swap(true) {
+	if err == nil && request.URL.Path == publicqueryv1connect.EnrollmentServiceRegisterNodeProcedure && response.StatusCode == http.StatusOK && !f.lost.Swap(true) {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 65537))
 		_ = response.Body.Close()
 		return nil, errors.New("isolated fixture discarded committed registration response")
@@ -289,12 +299,7 @@ func TestWindowsRuntimeAgainstActualOwnerChain(t *testing.T) {
 	if err != nil || len(raw) > 65536 {
 		t.Fatal("owner fixture size")
 	}
-	var input struct {
-		Address          string `json:"address"`
-		CA               []byte `json:"ca"`
-		Bootstrap        []byte `json:"bootstrap"`
-		BrowserSimulator string `json:"browser_simulator,omitempty"`
-	}
+	var input ownerChainFixture
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&input) != nil || decoder.Decode(new(any)) != io.EOF {
@@ -320,7 +325,7 @@ func TestWindowsRuntimeAgainstActualOwnerChain(t *testing.T) {
 	var recoveryUntil time.Time
 	for cycle := range 2 {
 		build, digest := runtimeMetadata(t)
-		runtime, err := NewWindows(c, build, digest, io.Discard)
+		runtime, err := newWindows(c, build, digest, io.Discard, input.signingRoots(t, c.ControlOrigin))
 		if err != nil {
 			t.Fatal("owner-chain application construction", err)
 		}

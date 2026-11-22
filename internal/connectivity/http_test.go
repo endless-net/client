@@ -10,13 +10,16 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"strings"
-	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/endless-net/client/internal/state"
+	"github.com/endless-net/client/internal/testwire"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
+	"google.golang.org/protobuf/proto"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -32,14 +35,32 @@ func transportFixture(t *testing.T, roundTrip roundTripFunc) *Transport {
 	return transport
 }
 
-func mapResponse(request *http.Request, body io.ReadCloser) *http.Response {
-	header := make(http.Header)
-	header.Set("Content-Type", "application/x-ndjson")
-	header.Set("X-EndlessNet-Map-Protocol", "3")
-	header.Set("X-EndlessNet-Map-Capabilities", "snapshot,signed-delta,checkpoint,resync,heartbeat")
-	return &http.Response{StatusCode: 200, Request: request, Body: body, Header: header}
+func watchRequest(t *testing.T, r *http.Request) *wire.WatchMapsRequest {
+	t.Helper()
+	message, err := testwire.ReadWatch(r)
+	if err != nil || r.URL.Path != publicqueryv1connect.ConnectivityServiceWatchMapsProcedure || message.NodeId != "node" ||
+		message.Timeout.CheckValid() != nil || coordinator.ValidateMapStreamNonce(message.Nonce) != nil {
+		t.Fatal("invalid generated WatchMaps request", err)
+	}
+	return message
 }
 
+func fixtureFrames(t *testing.T, records ...[]byte) []byte {
+	t.Helper()
+	var frames []byte
+	for _, record := range records {
+		var event coordinator.MapStreamEvent
+		if err := json.Unmarshal(record, &event); err != nil {
+			t.Fatal(err)
+		}
+		frame, err := testwire.Frame(testwire.Update(event))
+		if err != nil {
+			t.Fatal(err)
+		}
+		frames = append(frames, frame...)
+	}
+	return frames
+}
 func assertNodeRequest(t *testing.T, r *http.Request, f *mapFixture) {
 	t.Helper()
 	if r.URL.Scheme != "https" || r.URL.Host != "control.example" || r.Header.Get("X-EndlessNet-Node-Credential") != f.profile.Secrets.NodeCredential || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
@@ -50,7 +71,7 @@ func assertNodeRequest(t *testing.T, r *http.Request, f *mapFixture) {
 	}
 }
 
-func TestTransportStreamsMapsWithoutPromotingHeartbeatReplayAndPreservesRevocation(t *testing.T) {
+func TestTransportStreamsMapsWithoutPromotingReplayAndPreservesRevocation(t *testing.T) {
 	f := newMapFixture(t)
 	v, err := NewVerifier(f.profile, f.config)
 	if err != nil {
@@ -58,23 +79,23 @@ func TestTransportStreamsMapsWithoutPromotingHeartbeatReplayAndPreservesRevocati
 	}
 	first := f.sign(t, nil, f.now, f.now.Add(time.Minute))
 	cursor := state.MapCursor{Revision: f.value.Revision, PayloadHash: f.value.MapSignature.PayloadHash, IssuedAt: f.now}
-	heartbeat, _ := json.Marshal(coordinator.MapStreamEvent{Type: "heartbeat", ProtocolVersion: 3, Capabilities: []string{"snapshot", "signed-delta", "checkpoint", "resync", "heartbeat"}, EventID: "heartbeat", From: cursor.Revision, To: cursor.Revision})
 	f.now = f.now.Add(time.Second)
 	f.value.Revision.Network++
 	f.value.Network.Revision = f.value.Revision.Network
 	f.value.Node.Status = "revoked"
 	f.value.Peers = []coordinator.Peer{}
 	last := f.sign(t, &cursor, f.now, f.now.Add(time.Minute))
-	body := bytes.Join([][]byte{first, heartbeat, first, last}, []byte{'\n'})
-	body = append(body, '\n')
 	calls := 0
 	transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
 		calls++
 		assertNodeRequest(t, r, f)
-		if r.Method != http.MethodGet || r.URL.Path != "/maps/node/stream" || r.URL.Query().Get("from_network_revision") != "0" || len(r.URL.Query()) != 4 || r.Header.Get("Accept") != "application/x-ndjson" {
-			t.Fatal("stream surface/cursor changed")
+		request := watchRequest(t, r)
+		if request.Cursor != nil {
+			t.Fatal("initial stream unexpectedly bound a cursor")
 		}
-		return mapResponse(r, io.NopCloser(bytes.NewReader(body))), nil
+		opening := f.openingRecord(t, first, request.Nonce)
+		body := fixtureFrames(t, opening, first, last)
+		return testwire.StreamResponse(r, io.NopCloser(bytes.NewReader(body))), nil
 	})
 	var received []Map
 	err = transport.Stream(context.Background(), v, nil, func(_ context.Context, m Map) error {
@@ -110,10 +131,12 @@ func TestTransportResumesExactUint64CursorAndClosesOnCancellation(t *testing.T) 
 	received := 0
 	transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
 		assertNodeRequest(t, r, f)
-		if r.URL.Query().Get("from_network_revision") != "9007199254740993" || r.URL.Query().Get("from_map_hash") != cursor.PayloadHash || r.URL.Query().Get("from_global_revision") != "0" {
+		request := watchRequest(t, r)
+		if request.Cursor.GetRevision().GetNetwork() != 9007199254740993 || request.Cursor.GetMapHash() != cursor.PayloadHash || request.Cursor.GetRevision().GetGlobal() != 0 {
 			t.Fatal("durable cursor rounded or omitted")
 		}
-		return mapResponse(r, &closeReader{Reader: bytes.NewReader(raw), close: func() { closed = true }}), nil
+		opening := f.openingRecord(t, raw, request.Nonce)
+		return testwire.StreamResponse(r, &closeReader{Reader: bytes.NewReader(fixtureFrames(t, opening)), close: func() { closed = true }}), nil
 	})
 	err = transport.Stream(ctx, v, &cursor, func(context.Context, Map) error { received++; cancel(); return nil })
 	if !errors.Is(err, context.Canceled) || received != 1 || !closed || len(transport.activeStreams) != 0 {
@@ -128,14 +151,6 @@ type closeReader struct {
 
 func (b *closeReader) Close() error { b.close(); return nil }
 
-type blockingBody struct {
-	closed chan struct{}
-	once   sync.Once
-}
-
-func (b *blockingBody) Read([]byte) (int, error) { <-b.closed; return 0, io.ErrClosedPipe }
-func (b *blockingBody) Close() error             { b.once.Do(func() { close(b.closed) }); return nil }
-
 type streamDeadlineReader struct{ ctx context.Context }
 
 func (r streamDeadlineReader) Read([]byte) (int, error) {
@@ -144,7 +159,7 @@ func (r streamDeadlineReader) Read([]byte) (int, error) {
 }
 
 func TestStreamRotationRequiresOwnDeadlineAndVerifiedMap(t *testing.T) {
-	for _, name := range []string{"scheduled", "parent-deadline", "credential-deadline", "early-eof", "idle", "heartbeat-only", "partial-record"} {
+	for _, name := range []string{"scheduled", "parent-deadline", "credential-deadline", "early-eof", "idle", "empty-update", "partial-record"} {
 		t.Run(name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				f := newMapFixture(t)
@@ -160,22 +175,23 @@ func TestStreamRotationRequiresOwnDeadlineAndVerifiedMap(t *testing.T) {
 				}
 				raw := append(f.sign(t, nil, f.now, expiry), '\n')
 				transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
-					body := io.MultiReader(bytes.NewReader(raw), streamDeadlineReader{ctx: r.Context()})
+					opening := f.openingRecord(t, raw, watchRequest(t, r).Nonce)
+					body := io.MultiReader(bytes.NewReader(fixtureFrames(t, opening)), streamDeadlineReader{ctx: r.Context()})
 					switch name {
 					case "early-eof":
-						body = bytes.NewReader(raw)
+						body = bytes.NewReader(fixtureFrames(t, opening))
 					case "idle":
-						return mapResponse(r, &blockingBody{closed: make(chan struct{})}), nil
-					case "heartbeat-only":
+						return testwire.StreamResponse(r, io.NopCloser(streamDeadlineReader{ctx: r.Context()})), nil
+					case "empty-update":
 						event, err := json.Marshal(coordinator.MapStreamEvent{Type: "heartbeat", ProtocolVersion: 3, Capabilities: []string{"snapshot", "signed-delta", "checkpoint", "resync", "heartbeat"}, EventID: "heartbeat"})
 						if err != nil {
 							t.Fatal(err)
 						}
-						body = io.MultiReader(bytes.NewReader(append(event, '\n')), streamDeadlineReader{ctx: r.Context()})
+						body = io.MultiReader(bytes.NewReader(fixtureFrames(t, event)), streamDeadlineReader{ctx: r.Context()})
 					case "partial-record":
-						body = io.MultiReader(bytes.NewReader(raw), strings.NewReader("{"), streamDeadlineReader{ctx: r.Context()})
+						body = io.MultiReader(bytes.NewReader(fixtureFrames(t, opening)), strings.NewReader("{"), streamDeadlineReader{ctx: r.Context()})
 					}
-					return mapResponse(r, io.NopCloser(body)), nil
+					return testwire.StreamResponse(r, io.NopCloser(body)), nil
 				})
 				ctx := context.Background()
 				want := ErrUnavailable
@@ -189,13 +205,15 @@ func TestStreamRotationRequiresOwnDeadlineAndVerifiedMap(t *testing.T) {
 					want = context.DeadlineExceeded
 				case "credential-deadline", "partial-record":
 					want = context.DeadlineExceeded
-				case "idle", "heartbeat-only":
+				case "idle":
 					transport.config.ReadIdleTimeout = 500 * time.Millisecond
+				case "empty-update":
+					want = ErrMap
 				}
 				received := 0
 				err = transport.StreamSnapshot(ctx, v, nil, func(context.Context, Map) error { received++; return nil })
 				wantReceived := 1
-				if name == "idle" || name == "heartbeat-only" {
+				if name == "idle" || name == "empty-update" {
 					wantReceived = 0
 				}
 				if !errors.Is(err, want) || received != wantReceived || len(transport.activeStreams) != 0 {
@@ -207,7 +225,7 @@ func TestStreamRotationRequiresOwnDeadlineAndVerifiedMap(t *testing.T) {
 }
 
 func TestTransportRejectsBadStreamsAndBoundsIdleRecordsAndCapacity(t *testing.T) {
-	for _, name := range []string{"protocol", "capabilities", "media", "encoding", "oversize", "truncated", "denied", "outage", "records", "capacity", "idle", "header-timeout"} {
+	for _, name := range []string{"media", "oversize", "truncated", "denied", "outage", "records", "capacity", "idle", "header-timeout"} {
 		t.Run(name, func(t *testing.T) {
 			f := newMapFixture(t)
 			v, err := NewVerifier(f.profile, f.config)
@@ -225,27 +243,26 @@ func TestTransportRejectsBadStreamsAndBoundsIdleRecordsAndCapacity(t *testing.T)
 					<-r.Context().Done()
 					return nil, r.Context().Err()
 				}
-				response := mapResponse(r, io.NopCloser(bytes.NewReader(raw)))
+				opening := f.openingRecord(t, raw, watchRequest(t, r).Nonce)
+				frame := fixtureFrames(t, opening)
+				response := testwire.StreamResponse(r, io.NopCloser(bytes.NewReader(frame)))
 				switch name {
-				case "protocol":
-					response.Header.Set("X-EndlessNet-Map-Protocol", "2")
-				case "capabilities":
-					response.Header.Del("X-EndlessNet-Map-Capabilities")
 				case "media":
 					response.Header.Set("Content-Type", "application/json")
-				case "encoding":
-					response.Header.Set("Content-Encoding", "gzip")
 				case "oversize":
-					response.Body = io.NopCloser(strings.NewReader(strings.Repeat("x", 65537) + "\n"))
+					prefix := []byte{0, 0, 1, 0, 1}
+					response.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), strings.NewReader(strings.Repeat("x", 65537))))
 				case "truncated":
-					response.Body = io.NopCloser(bytes.NewReader(bytes.TrimSuffix(raw, []byte{'\n'})))
+					response.Body = io.NopCloser(bytes.NewReader(frame[:len(frame)-1]))
 				case "denied":
 					response.StatusCode = http.StatusForbidden
+					response.Header.Set("Content-Type", "application/json")
+					response.Body = io.NopCloser(strings.NewReader(`{"code":"permission_denied"}`))
 				case "records":
-					event, _ := json.Marshal(coordinator.MapStreamEvent{Type: "heartbeat", ProtocolVersion: 3, Capabilities: []string{"snapshot", "signed-delta", "checkpoint", "resync", "heartbeat"}, EventID: "heartbeat"})
-					response.Body = io.NopCloser(bytes.NewReader(bytes.Repeat(append(event, '\n'), 10)))
+					frame = append(frame, bytes.Repeat(fixtureFrames(t, raw), 10)...)
+					response.Body = io.NopCloser(bytes.NewReader(frame))
 				case "idle":
-					response.Body = &blockingBody{closed: make(chan struct{})}
+					response.Body = io.NopCloser(streamDeadlineReader{ctx: r.Context()})
 				}
 				return response, nil
 			})
@@ -264,10 +281,14 @@ func TestTransportRejectsBadStreamsAndBoundsIdleRecordsAndCapacity(t *testing.T)
 			if name == "denied" {
 				want = ErrDenied
 			}
-			if name == "outage" || name == "records" || name == "capacity" || name == "idle" || name == "header-timeout" {
+			if name == "media" || name == "outage" || name == "records" || name == "capacity" || name == "idle" || name == "header-timeout" {
 				want = ErrUnavailable
 			}
-			if !errors.Is(err, want) || received != 0 || strings.Contains(err.Error(), "secret") {
+			wantReceived := 0
+			if name == "records" {
+				wantReceived = 1
+			}
+			if !errors.Is(err, want) || received != wantReceived || strings.Contains(err.Error(), "secret") {
 				t.Fatal("unsafe stream accepted or diagnostic leaked", err, received)
 			}
 			if name == "capacity" && calls != 0 {
@@ -292,18 +313,15 @@ func TestEndpointTransportUsesNodeClassExactACKAndNeverRetriesUncertainMutation(
 			transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
 				calls++
 				assertNodeRequest(t, r, f)
-				if r.Method != http.MethodPatch || r.URL.Path != "/nodes/node/endpoint" || r.URL.RawQuery != "" {
+				if r.Method != http.MethodPost || r.URL.Path != publicqueryv1connect.ConnectivityServiceUpdateNodeEndpointProcedure || r.URL.RawQuery != "" {
 					t.Fatal("endpoint route changed")
 				}
 				raw, err := io.ReadAll(r.Body)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if !bytes.Equal(raw, f.profile.Connection.EndpointRequest.Request) {
-					t.Fatal("frozen endpoint bytes were reencoded")
-				}
-				request, err := coordinator.DecodeUpdateNodeEndpointRequest(raw, 65536)
-				if err != nil || request.Generation != input.Generation || request.Status != status {
+				request, err := testwire.EndpointRequest(raw)
+				if err != nil || request.Generation != input.Generation || request.Status != status || request.Endpoint != input.Endpoint || request.TTL != input.TTL {
 					t.Fatal("endpoint immutable request changed", err)
 				}
 				if name == "outage" {
@@ -313,22 +331,26 @@ func TestEndpointTransportUsesNodeClassExactACKAndNeverRetriesUncertainMutation(
 				if name == "foreign" {
 					ack.NetworkID = "other"
 				}
-				raw, _ = json.Marshal(ack)
+				raw, _ = proto.Marshal(testwire.EndpointReceipt(ack))
 				if name == "malformed" {
 					raw = []byte(`{"credential":"secret-credential"}`)
 				}
 				if name == "oversize" {
 					raw = bytes.Repeat([]byte{'x'}, 65537)
 				}
-				response := &http.Response{StatusCode: 200, Request: r, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw))}
+				response := &http.Response{StatusCode: 200, Request: r, Header: http.Header{"Content-Type": {"application/proto"}}, Body: io.NopCloser(bytes.NewReader(raw))}
 				switch name {
 				case "denied":
 					response.StatusCode = 403
+					response.Header.Set("Content-Type", "application/json")
+					response.Body = io.NopCloser(strings.NewReader(`{"code":"permission_denied"}`))
 				case "stale":
 					response.StatusCode = 409
+					response.Header.Set("Content-Type", "application/json")
+					response.Body = io.NopCloser(strings.NewReader(`{"code":"aborted"}`))
 				case "redirect":
 					response.StatusCode = 307
-					response.Header.Set("Location", "https://other.example/nodes/node/endpoint")
+					response.Header.Set("Location", "https://other.example"+publicqueryv1connect.ConnectivityServiceUpdateNodeEndpointProcedure)
 				}
 				return response, nil
 			})
@@ -391,73 +413,218 @@ func TestTransportRequiresBoundedPublicHTTPPolicy(t *testing.T) {
 	}
 }
 
-func TestStreamSnapshotWaitsForActualIssuedTimeWithoutGrantingEarlyAuthority(t *testing.T) {
-	for _, name := range []string{"valid", "resync", "cancel", "far-future", "bad-signature"} {
+func TestOpeningMapUsesSignedTimeAndRejectsInvalidAuthority(t *testing.T) {
+	for _, name := range []string{"ahead", "behind", "resync", "missing", "nonce", "hash", "proof-signature", "map-signature", "rollback", "delayed-expiry", "cancel"} {
 		t.Run(name, func(t *testing.T) {
 			f := newMapFixture(t)
-			base := f.now
-			var started time.Time
-			elapsedNow := func() time.Duration {
-				if started.IsZero() {
-					return 0
+			clock := &leaseClock{sample: ClockSample{Wall: f.now, Uptime: time.Hour, UpperUptime: time.Hour, Epoch: "fixture-runtime"}}
+			f.config.Clock = clock
+			issued := f.now.Add(1200 * time.Millisecond)
+			if name == "behind" {
+				issued = f.now.Add(-1200 * time.Millisecond)
+			}
+			expires := issued.Add(30 * time.Second)
+			raw := f.sign(t, nil, issued, expires)
+			if name == "rollback" {
+				f.profile.Connection.MapCursor = &state.MapCursor{
+					Revision: coordinator.MapRevision{Network: f.value.Revision.Network + 1}, PayloadHash: strings.Repeat("a", 64), IssuedAt: issued,
 				}
-				return time.Since(started)
 			}
-			f.config.Now = func() time.Time { return base.Add(elapsedNow()) }
-			f.config.Clock = clockFunc(func() (ClockSample, error) {
-				elapsed := elapsedNow()
-				return ClockSample{Wall: base.Add(elapsed), Uptime: time.Hour + elapsed, UpperUptime: time.Hour + elapsed, Epoch: "fixture-runtime"}, nil
-			})
-			issued := base.Add(50 * time.Millisecond)
-			if name == "far-future" {
-				issued = base.Add(2 * time.Second)
-			}
-			raw := f.sign(t, nil, issued, base.Add(30*time.Second))
 			if name == "resync" {
-				raw = []byte(strings.ReplaceAll(string(raw), `"type":"snapshot"`, `"type":"resync"`))
-			}
-			if name == "bad-signature" {
-				raw = []byte(strings.ReplaceAll(string(raw), f.value.MapSignature.Signature, strings.Repeat("A", len(f.value.MapSignature.Signature))))
+				raw = bytes.ReplaceAll(raw, []byte(`"type":"snapshot"`), []byte(`"type":"resync"`))
 			}
 			v, err := NewVerifier(f.profile, f.config)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = v.VerifySnapshot(context.Background(), raw, nil); !errors.Is(err, ErrMap) {
-				t.Fatal("pure verifier accepted future signature", err)
-			}
-			started = time.Now()
-			transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
-				return mapResponse(r, io.NopCloser(bytes.NewReader(append(raw, '\n')))), nil
-			})
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			if name == "cancel" {
-				timer := time.AfterFunc(10*time.Millisecond, cancel)
-				defer timer.Stop()
-			}
-			calls := 0
+			requests, received := 0, 0
+			transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
+				requests++
+				nonce := watchRequest(t, r).Nonce
+				if coordinator.ValidateMapStreamNonce(nonce) != nil {
+					t.Fatal("invalid outgoing nonce")
+				}
+				if name == "nonce" {
+					nonce = strings.Repeat("A", 43)
+				}
+				opening := f.openingRecord(t, raw, nonce)
+				switch name {
+				case "missing":
+					opening = append(bytes.Clone(raw), '\n')
+				case "hash":
+					opening = bytes.Replace(opening, []byte(`"map_hash":"`+f.value.MapSignature.PayloadHash), []byte(`"map_hash":"`+strings.Repeat("a", 64)), 1)
+				case "proof-signature":
+					var event coordinator.MapStreamEvent
+					if err := json.Unmarshal(opening, &event); err != nil {
+						t.Fatal(err)
+					}
+					opening = bytes.Replace(opening, []byte(event.TimeProof.Signature), []byte(strings.Repeat("A", 86)), 1)
+				case "map-signature":
+					opening = bytes.ReplaceAll(opening, []byte(f.value.MapSignature.Signature), []byte(strings.Repeat("A", 86)))
+				case "delayed-expiry":
+					clock.advance(0, 30*time.Second)
+				case "cancel":
+					cancel()
+				}
+				return testwire.StreamResponse(r, io.NopCloser(bytes.NewReader(fixtureFrames(t, opening)))), nil
+			})
 			done := errors.New("received verified map")
 			err = transport.StreamSnapshot(ctx, v, nil, func(_ context.Context, m Map) error {
-				calls++
-				if f.config.Now().Before(issued) || m.snapshot.MapSignature.IssuedAt != issued {
-					t.Fatal("early or altered authority")
+				received++
+				if m.Cursor().IssuedAt != issued || m.timeProof.serverTime != issued {
+					t.Fatal("signed times were altered")
 				}
 				return done
 			})
-			if name == "valid" || name == "resync" {
-				if calls != 1 || !errors.Is(err, done) {
-					t.Fatal("bounded current snapshot not received", calls, err)
-				}
-				return
-			}
-			want := ErrMap
-			if name == "cancel" {
+			want, wantReceived := ErrMap, 0
+			switch name {
+			case "ahead", "behind", "resync":
+				want, wantReceived = done, 1
+			case "rollback":
+				want = ErrStale
+			case "delayed-expiry":
+				want = ErrExpired
+			case "cancel":
 				want = context.Canceled
 			}
-			if calls != 0 || !errors.Is(err, want) {
-				t.Fatal("unsafe snapshot received", calls, err)
+			if !errors.Is(err, want) || received != wantReceived || requests != 1 {
+				t.Fatalf("stream = %v, maps = %d, requests = %d; want %v, %d, 1", err, received, requests, want, wantReceived)
 			}
+		})
+	}
+}
+
+func TestOpeningMapLeaseCountsRoundTripSleepAndRestart(t *testing.T) {
+	f := newMapFixture(t)
+	clock := &leaseClock{sample: ClockSample{Wall: f.now, Uptime: time.Hour, UpperUptime: time.Hour, Epoch: "fixture-runtime"}}
+	f.config.Clock = clock
+	v, err := NewVerifier(f.profile, f.config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := NewLease(t.Context(), clock, f.profile.ID, f.profile.Connection.Generation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued := f.now.Add(1200 * time.Millisecond)
+	expires := issued.Add(30 * time.Second)
+	raw := f.sign(t, nil, issued, expires)
+	var firstNonce string
+	var first []byte
+	var received int
+	var calls int
+	transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
+		calls++
+		nonce := watchRequest(t, r).Nonce
+		if calls == 1 {
+			firstNonce = nonce
+			first = f.openingRecord(t, raw, nonce)
+			clock.advance(0, 2*time.Second)
+		} else if nonce == firstNonce {
+			t.Fatal("reconnect reused challenge")
+		}
+		return testwire.StreamResponse(r, io.NopCloser(bytes.NewReader(fixtureFrames(t, first)))), nil
+	})
+	var accepted Map
+	applied := errors.New("applied")
+	err = transport.Stream(t.Context(), v, nil, func(_ context.Context, m Map) error {
+		accepted = m
+		if err := lease.Confirm(m); err != nil {
+			return err
+		}
+		return applied
+	})
+	if !errors.Is(err, applied) {
+		t.Fatal("opening map was not applied", err)
+	}
+	nestedEnd := issued.Add(5 * time.Second)
+	if !lease.WindowCurrent(accepted, issued, nestedEnd, f.now) || !lease.Permit(false) {
+		t.Fatal("signed interval start was not accepted")
+	}
+	clock.advance(0, 3*time.Second)
+	if lease.WindowCurrent(accepted, issued, nestedEnd, f.now) || !lease.Permit(true) {
+		t.Fatal("shorter interval did not expire independently of map")
+	}
+	lease.Unavailable()
+	clock.advance(0, 25*time.Second)
+	if lease.Permit(true) {
+		t.Fatal("sleep or elapsed exchange extended offline permission")
+	}
+	// A later map can restore the lease while the original Relay credential
+	// remains expired on its original time bound.
+	f.now = f.now.Add(2 * time.Second)
+	clock.advance(2*time.Second, 0)
+	cursor := accepted.Cursor()
+	updated, err := v.Verify(t.Context(), f.sign(t, &cursor, f.now, f.now.Add(20*time.Second)), &cursor)
+	if err != nil || lease.Confirm(updated) != nil || !lease.Permit(true) || lease.OriginalExpiryCurrent(accepted, nestedEnd, f.now) {
+		t.Fatal("map refresh renewed the original Relay credential", err)
+	}
+	err = transport.Stream(t.Context(), v, nil, func(context.Context, Map) error {
+		received++
+		return applied
+	})
+	if !errors.Is(err, ErrMap) || received != 0 || calls != 2 {
+		t.Fatal("old proof was accepted in a new stream", err)
+	}
+	restarted := &leaseClock{sample: ClockSample{Wall: f.now, Uptime: time.Hour, UpperUptime: time.Hour, Epoch: "restarted-runtime"}}
+	next, err := NewLease(t.Context(), restarted, f.profile.ID, f.profile.Connection.Generation)
+	if err != nil || !errors.Is(next.Confirm(accepted), ErrClock) || next.Permit(true) {
+		t.Fatal("restart restored authority from old proof", err)
+	}
+}
+
+func TestOpeningTimeProofCannotAuthorizeLaterStreamRecords(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		replay bool
+	}{{"later issued time", false}, {"repeated proof", true}} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				f := newMapFixture(t)
+				started := time.Now()
+				f.config.Now = func() time.Time { return f.now.Add(time.Since(started)) }
+				f.config.Clock = clockFunc(func() (ClockSample, error) {
+					uptime := time.Hour + time.Since(started)
+					return ClockSample{Wall: f.config.Now(), Uptime: uptime, UpperUptime: uptime, Epoch: "fixture-runtime"}, nil
+				})
+				first := f.sign(t, nil, f.now, f.now.Add(time.Minute))
+				cursor := state.MapCursor{Revision: f.value.Revision, PayloadHash: f.value.MapSignature.PayloadHash, IssuedAt: f.now}
+				issued := f.now.Add(50 * time.Millisecond)
+				later := f.sign(t, &cursor, issued, f.now.Add(time.Minute))
+				v, err := NewVerifier(f.profile, f.config)
+				if err != nil {
+					t.Fatal(err)
+				}
+				transport := transportFixture(t, func(r *http.Request) (*http.Response, error) {
+					opening := f.openingRecord(t, first, watchRequest(t, r).Nonce)
+					second := append(bytes.Clone(later), '\n')
+					if test.replay {
+						second = opening
+					}
+					return testwire.StreamResponse(r, io.NopCloser(bytes.NewReader(fixtureFrames(t, opening, second)))), nil
+				})
+				received := 0
+				finished := errors.New("received later record")
+				err = transport.Stream(t.Context(), v, nil, func(context.Context, Map) error {
+					received++
+					if received == 2 {
+						if f.config.Now().Before(issued) {
+							t.Fatal("unattested map applied before issued_at")
+						}
+						return finished
+					}
+					return nil
+				})
+				want, wantReceived := finished, 2
+				if test.replay {
+					want, wantReceived = ErrMap, 1
+				}
+				if !errors.Is(err, want) || received != wantReceived {
+					t.Fatal("later record violated its authorization boundary", err, received)
+				}
+			})
 		})
 	}
 }

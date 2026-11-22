@@ -119,7 +119,11 @@ func (l *Lease) Confirm(m Map) error {
 		l.online = false
 		return ErrClock
 	}
-	remaining := m.ExpiresAt().Sub(m.verified.Wall)
+	upper, err := m.timeProof.upper(m.verified)
+	if err != nil {
+		return err
+	}
+	remaining := m.ExpiresAt().Sub(upper)
 	if remaining > 300*time.Second {
 		remaining = 300 * time.Second
 	}
@@ -258,6 +262,44 @@ func (l *Lease) MatchesMap(m Map) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.cursor != nil && l.profileID == m.profileID && l.generation == m.generation && *l.cursor == m.Cursor()
+}
+
+// WindowCurrent checks an interval carried by the current map. The opening
+// proof can establish its start, while the monotonic upper bound and the wall
+// clock both limit its end. A zero issued time requests an expiry-only check.
+func (l *Lease) WindowCurrent(m Map, issued, expires, wall time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.cursor == nil || *l.cursor != m.Cursor() || l.profileID != m.profileID || l.generation != m.generation {
+		return false
+	}
+	return l.windowCurrent(l.current.timeProof, issued, expires, wall)
+}
+
+// OriginalExpiryCurrent retains the time bound for an already-issued Relay
+// credential as maps change. It provides no permission to use an old map.
+func (l *Lease) OriginalExpiryCurrent(m Map, expires, wall time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if m.snapshot.MapSignature == nil || m.denied || l.profileID != m.profileID || l.generation != m.generation || l.last.Epoch != m.verified.Epoch {
+		return false
+	}
+	return l.windowCurrent(m.timeProof, time.Time{}, expires, wall)
+}
+
+func (l *Lease) windowCurrent(proof mapTimeAuthority, issued, expires, wall time.Time) bool {
+	if l.fault || l.revoked || l.ctx.Err() != nil || wall.IsZero() || !wall.Before(expires) {
+		return false
+	}
+	if proof.serverTime.IsZero() {
+		return !wall.Before(issued)
+	}
+	sample, err := l.sample()
+	if err != nil {
+		return false
+	}
+	upper, err := proof.upper(sample)
+	return err == nil && !proof.serverTime.Before(issued) && upper.Before(expires) && sample.Wall.Before(expires)
 }
 
 // CurrentMap returns only the last immutable verifier result accepted by this

@@ -1,24 +1,24 @@
 package connectivity
 
 import (
-	"bufio"
-	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"io"
-	"mime"
 	"net/http"
 	"net/netip"
-	"net/url"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 var (
@@ -88,29 +88,16 @@ func pathID(value string) bool {
 	return true
 }
 
-func headerOne(h http.Header, key string) string {
-	var values []string
-	for name, value := range h {
-		if strings.EqualFold(name, key) {
-			values = append(values, value...)
-		}
-	}
-	if len(values) != 1 {
-		return ""
-	}
-	return values[0]
-}
-
-func responseStatus(status int, mutation bool) error {
-	switch status {
-	case http.StatusOK:
-		return nil
-	case http.StatusUnauthorized, http.StatusForbidden:
+func connectivityCallError(err error, mutation bool) error {
+	switch connect.CodeOf(err) {
+	case connect.CodeUnauthenticated, connect.CodePermissionDenied:
 		return ErrDenied
-	case http.StatusConflict:
+	case connect.CodeAborted:
 		return ErrStale
-	case http.StatusBadRequest:
-		return ErrMap
+	case connect.CodeInvalidArgument:
+		if !mutation || connect.IsWireError(err) {
+			return ErrMap
+		}
 	}
 	if mutation {
 		return ErrEndpointUncertain
@@ -118,6 +105,10 @@ func responseStatus(status int, mutation bool) error {
 	return ErrUnavailable
 }
 
+func (t *Transport) client(httpClient connect.HTTPClient, origin string) publicqueryv1connect.ConnectivityServiceClient {
+	return publicqueryv1connect.NewConnectivityServiceClient(httpClient, origin,
+		connect.WithReadMaxBytes(t.config.MaxResponseBytes), connect.WithSendMaxBytes(t.config.MaxRequestBytes))
+}
 func validAnnouncement(p state.Profile, r coordinator.UpdateNodeEndpointRequest) bool {
 	if p.Connection == nil || r.Generation == 0 || r.Generation != p.Connection.EndpointGeneration || len(r.Candidates) != 0 {
 		return false
@@ -171,30 +162,16 @@ func (t *Transport) UpdateEndpoint(parent context.Context, p state.Profile, c Ve
 	if ctx.Err() != nil {
 		return empty, ctx.Err()
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPatch, binding.origin+"/nodes/"+binding.node+"/endpoint", bytes.NewReader(raw))
+	request := connect.NewRequest(control.EndpointRequest(binding.node, input))
+	request.Header().Set("X-EndlessNet-Node-Credential", binding.credential)
+	response, err := t.client(t.calls, binding.origin).UpdateNodeEndpoint(ctx, request)
 	if err != nil {
-		return empty, ErrConfig
+		return empty, connectivityCallError(err, true)
 	}
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("X-EndlessNet-Node-Credential", binding.credential)
-	response, err := t.calls.Do(request)
-	if err != nil {
+	if ctx.Err() != nil {
 		return empty, ErrEndpointUncertain
 	}
-	defer func() { _ = response.Body.Close() }()
-	if err := responseStatus(response.StatusCode, true); err != nil {
-		return empty, err
-	}
-	media, _, err := mime.ParseMediaType(headerOne(response.Header, "Content-Type"))
-	if err != nil || media != "application/json" || response.ContentLength > int64(t.config.MaxResponseBytes) {
-		return empty, ErrEndpointUncertain
-	}
-	raw, err = io.ReadAll(io.LimitReader(response.Body, int64(t.config.MaxResponseBytes)+1))
-	if err != nil || ctx.Err() != nil || len(raw) > t.config.MaxResponseBytes {
-		return empty, ErrEndpointUncertain
-	}
-	result, err := coordinator.DecodeUpdateNodeEndpointResponse(raw, t.config.MaxResponseBytes)
+	result, err := control.EndpointReceipt(response.Msg)
 	// This acknowledgement reports discovery state. Its timestamp uses the
 	// server clock and never supplies authority to start or extend traffic.
 	if err != nil || coordinator.ValidateEndpointReceipt(input, result, binding.node, binding.network) != nil || result.ExpiresAt.After(binding.credentialEnds) {
@@ -266,93 +243,80 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	query := url.Values{"from_network_revision": {"0"}, "from_global_revision": {"0"}, "from_map_hash": {""}, "timeout": {duration.String()}}
+	var challengeBytes [32]byte
+	if _, err := rand.Read(challengeBytes[:]); err != nil {
+		return ErrUnavailable
+	}
+	challenge := mapTimeChallenge{nonce: base64.RawURLEncoding.EncodeToString(challengeBytes[:])}
+	message := &wire.WatchMapsRequest{NodeId: v.node, Timeout: durationpb.New(duration), Nonce: challenge.nonce}
 	if cursor != nil && !full {
-		query.Set("from_network_revision", strconv.FormatUint(cursor.Revision.Network, 10))
-		query.Set("from_map_hash", cursor.PayloadHash)
+		message.Cursor = &wire.MapCursor{Revision: &wire.MapRevision{Network: cursor.Revision.Network}, MapHash: cursor.PayloadHash}
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, v.origin+"/maps/"+v.node+"/stream?"+query.Encode(), nil)
-	if err != nil {
-		return ErrConfig
+	request := connect.NewRequest(message)
+	request.Header().Set("X-EndlessNet-Node-Credential", v.credential)
+	challenge.sent, err = v.config.Clock.Sample()
+	if err != nil || !challenge.sent.valid() {
+		return ErrClock
 	}
-	request.Header.Set("Accept", "application/x-ndjson")
-	request.Header.Set("Accept-Encoding", "identity")
-	request.Header.Set("X-EndlessNet-Node-Credential", v.credential)
 	headerTimer := time.AfterFunc(t.config.CallTimeout, func() { abort(ErrUnavailable) })
-	response, err := t.streams.Do(request)
-	headerTimer.Stop()
+	defer headerTimer.Stop()
+	meter := &streamReadMeter{client: t.streams}
+	stream, err := t.client(meter, v.origin).WatchMaps(ctx, request)
 	if err != nil {
 		if ctx.Err() != nil {
 			return streamContextError(ctx)
 		}
-		return ErrUnavailable
+		return connectivityCallError(err, false)
 	}
-	response.Body = &streamBody{ReadCloser: response.Body}
-	defer func() { _ = response.Body.Close() }()
-	closeBody := func() { _ = response.Body.Close() }
-	if err := responseStatus(response.StatusCode, false); err != nil {
-		return err
-	}
-	media, _, err := mime.ParseMediaType(headerOne(response.Header, "Content-Type"))
-	if err != nil || media != "application/x-ndjson" || headerOne(response.Header, "X-EndlessNet-Map-Protocol") != "3" || headerOne(response.Header, "X-EndlessNet-Map-Capabilities") != "snapshot,signed-delta,checkpoint,resync,heartbeat" || response.Header.Get("Content-Encoding") != "" {
-		return ErrMap
-	}
-	reader := bufio.NewReaderSize(response.Body, t.config.MaxResponseBytes+1)
+	defer func() { _ = stream.Close() }()
 	receivedMap := false
-	firstMapBy := time.Now().Add(t.config.ReadIdleTimeout)
 	for count := 0; count < t.config.MaxRecords; count++ {
 		if ctx.Err() != nil {
 			return streamContextError(ctx)
 		}
-		idle := t.config.ReadIdleTimeout
-		if full && !receivedMap {
-			// Heartbeats and replays cannot keep a replacement waiting for a
-			// fresh, signed snapshot past the initial read budget.
-			idle = time.Until(firstMapBy)
-			if idle <= 0 {
-				return ErrUnavailable
-			}
-		}
 		var timer *time.Timer
-		if deadline, _ := ctx.Deadline(); idle < time.Until(deadline) {
-			timer = time.AfterFunc(idle, func() { abort(ErrUnavailable); closeBody() })
+		if deadline, _ := ctx.Deadline(); t.config.ReadIdleTimeout < time.Until(deadline) {
+			timer = time.AfterFunc(t.config.ReadIdleTimeout, func() { abort(ErrUnavailable) })
 		}
-		raw, readErr := reader.ReadSlice('\n')
+		before := meter.bytes
+		hasMessage := stream.Receive()
 		if timer != nil {
 			timer.Stop()
 		}
+		headerTimer.Stop()
 		if ctx.Err() != nil {
-			// Only our own limit may rotate a stream that delivered a verified
-			// map. EOF, partial records and independent I/O errors are failures.
-			if receivedMap && len(raw) == 0 && context.Cause(ctx) == ErrStreamRotation &&
-				(errors.Is(readErr, ErrStreamRotation) || errors.Is(readErr, context.DeadlineExceeded) || errors.Is(readErr, context.Canceled)) {
+			if receivedMap && !hasMessage && meter.bytes == before && context.Cause(ctx) == ErrStreamRotation &&
+				(connect.CodeOf(stream.Err()) == connect.CodeDeadlineExceeded || connect.CodeOf(stream.Err()) == connect.CodeCanceled) {
 				return ErrStreamRotation
 			}
 			return streamContextError(ctx)
 		}
-		if len(raw) > t.config.MaxResponseBytes || errors.Is(readErr, bufio.ErrBufferFull) {
-			return ErrMap
-		}
-		if readErr != nil {
-			if errors.Is(readErr, io.EOF) && len(raw) > 0 {
+		if !hasMessage {
+			if connect.CodeOf(stream.Err()) == connect.CodeResourceExhausted {
 				return ErrMap
 			}
-			return ErrUnavailable
+			return connectivityCallError(stream.Err(), false)
+		}
+		event, err := control.MapUpdate(stream.Msg())
+		if err != nil || !pathID(event.EventID) {
+			return ErrMap
 		}
 		var m Map
-		var err error
-		if err = t.waitSnapshotIssuedAt(ctx, v, raw); err != nil {
-			return err
-		}
-		if full {
-			m, err = v.VerifySnapshot(ctx, raw, cursor)
+		if count == 0 {
+			m, err = v.verifyEvent(ctx, event, cursor, full, &challenge)
 		} else {
-			m, err = v.Verify(ctx, raw, cursor)
+			if err = t.waitSnapshotIssuedAt(ctx, v, event); err != nil {
+				return err
+			}
+			m, err = v.verifyEvent(ctx, event, cursor, full, nil)
 		}
 		if ctx.Err() != nil {
 			return streamContextError(ctx)
 		}
 		if errors.Is(err, ErrNoMap) || errors.Is(err, ErrReplay) {
+			if count == 0 {
+				return err
+			}
 			continue
 		}
 		if err != nil {
@@ -381,9 +345,11 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 // A server clock can be slightly ahead without granting authority yet. Wait
 // within the existing call budget, then run the unchanged verifier against the
 // actual clock. Untrusted timestamps never reach receive or extend a deadline.
-func (t *Transport) waitSnapshotIssuedAt(ctx context.Context, v *Verifier, raw []byte) error {
-	event, err := coordinator.DecodeMapStreamEvent(raw, v.config.MaxBytes)
-	if err != nil || event.Type != "snapshot" && event.Type != "resync" || event.Snapshot == nil || event.Snapshot.MapSignature == nil {
+func (t *Transport) waitSnapshotIssuedAt(ctx context.Context, v *Verifier, event coordinator.MapStreamEvent) error {
+	if event.TimeProof != nil {
+		return ErrMap
+	}
+	if event.Type != "snapshot" && event.Type != "resync" || event.Snapshot == nil || event.Snapshot.MapSignature == nil {
 		return nil // The verifier owns malformed records and other event types.
 	}
 	delay := event.Snapshot.MapSignature.IssuedAt.Sub(v.config.Now())
@@ -410,12 +376,26 @@ func streamContextError(ctx context.Context) error {
 	return ctx.Err()
 }
 
-type streamBody struct {
-	io.ReadCloser
-	once sync.Once
+type streamReadMeter struct {
+	client *http.Client
+	bytes  int64
 }
 
-func (b *streamBody) Close() (err error) {
-	b.once.Do(func() { err = b.ReadCloser.Close() })
-	return err
+func (m *streamReadMeter) Do(request *http.Request) (*http.Response, error) {
+	response, err := m.client.Do(request)
+	if err == nil {
+		response.Body = &measuredStreamBody{ReadCloser: response.Body, meter: m}
+	}
+	return response, err
+}
+
+type measuredStreamBody struct {
+	io.ReadCloser
+	meter *streamReadMeter
+}
+
+func (b *measuredStreamBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	b.meter.bytes += int64(n)
+	return n, err
 }

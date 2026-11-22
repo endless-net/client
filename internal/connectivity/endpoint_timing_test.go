@@ -1,15 +1,14 @@
 package connectivity
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/endless-net/client/internal/state"
+	"github.com/endless-net/client/internal/testwire"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
 
@@ -36,17 +35,10 @@ func TestEndpointTransportAcceptsBoundReceiptWithServerClockAhead(t *testing.T) 
 			Generation: input.Generation, Online: true, UpdatedAt: updatedAt,
 			ExpiresAt: updatedAt.Add(30 * time.Second), Revision: coordinator.MapRevision{Network: 2},
 		}
-		raw, err := json.Marshal(ack)
-		if err != nil {
-			t.Fatal(err)
-		}
 		calls := 0
 		transport := transportFixture(t, func(request *http.Request) (*http.Response, error) {
 			calls++
-			return &http.Response{
-				StatusCode: 200, Request: request, Header: http.Header{"Content-Type": {"application/json"}},
-				Body: io.NopCloser(bytes.NewReader(raw)),
-			}, nil
+			return testwire.UnaryResponse(request, testwire.EndpointReceipt(ack))
 		})
 		result, err := transport.UpdateEndpoint(t.Context(), f.profile, f.config)
 		if calls != 1 {
