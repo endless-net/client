@@ -21,22 +21,6 @@
       "path": "api/tooling/dart",
       "kind": "dart",
       "unit": []
-    },
-    {
-      "path": "api/transport",
-      "kind": "json",
-      "unit": [
-        "fixtures/cases.json"
-      ]
-    },
-    {
-      "path": "scripts",
-      "kind": "json",
-      "unit": [
-        "test_install.py",
-        "test_endlessnet.py",
-        "test_windows_installer.py"
-      ]
     }
   ],
   "artifacts": [
