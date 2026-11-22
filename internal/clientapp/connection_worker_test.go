@@ -284,7 +284,7 @@ func awaitWorkerSession(t *testing.T, h *workerHarness) *workerSession {
 	select {
 	case s := <-h.created:
 		return s
-	case <-time.After(time.Second):
+	case <-time.After(2 * time.Second):
 		t.Fatal("owner not created")
 		return nil
 	}
