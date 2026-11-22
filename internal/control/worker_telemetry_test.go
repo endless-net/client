@@ -53,7 +53,7 @@ func TestWorkerJobsLinkWakeWithoutExtendingRequestOrPersistingTrace(t *testing.T
 				called <- trace.SpanContextFromContext(req.Context())
 				return f.response(req, t), nil
 			})
-			native, err := NewNative(&http.Client{}, staticAnnouncement{f.announcement}, 65536, "/api/v1/auth/native-login/", func() time.Time { return f.now })
+			native, err := NewNative(&http.Client{}, staticAnnouncement{f.announcement}, 65536, func() time.Time { return f.now })
 			if err != nil {
 				t.Fatal(err)
 			}

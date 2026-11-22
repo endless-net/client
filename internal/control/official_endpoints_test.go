@@ -23,13 +23,13 @@ func TestOfficialNativeBrowserOriginIsExactAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := &Native{consentPrefix: "/api/v1/auth/native-login/", now: func() time.Time { return *now }}
+	n := &Native{now: func() time.Time { return *now }}
 	const transaction = "ab8851d7-45e8-43bc-9b9a-a67ef3dd40fe"
 	tx := &identityapi.NativeLoginTransaction{TransactionId: transaction, RequestId: p.Attempt.RequestID, AttemptBindingSha256: binding[:], State: identityapi.NativeLoginState_NATIVE_LOGIN_STATE_PENDING, CreatedAt: timestamppb.New(*now), ExpiresAt: timestamppb.New(now.Add(enrollment.LoginTTL)), ReplayExpiresAt: timestamppb.New(now.Add(enrollment.LoginTTL + 720*time.Second)), PollAfterSeconds: 1}
 	action := &identityapi.NativeLoginBrowserAction{ExpiresAt: tx.ExpiresAt}
 	tx.Outcome = &identityapi.NativeLoginTransaction_BrowserAction{BrowserAction: action}
 	for _, origin := range []string{enrollment.BrowserOrigin, enrollment.ControlOrigin, "https://admin.endlessnet.ru.evil.invalid", "http://admin.endlessnet.ru", "https://admin.endlessnet.ru:444"} {
-		action.VerificationUrl = origin + n.consentPrefix + transaction
+		action.VerificationUrl = origin + "/native-login/" + transaction
 		err := n.validate(p, tx, binding, "opaque-poll-proof")
 		if (err == nil) != (origin == enrollment.BrowserOrigin) {
 			t.Fatal("unexpected consent origin acceptance", origin, err)
@@ -39,6 +39,18 @@ func TestOfficialNativeBrowserOriginIsExactAndPersists(t *testing.T) {
 		s.Profiles[loginProfile] = p
 		if err := s.Validate(s.InstallationID); (err == nil) != (origin == enrollment.BrowserOrigin) {
 			t.Fatal("protected state disagrees with native origin policy", origin, err)
+		}
+	}
+	for _, path := range []string{
+		"/auth/native-login/" + transaction,
+		"/api/v1/auth/native-login/" + transaction,
+		"/native-login/" + transaction + "?next=/",
+		"/native-login/" + transaction + "#other",
+		"/native-login/2d34f818-cfa5-416a-a83d-c0905bf46977",
+	} {
+		action.VerificationUrl = enrollment.BrowserOrigin + path
+		if err := n.validate(p, tx, binding, "opaque-poll-proof"); err == nil {
+			t.Fatal("accepted a noncanonical or unrelated consent URL", path)
 		}
 	}
 }

@@ -11,9 +11,8 @@ import (
 
 func configEnvironment() map[string]string {
 	values := map[string]string{
-		"NATIVE_CONSENT_PREFIX": "/api/v1/auth/native-login/",
-		"APPROVAL_BASE":         "https://approval.invalid/devices",
-		"INSTALLATION_ID":       "5c2e681d-fcd7-4d72-a85b-d7ac21858992", "DEFAULT_PROFILE_ID": "5e510773-e1cf-440f-9224-d0cdf454a185",
+		"APPROVAL_BASE":   "https://approval.invalid/devices",
+		"INSTALLATION_ID": "5c2e681d-fcd7-4d72-a85b-d7ac21858992", "DEFAULT_PROFILE_ID": "5e510773-e1cf-440f-9224-d0cdf454a185",
 		"STATE_DIRECTORY": `C:\fixture-only\missing-client-state`, "SERVICE_SID": "S-1-5-18", "ALLOWED_SIDS": "S-1-5-18,S-1-5-32-544",
 		"CONTROL_ORIGIN": "https://control.invalid", "PROFILE_DISPLAY_NAME": "Fixture",
 		"CONNECTION_ENDPOINT": "192.0.2.1:51820", "CONNECTION_LISTEN_PORT": "51820", "CONNECTION_MTU": "1420", "CONNECTION_ROUTE_METRIC": "7",

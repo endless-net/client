@@ -34,7 +34,7 @@ func TestApprovalWorkerExplicitConstructorResumesAndKeepsConcurrentWake(t *testi
 		f.enrolled(t)
 		return approvalResponse(t, req, coordinator.CompleteNodeEnrollmentRequestResponse{Request: f.view, Registration: &f.result}), nil
 	})
-	native, err := NewNative(&http.Client{}, staticAnnouncement{f.announcement}, 65536, "/api/v1/auth/native-login/", func() time.Time { return f.now })
+	native, err := NewNative(&http.Client{}, staticAnnouncement{f.announcement}, 65536, func() time.Time { return f.now })
 	if err != nil {
 		t.Fatal(err)
 	}

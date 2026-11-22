@@ -22,12 +22,11 @@ type Native struct {
 	http          *http.Client
 	announcements Announcements
 	maxBytes      int
-	consentPrefix string
 	now           func() time.Time
 }
 
-func NewNative(client *http.Client, announcements Announcements, maxBytes int, consentPrefix string, now func() time.Time) (*Native, error) {
-	if announcements == nil || maxBytes <= 0 || (consentPrefix != "/auth/native-login/" && consentPrefix != "/api/v1/auth/native-login/") {
+func NewNative(client *http.Client, announcements Announcements, maxBytes int, now func() time.Time) (*Native, error) {
+	if announcements == nil || maxBytes <= 0 {
 		return nil, ErrNativeProtocol
 	}
 	// Reuse this public adapter's restricted HTTP policy; no cookie/redirect/
@@ -36,7 +35,7 @@ func NewNative(client *http.Client, announcements Announcements, maxBytes int, c
 	if err != nil {
 		return nil, err
 	}
-	return &Native{http: b.client, announcements: announcements, maxBytes: maxBytes, consentPrefix: consentPrefix, now: b.now}, nil
+	return &Native{http: b.client, announcements: announcements, maxBytes: maxBytes, now: b.now}, nil
 }
 
 // NativeBinding implements the caller-owned digest of its durable attempt.
@@ -145,7 +144,7 @@ func (n *Native) validate(p state.Profile, t *identityapi.NativeLoginTransaction
 	switch t.State {
 	case identityapi.NativeLoginState_NATIVE_LOGIN_STATE_PENDING:
 		a := t.GetBrowserAction()
-		if a == nil || a.ExpiresAt == nil || a.ExpiresAt.CheckValid() != nil || !a.ExpiresAt.AsTime().Equal(t.ExpiresAt.AsTime()) || a.VerificationUrl != enrollment.NativeConsentOrigin(p.ControlOrigin)+n.consentPrefix+t.TransactionId || t.PollAfterSeconds == 0 || !n.now().Before(t.ExpiresAt.AsTime()) {
+		if a == nil || a.ExpiresAt == nil || a.ExpiresAt.CheckValid() != nil || !a.ExpiresAt.AsTime().Equal(t.ExpiresAt.AsTime()) || a.VerificationUrl != enrollment.NativeConsentURL(p.ControlOrigin, t.TransactionId) || t.PollAfterSeconds == 0 || !n.now().Before(t.ExpiresAt.AsTime()) {
 			return ErrNativeProtocol
 		}
 	case identityapi.NativeLoginState_NATIVE_LOGIN_STATE_AUTHORIZED:

@@ -124,7 +124,7 @@ type State struct {
 	HintObservedAt  time.Time       `json:",omitempty"`
 }
 
-const CurrentVersion uint32 = 8
+const CurrentVersion uint32 = 9
 
 func (s State) Validate(installation string) error {
 	if s.Version != CurrentVersion || !validID(s.InstallationID) || s.InstallationID != installation || s.Revision == 0 || (len(s.Profiles) == 0) != (s.OwnerSID == "") {
@@ -199,7 +199,7 @@ func (s State) Validate(installation string) error {
 			if !validID(p.Secrets.TransactionID) || len(p.Secrets.PollProof) < 32 || p.Login.CreatedAt.IsZero() || !p.Login.ExpiresAt.Equal(p.Login.CreatedAt.Add(enrollment.LoginTTL)) || p.Login.ReplayUntil.Before(p.Login.ExpiresAt.Add(720*time.Second)) {
 				return ErrCorrupt
 			}
-			if p.Login.VerificationURL != "" && p.Login.VerificationURL != enrollment.NativeConsentOrigin(p.ControlOrigin)+"/auth/native-login/"+p.Secrets.TransactionID && p.Login.VerificationURL != enrollment.NativeConsentOrigin(p.ControlOrigin)+"/api/v1/auth/native-login/"+p.Secrets.TransactionID {
+			if p.Login.VerificationURL != "" && p.Login.VerificationURL != enrollment.NativeConsentURL(p.ControlOrigin, p.Secrets.TransactionID) {
 				return ErrCorrupt
 			}
 		} else if p.Secrets.PollProof != "" || !p.Login.CreatedAt.IsZero() || !p.Login.ExpiresAt.IsZero() || p.Login.VerificationURL != "" {

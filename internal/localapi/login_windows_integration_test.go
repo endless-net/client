@@ -59,7 +59,7 @@ func (f *nativeHTTPFixture) StartNativeLogin(ctx context.Context, r *connect.Req
 	if f.tx == nil {
 		now := time.Now().UTC()
 		f.tx = &identityapi.NativeLoginTransaction{TransactionId: "3d8bdf1c-b741-438e-b908-471e4e2a60da", RequestId: r.Msg.RequestId, AttemptBindingSha256: r.Msg.AttemptBindingSha256, State: identityapi.NativeLoginState_NATIVE_LOGIN_STATE_PENDING, CreatedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(600 * time.Second)), ReplayExpiresAt: timestamppb.New(now.Add(1320 * time.Second)), PollAfterSeconds: 1}
-		f.tx.Outcome = &identityapi.NativeLoginTransaction_BrowserAction{BrowserAction: &identityapi.NativeLoginBrowserAction{VerificationUrl: p.ControlOrigin + "/api/v1/auth/native-login/" + f.tx.TransactionId, ExpiresAt: f.tx.ExpiresAt}}
+		f.tx.Outcome = &identityapi.NativeLoginTransaction_BrowserAction{BrowserAction: &identityapi.NativeLoginBrowserAction{VerificationUrl: p.ControlOrigin + "/native-login/" + f.tx.TransactionId, ExpiresAt: f.tx.ExpiresAt}}
 	}
 	return connect.NewResponse(&identityapi.StartNativeLoginResponse{Transaction: proto.Clone(f.tx).(*identityapi.NativeLoginTransaction), PollAuthorization: strings.Repeat("p", 43)}), nil
 }
@@ -116,7 +116,7 @@ func TestWindowsControllerWithNativeLoginWorker(t *testing.T) {
 	upstream := &nativeHTTPFixture{store: s}
 	path, h := identityapiconnect.NewNativeLoginServiceHandler(upstream)
 	mux.Handle(path, h)
-	n, err := control.NewNative(&http.Client{Transport: nativeFixtureTransport{mux}}, cfg.Announcements, 1<<20, "/api/v1/auth/native-login/", time.Now)
+	n, err := control.NewNative(&http.Client{Transport: nativeFixtureTransport{mux}}, cfg.Announcements, 1<<20, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

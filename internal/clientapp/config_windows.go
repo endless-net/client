@@ -24,7 +24,6 @@ var ErrConfig = errors.New("invalid client configuration")
 // installation/profile IDs are explicit; per-process instance IDs, paging keys
 // and the installed API descriptor digest must be provided by composition.
 type Config struct {
-	NativeConsentPrefix string        `env:"NATIVE_CONSENT_PREFIX,required"`
 	ApprovalBase        string        `env:"APPROVAL_BASE,required"`
 	InstallationID      string        `env:"INSTALLATION_ID,required"`
 	StateDirectory      string        `env:"STATE_DIRECTORY,required"`
@@ -128,9 +127,6 @@ func (c Config) Validate() error {
 		return ErrConfig
 	}
 	if !approvalmodel.ValidBase(c.ApprovalBase) {
-		return ErrConfig
-	}
-	if c.NativeConsentPrefix != "/api/v1/auth/native-login/" && c.NativeConsentPrefix != "/auth/native-login/" {
 		return ErrConfig
 	}
 	if !validConfigID(c.InstallationID) || !validConfigID(c.DefaultProfileID) || !stateDirectory(c.StateDirectory) || !configSID(c.ServiceSID) || len(c.AllowedSIDs) == 0 || !controlOrigin(c.ControlOrigin) {

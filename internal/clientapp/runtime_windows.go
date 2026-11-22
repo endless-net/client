@@ -108,7 +108,7 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			native, err := control.NewNative(r.http, bootstrap, c.MaxResponseBytes, c.NativeConsentPrefix, time.Now)
+			native, err := control.NewNative(r.http, bootstrap, c.MaxResponseBytes, time.Now)
 			if err != nil {
 				return err
 			}

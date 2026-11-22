@@ -310,7 +310,6 @@ func TestWindowsRuntimeAgainstActualOwnerChain(t *testing.T) {
 	}
 	c := stateFixtureConfig(t)
 	c.ControlOrigin = "https://public.invalid"
-	c.NativeConsentPrefix = "/api/v1/auth/native-login/"
 	var original state.Profile
 	if input.BrowserSimulator != "" {
 		prepareOwnerChainProfile(t, c, input.Bootstrap)

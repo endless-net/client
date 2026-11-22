@@ -71,7 +71,7 @@ func TestWindowsUIAgainstActualOwnerChain(t *testing.T) {
 		t.Fatal("owner fixture CA")
 	}
 	c := stateFixtureConfig(t)
-	c.ControlOrigin, c.NativeConsentPrefix = "https://public.invalid", "/api/v1/auth/native-login/"
+	c.ControlOrigin = "https://public.invalid"
 	prepareOwnerChainProfile(t, c, input.Bootstrap)
 	journal := filepath.Join(stateFixtureConfig(t).StateDirectory, "ui-correlation.bin")
 	var original state.Profile

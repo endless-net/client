@@ -146,7 +146,7 @@ func (s *nativeFixtureServer) StartNativeLogin(ctx context.Context, q *connect.R
 	if s.tx == nil {
 		s.created++
 		s.tx = &identityapi.NativeLoginTransaction{TransactionId: "ab8851d7-45e8-43bc-9b9a-a67ef3dd40fe", RequestId: q.Msg.RequestId, AttemptBindingSha256: append([]byte(nil), q.Msg.AttemptBindingSha256...), State: identityapi.NativeLoginState_NATIVE_LOGIN_STATE_PENDING, CreatedAt: timestamppb.New(*s.now), ExpiresAt: timestamppb.New(s.now.Add(600 * time.Second)), ReplayExpiresAt: timestamppb.New(s.now.Add(1320 * time.Second)), PollAfterSeconds: 2}
-		s.tx.Outcome = &identityapi.NativeLoginTransaction_BrowserAction{BrowserAction: &identityapi.NativeLoginBrowserAction{VerificationUrl: "https://control.example/api/v1/auth/native-login/" + s.tx.TransactionId, ExpiresAt: s.tx.ExpiresAt}}
+		s.tx.Outcome = &identityapi.NativeLoginTransaction_BrowserAction{BrowserAction: &identityapi.NativeLoginBrowserAction{VerificationUrl: "https://control.example/native-login/" + s.tx.TransactionId, ExpiresAt: s.tx.ExpiresAt}}
 	}
 	if s.tx.RequestId != q.Msg.RequestId || !bytes.Equal(s.tx.AttemptBindingSha256, q.Msg.AttemptBindingSha256) {
 		s.t.Fatal("retry changed request binding")
@@ -232,7 +232,7 @@ func loginFixture(t *testing.T) (*LoginExecutor, *nativeFixtureServer, *time.Tim
 		v.Request = r
 		return v, nil
 	})}
-	native, err := NewNative(client, staticAnnouncement{announcement}, 1<<20, "/api/v1/auth/native-login/", func() time.Time { return now })
+	native, err := NewNative(client, staticAnnouncement{announcement}, 1<<20, func() time.Time { return now })
 	if err != nil {
 		t.Fatal(err)
 	}

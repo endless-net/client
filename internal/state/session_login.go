@@ -178,7 +178,7 @@ func nativeTransaction(p Profile, b enrollment.Binding, created time.Time, raw [
 	switch tx.State {
 	case identityapi.NativeLoginState_NATIVE_LOGIN_STATE_PENDING:
 		action := tx.GetBrowserAction()
-		if action == nil || action.ExpiresAt == nil || action.ExpiresAt.CheckValid() != nil || !action.ExpiresAt.AsTime().Equal(tx.ExpiresAt.AsTime()) || tx.PollAfterSeconds == 0 || (action.VerificationUrl != enrollment.NativeConsentOrigin(p.ControlOrigin)+"/auth/native-login/"+tx.TransactionId && action.VerificationUrl != enrollment.NativeConsentOrigin(p.ControlOrigin)+"/api/v1/auth/native-login/"+tx.TransactionId) {
+		if action == nil || action.ExpiresAt == nil || action.ExpiresAt.CheckValid() != nil || !action.ExpiresAt.AsTime().Equal(tx.ExpiresAt.AsTime()) || tx.PollAfterSeconds == 0 || action.VerificationUrl != enrollment.NativeConsentURL(p.ControlOrigin, tx.TransactionId) {
 			return nil, ErrCorrupt
 		}
 	case identityapi.NativeLoginState_NATIVE_LOGIN_STATE_AUTHORIZED:

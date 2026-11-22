@@ -15,3 +15,8 @@ func NativeConsentOrigin(origin string) string {
 	}
 	return origin
 }
+
+// NativeConsentURL binds the Admin page to the original Identity transaction.
+func NativeConsentURL(controlOrigin, transactionID string) string {
+	return NativeConsentOrigin(controlOrigin) + "/native-login/" + transactionID
+}
