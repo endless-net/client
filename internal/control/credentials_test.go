@@ -51,7 +51,7 @@ func (s *sessionRotationFixture) RenewSession(ctx context.Context, r *connect.Re
 	} else if !proto.Equal(s.request, r.Msg) {
 		s.t.Fatal("session retry changed input")
 	}
-	if s.mode == "lost-session" && s.calls == 1 {
+	if (s.mode == "lost-session" || s.mode == "expired-session-renewal") && s.calls == 1 {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("secret lost session result"))
 	}
 	user := "native-user"
@@ -66,7 +66,7 @@ func (s *sessionRotationFixture) RenewSession(ctx context.Context, r *connect.Re
 }
 
 func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testing.T) {
-	for _, mode := range []string{"valid", "lost-session", "lost-node", "expired-node", "recover-node", "lost-recovery", "lost-session-save", "lost-node-save", "foreign-session", "foreign-node", "signature", "future-issued", "future-issued-timeout"} {
+	for _, mode := range []string{"valid", "lost-session", "expired-session-renewal", "lost-node", "expired-node", "recover-node", "lost-recovery", "lost-session-save", "lost-node-save", "foreign-session", "foreign-node", "signature", "future-issued", "future-issued-timeout"} {
 		run := func(t *testing.T) {
 			f := newRegistrationFixture(t)
 			var responseTime time.Time
@@ -199,6 +199,17 @@ func TestCredentialsRefreshUsesOriginalDeviceAndRecoversUnknownResults(t *testin
 				after, loadErr := f.store.Load(t.Context())
 				if !errors.Is(err, context.DeadlineExceeded) || loadErr != nil || after.Profiles[loginProfile].ActiveNodeCredential != nil || nodeCalls != 1 {
 					t.Fatal("future credential exceeded its budget or was adopted", err, loadErr, nodeCalls)
+				}
+				return
+			}
+			if mode == "expired-session-renewal" {
+				if !errors.Is(err, ErrCredentialsUnavailable) {
+					t.Fatal("lost renewal result was not initially retryable", err)
+				}
+				f.now = f.now.Add(11 * time.Minute)
+				err = makeExecutor().Ensure(t.Context(), loginProfile, 1)
+				if !errors.Is(err, ErrCredentialsLogin) || actor.calls != 1 || nodeCalls != 0 {
+					t.Fatal("expired session renewal did not require a fresh login", err)
 				}
 				return
 			}

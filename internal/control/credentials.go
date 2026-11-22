@@ -23,7 +23,6 @@ import (
 )
 
 var ErrCredentialsLogin = errors.New("current user login required")
-var ErrCredentialsExpired = errors.New("credential renewal command expired")
 var ErrNodeRenewalUnresolved = errors.New("node credential renewal outcome unresolved")
 var ErrNodeRenewalPending = errors.New("node credential renewal can still be replayed")
 var ErrCredentialsProtocol = errors.New("credential renewal response invalid")
@@ -222,7 +221,7 @@ func (c *Credentials) ensureSession(ctx context.Context, id string, generation u
 	}
 	r := *p.SessionRefresh
 	if !c.config.Now().Before(r.Deadline) || !r.ReplayUntil.IsZero() && !c.config.Now().Before(r.ReplayUntil) {
-		return ErrCredentialsExpired
+		return ErrCredentialsLogin
 	}
 	call, stop := context.WithTimeout(ctx, min(r.Deadline.Sub(c.config.Now()), 30*time.Second))
 	defer stop()

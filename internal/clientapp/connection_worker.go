@@ -280,7 +280,7 @@ func (w *ConnectionWorker) Reconcile(ctx context.Context, profile string, genera
 			case ConnectionFailed:
 				// Retryable failure is provisional until the same owner has
 				// finished cleanup. The run loop keeps the original budget.
-				if !recoveryFailure(v.Failure) || !v.CleanupPending || v.CleanupFailure != nil || v.RetryScheduled {
+				if !recoveryFailure(v.Failure) || !v.CleanupPending || v.CleanupFailure != nil {
 					return v.Failure
 				}
 			}
