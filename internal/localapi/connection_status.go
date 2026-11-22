@@ -156,7 +156,7 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_OFFLINE_CACHE
 		}
-		if local.Permission.NewFlows && (local.DirectPaths > 0 || local.RelayPaths > 0) {
+		if local.Permission.NewFlows && local.PeerCount > 0 && local.MapRevision > 0 && local.Address != "" {
 			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_CONNECTED
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_READY

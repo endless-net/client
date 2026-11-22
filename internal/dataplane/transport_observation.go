@@ -10,6 +10,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+func pendingPeerTransport(peerID string) *clientv0.PeerTransportStatus {
+	return &clientv0.PeerTransportStatus{PeerId: peerID, SearchState: clientv0.TransportSearchState_TRANSPORT_SEARCH_STATE_IDLE, ReasonKey: "client.transport.awaiting_path"}
+}
+
 // publishTransportStatus runs on the actor. Readers receive detached public
 // producer messages, never live candidate objects or parameter documents.
 func (g *transportSupervisor) publishTransportStatus(now connectivity.ClockSample) {
@@ -21,7 +25,7 @@ func (g *transportSupervisor) publishTransportStatus(now connectivity.ClockSampl
 	}
 	result := make([]*clientv0.PeerTransportStatus, 0, len(g.snapshot.Peers))
 	for _, peer := range g.snapshot.Peers {
-		v := &clientv0.PeerTransportStatus{PeerId: peer.ID, SearchState: clientv0.TransportSearchState_TRANSPORT_SEARCH_STATE_IDLE, ReasonKey: "client.transport.awaiting_path"}
+		v := pendingPeerTransport(peer.ID)
 		p := g.peers[peer.ID]
 		choice, overridden := choices[peer.ID]
 		if p != nil {

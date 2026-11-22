@@ -488,6 +488,35 @@ func (s *WindowsSession) activationFence(ctx context.Context, m connectivity.Map
 		return err
 	}
 	clear(p.Keys.WireGuardPrivate)
+
+	if err := s.checkSessionAddress(ctx, p.Connection.Journal); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		s.lease.Revoke()
+		return err
+	}
+	return nil
+}
+
+func (s *WindowsSession) checkSessionAddress(ctx context.Context, j *state.ResourceJournal) error {
+	if j == nil || j.ID != s.id || j.Generation != s.generation || j.Adapter == nil ||
+		j.Adapter.Phase != state.EffectApplied || j.Adapter.LUID != s.tunnel.Record().LUID ||
+		len(j.Addresses) != 1 || j.Addresses[0].Phase != state.EffectApplied {
+		return state.ErrStale
+	}
+	address := j.Addresses[0]
+	plan, err := PrepareIPCleanup(s.id, j.Adapter.LUID, address.Prefix)
+	if err != nil {
+		return err
+	}
+	effect, err := s.ip.InspectAddress(ctx, plan, address)
+	if err != nil {
+		return err
+	}
+	if !effect.Ready {
+		return ErrIPConflict
+	}
 	return ctx.Err()
 }
 

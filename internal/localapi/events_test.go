@@ -58,11 +58,15 @@ func TestWatchEventsStartsWithCallerFilteredSnapshotAndOrdersVolatileStatus(t *t
 	}
 	mu.Lock()
 	view.Phase = connectivity.PhaseConnected
-	view.Local = connectivity.LocalObservation{Known: true, Applied: true, Permission: connectivity.Permission{NewFlows: true, ExistingFlows: true}, DirectPaths: 1}
+	view.Local = connectivity.LocalObservation{Known: true, Applied: true, Permission: connectivity.Permission{NewFlows: true, ExistingFlows: true}, MapRevision: 8, PeerCount: 1, Address: "100.64.0.1"}
 	mu.Unlock()
 	second := nextWatchEvent(t, values)
 	if second.Sequence != 2 || second.GetStatusChanged() == nil || second.GetStatusChanged().ServiceState != clientv0.ServiceState_SERVICE_STATE_CONNECTED || second.Metadata.Revision != first.Metadata.Revision {
 		t.Fatal("volatile state lost, reordered or changed durable CAS", second)
+	}
+	peers := nextWatchEvent(t, values)
+	if peers.Sequence != 3 || peers.GetInvalidated().GetDomain() != clientv0.Domain_DOMAIN_PEERS {
+		t.Fatal("applied peer map did not invalidate peer data", peers)
 	}
 	cancel()
 	select {

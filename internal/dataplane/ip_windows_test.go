@@ -24,6 +24,7 @@ type mockIPAPI struct {
 	forward                                                          []winipcfg.MibIPforwardRow2
 	createdAddresses, createdRoutes, deletedAddresses, deletedRoutes int
 	loseCreate, loseDelete                                           bool
+	tentativeOnCreate                                                bool
 	afterCreate                                                      func()
 }
 
@@ -69,7 +70,9 @@ func (m *mockIPAPI) createAddress(row *winipcfg.MibUnicastIPAddressRow) error {
 	m.createdAddresses++
 	r := *row
 	r.CreationTimeStamp = 100
-	r.DadState = winipcfg.DadStateTentative
+	if m.tentativeOnCreate {
+		r.DadState = winipcfg.DadStateTentative
+	}
 	r.InterfaceIndex = 17
 	m.addrs = append(m.addrs, r)
 	auto := testIPRoute(row.InterfaceLUID, netip.PrefixFrom(row.Address.Addr(), 32).String(), 9)
@@ -166,6 +169,7 @@ func removingAddress(r state.AddressRecord) state.AddressRecord {
 
 func TestWindowsIPIndividualEffectsDADAndCleanupPreserveForeignRows(t *testing.T) {
 	w, api, p, j := ipFixture(t)
+	api.tentativeOnCreate = true
 	foreign := []winipcfg.MibIPforwardRow2{testIPRoute(9, "0.0.0.0/0", 10), testIPRoute(9, "192.168.80.0/24", 1)}
 	api.forward = append(api.forward, foreign...)
 	if err := w.Preflight(context.Background(), p, j); err != nil {

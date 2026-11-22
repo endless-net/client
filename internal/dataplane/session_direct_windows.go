@@ -4,89 +4,30 @@ package dataplane
 
 import (
 	"context"
-	"errors"
-	"time"
 
 	"github.com/endless-net/client/internal/connectivity"
 )
 
-// WaitPaths does not hold the native owner mutex across a network wait: fresh
-// map/offline/revoke updates and Stop must be able to preempt it. Completion of
-// the operation remains with the daemon worker after its final intent fence.
-func (s *WindowsSession) WaitPaths(parent context.Context, probeInterval time.Duration) (err error) {
-	if probeInterval < time.Millisecond || probeInterval > 30*time.Second {
-		return ErrConfiguration
-	}
-	b, err := connectivity.OperationFromContext(parent)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithCancel(parent)
-	stop := context.AfterFunc(s.lifetime, cancel)
-	defer func() { stop(); cancel() }()
-	s.mu.Lock()
-	if s.stopped || s.engine == nil {
-		s.mu.Unlock()
-		return ErrClosed
-	}
-	if err := s.packets.Err(); err != nil {
-		s.mu.Unlock()
-		return err
-	}
-	if b != s.operation || !b.Active() {
-		s.mu.Unlock()
-		return connectivity.ErrConfig
-	}
-	e := s.engine
-	s.mu.Unlock()
-	defer func() {
-		if err != nil {
-			s.lease.Revoke()
-			s.cancel()
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			err = s.failUpdate(err)
-		}
-	}()
-	if err := connectivity.CheckOperation(ctx); err != nil {
-		return err
-	}
-	poll := time.NewTicker(min(probeInterval, negotiationRetry))
-	defer poll.Stop()
-	for {
-		if err := connectivity.CheckOperation(ctx); err != nil {
-			return err
-		}
-		_, sourceChanged := s.lease.SourceSignal()
-		_, changed, closed := e.direct.snapshot()
-		if closed {
-			return ErrClosed
-		}
-		if err := e.ProbeDirect(ctx); err != nil && !errors.Is(err, ErrNoAuthority) {
-			return err
-		}
-		s.mu.Lock()
-		sole := s.soleNodeReady(e)
-		s.mu.Unlock()
-		if s.lease.Permissions().NewFlows && (sole || s.pathReady(e)) {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-sourceChanged:
-		case <-changed:
-		case <-poll.C:
-		}
-	}
+// CheckReady fences local activation after the endpoint ACK. The daemon worker
+// still owns completion of the operation under the final intent fence.
+func (s *WindowsSession) CheckReady(ctx context.Context) (err error) {
+	b, err := connectivity.OperationFromContext(ctx)
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.stopped || s.engine != e {
+	if s.stopped || s.engine == nil {
 		return ErrClosed
 	}
+	if b != s.operation || !b.Active() {
+		return connectivity.ErrConfig
+	}
+	defer func() {
+		if err != nil {
+			err = s.failUpdate(err)
+		}
+	}()
 	if err := s.packets.Err(); err != nil {
 		return err
 	}
@@ -96,46 +37,24 @@ func (s *WindowsSession) WaitPaths(parent context.Context, probeInterval time.Du
 	if err := connectivity.CheckOperation(ctx); err != nil {
 		return err
 	}
-	if !s.lease.Permissions().NewFlows {
-		return ErrNoAuthority
-	}
-	if !s.soleNodeReady(e) && !s.pathReady(e) {
+	if !s.tunnelReady() {
 		return ErrNoAuthority
 	}
 	return nil
 }
 
-// Caller holds s.mu. Empty discovery/path tables are insufficient: current is
-// a verified map that passed native application, listener and source fences.
-func (s *WindowsSession) soleNodeReady(e *Engine) bool {
-	if !s.started || s.stopped || s.engine != e || e == nil || s.tunnel == nil || s.filters == nil || s.ip == nil || s.packets == nil || s.packets.Err() != nil || !s.lease.Permissions().NewFlows || s.current.Denied() {
+// Caller holds s.mu. Current must be a verified map that passed native
+// application, listener, and source fences.
+func (s *WindowsSession) tunnelReady() bool {
+	if !s.started || s.stopped || s.engine == nil || s.tunnel == nil || s.filters == nil || s.ip == nil || s.packets == nil || s.packets.Err() != nil || !s.lease.Permissions().NewFlows || s.current.Denied() {
 		return false
 	}
 	m, err := s.current.Snapshot()
-	if err != nil || len(m.Peers) != 0 || m.Revision.Network == 0 || m.Node.AssignedIP == "" {
+	if err != nil || m.Revision.Network == 0 || m.Node.AssignedIP == "" {
 		return false
 	}
-	_, err = e.BoundPort()
+	_, err = s.engine.BoundPort()
 	return err == nil
-}
-
-func (s *WindowsSession) pathReady(e *Engine) bool {
-	choices := s.packets.outputChoices()
-	for _, kind := range choices {
-		if kind == peerRouteRelay || kind == peerRouteDirect {
-			return true
-		}
-	}
-	paths, _, closed := e.direct.snapshot()
-	if closed {
-		return false
-	}
-	for _, path := range paths {
-		if _, overridden := choices[path.PeerID]; path.Authenticated && !overridden {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *WindowsSession) ProbePaths(parent context.Context) error {

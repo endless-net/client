@@ -138,8 +138,9 @@ transport/mux/reserved WG channels, global probe admission и own-nonce health.
 Перед первыми health probes создаются максимум два ещё неподтверждённых канала;
 большая peer set не задерживает первый Relay из-за создания всех остальных engines.
 Own peer proof выбирает Relay при отсутствии primary Direct; TLS Ready не выбирает
-путь. `WaitPaths` сохраняет исходный Connect budget и принимает Direct или Relay;
-periodic monitoring не объявляет отказ из-за Direct0 при работающем Relay.
+путь. Connect подтверждает локальное применение карты и объявление endpoint
+в рамках исходного бюджета. Поиск путей продолжается в фоне, а исчезновение
+всех путей само по себе не останавливает туннель.
 Agent IPC передаёт отдельный relay_path_count. Missed health reply не разрывает
 известную WG session только из-за удалённого offline gate; upstream session loss
 снимает прежнюю proof и требует новую собственную challenge/echo.

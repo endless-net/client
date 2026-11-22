@@ -11,12 +11,12 @@ import (
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
-	"github.com/tailscale/wireguard-go/device"
+	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 )
 
 func TestWindowsSoleNodeRequiresVerifiedMapAppliedResourcesAndCurrentLease(t *testing.T) {
 	s, _, _, original, _, _, _, _, clock := wiredSessionFixture(t)
-	if s.soleNodeReady(nil) {
+	if s.tunnelReady() {
 		t.Fatal("empty discovery invented local readiness")
 	}
 	empty := nextSessionMap(t, s, original, clock, func(snapshot *coordinator.NetworkMapSnapshot) { snapshot.Peers = []coordinator.Peer{} })
@@ -27,7 +27,7 @@ func TestWindowsSoleNodeRequiresVerifiedMapAppliedResourcesAndCurrentLease(t *te
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Stop(cleanupContext(t)) }()
-	if err := s.WaitPaths(operation, time.Millisecond); err != nil {
+	if err := s.CheckReady(operation); err != nil {
 		t.Fatal("verified sole-node tunnel did not become ready", err)
 	}
 	local := s.ConnectionLocal()
@@ -46,28 +46,41 @@ func TestWindowsSoleNodeRequiresVerifiedMapAppliedResourcesAndCurrentLease(t *te
 	}
 }
 
-// Path callbacks are injected in these native-owner tests. Actual cryptography
-// and UDP delivery are tested separately by the engine's transport fixtures.
-func injectSessionPath(t *testing.T, s *WindowsSession) {
-	t.Helper()
-	probe, cancel := context.WithTimeout(context.Background(), time.Second)
+func TestWindowsOptimisticDADRevokesReadySessionOnLateDuplicate(t *testing.T) {
+	s, _, _, original, ip, _, _, _, clock := wiredSessionFixture(t)
+	empty := nextSessionMap(t, s, original, clock, func(snapshot *coordinator.NetworkMapSnapshot) {
+		snapshot.Peers = []coordinator.Peer{}
+	})
+	parent, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := s.engine.ProbeDirect(probe); err != nil {
+	operation, _ := sessionFixtureOperation(t, s, parent, false)
+	if err := s.Start(operation, empty); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := s.current.Snapshot()
-	if err != nil {
+	if len(ip.addrs) != 1 || ip.addrs[0].DadState != winipcfg.DadStatePreferred {
+		t.Fatal("Windows did not receive the optimistic DAD request")
+	}
+	if err := s.CheckReady(operation); err != nil {
 		t.Fatal(err)
 	}
-	key := peerKey(t, snapshot.Peers[0].PublicKey)
-	tracker := s.engine.direct
-	tracker.session(key, device.PeerSessionEstablished)
-	tracker.currentKey(key)
-	config := tracker.config.Load()
-	tracker.authenticated([32]byte(key), config.peers[[32]byte(key)].endpoint, config, time.Now().UTC())
+
+	ip.addrs[0].DadState = winipcfg.DadStateDuplicate
+	if err := s.ProbePaths(parent); !errors.Is(err, ErrIPConflict) {
+		t.Fatal("late duplicate did not fail the session", err)
+	}
+	local := s.ConnectionLocal()
+	if local.SoleNodeReady || local.Permission.NewFlows || local.Permission.ExistingFlows {
+		t.Fatal("late duplicate left the session ready or permitted traffic", local)
+	}
+	if err := s.Stop(cleanupContext(t)); err != nil {
+		t.Fatal(err)
+	}
+	if len(ip.addrs) != 0 {
+		t.Fatal("cleanup left the duplicate address")
+	}
 }
 
-func TestWindowsDirectWaitFencesCurrentIntentAndLeavesCompletionToWorker(t *testing.T) {
+func TestWindowsReadyChecksIntentWithoutWaitingForPeer(t *testing.T) {
 	s, store, _, m, _, _, _, _, _ := wiredSessionFixture(t)
 	parent, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -75,12 +88,15 @@ func TestWindowsDirectWaitFencesCurrentIntentAndLeavesCompletionToWorker(t *test
 	if err := s.Start(operation, m); err != nil {
 		t.Fatal(err)
 	}
-	injectSessionPath(t, s)
-	if err := s.WaitPaths(operation, time.Millisecond); err != nil {
+	if err := s.CheckReady(operation); err != nil {
 		t.Fatal(err)
 	}
+	local := s.ConnectionLocal()
+	if local.PeerCount != 1 || local.DirectPaths != 0 || local.RelayPaths != 0 || len(local.PeerTransports) != 1 || local.PeerTransports[0].GetSelectedPath() != 0 {
+		t.Fatal("ready tunnel must report its peer without inventing a path", local)
+	}
 	if !b.Active() {
-		t.Fatal("native path observation completed operation without worker fence")
+		t.Fatal("local readiness completed operation without worker fence")
 	}
 	value, err := store.Load(context.Background())
 	if err != nil {
@@ -94,33 +110,7 @@ func TestWindowsDirectWaitFencesCurrentIntentAndLeavesCompletionToWorker(t *test
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.WaitPaths(operation, time.Millisecond); !errors.Is(err, state.ErrStale) || s.lease.Permissions().ExistingFlows {
-		t.Fatal("late observed path ignored newer Disconnect", err)
-	}
-}
-
-func TestWindowsDirectWaitDoesNotBlockConcurrentStop(t *testing.T) {
-	s, _, _, m, _, _, _, _, _ := wiredSessionFixture(t)
-	parent, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	operation, _ := sessionFixtureOperation(t, s, parent, false)
-	if err := s.Start(operation, m); err != nil {
-		t.Fatal(err)
-	}
-	done := make(chan error, 1)
-	go func() { done <- s.WaitPaths(operation, time.Millisecond) }()
-	if err := s.Stop(cleanupContext(t)); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case err := <-done:
-		if err == nil {
-			t.Fatal("stopped path wait claimed success")
-		}
-	case <-parent.Done():
-		t.Fatal("path wait held native mutex across network wait")
-	}
-	if s.lease.Permissions().ExistingFlows {
-		t.Fatal("Stop left authority active")
+	if err := s.CheckReady(operation); !errors.Is(err, state.ErrStale) || s.lease.Permissions().ExistingFlows {
+		t.Fatal("local readiness ignored newer Disconnect", err)
 	}
 }

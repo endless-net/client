@@ -250,6 +250,8 @@ func (w *WindowsIP) CreateAddress(ctx context.Context, p IPPlan, j state.Resourc
 		return AddressEffect{}, err
 	}
 	row := p.address
+	// Windows starts DAD asynchronously and can report Preferred immediately.
+	row.DadState = winipcfg.DadStatePreferred
 	if err := w.api.createAddress(&row); err != nil {
 		if reason := ipError(err); reason != ErrIP {
 			return AddressEffect{}, reason

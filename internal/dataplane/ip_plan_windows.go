@@ -37,8 +37,8 @@ type IPPlan struct {
 func (IPPlan) String() string   { return "[Windows IP plan]" }
 func (IPPlan) GoString() string { return "[Windows IP plan]" }
 
-// PrepareIPCleanup restores only object keys from the protected journal. It
-// accepts no cached map/credential and cannot be used to create network effects.
+// PrepareIPCleanup restores only object keys from the protected journal for
+// inspection or removal. It cannot be used to create network effects.
 func PrepareIPCleanup(adapterID string, luid uint64, localPrefix string) (IPPlan, error) {
 	key, err := canonicalGUID(adapterID)
 	prefix, parseErr := netip.ParsePrefix(localPrefix)

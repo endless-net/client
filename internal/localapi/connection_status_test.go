@@ -46,7 +46,7 @@ func (o *observedConnection) ConnectionSnapshot() connectivity.Observation {
 	return o.value
 }
 
-func TestConnectionStatusRequiresCurrentGenerationMeasuredApplyAndPath(t *testing.T) {
+func TestConnectionStatusRequiresCurrentGenerationAndAppliedTunnel(t *testing.T) {
 	c, _, _, _, caller := connectionFixture(t)
 	if _, err := c.connect(context.Background(), caller, &clientv0.ConnectRequest{Mutation: connectionMutation(3), Async: true}); err != nil {
 		t.Fatal(err)
@@ -58,6 +58,8 @@ func TestConnectionStatusRequiresCurrentGenerationMeasuredApplyAndPath(t *testin
 	soleOffline.Permission = connectivity.Permission{ExistingFlows: true}
 	soleWithPeer := sole
 	soleWithPeer.PeerCount = 1
+	soleWithPeer.SoleNodeReady = false
+	soleWithPeer.PeerTransports = []*clientv0.PeerTransportStatus{{PeerId: "peer"}}
 	relay := online
 	relay.DirectPaths, relay.RelayPaths = 0, 1
 	unsupported := relay
@@ -74,7 +76,8 @@ func TestConnectionStatusRequiresCurrentGenerationMeasuredApplyAndPath(t *testin
 		{"verified_sole_node", connectivity.PhaseConnected, sole, false, clientv0.ServiceState_SERVICE_STATE_LOCAL_READY, clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY},
 		{"stale_sole_node", connectivity.PhaseConnected, sole, true, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
 		{"offline_sole_node", connectivity.PhaseConnected, soleOffline, false, clientv0.ServiceState_SERVICE_STATE_DEGRADED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
-		{"peer_without_authenticated_path", connectivity.PhaseConnected, soleWithPeer, false, clientv0.ServiceState_SERVICE_STATE_DEGRADED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
+		{"peer_without_authenticated_path", connectivity.PhaseConnected, soleWithPeer, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
+		{"before_endpoint_ack", connectivity.PhaseConnecting, soleWithPeer, false, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTING},
 		{"applied_path", connectivity.PhaseConnected, online, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
 		{"applied_relay", connectivity.PhaseConnected, relay, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
 		{"relay_with_unsupported_direct", connectivity.PhaseConnected, unsupported, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},

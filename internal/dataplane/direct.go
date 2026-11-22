@@ -332,7 +332,9 @@ func (e *Engine) ProbeDirect(ctx context.Context) error {
 		}
 		if first {
 			if err := peer.SendHandshakeInitiation(false); err != nil {
-				return ErrEngine
+				// Sending to one peer can fail while the local tunnel is healthy.
+				// WireGuard owns the handshake retransmission timer.
+				continue
 			}
 		}
 		peer.SendKeepalive()

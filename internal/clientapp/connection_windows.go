@@ -40,7 +40,7 @@ type windowsConnectionNative interface {
 	Refresh(context.Context, connectivity.Map) error
 	Offline(context.Context) error
 	Stop(context.Context) error
-	WaitPaths(context.Context, time.Duration) error
+	CheckReady(context.Context) error
 	ProbePaths(context.Context) error
 	BoundPort() (uint16, error)
 	TransportAdvertisement(netip.Addr) (coordinator.TransportAdvertisement, error)
@@ -241,9 +241,6 @@ func (d *windowsConnection) Connect(operation context.Context, restore bool) err
 				return d.result()
 			case <-d.credentialsStarted:
 			}
-		}
-		if err := native.WaitPaths(operation, d.factory.config.ProbeInterval); err != nil {
-			return nativeConnectionFailure(err, connectivity.FailurePath)
 		}
 		return connectivity.CheckOperation(operation)
 	case <-done:
@@ -452,6 +449,9 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				if err := d.announce(initial, true, native); err != nil {
 					return err
 				}
+				if err := native.CheckReady(initial); err != nil {
+					return nativeConnectionFailure(err, connectivity.FailureApply)
+				}
 				close(d.credentialsReady)
 				select {
 				case d.applied <- struct{}{}:
@@ -487,10 +487,6 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				}
 				if err != nil && !errors.Is(err, dataplane.ErrNoAuthority) {
 					return nativeConnectionFailure(err, connectivity.FailurePath)
-				}
-				local := native.ConnectionLocal()
-				if local.Known && local.Permission.NewFlows && local.PeerCount > 0 && local.DirectPaths == 0 && local.RelayPaths == 0 {
-					return connectivity.FailurePath
 				}
 			}
 		}

@@ -56,16 +56,16 @@ func (b *connectionStreamBody) Read(p []byte) (int, error) {
 func (b *connectionStreamBody) Close() error { b.once.Do(func() { close(b.closed) }); return nil }
 
 type connectionNativeFixture struct {
-	store                        *state.Store
-	started, bound, revoked      atomic.Bool
-	starts, stops, waits, epochs atomic.Uint64
-	refreshes, offlines          atomic.Uint64
-	probes                       atomic.Uint64
-	wrongPort                    bool
-	refreshError                 atomic.Pointer[error]
-	refreshHook                  func(context.Context) error
-	advertisement                atomic.Pointer[coordinator.TransportAdvertisement]
-	advertisementChanged         chan struct{}
+	store                         *state.Store
+	started, bound, revoked       atomic.Bool
+	starts, stops, checks, epochs atomic.Uint64
+	refreshes, offlines           atomic.Uint64
+	probes                        atomic.Uint64
+	wrongPort                     bool
+	refreshError                  atomic.Pointer[error]
+	refreshHook                   func(context.Context) error
+	advertisement                 atomic.Pointer[coordinator.TransportAdvertisement]
+	advertisementChanged          chan struct{}
 }
 
 func (n *connectionNativeFixture) Start(ctx context.Context, m connectivity.Map) error {
@@ -101,7 +101,7 @@ func (n *connectionNativeFixture) Stop(context.Context) error {
 	n.stops.Add(1)
 	return nil
 }
-func (n *connectionNativeFixture) WaitPaths(ctx context.Context, _ time.Duration) error {
+func (n *connectionNativeFixture) CheckReady(ctx context.Context) error {
 	value, err := n.store.Load(ctx)
 	if err != nil {
 		return err
@@ -109,9 +109,9 @@ func (n *connectionNativeFixture) WaitPaths(ctx context.Context, _ time.Duration
 	defer clearConnectionKeys(value)
 	p := value.Profiles[workerProfile]
 	if !n.started.Load() || p.Connection.EndpointRequest == nil || p.Connection.EndpointGeneration == 1 && p.Connection.EndpointRequest.Receipt == nil {
-		return errors.New("path wait before durable endpoint ACK")
+		return errors.New("readiness check before durable endpoint ACK")
 	}
-	n.waits.Add(1)
+	n.checks.Add(1)
 	return nil
 }
 func (n *connectionNativeFixture) ProbePaths(context.Context) error { n.probes.Add(1); return nil }
@@ -139,14 +139,14 @@ func (n *connectionNativeFixture) BlockSource() uint64 { return n.epochs.Add(1) 
 func (n *connectionNativeFixture) RevokeSource()       { n.revoked.Store(true) }
 
 func (n *connectionNativeFixture) ConnectionLocal() connectivity.LocalObservation {
-	return connectivity.LocalObservation{Known: n.started.Load() && !n.revoked.Load(), Applied: n.started.Load()}
+	return connectivity.LocalObservation{Known: n.started.Load() && !n.revoked.Load(), Applied: n.started.Load(), PeerCount: 1, Permission: connectivity.Permission{NewFlows: true}}
 }
 
 type endpointClockFunc func() (connectivity.ClockSample, error)
 
 func (f endpointClockFunc) Sample() (connectivity.ClockSample, error) { return f() }
 
-func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeDirect(t *testing.T) {
+func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeReady(t *testing.T) {
 	for _, mode := range []string{"expired", "changed", "current", "capability_changed", "uncertain_next", "expired_next", "budget"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newConnectionBackendFixture(t)
@@ -223,11 +223,11 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeDirect(t *
 			}()
 			err = d.Connect(backendOperation(t, f), false)
 			if mode == "budget" {
-				if !errors.Is(err, context.DeadlineExceeded) || f.native.waits.Load() != 0 {
+				if !errors.Is(err, context.DeadlineExceeded) || f.native.checks.Load() != 0 {
 					t.Fatal("expired native budget reached next announcement or Direct", err)
 				}
 			} else if mode == "uncertain_next" || mode == "expired_next" {
-				if !errors.Is(err, connectivity.ErrEndpointUncertain) || f.native.waits.Load() != 0 {
+				if !errors.Is(err, connectivity.ErrEndpointUncertain) || f.native.checks.Load() != 0 {
 					t.Fatal("unconfirmed current announcement reached Direct", err)
 				}
 			} else if err != nil {
@@ -247,7 +247,7 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeDirect(t *
 				t.Fatal("historical receipt used as current lease, frozen request changed or operation renewed", p.Connection.EndpointGeneration, want)
 			}
 			if mode != "uncertain_next" && mode != "expired_next" && mode != "budget" {
-				if receipt := p.Connection.EndpointRequest.Receipt; receipt == nil || receipt.Endpoint != f.config.Endpoint.String() || !receipt.ExpiresAt.After(time.Now()) || f.native.waits.Load() != 1 {
+				if receipt := p.Connection.EndpointRequest.Receipt; receipt == nil || receipt.Endpoint != f.config.Endpoint.String() || !receipt.ExpiresAt.After(time.Now()) || f.native.checks.Load() != 1 {
 					t.Fatal("Direct admitted without a current matching discovery ACK")
 				}
 			}
@@ -443,7 +443,7 @@ func backendOperation(t *testing.T, f *connectionBackendFixture) context.Context
 	return connectivity.WithOperationBudget(ctx, b)
 }
 
-func TestWindowsConnectionDriverUsesSDKMapBoundPortEndpointACKBeforePath(t *testing.T) {
+func TestWindowsConnectionDriverCompletesAfterACKWithNoPeerPaths(t *testing.T) {
 	f := newConnectionBackendFixture(t)
 	owner, err := f.factory.newOwner(context.Background(), workerProfile, 1)
 	if err != nil {
@@ -464,11 +464,24 @@ func TestWindowsConnectionDriverUsesSDKMapBoundPortEndpointACKBeforePath(t *test
 	}
 	defer clearConnectionKeys(value)
 	p := value.Profiles[workerProfile]
-	if p.Connection.MapCursor == nil || p.Connection.EndpointGeneration < 1 || f.native.starts.Load() != 1 || f.native.waits.Load() != 1 {
+	if p.Connection.MapCursor == nil || p.Connection.EndpointGeneration < 1 || f.native.starts.Load() != 1 || f.native.checks.Load() != 1 {
 		t.Fatal("driver skipped actual SDK/state stages")
 	}
 	if p.Attempt.NodeID != "node" || p.Connection.Generation != 1 {
 		t.Fatal("connect changed registration/generation")
+	}
+	deadline := time.NewTimer(time.Second)
+	defer deadline.Stop()
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for f.native.probes.Load() < 2 {
+		select {
+		case <-d.done:
+			t.Fatal("zero peer paths ended the session", d.result())
+		case <-deadline.C:
+			t.Fatal("background peer probes did not run")
+		case <-tick.C:
+		}
 	}
 }
 
@@ -671,7 +684,7 @@ func TestWindowsConnectionDriverRotatesMapStreamWithoutEnteringOffline(t *testin
 	}
 }
 
-func TestWindowsConnectionDriverRejectsBindMismatchBeforeAnnouncementOrPath(t *testing.T) {
+func TestWindowsConnectionDriverRejectsBindMismatchBeforeAnnouncementOrReadiness(t *testing.T) {
 	f := newConnectionBackendFixture(t)
 	f.native.wrongPort = true
 	owner, err := f.factory.newOwner(context.Background(), workerProfile, 1)
@@ -692,8 +705,8 @@ func TestWindowsConnectionDriverRejectsBindMismatchBeforeAnnouncementOrPath(t *t
 		t.Fatal(err)
 	}
 	defer clearConnectionKeys(value)
-	if len(f.patches) != 0 || f.native.waits.Load() != 0 || value.Profiles[workerProfile].Connection.EndpointGeneration != 0 {
-		t.Fatal("unconfirmed bind published or completed path")
+	if len(f.patches) != 0 || f.native.checks.Load() != 0 || value.Profiles[workerProfile].Connection.EndpointGeneration != 0 {
+		t.Fatal("unconfirmed bind published or completed connection")
 	}
 }
 

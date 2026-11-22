@@ -2,7 +2,10 @@
 
 package dataplane
 
-import "github.com/endless-net/client/internal/connectivity"
+import (
+	clientv0 "github.com/endless-net/client/api/client/v0"
+	"github.com/endless-net/client/internal/connectivity"
+)
 
 // ConnectionLocal never waits for an in-flight native SDK transaction and never
 // treats a journal or listener as a confirmed path. A busy owner is unknown.
@@ -38,9 +41,16 @@ func (s *WindowsSession) ConnectionLocal() connectivity.LocalObservation {
 		}
 	}
 	v.Permission = s.lease.Permissions()
-	v.SoleNodeReady = s.soleNodeReady(s.engine)
+	v.SoleNodeReady = v.PeerCount == 0 && s.tunnelReady()
 	if s.supervisor != nil {
 		v.PeerTransports = s.supervisor.transportStatuses(s.current)
+	}
+	if len(v.PeerTransports) == 0 && len(m.Peers) > 0 {
+		// A newly applied map may precede the supervisor's first observation.
+		v.PeerTransports = make([]*clientv0.PeerTransportStatus, 0, len(m.Peers))
+		for _, peer := range m.Peers {
+			v.PeerTransports = append(v.PeerTransports, pendingPeerTransport(peer.ID))
+		}
 	}
 	return v
 }

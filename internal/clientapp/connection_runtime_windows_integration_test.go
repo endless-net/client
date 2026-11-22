@@ -32,7 +32,7 @@ func TestWindowsRuntimeConnectionCommandsReachMandatoryWorker(t *testing.T) {
 	}
 	h := &workerHarness{created: make(chan *workerSession, 4)}
 	h.setup = func(s *workerSession) {
-		s.local = connectivity.LocalObservation{Known: true, Applied: true, Permission: connectivity.Permission{NewFlows: true, ExistingFlows: true}, DirectPaths: 1, MapRevision: 7}
+		s.local = connectivity.LocalObservation{Known: true, Applied: true, Permission: connectivity.Permission{NewFlows: true, ExistingFlows: true}, DirectPaths: 1, MapRevision: 7, PeerCount: 1, Address: "100.64.0.1"}
 	}
 	r.connection.factory = h.factory
 	if err := r.App.Start(budget(t)); err != nil {

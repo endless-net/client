@@ -22,7 +22,6 @@ import (
 	signing "github.com/endless-net/signing/api/contract"
 	"github.com/tailscale/wf"
 	"github.com/tailscale/wireguard-go/conn"
-	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 )
 
 type sessionClock struct {
@@ -202,9 +201,6 @@ func wiredSessionFixtureAt(t *testing.T, now time.Time) (*WindowsSession, *state
 	ip.afterCreate = func() {
 		if guards.commits == 0 || len(guards.live) == 0 || s.lease.Permissions().ExistingFlows {
 			t.Fatal("native IP reached Windows before guards or while packets enabled")
-		}
-		for i := range ip.addrs {
-			ip.addrs[i].DadState = winipcfg.DadStatePreferred
 		}
 	}
 	tunnel.afterClose = func() { tunAPI.rows = nil; ip.gone = true; ip.addrs = nil; ip.forward = nil }
