@@ -3,6 +3,7 @@ package clientapp
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ type ConnectionWorkerConfig struct {
 	ReadTimeout, PollInterval, CleanupTimeout time.Duration
 	RefreshSession                            func(context.Context, string, uint64) error
 	SessionRetryInterval                      time.Duration
+	Logger                                    *slog.Logger
 }
 
 type ConnectionPhase = connectivity.Phase
@@ -374,6 +376,9 @@ func (w *ConnectionWorker) result(r connectionResult) {
 }
 
 func (w *ConnectionWorker) budgetFailure(t *connectionTarget, err error) {
+	if w.config.Logger != nil && t.intent == state.IntentConnected && errors.Is(err, context.DeadlineExceeded) {
+		w.config.Logger.Warn("client.connection.deadline", "component", "connection", "generation", t.generation, "attempt", t.attempt)
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.view.Profile == t.profile && w.view.Generation == t.generation &&
@@ -714,6 +719,9 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 			lifetime, cancel := context.WithCancel(ctx)
 			current = &connectionJob{target: t, daemon: ctx, lifetime: lifetime, cancel: cancel, previous: w.retired, sessionMaintenance: maintenance}
 			w.retired = nil
+			if w.config.Logger != nil && t.intent == state.IntentConnected {
+				w.config.Logger.Info("client.connection.attempt_started", "component", "connection", "generation", t.generation, "attempt", t.attempt, "restore", t.restore)
+			}
 			go w.runJob(current, results)
 		}
 		var timeout <-chan time.Time

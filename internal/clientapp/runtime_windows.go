@@ -108,7 +108,7 @@ func newWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			}
 			r.connection, err = NewConnectionWorker(r.state.Store(), factory, ConnectionWorkerConfig{
 				Clock: clock, RuntimeID: instance, ReadTimeout: c.WriteBudget, PollInterval: c.PollInterval, CleanupTimeout: c.CleanupTimeout,
-				RefreshSession: credentials.RefreshSession, SessionRetryInterval: driver.RetryInterval,
+				RefreshSession: credentials.RefreshSession, SessionRetryInterval: driver.RetryInterval, Logger: t.Signals().logger,
 			})
 			if err != nil {
 				return err
@@ -161,7 +161,7 @@ func newWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{Revocations: revocations, Connections: r.connection, SessionLogins: sessionLogin, MaxSessionLogins: c.MaxPending, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
+			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{RecentLogs: t.RecentLogs, LogPageKey: pageKey, LogResponseBytes: c.MaxMessageBytes, Revocations: revocations, Connections: r.connection, SessionLogins: sessionLogin, MaxSessionLogins: c.MaxPending, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
 			if err != nil {
 				return err
 			}

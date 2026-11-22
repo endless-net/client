@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/endless-net/client/internal/localapi"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -141,6 +142,8 @@ type logQueue struct {
 	started, closed bool
 	dropped         metric.Int64Counter
 	total           atomic.Uint64
+	recentLogs      [recentLogCapacity]localapi.RecentLog
+	logSequence     uint64
 }
 
 func (q *logQueue) drop(reason string) {
@@ -159,6 +162,7 @@ func (q *logQueue) Write(data []byte) (int, error) {
 		q.drop("too_large")
 		return len(data), nil
 	}
+	q.retain(data)
 	select {
 	case q.queue <- append([]byte(nil), data...):
 	default:
