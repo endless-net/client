@@ -171,10 +171,20 @@ func TestWindowsCleanupLiveForeignOrStaleStateStopsBeforeDeletion(t *testing.T) 
 
 func TestWindowsCleanupLostBFECommitRetainsJournalUntilExplicitRecovery(t *testing.T) {
 	c, store, _, guards := cleanupFixture(t)
+	var reportedStage string
+	c.reportFailure = func(generation uint64, stage string, err error) {
+		if generation != 1 || !errors.Is(err, ErrPolicyUncertain) {
+			t.Fatalf("unexpected cleanup diagnostic: %d %s %v", generation, stage, err)
+		}
+		reportedStage = stage
+	}
 	guards.fail = "commit"
 	ctx := cleanupContext(t)
 	if err := c.Run(ctx, cleanupProfile, policySession, 1); !errors.Is(err, ErrPolicyUncertain) {
 		t.Fatal("lost BFE commit called success", err)
+	}
+	if reportedStage != "cleanup_wfp_remove" {
+		t.Fatalf("wrong stage for a lost BFE commit: %q", reportedStage)
 	}
 	j := store.value.Profiles[cleanupProfile].Connection.Journal
 	if j == nil || len(j.Filters) == 0 || j.Adapter == nil || j.Adapter.Phase != state.EffectRemoving || guards.closes != 1 {
