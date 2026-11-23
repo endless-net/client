@@ -15,11 +15,11 @@ import 'dart:core' as $core;
 import 'package:fixnum/fixnum.dart' as $fixnum;
 import 'package:protobuf/protobuf.dart' as $pb;
 import 'package:protobuf/well_known_types/google/protobuf/timestamp.pb.dart'
-    as $4;
+    as $5;
 
-import 'common.pb.dart' as $1;
-import 'features.pb.dart' as $3;
-import 'runtime.pb.dart' as $2;
+import 'common.pb.dart' as $2;
+import 'features.pb.dart' as $4;
+import 'runtime.pb.dart' as $3;
 import 'service.pbenum.dart';
 
 export 'package:protobuf/protobuf.dart' show GeneratedMessageGenericExtensions;
@@ -67,7 +67,7 @@ class GetRuntimeInfoRequest extends $pb.GeneratedMessage {
 
 class GetRuntimeInfoResponse extends $pb.GeneratedMessage {
   factory GetRuntimeInfoResponse({
-    $1.RuntimeInfo? runtime,
+    $2.RuntimeInfo? runtime,
   }) {
     final result = create();
     if (runtime != null) result.runtime = runtime;
@@ -87,8 +87,8 @@ class GetRuntimeInfoResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetRuntimeInfoResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.RuntimeInfo>(1, _omitFieldNames ? '' : 'runtime',
-        subBuilder: $1.RuntimeInfo.create)
+    ..aOM<$2.RuntimeInfo>(1, _omitFieldNames ? '' : 'runtime',
+        subBuilder: $2.RuntimeInfo.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -112,15 +112,15 @@ class GetRuntimeInfoResponse extends $pb.GeneratedMessage {
   static GetRuntimeInfoResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.RuntimeInfo get runtime => $_getN(0);
+  $2.RuntimeInfo get runtime => $_getN(0);
   @$pb.TagNumber(1)
-  set runtime($1.RuntimeInfo value) => $_setField(1, value);
+  set runtime($2.RuntimeInfo value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasRuntime() => $_has(0);
   @$pb.TagNumber(1)
   void clearRuntime() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.RuntimeInfo ensureRuntime() => $_ensure(0);
+  $2.RuntimeInfo ensureRuntime() => $_ensure(0);
 }
 
 class GetStatusRequest extends $pb.GeneratedMessage {
@@ -163,7 +163,7 @@ class GetStatusRequest extends $pb.GeneratedMessage {
 
 class GetStatusResponse extends $pb.GeneratedMessage {
   factory GetStatusResponse({
-    $2.Status? status,
+    $3.Status? status,
   }) {
     final result = create();
     if (status != null) result.status = status;
@@ -183,8 +183,8 @@ class GetStatusResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetStatusResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$2.Status>(1, _omitFieldNames ? '' : 'status',
-        subBuilder: $2.Status.create)
+    ..aOM<$3.Status>(1, _omitFieldNames ? '' : 'status',
+        subBuilder: $3.Status.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -207,15 +207,15 @@ class GetStatusResponse extends $pb.GeneratedMessage {
   static GetStatusResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $2.Status get status => $_getN(0);
+  $3.Status get status => $_getN(0);
   @$pb.TagNumber(1)
-  set status($2.Status value) => $_setField(1, value);
+  set status($3.Status value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasStatus() => $_has(0);
   @$pb.TagNumber(1)
   void clearStatus() => $_clearField(1);
   @$pb.TagNumber(1)
-  $2.Status ensureStatus() => $_ensure(0);
+  $3.Status ensureStatus() => $_ensure(0);
 }
 
 class WatchEventsRequest extends $pb.GeneratedMessage {
@@ -258,9 +258,9 @@ class WatchEventsRequest extends $pb.GeneratedMessage {
 
 class EnrollRequest extends $pb.GeneratedMessage {
   factory EnrollRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
-    $2.EnrollmentMode? mode,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
+    $3.EnrollmentMode? mode,
     $core.String? hostname,
     $core.String? requestId,
   }) {
@@ -286,12 +286,12 @@ class EnrollRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'EnrollRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
-    ..aE<$2.EnrollmentMode>(3, _omitFieldNames ? '' : 'mode',
-        enumValues: $2.EnrollmentMode.values)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
+    ..aE<$3.EnrollmentMode>(3, _omitFieldNames ? '' : 'mode',
+        enumValues: $3.EnrollmentMode.values)
     ..aOS(4, _omitFieldNames ? '' : 'hostname')
     ..aOS(7, _omitFieldNames ? '' : 'requestId')
     ..hasRequiredFields = false;
@@ -316,31 +316,31 @@ class EnrollRequest extends $pb.GeneratedMessage {
   static EnrollRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
-  $2.EnrollmentMode get mode => $_getN(2);
+  $3.EnrollmentMode get mode => $_getN(2);
   @$pb.TagNumber(3)
-  set mode($2.EnrollmentMode value) => $_setField(3, value);
+  set mode($3.EnrollmentMode value) => $_setField(3, value);
   @$pb.TagNumber(3)
   $core.bool hasMode() => $_has(2);
   @$pb.TagNumber(3)
@@ -372,7 +372,7 @@ class EnrollRequest extends $pb.GeneratedMessage {
 
 class EnrollResponse extends $pb.GeneratedMessage {
   factory EnrollResponse({
-    $2.EnrollmentAttempt? attempt,
+    $3.EnrollmentAttempt? attempt,
   }) {
     final result = create();
     if (attempt != null) result.attempt = attempt;
@@ -392,8 +392,8 @@ class EnrollResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'EnrollResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$2.EnrollmentAttempt>(3, _omitFieldNames ? '' : 'attempt',
-        subBuilder: $2.EnrollmentAttempt.create)
+    ..aOM<$3.EnrollmentAttempt>(3, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $3.EnrollmentAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -416,15 +416,15 @@ class EnrollResponse extends $pb.GeneratedMessage {
   static EnrollResponse? _defaultInstance;
 
   @$pb.TagNumber(3)
-  $2.EnrollmentAttempt get attempt => $_getN(0);
+  $3.EnrollmentAttempt get attempt => $_getN(0);
   @$pb.TagNumber(3)
-  set attempt($2.EnrollmentAttempt value) => $_setField(3, value);
+  set attempt($3.EnrollmentAttempt value) => $_setField(3, value);
   @$pb.TagNumber(3)
   $core.bool hasAttempt() => $_has(0);
   @$pb.TagNumber(3)
   void clearAttempt() => $_clearField(3);
   @$pb.TagNumber(3)
-  $2.EnrollmentAttempt ensureAttempt() => $_ensure(0);
+  $3.EnrollmentAttempt ensureAttempt() => $_ensure(0);
 }
 
 enum GetEnrollmentAttemptRequest_Selector {
@@ -436,7 +436,7 @@ enum GetEnrollmentAttemptRequest_Selector {
 
 class GetEnrollmentAttemptRequest extends $pb.GeneratedMessage {
   factory GetEnrollmentAttemptRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
     $core.String? attemptId,
     $core.String? requestId,
     $core.bool? current,
@@ -470,8 +470,8 @@ class GetEnrollmentAttemptRequest extends $pb.GeneratedMessage {
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
     ..oo(0, [2, 3, 4])
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(2, _omitFieldNames ? '' : 'attemptId')
     ..aOS(3, _omitFieldNames ? '' : 'requestId')
     ..aOB(4, _omitFieldNames ? '' : 'current')
@@ -512,15 +512,15 @@ class GetEnrollmentAttemptRequest extends $pb.GeneratedMessage {
   /// Empty profile means the active profile. OS owner authorization is mandatory;
   /// this read never claims an unowned installation or exports native grants.
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 
   @$pb.TagNumber(2)
   $core.String get attemptId => $_getSZ(1);
@@ -558,7 +558,7 @@ class GetEnrollmentAttemptRequest extends $pb.GeneratedMessage {
 
 class GetEnrollmentAttemptResponse extends $pb.GeneratedMessage {
   factory GetEnrollmentAttemptResponse({
-    $2.EnrollmentAttempt? attempt,
+    $3.EnrollmentAttempt? attempt,
   }) {
     final result = create();
     if (attempt != null) result.attempt = attempt;
@@ -578,8 +578,8 @@ class GetEnrollmentAttemptResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetEnrollmentAttemptResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$2.EnrollmentAttempt>(1, _omitFieldNames ? '' : 'attempt',
-        subBuilder: $2.EnrollmentAttempt.create)
+    ..aOM<$3.EnrollmentAttempt>(1, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $3.EnrollmentAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -605,22 +605,22 @@ class GetEnrollmentAttemptResponse extends $pb.GeneratedMessage {
   static GetEnrollmentAttemptResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $2.EnrollmentAttempt get attempt => $_getN(0);
+  $3.EnrollmentAttempt get attempt => $_getN(0);
   @$pb.TagNumber(1)
-  set attempt($2.EnrollmentAttempt value) => $_setField(1, value);
+  set attempt($3.EnrollmentAttempt value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasAttempt() => $_has(0);
   @$pb.TagNumber(1)
   void clearAttempt() => $_clearField(1);
   @$pb.TagNumber(1)
-  $2.EnrollmentAttempt ensureAttempt() => $_ensure(0);
+  $3.EnrollmentAttempt ensureAttempt() => $_ensure(0);
 }
 
 class ListEnrollmentTargetsRequest extends $pb.GeneratedMessage {
   factory ListEnrollmentTargetsRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
     $core.String? attemptId,
-    $1.PageRequest? page,
+    $2.PageRequest? page,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -642,11 +642,11 @@ class ListEnrollmentTargetsRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListEnrollmentTargetsRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(2, _omitFieldNames ? '' : 'attemptId')
-    ..aOM<$1.PageRequest>(3, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageRequest.create)
+    ..aOM<$2.PageRequest>(3, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageRequest.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -672,15 +672,15 @@ class ListEnrollmentTargetsRequest extends $pb.GeneratedMessage {
   static ListEnrollmentTargetsRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 
   @$pb.TagNumber(2)
   $core.String get attemptId => $_getSZ(1);
@@ -692,22 +692,22 @@ class ListEnrollmentTargetsRequest extends $pb.GeneratedMessage {
   void clearAttemptId() => $_clearField(2);
 
   @$pb.TagNumber(3)
-  $1.PageRequest get page => $_getN(2);
+  $2.PageRequest get page => $_getN(2);
   @$pb.TagNumber(3)
-  set page($1.PageRequest value) => $_setField(3, value);
+  set page($2.PageRequest value) => $_setField(3, value);
   @$pb.TagNumber(3)
   $core.bool hasPage() => $_has(2);
   @$pb.TagNumber(3)
   void clearPage() => $_clearField(3);
   @$pb.TagNumber(3)
-  $1.PageRequest ensurePage() => $_ensure(2);
+  $2.PageRequest ensurePage() => $_ensure(2);
 }
 
 class ListEnrollmentTargetsResponse extends $pb.GeneratedMessage {
   factory ListEnrollmentTargetsResponse({
-    $core.Iterable<$2.EnrollmentTarget>? targets,
-    $1.PageResponse? page,
-    $1.SnapshotMetadata? metadata,
+    $core.Iterable<$3.EnrollmentTarget>? targets,
+    $2.PageResponse? page,
+    $2.SnapshotMetadata? metadata,
   }) {
     final result = create();
     if (targets != null) result.targets.addAll(targets);
@@ -729,12 +729,12 @@ class ListEnrollmentTargetsResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListEnrollmentTargetsResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..pPM<$2.EnrollmentTarget>(1, _omitFieldNames ? '' : 'targets',
-        subBuilder: $2.EnrollmentTarget.create)
-    ..aOM<$1.PageResponse>(2, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageResponse.create)
-    ..aOM<$1.SnapshotMetadata>(3, _omitFieldNames ? '' : 'metadata',
-        subBuilder: $1.SnapshotMetadata.create)
+    ..pPM<$3.EnrollmentTarget>(1, _omitFieldNames ? '' : 'targets',
+        subBuilder: $3.EnrollmentTarget.create)
+    ..aOM<$2.PageResponse>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageResponse.create)
+    ..aOM<$2.SnapshotMetadata>(3, _omitFieldNames ? '' : 'metadata',
+        subBuilder: $2.SnapshotMetadata.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -760,35 +760,35 @@ class ListEnrollmentTargetsResponse extends $pb.GeneratedMessage {
   static ListEnrollmentTargetsResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $pb.PbList<$2.EnrollmentTarget> get targets => $_getList(0);
+  $pb.PbList<$3.EnrollmentTarget> get targets => $_getList(0);
 
   @$pb.TagNumber(2)
-  $1.PageResponse get page => $_getN(1);
+  $2.PageResponse get page => $_getN(1);
   @$pb.TagNumber(2)
-  set page($1.PageResponse value) => $_setField(2, value);
+  set page($2.PageResponse value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasPage() => $_has(1);
   @$pb.TagNumber(2)
   void clearPage() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.PageResponse ensurePage() => $_ensure(1);
+  $2.PageResponse ensurePage() => $_ensure(1);
 
   @$pb.TagNumber(3)
-  $1.SnapshotMetadata get metadata => $_getN(2);
+  $2.SnapshotMetadata get metadata => $_getN(2);
   @$pb.TagNumber(3)
-  set metadata($1.SnapshotMetadata value) => $_setField(3, value);
+  set metadata($2.SnapshotMetadata value) => $_setField(3, value);
   @$pb.TagNumber(3)
   $core.bool hasMetadata() => $_has(2);
   @$pb.TagNumber(3)
   void clearMetadata() => $_clearField(3);
   @$pb.TagNumber(3)
-  $1.SnapshotMetadata ensureMetadata() => $_ensure(2);
+  $2.SnapshotMetadata ensureMetadata() => $_ensure(2);
 }
 
 class SelectEnrollmentTargetRequest extends $pb.GeneratedMessage {
   factory SelectEnrollmentTargetRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     $core.String? attemptId,
     $core.String? accountId,
     $core.String? networkId,
@@ -815,10 +815,10 @@ class SelectEnrollmentTargetRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SelectEnrollmentTargetRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(3, _omitFieldNames ? '' : 'attemptId')
     ..aOS(4, _omitFieldNames ? '' : 'accountId')
     ..aOS(5, _omitFieldNames ? '' : 'networkId')
@@ -847,26 +847,26 @@ class SelectEnrollmentTargetRequest extends $pb.GeneratedMessage {
   static SelectEnrollmentTargetRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
   $core.String get attemptId => $_getSZ(2);
@@ -898,7 +898,7 @@ class SelectEnrollmentTargetRequest extends $pb.GeneratedMessage {
 
 class SelectEnrollmentTargetResponse extends $pb.GeneratedMessage {
   factory SelectEnrollmentTargetResponse({
-    $2.EnrollmentAttempt? attempt,
+    $3.EnrollmentAttempt? attempt,
   }) {
     final result = create();
     if (attempt != null) result.attempt = attempt;
@@ -918,8 +918,8 @@ class SelectEnrollmentTargetResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SelectEnrollmentTargetResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$2.EnrollmentAttempt>(1, _omitFieldNames ? '' : 'attempt',
-        subBuilder: $2.EnrollmentAttempt.create)
+    ..aOM<$3.EnrollmentAttempt>(1, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $3.EnrollmentAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -945,21 +945,21 @@ class SelectEnrollmentTargetResponse extends $pb.GeneratedMessage {
   static SelectEnrollmentTargetResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $2.EnrollmentAttempt get attempt => $_getN(0);
+  $3.EnrollmentAttempt get attempt => $_getN(0);
   @$pb.TagNumber(1)
-  set attempt($2.EnrollmentAttempt value) => $_setField(1, value);
+  set attempt($3.EnrollmentAttempt value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasAttempt() => $_has(0);
   @$pb.TagNumber(1)
   void clearAttempt() => $_clearField(1);
   @$pb.TagNumber(1)
-  $2.EnrollmentAttempt ensureAttempt() => $_ensure(0);
+  $3.EnrollmentAttempt ensureAttempt() => $_ensure(0);
 }
 
 class CancelEnrollmentAttemptRequest extends $pb.GeneratedMessage {
   factory CancelEnrollmentAttemptRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     $core.String? attemptId,
   }) {
     final result = create();
@@ -982,10 +982,10 @@ class CancelEnrollmentAttemptRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'CancelEnrollmentAttemptRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(3, _omitFieldNames ? '' : 'attemptId')
     ..hasRequiredFields = false;
 
@@ -1012,26 +1012,26 @@ class CancelEnrollmentAttemptRequest extends $pb.GeneratedMessage {
   static CancelEnrollmentAttemptRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
   $core.String get attemptId => $_getSZ(2);
@@ -1045,7 +1045,7 @@ class CancelEnrollmentAttemptRequest extends $pb.GeneratedMessage {
 
 class CancelEnrollmentAttemptResponse extends $pb.GeneratedMessage {
   factory CancelEnrollmentAttemptResponse({
-    $2.EnrollmentAttempt? attempt,
+    $3.EnrollmentAttempt? attempt,
   }) {
     final result = create();
     if (attempt != null) result.attempt = attempt;
@@ -1065,8 +1065,8 @@ class CancelEnrollmentAttemptResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'CancelEnrollmentAttemptResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$2.EnrollmentAttempt>(1, _omitFieldNames ? '' : 'attempt',
-        subBuilder: $2.EnrollmentAttempt.create)
+    ..aOM<$3.EnrollmentAttempt>(1, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $3.EnrollmentAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1093,21 +1093,21 @@ class CancelEnrollmentAttemptResponse extends $pb.GeneratedMessage {
   static CancelEnrollmentAttemptResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $2.EnrollmentAttempt get attempt => $_getN(0);
+  $3.EnrollmentAttempt get attempt => $_getN(0);
   @$pb.TagNumber(1)
-  set attempt($2.EnrollmentAttempt value) => $_setField(1, value);
+  set attempt($3.EnrollmentAttempt value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasAttempt() => $_has(0);
   @$pb.TagNumber(1)
   void clearAttempt() => $_clearField(1);
   @$pb.TagNumber(1)
-  $2.EnrollmentAttempt ensureAttempt() => $_ensure(0);
+  $3.EnrollmentAttempt ensureAttempt() => $_ensure(0);
 }
 
 class ConnectRequest extends $pb.GeneratedMessage {
   factory ConnectRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     $core.bool? async,
   }) {
     final result = create();
@@ -1130,10 +1130,10 @@ class ConnectRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ConnectRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOB(3, _omitFieldNames ? '' : 'async')
     ..hasRequiredFields = false;
 
@@ -1157,26 +1157,26 @@ class ConnectRequest extends $pb.GeneratedMessage {
   static ConnectRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   /// False waits for a connected tunnel or failure; true returns after intent
   /// is accepted, with subsequent connection changes in GetStatus/WatchEvents.
@@ -1230,8 +1230,8 @@ class ConnectResponse extends $pb.GeneratedMessage {
 
 class DisconnectRequest extends $pb.GeneratedMessage {
   factory DisconnectRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -1252,10 +1252,10 @@ class DisconnectRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'DisconnectRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1278,31 +1278,31 @@ class DisconnectRequest extends $pb.GeneratedMessage {
   static DisconnectRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 }
 
 class DisconnectResponse extends $pb.GeneratedMessage {
   factory DisconnectResponse({
-    $1.ChangeResult? change,
+    $2.ChangeResult? change,
   }) {
     final result = create();
     if (change != null) result.change = change;
@@ -1322,8 +1322,8 @@ class DisconnectResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'DisconnectResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ChangeResult>(1, _omitFieldNames ? '' : 'change',
-        subBuilder: $1.ChangeResult.create)
+    ..aOM<$2.ChangeResult>(1, _omitFieldNames ? '' : 'change',
+        subBuilder: $2.ChangeResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1346,20 +1346,20 @@ class DisconnectResponse extends $pb.GeneratedMessage {
   static DisconnectResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ChangeResult get change => $_getN(0);
+  $2.ChangeResult get change => $_getN(0);
   @$pb.TagNumber(1)
-  set change($1.ChangeResult value) => $_setField(1, value);
+  set change($2.ChangeResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasChange() => $_has(0);
   @$pb.TagNumber(1)
   void clearChange() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ChangeResult ensureChange() => $_ensure(0);
+  $2.ChangeResult ensureChange() => $_ensure(0);
 }
 
 class GetServerIdentityRequest extends $pb.GeneratedMessage {
   factory GetServerIdentityRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -1379,8 +1379,8 @@ class GetServerIdentityRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetServerIdentityRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1404,21 +1404,21 @@ class GetServerIdentityRequest extends $pb.GeneratedMessage {
   static GetServerIdentityRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 }
 
 class GetServerIdentityResponse extends $pb.GeneratedMessage {
   factory GetServerIdentityResponse({
-    $2.ServerIdentity? identity,
-    $1.SnapshotMetadata? metadata,
+    $3.ServerIdentity? identity,
+    $2.SnapshotMetadata? metadata,
   }) {
     final result = create();
     if (identity != null) result.identity = identity;
@@ -1439,10 +1439,10 @@ class GetServerIdentityResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetServerIdentityResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$2.ServerIdentity>(1, _omitFieldNames ? '' : 'identity',
-        subBuilder: $2.ServerIdentity.create)
-    ..aOM<$1.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
-        subBuilder: $1.SnapshotMetadata.create)
+    ..aOM<$3.ServerIdentity>(1, _omitFieldNames ? '' : 'identity',
+        subBuilder: $3.ServerIdentity.create)
+    ..aOM<$2.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
+        subBuilder: $2.SnapshotMetadata.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1466,32 +1466,32 @@ class GetServerIdentityResponse extends $pb.GeneratedMessage {
   static GetServerIdentityResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $2.ServerIdentity get identity => $_getN(0);
+  $3.ServerIdentity get identity => $_getN(0);
   @$pb.TagNumber(1)
-  set identity($2.ServerIdentity value) => $_setField(1, value);
+  set identity($3.ServerIdentity value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasIdentity() => $_has(0);
   @$pb.TagNumber(1)
   void clearIdentity() => $_clearField(1);
   @$pb.TagNumber(1)
-  $2.ServerIdentity ensureIdentity() => $_ensure(0);
+  $3.ServerIdentity ensureIdentity() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.SnapshotMetadata get metadata => $_getN(1);
+  $2.SnapshotMetadata get metadata => $_getN(1);
   @$pb.TagNumber(2)
-  set metadata($1.SnapshotMetadata value) => $_setField(2, value);
+  set metadata($2.SnapshotMetadata value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasMetadata() => $_has(1);
   @$pb.TagNumber(2)
   void clearMetadata() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.SnapshotMetadata ensureMetadata() => $_ensure(1);
+  $2.SnapshotMetadata ensureMetadata() => $_ensure(1);
 }
 
 class TrustServerIdentityRequest extends $pb.GeneratedMessage {
   factory TrustServerIdentityRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     $core.String? confirmedControlOrigin,
     $core.String? confirmedKeyId,
     $core.String? confirmedAnnouncementId,
@@ -1520,10 +1520,10 @@ class TrustServerIdentityRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'TrustServerIdentityRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(3, _omitFieldNames ? '' : 'confirmedControlOrigin')
     ..aOS(4, _omitFieldNames ? '' : 'confirmedKeyId')
     ..aOS(5, _omitFieldNames ? '' : 'confirmedAnnouncementId')
@@ -1551,26 +1551,26 @@ class TrustServerIdentityRequest extends $pb.GeneratedMessage {
   static TrustServerIdentityRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
   $core.String get confirmedControlOrigin => $_getSZ(2);
@@ -1602,7 +1602,7 @@ class TrustServerIdentityRequest extends $pb.GeneratedMessage {
 
 class TrustServerIdentityResponse extends $pb.GeneratedMessage {
   factory TrustServerIdentityResponse({
-    $1.ChangeResult? change,
+    $2.ChangeResult? change,
   }) {
     final result = create();
     if (change != null) result.change = change;
@@ -1622,8 +1622,8 @@ class TrustServerIdentityResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'TrustServerIdentityResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ChangeResult>(1, _omitFieldNames ? '' : 'change',
-        subBuilder: $1.ChangeResult.create)
+    ..aOM<$2.ChangeResult>(1, _omitFieldNames ? '' : 'change',
+        subBuilder: $2.ChangeResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1649,21 +1649,21 @@ class TrustServerIdentityResponse extends $pb.GeneratedMessage {
   static TrustServerIdentityResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ChangeResult get change => $_getN(0);
+  $2.ChangeResult get change => $_getN(0);
   @$pb.TagNumber(1)
-  set change($1.ChangeResult value) => $_setField(1, value);
+  set change($2.ChangeResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasChange() => $_has(0);
   @$pb.TagNumber(1)
   void clearChange() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ChangeResult ensureChange() => $_ensure(0);
+  $2.ChangeResult ensureChange() => $_ensure(0);
 }
 
 class LogoutRequest extends $pb.GeneratedMessage {
   factory LogoutRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -1684,10 +1684,10 @@ class LogoutRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'LogoutRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1710,31 +1710,31 @@ class LogoutRequest extends $pb.GeneratedMessage {
   static LogoutRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 }
 
 class LogoutResponse extends $pb.GeneratedMessage {
   factory LogoutResponse({
-    $1.CleanupResult? cleanup,
+    $2.CleanupResult? cleanup,
   }) {
     final result = create();
     if (cleanup != null) result.cleanup = cleanup;
@@ -1754,8 +1754,8 @@ class LogoutResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'LogoutResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.CleanupResult>(1, _omitFieldNames ? '' : 'cleanup',
-        subBuilder: $1.CleanupResult.create)
+    ..aOM<$2.CleanupResult>(1, _omitFieldNames ? '' : 'cleanup',
+        subBuilder: $2.CleanupResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1778,21 +1778,21 @@ class LogoutResponse extends $pb.GeneratedMessage {
   static LogoutResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.CleanupResult get cleanup => $_getN(0);
+  $2.CleanupResult get cleanup => $_getN(0);
   @$pb.TagNumber(1)
-  set cleanup($1.CleanupResult value) => $_setField(1, value);
+  set cleanup($2.CleanupResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasCleanup() => $_has(0);
   @$pb.TagNumber(1)
   void clearCleanup() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.CleanupResult ensureCleanup() => $_ensure(0);
+  $2.CleanupResult ensureCleanup() => $_ensure(0);
 }
 
 class ForgetLocalEnrollmentRequest extends $pb.GeneratedMessage {
   factory ForgetLocalEnrollmentRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     $core.bool? confirmed,
   }) {
     final result = create();
@@ -1815,10 +1815,10 @@ class ForgetLocalEnrollmentRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ForgetLocalEnrollmentRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOB(3, _omitFieldNames ? '' : 'confirmed')
     ..hasRequiredFields = false;
 
@@ -1845,26 +1845,26 @@ class ForgetLocalEnrollmentRequest extends $pb.GeneratedMessage {
   static ForgetLocalEnrollmentRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
   $core.bool get confirmed => $_getBF(2);
@@ -1878,7 +1878,7 @@ class ForgetLocalEnrollmentRequest extends $pb.GeneratedMessage {
 
 class ForgetLocalEnrollmentResponse extends $pb.GeneratedMessage {
   factory ForgetLocalEnrollmentResponse({
-    $1.CleanupResult? cleanup,
+    $2.CleanupResult? cleanup,
   }) {
     final result = create();
     if (cleanup != null) result.cleanup = cleanup;
@@ -1898,8 +1898,8 @@ class ForgetLocalEnrollmentResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ForgetLocalEnrollmentResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.CleanupResult>(1, _omitFieldNames ? '' : 'cleanup',
-        subBuilder: $1.CleanupResult.create)
+    ..aOM<$2.CleanupResult>(1, _omitFieldNames ? '' : 'cleanup',
+        subBuilder: $2.CleanupResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1925,21 +1925,21 @@ class ForgetLocalEnrollmentResponse extends $pb.GeneratedMessage {
   static ForgetLocalEnrollmentResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.CleanupResult get cleanup => $_getN(0);
+  $2.CleanupResult get cleanup => $_getN(0);
   @$pb.TagNumber(1)
-  set cleanup($1.CleanupResult value) => $_setField(1, value);
+  set cleanup($2.CleanupResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasCleanup() => $_has(0);
   @$pb.TagNumber(1)
   void clearCleanup() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.CleanupResult ensureCleanup() => $_ensure(0);
+  $2.CleanupResult ensureCleanup() => $_ensure(0);
 }
 
 class ListNetworksRequest extends $pb.GeneratedMessage {
   factory ListNetworksRequest({
-    $1.ProfileRef? profile,
-    $1.PageRequest? page,
+    $2.ProfileRef? profile,
+    $2.PageRequest? page,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -1960,10 +1960,10 @@ class ListNetworksRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListNetworksRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
-    ..aOM<$1.PageRequest>(2, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageRequest.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
+    ..aOM<$2.PageRequest>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageRequest.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1986,33 +1986,33 @@ class ListNetworksRequest extends $pb.GeneratedMessage {
   static ListNetworksRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.PageRequest get page => $_getN(1);
+  $2.PageRequest get page => $_getN(1);
   @$pb.TagNumber(2)
-  set page($1.PageRequest value) => $_setField(2, value);
+  set page($2.PageRequest value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasPage() => $_has(1);
   @$pb.TagNumber(2)
   void clearPage() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.PageRequest ensurePage() => $_ensure(1);
+  $2.PageRequest ensurePage() => $_ensure(1);
 }
 
 class ListNetworksResponse extends $pb.GeneratedMessage {
   factory ListNetworksResponse({
-    $core.Iterable<$2.Network>? networks,
+    $core.Iterable<$3.Network>? networks,
     $core.String? selectedNetworkId,
-    $1.PageResponse? page,
+    $2.PageResponse? page,
   }) {
     final result = create();
     if (networks != null) result.networks.addAll(networks);
@@ -2034,11 +2034,11 @@ class ListNetworksResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListNetworksResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..pPM<$2.Network>(1, _omitFieldNames ? '' : 'networks',
-        subBuilder: $2.Network.create)
+    ..pPM<$3.Network>(1, _omitFieldNames ? '' : 'networks',
+        subBuilder: $3.Network.create)
     ..aOS(2, _omitFieldNames ? '' : 'selectedNetworkId')
-    ..aOM<$1.PageResponse>(3, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageResponse.create)
+    ..aOM<$2.PageResponse>(3, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageResponse.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2061,7 +2061,7 @@ class ListNetworksResponse extends $pb.GeneratedMessage {
   static ListNetworksResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $pb.PbList<$2.Network> get networks => $_getList(0);
+  $pb.PbList<$3.Network> get networks => $_getList(0);
 
   @$pb.TagNumber(2)
   $core.String get selectedNetworkId => $_getSZ(1);
@@ -2073,21 +2073,21 @@ class ListNetworksResponse extends $pb.GeneratedMessage {
   void clearSelectedNetworkId() => $_clearField(2);
 
   @$pb.TagNumber(3)
-  $1.PageResponse get page => $_getN(2);
+  $2.PageResponse get page => $_getN(2);
   @$pb.TagNumber(3)
-  set page($1.PageResponse value) => $_setField(3, value);
+  set page($2.PageResponse value) => $_setField(3, value);
   @$pb.TagNumber(3)
   $core.bool hasPage() => $_has(2);
   @$pb.TagNumber(3)
   void clearPage() => $_clearField(3);
   @$pb.TagNumber(3)
-  $1.PageResponse ensurePage() => $_ensure(2);
+  $2.PageResponse ensurePage() => $_ensure(2);
 }
 
 class SelectNetworkRequest extends $pb.GeneratedMessage {
   factory SelectNetworkRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     $core.String? networkId,
   }) {
     final result = create();
@@ -2110,10 +2110,10 @@ class SelectNetworkRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SelectNetworkRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(3, _omitFieldNames ? '' : 'networkId')
     ..hasRequiredFields = false;
 
@@ -2137,26 +2137,26 @@ class SelectNetworkRequest extends $pb.GeneratedMessage {
   static SelectNetworkRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
   $core.String get networkId => $_getSZ(2);
@@ -2170,8 +2170,8 @@ class SelectNetworkRequest extends $pb.GeneratedMessage {
 
 class SelectNetworkResponse extends $pb.GeneratedMessage {
   factory SelectNetworkResponse({
-    $1.SelectionResult? selection,
-    $1.ConnectionContinuity? continuity,
+    $2.SelectionResult? selection,
+    $2.ConnectionContinuity? continuity,
   }) {
     final result = create();
     if (selection != null) result.selection = selection;
@@ -2192,10 +2192,10 @@ class SelectNetworkResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SelectNetworkResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.SelectionResult>(1, _omitFieldNames ? '' : 'selection',
-        subBuilder: $1.SelectionResult.create)
-    ..aE<$1.ConnectionContinuity>(2, _omitFieldNames ? '' : 'continuity',
-        enumValues: $1.ConnectionContinuity.values)
+    ..aOM<$2.SelectionResult>(1, _omitFieldNames ? '' : 'selection',
+        subBuilder: $2.SelectionResult.create)
+    ..aE<$2.ConnectionContinuity>(2, _omitFieldNames ? '' : 'continuity',
+        enumValues: $2.ConnectionContinuity.values)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2219,20 +2219,20 @@ class SelectNetworkResponse extends $pb.GeneratedMessage {
   static SelectNetworkResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.SelectionResult get selection => $_getN(0);
+  $2.SelectionResult get selection => $_getN(0);
   @$pb.TagNumber(1)
-  set selection($1.SelectionResult value) => $_setField(1, value);
+  set selection($2.SelectionResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasSelection() => $_has(0);
   @$pb.TagNumber(1)
   void clearSelection() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.SelectionResult ensureSelection() => $_ensure(0);
+  $2.SelectionResult ensureSelection() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ConnectionContinuity get continuity => $_getN(1);
+  $2.ConnectionContinuity get continuity => $_getN(1);
   @$pb.TagNumber(2)
-  set continuity($1.ConnectionContinuity value) => $_setField(2, value);
+  set continuity($2.ConnectionContinuity value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasContinuity() => $_has(1);
   @$pb.TagNumber(2)
@@ -2241,8 +2241,8 @@ class SelectNetworkResponse extends $pb.GeneratedMessage {
 
 class ListPeersRequest extends $pb.GeneratedMessage {
   factory ListPeersRequest({
-    $1.ProfileRef? profile,
-    $1.PageRequest? page,
+    $2.ProfileRef? profile,
+    $2.PageRequest? page,
     $core.String? search,
   }) {
     final result = create();
@@ -2265,10 +2265,10 @@ class ListPeersRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListPeersRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
-    ..aOM<$1.PageRequest>(2, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageRequest.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
+    ..aOM<$2.PageRequest>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageRequest.create)
     ..aOS(3, _omitFieldNames ? '' : 'search')
     ..hasRequiredFields = false;
 
@@ -2292,26 +2292,26 @@ class ListPeersRequest extends $pb.GeneratedMessage {
   static ListPeersRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.PageRequest get page => $_getN(1);
+  $2.PageRequest get page => $_getN(1);
   @$pb.TagNumber(2)
-  set page($1.PageRequest value) => $_setField(2, value);
+  set page($2.PageRequest value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasPage() => $_has(1);
   @$pb.TagNumber(2)
   void clearPage() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.PageRequest ensurePage() => $_ensure(1);
+  $2.PageRequest ensurePage() => $_ensure(1);
 
   @$pb.TagNumber(3)
   $core.String get search => $_getSZ(2);
@@ -2325,9 +2325,9 @@ class ListPeersRequest extends $pb.GeneratedMessage {
 
 class ListPeersResponse extends $pb.GeneratedMessage {
   factory ListPeersResponse({
-    $core.Iterable<$2.Peer>? peers,
-    $1.PageResponse? page,
-    $2.AgentSnapshotState? snapshotState,
+    $core.Iterable<$3.Peer>? peers,
+    $2.PageResponse? page,
+    $3.AgentSnapshotState? snapshotState,
     $fixnum.Int64? mapRevision,
     $fixnum.Int64? targetMapRevision,
   }) {
@@ -2353,12 +2353,12 @@ class ListPeersResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListPeersResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..pPM<$2.Peer>(1, _omitFieldNames ? '' : 'peers',
-        subBuilder: $2.Peer.create)
-    ..aOM<$1.PageResponse>(2, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageResponse.create)
-    ..aE<$2.AgentSnapshotState>(3, _omitFieldNames ? '' : 'snapshotState',
-        enumValues: $2.AgentSnapshotState.values)
+    ..pPM<$3.Peer>(1, _omitFieldNames ? '' : 'peers',
+        subBuilder: $3.Peer.create)
+    ..aOM<$2.PageResponse>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageResponse.create)
+    ..aE<$3.AgentSnapshotState>(3, _omitFieldNames ? '' : 'snapshotState',
+        enumValues: $3.AgentSnapshotState.values)
     ..a<$fixnum.Int64>(
         4, _omitFieldNames ? '' : 'mapRevision', $pb.PbFieldType.OU6,
         defaultOrMaker: $fixnum.Int64.ZERO)
@@ -2387,23 +2387,23 @@ class ListPeersResponse extends $pb.GeneratedMessage {
   static ListPeersResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $pb.PbList<$2.Peer> get peers => $_getList(0);
+  $pb.PbList<$3.Peer> get peers => $_getList(0);
 
   @$pb.TagNumber(2)
-  $1.PageResponse get page => $_getN(1);
+  $2.PageResponse get page => $_getN(1);
   @$pb.TagNumber(2)
-  set page($1.PageResponse value) => $_setField(2, value);
+  set page($2.PageResponse value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasPage() => $_has(1);
   @$pb.TagNumber(2)
   void clearPage() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.PageResponse ensurePage() => $_ensure(1);
+  $2.PageResponse ensurePage() => $_ensure(1);
 
   @$pb.TagNumber(3)
-  $2.AgentSnapshotState get snapshotState => $_getN(2);
+  $3.AgentSnapshotState get snapshotState => $_getN(2);
   @$pb.TagNumber(3)
-  set snapshotState($2.AgentSnapshotState value) => $_setField(3, value);
+  set snapshotState($3.AgentSnapshotState value) => $_setField(3, value);
   @$pb.TagNumber(3)
   $core.bool hasSnapshotState() => $_has(2);
   @$pb.TagNumber(3)
@@ -2430,7 +2430,7 @@ class ListPeersResponse extends $pb.GeneratedMessage {
 
 class GetDiagnosticsRequest extends $pb.GeneratedMessage {
   factory GetDiagnosticsRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -2450,8 +2450,8 @@ class GetDiagnosticsRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetDiagnosticsRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2475,20 +2475,20 @@ class GetDiagnosticsRequest extends $pb.GeneratedMessage {
   static GetDiagnosticsRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 }
 
 class GetDiagnosticsResponse extends $pb.GeneratedMessage {
   factory GetDiagnosticsResponse({
-    $2.Diagnostics? diagnostics,
+    $3.Diagnostics? diagnostics,
   }) {
     final result = create();
     if (diagnostics != null) result.diagnostics = diagnostics;
@@ -2508,8 +2508,8 @@ class GetDiagnosticsResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetDiagnosticsResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$2.Diagnostics>(1, _omitFieldNames ? '' : 'diagnostics',
-        subBuilder: $2.Diagnostics.create)
+    ..aOM<$3.Diagnostics>(1, _omitFieldNames ? '' : 'diagnostics',
+        subBuilder: $3.Diagnostics.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2533,21 +2533,21 @@ class GetDiagnosticsResponse extends $pb.GeneratedMessage {
   static GetDiagnosticsResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $2.Diagnostics get diagnostics => $_getN(0);
+  $3.Diagnostics get diagnostics => $_getN(0);
   @$pb.TagNumber(1)
-  set diagnostics($2.Diagnostics value) => $_setField(1, value);
+  set diagnostics($3.Diagnostics value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasDiagnostics() => $_has(0);
   @$pb.TagNumber(1)
   void clearDiagnostics() => $_clearField(1);
   @$pb.TagNumber(1)
-  $2.Diagnostics ensureDiagnostics() => $_ensure(0);
+  $3.Diagnostics ensureDiagnostics() => $_ensure(0);
 }
 
 class CreateDiagnosticsBundleRequest extends $pb.GeneratedMessage {
   factory CreateDiagnosticsBundleRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -2568,10 +2568,10 @@ class CreateDiagnosticsBundleRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'CreateDiagnosticsBundleRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2597,31 +2597,31 @@ class CreateDiagnosticsBundleRequest extends $pb.GeneratedMessage {
   static CreateDiagnosticsBundleRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 }
 
 class CreateDiagnosticsBundleResponse extends $pb.GeneratedMessage {
   factory CreateDiagnosticsBundleResponse({
-    $1.BundleResult? bundle,
+    $2.BundleResult? bundle,
   }) {
     final result = create();
     if (bundle != null) result.bundle = bundle;
@@ -2641,8 +2641,8 @@ class CreateDiagnosticsBundleResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'CreateDiagnosticsBundleResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.BundleResult>(1, _omitFieldNames ? '' : 'bundle',
-        subBuilder: $1.BundleResult.create)
+    ..aOM<$2.BundleResult>(1, _omitFieldNames ? '' : 'bundle',
+        subBuilder: $2.BundleResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2669,15 +2669,15 @@ class CreateDiagnosticsBundleResponse extends $pb.GeneratedMessage {
   static CreateDiagnosticsBundleResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.BundleResult get bundle => $_getN(0);
+  $2.BundleResult get bundle => $_getN(0);
   @$pb.TagNumber(1)
-  set bundle($1.BundleResult value) => $_setField(1, value);
+  set bundle($2.BundleResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasBundle() => $_has(0);
   @$pb.TagNumber(1)
   void clearBundle() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.BundleResult ensureBundle() => $_ensure(0);
+  $2.BundleResult ensureBundle() => $_ensure(0);
 }
 
 class ReadDiagnosticsBundleRequest extends $pb.GeneratedMessage {
@@ -2848,8 +2848,8 @@ class ReadDiagnosticsBundleResponse extends $pb.GeneratedMessage {
 
 class ListRecentLogsRequest extends $pb.GeneratedMessage {
   factory ListRecentLogsRequest({
-    $1.ProfileRef? profile,
-    $1.PageRequest? page,
+    $2.ProfileRef? profile,
+    $2.PageRequest? page,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -2870,10 +2870,10 @@ class ListRecentLogsRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListRecentLogsRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
-    ..aOM<$1.PageRequest>(2, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageRequest.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
+    ..aOM<$2.PageRequest>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageRequest.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2897,32 +2897,32 @@ class ListRecentLogsRequest extends $pb.GeneratedMessage {
   static ListRecentLogsRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.PageRequest get page => $_getN(1);
+  $2.PageRequest get page => $_getN(1);
   @$pb.TagNumber(2)
-  set page($1.PageRequest value) => $_setField(2, value);
+  set page($2.PageRequest value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasPage() => $_has(1);
   @$pb.TagNumber(2)
   void clearPage() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.PageRequest ensurePage() => $_ensure(1);
+  $2.PageRequest ensurePage() => $_ensure(1);
 }
 
 class ListRecentLogsResponse extends $pb.GeneratedMessage {
   factory ListRecentLogsResponse({
-    $core.Iterable<$2.LogEntry>? logs,
-    $1.PageResponse? page,
+    $core.Iterable<$3.LogEntry>? logs,
+    $2.PageResponse? page,
   }) {
     final result = create();
     if (logs != null) result.logs.addAll(logs);
@@ -2943,10 +2943,10 @@ class ListRecentLogsResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListRecentLogsResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..pPM<$2.LogEntry>(1, _omitFieldNames ? '' : 'logs',
-        subBuilder: $2.LogEntry.create)
-    ..aOM<$1.PageResponse>(2, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageResponse.create)
+    ..pPM<$3.LogEntry>(1, _omitFieldNames ? '' : 'logs',
+        subBuilder: $3.LogEntry.create)
+    ..aOM<$2.PageResponse>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageResponse.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2970,23 +2970,23 @@ class ListRecentLogsResponse extends $pb.GeneratedMessage {
   static ListRecentLogsResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $pb.PbList<$2.LogEntry> get logs => $_getList(0);
+  $pb.PbList<$3.LogEntry> get logs => $_getList(0);
 
   @$pb.TagNumber(2)
-  $1.PageResponse get page => $_getN(1);
+  $2.PageResponse get page => $_getN(1);
   @$pb.TagNumber(2)
-  set page($1.PageResponse value) => $_setField(2, value);
+  set page($2.PageResponse value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasPage() => $_has(1);
   @$pb.TagNumber(2)
   void clearPage() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.PageResponse ensurePage() => $_ensure(1);
+  $2.PageResponse ensurePage() => $_ensure(1);
 }
 
 class ListProfilesRequest extends $pb.GeneratedMessage {
   factory ListProfilesRequest({
-    $1.PageRequest? page,
+    $2.PageRequest? page,
   }) {
     final result = create();
     if (page != null) result.page = page;
@@ -3006,8 +3006,8 @@ class ListProfilesRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListProfilesRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.PageRequest>(1, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageRequest.create)
+    ..aOM<$2.PageRequest>(1, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageRequest.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3030,22 +3030,22 @@ class ListProfilesRequest extends $pb.GeneratedMessage {
   static ListProfilesRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.PageRequest get page => $_getN(0);
+  $2.PageRequest get page => $_getN(0);
   @$pb.TagNumber(1)
-  set page($1.PageRequest value) => $_setField(1, value);
+  set page($2.PageRequest value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasPage() => $_has(0);
   @$pb.TagNumber(1)
   void clearPage() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.PageRequest ensurePage() => $_ensure(0);
+  $2.PageRequest ensurePage() => $_ensure(0);
 }
 
 class ListProfilesResponse extends $pb.GeneratedMessage {
   factory ListProfilesResponse({
-    $core.Iterable<$2.Profile>? profiles,
+    $core.Iterable<$3.Profile>? profiles,
     $core.String? activeProfileId,
-    $1.PageResponse? page,
+    $2.PageResponse? page,
   }) {
     final result = create();
     if (profiles != null) result.profiles.addAll(profiles);
@@ -3067,11 +3067,11 @@ class ListProfilesResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListProfilesResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..pPM<$2.Profile>(1, _omitFieldNames ? '' : 'profiles',
-        subBuilder: $2.Profile.create)
+    ..pPM<$3.Profile>(1, _omitFieldNames ? '' : 'profiles',
+        subBuilder: $3.Profile.create)
     ..aOS(2, _omitFieldNames ? '' : 'activeProfileId')
-    ..aOM<$1.PageResponse>(3, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageResponse.create)
+    ..aOM<$2.PageResponse>(3, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageResponse.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3094,7 +3094,7 @@ class ListProfilesResponse extends $pb.GeneratedMessage {
   static ListProfilesResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $pb.PbList<$2.Profile> get profiles => $_getList(0);
+  $pb.PbList<$3.Profile> get profiles => $_getList(0);
 
   @$pb.TagNumber(2)
   $core.String get activeProfileId => $_getSZ(1);
@@ -3106,20 +3106,20 @@ class ListProfilesResponse extends $pb.GeneratedMessage {
   void clearActiveProfileId() => $_clearField(2);
 
   @$pb.TagNumber(3)
-  $1.PageResponse get page => $_getN(2);
+  $2.PageResponse get page => $_getN(2);
   @$pb.TagNumber(3)
-  set page($1.PageResponse value) => $_setField(3, value);
+  set page($2.PageResponse value) => $_setField(3, value);
   @$pb.TagNumber(3)
   $core.bool hasPage() => $_has(2);
   @$pb.TagNumber(3)
   void clearPage() => $_clearField(3);
   @$pb.TagNumber(3)
-  $1.PageResponse ensurePage() => $_ensure(2);
+  $2.PageResponse ensurePage() => $_ensure(2);
 }
 
 class CreateProfileRequest extends $pb.GeneratedMessage {
   factory CreateProfileRequest({
-    $1.MutationContext? mutation,
+    $2.MutationContext? mutation,
     $core.String? displayName,
     $core.String? controlOrigin,
   }) {
@@ -3143,8 +3143,8 @@ class CreateProfileRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'CreateProfileRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
     ..aOS(2, _omitFieldNames ? '' : 'displayName')
     ..aOS(3, _omitFieldNames ? '' : 'controlOrigin')
     ..hasRequiredFields = false;
@@ -3169,15 +3169,15 @@ class CreateProfileRequest extends $pb.GeneratedMessage {
   static CreateProfileRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
   $core.String get displayName => $_getSZ(1);
@@ -3200,7 +3200,7 @@ class CreateProfileRequest extends $pb.GeneratedMessage {
 
 class CreateProfileResponse extends $pb.GeneratedMessage {
   factory CreateProfileResponse({
-    $1.ProfileResult? profile,
+    $2.ProfileResult? profile,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -3220,8 +3220,8 @@ class CreateProfileResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'CreateProfileResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileResult>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileResult.create)
+    ..aOM<$2.ProfileResult>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3245,21 +3245,21 @@ class CreateProfileResponse extends $pb.GeneratedMessage {
   static CreateProfileResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileResult get profile => $_getN(0);
+  $2.ProfileResult get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileResult value) => $_setField(1, value);
+  set profile($2.ProfileResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileResult ensureProfile() => $_ensure(0);
+  $2.ProfileResult ensureProfile() => $_ensure(0);
 }
 
 class SelectProfileRequest extends $pb.GeneratedMessage {
   factory SelectProfileRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -3280,10 +3280,10 @@ class SelectProfileRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SelectProfileRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3306,32 +3306,32 @@ class SelectProfileRequest extends $pb.GeneratedMessage {
   static SelectProfileRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 }
 
 class SelectProfileResponse extends $pb.GeneratedMessage {
   factory SelectProfileResponse({
-    $1.SelectionResult? selection,
-    $1.ConnectionContinuity? continuity,
+    $2.SelectionResult? selection,
+    $2.ConnectionContinuity? continuity,
   }) {
     final result = create();
     if (selection != null) result.selection = selection;
@@ -3352,10 +3352,10 @@ class SelectProfileResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SelectProfileResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.SelectionResult>(1, _omitFieldNames ? '' : 'selection',
-        subBuilder: $1.SelectionResult.create)
-    ..aE<$1.ConnectionContinuity>(2, _omitFieldNames ? '' : 'continuity',
-        enumValues: $1.ConnectionContinuity.values)
+    ..aOM<$2.SelectionResult>(1, _omitFieldNames ? '' : 'selection',
+        subBuilder: $2.SelectionResult.create)
+    ..aE<$2.ConnectionContinuity>(2, _omitFieldNames ? '' : 'continuity',
+        enumValues: $2.ConnectionContinuity.values)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3379,20 +3379,20 @@ class SelectProfileResponse extends $pb.GeneratedMessage {
   static SelectProfileResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.SelectionResult get selection => $_getN(0);
+  $2.SelectionResult get selection => $_getN(0);
   @$pb.TagNumber(1)
-  set selection($1.SelectionResult value) => $_setField(1, value);
+  set selection($2.SelectionResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasSelection() => $_has(0);
   @$pb.TagNumber(1)
   void clearSelection() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.SelectionResult ensureSelection() => $_ensure(0);
+  $2.SelectionResult ensureSelection() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ConnectionContinuity get continuity => $_getN(1);
+  $2.ConnectionContinuity get continuity => $_getN(1);
   @$pb.TagNumber(2)
-  set continuity($1.ConnectionContinuity value) => $_setField(2, value);
+  set continuity($2.ConnectionContinuity value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasContinuity() => $_has(1);
   @$pb.TagNumber(2)
@@ -3401,8 +3401,8 @@ class SelectProfileResponse extends $pb.GeneratedMessage {
 
 class RenameProfileRequest extends $pb.GeneratedMessage {
   factory RenameProfileRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     $core.String? displayName,
   }) {
     final result = create();
@@ -3425,10 +3425,10 @@ class RenameProfileRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'RenameProfileRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(3, _omitFieldNames ? '' : 'displayName')
     ..hasRequiredFields = false;
 
@@ -3452,26 +3452,26 @@ class RenameProfileRequest extends $pb.GeneratedMessage {
   static RenameProfileRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
   $core.String get displayName => $_getSZ(2);
@@ -3485,7 +3485,7 @@ class RenameProfileRequest extends $pb.GeneratedMessage {
 
 class RenameProfileResponse extends $pb.GeneratedMessage {
   factory RenameProfileResponse({
-    $1.ChangeResult? change,
+    $2.ChangeResult? change,
   }) {
     final result = create();
     if (change != null) result.change = change;
@@ -3505,8 +3505,8 @@ class RenameProfileResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'RenameProfileResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ChangeResult>(1, _omitFieldNames ? '' : 'change',
-        subBuilder: $1.ChangeResult.create)
+    ..aOM<$2.ChangeResult>(1, _omitFieldNames ? '' : 'change',
+        subBuilder: $2.ChangeResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3530,21 +3530,21 @@ class RenameProfileResponse extends $pb.GeneratedMessage {
   static RenameProfileResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ChangeResult get change => $_getN(0);
+  $2.ChangeResult get change => $_getN(0);
   @$pb.TagNumber(1)
-  set change($1.ChangeResult value) => $_setField(1, value);
+  set change($2.ChangeResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasChange() => $_has(0);
   @$pb.TagNumber(1)
   void clearChange() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ChangeResult ensureChange() => $_ensure(0);
+  $2.ChangeResult ensureChange() => $_ensure(0);
 }
 
 class RemoveProfileRequest extends $pb.GeneratedMessage {
   factory RemoveProfileRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -3565,10 +3565,10 @@ class RemoveProfileRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'RemoveProfileRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3591,31 +3591,31 @@ class RemoveProfileRequest extends $pb.GeneratedMessage {
   static RemoveProfileRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 }
 
 class RemoveProfileResponse extends $pb.GeneratedMessage {
   factory RemoveProfileResponse({
-    $1.ChangeResult? change,
+    $2.ChangeResult? change,
   }) {
     final result = create();
     if (change != null) result.change = change;
@@ -3635,8 +3635,8 @@ class RemoveProfileResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'RemoveProfileResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ChangeResult>(1, _omitFieldNames ? '' : 'change',
-        subBuilder: $1.ChangeResult.create)
+    ..aOM<$2.ChangeResult>(1, _omitFieldNames ? '' : 'change',
+        subBuilder: $2.ChangeResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3660,20 +3660,20 @@ class RemoveProfileResponse extends $pb.GeneratedMessage {
   static RemoveProfileResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ChangeResult get change => $_getN(0);
+  $2.ChangeResult get change => $_getN(0);
   @$pb.TagNumber(1)
-  set change($1.ChangeResult value) => $_setField(1, value);
+  set change($2.ChangeResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasChange() => $_has(0);
   @$pb.TagNumber(1)
   void clearChange() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ChangeResult ensureChange() => $_ensure(0);
+  $2.ChangeResult ensureChange() => $_ensure(0);
 }
 
 class GetSessionRequest extends $pb.GeneratedMessage {
   factory GetSessionRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -3693,8 +3693,8 @@ class GetSessionRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetSessionRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3717,22 +3717,22 @@ class GetSessionRequest extends $pb.GeneratedMessage {
   static GetSessionRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 }
 
 class GetSessionResponse extends $pb.GeneratedMessage {
   factory GetSessionResponse({
-    $2.Session? session,
-    $1.SnapshotMetadata? metadata,
-    $2.SessionLoginAttempt? loginAttempt,
+    $3.Session? session,
+    $2.SnapshotMetadata? metadata,
+    $3.SessionLoginAttempt? loginAttempt,
   }) {
     final result = create();
     if (session != null) result.session = session;
@@ -3754,12 +3754,12 @@ class GetSessionResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetSessionResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$2.Session>(1, _omitFieldNames ? '' : 'session',
-        subBuilder: $2.Session.create)
-    ..aOM<$1.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
-        subBuilder: $1.SnapshotMetadata.create)
-    ..aOM<$2.SessionLoginAttempt>(3, _omitFieldNames ? '' : 'loginAttempt',
-        subBuilder: $2.SessionLoginAttempt.create)
+    ..aOM<$3.Session>(1, _omitFieldNames ? '' : 'session',
+        subBuilder: $3.Session.create)
+    ..aOM<$2.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
+        subBuilder: $2.SnapshotMetadata.create)
+    ..aOM<$3.SessionLoginAttempt>(3, _omitFieldNames ? '' : 'loginAttempt',
+        subBuilder: $3.SessionLoginAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3782,44 +3782,44 @@ class GetSessionResponse extends $pb.GeneratedMessage {
   static GetSessionResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $2.Session get session => $_getN(0);
+  $3.Session get session => $_getN(0);
   @$pb.TagNumber(1)
-  set session($2.Session value) => $_setField(1, value);
+  set session($3.Session value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasSession() => $_has(0);
   @$pb.TagNumber(1)
   void clearSession() => $_clearField(1);
   @$pb.TagNumber(1)
-  $2.Session ensureSession() => $_ensure(0);
+  $3.Session ensureSession() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.SnapshotMetadata get metadata => $_getN(1);
+  $2.SnapshotMetadata get metadata => $_getN(1);
   @$pb.TagNumber(2)
-  set metadata($1.SnapshotMetadata value) => $_setField(2, value);
+  set metadata($2.SnapshotMetadata value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasMetadata() => $_has(1);
   @$pb.TagNumber(2)
   void clearMetadata() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.SnapshotMetadata ensureMetadata() => $_ensure(1);
+  $2.SnapshotMetadata ensureMetadata() => $_ensure(1);
 
   /// Current persisted attempt when present; reading never starts a login.
   @$pb.TagNumber(3)
-  $2.SessionLoginAttempt get loginAttempt => $_getN(2);
+  $3.SessionLoginAttempt get loginAttempt => $_getN(2);
   @$pb.TagNumber(3)
-  set loginAttempt($2.SessionLoginAttempt value) => $_setField(3, value);
+  set loginAttempt($3.SessionLoginAttempt value) => $_setField(3, value);
   @$pb.TagNumber(3)
   $core.bool hasLoginAttempt() => $_has(2);
   @$pb.TagNumber(3)
   void clearLoginAttempt() => $_clearField(3);
   @$pb.TagNumber(3)
-  $2.SessionLoginAttempt ensureLoginAttempt() => $_ensure(2);
+  $3.SessionLoginAttempt ensureLoginAttempt() => $_ensure(2);
 }
 
 class StartSessionLoginRequest extends $pb.GeneratedMessage {
   factory StartSessionLoginRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     $core.String? requestId,
   }) {
     final result = create();
@@ -3842,10 +3842,10 @@ class StartSessionLoginRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'StartSessionLoginRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(3, _omitFieldNames ? '' : 'requestId')
     ..hasRequiredFields = false;
 
@@ -3870,26 +3870,26 @@ class StartSessionLoginRequest extends $pb.GeneratedMessage {
   static StartSessionLoginRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   /// Canonical UUID persisted before dispatch; bound to owner/profile.
   /// Matching retry returns the original attempt before stale CAS rejection;
@@ -3906,7 +3906,7 @@ class StartSessionLoginRequest extends $pb.GeneratedMessage {
 
 class StartSessionLoginResponse extends $pb.GeneratedMessage {
   factory StartSessionLoginResponse({
-    $2.SessionLoginAttempt? attempt,
+    $3.SessionLoginAttempt? attempt,
   }) {
     final result = create();
     if (attempt != null) result.attempt = attempt;
@@ -3926,8 +3926,8 @@ class StartSessionLoginResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'StartSessionLoginResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$2.SessionLoginAttempt>(1, _omitFieldNames ? '' : 'attempt',
-        subBuilder: $2.SessionLoginAttempt.create)
+    ..aOM<$3.SessionLoginAttempt>(1, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $3.SessionLoginAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3951,22 +3951,22 @@ class StartSessionLoginResponse extends $pb.GeneratedMessage {
   static StartSessionLoginResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $2.SessionLoginAttempt get attempt => $_getN(0);
+  $3.SessionLoginAttempt get attempt => $_getN(0);
   @$pb.TagNumber(1)
-  set attempt($2.SessionLoginAttempt value) => $_setField(1, value);
+  set attempt($3.SessionLoginAttempt value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasAttempt() => $_has(0);
   @$pb.TagNumber(1)
   void clearAttempt() => $_clearField(1);
   @$pb.TagNumber(1)
-  $2.SessionLoginAttempt ensureAttempt() => $_ensure(0);
+  $3.SessionLoginAttempt ensureAttempt() => $_ensure(0);
 }
 
 enum GetSessionLoginRequest_Selector { attemptId, requestId, current, notSet }
 
 class GetSessionLoginRequest extends $pb.GeneratedMessage {
   factory GetSessionLoginRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
     $core.String? attemptId,
     $core.String? requestId,
     $core.bool? current,
@@ -4000,8 +4000,8 @@ class GetSessionLoginRequest extends $pb.GeneratedMessage {
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
     ..oo(0, [2, 3, 4])
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(2, _omitFieldNames ? '' : 'attemptId')
     ..aOS(3, _omitFieldNames ? '' : 'requestId')
     ..aOB(4, _omitFieldNames ? '' : 'current')
@@ -4038,15 +4038,15 @@ class GetSessionLoginRequest extends $pb.GeneratedMessage {
   void clearSelector() => $_clearField($_whichOneof(0));
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 
   @$pb.TagNumber(2)
   $core.String get attemptId => $_getSZ(1);
@@ -4078,7 +4078,7 @@ class GetSessionLoginRequest extends $pb.GeneratedMessage {
 
 class GetSessionLoginResponse extends $pb.GeneratedMessage {
   factory GetSessionLoginResponse({
-    $2.SessionLoginAttempt? attempt,
+    $3.SessionLoginAttempt? attempt,
   }) {
     final result = create();
     if (attempt != null) result.attempt = attempt;
@@ -4098,8 +4098,8 @@ class GetSessionLoginResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetSessionLoginResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$2.SessionLoginAttempt>(1, _omitFieldNames ? '' : 'attempt',
-        subBuilder: $2.SessionLoginAttempt.create)
+    ..aOM<$3.SessionLoginAttempt>(1, _omitFieldNames ? '' : 'attempt',
+        subBuilder: $3.SessionLoginAttempt.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4123,21 +4123,21 @@ class GetSessionLoginResponse extends $pb.GeneratedMessage {
   static GetSessionLoginResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $2.SessionLoginAttempt get attempt => $_getN(0);
+  $3.SessionLoginAttempt get attempt => $_getN(0);
   @$pb.TagNumber(1)
-  set attempt($2.SessionLoginAttempt value) => $_setField(1, value);
+  set attempt($3.SessionLoginAttempt value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasAttempt() => $_has(0);
   @$pb.TagNumber(1)
   void clearAttempt() => $_clearField(1);
   @$pb.TagNumber(1)
-  $2.SessionLoginAttempt ensureAttempt() => $_ensure(0);
+  $3.SessionLoginAttempt ensureAttempt() => $_ensure(0);
 }
 
 class ListExitNodesRequest extends $pb.GeneratedMessage {
   factory ListExitNodesRequest({
-    $1.ProfileRef? profile,
-    $1.PageRequest? page,
+    $2.ProfileRef? profile,
+    $2.PageRequest? page,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -4158,10 +4158,10 @@ class ListExitNodesRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListExitNodesRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
-    ..aOM<$1.PageRequest>(2, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageRequest.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
+    ..aOM<$2.PageRequest>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageRequest.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4184,32 +4184,32 @@ class ListExitNodesRequest extends $pb.GeneratedMessage {
   static ListExitNodesRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.PageRequest get page => $_getN(1);
+  $2.PageRequest get page => $_getN(1);
   @$pb.TagNumber(2)
-  set page($1.PageRequest value) => $_setField(2, value);
+  set page($2.PageRequest value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasPage() => $_has(1);
   @$pb.TagNumber(2)
   void clearPage() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.PageRequest ensurePage() => $_ensure(1);
+  $2.PageRequest ensurePage() => $_ensure(1);
 }
 
 class ListExitNodesResponse extends $pb.GeneratedMessage {
   factory ListExitNodesResponse({
-    $core.Iterable<$3.ExitNode>? exitNodes,
-    $1.PageResponse? page,
+    $core.Iterable<$4.ExitNode>? exitNodes,
+    $2.PageResponse? page,
   }) {
     final result = create();
     if (exitNodes != null) result.exitNodes.addAll(exitNodes);
@@ -4230,10 +4230,10 @@ class ListExitNodesResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListExitNodesResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..pPM<$3.ExitNode>(1, _omitFieldNames ? '' : 'exitNodes',
-        subBuilder: $3.ExitNode.create)
-    ..aOM<$1.PageResponse>(2, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageResponse.create)
+    ..pPM<$4.ExitNode>(1, _omitFieldNames ? '' : 'exitNodes',
+        subBuilder: $4.ExitNode.create)
+    ..aOM<$2.PageResponse>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageResponse.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4257,23 +4257,23 @@ class ListExitNodesResponse extends $pb.GeneratedMessage {
   static ListExitNodesResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $pb.PbList<$3.ExitNode> get exitNodes => $_getList(0);
+  $pb.PbList<$4.ExitNode> get exitNodes => $_getList(0);
 
   @$pb.TagNumber(2)
-  $1.PageResponse get page => $_getN(1);
+  $2.PageResponse get page => $_getN(1);
   @$pb.TagNumber(2)
-  set page($1.PageResponse value) => $_setField(2, value);
+  set page($2.PageResponse value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasPage() => $_has(1);
   @$pb.TagNumber(2)
   void clearPage() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.PageResponse ensurePage() => $_ensure(1);
+  $2.PageResponse ensurePage() => $_ensure(1);
 }
 
 class GetExitNodeRequest extends $pb.GeneratedMessage {
   factory GetExitNodeRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -4293,8 +4293,8 @@ class GetExitNodeRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetExitNodeRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4317,20 +4317,20 @@ class GetExitNodeRequest extends $pb.GeneratedMessage {
   static GetExitNodeRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 }
 
 class GetExitNodeResponse extends $pb.GeneratedMessage {
   factory GetExitNodeResponse({
-    $3.ExitNodeStatus? status,
+    $4.ExitNodeStatus? status,
   }) {
     final result = create();
     if (status != null) result.status = status;
@@ -4350,8 +4350,8 @@ class GetExitNodeResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetExitNodeResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$3.ExitNodeStatus>(1, _omitFieldNames ? '' : 'status',
-        subBuilder: $3.ExitNodeStatus.create)
+    ..aOM<$4.ExitNodeStatus>(1, _omitFieldNames ? '' : 'status',
+        subBuilder: $4.ExitNodeStatus.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4374,24 +4374,24 @@ class GetExitNodeResponse extends $pb.GeneratedMessage {
   static GetExitNodeResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $3.ExitNodeStatus get status => $_getN(0);
+  $4.ExitNodeStatus get status => $_getN(0);
   @$pb.TagNumber(1)
-  set status($3.ExitNodeStatus value) => $_setField(1, value);
+  set status($4.ExitNodeStatus value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasStatus() => $_has(0);
   @$pb.TagNumber(1)
   void clearStatus() => $_clearField(1);
   @$pb.TagNumber(1)
-  $3.ExitNodeStatus ensureStatus() => $_ensure(0);
+  $4.ExitNodeStatus ensureStatus() => $_ensure(0);
 }
 
 class SelectExitNodeRequest extends $pb.GeneratedMessage {
   factory SelectExitNodeRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     $core.String? exitNodeId,
-    $3.LanAccess? lanAccess,
-    $3.ExitFamilyMode? familyMode,
+    $4.LanAccess? lanAccess,
+    $4.ExitFamilyMode? familyMode,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -4415,15 +4415,15 @@ class SelectExitNodeRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SelectExitNodeRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(3, _omitFieldNames ? '' : 'exitNodeId')
-    ..aE<$3.LanAccess>(4, _omitFieldNames ? '' : 'lanAccess',
-        enumValues: $3.LanAccess.values)
-    ..aE<$3.ExitFamilyMode>(5, _omitFieldNames ? '' : 'familyMode',
-        enumValues: $3.ExitFamilyMode.values)
+    ..aE<$4.LanAccess>(4, _omitFieldNames ? '' : 'lanAccess',
+        enumValues: $4.LanAccess.values)
+    ..aE<$4.ExitFamilyMode>(5, _omitFieldNames ? '' : 'familyMode',
+        enumValues: $4.ExitFamilyMode.values)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4447,26 +4447,26 @@ class SelectExitNodeRequest extends $pb.GeneratedMessage {
   static SelectExitNodeRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
   $core.String get exitNodeId => $_getSZ(2);
@@ -4478,9 +4478,9 @@ class SelectExitNodeRequest extends $pb.GeneratedMessage {
   void clearExitNodeId() => $_clearField(3);
 
   @$pb.TagNumber(4)
-  $3.LanAccess get lanAccess => $_getN(3);
+  $4.LanAccess get lanAccess => $_getN(3);
   @$pb.TagNumber(4)
-  set lanAccess($3.LanAccess value) => $_setField(4, value);
+  set lanAccess($4.LanAccess value) => $_setField(4, value);
   @$pb.TagNumber(4)
   $core.bool hasLanAccess() => $_has(3);
   @$pb.TagNumber(4)
@@ -4489,9 +4489,9 @@ class SelectExitNodeRequest extends $pb.GeneratedMessage {
   /// Must be explicitly listed in ExitNode.allowed_family_modes.
   /// UNSPECIFIED/NONE and unknown values fail INVALID_ARGUMENT; no downgrade.
   @$pb.TagNumber(5)
-  $3.ExitFamilyMode get familyMode => $_getN(4);
+  $4.ExitFamilyMode get familyMode => $_getN(4);
   @$pb.TagNumber(5)
-  set familyMode($3.ExitFamilyMode value) => $_setField(5, value);
+  set familyMode($4.ExitFamilyMode value) => $_setField(5, value);
   @$pb.TagNumber(5)
   $core.bool hasFamilyMode() => $_has(4);
   @$pb.TagNumber(5)
@@ -4500,8 +4500,8 @@ class SelectExitNodeRequest extends $pb.GeneratedMessage {
 
 class SelectExitNodeResponse extends $pb.GeneratedMessage {
   factory SelectExitNodeResponse({
-    $1.SelectionResult? selection,
-    $1.ConnectionContinuity? continuity,
+    $2.SelectionResult? selection,
+    $2.ConnectionContinuity? continuity,
   }) {
     final result = create();
     if (selection != null) result.selection = selection;
@@ -4522,10 +4522,10 @@ class SelectExitNodeResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SelectExitNodeResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.SelectionResult>(1, _omitFieldNames ? '' : 'selection',
-        subBuilder: $1.SelectionResult.create)
-    ..aE<$1.ConnectionContinuity>(2, _omitFieldNames ? '' : 'continuity',
-        enumValues: $1.ConnectionContinuity.values)
+    ..aOM<$2.SelectionResult>(1, _omitFieldNames ? '' : 'selection',
+        subBuilder: $2.SelectionResult.create)
+    ..aE<$2.ConnectionContinuity>(2, _omitFieldNames ? '' : 'continuity',
+        enumValues: $2.ConnectionContinuity.values)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4549,20 +4549,20 @@ class SelectExitNodeResponse extends $pb.GeneratedMessage {
   static SelectExitNodeResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.SelectionResult get selection => $_getN(0);
+  $2.SelectionResult get selection => $_getN(0);
   @$pb.TagNumber(1)
-  set selection($1.SelectionResult value) => $_setField(1, value);
+  set selection($2.SelectionResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasSelection() => $_has(0);
   @$pb.TagNumber(1)
   void clearSelection() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.SelectionResult ensureSelection() => $_ensure(0);
+  $2.SelectionResult ensureSelection() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ConnectionContinuity get continuity => $_getN(1);
+  $2.ConnectionContinuity get continuity => $_getN(1);
   @$pb.TagNumber(2)
-  set continuity($1.ConnectionContinuity value) => $_setField(2, value);
+  set continuity($2.ConnectionContinuity value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasContinuity() => $_has(1);
   @$pb.TagNumber(2)
@@ -4571,8 +4571,8 @@ class SelectExitNodeResponse extends $pb.GeneratedMessage {
 
 class ClearExitNodeRequest extends $pb.GeneratedMessage {
   factory ClearExitNodeRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -4593,10 +4593,10 @@ class ClearExitNodeRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ClearExitNodeRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4619,32 +4619,32 @@ class ClearExitNodeRequest extends $pb.GeneratedMessage {
   static ClearExitNodeRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 }
 
 class ClearExitNodeResponse extends $pb.GeneratedMessage {
   factory ClearExitNodeResponse({
-    $1.SelectionResult? selection,
-    $1.ConnectionContinuity? continuity,
+    $2.SelectionResult? selection,
+    $2.ConnectionContinuity? continuity,
   }) {
     final result = create();
     if (selection != null) result.selection = selection;
@@ -4665,10 +4665,10 @@ class ClearExitNodeResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ClearExitNodeResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.SelectionResult>(1, _omitFieldNames ? '' : 'selection',
-        subBuilder: $1.SelectionResult.create)
-    ..aE<$1.ConnectionContinuity>(2, _omitFieldNames ? '' : 'continuity',
-        enumValues: $1.ConnectionContinuity.values)
+    ..aOM<$2.SelectionResult>(1, _omitFieldNames ? '' : 'selection',
+        subBuilder: $2.SelectionResult.create)
+    ..aE<$2.ConnectionContinuity>(2, _omitFieldNames ? '' : 'continuity',
+        enumValues: $2.ConnectionContinuity.values)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4692,20 +4692,20 @@ class ClearExitNodeResponse extends $pb.GeneratedMessage {
   static ClearExitNodeResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.SelectionResult get selection => $_getN(0);
+  $2.SelectionResult get selection => $_getN(0);
   @$pb.TagNumber(1)
-  set selection($1.SelectionResult value) => $_setField(1, value);
+  set selection($2.SelectionResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasSelection() => $_has(0);
   @$pb.TagNumber(1)
   void clearSelection() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.SelectionResult ensureSelection() => $_ensure(0);
+  $2.SelectionResult ensureSelection() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ConnectionContinuity get continuity => $_getN(1);
+  $2.ConnectionContinuity get continuity => $_getN(1);
   @$pb.TagNumber(2)
-  set continuity($1.ConnectionContinuity value) => $_setField(2, value);
+  set continuity($2.ConnectionContinuity value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasContinuity() => $_has(1);
   @$pb.TagNumber(2)
@@ -4714,7 +4714,7 @@ class ClearExitNodeResponse extends $pb.GeneratedMessage {
 
 class GetPreferencesRequest extends $pb.GeneratedMessage {
   factory GetPreferencesRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -4734,8 +4734,8 @@ class GetPreferencesRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetPreferencesRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4759,20 +4759,20 @@ class GetPreferencesRequest extends $pb.GeneratedMessage {
   static GetPreferencesRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 }
 
 class GetPreferencesResponse extends $pb.GeneratedMessage {
   factory GetPreferencesResponse({
-    $3.Preferences? preferences,
+    $4.Preferences? preferences,
   }) {
     final result = create();
     if (preferences != null) result.preferences = preferences;
@@ -4792,8 +4792,8 @@ class GetPreferencesResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetPreferencesResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$3.Preferences>(1, _omitFieldNames ? '' : 'preferences',
-        subBuilder: $3.Preferences.create)
+    ..aOM<$4.Preferences>(1, _omitFieldNames ? '' : 'preferences',
+        subBuilder: $4.Preferences.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4817,22 +4817,22 @@ class GetPreferencesResponse extends $pb.GeneratedMessage {
   static GetPreferencesResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $3.Preferences get preferences => $_getN(0);
+  $4.Preferences get preferences => $_getN(0);
   @$pb.TagNumber(1)
-  set preferences($3.Preferences value) => $_setField(1, value);
+  set preferences($4.Preferences value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasPreferences() => $_has(0);
   @$pb.TagNumber(1)
   void clearPreferences() => $_clearField(1);
   @$pb.TagNumber(1)
-  $3.Preferences ensurePreferences() => $_ensure(0);
+  $4.Preferences ensurePreferences() => $_ensure(0);
 }
 
 class SetPreferencesRequest extends $pb.GeneratedMessage {
   factory SetPreferencesRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
-    $3.PreferencesPatch? patch,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
+    $4.PreferencesPatch? patch,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -4854,12 +4854,12 @@ class SetPreferencesRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SetPreferencesRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
-    ..aOM<$3.PreferencesPatch>(3, _omitFieldNames ? '' : 'patch',
-        subBuilder: $3.PreferencesPatch.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
+    ..aOM<$4.PreferencesPatch>(3, _omitFieldNames ? '' : 'patch',
+        subBuilder: $4.PreferencesPatch.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4883,42 +4883,42 @@ class SetPreferencesRequest extends $pb.GeneratedMessage {
   static SetPreferencesRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
-  $3.PreferencesPatch get patch => $_getN(2);
+  $4.PreferencesPatch get patch => $_getN(2);
   @$pb.TagNumber(3)
-  set patch($3.PreferencesPatch value) => $_setField(3, value);
+  set patch($4.PreferencesPatch value) => $_setField(3, value);
   @$pb.TagNumber(3)
   $core.bool hasPatch() => $_has(2);
   @$pb.TagNumber(3)
   void clearPatch() => $_clearField(3);
   @$pb.TagNumber(3)
-  $3.PreferencesPatch ensurePatch() => $_ensure(2);
+  $4.PreferencesPatch ensurePatch() => $_ensure(2);
 }
 
 class SetPreferencesResponse extends $pb.GeneratedMessage {
   factory SetPreferencesResponse({
-    $1.ChangeResult? change,
+    $2.ChangeResult? change,
   }) {
     final result = create();
     if (change != null) result.change = change;
@@ -4938,8 +4938,8 @@ class SetPreferencesResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SetPreferencesResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ChangeResult>(1, _omitFieldNames ? '' : 'change',
-        subBuilder: $1.ChangeResult.create)
+    ..aOM<$2.ChangeResult>(1, _omitFieldNames ? '' : 'change',
+        subBuilder: $2.ChangeResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -4963,22 +4963,22 @@ class SetPreferencesResponse extends $pb.GeneratedMessage {
   static SetPreferencesResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ChangeResult get change => $_getN(0);
+  $2.ChangeResult get change => $_getN(0);
   @$pb.TagNumber(1)
-  set change($1.ChangeResult value) => $_setField(1, value);
+  set change($2.ChangeResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasChange() => $_has(0);
   @$pb.TagNumber(1)
   void clearChange() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ChangeResult ensureChange() => $_ensure(0);
+  $2.ChangeResult ensureChange() => $_ensure(0);
 }
 
 class ResetPreferencesRequest extends $pb.GeneratedMessage {
   factory ResetPreferencesRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
-    $core.Iterable<$3.PreferenceKey>? keys,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
+    $core.Iterable<$4.PreferenceKey>? keys,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -5000,14 +5000,14 @@ class ResetPreferencesRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ResetPreferencesRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
-    ..pc<$3.PreferenceKey>(3, _omitFieldNames ? '' : 'keys', $pb.PbFieldType.KE,
-        valueOf: $3.PreferenceKey.valueOf,
-        enumValues: $3.PreferenceKey.values,
-        defaultEnumValue: $3.PreferenceKey.PREFERENCE_KEY_UNSPECIFIED)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
+    ..pc<$4.PreferenceKey>(3, _omitFieldNames ? '' : 'keys', $pb.PbFieldType.KE,
+        valueOf: $4.PreferenceKey.valueOf,
+        enumValues: $4.PreferenceKey.values,
+        defaultEnumValue: $4.PreferenceKey.PREFERENCE_KEY_UNSPECIFIED)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5031,34 +5031,34 @@ class ResetPreferencesRequest extends $pb.GeneratedMessage {
   static ResetPreferencesRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
-  $pb.PbList<$3.PreferenceKey> get keys => $_getList(2);
+  $pb.PbList<$4.PreferenceKey> get keys => $_getList(2);
 }
 
 class ResetPreferencesResponse extends $pb.GeneratedMessage {
   factory ResetPreferencesResponse({
-    $1.ChangeResult? change,
+    $2.ChangeResult? change,
   }) {
     final result = create();
     if (change != null) result.change = change;
@@ -5078,8 +5078,8 @@ class ResetPreferencesResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ResetPreferencesResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ChangeResult>(1, _omitFieldNames ? '' : 'change',
-        subBuilder: $1.ChangeResult.create)
+    ..aOM<$2.ChangeResult>(1, _omitFieldNames ? '' : 'change',
+        subBuilder: $2.ChangeResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5103,20 +5103,20 @@ class ResetPreferencesResponse extends $pb.GeneratedMessage {
   static ResetPreferencesResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ChangeResult get change => $_getN(0);
+  $2.ChangeResult get change => $_getN(0);
   @$pb.TagNumber(1)
-  set change($1.ChangeResult value) => $_setField(1, value);
+  set change($2.ChangeResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasChange() => $_has(0);
   @$pb.TagNumber(1)
   void clearChange() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ChangeResult ensureChange() => $_ensure(0);
+  $2.ChangeResult ensureChange() => $_ensure(0);
 }
 
 class ListManagedSettingsRequest extends $pb.GeneratedMessage {
   factory ListManagedSettingsRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -5136,8 +5136,8 @@ class ListManagedSettingsRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListManagedSettingsRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5162,21 +5162,21 @@ class ListManagedSettingsRequest extends $pb.GeneratedMessage {
   static ListManagedSettingsRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 }
 
 class ListManagedSettingsResponse extends $pb.GeneratedMessage {
   factory ListManagedSettingsResponse({
-    $core.Iterable<$3.ManagedSetting>? settings,
-    $1.SnapshotMetadata? metadata,
+    $core.Iterable<$4.ManagedSetting>? settings,
+    $2.SnapshotMetadata? metadata,
   }) {
     final result = create();
     if (settings != null) result.settings.addAll(settings);
@@ -5197,10 +5197,10 @@ class ListManagedSettingsResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListManagedSettingsResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..pPM<$3.ManagedSetting>(1, _omitFieldNames ? '' : 'settings',
-        subBuilder: $3.ManagedSetting.create)
-    ..aOM<$1.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
-        subBuilder: $1.SnapshotMetadata.create)
+    ..pPM<$4.ManagedSetting>(1, _omitFieldNames ? '' : 'settings',
+        subBuilder: $4.ManagedSetting.create)
+    ..aOM<$2.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
+        subBuilder: $2.SnapshotMetadata.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5226,26 +5226,26 @@ class ListManagedSettingsResponse extends $pb.GeneratedMessage {
   static ListManagedSettingsResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $pb.PbList<$3.ManagedSetting> get settings => $_getList(0);
+  $pb.PbList<$4.ManagedSetting> get settings => $_getList(0);
 
   @$pb.TagNumber(2)
-  $1.SnapshotMetadata get metadata => $_getN(1);
+  $2.SnapshotMetadata get metadata => $_getN(1);
   @$pb.TagNumber(2)
-  set metadata($1.SnapshotMetadata value) => $_setField(2, value);
+  set metadata($2.SnapshotMetadata value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasMetadata() => $_has(1);
   @$pb.TagNumber(2)
   void clearMetadata() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.SnapshotMetadata ensureMetadata() => $_ensure(1);
+  $2.SnapshotMetadata ensureMetadata() => $_ensure(1);
 }
 
 class ListResourcesRequest extends $pb.GeneratedMessage {
   factory ListResourcesRequest({
-    $1.ProfileRef? profile,
-    $1.PageRequest? page,
+    $2.ProfileRef? profile,
+    $2.PageRequest? page,
     $core.String? search,
-    $core.Iterable<$3.ResourceKind>? kinds,
+    $core.Iterable<$4.ResourceKind>? kinds,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -5268,15 +5268,15 @@ class ListResourcesRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListResourcesRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
-    ..aOM<$1.PageRequest>(2, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageRequest.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
+    ..aOM<$2.PageRequest>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageRequest.create)
     ..aOS(3, _omitFieldNames ? '' : 'search')
-    ..pc<$3.ResourceKind>(4, _omitFieldNames ? '' : 'kinds', $pb.PbFieldType.KE,
-        valueOf: $3.ResourceKind.valueOf,
-        enumValues: $3.ResourceKind.values,
-        defaultEnumValue: $3.ResourceKind.RESOURCE_KIND_UNSPECIFIED)
+    ..pc<$4.ResourceKind>(4, _omitFieldNames ? '' : 'kinds', $pb.PbFieldType.KE,
+        valueOf: $4.ResourceKind.valueOf,
+        enumValues: $4.ResourceKind.values,
+        defaultEnumValue: $4.ResourceKind.RESOURCE_KIND_UNSPECIFIED)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5299,26 +5299,26 @@ class ListResourcesRequest extends $pb.GeneratedMessage {
   static ListResourcesRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.PageRequest get page => $_getN(1);
+  $2.PageRequest get page => $_getN(1);
   @$pb.TagNumber(2)
-  set page($1.PageRequest value) => $_setField(2, value);
+  set page($2.PageRequest value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasPage() => $_has(1);
   @$pb.TagNumber(2)
   void clearPage() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.PageRequest ensurePage() => $_ensure(1);
+  $2.PageRequest ensurePage() => $_ensure(1);
 
   @$pb.TagNumber(3)
   $core.String get search => $_getSZ(2);
@@ -5330,13 +5330,13 @@ class ListResourcesRequest extends $pb.GeneratedMessage {
   void clearSearch() => $_clearField(3);
 
   @$pb.TagNumber(4)
-  $pb.PbList<$3.ResourceKind> get kinds => $_getList(3);
+  $pb.PbList<$4.ResourceKind> get kinds => $_getList(3);
 }
 
 class ListResourcesResponse extends $pb.GeneratedMessage {
   factory ListResourcesResponse({
-    $core.Iterable<$3.Resource>? resources,
-    $1.PageResponse? page,
+    $core.Iterable<$4.Resource>? resources,
+    $2.PageResponse? page,
   }) {
     final result = create();
     if (resources != null) result.resources.addAll(resources);
@@ -5357,10 +5357,10 @@ class ListResourcesResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListResourcesResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..pPM<$3.Resource>(1, _omitFieldNames ? '' : 'resources',
-        subBuilder: $3.Resource.create)
-    ..aOM<$1.PageResponse>(2, _omitFieldNames ? '' : 'page',
-        subBuilder: $1.PageResponse.create)
+    ..pPM<$4.Resource>(1, _omitFieldNames ? '' : 'resources',
+        subBuilder: $4.Resource.create)
+    ..aOM<$2.PageResponse>(2, _omitFieldNames ? '' : 'page',
+        subBuilder: $2.PageResponse.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5384,24 +5384,24 @@ class ListResourcesResponse extends $pb.GeneratedMessage {
   static ListResourcesResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $pb.PbList<$3.Resource> get resources => $_getList(0);
+  $pb.PbList<$4.Resource> get resources => $_getList(0);
 
   @$pb.TagNumber(2)
-  $1.PageResponse get page => $_getN(1);
+  $2.PageResponse get page => $_getN(1);
   @$pb.TagNumber(2)
-  set page($1.PageResponse value) => $_setField(2, value);
+  set page($2.PageResponse value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasPage() => $_has(1);
   @$pb.TagNumber(2)
   void clearPage() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.PageResponse ensurePage() => $_ensure(1);
+  $2.PageResponse ensurePage() => $_ensure(1);
 }
 
 class SetResourceEnabledRequest extends $pb.GeneratedMessage {
   factory SetResourceEnabledRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     $core.String? resourceId,
     $core.bool? enabled,
   }) {
@@ -5426,10 +5426,10 @@ class SetResourceEnabledRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SetResourceEnabledRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(3, _omitFieldNames ? '' : 'resourceId')
     ..aOB(4, _omitFieldNames ? '' : 'enabled')
     ..hasRequiredFields = false;
@@ -5455,26 +5455,26 @@ class SetResourceEnabledRequest extends $pb.GeneratedMessage {
   static SetResourceEnabledRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
   $core.String get resourceId => $_getSZ(2);
@@ -5497,7 +5497,7 @@ class SetResourceEnabledRequest extends $pb.GeneratedMessage {
 
 class SetResourceEnabledResponse extends $pb.GeneratedMessage {
   factory SetResourceEnabledResponse({
-    $1.ChangeResult? change,
+    $2.ChangeResult? change,
   }) {
     final result = create();
     if (change != null) result.change = change;
@@ -5517,8 +5517,8 @@ class SetResourceEnabledResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SetResourceEnabledResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ChangeResult>(1, _omitFieldNames ? '' : 'change',
-        subBuilder: $1.ChangeResult.create)
+    ..aOM<$2.ChangeResult>(1, _omitFieldNames ? '' : 'change',
+        subBuilder: $2.ChangeResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5543,22 +5543,22 @@ class SetResourceEnabledResponse extends $pb.GeneratedMessage {
   static SetResourceEnabledResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ChangeResult get change => $_getN(0);
+  $2.ChangeResult get change => $_getN(0);
   @$pb.TagNumber(1)
-  set change($1.ChangeResult value) => $_setField(1, value);
+  set change($2.ChangeResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasChange() => $_has(0);
   @$pb.TagNumber(1)
   void clearChange() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ChangeResult ensureChange() => $_ensure(0);
+  $2.ChangeResult ensureChange() => $_ensure(0);
 }
 
 class NotifyLifecycleRequest extends $pb.GeneratedMessage {
   factory NotifyLifecycleRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
-    $3.LifecycleEvent? event,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
+    $4.LifecycleEvent? event,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -5580,12 +5580,12 @@ class NotifyLifecycleRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'NotifyLifecycleRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
-    ..aE<$3.LifecycleEvent>(3, _omitFieldNames ? '' : 'event',
-        enumValues: $3.LifecycleEvent.values)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
+    ..aE<$4.LifecycleEvent>(3, _omitFieldNames ? '' : 'event',
+        enumValues: $4.LifecycleEvent.values)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5609,31 +5609,31 @@ class NotifyLifecycleRequest extends $pb.GeneratedMessage {
   static NotifyLifecycleRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
-  $3.LifecycleEvent get event => $_getN(2);
+  $4.LifecycleEvent get event => $_getN(2);
   @$pb.TagNumber(3)
-  set event($3.LifecycleEvent value) => $_setField(3, value);
+  set event($4.LifecycleEvent value) => $_setField(3, value);
   @$pb.TagNumber(3)
   $core.bool hasEvent() => $_has(2);
   @$pb.TagNumber(3)
@@ -5642,7 +5642,7 @@ class NotifyLifecycleRequest extends $pb.GeneratedMessage {
 
 class NotifyLifecycleResponse extends $pb.GeneratedMessage {
   factory NotifyLifecycleResponse({
-    $1.ChangeResult? change,
+    $2.ChangeResult? change,
   }) {
     final result = create();
     if (change != null) result.change = change;
@@ -5662,8 +5662,8 @@ class NotifyLifecycleResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'NotifyLifecycleResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ChangeResult>(1, _omitFieldNames ? '' : 'change',
-        subBuilder: $1.ChangeResult.create)
+    ..aOM<$2.ChangeResult>(1, _omitFieldNames ? '' : 'change',
+        subBuilder: $2.ChangeResult.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5687,20 +5687,20 @@ class NotifyLifecycleResponse extends $pb.GeneratedMessage {
   static NotifyLifecycleResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ChangeResult get change => $_getN(0);
+  $2.ChangeResult get change => $_getN(0);
   @$pb.TagNumber(1)
-  set change($1.ChangeResult value) => $_setField(1, value);
+  set change($2.ChangeResult value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasChange() => $_has(0);
   @$pb.TagNumber(1)
   void clearChange() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ChangeResult ensureChange() => $_ensure(0);
+  $2.ChangeResult ensureChange() => $_ensure(0);
 }
 
 class GetUpdateInfoRequest extends $pb.GeneratedMessage {
   factory GetUpdateInfoRequest({
-    $1.BuildIdentity? reportedUi,
+    $2.BuildIdentity? reportedUi,
   }) {
     final result = create();
     if (reportedUi != null) result.reportedUi = reportedUi;
@@ -5720,8 +5720,8 @@ class GetUpdateInfoRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetUpdateInfoRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.BuildIdentity>(1, _omitFieldNames ? '' : 'reportedUi',
-        subBuilder: $1.BuildIdentity.create)
+    ..aOM<$2.BuildIdentity>(1, _omitFieldNames ? '' : 'reportedUi',
+        subBuilder: $2.BuildIdentity.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5744,20 +5744,20 @@ class GetUpdateInfoRequest extends $pb.GeneratedMessage {
   static GetUpdateInfoRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.BuildIdentity get reportedUi => $_getN(0);
+  $2.BuildIdentity get reportedUi => $_getN(0);
   @$pb.TagNumber(1)
-  set reportedUi($1.BuildIdentity value) => $_setField(1, value);
+  set reportedUi($2.BuildIdentity value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasReportedUi() => $_has(0);
   @$pb.TagNumber(1)
   void clearReportedUi() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.BuildIdentity ensureReportedUi() => $_ensure(0);
+  $2.BuildIdentity ensureReportedUi() => $_ensure(0);
 }
 
 class GetUpdateInfoResponse extends $pb.GeneratedMessage {
   factory GetUpdateInfoResponse({
-    $3.UpdateInfo? info,
+    $4.UpdateInfo? info,
   }) {
     final result = create();
     if (info != null) result.info = info;
@@ -5777,8 +5777,8 @@ class GetUpdateInfoResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetUpdateInfoResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$3.UpdateInfo>(1, _omitFieldNames ? '' : 'info',
-        subBuilder: $3.UpdateInfo.create)
+    ..aOM<$4.UpdateInfo>(1, _omitFieldNames ? '' : 'info',
+        subBuilder: $4.UpdateInfo.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5802,15 +5802,15 @@ class GetUpdateInfoResponse extends $pb.GeneratedMessage {
   static GetUpdateInfoResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $3.UpdateInfo get info => $_getN(0);
+  $4.UpdateInfo get info => $_getN(0);
   @$pb.TagNumber(1)
-  set info($3.UpdateInfo value) => $_setField(1, value);
+  set info($4.UpdateInfo value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasInfo() => $_has(0);
   @$pb.TagNumber(1)
   void clearInfo() => $_clearField(1);
   @$pb.TagNumber(1)
-  $3.UpdateInfo ensureInfo() => $_ensure(0);
+  $4.UpdateInfo ensureInfo() => $_ensure(0);
 }
 
 class GetSupportInfoRequest extends $pb.GeneratedMessage {
@@ -5854,7 +5854,7 @@ class GetSupportInfoRequest extends $pb.GeneratedMessage {
 
 class GetSupportInfoResponse extends $pb.GeneratedMessage {
   factory GetSupportInfoResponse({
-    $3.SupportInfo? info,
+    $4.SupportInfo? info,
   }) {
     final result = create();
     if (info != null) result.info = info;
@@ -5874,8 +5874,8 @@ class GetSupportInfoResponse extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetSupportInfoResponse',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$3.SupportInfo>(1, _omitFieldNames ? '' : 'info',
-        subBuilder: $3.SupportInfo.create)
+    ..aOM<$4.SupportInfo>(1, _omitFieldNames ? '' : 'info',
+        subBuilder: $4.SupportInfo.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5899,15 +5899,15 @@ class GetSupportInfoResponse extends $pb.GeneratedMessage {
   static GetSupportInfoResponse? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $3.SupportInfo get info => $_getN(0);
+  $4.SupportInfo get info => $_getN(0);
   @$pb.TagNumber(1)
-  set info($3.SupportInfo value) => $_setField(1, value);
+  set info($4.SupportInfo value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasInfo() => $_has(0);
   @$pb.TagNumber(1)
   void clearInfo() => $_clearField(1);
   @$pb.TagNumber(1)
-  $3.SupportInfo ensureInfo() => $_ensure(0);
+  $4.SupportInfo ensureInfo() => $_ensure(0);
 }
 
 enum WatchEventsResponse_Event {
@@ -5924,12 +5924,12 @@ enum WatchEventsResponse_Event {
 class WatchEventsResponse extends $pb.GeneratedMessage {
   factory WatchEventsResponse({
     $fixnum.Int64? sequence,
-    $1.SnapshotMetadata? metadata,
+    $2.SnapshotMetadata? metadata,
     SnapshotEvent? snapshot,
-    $2.Status? statusChanged,
+    $3.Status? statusChanged,
     DomainInvalidated? invalidated,
-    $1.Failure? failure,
-    $2.Session? sessionChanged,
+    $2.Failure? failure,
+    $3.Session? sessionChanged,
   }) {
     final result = create();
     if (sequence != null) result.sequence = sequence;
@@ -5968,18 +5968,18 @@ class WatchEventsResponse extends $pb.GeneratedMessage {
     ..a<$fixnum.Int64>(
         1, _omitFieldNames ? '' : 'sequence', $pb.PbFieldType.OU6,
         defaultOrMaker: $fixnum.Int64.ZERO)
-    ..aOM<$1.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
-        subBuilder: $1.SnapshotMetadata.create)
+    ..aOM<$2.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
+        subBuilder: $2.SnapshotMetadata.create)
     ..aOM<SnapshotEvent>(3, _omitFieldNames ? '' : 'snapshot',
         subBuilder: SnapshotEvent.create)
-    ..aOM<$2.Status>(4, _omitFieldNames ? '' : 'statusChanged',
-        subBuilder: $2.Status.create)
+    ..aOM<$3.Status>(4, _omitFieldNames ? '' : 'statusChanged',
+        subBuilder: $3.Status.create)
     ..aOM<DomainInvalidated>(5, _omitFieldNames ? '' : 'invalidated',
         subBuilder: DomainInvalidated.create)
-    ..aOM<$1.Failure>(7, _omitFieldNames ? '' : 'failure',
-        subBuilder: $1.Failure.create)
-    ..aOM<$2.Session>(8, _omitFieldNames ? '' : 'sessionChanged',
-        subBuilder: $2.Session.create)
+    ..aOM<$2.Failure>(7, _omitFieldNames ? '' : 'failure',
+        subBuilder: $2.Failure.create)
+    ..aOM<$3.Session>(8, _omitFieldNames ? '' : 'sessionChanged',
+        subBuilder: $3.Session.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6025,15 +6025,15 @@ class WatchEventsResponse extends $pb.GeneratedMessage {
   void clearSequence() => $_clearField(1);
 
   @$pb.TagNumber(2)
-  $1.SnapshotMetadata get metadata => $_getN(1);
+  $2.SnapshotMetadata get metadata => $_getN(1);
   @$pb.TagNumber(2)
-  set metadata($1.SnapshotMetadata value) => $_setField(2, value);
+  set metadata($2.SnapshotMetadata value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasMetadata() => $_has(1);
   @$pb.TagNumber(2)
   void clearMetadata() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.SnapshotMetadata ensureMetadata() => $_ensure(1);
+  $2.SnapshotMetadata ensureMetadata() => $_ensure(1);
 
   @$pb.TagNumber(3)
   SnapshotEvent get snapshot => $_getN(2);
@@ -6047,15 +6047,15 @@ class WatchEventsResponse extends $pb.GeneratedMessage {
   SnapshotEvent ensureSnapshot() => $_ensure(2);
 
   @$pb.TagNumber(4)
-  $2.Status get statusChanged => $_getN(3);
+  $3.Status get statusChanged => $_getN(3);
   @$pb.TagNumber(4)
-  set statusChanged($2.Status value) => $_setField(4, value);
+  set statusChanged($3.Status value) => $_setField(4, value);
   @$pb.TagNumber(4)
   $core.bool hasStatusChanged() => $_has(3);
   @$pb.TagNumber(4)
   void clearStatusChanged() => $_clearField(4);
   @$pb.TagNumber(4)
-  $2.Status ensureStatusChanged() => $_ensure(3);
+  $3.Status ensureStatusChanged() => $_ensure(3);
 
   @$pb.TagNumber(5)
   DomainInvalidated get invalidated => $_getN(4);
@@ -6069,32 +6069,32 @@ class WatchEventsResponse extends $pb.GeneratedMessage {
   DomainInvalidated ensureInvalidated() => $_ensure(4);
 
   @$pb.TagNumber(7)
-  $1.Failure get failure => $_getN(5);
+  $2.Failure get failure => $_getN(5);
   @$pb.TagNumber(7)
-  set failure($1.Failure value) => $_setField(7, value);
+  set failure($2.Failure value) => $_setField(7, value);
   @$pb.TagNumber(7)
   $core.bool hasFailure() => $_has(5);
   @$pb.TagNumber(7)
   void clearFailure() => $_clearField(7);
   @$pb.TagNumber(7)
-  $1.Failure ensureFailure() => $_ensure(5);
+  $2.Failure ensureFailure() => $_ensure(5);
 
   @$pb.TagNumber(8)
-  $2.Session get sessionChanged => $_getN(6);
+  $3.Session get sessionChanged => $_getN(6);
   @$pb.TagNumber(8)
-  set sessionChanged($2.Session value) => $_setField(8, value);
+  set sessionChanged($3.Session value) => $_setField(8, value);
   @$pb.TagNumber(8)
   $core.bool hasSessionChanged() => $_has(6);
   @$pb.TagNumber(8)
   void clearSessionChanged() => $_clearField(8);
   @$pb.TagNumber(8)
-  $2.Session ensureSessionChanged() => $_ensure(6);
+  $3.Session ensureSessionChanged() => $_ensure(6);
 }
 
 class SnapshotEvent extends $pb.GeneratedMessage {
   factory SnapshotEvent({
-    $1.RuntimeInfo? runtime,
-    $2.Status? status,
+    $2.RuntimeInfo? runtime,
+    $3.Status? status,
   }) {
     final result = create();
     if (runtime != null) result.runtime = runtime;
@@ -6115,10 +6115,10 @@ class SnapshotEvent extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'SnapshotEvent',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.RuntimeInfo>(1, _omitFieldNames ? '' : 'runtime',
-        subBuilder: $1.RuntimeInfo.create)
-    ..aOM<$2.Status>(2, _omitFieldNames ? '' : 'status',
-        subBuilder: $2.Status.create)
+    ..aOM<$2.RuntimeInfo>(1, _omitFieldNames ? '' : 'runtime',
+        subBuilder: $2.RuntimeInfo.create)
+    ..aOM<$3.Status>(2, _omitFieldNames ? '' : 'status',
+        subBuilder: $3.Status.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6141,26 +6141,26 @@ class SnapshotEvent extends $pb.GeneratedMessage {
   static SnapshotEvent? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.RuntimeInfo get runtime => $_getN(0);
+  $2.RuntimeInfo get runtime => $_getN(0);
   @$pb.TagNumber(1)
-  set runtime($1.RuntimeInfo value) => $_setField(1, value);
+  set runtime($2.RuntimeInfo value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasRuntime() => $_has(0);
   @$pb.TagNumber(1)
   void clearRuntime() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.RuntimeInfo ensureRuntime() => $_ensure(0);
+  $2.RuntimeInfo ensureRuntime() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $2.Status get status => $_getN(1);
+  $3.Status get status => $_getN(1);
   @$pb.TagNumber(2)
-  set status($2.Status value) => $_setField(2, value);
+  set status($3.Status value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasStatus() => $_has(1);
   @$pb.TagNumber(2)
   void clearStatus() => $_clearField(2);
   @$pb.TagNumber(2)
-  $2.Status ensureStatus() => $_ensure(1);
+  $3.Status ensureStatus() => $_ensure(1);
 }
 
 class DomainInvalidated extends $pb.GeneratedMessage {
@@ -6368,8 +6368,8 @@ class NodeRevocationResult extends $pb.GeneratedMessage {
     NodeRevocationTarget? target,
     $core.String? commandId,
     NodeRevocationPhase? phase,
-    $4.Timestamp? acceptedAt,
-    $4.Timestamp? enforceBy,
+    $5.Timestamp? acceptedAt,
+    $5.Timestamp? enforceBy,
     $fixnum.Int64? committedNetworkRevision,
   }) {
     final result = create();
@@ -6403,10 +6403,10 @@ class NodeRevocationResult extends $pb.GeneratedMessage {
     ..aOS(3, _omitFieldNames ? '' : 'commandId')
     ..aE<NodeRevocationPhase>(4, _omitFieldNames ? '' : 'phase',
         enumValues: NodeRevocationPhase.values)
-    ..aOM<$4.Timestamp>(5, _omitFieldNames ? '' : 'acceptedAt',
-        subBuilder: $4.Timestamp.create)
-    ..aOM<$4.Timestamp>(6, _omitFieldNames ? '' : 'enforceBy',
-        subBuilder: $4.Timestamp.create)
+    ..aOM<$5.Timestamp>(5, _omitFieldNames ? '' : 'acceptedAt',
+        subBuilder: $5.Timestamp.create)
+    ..aOM<$5.Timestamp>(6, _omitFieldNames ? '' : 'enforceBy',
+        subBuilder: $5.Timestamp.create)
     ..a<$fixnum.Int64>(7, _omitFieldNames ? '' : 'committedNetworkRevision',
         $pb.PbFieldType.OU6,
         defaultOrMaker: $fixnum.Int64.ZERO)
@@ -6470,26 +6470,26 @@ class NodeRevocationResult extends $pb.GeneratedMessage {
   void clearPhase() => $_clearField(4);
 
   @$pb.TagNumber(5)
-  $4.Timestamp get acceptedAt => $_getN(4);
+  $5.Timestamp get acceptedAt => $_getN(4);
   @$pb.TagNumber(5)
-  set acceptedAt($4.Timestamp value) => $_setField(5, value);
+  set acceptedAt($5.Timestamp value) => $_setField(5, value);
   @$pb.TagNumber(5)
   $core.bool hasAcceptedAt() => $_has(4);
   @$pb.TagNumber(5)
   void clearAcceptedAt() => $_clearField(5);
   @$pb.TagNumber(5)
-  $4.Timestamp ensureAcceptedAt() => $_ensure(4);
+  $5.Timestamp ensureAcceptedAt() => $_ensure(4);
 
   @$pb.TagNumber(6)
-  $4.Timestamp get enforceBy => $_getN(5);
+  $5.Timestamp get enforceBy => $_getN(5);
   @$pb.TagNumber(6)
-  set enforceBy($4.Timestamp value) => $_setField(6, value);
+  set enforceBy($5.Timestamp value) => $_setField(6, value);
   @$pb.TagNumber(6)
   $core.bool hasEnforceBy() => $_has(5);
   @$pb.TagNumber(6)
   void clearEnforceBy() => $_clearField(6);
   @$pb.TagNumber(6)
-  $4.Timestamp ensureEnforceBy() => $_ensure(5);
+  $5.Timestamp ensureEnforceBy() => $_ensure(5);
 
   @$pb.TagNumber(7)
   $fixnum.Int64 get committedNetworkRevision => $_getI64(6);
@@ -6503,7 +6503,7 @@ class NodeRevocationResult extends $pb.GeneratedMessage {
 
 class ListNodeRevocationTargetsRequest extends $pb.GeneratedMessage {
   factory ListNodeRevocationTargetsRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
   }) {
     final result = create();
     if (profile != null) result.profile = profile;
@@ -6524,8 +6524,8 @@ class ListNodeRevocationTargetsRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'ListNodeRevocationTargetsRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6552,21 +6552,21 @@ class ListNodeRevocationTargetsRequest extends $pb.GeneratedMessage {
   static ListNodeRevocationTargetsRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 }
 
 class ListNodeRevocationTargetsResponse extends $pb.GeneratedMessage {
   factory ListNodeRevocationTargetsResponse({
     $core.Iterable<NodeRevocationTarget>? targets,
-    $1.SnapshotMetadata? metadata,
+    $2.SnapshotMetadata? metadata,
   }) {
     final result = create();
     if (targets != null) result.targets.addAll(targets);
@@ -6590,8 +6590,8 @@ class ListNodeRevocationTargetsResponse extends $pb.GeneratedMessage {
       createEmptyInstance: create)
     ..pPM<NodeRevocationTarget>(1, _omitFieldNames ? '' : 'targets',
         subBuilder: NodeRevocationTarget.create)
-    ..aOM<$1.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
-        subBuilder: $1.SnapshotMetadata.create)
+    ..aOM<$2.SnapshotMetadata>(2, _omitFieldNames ? '' : 'metadata',
+        subBuilder: $2.SnapshotMetadata.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6621,21 +6621,21 @@ class ListNodeRevocationTargetsResponse extends $pb.GeneratedMessage {
   $pb.PbList<NodeRevocationTarget> get targets => $_getList(0);
 
   @$pb.TagNumber(2)
-  $1.SnapshotMetadata get metadata => $_getN(1);
+  $2.SnapshotMetadata get metadata => $_getN(1);
   @$pb.TagNumber(2)
-  set metadata($1.SnapshotMetadata value) => $_setField(2, value);
+  set metadata($2.SnapshotMetadata value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasMetadata() => $_has(1);
   @$pb.TagNumber(2)
   void clearMetadata() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.SnapshotMetadata ensureMetadata() => $_ensure(1);
+  $2.SnapshotMetadata ensureMetadata() => $_ensure(1);
 }
 
 class RevokeNodeAccessRequest extends $pb.GeneratedMessage {
   factory RevokeNodeAccessRequest({
-    $1.MutationContext? mutation,
-    $1.ProfileRef? profile,
+    $2.MutationContext? mutation,
+    $2.ProfileRef? profile,
     NodeRevocationTarget? target,
     $core.String? commandId,
   }) {
@@ -6660,10 +6660,10 @@ class RevokeNodeAccessRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'RevokeNodeAccessRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
-        subBuilder: $1.MutationContext.create)
-    ..aOM<$1.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.MutationContext>(1, _omitFieldNames ? '' : 'mutation',
+        subBuilder: $2.MutationContext.create)
+    ..aOM<$2.ProfileRef>(2, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOM<NodeRevocationTarget>(3, _omitFieldNames ? '' : 'target',
         subBuilder: NodeRevocationTarget.create)
     ..aOS(4, _omitFieldNames ? '' : 'commandId')
@@ -6690,26 +6690,26 @@ class RevokeNodeAccessRequest extends $pb.GeneratedMessage {
   static RevokeNodeAccessRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.MutationContext get mutation => $_getN(0);
+  $2.MutationContext get mutation => $_getN(0);
   @$pb.TagNumber(1)
-  set mutation($1.MutationContext value) => $_setField(1, value);
+  set mutation($2.MutationContext value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasMutation() => $_has(0);
   @$pb.TagNumber(1)
   void clearMutation() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.MutationContext ensureMutation() => $_ensure(0);
+  $2.MutationContext ensureMutation() => $_ensure(0);
 
   @$pb.TagNumber(2)
-  $1.ProfileRef get profile => $_getN(1);
+  $2.ProfileRef get profile => $_getN(1);
   @$pb.TagNumber(2)
-  set profile($1.ProfileRef value) => $_setField(2, value);
+  set profile($2.ProfileRef value) => $_setField(2, value);
   @$pb.TagNumber(2)
   $core.bool hasProfile() => $_has(1);
   @$pb.TagNumber(2)
   void clearProfile() => $_clearField(2);
   @$pb.TagNumber(2)
-  $1.ProfileRef ensureProfile() => $_ensure(1);
+  $2.ProfileRef ensureProfile() => $_ensure(1);
 
   @$pb.TagNumber(3)
   NodeRevocationTarget get target => $_getN(2);
@@ -6794,7 +6794,7 @@ class RevokeNodeAccessResponse extends $pb.GeneratedMessage {
 
 class GetNodeRevocationRequest extends $pb.GeneratedMessage {
   factory GetNodeRevocationRequest({
-    $1.ProfileRef? profile,
+    $2.ProfileRef? profile,
     $core.String? commandId,
   }) {
     final result = create();
@@ -6816,8 +6816,8 @@ class GetNodeRevocationRequest extends $pb.GeneratedMessage {
       _omitMessageNames ? '' : 'GetNodeRevocationRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
       createEmptyInstance: create)
-    ..aOM<$1.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
-        subBuilder: $1.ProfileRef.create)
+    ..aOM<$2.ProfileRef>(1, _omitFieldNames ? '' : 'profile',
+        subBuilder: $2.ProfileRef.create)
     ..aOS(2, _omitFieldNames ? '' : 'commandId')
     ..hasRequiredFields = false;
 
@@ -6842,15 +6842,15 @@ class GetNodeRevocationRequest extends $pb.GeneratedMessage {
   static GetNodeRevocationRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
-  $1.ProfileRef get profile => $_getN(0);
+  $2.ProfileRef get profile => $_getN(0);
   @$pb.TagNumber(1)
-  set profile($1.ProfileRef value) => $_setField(1, value);
+  set profile($2.ProfileRef value) => $_setField(1, value);
   @$pb.TagNumber(1)
   $core.bool hasProfile() => $_has(0);
   @$pb.TagNumber(1)
   void clearProfile() => $_clearField(1);
   @$pb.TagNumber(1)
-  $1.ProfileRef ensureProfile() => $_ensure(0);
+  $2.ProfileRef ensureProfile() => $_ensure(0);
 
   @$pb.TagNumber(2)
   $core.String get commandId => $_getSZ(1);

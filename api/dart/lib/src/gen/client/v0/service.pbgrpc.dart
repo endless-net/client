@@ -16,6 +16,7 @@ import 'dart:core' as $core;
 import 'package:grpc/service_api.dart' as $grpc;
 import 'package:protobuf/protobuf.dart' as $pb;
 
+import 'dashboard.pb.dart' as $1;
 import 'service.pb.dart' as $0;
 
 export 'service.pb.dart';
@@ -403,6 +404,29 @@ class ClientServiceClient extends $grpc.Client {
     return $createUnaryCall(_$getSupportInfo, request, options: options);
   }
 
+  /// 016: OS owner and an existing native user session. No tunnel changes.
+  $grpc.ResponseFuture<$1.ListDashboardSpacesResponse> listDashboardSpaces(
+    $1.ListDashboardSpacesRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listDashboardSpaces, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$1.GetDashboardBoardResponse> getDashboardBoard(
+    $1.GetDashboardBoardRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getDashboardBoard, request, options: options);
+  }
+
+  /// Server authorizes this Account and applies a single revision-bound replace.
+  $grpc.ResponseFuture<$1.ReplaceDashboardBoardResponse> replaceDashboardBoard(
+    $1.ReplaceDashboardBoardRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$replaceDashboardBoard, request, options: options);
+  }
+
   // method descriptors
 
   static final _$listNodeRevocationTargets = $grpc.ClientMethod<
@@ -633,6 +657,21 @@ class ClientServiceClient extends $grpc.Client {
           '/client.v0.ClientService/GetSupportInfo',
           ($0.GetSupportInfoRequest value) => value.writeToBuffer(),
           $0.GetSupportInfoResponse.fromBuffer);
+  static final _$listDashboardSpaces = $grpc.ClientMethod<
+          $1.ListDashboardSpacesRequest, $1.ListDashboardSpacesResponse>(
+      '/client.v0.ClientService/ListDashboardSpaces',
+      ($1.ListDashboardSpacesRequest value) => value.writeToBuffer(),
+      $1.ListDashboardSpacesResponse.fromBuffer);
+  static final _$getDashboardBoard = $grpc.ClientMethod<
+          $1.GetDashboardBoardRequest, $1.GetDashboardBoardResponse>(
+      '/client.v0.ClientService/GetDashboardBoard',
+      ($1.GetDashboardBoardRequest value) => value.writeToBuffer(),
+      $1.GetDashboardBoardResponse.fromBuffer);
+  static final _$replaceDashboardBoard = $grpc.ClientMethod<
+          $1.ReplaceDashboardBoardRequest, $1.ReplaceDashboardBoardResponse>(
+      '/client.v0.ClientService/ReplaceDashboardBoard',
+      ($1.ReplaceDashboardBoardRequest value) => value.writeToBuffer(),
+      $1.ReplaceDashboardBoardResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('client.v0.ClientService')
@@ -1031,6 +1070,33 @@ abstract class ClientServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.GetSupportInfoRequest.fromBuffer(value),
         ($0.GetSupportInfoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$1.ListDashboardSpacesRequest,
+            $1.ListDashboardSpacesResponse>(
+        'ListDashboardSpaces',
+        listDashboardSpaces_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $1.ListDashboardSpacesRequest.fromBuffer(value),
+        ($1.ListDashboardSpacesResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$1.GetDashboardBoardRequest,
+            $1.GetDashboardBoardResponse>(
+        'GetDashboardBoard',
+        getDashboardBoard_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $1.GetDashboardBoardRequest.fromBuffer(value),
+        ($1.GetDashboardBoardResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$1.ReplaceDashboardBoardRequest,
+            $1.ReplaceDashboardBoardResponse>(
+        'ReplaceDashboardBoard',
+        replaceDashboardBoard_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $1.ReplaceDashboardBoardRequest.fromBuffer(value),
+        ($1.ReplaceDashboardBoardResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListNodeRevocationTargetsResponse>
@@ -1428,4 +1494,31 @@ abstract class ClientServiceBase extends $grpc.Service {
 
   $async.Future<$0.GetSupportInfoResponse> getSupportInfo(
       $grpc.ServiceCall call, $0.GetSupportInfoRequest request);
+
+  $async.Future<$1.ListDashboardSpacesResponse> listDashboardSpaces_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$1.ListDashboardSpacesRequest> $request) async {
+    return listDashboardSpaces($call, await $request);
+  }
+
+  $async.Future<$1.ListDashboardSpacesResponse> listDashboardSpaces(
+      $grpc.ServiceCall call, $1.ListDashboardSpacesRequest request);
+
+  $async.Future<$1.GetDashboardBoardResponse> getDashboardBoard_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$1.GetDashboardBoardRequest> $request) async {
+    return getDashboardBoard($call, await $request);
+  }
+
+  $async.Future<$1.GetDashboardBoardResponse> getDashboardBoard(
+      $grpc.ServiceCall call, $1.GetDashboardBoardRequest request);
+
+  $async.Future<$1.ReplaceDashboardBoardResponse> replaceDashboardBoard_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$1.ReplaceDashboardBoardRequest> $request) async {
+    return replaceDashboardBoard($call, await $request);
+  }
+
+  $async.Future<$1.ReplaceDashboardBoardResponse> replaceDashboardBoard(
+      $grpc.ServiceCall call, $1.ReplaceDashboardBoardRequest request);
 }

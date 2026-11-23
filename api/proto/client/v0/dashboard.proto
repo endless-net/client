@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+package client.v0;
+
+import "client/v0/common.proto";
+
+option go_package = "github.com/endless-net/client/api/client/v0;clientv0";
+
+message DashboardSpace {
+  string account_id = 1;
+  string display_name = 2;
+}
+
+enum DashboardWidgetKind {
+  DASHBOARD_WIDGET_KIND_UNSPECIFIED = 0;
+  DASHBOARD_WIDGET_KIND_HARDWARE = 1;
+  DASHBOARD_WIDGET_KIND_NETWORK = 2;
+  DASHBOARD_WIDGET_KIND_DISK = 3;
+  DASHBOARD_WIDGET_KIND_PERIPHERALS = 4;
+  DASHBOARD_WIDGET_KIND_COMPUTER = 5;
+  DASHBOARD_WIDGET_KIND_TUNNEL = 6;
+}
+
+enum DashboardWidgetSize {
+  DASHBOARD_WIDGET_SIZE_UNSPECIFIED = 0;
+  DASHBOARD_WIDGET_SIZE_SQUARE = 1;
+  DASHBOARD_WIDGET_SIZE_WIDE = 2;
+  DASHBOARD_WIDGET_SIZE_LARGE = 3;
+}
+
+enum DashboardImage {
+  DASHBOARD_IMAGE_UNSPECIFIED = 0;
+  DASHBOARD_IMAGE_RIBBON = 1;
+  DASHBOARD_IMAGE_CABIN = 2;
+  DASHBOARD_IMAGE_GLASS = 3;
+}
+
+message DashboardWidget {
+  DashboardWidgetKind kind = 1;
+  DashboardWidgetSize size = 2;
+}
+
+message DashboardLayout {
+  DashboardImage image = 1;
+  repeated DashboardWidget widgets = 2;
+}
+
+message DashboardBoard {
+  string account_id = 1;
+  uint64 revision = 2;
+  DashboardLayout layout = 3;
+  // Current service result for this profile's native user. Not local authority.
+  bool can_edit = 4;
+}
+
+message ListDashboardSpacesRequest {
+  ProfileRef profile = 1;
+}
+
+message ListDashboardSpacesResponse {
+  repeated DashboardSpace spaces = 1;
+  // The authoritative personal Account. Empty when not provisioned.
+  string primary_account_id = 2;
+}
+
+message GetDashboardBoardRequest {
+  ProfileRef profile = 1;
+  string account_id = 2;
+}
+
+message GetDashboardBoardResponse {
+  DashboardBoard board = 1;
+}
+
+message ReplaceDashboardBoardRequest {
+  ProfileRef profile = 1;
+  string account_id = 2;
+  optional uint64 expected_revision = 3;
+  DashboardLayout layout = 4;
+}
+
+message ReplaceDashboardBoardResponse {
+  DashboardBoard board = 1;
+}

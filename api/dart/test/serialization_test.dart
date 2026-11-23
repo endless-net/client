@@ -4,6 +4,21 @@ import 'package:protobuf/protobuf.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('dashboard keeps explicit revision and isolates Account scope', () {
+    final request = ReplaceDashboardBoardRequest(
+      accountId: 'acc_fixture',
+      expectedRevision: Int64.ZERO,
+      layout: DashboardLayout(image: DashboardImage.DASHBOARD_IMAGE_RIBBON),
+    );
+    final decoded = ReplaceDashboardBoardRequest.fromBuffer(
+      request.writeToBuffer(),
+    );
+    expect(decoded.accountId, 'acc_fixture');
+    expect(decoded.hasExpectedRevision(), isTrue);
+    expect(decoded.expectedRevision, Int64.ZERO);
+    expect(decoded.layout.widgets, isEmpty);
+  });
+
   test('session login has durable correlation without provider codes', () {
     const requestId = '611fb038-329c-4de5-872a-89bcab17287a';
     final start = StartSessionLoginRequest(

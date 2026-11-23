@@ -111,6 +111,8 @@ class Capability extends $pb.ProtobufEnum {
   /// Explicit same-user browser login, separate from seamless renewal.
   static const Capability CAPABILITY_SESSION_LOGIN =
       Capability._(18, _omitEnumNames ? '' : 'CAPABILITY_SESSION_LOGIN');
+  static const Capability CAPABILITY_DASHBOARD =
+      Capability._(19, _omitEnumNames ? '' : 'CAPABILITY_DASHBOARD');
 
   static const $core.List<Capability> values = <Capability>[
     CAPABILITY_UNSPECIFIED,
@@ -132,10 +134,11 @@ class Capability extends $pb.ProtobufEnum {
     CAPABILITY_UPDATE_DISCOVERY,
     CAPABILITY_SUPPORT_INFO,
     CAPABILITY_SESSION_LOGIN,
+    CAPABILITY_DASHBOARD,
   ];
 
   static final $core.List<Capability?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 18);
+      $pb.ProtobufEnum.$_initByValueList(values, 19);
   static Capability? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 

@@ -166,6 +166,15 @@ const (
 	// ClientServiceGetSupportInfoProcedure is the fully-qualified name of the ClientService's
 	// GetSupportInfo RPC.
 	ClientServiceGetSupportInfoProcedure = "/client.v0.ClientService/GetSupportInfo"
+	// ClientServiceListDashboardSpacesProcedure is the fully-qualified name of the ClientService's
+	// ListDashboardSpaces RPC.
+	ClientServiceListDashboardSpacesProcedure = "/client.v0.ClientService/ListDashboardSpaces"
+	// ClientServiceGetDashboardBoardProcedure is the fully-qualified name of the ClientService's
+	// GetDashboardBoard RPC.
+	ClientServiceGetDashboardBoardProcedure = "/client.v0.ClientService/GetDashboardBoard"
+	// ClientServiceReplaceDashboardBoardProcedure is the fully-qualified name of the ClientService's
+	// ReplaceDashboardBoard RPC.
+	ClientServiceReplaceDashboardBoardProcedure = "/client.v0.ClientService/ReplaceDashboardBoard"
 )
 
 // ClientServiceClient is a client for the client.v0.ClientService service.
@@ -261,6 +270,11 @@ type ClientServiceClient interface {
 	GetUpdateInfo(context.Context, *connect.Request[v0.GetUpdateInfoRequest]) (*connect.Response[v0.GetUpdateInfoResponse], error)
 	// UF-23: validated product links and offline-help key.
 	GetSupportInfo(context.Context, *connect.Request[v0.GetSupportInfoRequest]) (*connect.Response[v0.GetSupportInfoResponse], error)
+	// 016: OS owner and an existing native user session. No tunnel changes.
+	ListDashboardSpaces(context.Context, *connect.Request[v0.ListDashboardSpacesRequest]) (*connect.Response[v0.ListDashboardSpacesResponse], error)
+	GetDashboardBoard(context.Context, *connect.Request[v0.GetDashboardBoardRequest]) (*connect.Response[v0.GetDashboardBoardResponse], error)
+	// Server authorizes this Account and applies a single revision-bound replace.
+	ReplaceDashboardBoard(context.Context, *connect.Request[v0.ReplaceDashboardBoardRequest]) (*connect.Response[v0.ReplaceDashboardBoardResponse], error)
 }
 
 // NewClientServiceClient constructs a client for the client.v0.ClientService service. By default,
@@ -544,6 +558,24 @@ func NewClientServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(clientServiceMethods.ByName("GetSupportInfo")),
 			connect.WithClientOptions(opts...),
 		),
+		listDashboardSpaces: connect.NewClient[v0.ListDashboardSpacesRequest, v0.ListDashboardSpacesResponse](
+			httpClient,
+			baseURL+ClientServiceListDashboardSpacesProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("ListDashboardSpaces")),
+			connect.WithClientOptions(opts...),
+		),
+		getDashboardBoard: connect.NewClient[v0.GetDashboardBoardRequest, v0.GetDashboardBoardResponse](
+			httpClient,
+			baseURL+ClientServiceGetDashboardBoardProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("GetDashboardBoard")),
+			connect.WithClientOptions(opts...),
+		),
+		replaceDashboardBoard: connect.NewClient[v0.ReplaceDashboardBoardRequest, v0.ReplaceDashboardBoardResponse](
+			httpClient,
+			baseURL+ClientServiceReplaceDashboardBoardProcedure,
+			connect.WithSchema(clientServiceMethods.ByName("ReplaceDashboardBoard")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -594,6 +626,9 @@ type clientServiceClient struct {
 	notifyLifecycle           *connect.Client[v0.NotifyLifecycleRequest, v0.NotifyLifecycleResponse]
 	getUpdateInfo             *connect.Client[v0.GetUpdateInfoRequest, v0.GetUpdateInfoResponse]
 	getSupportInfo            *connect.Client[v0.GetSupportInfoRequest, v0.GetSupportInfoResponse]
+	listDashboardSpaces       *connect.Client[v0.ListDashboardSpacesRequest, v0.ListDashboardSpacesResponse]
+	getDashboardBoard         *connect.Client[v0.GetDashboardBoardRequest, v0.GetDashboardBoardResponse]
+	replaceDashboardBoard     *connect.Client[v0.ReplaceDashboardBoardRequest, v0.ReplaceDashboardBoardResponse]
 }
 
 // ListNodeRevocationTargets calls client.v0.ClientService.ListNodeRevocationTargets.
@@ -821,6 +856,21 @@ func (c *clientServiceClient) GetSupportInfo(ctx context.Context, req *connect.R
 	return c.getSupportInfo.CallUnary(ctx, req)
 }
 
+// ListDashboardSpaces calls client.v0.ClientService.ListDashboardSpaces.
+func (c *clientServiceClient) ListDashboardSpaces(ctx context.Context, req *connect.Request[v0.ListDashboardSpacesRequest]) (*connect.Response[v0.ListDashboardSpacesResponse], error) {
+	return c.listDashboardSpaces.CallUnary(ctx, req)
+}
+
+// GetDashboardBoard calls client.v0.ClientService.GetDashboardBoard.
+func (c *clientServiceClient) GetDashboardBoard(ctx context.Context, req *connect.Request[v0.GetDashboardBoardRequest]) (*connect.Response[v0.GetDashboardBoardResponse], error) {
+	return c.getDashboardBoard.CallUnary(ctx, req)
+}
+
+// ReplaceDashboardBoard calls client.v0.ClientService.ReplaceDashboardBoard.
+func (c *clientServiceClient) ReplaceDashboardBoard(ctx context.Context, req *connect.Request[v0.ReplaceDashboardBoardRequest]) (*connect.Response[v0.ReplaceDashboardBoardResponse], error) {
+	return c.replaceDashboardBoard.CallUnary(ctx, req)
+}
+
 // ClientServiceHandler is an implementation of the client.v0.ClientService service.
 type ClientServiceHandler interface {
 	// 006: native human session, active profile Network; listing is not a grant.
@@ -914,6 +964,11 @@ type ClientServiceHandler interface {
 	GetUpdateInfo(context.Context, *connect.Request[v0.GetUpdateInfoRequest]) (*connect.Response[v0.GetUpdateInfoResponse], error)
 	// UF-23: validated product links and offline-help key.
 	GetSupportInfo(context.Context, *connect.Request[v0.GetSupportInfoRequest]) (*connect.Response[v0.GetSupportInfoResponse], error)
+	// 016: OS owner and an existing native user session. No tunnel changes.
+	ListDashboardSpaces(context.Context, *connect.Request[v0.ListDashboardSpacesRequest]) (*connect.Response[v0.ListDashboardSpacesResponse], error)
+	GetDashboardBoard(context.Context, *connect.Request[v0.GetDashboardBoardRequest]) (*connect.Response[v0.GetDashboardBoardResponse], error)
+	// Server authorizes this Account and applies a single revision-bound replace.
+	ReplaceDashboardBoard(context.Context, *connect.Request[v0.ReplaceDashboardBoardRequest]) (*connect.Response[v0.ReplaceDashboardBoardResponse], error)
 }
 
 // NewClientServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1193,6 +1248,24 @@ func NewClientServiceHandler(svc ClientServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(clientServiceMethods.ByName("GetSupportInfo")),
 		connect.WithHandlerOptions(opts...),
 	)
+	clientServiceListDashboardSpacesHandler := connect.NewUnaryHandler(
+		ClientServiceListDashboardSpacesProcedure,
+		svc.ListDashboardSpaces,
+		connect.WithSchema(clientServiceMethods.ByName("ListDashboardSpaces")),
+		connect.WithHandlerOptions(opts...),
+	)
+	clientServiceGetDashboardBoardHandler := connect.NewUnaryHandler(
+		ClientServiceGetDashboardBoardProcedure,
+		svc.GetDashboardBoard,
+		connect.WithSchema(clientServiceMethods.ByName("GetDashboardBoard")),
+		connect.WithHandlerOptions(opts...),
+	)
+	clientServiceReplaceDashboardBoardHandler := connect.NewUnaryHandler(
+		ClientServiceReplaceDashboardBoardProcedure,
+		svc.ReplaceDashboardBoard,
+		connect.WithSchema(clientServiceMethods.ByName("ReplaceDashboardBoard")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/client.v0.ClientService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ClientServiceListNodeRevocationTargetsProcedure:
@@ -1285,6 +1358,12 @@ func NewClientServiceHandler(svc ClientServiceHandler, opts ...connect.HandlerOp
 			clientServiceGetUpdateInfoHandler.ServeHTTP(w, r)
 		case ClientServiceGetSupportInfoProcedure:
 			clientServiceGetSupportInfoHandler.ServeHTTP(w, r)
+		case ClientServiceListDashboardSpacesProcedure:
+			clientServiceListDashboardSpacesHandler.ServeHTTP(w, r)
+		case ClientServiceGetDashboardBoardProcedure:
+			clientServiceGetDashboardBoardHandler.ServeHTTP(w, r)
+		case ClientServiceReplaceDashboardBoardProcedure:
+			clientServiceReplaceDashboardBoardHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1472,4 +1551,16 @@ func (UnimplementedClientServiceHandler) GetUpdateInfo(context.Context, *connect
 
 func (UnimplementedClientServiceHandler) GetSupportInfo(context.Context, *connect.Request[v0.GetSupportInfoRequest]) (*connect.Response[v0.GetSupportInfoResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.GetSupportInfo is not implemented"))
+}
+
+func (UnimplementedClientServiceHandler) ListDashboardSpaces(context.Context, *connect.Request[v0.ListDashboardSpacesRequest]) (*connect.Response[v0.ListDashboardSpacesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.ListDashboardSpaces is not implemented"))
+}
+
+func (UnimplementedClientServiceHandler) GetDashboardBoard(context.Context, *connect.Request[v0.GetDashboardBoardRequest]) (*connect.Response[v0.GetDashboardBoardResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.GetDashboardBoard is not implemented"))
+}
+
+func (UnimplementedClientServiceHandler) ReplaceDashboardBoard(context.Context, *connect.Request[v0.ReplaceDashboardBoardRequest]) (*connect.Response[v0.ReplaceDashboardBoardResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("client.v0.ClientService.ReplaceDashboardBoard is not implemented"))
 }

@@ -1,5 +1,19 @@
 # Client API: контрактный candidate
 
+## Общая доска пространства — api/v0.8.0
+
+ListDashboardSpaces, GetDashboardBoard и ReplaceDashboardBoard доступны
+текущему OS owner профиля с действующей native session. Список указывает
+явно назначенный личный Account. Выбор Account не меняет profile, Network
+или намерение соединения. Публичная модель не содержит bearer и grants.
+
+Replace принимает явную ожидаемую ревизию. При конфликте или
+неподтверждённом результате UI запрашивает актуальное состояние, а новую
+запись делает по явному действию. Нулевое значение сохраняет presence.
+Capability DASHBOARD заявляется runtime после реализации. Runtime
+авторизация и серверная запись проверяются отдельно от SDK.
+
+
 ## Повторный вход того же пользователя — candidate api/v0.7.0
 
 003/FR-016/022, CMP-CLIENT-003/005/014: `StartSessionLogin` и `GetSessionLogin`

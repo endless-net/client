@@ -73,6 +73,7 @@ const Capability$json = {
     {'1': 'CAPABILITY_UPDATE_DISCOVERY', '2': 16},
     {'1': 'CAPABILITY_SUPPORT_INFO', '2': 17},
     {'1': 'CAPABILITY_SESSION_LOGIN', '2': 18},
+    {'1': 'CAPABILITY_DASHBOARD', '2': 19},
   ],
 };
 
@@ -88,7 +89,7 @@ final $typed_data.Uint8List capabilityDescriptor = $convert.base64Decode(
     'lfUkVTT1VSQ0VTEA0SHwobQ0FQQUJJTElUWV9NQU5BR0VEX1NFVFRJTkdTEA4SIAocQ0FQQUJJ'
     'TElUWV9SVU5USU1FX0xJRkVDWUNMRRAPEh8KG0NBUEFCSUxJVFlfVVBEQVRFX0RJU0NPVkVSWR'
     'AQEhsKF0NBUEFCSUxJVFlfU1VQUE9SVF9JTkZPEBESHAoYQ0FQQUJJTElUWV9TRVNTSU9OX0xP'
-    'R0lOEBI=');
+    'R0lOEBISGAoUQ0FQQUJJTElUWV9EQVNIQk9BUkQQEw==');
 
 @$core.Deprecated('Use availabilityDescriptor instead')
 const Availability$json = {
