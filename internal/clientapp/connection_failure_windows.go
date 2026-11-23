@@ -29,6 +29,18 @@ func (s *Signals) windowsNetworkFailure(generation uint64, stage string, err err
 		class = "adapter_still_present"
 	case errors.Is(err, dataplane.ErrPolicyCleanupRequired):
 		class = "policy_cleanup_required"
+	case errors.Is(err, dataplane.ErrNoAuthority):
+		class = "no_authority"
+	case errors.Is(err, connectivity.ErrSourceChanged):
+		class = "source_changed"
+	case errors.Is(err, connectivity.ErrUnavailable):
+		class = "unavailable"
+	case errors.Is(err, connectivity.ErrResync):
+		class = "resync_required"
+	case errors.Is(err, dataplane.ErrClosed):
+		class = "closed"
+	case errors.Is(err, connectivity.ErrConfig), errors.Is(err, dataplane.ErrConfiguration):
+		class = "invalid_configuration"
 	case errors.Is(err, context.DeadlineExceeded):
 		class = "deadline"
 	case errors.Is(err, state.ErrStale):
@@ -46,7 +58,14 @@ func (s *Signals) windowsNetworkFailure(generation uint64, stage string, err err
 	// addresses or identifiers, so the diagnostic records only a bounded class
 	// and a typed Windows code if the backend preserved one.
 	fields := []any{"component", "connection", "generation", generation, "operation", stage, "outcome", "failure", "error_code", class}
-	if errors.Is(err, context.DeadlineExceeded) && class != "deadline" {
+	deadline := errors.Is(err, context.DeadlineExceeded)
+	var cleanup interface{ WFPCleanupStep() (string, bool) }
+	if errors.As(err, &cleanup) {
+		step, exhausted := cleanup.WFPCleanupStep()
+		fields = append(fields, "wfp_step", step)
+		deadline = deadline || exhausted
+	}
+	if deadline && class != "deadline" {
 		fields = append(fields, "deadline_exceeded", true)
 	}
 	var code windows.Errno

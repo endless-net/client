@@ -369,6 +369,7 @@ func (d *windowsConnection) readMaps(native windowsConnectionNative) {
 			// still takes the normal offline or terminal path below.
 			continue
 		}
+		d.reportNativeFailure("map_stream_ended", err)
 		epoch := native.BlockSource()
 		if !transientMapError(err) {
 			d.failSource(native, err)
@@ -455,7 +456,6 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 					return err
 				}
 				if err := native.CheckReady(initial); err != nil {
-					d.reportNativeFailure("apply_readiness", err)
 					return nativeConnectionFailure(err, connectivity.FailureApply)
 				}
 				close(d.credentialsReady)

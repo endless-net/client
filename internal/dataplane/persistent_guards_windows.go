@@ -168,7 +168,7 @@ func (g *persistentGuards) remove(ctx context.Context) error {
 		return ctx.Err()
 	}
 	if err := beginFilterTransaction(ctx, g.api); err != nil {
-		return classifyPolicyError(err)
+		return wfpCleanupFailure("begin_transaction", classifyPolicyError(err), err)
 	}
 	finished := false
 	defer func() {
@@ -178,15 +178,15 @@ func (g *persistentGuards) remove(ctx context.Context) error {
 	}()
 	fail := func(err error) error {
 		finished = true
-		if g.api.abort() != nil {
-			return ErrPolicyUncertain
+		if abortErr := g.api.abort(); abortErr != nil {
+			return wfpCleanupFailure("abort_transaction", ErrPolicyUncertain, abortErr)
 		}
 		return err
 	}
 	err := g.api.checkSublayer(g.key)
 	missing := sublayerMissing(err)
 	if err != nil && !missing {
-		return fail(classifyPolicyError(err))
+		return fail(wfpCleanupFailure("check_sublayer", classifyPolicyError(err), err))
 	}
 	for id, r := range g.rules {
 		if ctx.Err() != nil {
@@ -197,31 +197,55 @@ func (g *persistentGuards) remove(ctx context.Context) error {
 			continue
 		}
 		if err != nil {
-			return fail(classifyPolicyError(err))
+			return fail(wfpCleanupFailure("check_filter", classifyPolicyError(err), err))
 		}
 		if missing || g.ids[id] == 0 || actual != g.ids[id] {
-			return fail(ErrPolicyOwnership)
+			return fail(wfpCleanupFailure("check_filter", ErrPolicyOwnership, nil))
 		}
 		if err := g.api.remove(id); err != nil {
-			return fail(classifyPolicyError(err))
+			return fail(wfpCleanupFailure("delete_filter", classifyPolicyError(err), err))
 		}
 	}
 	if !missing {
 		if err := g.api.removeSublayer(g.key); err != nil {
-			return fail(classifyPolicyError(err))
+			return fail(wfpCleanupFailure("delete_sublayer", classifyPolicyError(err), err))
 		}
 	}
 	if ctx.Err() != nil {
 		return fail(ctx.Err())
 	}
-	if g.api.commit() != nil {
+	if err := g.api.commit(); err != nil {
 		_ = g.api.abort()
 		finished = true
-		return ErrPolicyUncertain
+		return wfpCleanupFailure("commit_transaction", ErrPolicyUncertain, err)
 	}
 	finished = true
 	g.removed = true
 	return nil
+}
+
+type wfpCleanupDiagnostic struct {
+	step     string
+	deadline bool
+	cause    error
+}
+
+func (e wfpCleanupDiagnostic) Error() string { return e.cause.Error() }
+func (e wfpCleanupDiagnostic) Unwrap() error { return e.cause }
+func (e wfpCleanupDiagnostic) WFPCleanupStep() (string, bool) {
+	return e.step, e.deadline
+}
+
+func wfpCleanupFailure(step string, class, err error) error {
+	return wfpCleanupDiagnostic{step: step, deadline: errors.Is(err, context.DeadlineExceeded), cause: policyErrorWithWindowsCode(class, err)}
+}
+
+func policyErrorWithWindowsCode(class, err error) error {
+	var code windows.Errno
+	if errors.As(err, &code) {
+		return errors.Join(class, code)
+	}
+	return class
 }
 func (g *persistentGuards) close() error {
 	if g.closed {

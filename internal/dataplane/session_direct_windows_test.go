@@ -46,6 +46,39 @@ func TestWindowsSoleNodeRequiresVerifiedMapAppliedResourcesAndCurrentLease(t *te
 	}
 }
 
+func TestWindowsReadinessReportsMapSupersededDuringApply(t *testing.T) {
+	s, _, _, m, ip, _, _, _, _ := wiredSessionFixture(t)
+	var stages []string
+	var failures []error
+	s.config.ReportFailure = func(_ uint64, operation string, err error) {
+		if operation == "apply_readiness_lease" && s.stopped {
+			t.Error("readiness diagnostic was reported after rollback")
+		}
+		stages = append(stages, operation)
+		failures = append(failures, err)
+	}
+	parent, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	operation, _ := sessionFixtureOperation(t, s, parent, false)
+	operation = WithSourceEpoch(operation, s.BlockSource())
+	afterCreate := ip.afterCreate
+	ip.afterCreate = func() {
+		afterCreate()
+		s.BlockSource()
+	}
+	if err := s.Start(operation, m); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Stop(cleanupContext(t)) }()
+	if err := s.CheckReady(operation); !errors.Is(err, ErrNoAuthority) {
+		t.Fatal("readiness ignored blocked source", err)
+	}
+	if len(stages) != 2 || stages[0] != "apply_source_superseded" || !errors.Is(failures[0], connectivity.ErrSourceChanged) ||
+		stages[1] != "apply_readiness_lease" || !errors.Is(failures[1], ErrNoAuthority) {
+		t.Fatalf("wrong readiness diagnostics: %v %v", stages, failures)
+	}
+}
+
 func TestWindowsOptimisticDADRevokesReadySessionOnLateDuplicate(t *testing.T) {
 	s, _, _, original, ip, _, _, _, clock := wiredSessionFixture(t)
 	empty := nextSessionMap(t, s, original, clock, func(snapshot *coordinator.NetworkMapSnapshot) {

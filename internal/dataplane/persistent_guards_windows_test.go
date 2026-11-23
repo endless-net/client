@@ -241,6 +241,27 @@ type beginProbeAPI struct {
 
 func (a beginProbeAPI) begin() error { return a.beginCall() }
 func (a beginProbeAPI) abort() error { return a.abortCall() }
+
+func TestPersistentGuardCleanupReportsTransactionWaitDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Millisecond)
+	defer cancel()
+	guards := &persistentGuards{api: beginProbeAPI{beginCall: func() error {
+		<-ctx.Done()
+		return windows.Errno(windows.FWP_E_TIMEOUT)
+	}, abortCall: func() error {
+		t.Fatal("aborted a transaction that never acquired its lock")
+		return nil
+	}}}
+	err := guards.remove(ctx)
+	var diagnostic wfpCleanupDiagnostic
+	if !errors.As(err, &diagnostic) || !errors.Is(err, ErrPolicy) || errors.Is(err, context.DeadlineExceeded) || guards.removed {
+		t.Fatalf("unexpected cleanup result: %v", err)
+	}
+	if step, exhausted := diagnostic.WFPCleanupStep(); step != "begin_transaction" || !exhausted {
+		t.Fatalf("wrong diagnostic: %q deadline=%t", step, exhausted)
+	}
+}
+
 func TestFilterTransactionWaitUsesOnlyOriginalBoundedContext(t *testing.T) {
 	timeout := windows.Errno(windows.FWP_E_TIMEOUT)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
