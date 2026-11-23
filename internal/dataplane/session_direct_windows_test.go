@@ -47,11 +47,11 @@ func TestWindowsSoleNodeRequiresVerifiedMapAppliedResourcesAndCurrentLease(t *te
 }
 
 func TestWindowsReadinessReportsMapSupersededDuringApply(t *testing.T) {
-	s, _, _, m, ip, _, _, _, _ := wiredSessionFixture(t)
+	s, _, _, m, ip, _, _, _, clock := wiredSessionFixture(t)
 	var stages []string
 	var failures []error
 	s.config.ReportFailure = func(_ uint64, operation string, err error) {
-		if operation == "apply_readiness_lease" && s.stopped {
+		if operation == "apply_readiness_source" && s.stopped {
 			t.Error("readiness diagnostic was reported after rollback")
 		}
 		stages = append(stages, operation)
@@ -70,12 +70,24 @@ func TestWindowsReadinessReportsMapSupersededDuringApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Stop(cleanupContext(t)) }()
-	if err := s.CheckReady(operation); !errors.Is(err, ErrNoAuthority) {
+	if err := s.CheckReady(operation); !errors.Is(err, connectivity.ErrSourceChanged) {
 		t.Fatal("readiness ignored blocked source", err)
 	}
+	if s.stopped || s.lease.Permissions().NewFlows || s.lease.Permissions().ExistingFlows {
+		t.Fatal("supersession stopped the session or allowed traffic")
+	}
 	if len(stages) != 2 || stages[0] != "apply_source_superseded" || !errors.Is(failures[0], connectivity.ErrSourceChanged) ||
-		stages[1] != "apply_readiness_lease" || !errors.Is(failures[1], ErrNoAuthority) {
+		stages[1] != "apply_readiness_source" || !errors.Is(failures[1], connectivity.ErrSourceChanged) {
 		t.Fatalf("wrong readiness diagnostics: %v %v", stages, failures)
+	}
+	next := nextSessionMap(t, s, m, clock, func(*coordinator.NetworkMapSnapshot) {})
+	epoch, _ := s.lease.SourceSignal()
+	operation = WithSourceEpoch(operation, epoch)
+	if err := s.Refresh(operation, next); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CheckReady(operation); err != nil || !s.lease.Permissions().NewFlows {
+		t.Fatal("replacement map did not restore readiness", err)
 	}
 }
 

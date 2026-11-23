@@ -751,3 +751,53 @@ func TestConnectionWorkerConfirmedConnectDoesNotExpireAtOperationDeadline(t *tes
 		t.Fatal("operation budget replaced continuing authority lifecycle")
 	}
 }
+
+type cleanupRetrySession struct {
+	workerSession
+	disconnect func(context.Context) error
+}
+
+func (s *cleanupRetrySession) Disconnect(ctx context.Context) error { return s.disconnect(ctx) }
+
+func TestFailedSessionRetriesOnlySafeCleanupTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		first, second error
+		shutdown      bool
+		wantCalls     int
+		want          error
+	}{
+		{name: "success", first: errRetryCleanup, wantCalls: 2},
+		{name: "another timeout", first: errRetryCleanup, second: errRetryCleanup, wantCalls: 2, want: errRetryCleanup},
+		{name: "uncertain cleanup", first: connectivity.FailureCleanup, wantCalls: 1, want: connectivity.FailureCleanup},
+		{name: "shutdown", first: errRetryCleanup, shutdown: true, wantCalls: 1, want: errRetryCleanup},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			daemon, stop := context.WithCancel(t.Context())
+			defer stop()
+			w := &ConnectionWorker{config: ConnectionWorkerConfig{CleanupTimeout: time.Second}}
+			calls := 0
+			var first context.Context
+			session := &cleanupRetrySession{disconnect: func(ctx context.Context) error {
+				calls++
+				if _, bounded := ctx.Deadline(); !bounded || ctx.Err() != nil {
+					t.Fatal("cleanup context is not active and bounded")
+				}
+				if calls == 1 {
+					first = ctx
+					if tc.shutdown {
+						stop()
+					}
+					return tc.first
+				}
+				if first.Err() == nil {
+					t.Fatal("previous cleanup context is still active")
+				}
+				return tc.second
+			}}
+			if err := w.disconnectFailedSession(daemon, session); !errors.Is(err, tc.want) || calls != tc.wantCalls {
+				t.Fatalf("cleanup calls = %d, error = %v", calls, err)
+			}
+		})
+	}
+}

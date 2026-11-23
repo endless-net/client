@@ -3,6 +3,7 @@ package clientapp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -395,6 +396,8 @@ func (w *ConnectionWorker) markRetryScheduled() {
 	w.announceLocked()
 }
 
+var errRetryCleanup = fmt.Errorf("cleanup transaction timed out before deletion: %w", connectivity.FailureCleanup)
+
 func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionResult) {
 	t := job.target
 	opBase, cancelOperation := context.WithDeadline(job.lifetime, t.deadline)
@@ -466,12 +469,7 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 	results <- connectionResult{job: job, err: err, maintainSession: sessionMaintenanceAllowed(err)}
 	var primaryErr error
 	if session != nil {
-		cleanup, cancel := w.cleanupContext(job.daemon)
-		cleanupErr := session.Disconnect(cleanup)
-		if cleanupErr == nil {
-			cleanupErr = cleanup.Err()
-		}
-		cancel()
+		cleanupErr := w.disconnectFailedSession(job.daemon, session)
 		if cleanupErr != nil {
 			// A recovery can reset the observation while this owner cleans up.
 			// Carry its failure with the cleanup result unless it was just canceled.
@@ -488,6 +486,25 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 		retained = session
 	}
 	results <- connectionResult{job: job, finished: true, err: err, primaryErr: primaryErr, retained: retained}
+}
+
+func (w *ConnectionWorker) disconnectFailedSession(daemon context.Context, session ConnectionSession) error {
+	cleanup, cancel := w.cleanupContext(daemon)
+	err := session.Disconnect(cleanup)
+	if err == nil {
+		err = cleanup.Err()
+	}
+	cancel()
+	if !errors.Is(err, errRetryCleanup) || daemon.Err() != nil {
+		return err
+	}
+
+	retry, stop := context.WithTimeout(daemon, w.config.CleanupTimeout)
+	defer stop()
+	if err := session.Disconnect(retry); err != nil {
+		return err
+	}
+	return retry.Err()
 }
 
 func (w *ConnectionWorker) cleanupContext(daemon context.Context) (context.Context, context.CancelFunc) {

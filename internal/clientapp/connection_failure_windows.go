@@ -75,6 +75,13 @@ func (s *Signals) windowsNetworkFailure(generation uint64, stage string, err err
 	s.logger.Warn("client.connection.native_failure", fields...)
 }
 
+func windowsCleanupFailure(err error) error {
+	if dataplane.CanRetryCleanup(err) {
+		return errRetryCleanup
+	}
+	return nativeConnectionFailure(err, connectivity.FailureCleanup)
+}
+
 // nativeConnectionFailure discards raw backend diagnostics. Keep only known
 // actionable classifications, with no arbitrary message or native code payload.
 func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error {

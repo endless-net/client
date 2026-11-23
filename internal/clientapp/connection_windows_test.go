@@ -66,6 +66,7 @@ type connectionNativeFixture struct {
 	wrongPort                     bool
 	refreshError                  atomic.Pointer[error]
 	refreshHook                   func(context.Context) error
+	readyHook                     func() error
 	advertisement                 atomic.Pointer[coordinator.TransportAdvertisement]
 	advertisementChanged          chan struct{}
 }
@@ -114,6 +115,9 @@ func (n *connectionNativeFixture) CheckReady(ctx context.Context) error {
 		return errors.New("readiness check before durable endpoint ACK")
 	}
 	n.checks.Add(1)
+	if n.readyHook != nil {
+		return n.readyHook()
+	}
 	return nil
 }
 func (n *connectionNativeFixture) ProbePaths(context.Context) error { n.probes.Add(1); return nil }
@@ -822,5 +826,70 @@ func TestWindowsConnectionFactoryAllocatesNoNativeResourcesOrStateOnConstruction
 	defer clearConnectionKeys(after)
 	if after.Revision != before.Revision || after.Profiles[workerProfile].Connection.Journal != nil || len(f.patches) != 0 {
 		t.Fatal("pure owner construction created side effects")
+	}
+}
+
+func TestWindowsConnectionCompletesStartupAfterMapIsSupersededAtACK(t *testing.T) {
+	f := newConnectionBackendFixture(t)
+	f.factory.config.RenewalInterval = time.Minute
+	ackStarted := make(chan struct{})
+	ackWait := time.NewTimer(time.Second)
+	defer ackWait.Stop()
+	replacementQueued := make(chan struct{})
+	f.afterACK = func(coordinator.UpdateNodeEndpointResponse) {
+		close(ackStarted)
+		select {
+		case <-replacementQueued:
+		case <-ackWait.C:
+		}
+	}
+
+	stream := f.factory.stream
+	f.factory.stream = func(ctx context.Context, v *connectivity.Verifier, cursor *state.MapCursor, receive func(context.Context, connectivity.Map) error) error {
+		return stream(ctx, v, cursor, func(ctx context.Context, m connectivity.Map) error {
+			if err := receive(ctx, m); err != nil {
+				return err
+			}
+			if m.Cursor().Revision.Network > 1 {
+				close(replacementQueued)
+				return nil
+			}
+			select {
+			case <-ackStarted:
+				return connectivity.ErrStreamRotation
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		})
+	}
+	f.native.readyHook = func() error {
+		if f.native.epochs.Load() == 2 && f.native.refreshes.Load() == 0 {
+			return connectivity.ErrSourceChanged
+		}
+		return nil
+	}
+	operation := backendOperation(t, f)
+	budget, err := connectivity.OperationFromContext(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.native.refreshHook = func(ctx context.Context) error {
+		current, err := connectivity.OperationFromContext(ctx)
+		if err != nil || current != budget {
+			return errors.New("refresh lost the startup budget")
+		}
+		return nil
+	}
+	owner, err := f.factory.newOwner(t.Context(), workerProfile, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = owner.Disconnect(workerCallContext(t)) }()
+	if err := owner.Connect(operation, false); err != nil {
+		t.Fatal(err)
+	}
+	if f.native.starts.Load() != 1 || f.native.refreshes.Load() != 1 ||
+		f.native.checks.Load() != 2 || f.native.revoked.Load() {
+		t.Fatal("expected readiness only after processing the replacement map in the original session")
 	}
 }
