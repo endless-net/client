@@ -24,6 +24,8 @@ github.com/dvyukov/go-fuzz v0.0.0-20210103155950-6a8e9d1f2415 h1:q1oJaUPdmpDm/Vy
 github.com/dvyukov/go-fuzz v0.0.0-20210103155950-6a8e9d1f2415/go.mod h1:11Gm+ccJnvAhCNLlf5+cS9KjtbaD5I5zaZpFMsTHWTw=
 github.com/endless-net/billing/api v0.5.0 h1:Vfz92f9B6AlTgg/WBnTFzTFPJj27/vdfK6AsevAw30s=
 github.com/endless-net/billing/api v0.5.0/go.mod h1:rc0T3QHTnNqJ8612ulNDqbVUmGLKOVfDQbgnOyAAm6g=
+github.com/endless-net/billing/api v0.9.0 h1:BL5MjGGC0++dDL+MoOGEFkqjB6ZouwSYq0w9cmclkEI=
+github.com/endless-net/billing/api v0.9.0/go.mod h1:rc0T3QHTnNqJ8612ulNDqbVUmGLKOVfDQbgnOyAAm6g=
 github.com/endless-net/client/api v0.4.0 h1:AxS3jsVVLyn6LXbMgYlgV+i1UEQSBJlZZsNtkRZxjsY=
 github.com/endless-net/client/api v0.4.0/go.mod h1:IVj2p7eLqMHPbvHQN6wrWUcOlSCIoxF44ZUI7CAHDWM=
 github.com/endless-net/client/api v0.5.0 h1:vHfx3hdLB6p51uxQ8Lj/UNhKfpU7HDCDyRD27sI2m3U=
@@ -32,6 +34,8 @@ github.com/endless-net/client/api v0.6.0 h1:ySuUiCriYPYbI36rKcNbUjAvzgnAm3IWYCPS
 github.com/endless-net/client/api v0.6.0/go.mod h1:IVj2p7eLqMHPbvHQN6wrWUcOlSCIoxF44ZUI7CAHDWM=
 github.com/endless-net/client/api v0.7.0 h1:lDQm9Hr/0PA4vwTzNVSl6kc8o8UzWLdqbeXhWU+C2vg=
 github.com/endless-net/client/api v0.7.0/go.mod h1:IVj2p7eLqMHPbvHQN6wrWUcOlSCIoxF44ZUI7CAHDWM=
+github.com/endless-net/client/api v0.8.0 h1:JtRLSN3WVqt0ybSxHULaqJZ8Aq1sr0OkObKQb/VJHTM=
+github.com/endless-net/client/api v0.8.0/go.mod h1:IVj2p7eLqMHPbvHQN6wrWUcOlSCIoxF44ZUI7CAHDWM=
 github.com/endless-net/coordinator/api v0.10.0 h1:13WJNNILrl3YNEhWZjcGs5Ktrrcb+Ws+r94Y7ViOf4M=
 github.com/endless-net/coordinator/api v0.10.0/go.mod h1:yLAfwUj4WS82s0sJcHXRxLPBR8D1fhD+n+UJx5l+SZI=
 github.com/endless-net/coordinator/api v0.11.0 h1:+ukqX4uzKGLUMnE3ikpzXQEX4W+Geg8wfX62jyv6iOw=
@@ -48,6 +52,8 @@ github.com/endless-net/identity/api v0.2.0 h1:C22dS+eK6Jfa9rjqjChQ17L8o2399SFOil
 github.com/endless-net/identity/api v0.2.0/go.mod h1:DmcpvdsQoo846mg2LL9jtscR9CK2GJuSIZsjMwe6eMQ=
 github.com/endless-net/identity/api v0.9.0 h1:xaHuu06DiDgRq2+OTYk+vnKDfkwAHhE4ZHx8poVaWk0=
 github.com/endless-net/identity/api v0.9.0/go.mod h1:DmcpvdsQoo846mg2LL9jtscR9CK2GJuSIZsjMwe6eMQ=
+github.com/endless-net/management/api v0.6.0 h1:Ew1rBszihD0RDAEzdOzJE4CCRMdCcuivnlr6KYDcFVY=
+github.com/endless-net/management/api v0.6.0/go.mod h1:680vmTciYdVhlFweLhdyPoUKPYVcbLzbWvgUVP9sT2I=
 github.com/endless-net/relay/api v0.4.0 h1:f6szHbFk3/xuWqfTVyrg0wq5x+xMxk+WFDrRZZ2yzeM=
 github.com/endless-net/relay/api v0.4.0/go.mod h1:DyZOBGoNp5n93wiUAhRjbrYk0wam8U4OP0hqbDyU4Xw=
 github.com/endless-net/signing/api v0.1.0 h1:CO6Sm3y+SROGIMDKnA1ZEEF0+VAbevrMjIR8LL7841U=
