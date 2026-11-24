@@ -262,7 +262,7 @@ func (c *Controller) runtimeInfo(ctx context.Context, p localipc.Principal) (*cl
 		restriction := &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_PERMISSION_REQUIRED, ReasonKey: "client.owner.required", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}
 		if s.OwnerSID != "" && s.OwnerSID == p.SID {
 			restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "client.session.login_required", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}
-			if dashboardSession(s.Profiles[s.ActiveProfileID], c.config.Now()) {
+			if available, err := dashboardSession(s.Profiles[s.ActiveProfileID], c.config.Now()); err == nil && available {
 				restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_AVAILABLE}
 			}
 		}

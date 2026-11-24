@@ -20,9 +20,12 @@ type DashboardSource interface {
 	Replace(context.Context, state.Profile, *clientv0.ReplaceDashboardBoardRequest) (*clientv0.DashboardBoard, error)
 }
 
-func dashboardSession(profile state.Profile, now time.Time) bool {
-	secrets := profile.Secrets
-	return secrets.Access != "" && secrets.SessionID != "" && secrets.UserID != "" && now.Before(secrets.SessionExpiresAt)
+func dashboardSession(profile state.Profile, now time.Time) (bool, error) {
+	session, err := profile.CurrentSession()
+	if err != nil {
+		return false, err
+	}
+	return session.Access != "" && session.SessionID != "" && session.UserID != "" && now.Before(session.ExpiresAt), nil
 }
 
 func (c *Controller) dashboardProfile(ctx context.Context, ref *clientv0.ProfileRef) (state.Profile, error) {
@@ -45,7 +48,11 @@ func (c *Controller) dashboardProfile(ctx context.Context, ref *clientv0.Profile
 	if !found {
 		return state.Profile{}, status.Error(codes.NotFound, "profile not found")
 	}
-	if !dashboardSession(profile, c.config.Now()) {
+	available, err := dashboardSession(profile, c.config.Now())
+	if err != nil {
+		return state.Profile{}, rpcError(err)
+	}
+	if !available {
 		return state.Profile{}, dashboardRPCError(control.ErrSessionDenied)
 	}
 	return profile, nil

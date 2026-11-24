@@ -41,9 +41,13 @@ func NewDashboard(client *http.Client, announcements Announcements, config Targe
 	return &Dashboard{http: bootstrap.client, announcements: announcements, config: config}, nil
 }
 
-func (d *Dashboard) call(parent context.Context, profile state.Profile, run func(context.Context) error) error {
-	remaining := profile.Secrets.SessionExpiresAt.Sub(d.config.Now())
-	if remaining <= 0 || profile.Secrets.Access == "" || profile.Secrets.SessionID == "" || profile.Secrets.UserID == "" {
+func (d *Dashboard) call(parent context.Context, profile state.Profile, run func(context.Context, string) error) error {
+	session, err := profile.CurrentSession()
+	if err != nil {
+		return err
+	}
+	remaining := session.ExpiresAt.Sub(d.config.Now())
+	if remaining <= 0 || session.Access == "" || session.SessionID == "" || session.UserID == "" {
 		return ErrSessionDenied
 	}
 	ctx, cancel := context.WithTimeout(parent, min(30*time.Second, remaining))
@@ -55,11 +59,11 @@ func (d *Dashboard) call(parent context.Context, profile state.Profile, run func
 	if err != nil || !announcement.MatchesProfile(profile, d.config.Now()) {
 		return ErrBootstrap
 	}
-	err = run(ctx)
+	err = run(ctx, session.Access)
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if !d.config.Now().Before(profile.Secrets.SessionExpiresAt) {
+	if !d.config.Now().Before(session.ExpiresAt) {
 		return ErrSessionDenied
 	}
 	return err
@@ -88,7 +92,7 @@ func (d *Dashboard) List(ctx context.Context, profile state.Profile) (*ipc.ListD
 	client := billingpublicapiconnect.NewBillingUserServiceClient(d.http, profile.ControlOrigin,
 		connect.WithReadMaxBytes(d.config.MaxResponseBytes), connect.WithSendMaxBytes(4096))
 	result := &ipc.ListDashboardSpacesResponse{}
-	err := d.call(ctx, profile, func(ctx context.Context) error {
+	err := d.call(ctx, profile, func(ctx context.Context, access string) error {
 		seen := map[string]bool{}
 		tokens := map[string]bool{}
 		for token := ""; ; {
@@ -97,7 +101,7 @@ func (d *Dashboard) List(ctx context.Context, profile state.Profile) (*ipc.ListD
 			}
 			tokens[token] = true
 			request := &billing.ListAccountsRequest{Page: &billing.PageRequest{PageSize: d.config.UpstreamPageSize, PageToken: token}}
-			response, err := client.ListAccounts(ctx, bearer(request, profile.Secrets.Access))
+			response, err := client.ListAccounts(ctx, bearer(request, access))
 			if err != nil {
 				return dashboardError(err)
 			}
@@ -121,7 +125,7 @@ func (d *Dashboard) List(ctx context.Context, profile state.Profile) (*ipc.ListD
 				break
 			}
 		}
-		primary, err := client.GetPrimaryAccount(ctx, bearer(&billing.GetPrimaryAccountRequest{}, profile.Secrets.Access))
+		primary, err := client.GetPrimaryAccount(ctx, bearer(&billing.GetPrimaryAccountRequest{}, access))
 		if connect.CodeOf(err) == connect.CodeNotFound {
 			return nil
 		}
@@ -151,8 +155,8 @@ func (d *Dashboard) Get(ctx context.Context, profile state.Profile, account stri
 		return nil, ErrDashboardInput
 	}
 	var result *ipc.DashboardBoard
-	err := d.call(ctx, profile, func(ctx context.Context) error {
-		response, err := d.remote(profile).GetBoard(ctx, bearer(request, profile.Secrets.Access))
+	err := d.call(ctx, profile, func(ctx context.Context, access string) error {
+		response, err := d.remote(profile).GetBoard(ctx, bearer(request, access))
 		if err != nil {
 			return dashboardError(err)
 		}
@@ -182,8 +186,8 @@ func (d *Dashboard) Replace(ctx context.Context, profile state.Profile, input *i
 		return nil, ErrDashboardInput
 	}
 	var result *ipc.DashboardBoard
-	err := d.call(ctx, profile, func(ctx context.Context) error {
-		response, err := d.remote(profile).ReplaceBoard(ctx, bearer(request, profile.Secrets.Access))
+	err := d.call(ctx, profile, func(ctx context.Context, access string) error {
+		response, err := d.remote(profile).ReplaceBoard(ctx, bearer(request, access))
 		if err != nil {
 			return dashboardError(err)
 		}

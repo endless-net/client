@@ -19,14 +19,15 @@ import (
 
 type accountFixture struct {
 	billingpublicapiconnect.UnimplementedBillingUserServiceHandler
-	t     *testing.T
-	calls int
-	cycle bool
+	t      *testing.T
+	calls  int
+	cycle  bool
+	access string
 }
 
 func (f *accountFixture) ListAccounts(ctx context.Context, r *connect.Request[billingapi.ListAccountsRequest]) (*connect.Response[billingapi.ListAccountsResponse], error) {
 	f.calls++
-	if r.Header().Get("Authorization") != "Bearer "+strings.Repeat("a", 43) {
+	if r.Header().Get("Authorization") != "Bearer "+f.access {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("secret-user-proof"))
 	}
 	deadline, ok := ctx.Deadline()
@@ -98,7 +99,7 @@ func targetFixture(t *testing.T) (*Targets, state.Profile, *accountFixture, *net
 	p.Secrets.Access = strings.Repeat("a", 43)
 	p.Secrets.SessionID = "native-session"
 	p.Secrets.SessionExpiresAt = clock.Add(time.Hour)
-	accounts := &accountFixture{t: t}
+	accounts := &accountFixture{t: t, access: p.Secrets.Access}
 	networks := &networkFixture{t: t}
 	mux := http.NewServeMux()
 	path, h := billingpublicapiconnect.NewBillingUserServiceHandler(accounts)
