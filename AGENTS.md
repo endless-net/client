@@ -68,8 +68,8 @@ govulncheck ./...
 ```
 
 Непустой вывод `goimports -l` означает ошибку форматирования; исправления
-просматриваются отдельно. Windows `cmd/client/main_windows.go` собирает runtime003;
-`cmd/client/main.go` для остальных платформ сохраняет сборочный каркас.
+просматриваются отдельно. Общая точка входа `cmd/client/main.go` вызывает
+платформенный запуск. Windows запускает runtime003 через SCM.
 Windows amd64, Linux amd64 и macOS amd64/arm64 outputs проверяют сборку,
 но не доказывают реализацию туннеля, маршрутов или системную приёмку.
 Сборка выполняется отдельно командой `go run ./scripts/ci build`.
@@ -101,9 +101,8 @@ local replace и обход pin через GOWORK запрещены.
 На push в `main` Go CI запускает `go test -short`, `govulncheck` и
 `golangci-lint` для Go-кода приложения и инструментов. Workflow `api-ci.yml`
 сверяет сборку API с исходным контрактом. Проверки Dart/JSON выполняются отдельно. Integration/E2E и тесты прежних версий в обязательный
-MVP gate не входят. Отсутствие unit cases у пустого main фиксируется без выдуманного
-покрытия. Наличие Windows entrypoint не объявляет завершённым весь runtime003;
-прочие платформы по-прежнему проверяют только сборочный каркас.
+MVP gate не входят. На платформах без runtime общий бинарник сообщает
+о недоступности службы и завершает запуск с ошибкой.
 
 Автономные команды — `go run ./scripts/ci check`, `go run ./scripts/ci build`
 и `go test -short ./scripts/...`.

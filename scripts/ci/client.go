@@ -64,7 +64,7 @@ func extractConstant(file, key string, length int) (string, error) {
 }
 
 func (r runner) verifyClientContract(ctx context.Context) error {
-	main := filepath.Join(r.root, "cmd/client/main_windows.go")
+	main := filepath.Join(r.root, "cmd/client/main.go")
 	revision, err := extractConstant(main, "clientAPIRevision", 40)
 	if err != nil {
 		return err

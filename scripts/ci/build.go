@@ -240,9 +240,10 @@ func (r runner) buildEntries(ctx context.Context, a artifact, sha, version strin
 	}
 	binary := filepath.Join(tmp, name)
 	env := goEnvironment("GOOS="+a.Target.OS, "GOARCH="+a.Target.Arch, "CGO_ENABLED=0")
-	windowsClient := a.Package == "./cmd/client" && a.Target.OS == "windows"
+	client := a.Package == "./cmd/client"
+	windowsClient := client && a.Target.OS == "windows"
 	args := []string{"go", "build", "-trimpath", "-buildvcs=false"}
-	if windowsClient {
+	if client {
 		if err := r.verifyClientContract(ctx); err != nil {
 			return nil, err
 		}

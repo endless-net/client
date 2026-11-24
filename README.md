@@ -359,8 +359,9 @@ daemon выполнено; фактическая WFP classification/process-los
 
 ## MVP v0: собираемая поставка
 
-Windows entrypoint `cmd/client/main_windows.go` собирает protected state, enrollment, connectivity005,
-Windows IPC и lifecycle через `clientapp.NewWindows` и запускает SCM host.
+Общая точка входа `cmd/client/main.go` разбирает команды и проверяет метаданные
+сборки. На Windows платформенный запуск собирает protected state, enrollment,
+connectivity005, Windows IPC и lifecycle через `clientapp.NewWindows` и запускает SCM host.
 Обязательные ENV и build metadata проверяются до обращения к SCM; отсутствующее
 state при обычном запуске не инициализируется. Явная offline-команда `client init-state`
 создаёт только пустое protected state с теми же validated ENV и build metadata.
@@ -369,7 +370,8 @@ state при обычном запуске не инициализируется
 или запускает службу. Existing/corrupt state не перезаписывается, migration/reset
 и генерация keys/attempt/credentials не выполняются. Для v0.6 эта команда не является
 переходом на новую версию. Установка и запуск установленной службы здесь не выполняются.
-Другие платформы пока сохраняют сборочный каркас `cmd/client/main.go`.
+На Linux и macOS `client print-contract` выводит отпечаток контракта. Запуск
+службы завершится с ошибкой, пока для этих платформ нет реализации runtime.
 Approval/recovery, legacy adoption и системная приёмка003 ещё не завершены.
 
 Private browser approval state хранит исходный device-only request и receipt под
