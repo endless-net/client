@@ -39,7 +39,7 @@ func TestWindowsSessionLoginOwnerPipeDPAPIAndUIReopen(t *testing.T) {
 	upstream := &nativeHTTPFixture{store: s, relogin: true}
 	path, handler := identityapiconnect.NewNativeLoginServiceHandler(upstream)
 	mux.Handle(path, handler)
-	native, err := control.NewNative(&http.Client{Transport: nativeFixtureTransport{mux}}, cfg.Announcements, 65536, "/api/v1/auth/native-login/", time.Now)
+	native, err := control.NewNative(&http.Client{Transport: nativeFixtureTransport{mux}}, cfg.Announcements, 65536, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestWindowsSessionLoginOwnerPipeDPAPIAndUIReopen(t *testing.T) {
 		}
 		if read.Attempt.BrowserAction != nil {
 			sawBrowser = true
-			if !strings.HasPrefix(read.Attempt.BrowserAction.VerificationUrl, cfg.DefaultControlOrigin+"/api/v1/auth/native-login/") {
+			if !strings.HasPrefix(read.Attempt.BrowserAction.VerificationUrl, cfg.DefaultControlOrigin+"/native-login/") {
 				t.Fatal("wrong browser origin")
 			}
 			upstream.mu.Lock()

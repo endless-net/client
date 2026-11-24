@@ -67,7 +67,7 @@ func NewWindowsConnectionFactory(store *state.Store, transport *connectivity.Tra
 	if store == nil || transport == nil || c.Verifier.Clock == nil || c.Verifier.Announcements == nil || c.Verifier.Now == nil || c.validateSettings() != nil {
 		return nil, ErrConnectionWorker
 	}
-	cleanup, err := dataplane.NewWindowsCleanup(store, dataplane.WindowsCleanupConfig{MaxInventoryRows: c.Native.MaxInventoryRows, MaxInterfaces: c.Native.MaxInterfaces, MaxProtected: c.Native.MaxProtected, TransactionWait: c.Native.TransactionWait, PollInterval: c.Native.DADPollInterval})
+	cleanup, err := dataplane.NewWindowsCleanup(store, dataplane.WindowsCleanupConfig{MaxInventoryRows: c.Native.MaxInventoryRows, MaxInterfaces: c.Native.MaxInterfaces, MaxProtected: c.Native.MaxProtected, TransactionWait: c.Native.TransactionWait, PollInterval: c.Native.DADPollInterval, ReportFailure: c.Native.ReportFailure})
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +203,7 @@ func (d *windowsConnection) Connect(operation context.Context, restore bool) err
 	}
 	native, err := d.factory.makeNative(d.lifetime, d.profile, d.generation)
 	if err != nil {
+		d.reportNativeFailure("apply_session_create", err)
 		return nativeConnectionFailure(err, connectivity.FailureApply)
 	}
 	if bootstrap, ok := d.verifier.Announcements.(*control.Bootstrap); ok {
@@ -368,6 +369,7 @@ func (d *windowsConnection) readMaps(native windowsConnectionNative) {
 			// still takes the normal offline or terminal path below.
 			continue
 		}
+		d.reportNativeFailure("map_stream_ended", err)
 		epoch := native.BlockSource()
 		if !transientMapError(err) {
 			d.failSource(native, err)
@@ -414,6 +416,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 					cancel()
 					d.mapApplyMu.Unlock()
 					if err != nil {
+						d.reportNativeFailure("apply_offline", err)
 						return nativeConnectionFailure(err, connectivity.FailureApply)
 					}
 				} else {
@@ -442,6 +445,9 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 			cancel()
 			d.mapApplyMu.Unlock()
 			if err != nil && !errors.Is(err, connectivity.ErrReplay) {
+				if started {
+					d.reportNativeFailure("apply_refresh", err)
+				}
 				return nativeConnectionFailure(err, connectivity.FailureApply)
 			}
 			if !started {
@@ -535,9 +541,11 @@ func (d *windowsConnection) announce(ctx context.Context, online bool, native wi
 		if online {
 			port, err := native.BoundPort()
 			if err != nil {
+				d.reportNativeFailure("apply_listen_port", err)
 				return nativeConnectionFailure(err, connectivity.FailureApply)
 			}
 			if port != d.factory.config.Native.ListenPort {
+				d.reportNativeFailure("apply_listen_port", connectivity.FailureApply)
 				return connectivity.FailureApply
 			}
 		}

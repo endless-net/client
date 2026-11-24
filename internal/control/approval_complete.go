@@ -2,11 +2,12 @@ package control
 
 import (
 	"context"
-	"net/http"
 
 	approvalmodel "github.com/endless-net/client/internal/approval"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 )
 
 // ApprovalCompletion is private daemon output. Registered is present only after
@@ -21,7 +22,7 @@ type ApprovalCompletion struct {
 func (ApprovalCompletion) String() string   { return "[private approval completion]" }
 func (ApprovalCompletion) GoString() string { return "[private approval completion]" }
 
-// Complete sends once with the original poll bearer and no body. An approved
+// Complete sends once with the original poll bearer and request ID. An approved
 // response without a credential remains an observation, never a success grant.
 func (a *Approval) Complete(ctx context.Context, p state.Profile, original []byte, previous approvalmodel.Snapshot) (ApprovalCompletion, error) {
 	q, err := a.input(p, original)
@@ -38,11 +39,29 @@ func (a *Approval) Complete(ctx context.Context, p state.Profile, original []byt
 	ctx, cancel := context.WithTimeout(ctx, remaining)
 	defer cancel()
 	var proof Announcement
-	raw, err := a.call(ctx, &p, &proof, &previous, http.MethodPost, "/nodes/enrollment-requests/"+previous.Request.ID+"/complete", previous.PollToken, nil)
+	var message *wire.CompleteNodeEnrollmentRequestResponse
+	err = a.call(ctx, &p, &proof, &previous, func(ctx context.Context, client publicqueryv1connect.EnrollmentServiceClient) error {
+		response, err := client.CompleteNodeEnrollmentRequest(ctx, bearer(&wire.CompleteNodeEnrollmentRequestRequest{RequestId: previous.Request.ID}, previous.PollToken))
+		if err == nil {
+			message = response.Msg
+		}
+		return err
+	})
 	if err != nil {
 		return ApprovalCompletion{}, err
 	}
-	v, err := coordinator.DecodeCompleteNodeEnrollmentRequestResponse(raw, a.registration.config.MaxResponseBytes)
+	if !knownRPC(message.ProtoReflect()) {
+		return ApprovalCompletion{}, approvalmodel.ErrProtocol
+	}
+	request, err := enrollmentView(message.Request)
+	v := coordinator.CompleteNodeEnrollmentRequestResponse{Request: request}
+	if message.Registration != nil {
+		result, decodeErr := registrationResult(message.Registration)
+		if decodeErr != nil {
+			return ApprovalCompletion{}, decodeErr
+		}
+		v.Registration = &result
+	}
 	now := a.registration.config.Now()
 	if err != nil || now.Before(previous.ObservedAt) || a.validate(q, p, v.Request, 0, now, false) != nil || !approvalSuccessor(previous.Request, v.Request) {
 		return ApprovalCompletion{}, approvalmodel.ErrProtocol

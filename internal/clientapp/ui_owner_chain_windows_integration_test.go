@@ -44,12 +44,7 @@ func TestWindowsUIAgainstActualOwnerChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var input struct {
-		Address          string `json:"address"`
-		CA               []byte `json:"ca"`
-		Bootstrap        []byte `json:"bootstrap"`
-		BrowserSimulator string `json:"browser_simulator"`
-	}
+	var input ownerChainFixture
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&input) != nil || decoder.Decode(new(any)) != io.EOF {
@@ -71,14 +66,14 @@ func TestWindowsUIAgainstActualOwnerChain(t *testing.T) {
 		t.Fatal("owner fixture CA")
 	}
 	c := stateFixtureConfig(t)
-	c.ControlOrigin, c.NativeConsentPrefix = "https://public.invalid", "/api/v1/auth/native-login/"
+	c.ControlOrigin = "https://public.invalid"
 	prepareOwnerChainProfile(t, c, input.Bootstrap)
 	journal := filepath.Join(stateFixtureConfig(t).StateDirectory, "ui-correlation.bin")
 	var original state.Profile
 	var requestID, attemptID string
 	for cycle := range 2 {
 		build, digest := runtimeMetadata(t)
-		runtime, err := NewWindows(c, build, digest, io.Discard)
+		runtime, err := newWindows(c, build, digest, io.Discard, input.signingRoots(t, c.ControlOrigin))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -17,6 +17,7 @@ import (
 	"github.com/endless-net/client/internal/localapi"
 	"github.com/endless-net/client/internal/localipc"
 	"github.com/endless-net/client/internal/windowsservice"
+	signing "github.com/endless-net/signing/api/contract"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 	"google.golang.org/protobuf/proto"
@@ -39,6 +40,10 @@ type WindowsRuntime struct {
 }
 
 func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output io.Writer) (*WindowsRuntime, error) {
+	return newWindows(c, build, digest, output, control.EmbeddedBootstrapRoots())
+}
+
+func newWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output io.Writer, bootstrapRoots map[string]signing.BootstrapRoot) (*WindowsRuntime, error) {
 	if c.Validate() != nil || build == nil || output == nil || digest == [32]byte{} || build.Version == "" || build.Commit == "" || build.Platform != clientv0.Platform_PLATFORM_WINDOWS || build.Architecture != runtime.GOARCH {
 		return nil, ErrConfig
 	}
@@ -80,7 +85,7 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 				return err
 			}
 			lc.Append(t.Signals().hook("control_http", func(ctx context.Context) error { return ctx.Err() }, func(context.Context) error { r.http.CloseIdleConnections(); return nil }))
-			bootstrap, err := control.NewVerifiedBootstrap(r.http, int64(c.MaxBootstrapBytes), time.Now, control.EmbeddedBootstrapRoots(), r.state.Store())
+			bootstrap, err := control.NewVerifiedBootstrap(r.http, int64(c.MaxBootstrapBytes), time.Now, bootstrapRoots, r.state.Store())
 			if err != nil {
 				return err
 			}
@@ -95,6 +100,7 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 				return err
 			}
 			driver := c.connectionDriver(clock, bootstrap)
+			driver.Native.ReportFailure = t.Signals().windowsNetworkFailure
 			driver.PrepareCredentials = credentials.Ensure
 			driver.RefreshCredentials = credentials.Refresh
 			factory, err := NewWindowsConnectionFactory(r.state.Store(), transport, driver)
@@ -103,12 +109,12 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			}
 			r.connection, err = NewConnectionWorker(r.state.Store(), factory, ConnectionWorkerConfig{
 				Clock: clock, RuntimeID: instance, ReadTimeout: c.WriteBudget, PollInterval: c.PollInterval, CleanupTimeout: c.CleanupTimeout,
-				RefreshSession: credentials.RefreshSession, SessionRetryInterval: driver.RetryInterval,
+				RefreshSession: credentials.RefreshSession, SessionRetryInterval: driver.RetryInterval, Logger: t.Signals().logger,
 			})
 			if err != nil {
 				return err
 			}
-			native, err := control.NewNative(r.http, bootstrap, c.MaxResponseBytes, c.NativeConsentPrefix, time.Now)
+			native, err := control.NewNative(r.http, bootstrap, c.MaxResponseBytes, time.Now)
 			if err != nil {
 				return err
 			}
@@ -156,7 +162,7 @@ func NewWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{Revocations: revocations, Connections: r.connection, SessionLogins: sessionLogin, MaxSessionLogins: c.MaxPending, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
+			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{RecentLogs: t.RecentLogs, LogPageKey: pageKey, LogResponseBytes: c.MaxMessageBytes, Revocations: revocations, Connections: r.connection, SessionLogins: sessionLogin, MaxSessionLogins: c.MaxPending, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
 			if err != nil {
 				return err
 			}

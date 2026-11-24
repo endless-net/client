@@ -155,6 +155,26 @@ func (f *mapFixture) sign(t *testing.T, previous *state.MapCursor, issued, expir
 	return raw
 }
 
+func (f *mapFixture) openingRecord(t *testing.T, raw []byte, nonce string) []byte {
+	t.Helper()
+	var event coordinator.MapStreamEvent
+	if err := json.Unmarshal(raw, &event); err != nil {
+		t.Fatal(err)
+	}
+	proof := coordinator.MapTimeProof{Nonce: nonce, MapHash: event.ResultSignature.PayloadHash, ServerTime: event.ResultSignature.IssuedAt}
+	payload, err := coordinator.MapTimeProofSigningPayload(proof, *event.ResultSignature)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(f.mapPrivate, payload))
+	event.TimeProof = &proof
+	result, err := json.Marshal(event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(result, '\n')
+}
+
 func TestVerifierAuthenticatesSubjectDirectionExpiryAndProtectsSnapshot(t *testing.T) {
 	f := newMapFixture(t)
 	v, err := NewVerifier(f.profile, f.config)

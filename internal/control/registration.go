@@ -9,8 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
-	"mime"
 	"net/http"
 	"strings"
 	"time"
@@ -18,6 +16,7 @@ import (
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
 	signing "github.com/endless-net/signing/api/contract"
 )
 
@@ -142,32 +141,22 @@ func (r *Registration) Register(ctx context.Context, p state.Profile, original [
 		return RegisteredResult{}, ErrBootstrap
 	}
 	p.Trust = state.ServerTrust{KeyID: a.KeyID, AnnouncementID: a.ID, Bundle: a.Bundle}
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, p.ControlOrigin+"/nodes/register", bytes.NewReader(original))
-	if err != nil {
+	requestRPC := bearer(&wire.RegisterNodeRequest{
+		Proof: registrationProof(request),
+		Authorization: &wire.RegisterNodeRequest_NativeSession{NativeSession: &wire.NativeSessionRegistration{
+			SessionTokenBinding: request.SessionTokenBinding,
+		}},
+	}, p.Secrets.Access)
+	response, err := r.rpc(p.ControlOrigin).RegisterNode(ctx, requestRPC)
+	if err != nil || ctx.Err() != nil {
+		return RegisteredResult{}, registrationCallError(ctx)
+	}
+	if !knownRPC(response.Msg.ProtoReflect()) {
 		return RegisteredResult{}, ErrRegistrationProtocol
 	}
-	httpRequest.Header.Set("Authorization", "Bearer "+p.Secrets.Access)
-	httpRequest.Header.Set("Content-Type", "application/json")
-	httpRequest.Header.Set("Accept", "application/json")
-	response, err := r.http.Do(httpRequest)
+	result, err := registrationResult(response.Msg.GetRegistration())
 	if err != nil {
-		return RegisteredResult{}, registrationCallError(ctx)
-	}
-	defer func() { _ = response.Body.Close() }()
-	media, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	if err != nil || media != "application/json" || response.StatusCode != http.StatusOK {
-		return RegisteredResult{}, ErrRegistrationUnavailable
-	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, int64(r.config.MaxResponseBytes)+1))
-	if err != nil || len(raw) > r.config.MaxResponseBytes {
-		return RegisteredResult{}, registrationCallError(ctx)
-	}
-	if ctx.Err() != nil {
-		return RegisteredResult{}, registrationCallError(ctx)
-	}
-	result, err := coordinator.DecodeRegisterNodeResponse(raw, r.config.MaxResponseBytes)
-	if err != nil {
-		return RegisteredResult{}, ErrRegistrationProtocol
+		return RegisteredResult{}, err
 	}
 	if !a.MatchesProfile(p, r.config.Now()) {
 		return RegisteredResult{}, ErrBootstrap

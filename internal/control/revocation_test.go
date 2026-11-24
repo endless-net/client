@@ -3,7 +3,6 @@ package control
 import (
 	"bytes"
 	"errors"
-	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -11,10 +10,13 @@ import (
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	contract "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestRevocationTransportRequiresCurrentRevisionAndNeverReplaysMutation(t *testing.T) {
-	for _, mode := range []string{"valid", "missing-revision", "duplicate-revision", "foreign-node", "lost-answer", "false-enforced", "expired-session"} {
+	for _, mode := range []string{"valid", "missing-revision", "unknown-field", "foreign-node", "lost-answer", "false-enforced", "expired-session"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newRegistrationFixture(t)
 			f.p.Attempt.Phase = enrollment.Registered
@@ -26,40 +28,43 @@ func TestRevocationTransportRequiresCurrentRevisionAndNeverReplaysMutation(t *te
 			calls := 0
 			r, err := NewRevocations(&http.Client{Transport: transport(func(request *http.Request) (*http.Response, error) {
 				calls++
-				if _, ok := request.Context().Deadline(); !ok || request.Header.Get("Authorization") != "Bearer "+f.p.Secrets.Access || request.Header.Get("Cookie") != "" || request.Header.Get("X-EndlessNet-Node-Credential") != "" || request.GetBody != nil {
+				if _, ok := request.Context().Deadline(); !ok || request.Header.Get("Authorization") != "Bearer "+f.p.Secrets.Access || request.Header.Get("Cookie") != "" || request.Header.Get("X-EndlessNet-Node-Credential") != "" || request.Header.Get("Idempotency-Key") != "" || request.Header.Get("X-Idempotency-Key") != "" {
 					t.Fatal("wrong credentials or replayable request")
 				}
-				header := http.Header{"Content-Type": {"application/json"}}
-				header.Set(contract.NodeListRevisionHeader, "7")
-				var raw []byte
-				if request.Method == http.MethodGet {
-					network := "network"
-					if mode == "foreign-node" {
-						network = "foreign"
+				if request.URL.Path == publicqueryv1connect.NodeManagementServiceListNodesProcedure {
+					input := &wire.ListNodesRequest{}
+					readRPC(t, request, input)
+					if input.NetworkId != req.NetworkID {
+						t.Fatal("list changed the network selector")
 					}
-					raw = encode(t, []contract.Node{{ID: "lost", NetworkID: network, Hostname: "same-name", Status: "active"}})
-					if mode == "missing-revision" {
-						header.Del(contract.NodeListRevisionHeader)
+					result := &wire.ListNodesResponse{NetworkRevision: 7, Nodes: []*wire.MapNode{{Id: "lost", NetworkId: "network", Hostname: "same-name", Status: "active"}}}
+					switch mode {
+					case "foreign-node":
+						result.Nodes[0].NetworkId = "foreign"
+					case "missing-revision":
+						result.NetworkRevision = 0
+					case "unknown-field":
+						result.ProtoReflect().SetUnknown([]byte{0x78, 0x01})
 					}
-					if mode == "duplicate-revision" {
-						header.Add(contract.NodeListRevisionHeader, "8")
-					}
-				} else {
-					body, _ := io.ReadAll(request.Body)
-					decoded, err := contract.DecodeRevokeNodeRequest(body, 65536)
-					if err != nil || decoded != req || bytes.Contains(body, []byte(f.p.Secrets.Access)) {
-						t.Fatal("command changed or exported a secret", err)
-					}
-					if mode == "lost-answer" {
-						return nil, errors.New("private transport diagnostic")
-					}
-					receipt := contract.NodeRevocationReceipt{AccountID: "account", NetworkID: "network", NodeID: "lost", CommandID: req.CommandID, Status: "accepted", Revision: 8, AcceptedAt: f.now, EnforceBy: f.now.Add(300 * time.Second)}
-					if mode == "false-enforced" {
-						receipt.Status = "enforced"
-					}
-					raw = encode(t, receipt)
+					return rpcResponse(t, request, result), nil
 				}
-				return &http.Response{StatusCode: 200, Header: header, Body: io.NopCloser(bytes.NewReader(raw)), Request: request}, nil
+				input := &wire.RevokeNodeRequest{}
+				body := readRPC(t, request, input)
+				actual := contract.RevokeNodeRequest{AccountID: input.AccountId, NetworkID: input.NetworkId, NodeID: input.NodeId,
+					CommandID: input.CommandId, ExpectedRevision: input.ExpectedRevision}
+				if request.URL.Path != publicqueryv1connect.NodeManagementServiceRevokeNodeProcedure || actual != req ||
+					bytes.Contains(body, []byte(f.p.Secrets.Access)) {
+					t.Fatal("command changed or exported a secret")
+				}
+				if mode == "lost-answer" {
+					return nil, errors.New("private transport diagnostic")
+				}
+				receipt := &wire.NodeRevocationReceipt{AccountId: "account", NetworkId: "network", NodeId: "lost", CommandId: req.CommandID,
+					Status: "accepted", Revision: 8, AcceptedAt: timestamppb.New(f.now), EnforceBy: timestamppb.New(f.now.Add(300 * time.Second))}
+				if mode == "false-enforced" {
+					receipt.Status = "enforced"
+				}
+				return rpcResponse(t, request, &wire.RevokeNodeResponse{Receipt: receipt}), nil
 			})}, staticAnnouncement{f.announcement}, RevocationConfig{MaxBytes: 65536, MaxTargets: 10, Now: func() time.Time { return f.now }})
 			if err != nil {
 				t.Fatal(err)
@@ -68,7 +73,7 @@ func TestRevocationTransportRequiresCurrentRevisionAndNeverReplaysMutation(t *te
 				f.p.Secrets.SessionExpiresAt = f.now
 			}
 			targets, err := r.List(t.Context(), f.p)
-			if mode == "missing-revision" || mode == "duplicate-revision" || mode == "foreign-node" || mode == "expired-session" {
+			if mode == "missing-revision" || mode == "unknown-field" || mode == "foreign-node" || mode == "expired-session" {
 				if err == nil || targets != nil {
 					t.Fatal("unverified target/current revision accepted")
 				}

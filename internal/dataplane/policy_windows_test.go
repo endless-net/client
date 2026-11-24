@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -448,5 +449,15 @@ func TestWindowsFilterSDKLayoutAndOwnershipComparison(t *testing.T) {
 	conditions[0].Match = uint32(wf.MatchTypeNotEqual)
 	if sameNativeFilter(a, b) {
 		t.Fatal("changed native condition accepted")
+	}
+}
+
+func TestPolicyDiagnosticKeepsTypedWindowsError(t *testing.T) {
+	native := windows.Errno(windows.FWP_E_IN_USE)
+	err := policyErrorWithWindowsCode(ErrPolicy, errors.Join(native, errors.New("private transport details")))
+	var code windows.Errno
+	if !errors.Is(err, ErrPolicy) || !errors.As(err, &code) || code != native ||
+		strings.Contains(err.Error(), "private transport details") {
+		t.Fatal("policy diagnostic lost its safe code", err)
 	}
 }

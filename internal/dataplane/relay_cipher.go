@@ -118,7 +118,7 @@ func (b *relayPeerBind) controlAllowed(value transport.Control, incoming bool) e
 		return nil
 	}
 	now := b.mux.transport.config.Now()
-	if now.Before(peer.Transport.IssuedAt) || !now.Before(peer.Transport.ExpiresAt) {
+	if !b.lease.WindowCurrent(m, peer.Transport.IssuedAt, peer.Transport.ExpiresAt, now) {
 		return ErrNoAuthority
 	}
 	for _, offer := range peer.Transport.Profiles {

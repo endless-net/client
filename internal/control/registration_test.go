@@ -16,7 +16,11 @@ import (
 
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 	signing "github.com/endless-net/signing/api/contract"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type registrationFixture struct {
@@ -106,14 +110,15 @@ func TestDirectRegistrationOriginalRequestAndVerifiedDisconnectedResult(t *testi
 	r := f.adapter(t, func(req *http.Request) (*http.Response, error) {
 		calls++
 		deadline, ok := req.Context().Deadline()
-		if !ok || time.Until(deadline) > 30*time.Second || req.Method != http.MethodPost || req.URL.String() != f.p.ControlOrigin+"/nodes/register" || req.Header.Get("Authorization") != "Bearer "+f.p.Secrets.Access || req.Header.Get("Cookie") != "" || req.Header.Get("X-EndlessNet-Node-Credential") != "" {
+		if !ok || time.Until(deadline) > 30*time.Second || req.Method != http.MethodPost || req.URL.String() != f.p.ControlOrigin+publicqueryv1connect.EnrollmentServiceRegisterNodeProcedure || req.Header.Get("Authorization") != "Bearer "+f.p.Secrets.Access || req.Header.Get("Cookie") != "" || req.Header.Get("X-EndlessNet-Node-Credential") != "" {
 			t.Fatal("wrong auth, route or deadline")
 		}
-		body, err := io.ReadAll(req.Body)
-		if err != nil || !bytes.Equal(body, f.original) || bytes.Contains(body, []byte(f.p.Secrets.Access)) || coordinator.VerifyRegisterNodeIdentityProof(f.request) != nil {
+		message := &wire.RegisterNodeRequest{}
+		body := readRPC(t, req, message)
+		if !matchesNativeProof(message, f.request) || bytes.Contains(body, []byte(f.p.Secrets.Access)) || coordinator.VerifyRegisterNodeIdentityProof(f.request) != nil {
 			t.Fatal("original request changed or bearer leaked")
 		}
-		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(encode(t, f.result))), Request: req}, nil
+		return rpcResponse(t, req, registrationMessage(f.result)), nil
 	})
 	got, err := r.Register(context.Background(), f.p, f.original)
 	if err != nil || got.NodeID != "node" || got.AccountID != "account" || got.NetworkID != "network" || got.Credential != f.result.NodeCredential || calls != 1 {
@@ -126,7 +131,7 @@ func TestDirectRegistrationOriginalRequestAndVerifiedDisconnectedResult(t *testi
 }
 
 func TestDirectRegistrationRejectsForeignOrInvalidCredential(t *testing.T) {
-	for _, name := range []string{"account", "network", "node", "operation", "proof", "device", "signature", "purpose", "scope", "expiry", "duplicate"} {
+	for _, name := range []string{"account", "network", "node", "operation", "proof", "device", "signature", "purpose", "scope", "expiry", "unknown"} {
 		t.Run(name, func(t *testing.T) {
 			f := newRegistrationFixture(t)
 			switch name {
@@ -160,11 +165,11 @@ func TestDirectRegistrationRejectsForeignOrInvalidCredential(t *testing.T) {
 				f.sign(t, claims.KeyID, "node:register", f.now)
 			}
 			r := f.adapter(t, func(req *http.Request) (*http.Response, error) {
-				raw := encode(t, f.result)
-				if name == "duplicate" {
-					raw = bytes.Replace(raw, []byte(`"schema_version":2`), []byte(`"schema_version":2,"schema_version":2`), 1)
+				response := registrationMessage(f.result)
+				if name == "unknown" {
+					response.ProtoReflect().SetUnknown([]byte{0x78, 0x01})
 				}
-				return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw)), Request: req}, nil
+				return rpcResponse(t, req, response), nil
 			})
 			got, err := r.Register(context.Background(), f.p, f.original)
 			if !errors.Is(err, ErrRegistrationProtocol) || got != (RegisteredResult{}) {
@@ -232,7 +237,8 @@ func TestDirectRegistrationResponseBudgetsAndLateResult(t *testing.T) {
 			calls := 0
 			r := f.adapter(t, func(req *http.Request) (*http.Response, error) {
 				calls++
-				raw, status, media := encode(t, f.result), 200, "application/json"
+				raw, _ := proto.Marshal(registrationMessage(f.result))
+				status, media := 200, "application/proto"
 				switch name {
 				case "oversize":
 					raw = bytes.Repeat([]byte("x"), 65537)
@@ -255,5 +261,29 @@ func TestDirectRegistrationResponseBudgetsAndLateResult(t *testing.T) {
 				t.Fatal("unsafe result", err)
 			}
 		})
+	}
+}
+
+func matchesNativeProof(m *wire.RegisterNodeRequest, expected coordinator.RegisterNodeRequest) bool {
+	return proto.Equal(m.Proof, registrationProof(expected)) && m.GetNativeSession() != nil &&
+		m.GetNativeSession().SessionTokenBinding == expected.SessionTokenBinding
+}
+
+func registrationMessage(r coordinator.RegisterNodeResponse) *wire.RegisterNodeResponse {
+	return &wire.RegisterNodeResponse{Result: &wire.RegisterNodeResponse_Registration{
+		Registration: testRegistration(r),
+	}}
+}
+
+func testRegistration(r coordinator.RegisterNodeResponse) *wire.NodeRegistration {
+	return &wire.NodeRegistration{IdempotencyId: r.IdempotencyID, NodeCredential: r.NodeCredential,
+		Map: &wire.NetworkMapSnapshot{RegistrationBinding: r.RegistrationBinding,
+			Revision: &wire.MapRevision{Network: r.Revision.Network, Global: r.Revision.Global},
+			Network:  &wire.MapNetwork{Id: r.Network.ID, AccountId: r.Network.AccountID, CreatedAt: timestamppb.New(r.Network.CreatedAt)},
+			Node: &wire.MapNode{Id: r.Node.ID, NetworkId: r.Node.NetworkID, Hostname: r.Node.Hostname,
+				IdentityPublicKey: r.Node.IdentityPublicKey, PublicKey: r.Node.PublicKey, DeviceFingerprint: r.Node.DeviceFingerprint,
+				CreatedAt: timestamppb.New(r.Node.CreatedAt), UpdatedAt: timestamppb.New(r.Node.UpdatedAt), LastSeen: timestamppb.New(r.Node.LastSeen),
+			},
+		},
 	}
 }

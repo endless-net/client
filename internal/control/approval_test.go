@@ -1,7 +1,6 @@
 package control
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +13,10 @@ import (
 	approvalmodel "github.com/endless-net/client/internal/approval"
 	"github.com/endless-net/client/internal/enrollment"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const approvalBase = "https://approval.example.test/devices"
@@ -65,9 +68,38 @@ func (f *approvalFixture) pending() approvalmodel.Snapshot {
 
 func approvalResponse(t *testing.T, req *http.Request, value any) *http.Response {
 	t.Helper()
-	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(encode(t, value))), Request: req}
+	switch v := value.(type) {
+	case coordinator.CreateNodeEnrollmentRequestResponse:
+		return rpcResponse(t, req, &wire.CreateNodeEnrollmentRequestResponse{Request: testEnrollmentView(v.Request), PollToken: v.PollToken, PollAfterSeconds: uint32(v.PollAfterSeconds)})
+	case coordinator.NodeEnrollmentRequestStatusResponse:
+		return rpcResponse(t, req, &wire.GetNodeEnrollmentRequestResponse{Request: testEnrollmentView(v.Request), PollAfterSeconds: uint32(v.PollAfterSeconds)})
+	case coordinator.CompleteNodeEnrollmentRequestResponse:
+		message := &wire.CompleteNodeEnrollmentRequestResponse{Request: testEnrollmentView(v.Request)}
+		if v.Registration != nil {
+			message.Registration = testRegistration(*v.Registration)
+		}
+		return rpcResponse(t, req, message)
+	default:
+		t.Fatalf("unexpected approval response type %T", value)
+		return nil
+	}
 }
 
+func testEnrollmentView(v coordinator.NodeEnrollmentRequest) *wire.NodeEnrollmentRequest {
+	optional := func(t *time.Time) *timestamppb.Timestamp {
+		if t == nil {
+			return nil
+		}
+		return timestamppb.New(*t)
+	}
+	return &wire.NodeEnrollmentRequest{
+		Id: v.ID, Status: v.Status, AccountId: v.AccountID, NetworkId: v.NetworkID, NetworkName: v.NetworkName, Hostname: v.Hostname,
+		PublicKey: v.PublicKey, IdentityPublicKey: v.IdentityPublicKey, DeviceFingerprint: v.DeviceFingerprint, Tags: v.Tags,
+		ApprovalUrl: v.ApprovalURL, ApprovedByUserId: v.ApprovedByUserID, RejectedByUserId: v.RejectedByUserID, RejectionReason: v.RejectionReason,
+		NodeId: v.NodeID, CreatedAt: timestamppb.New(v.CreatedAt), ExpiresAt: timestamppb.New(v.ExpiresAt),
+		ApprovedAt: optional(v.ApprovedAt), RejectedAt: optional(v.RejectedAt), CompletedAt: optional(v.CompletedAt),
+	}
+}
 func (f *approvalFixture) approve() {
 	stamp := f.now
 	f.view.Status = "approved"
@@ -86,18 +118,18 @@ func TestApprovalCreatePollAndReplayKeepCredentialClassesAndOriginalBindings(t *
 			if !ok || time.Until(deadline) > 30*time.Second || req.Header.Get("Cookie") != "" || req.Header.Get("X-EndlessNet-Node-Credential") != "" {
 				t.Fatal("missing budget or mixed credentials")
 			}
-			if req.Method == http.MethodPost {
-				body, err := io.ReadAll(req.Body)
-				if err != nil || !bytes.Equal(body, f.original) || req.URL.String() != f.p.ControlOrigin+"/nodes/enrollment-requests" || req.Header.Get("Authorization") != "" {
+			if req.URL.Path == publicqueryv1connect.EnrollmentServiceCreateNodeEnrollmentRequestProcedure {
+				message := &wire.CreateNodeEnrollmentRequestRequest{}
+				readRPC(t, req, message)
+				if !proto.Equal(message.Proof, registrationProof(f.request)) || req.URL.Host != "control.example" || req.Header.Get("Authorization") != "" {
 					t.Fatal("create input or credentials changed")
 				}
-				response := approvalResponse(t, req, coordinator.CreateNodeEnrollmentRequestResponse{Request: f.view, PollToken: f.token, PollAfterSeconds: 2})
-				if calls == 1 {
-					response.StatusCode = http.StatusCreated
-				}
-				return response, nil
+				return approvalResponse(t, req, coordinator.CreateNodeEnrollmentRequestResponse{Request: f.view, PollToken: f.token, PollAfterSeconds: 2}), nil
 			}
-			if req.Method != http.MethodGet || req.URL.String() != f.p.ControlOrigin+"/nodes/enrollment-requests/opaque-request-1" || req.Header.Get("Authorization") != "Bearer "+f.token || req.ContentLength != 0 {
+			message := &wire.GetNodeEnrollmentRequestRequest{}
+			readRPC(t, req, message)
+			if req.URL.String() != f.p.ControlOrigin+publicqueryv1connect.EnrollmentServiceGetNodeEnrollmentRequestProcedure ||
+				req.Header.Get("Authorization") != "Bearer "+f.token || message.RequestId != f.view.ID {
 				t.Fatal("poll route or poll-only bearer changed")
 			}
 			return approvalResponse(t, req, coordinator.NodeEnrollmentRequestStatusResponse{Request: f.view}), nil

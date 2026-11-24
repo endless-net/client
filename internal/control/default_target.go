@@ -2,19 +2,21 @@ package control
 
 import (
 	"bytes"
+	"connectrpc.com/connect"
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
-	"mime"
 	"net/http"
 	"time"
 
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var ErrDefaultTargetProtocol = errors.New("default enrollment target invalid")
@@ -77,32 +79,27 @@ func (d *DefaultTarget) Resolve(ctx context.Context, p state.Profile, original [
 	if err != nil || !a.MatchesProfile(p, d.registration.config.Now()) {
 		return zero, ErrBootstrap
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.ControlOrigin+coordinator.DefaultTargetPath, bytes.NewReader(original))
-	if err != nil {
-		return zero, ErrDefaultTargetProtocol
-	}
-	req.Header.Set("Authorization", "Bearer "+p.Secrets.Access)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	response, err := d.registration.http.Do(req)
-	if err != nil {
-		return zero, registrationCallError(ctx)
-	}
-	defer func() { _ = response.Body.Close() }()
-	media, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	if err != nil || media != "application/json" || response.StatusCode != http.StatusOK {
-		return zero, ErrRegistrationUnavailable
-	}
-	maxBytes := min(coordinator.DefaultTargetMaxBytes, d.registration.config.MaxResponseBytes)
-	raw, err := io.ReadAll(io.LimitReader(response.Body, int64(maxBytes)+1))
+	req := bearer(&wire.EnsureDefaultEnrollmentTargetRequest{
+		Version: uint32(r.SchemaVersion), RequestId: r.RequestID, AttemptBindingSha256: r.AttemptBindingSHA256,
+		IdentityPublicKey: r.IdentityPublicKey, IdentitySignature: r.IdentitySignature, SessionTokenBinding: r.SessionTokenBinding,
+		CreatedAt: timestamppb.New(r.CreatedAt), ExpiresAt: timestamppb.New(r.ExpiresAt),
+	}, p.Secrets.Access)
+	client := publicqueryv1connect.NewEnrollmentServiceClient(d.registration.http, p.ControlOrigin,
+		connect.WithSendMaxBytes(min(coordinator.DefaultTargetMaxBytes, d.registration.config.MaxRequestBytes)),
+		connect.WithReadMaxBytes(min(coordinator.DefaultTargetMaxBytes, d.registration.config.MaxResponseBytes)))
+	response, err := client.EnsureDefaultEnrollmentTarget(ctx, req)
 	if err != nil {
 		return zero, registrationCallError(ctx)
 	}
-	if len(raw) > maxBytes {
+	m := response.Msg
+	if !knownRPC(m.ProtoReflect()) || m.ResolvedAt.CheckValid() != nil || m.ExpiresAt.CheckValid() != nil {
 		return zero, ErrDefaultTargetProtocol
 	}
-	result, err := coordinator.DecodeDefaultEnrollmentTarget(raw, maxBytes)
-	if err != nil || result.Match(r, d.registration.config.Now()) != nil {
+	result := coordinator.DefaultEnrollmentTarget{
+		SchemaVersion: 1, RequestID: m.RequestId, RequestSHA256: m.RequestSha256, AccountID: m.AccountId,
+		NetworkID: m.NetworkId, Revision: m.Revision, ResolvedAt: m.ResolvedAt.AsTime(), ExpiresAt: m.ExpiresAt.AsTime(),
+	}
+	if result.Match(r, d.registration.config.Now()) != nil {
 		return zero, ErrDefaultTargetProtocol
 	}
 	if ctx.Err() != nil {

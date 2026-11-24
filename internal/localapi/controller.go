@@ -35,6 +35,9 @@ type Runner interface {
 }
 
 type Config struct {
+	RecentLogs                                        func() []RecentLog
+	LogPageKey                                        [32]byte
+	LogResponseBytes                                  int
 	Revocations                                       RevocationSource
 	Connections                                       ConnectionRunner
 	SessionLogins                                     Runner
@@ -82,6 +85,9 @@ func clearProfileKeys(s state.State) {
 }
 
 func New(store *state.Store, runner Runner, config Config) (*Controller, error) {
+	if config.RecentLogs != nil && (config.LogPageKey == [32]byte{} || config.LogResponseBytes <= 0) {
+		return nil, state.ErrCorrupt
+	}
 	if config.SessionLogins != nil && config.MaxSessionLogins <= 0 {
 		return nil, state.ErrCorrupt
 	}

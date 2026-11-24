@@ -14,6 +14,7 @@ import (
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/localipc"
 	signing "github.com/endless-net/signing/api/contract"
+	"google.golang.org/protobuf/proto"
 )
 
 type bootstrapTransport func(*http.Request) (*http.Response, error)
@@ -48,14 +49,18 @@ func TestRootVerifiedWakePinsAutomaticallyAndAcceptsNextRevision(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		raw, err = json.Marshal(signing.SignedBootstrap{Version: 2, Purpose: "bootstrap", RootKeyID: root.KeyID, Metadata: metadata, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, message))})
+		response, err := signing.NewBootstrapResponse(metadata, root.KeyID, ed25519.Sign(private, message))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err = proto.Marshal(response)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 	sign(1)
 	source, err := control.NewVerifiedBootstrap(&http.Client{Transport: bootstrapTransport(func(r *http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw)), Request: r}, nil
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/proto"}}, Body: io.NopCloser(bytes.NewReader(raw)), Request: r}, nil
 	})}, 1<<20, c.config.Now, map[string]signing.BootstrapRoot{origin: root}, c.store)
 	if err != nil {
 		t.Fatal(err)

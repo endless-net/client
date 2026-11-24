@@ -25,10 +25,13 @@ import (
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/state"
+	"github.com/endless-net/client/internal/testwire"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 	sessionv1 "github.com/endless-net/identity/api/session/v1"
 	"github.com/endless-net/identity/api/session/v1/sessionv1connect"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -124,7 +127,7 @@ func newOnlineRenewalBackend(t *testing.T, mode string) *onlineRenewalFixture {
 	}
 	_, handler := sessionv1connect.NewSessionServiceHandler(f)
 	client := &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
-		if r.URL.Path == "/nodes/register" {
+		if r.URL.Path == publicqueryv1connect.EnrollmentServiceRegisterNodeProcedure {
 			return f.node(r)
 		}
 		w := httptest.NewRecorder()
@@ -168,7 +171,7 @@ func (f *onlineRenewalFixture) node(r *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	request, err := coordinator.DecodeRegisterNodeRequest(raw, 16384)
+	request, err := testwire.RenewalRequest(raw)
 	if err != nil || coordinator.ValidateNodeCredentialRenewalRequest(request, 8192) != nil {
 		return nil, errors.New("invalid fixture request")
 	}
@@ -177,7 +180,7 @@ func (f *onlineRenewalFixture) node(r *http.Request) (*http.Response, error) {
 	call := f.nodeCalls
 	if f.mode == "denied" {
 		f.mu.Unlock()
-		return &http.Response{StatusCode: 403, Header: make(http.Header), Body: http.NoBody, Request: r}, nil
+		return &http.Response{StatusCode: 403, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"code":"permission_denied"}`)), Request: r}, nil
 	}
 	response := f.nodes[request.IdempotencyID]
 	if response == nil {
@@ -214,7 +217,7 @@ func (f *onlineRenewalFixture) node(r *http.Request) (*http.Response, error) {
 		}
 		credential := "enc_" + base64.RawURLEncoding.EncodeToString(encoded)
 		result := coordinator.NodeCredentialRenewalResponse{SchemaVersion: 1, IdempotencyID: request.IdempotencyID, RenewalBinding: coordinator.RegistrationIdentityProofBinding(request), RegistrationBinding: request.RegistrationBinding, PreviousCredentialSHA256: coordinator.NodeCredentialSHA256(request.NodeCredential), NetworkID: previous.NetworkID, NodeID: previous.NodeID, NodeCredential: credential, IssuedAt: f.now(), ExpiresAt: expires}
-		response, err = json.Marshal(result)
+		response, err = proto.Marshal(testwire.RenewalReceipt(result))
 		if err != nil {
 			f.mu.Unlock()
 			return nil, err
@@ -239,7 +242,7 @@ func (f *onlineRenewalFixture) node(r *http.Request) (*http.Response, error) {
 		f.entered <- struct{}{}
 		<-f.release // Deliberately misbehaving remote completion after cancellation.
 	}
-	return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(response)), Request: r}, nil
+	return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/proto"}}, Body: io.NopCloser(bytes.NewReader(response)), Request: r}, nil
 }
 
 func awaitCredentialCondition(t *testing.T, condition func() bool) {

@@ -11,14 +11,16 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"mime"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/endless-net/client/internal/state"
 	signingcontract "github.com/endless-net/signing/api/contract"
+	signingapi "github.com/endless-net/signing/api/v1"
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
 )
 
 var ErrBootstrap = errors.New("server trust announcement unavailable")
@@ -134,43 +136,18 @@ func (b *Bootstrap) Fetch(ctx context.Context, origin string) (Announcement, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	r, err := http.NewRequestWithContext(ctx, http.MethodGet, origin+"/server-key", nil)
+	client := signingapiconnect.NewBootstrapServiceClient(b.client, origin,
+		connect.WithReadMaxBytes(int(b.maxBytes)), connect.WithSendMaxBytes(1024))
+	response, err := client.GetBootstrap(ctx, connect.NewRequest(&signingapi.GetBootstrapRequest{}))
 	if err != nil {
-		return Announcement{}, ErrBootstrap
+		return Announcement{}, bootstrapResponseError(err)
 	}
-	r.Header.Set("Accept", "application/json")
-	response, err := b.client.Do(r)
-	if err != nil {
-		var verification *tls.CertificateVerificationError
-		var authority x509.UnknownAuthorityError
-		var invalid x509.CertificateInvalidError
-		var hostname x509.HostnameError
-		if errors.Is(err, ErrBootstrap) || errors.As(err, &verification) || errors.As(err, &authority) || errors.As(err, &invalid) || errors.As(err, &hostname) {
-			return Announcement{}, ErrBootstrap
-		}
-		return Announcement{}, ErrBootstrapUnavailable
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode >= http.StatusInternalServerError || response.StatusCode == http.StatusTooManyRequests {
-		return Announcement{}, ErrBootstrapUnavailable
-	}
-	media, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	if err != nil || media != "application/json" || response.StatusCode != http.StatusOK {
-		return Announcement{}, ErrBootstrap
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, b.maxBytes+1))
-	if err != nil {
-		return Announcement{}, ErrBootstrapUnavailable
-	}
-	if int64(len(data)) > b.maxBytes {
-		return Announcement{}, ErrBootstrap
-	}
-	if ctx.Err() != nil {
+	if response == nil || response.Msg == nil || ctx.Err() != nil {
 		return Announcement{}, ErrBootstrap
 	}
 	var accepted Announcement
 	err = b.store.AcceptBootstrap(ctx, origin, func(previous state.BootstrapCheckpoint) (state.BootstrapCheckpoint, error) {
-		metadata, checkpoint, verifyErr := signingcontract.VerifySignedBootstrap(data, root, origin, b.now(), signingcontract.BootstrapCheckpoint{Revision: previous.Revision, Digest: previous.Digest})
+		metadata, checkpoint, verifyErr := signingcontract.VerifyBootstrapResponse(response.Msg, root, origin, b.now(), signingcontract.BootstrapCheckpoint{Revision: previous.Revision, Digest: previous.Digest})
 		if verifyErr != nil {
 			return state.BootstrapCheckpoint{}, ErrBootstrap
 		}
@@ -190,6 +167,24 @@ func (b *Bootstrap) Fetch(ctx context.Context, origin string) (Announcement, err
 		return Announcement{}, ErrBootstrap
 	}
 	return accepted, nil
+}
+
+func bootstrapResponseError(err error) error {
+	var verification *tls.CertificateVerificationError
+	var authority x509.UnknownAuthorityError
+	var invalid x509.CertificateInvalidError
+	var hostname x509.HostnameError
+	if errors.Is(err, ErrBootstrap) || errors.As(err, &verification) || errors.As(err, &authority) ||
+		errors.As(err, &invalid) || errors.As(err, &hostname) {
+		return ErrBootstrap
+	}
+	var transport *url.Error
+	code := connect.CodeOf(err)
+	if errors.As(err, &transport) || code == connect.CodeUnavailable || code == connect.CodeDeadlineExceeded ||
+		code == connect.CodeResourceExhausted && connect.IsWireError(err) {
+		return ErrBootstrapUnavailable
+	}
+	return ErrBootstrap
 }
 
 // NewVerifiedBootstrap injects independently provisioned public roots and the

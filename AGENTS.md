@@ -72,7 +72,7 @@ govulncheck ./...
 `cmd/client/main.go` для остальных платформ сохраняет сборочный каркас.
 Windows amd64, Linux amd64 и macOS amd64/arm64 outputs проверяют сборку,
 но не доказывают реализацию туннеля, маршрутов или системную приёмку.
-Сборка выполняется отдельно командой `python3 -B scripts/ci.py build`.
+Сборка выполняется отдельно командой `go run ./scripts/ci build`.
 
 Версии инструментов и producer-owned generation/fixtures описаны в
 [контрактном README](api/README.md). При изменении схемы использовать закреплённые
@@ -98,14 +98,17 @@ shims, dual API и fallback ради прошлых версий. Сохраня
 local replace и обход pin через GOWORK запрещены.
 
 Профиль .ci/profile.json явно перечисляет все собственные модули и outputs.
-Базовый CI: format/lint, go vet, go test -short и govulncheck для Go, применимые
-Dart/JSON unit/static checks. Integration/E2E и тесты прежних версий в обязательный
+На push в `main` Go CI запускает `go test -short`, `govulncheck` и
+`golangci-lint` для Go-кода приложения и инструментов. Workflow `api-ci.yml`
+сверяет сборку API с исходным контрактом. Проверки Dart/JSON выполняются отдельно. Integration/E2E и тесты прежних версий в обязательный
 MVP gate не входят. Отсутствие unit cases у пустого main фиксируется без выдуманного
 покрытия. Наличие Windows entrypoint не объявляет завершённым весь runtime003;
 прочие платформы по-прежнему проверяют только сборочный каркас.
 
-Автономные команды: python3 -B scripts/ci.py check и build; unit tooling — scripts/test_ci.py.
+Автономные команды — `go run ./scripts/ci check`, `go run ./scripts/ci build`
+и `go test -short ./scripts/...`.
 Kit не загружается, собственные публичные lint configs остаются у владельца.
-Release допускается только по push обычного v0-тега после exact commit checks и
-сборки. API-тег выбирает только source/SDK, runtime-тег — runtime outputs.
+Тег runtime использует успешный Go CI, тег API — успешную сверку сборки API.
+В обоих случаях workflow сверяет результат на том же SHA, собирает артефакты
+и публикует выпуск. API-тег выбирает только source/SDK, runtime-тег — runtime outputs.
 Spec Kit и общая конституция находятся только в workspace.

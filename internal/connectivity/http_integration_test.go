@@ -16,10 +16,16 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/state"
+	"github.com/endless-net/client/internal/testwire"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 	signing "github.com/endless-net/signing/api/contract"
+	signingwire "github.com/endless-net/signing/api/v1"
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
 )
 
 func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T) {
@@ -27,9 +33,10 @@ func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T)
 		t.Skip("separate owner public TLS streaming fixture")
 	}
 	f := newMapFixture(t)
-	first := append(f.sign(t, nil, f.now, f.now.Add(time.Minute)), '\n')
-	cursor := state.MapCursor{Revision: f.value.Revision, PayloadHash: f.value.MapSignature.PayloadHash, IssuedAt: f.now}
-	issued := f.now.Add(time.Second)
+	firstIssued := f.now.Add(1200 * time.Millisecond)
+	first := f.sign(t, nil, firstIssued, f.now.Add(time.Minute))
+	cursor := state.MapCursor{Revision: f.value.Revision, PayloadHash: f.value.MapSignature.PayloadHash, IssuedAt: firstIssued}
+	issued := firstIssued.Add(time.Second)
 	f.value.Node.Status = "revoked"
 	f.value.Peers = []coordinator.Peer{}
 	f.value.Revision.Network++
@@ -37,35 +44,40 @@ func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T)
 	last := append(f.sign(t, &cursor, issued, issued.Add(time.Minute)), '\n')
 	firstReceived := make(chan struct{})
 	var keyCredentialLeak atomic.Bool
-	var bootstrapRaw []byte
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/server-key" {
-			if r.Header.Get("X-EndlessNet-Node-Credential") != "" || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
-				keyCredentialLeak.Store(true)
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(bootstrapRaw)
-			return
+	var mapCalls atomic.Int32
+	var bootstrapResponse *signingwire.GetBootstrapResponse
+	mux := http.NewServeMux()
+	_, bootstrapHandler := signingapiconnect.NewBootstrapServiceHandler(bootstrapOwner{get: func(r *connect.Request[signingwire.GetBootstrapRequest]) (*connect.Response[signingwire.GetBootstrapResponse], error) {
+		if r.Header().Get("X-EndlessNet-Node-Credential") != "" || r.Header().Get("Authorization") != "" || r.Header().Get("Cookie") != "" {
+			keyCredentialLeak.Store(true)
 		}
-		if r.URL.Path != "/maps/node/stream" || r.Header.Get("X-EndlessNet-Node-Credential") != f.profile.Secrets.NodeCredential {
-			http.Error(w, "denied", http.StatusForbidden)
-			return
+		return connect.NewResponse(bootstrapResponse), nil
+	}})
+	mux.Handle(signingapiconnect.BootstrapServiceGetBootstrapProcedure, bootstrapHandler)
+	_, mapsHandler := publicqueryv1connect.NewConnectivityServiceHandler(mapOwner{watch: func(ctx context.Context, r *connect.Request[wire.WatchMapsRequest], stream *connect.ServerStream[wire.WatchMapsResponse]) error {
+		if r.Msg.NodeId != "node" || r.Header().Get("X-EndlessNet-Node-Credential") != f.profile.Secrets.NodeCredential {
+			return connect.NewError(connect.CodePermissionDenied, errors.New("denied"))
 		}
-		w.Header().Set("Content-Type", "application/x-ndjson")
-		w.Header().Set("X-EndlessNet-Map-Protocol", "3")
-		w.Header().Set("X-EndlessNet-Map-Capabilities", "snapshot,signed-delta,checkpoint,resync,heartbeat")
-		_, _ = w.Write(first)
-		if http.NewResponseController(w).Flush() != nil {
-			return
+		mapCalls.Add(1)
+		var opening, final coordinator.MapStreamEvent
+		if err := json.Unmarshal(f.openingRecord(t, first, r.Msg.Nonce), &opening); err != nil {
+			return err
+		}
+		if err := json.Unmarshal(last, &final); err != nil {
+			return err
+		}
+		if err := stream.Send(testwire.Update(opening)); err != nil {
+			return err
 		}
 		select {
 		case <-firstReceived:
-		case <-r.Context().Done():
-			return
+			return stream.Send(testwire.Update(final))
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-		_, _ = w.Write(last)
-		_ = http.NewResponseController(w).Flush()
-	}))
+	}})
+	mux.Handle(publicqueryv1connect.ConnectivityServiceWatchMapsProcedure, mapsHandler)
+	server := httptest.NewTLSServer(mux)
 	defer server.Close()
 	announcement, err := control.DecodeAnnouncement(server.URL, f.trust.Bundle, f.now)
 	if err != nil {
@@ -88,7 +100,7 @@ func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bootstrapRaw, err = json.Marshal(signing.SignedBootstrap{Version: 2, Purpose: "bootstrap", RootKeyID: root.KeyID, Metadata: metadata, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(private, message))})
+	bootstrapResponse, err = signing.NewBootstrapResponse(metadata, root.KeyID, ed25519.Sign(private, message))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +125,7 @@ func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T)
 	err = transport.Stream(ctx, v, nil, func(_ context.Context, m Map) error {
 		received++
 		if received == 1 {
-			if m.Denied() {
+			if m.Denied() || !f.now.Before(firstIssued) {
 				t.Error("first map not delivered while stream open")
 			}
 			f.now = issued
@@ -123,7 +135,25 @@ func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T)
 		}
 		return nil
 	})
-	if !errors.Is(err, ErrRevoked) || received != 2 || keyCredentialLeak.Load() {
+	if !errors.Is(err, ErrRevoked) || received != 2 || mapCalls.Load() != 1 || keyCredentialLeak.Load() {
 		t.Fatal("public TLS stream/credential separation failed", err, received)
 	}
+}
+
+type bootstrapOwner struct {
+	signingapiconnect.UnimplementedBootstrapServiceHandler
+	get func(*connect.Request[signingwire.GetBootstrapRequest]) (*connect.Response[signingwire.GetBootstrapResponse], error)
+}
+
+func (o bootstrapOwner) GetBootstrap(_ context.Context, r *connect.Request[signingwire.GetBootstrapRequest]) (*connect.Response[signingwire.GetBootstrapResponse], error) {
+	return o.get(r)
+}
+
+type mapOwner struct {
+	publicqueryv1connect.UnimplementedConnectivityServiceHandler
+	watch func(context.Context, *connect.Request[wire.WatchMapsRequest], *connect.ServerStream[wire.WatchMapsResponse]) error
+}
+
+func (o mapOwner) WatchMaps(ctx context.Context, r *connect.Request[wire.WatchMapsRequest], stream *connect.ServerStream[wire.WatchMapsResponse]) error {
+	return o.watch(ctx, r, stream)
 }

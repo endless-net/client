@@ -51,7 +51,7 @@ try {
     $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     $data = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'EndlessNet\Client'
     $profile = Join-Path $work 'service.json'
-    & python -B (Join-Path $PSScriptRoot 'windows_installer.py') configure --defaults $defaultsPath --server $Server --endpoint $endpoint --sid $sid --state-directory (Join-Path $data 'state') --output $profile
+    & go -C $repo run ./scripts/installer configure --defaults $defaultsPath --server $Server --endpoint $endpoint --sid $sid --state-directory (Join-Path $data 'state') --output $profile
     if ($LASTEXITCODE) { throw 'Cannot prepare Client installation settings' }
     $settings = Get-Content -LiteralPath $profile -Raw | ConvertFrom-Json
     $process = [Diagnostics.ProcessStartInfo]::new((Join-Path $ClientBundle 'client.exe'), 'validate-config')
@@ -71,10 +71,10 @@ try {
     & cmake --build (Join-Path $work 'native') --config Release
     if ($LASTEXITCODE) { throw 'Native installer build failed' }
     $actions = Join-Path $work 'native/Release/endlessnet_client_installer_actions.dll'
-    & python -B (Join-Path $PSScriptRoot 'windows_installer.py') render --bundle $ClientBundle --cli $Cli --service-profile $profile --actions $actions --version $Version --output $work
+    & go -C $repo run ./scripts/installer render --bundle $ClientBundle --cli $Cli --service-profile $profile --actions $actions --version $Version --output $work
     if ($LASTEXITCODE) { throw 'Client MSI source generation failed' }
     $msi = Join-Path $output ('EndlessNetClient-v' + $Version.TrimStart('v') + '-windows-amd64.msi')
-    & wix build (Join-Path $work 'EndlessNetClient.wxs') -arch x64 -o $msi
+    & wix build (Join-Path $work 'EndlessNetClient.wxs') -arch x64 -o $msi -acceptEula wix7
     if ($LASTEXITCODE) { throw 'Client MSI compilation failed' }
     if ($Sign) {
         if (-not $CertificateThumbprint) { throw 'CertificateThumbprint is required for signing' }

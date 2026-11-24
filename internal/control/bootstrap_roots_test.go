@@ -1,11 +1,10 @@
 package control
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"io"
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
 	"net/http"
 	"testing"
 	"time"
@@ -44,10 +43,10 @@ func TestEmbeddedRootLookupReachesHTTPSButNeverAcceptsForeignSignature(t *testin
 	calls := 0
 	source, err := NewVerifiedBootstrap(&http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
 		calls++
-		if r.Method != http.MethodGet || r.URL.String() != origin+"/server-key" || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
+		if r.Method != http.MethodPost || r.URL.String() != origin+signingapiconnect.BootstrapServiceGetBootstrapProcedure || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
 			t.Fatal("bootstrap request lost its origin/credential boundary")
 		}
-		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(raw)), Request: r}, nil
+		return bootstrapReply(r, raw), nil
 	})}, 1<<20, func() time.Time { return now }, EmbeddedBootstrapRoots(), store)
 	if err != nil {
 		t.Fatal(err)

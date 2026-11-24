@@ -34,7 +34,7 @@ func TestEnrollmentWorkerResumesDurableRegistrationAndKeepsConcurrentWake(t *tes
 		called <- struct{}{}
 		return response, nil
 	})
-	native, err := NewNative(&http.Client{}, staticAnnouncement{f.announcement}, 65536, "/api/v1/auth/native-login/", func() time.Time { return f.now })
+	native, err := NewNative(&http.Client{}, staticAnnouncement{f.announcement}, 65536, func() time.Time { return f.now })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestEnrollmentWorkerRetainsLoginOnlyBoundary(t *testing.T) {
 		t.Fatal("unexpected call")
 		return nil, ErrRegistrationProtocol
 	})
-	native, err := NewNative(&http.Client{}, staticAnnouncement{f.announcement}, 65536, "/api/v1/auth/native-login/", func() time.Time { return f.now })
+	native, err := NewNative(&http.Client{}, staticAnnouncement{f.announcement}, 65536, func() time.Time { return f.now })
 	if err != nil {
 		t.Fatal(err)
 	}

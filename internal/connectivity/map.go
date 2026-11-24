@@ -106,8 +106,15 @@ func (v *Verifier) previous(cursor *state.MapCursor) (*state.MapCursor, error) {
 	return copyValue, nil
 }
 
-func (v *Verifier) currentTrust(parent context.Context, scope string) (signing.ServerKeyResponse, error) {
-	var empty signing.ServerKeyResponse
+type mapTrust struct {
+	signing.ServerKeyResponse
+	announcement control.Announcement
+	rootVerified bool
+	nodeKey      signing.BootstrapTrustKey
+}
+
+func (v *Verifier) currentTrust(parent context.Context, scope string) (mapTrust, error) {
+	var empty mapTrust
 	if !v.credentialEnds.After(v.config.Now()) {
 		return empty, ErrCredentialExpired
 	}
@@ -121,9 +128,10 @@ func (v *Verifier) currentTrust(parent context.Context, scope string) (signing.S
 		return empty, ctx.Err()
 	}
 	now := v.config.Now()
+	rootVerified := announcement.Checkpoint().Revision != 0
 	// An HTTPS response or a new self-consistent bundle is not an authorized
 	// rotation. Only the strict root-verified source can approve a newer bundle.
-	if err != nil || announcement.Origin != v.origin || (announcement.ID != v.anchorID && !announcement.VerifiedAt(now)) || announcement.Validate(now) != nil {
+	if err != nil || announcement.Origin != v.origin || (rootVerified || announcement.ID != v.anchorID) && !announcement.VerifiedAt(now) || announcement.Validate(now) != nil {
 		return empty, ErrTrust
 	}
 	var trust signing.ServerKeyResponse
@@ -146,7 +154,7 @@ func (v *Verifier) currentTrust(parent context.Context, scope string) (signing.S
 	if err != nil || !verified.ExpiresAt.Equal(v.credentialEnds) {
 		return empty, ErrMap
 	}
-	return trust, nil
+	return mapTrust{ServerKeyResponse: trust, announcement: announcement, rootVerified: rootVerified, nodeKey: key}, nil
 }
 
 // Map is immutable verified input. Its cursor may be durably recorded before
@@ -158,6 +166,7 @@ type Map struct {
 	generation uint64
 	denied     bool
 	verified   ClockSample
+	timeProof  mapTimeAuthority
 }
 
 func (Map) String() string   { return "[verified connectivity map]" }
@@ -211,16 +220,28 @@ func (m Map) Snapshot() (coordinator.NetworkMapSnapshot, error) {
 }
 
 func (v *Verifier) Verify(parent context.Context, raw []byte, previous *state.MapCursor) (Map, error) {
-	return v.verify(parent, raw, previous, false)
+	return v.verify(parent, raw, previous, false, nil)
 }
 
 // VerifySnapshot permits a requested full snapshot with From=0, while retaining
 // the durable anti-rollback floor. It never treats a saved signature as a grant.
 func (v *Verifier) VerifySnapshot(parent context.Context, raw []byte, previous *state.MapCursor) (Map, error) {
-	return v.verify(parent, raw, previous, true)
+	return v.verify(parent, raw, previous, true, nil)
 }
 
-func (v *Verifier) verify(parent context.Context, raw []byte, previous *state.MapCursor, full bool) (Map, error) {
+func (v *Verifier) verify(parent context.Context, raw []byte, previous *state.MapCursor, full bool, challenge *mapTimeChallenge) (Map, error) {
+	var empty Map
+	if parent.Err() != nil {
+		return empty, parent.Err()
+	}
+	event, err := coordinator.DecodeMapStreamEvent(raw, v.config.MaxBytes)
+	if err != nil {
+		return empty, ErrMap
+	}
+	return v.verifyEvent(parent, event, previous, full, challenge)
+}
+
+func (v *Verifier) verifyEvent(parent context.Context, event coordinator.MapStreamEvent, previous *state.MapCursor, full bool, challenge *mapTimeChallenge) (Map, error) {
 	var empty Map
 	if parent.Err() != nil {
 		return empty, parent.Err()
@@ -229,8 +250,7 @@ func (v *Verifier) verify(parent context.Context, raw []byte, previous *state.Ma
 	if err != nil {
 		return empty, err
 	}
-	event, err := coordinator.DecodeMapStreamEvent(raw, v.config.MaxBytes)
-	if err != nil {
+	if (challenge == nil) != (event.TimeProof == nil) {
 		return empty, ErrMap
 	}
 	if event.Type == "heartbeat" || event.Type == "checkpoint" {
@@ -261,8 +281,27 @@ func (v *Verifier) verify(parent context.Context, raw []byte, previous *state.Ma
 		return empty, ErrTrust
 	}
 	public, err := base64.RawURLEncoding.Strict().DecodeString(key.PublicKey)
-	if err != nil || coordinator.VerifyNetworkMap(*value, ed25519.PublicKey(public), v.account, v.network, v.node, v.public, now) != nil || sig.ExpiresAt.Sub(sig.IssuedAt) > 300*time.Second || sig.ExpiresAt.After(v.credentialEnds) {
+	if err != nil {
 		return empty, ErrMap
+	}
+	start, end := now, now
+	var timeProof mapTimeAuthority
+	if challenge != nil {
+		if coordinator.VerifyMapTimeProof(*event.TimeProof, *sig, challenge.nonce, ed25519.PublicKey(public)) != nil {
+			return empty, ErrMap
+		}
+		timeProof = mapTimeAuthority{serverTime: event.TimeProof.ServerTime, sent: challenge.sent}
+		start = timeProof.serverTime
+		end, err = timeProof.upper(sample)
+		if err != nil {
+			return empty, err
+		}
+	}
+	if coordinator.VerifyNetworkMap(*value, ed25519.PublicKey(public), v.account, v.network, v.node, v.public, start) != nil || sig.ExpiresAt.Sub(sig.IssuedAt) > 300*time.Second || sig.ExpiresAt.After(v.credentialEnds) {
+		return empty, ErrMap
+	}
+	if !end.Before(sig.ExpiresAt) || !now.Before(sig.ExpiresAt) {
+		return empty, ErrExpired
 	}
 	if previous != nil {
 		hash, hashErr := hex.DecodeString(previous.PayloadHash)
@@ -286,16 +325,37 @@ func (v *Verifier) verify(parent context.Context, raw []byte, previous *state.Ma
 		return empty, ErrResync
 	}
 	denied := value.Node.Status == "revoked"
-	if relayMap(*value, trust, now) != nil {
+	if relayMap(*value, trust.ServerKeyResponse, end) != nil {
 		return empty, ErrMap
 	}
-	if v.profile(*value, now, denied) != nil {
+	if v.profile(*value, end, denied) != nil {
 		return empty, ErrMap
+	}
+	if challenge != nil {
+		if trust.announcement.Validate(end) != nil {
+			return empty, ErrTrust
+		}
+		verified, clockErr := v.config.Clock.Sample()
+		if clockErr != nil || verified.Uptime < sample.UpperUptime || verified.Wall.Before(sample.Wall) {
+			return empty, ErrClock
+		}
+		sample = verified
+		end, err = timeProof.upper(sample)
+		if err != nil {
+			return empty, err
+		}
+		if !end.Before(sig.ExpiresAt) || !sample.Wall.Before(sig.ExpiresAt) || value.RelayCredential != nil && !end.Before(value.RelayCredential.ExpiresAt) {
+			return empty, ErrExpired
+		}
+		if trust.rootVerified && !trust.announcement.VerifiedAt(end) ||
+			!keyCurrentAt(key, end) || !keyCurrentAt(trust.nodeKey, end) {
+			return empty, ErrTrust
+		}
 	}
 	if parent.Err() != nil {
 		return empty, parent.Err()
 	}
-	return Map{snapshot: *value, profileID: v.profileID, anchorID: v.anchorID, generation: v.generation, denied: denied, verified: sample}, nil
+	return Map{snapshot: *value, profileID: v.profileID, anchorID: v.anchorID, generation: v.generation, denied: denied, verified: sample, timeProof: timeProof}, nil
 }
 
 func sameSignature(a, b *coordinator.MapSignature) bool {

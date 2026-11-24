@@ -25,7 +25,9 @@ import (
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/dataplane"
 	"github.com/endless-net/client/internal/state"
+	"github.com/endless-net/client/internal/testwire"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 	signing "github.com/endless-net/signing/api/contract"
 )
 
@@ -329,7 +331,7 @@ func newConnectionBackendFixturePrepared(t *testing.T, prepare func(*state.Profi
 		if fixture.checkRequest != nil {
 			fixture.checkRequest(request)
 		}
-		if request.Method == http.MethodPatch {
+		if request.URL.Path == publicqueryv1connect.ConnectivityServiceUpdateNodeEndpointProcedure {
 			if !fixture.native.bound.Load() {
 				return nil, errors.New("announcement before socket receipt")
 			}
@@ -337,7 +339,11 @@ func newConnectionBackendFixturePrepared(t *testing.T, prepare func(*state.Profi
 			if err != nil {
 				return nil, err
 			}
-			input, err := coordinator.DecodeUpdateNodeEndpointRequest(raw, 65536)
+			input, err := testwire.EndpointRequest(raw)
+			if err != nil {
+				return nil, err
+			}
+			raw, err = json.Marshal(input)
 			if err != nil {
 				return nil, err
 			}
@@ -370,16 +376,13 @@ func newConnectionBackendFixturePrepared(t *testing.T, prepare func(*state.Profi
 			if lose {
 				return nil, errors.New("lost endpoint ACK")
 			}
-			body, err := json.Marshal(ack)
-			if err != nil {
-				return nil, err
-			}
 			if fixture.afterACK != nil {
 				fixture.afterACK(ack)
 			}
-			return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(body)), Request: request}, nil
+			return testwire.UnaryResponse(request, testwire.EndpointReceipt(ack))
 		}
-		if request.URL.Query().Get("from_network_revision") != "0" || request.URL.Query().Get("from_map_hash") != "" {
+		watch, err := testwire.ReadWatch(request)
+		if err != nil || request.URL.Path != publicqueryv1connect.ConnectivityServiceWatchMapsProcedure || watch.NodeId != "node" || watch.Cursor != nil {
 			return nil, errors.New("not an explicit full snapshot request")
 		}
 		value, err := fixture.store.Load(request.Context())
@@ -404,16 +407,22 @@ func newConnectionBackendFixturePrepared(t *testing.T, prepare func(*state.Profi
 		hash := sha256.Sum256(payload)
 		m.MapSignature = &coordinator.MapSignature{Version: 7, Algorithm: "ed25519-network-map-v7", KeyID: mapBundle.ActiveKeyID, IssuedAt: issued, ExpiresAt: expires, PayloadHash: hex.EncodeToString(hash[:]), Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(mapKey, payload))}
 		event := coordinator.MapStreamEvent{Type: "snapshot", ProtocolVersion: 3, Capabilities: []string{"snapshot", "signed-delta", "checkpoint", "resync", "heartbeat"}, EventID: "map:" + m.MapSignature.PayloadHash, To: m.Revision, Snapshot: &m, ResultSignature: m.MapSignature}
-		body, err := json.Marshal(event)
+		proof := coordinator.MapTimeProof{Nonce: watch.Nonce, MapHash: m.MapSignature.PayloadHash, ServerTime: issued}
+		message, err := coordinator.MapTimeProofSigningPayload(proof, *m.MapSignature)
 		if err != nil {
 			return nil, err
 		}
-		body = append(body, '\n')
+		proof.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(mapKey, message))
+		event.TimeProof = &proof
+		body, err := testwire.Frame(testwire.Update(event))
+		if err != nil {
+			return nil, err
+		}
 		stream := &connectionStreamBody{data: bytes.NewReader(body), closed: make(chan struct{}), ctx: request.Context()}
 		fixture.mu.Lock()
 		fixture.streamBody = stream
 		fixture.mu.Unlock()
-		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/x-ndjson"}, "X-EndlessNet-Map-Protocol": {"3"}, "X-EndlessNet-Map-Capabilities": {"snapshot,signed-delta,checkpoint,resync,heartbeat"}}, Body: stream, Request: request}, nil
+		return testwire.StreamResponse(request, stream), nil
 	})
 	transport, err := connectivity.NewTransport(&http.Client{Transport: trip}, connectivity.HTTPConfig{CallTimeout: time.Second, StreamDuration: 2 * idle, ReadIdleTimeout: idle, MaxRequestBytes: 65536, MaxResponseBytes: 65536, MaxRecords: 8, MaxCalls: 1, MaxStreams: 1})
 	if err != nil {

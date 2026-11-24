@@ -15,6 +15,7 @@ import (
 type WindowsCleanupConfig struct {
 	MaxInventoryRows, MaxInterfaces, MaxProtected int
 	TransactionWait, PollInterval                 time.Duration
+	ReportFailure                                 func(uint64, string, error)
 }
 
 type cleanupStore interface {
@@ -36,12 +37,13 @@ type recoveredGuards interface {
 // This owner never opens/adopts an adapter, restores permits, or reads a map/key
 // as authority. A still-present adapter halts cleanup before native deletion.
 type WindowsCleanup struct {
-	mu      sync.Mutex
-	poll    time.Duration
-	store   cleanupStore
-	ip      *WindowsIP
-	adapter adapterAbsence
-	guards  func(context.Context, state.ResourceJournal) (recoveredGuards, error)
+	mu            sync.Mutex
+	poll          time.Duration
+	store         cleanupStore
+	ip            *WindowsIP
+	adapter       adapterAbsence
+	guards        func(context.Context, state.ResourceJournal) (recoveredGuards, error)
+	reportFailure func(uint64, string, error)
 }
 
 func (*WindowsCleanup) String() string   { return "[Windows resource cleanup]" }
@@ -59,7 +61,7 @@ func NewWindowsCleanup(store *state.Store, config WindowsCleanupConfig) (*Window
 	if err != nil {
 		return nil, err
 	}
-	return &WindowsCleanup{store: store, ip: ip, adapter: adapter, poll: config.PollInterval, guards: func(ctx context.Context, journal state.ResourceJournal) (recoveredGuards, error) {
+	return &WindowsCleanup{store: store, ip: ip, adapter: adapter, poll: config.PollInterval, reportFailure: config.ReportFailure, guards: func(ctx context.Context, journal state.ResourceJournal) (recoveredGuards, error) {
 		return RecoverWindowsGuardCleanup(ctx, journal, config.TransactionWait, config.MaxProtected)
 	}}, nil
 }
@@ -170,7 +172,13 @@ func (c *WindowsCleanup) retire(ctx context.Context, profileID string, expected 
 // Run requires the caller's bounded cleanup context, independent of a cancelled
 // Connect context. A lost ACK keeps the remaining journal for explicit recovery;
 // it never proves rollback or triggers a hidden repeat of native deletions.
-func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, generation uint64) error {
+func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, generation uint64) (result error) {
+	stage := "cleanup_journal"
+	defer func() {
+		if result != nil && c.reportFailure != nil {
+			c.reportFailure(generation, stage, result)
+		}
+	}()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if ctx == nil || c.store == nil || c.ip == nil || c.adapter == nil || c.guards == nil || generation == 0 {
@@ -196,14 +204,17 @@ func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, g
 	if j.Adapter == nil {
 		return c.retire(ctx, profileID, *j)
 	}
+	stage = "cleanup_adapter_absence"
 	if err := c.waitAdapterAbsent(ctx, *j.Adapter); err != nil {
 		return err
 	}
+	stage = "cleanup_journal"
 	j, err = c.change(ctx, profileID, *j, markJournalRemoving)
 	if err != nil {
 		return err
 	}
 	for len(j.Routes) > 0 {
+		stage = "cleanup_route"
 		r := j.Routes[0]
 		p, err := PrepareIPCleanup(j.ID, j.Adapter.LUID, r.Destination)
 		if err != nil {
@@ -212,12 +223,14 @@ func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, g
 		if err := c.ip.RemoveRoute(ctx, p, r); err != nil {
 			return err
 		}
+		stage = "cleanup_journal"
 		j, err = c.change(ctx, profileID, *j, func(j *state.ResourceJournal) { j.Routes = j.Routes[1:] })
 		if err != nil {
 			return err
 		}
 	}
 	for len(j.Addresses) > 0 {
+		stage = "cleanup_address"
 		a := j.Addresses[0]
 		p, err := PrepareIPCleanup(j.ID, j.Adapter.LUID, a.Prefix)
 		if err != nil {
@@ -226,6 +239,7 @@ func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, g
 		if err := c.ip.RemoveAddress(ctx, p, a); err != nil {
 			return err
 		}
+		stage = "cleanup_journal"
 		j, err = c.change(ctx, profileID, *j, func(j *state.ResourceJournal) { j.Addresses = j.Addresses[1:] })
 		if err != nil {
 			return err
@@ -233,30 +247,36 @@ func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, g
 	}
 	// Recheck after row reconciliation: a recycled identity never becomes
 	// permission to remove the old persistent guards.
+	stage = "cleanup_adapter_recheck"
 	if err := c.waitAdapterAbsent(ctx, *j.Adapter); err != nil {
 		return err
 	}
 	if j.Adapter.LUID != 0 {
+		stage = "cleanup_wfp_preflight"
 		key, _ := canonicalGUID(j.ID)
 		if err := c.ip.confirmFilterCleanup(ctx, FilterPlan{session: key, luid: j.Adapter.LUID}); err != nil {
 			return err
 		}
 	}
 	if len(j.Filters) > 0 {
+		stage = "cleanup_wfp_open"
 		guards, err := c.guards(ctx, *j)
 		if err != nil {
 			return err
 		}
+		stage = "cleanup_wfp_remove"
 		if err := guards.CloseAfterIPCleanup(ctx, c.ip); err != nil {
 			// Close only this recovery handle/unfinished transaction. Persistent
 			// denies survive; this is not an acknowledgment of native cleanup.
 			return errors.Join(err, guards.ReleaseForRecovery())
 		}
+		stage = "cleanup_journal"
 		j, err = c.change(ctx, profileID, *j, func(j *state.ResourceJournal) { j.Filters = nil })
 		if err != nil {
 			return err
 		}
 	}
+	stage = "cleanup_journal"
 	j, err = c.change(ctx, profileID, *j, func(j *state.ResourceJournal) { j.Adapter = nil })
 	if err != nil {
 		return err

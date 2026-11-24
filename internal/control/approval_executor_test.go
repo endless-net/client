@@ -1,11 +1,9 @@
 package control
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -14,7 +12,10 @@ import (
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 	signing "github.com/endless-net/signing/api/contract"
+	"google.golang.org/protobuf/proto"
 )
 
 func (f *approvalFixture) approvalExecutor(t *testing.T, trip transport) *ApprovalExecutor {
@@ -50,18 +51,19 @@ func TestApprovalExecutorLostCreateAndCompleteRecoverOriginal(t *testing.T) {
 			createCalls, pollCalls, completeCalls := 0, 0, 0
 			e := f.approvalExecutor(t, func(req *http.Request) (*http.Response, error) {
 				approvalSendClaim(t, &f, req)
-				switch {
-				case req.URL.Path == "/nodes/enrollment-requests":
+				switch req.URL.Path {
+				case publicqueryv1connect.EnrollmentServiceCreateNodeEnrollmentRequestProcedure:
 					createCalls++
-					raw, err := io.ReadAll(req.Body)
-					if err != nil || !bytes.Equal(raw, f.original) || req.Header.Get("Authorization") != "" {
-						t.Fatal("Create changed original device input", err)
+					message := &wire.CreateNodeEnrollmentRequestRequest{}
+					readRPC(t, req, message)
+					if !proto.Equal(message.Proof, registrationProof(f.request)) || req.Header.Get("Authorization") != "" {
+						t.Fatal("Create changed original device input")
 					}
 					if lost == "create" && createCalls == 1 {
 						return nil, errors.New("private lost Create reply")
 					}
 					return approvalResponse(t, req, coordinator.CreateNodeEnrollmentRequestResponse{Request: f.view, PollToken: f.token, PollAfterSeconds: 2}), nil
-				case req.Method == http.MethodGet:
+				case publicqueryv1connect.EnrollmentServiceGetNodeEnrollmentRequestProcedure:
 					pollCalls++
 					if req.Header.Get("Authorization") != "Bearer "+f.token {
 						t.Fatal("poll replaced original capability")
@@ -73,7 +75,7 @@ func TestApprovalExecutorLostCreateAndCompleteRecoverOriginal(t *testing.T) {
 					if completeCalls == 1 {
 						f.enrolled(t)
 					}
-					if req.URL.Path != "/nodes/enrollment-requests/"+f.view.ID+"/complete" || req.Header.Get("Authorization") != "Bearer "+f.token {
+					if req.URL.Path != publicqueryv1connect.EnrollmentServiceCompleteNodeEnrollmentRequestProcedure || req.Header.Get("Authorization") != "Bearer "+f.token {
 						t.Fatal("Complete changed original capability/path")
 					}
 					if lost == "complete" && completeCalls == 1 {
@@ -301,7 +303,7 @@ func TestApprovalExecutorPollExpiryDoesNotRenewRequest(t *testing.T) {
 	polls := 0
 	e := f.approvalExecutor(t, func(req *http.Request) (*http.Response, error) {
 		approvalSendClaim(t, &f, req)
-		if req.Method == http.MethodPost {
+		if req.URL.Path == publicqueryv1connect.EnrollmentServiceCreateNodeEnrollmentRequestProcedure {
 			return approvalResponse(t, req, coordinator.CreateNodeEnrollmentRequestResponse{Request: f.view, PollToken: f.token, PollAfterSeconds: 2}), nil
 		}
 		polls++

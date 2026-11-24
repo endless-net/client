@@ -27,11 +27,16 @@ import (
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/localipc"
 	"github.com/endless-net/client/internal/state"
+	"github.com/endless-net/client/internal/testwire"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 	sessionv1 "github.com/endless-net/identity/api/session/v1"
 	identityapi "github.com/endless-net/identity/api/v1"
 	"github.com/endless-net/identity/api/v1/identityapiconnect"
 	signing "github.com/endless-net/signing/api/contract"
+	signingwire "github.com/endless-net/signing/api/v1"
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -40,6 +45,7 @@ import (
 // Real HTTPS/SDK, the factory's observed transport, DPAPI and pipe are retained.
 type recoveryRemote struct {
 	identityapiconnect.UnimplementedNativeLoginServiceHandler
+	publicqueryv1connect.UnimplementedEnrollmentServiceHandler
 	mu       sync.Mutex
 	store    *state.Store
 	profile  string
@@ -85,42 +91,79 @@ func (f *recoveryRemote) StartNativeLogin(ctx context.Context, q *connect.Reques
 	return connect.NewResponse(&identityapi.StartNativeLoginResponse{Transaction: tx, PollAuthorization: strings.Repeat("p", 43)}), nil
 }
 
-func (f *recoveryRemote) register(w http.ResponseWriter, r *http.Request) {
+func (f *recoveryRemote) RegisterNode(ctx context.Context, r *connect.Request[wire.RegisterNodeRequest]) (*connect.Response[wire.RegisterNodeResponse], error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	raw, err := io.ReadAll(io.LimitReader(r.Body, 65537))
-	p, claimErr := f.sent(r.Context(), raw)
-	if err != nil || claimErr != nil || r.Header.Get("Authorization") != "Bearer "+p.Secrets.Access || string(raw) != p.Secrets.RegistrationRequest {
-		http.Error(w, "binding rejected", http.StatusPreconditionFailed)
-		return
+	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(r.Msg)
+	if err != nil {
+		return nil, err
+	}
+	p, err := f.sent(ctx, raw)
+	if err != nil || r.Header().Get("Authorization") != "Bearer "+p.Secrets.Access {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("binding rejected"))
+	}
+	q, err := coordinator.DecodeRegisterNodeRequest([]byte(p.Secrets.RegistrationRequest), 65536)
+	if err != nil || !proto.Equal(r.Msg.Proof, testwire.DeviceProof(q)) ||
+		r.Msg.GetNativeSession().GetSessionTokenBinding() != q.SessionTokenBinding {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("request rejected"))
 	}
 	if !f.replay {
-		http.Error(w, "lost reply fixture", http.StatusServiceUnavailable)
-		return
-	}
-	q, err := coordinator.DecodeRegisterNodeRequest(raw, 65536)
-	if err != nil {
-		http.Error(w, "request rejected", http.StatusBadRequest)
-		return
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("lost reply fixture"))
 	}
 	expires := p.Attempt.CreatedAt.Add(time.Hour)
 	claims := coordinator.NodeCredentialClaims{Version: 3, Algorithm: "ed25519-node-credential-v3", KeyID: f.keyID, NetworkID: q.NetworkID, NodeID: "node", Scopes: []string{"node:register"}, ExpiresAt: expires}
 	payload, err := coordinator.NodeCredentialSigningPayload(f.keyID, claims.NetworkID, claims.NodeID, claims.Scopes, expires)
 	if err != nil {
-		http.Error(w, "claim rejected", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	claims.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(f.key, payload))
 	encoded, err := json.Marshal(claims)
 	if err != nil {
-		http.Error(w, "claim rejected", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
-	result := coordinator.RegisterNodeResponse{SchemaVersion: 2, IdempotencyID: q.IdempotencyID, RegistrationBinding: coordinator.RegistrationIdentityProofBinding(q), Network: coordinator.Network{ID: q.NetworkID, AccountID: q.AccountID}, Node: coordinator.Node{ID: "node", NetworkID: q.NetworkID, IdentityPublicKey: q.IdentityPublicKey, PublicKey: q.PublicKey, DeviceFingerprint: q.DeviceFingerprint}, NodeCredential: "enc_" + base64.RawURLEncoding.EncodeToString(encoded)}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(result)
+	result := coordinator.RegisterNodeResponse{SchemaVersion: 2, IdempotencyID: q.IdempotencyID, RegistrationBinding: coordinator.RegistrationIdentityProofBinding(q),
+		Network: coordinator.Network{ID: q.NetworkID, AccountID: q.AccountID}, Node: coordinator.Node{ID: "node", NetworkID: q.NetworkID, IdentityPublicKey: q.IdentityPublicKey, PublicKey: q.PublicKey, DeviceFingerprint: q.DeviceFingerprint},
+		NodeCredential: "enc_" + base64.RawURLEncoding.EncodeToString(encoded)}
+	return connect.NewResponse(&wire.RegisterNodeResponse{Result: &wire.RegisterNodeResponse_Registration{Registration: testwire.Registration(result)}}), nil
 }
 
+type recoveryBootstrap struct {
+	signingapiconnect.UnimplementedBootstrapServiceHandler
+	response *signingwire.GetBootstrapResponse
+}
+
+func (f *recoveryBootstrap) GetBootstrap(context.Context, *connect.Request[signingwire.GetBootstrapRequest]) (*connect.Response[signingwire.GetBootstrapResponse], error) {
+	return connect.NewResponse(f.response), nil
+}
+
+func (f *recoveryBootstrap) prepare(t *testing.T, origin string, bundles signing.ServerKeyResponse) ([]byte, map[string]signing.BootstrapRoot) {
+	t.Helper()
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{88}, 32))
+	public := key.Public().(ed25519.PublicKey)
+	digest := sha256.Sum256(public)
+	root := signing.BootstrapRoot{KeyID: "ed25519:" + base64.RawURLEncoding.EncodeToString(digest[:]), PublicKey: public}
+	now := time.Now().UTC()
+	start, expires := now.Add(-time.Hour), now.Add(2*time.Hour)
+	for _, b := range []*signing.BootstrapTrustBundle{&bundles.TrustBundle, &bundles.NodeCredentialTrustBundle, &bundles.RelayTrustBundle} {
+		for i := range b.Keys {
+			b.Keys[i].NotBefore, b.Keys[i].NotAfter = &start, &expires
+		}
+	}
+	metadata := signing.BootstrapMetadata{Origin: origin, Revision: 1, IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour), Bundles: bundles}
+	payload, err := signing.BootstrapSigningBytes(metadata, root.KeyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.response, err = signing.NewBootstrapResponse(metadata, root.KeyID, ed25519.Sign(key, payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(bundles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw, map[string]signing.BootstrapRoot{origin: root}
+}
 func prepareRecoveryState(t *testing.T, c Config, bundle []byte, registration bool) state.Profile {
 	t.Helper()
 	backend, err := state.OpenWindows(c.StateDirectory, c.ServiceSID, c.StateLockRetry)
@@ -213,29 +256,26 @@ func TestWindowsAssemblyRecoversOriginalLoginAndRegistrationAfterLostReply(t *te
 			}
 			projection := signing.ServerKeyResponse{TrustBundle: bundle(1), NodeCredentialTrustBundle: bundle(7), RelayTrustBundle: bundle(3)}
 			remote.keyID = projection.NodeCredentialTrustBundle.ActiveKeyID
-			raw, err := json.Marshal(projection)
-			if err != nil {
-				t.Fatal(err)
-			}
 			mux := http.NewServeMux()
-			mux.HandleFunc("/server-key", func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write(raw)
-			})
-			path, handler := identityapiconnect.NewNativeLoginServiceHandler(remote)
+			bootstrap := &recoveryBootstrap{}
+			path, handler := signingapiconnect.NewBootstrapServiceHandler(bootstrap)
 			mux.Handle(path, handler)
-			mux.HandleFunc("/nodes/register", remote.register)
+			path, handler = identityapiconnect.NewNativeLoginServiceHandler(remote)
+			mux.Handle(path, handler)
+			path, handler = publicqueryv1connect.NewEnrollmentServiceHandler(remote)
+			mux.Handle(path, handler)
 			server := httptest.NewUnstartedServer(mux)
 			server.TLS = &tls.Config{MinVersion: tls.VersionTLS13}
 			server.StartTLS()
 			defer server.Close()
 			c.ControlOrigin = server.URL
+			raw, roots := bootstrap.prepare(t, c.ControlOrigin, projection)
 			original := prepareRecoveryState(t, c, raw, registration)
 			var recovery time.Time
 			var request string
 			for cycle := range 2 {
 				build, digest := runtimeMetadata(t)
-				r, err := NewWindows(c, build, digest, io.Discard)
+				r, err := newWindows(c, build, digest, io.Discard, roots)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -279,7 +319,8 @@ func TestWindowsAssemblyRecoversOriginalLoginAndRegistrationAfterLostReply(t *te
 								recovery = p.Attempt.RecoveryUntil
 								request = p.Secrets.RegistrationRequest
 							} else {
-								if !p.Attempt.RecoveryUntil.Equal(recovery) || p.RemoteInFlight || p.Attempt.Uncertain || p.Secrets.RegistrationRequest != request {
+								if !p.Attempt.RecoveryUntil.Equal(recovery) || p.Secrets.RegistrationRequest != request ||
+									(registration || p.DefaultTarget == nil) && (p.RemoteInFlight || p.Attempt.Uncertain) {
 									t.Fatal("recovery extended budget or changed request")
 								}
 								if registration && p.Secrets.NodeCredential == "" || !registration && p.Secrets.Access == "" {

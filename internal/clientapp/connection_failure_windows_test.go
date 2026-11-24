@@ -4,6 +4,7 @@ package clientapp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/dataplane"
+	"golang.org/x/sys/windows"
 )
 
 func TestNativeConnectionFailuresKeepSafeActionableCategory(t *testing.T) {
@@ -37,5 +39,24 @@ func TestNativeConnectionFailuresKeepSafeActionableCategory(t *testing.T) {
 		if got != tc.want || strings.Contains(got.Error(), "synthetic-secret") || connectionOperationError(got) != tc.want {
 			t.Fatal("classification or sanitization lost through worker", got)
 		}
+	}
+}
+
+func TestWindowsNetworkFailureLogsStageWithoutRawError(t *testing.T) {
+	signals, _, logs, _ := requestSignals(t)
+	signals.windowsNetworkFailure(141, "cleanup_wfp_remove", errors.Join(dataplane.ErrPolicyPermission, windows.ERROR_ACCESS_DENIED, errors.New("synthetic-secret")))
+	signals.windowsNetworkFailure(141, "apply_route", context.Canceled)
+	var record struct {
+		Message     string `json:"msg"`
+		Operation   string `json:"operation"`
+		ErrorCode   string `json:"error_code"`
+		Generation  uint64 `json:"generation"`
+		WindowsCode uint32 `json:"win32_code"`
+	}
+	if err := json.Unmarshal(logs.Bytes(), &record); err != nil {
+		t.Fatal(err)
+	}
+	if record.Message != "client.connection.native_failure" || record.Operation != "cleanup_wfp_remove" || record.ErrorCode != "permission_denied" || record.Generation != 141 || record.WindowsCode != uint32(windows.ERROR_ACCESS_DENIED) || strings.Contains(logs.String(), "synthetic-secret") {
+		t.Fatal("missing or unsafe network failure event", record)
 	}
 }

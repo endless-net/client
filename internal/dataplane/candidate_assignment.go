@@ -36,7 +36,7 @@ func newCandidateAssignment(m connectivity.Map, lease *connectivity.Lease, peerI
 			return candidateAssignment{}, ErrNoAuthority
 		}
 		plan := *peer.Transport
-		if plan.LocalIntentGeneration != m.IntentGeneration() || coordinator.ValidatePeerTransportPlan(plan, snapshot.Network, snapshot.Node, peer, snapshot.Revision, snapshot.MapSignature.IssuedAt, snapshot.MapSignature.ExpiresAt) != nil || !coordinator.TransportPlanCurrent(plan, now) {
+		if plan.LocalIntentGeneration != m.IntentGeneration() || coordinator.ValidatePeerTransportPlan(plan, snapshot.Network, snapshot.Node, peer, snapshot.Revision, snapshot.MapSignature.IssuedAt, snapshot.MapSignature.ExpiresAt) != nil || !lease.WindowCurrent(m, plan.IssuedAt, plan.ExpiresAt, now) {
 			return candidateAssignment{}, ErrNoAuthority
 		}
 		// Bidirectional cryptographic transport is needed even for a one-way app
@@ -65,7 +65,7 @@ func pairGranted(peer coordinator.Peer) bool {
 }
 
 func (a candidateAssignment) permission(now time.Time, probe bool) error {
-	if a.lease == nil || !a.lease.MatchesMap(a.mapValue) || now.IsZero() || now.Before(a.plan.IssuedAt) || !now.Before(a.plan.ExpiresAt) {
+	if a.lease == nil || !a.lease.WindowCurrent(a.mapValue, a.plan.IssuedAt, a.plan.ExpiresAt, now) {
 		return ErrNoAuthority
 	}
 	p := a.lease.Permissions()

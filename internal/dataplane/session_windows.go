@@ -17,6 +17,7 @@ import (
 )
 
 type WindowsSessionConfig struct {
+	ReportFailure                                                      func(uint64, string, error)
 	MaxPeers, MaxGrants, MaxProtected, MaxInventoryRows, MaxInterfaces int
 	MTU                                                                int
 	ListenPort                                                         uint16
@@ -82,7 +83,7 @@ func NewWindowsSession(parent context.Context, store *state.Store, clock connect
 	if parent == nil || store == nil || clock == nil || generation == 0 || config.Validate() != nil || resources == nil || resources.budget == nil || resources.budget.maxPeers != config.MaxPeers {
 		return nil, ErrConfiguration
 	}
-	cleanup, err := NewWindowsCleanup(store, WindowsCleanupConfig{MaxInventoryRows: config.MaxInventoryRows, MaxInterfaces: config.MaxInterfaces, MaxProtected: config.MaxProtected, TransactionWait: config.TransactionWait, PollInterval: config.DADPollInterval})
+	cleanup, err := NewWindowsCleanup(store, WindowsCleanupConfig{MaxInventoryRows: config.MaxInventoryRows, MaxInterfaces: config.MaxInterfaces, MaxProtected: config.MaxProtected, TransactionWait: config.TransactionWait, PollInterval: config.DADPollInterval, ReportFailure: config.ReportFailure})
 	if err != nil {
 		return nil, err
 	}
@@ -254,6 +255,19 @@ func (s *WindowsSession) Restore(ctx context.Context, m connectivity.Map) error 
 }
 
 func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore bool) (err error) {
+	stage := "apply_preflight"
+	var applyErr, releaseErr error
+	defer func() {
+		if report := s.config.ReportFailure; report != nil && err != nil {
+			if applyErr == nil {
+				applyErr = err
+			}
+			report(s.generation, stage, applyErr)
+			if releaseErr != nil {
+				report(s.generation, "cleanup_release_handles", releaseErr)
+			}
+		}
+	}()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if ctx == nil || s.started || s.stopped {
@@ -267,10 +281,12 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	defer stopCancellation()
 	defer func() {
 		if err != nil {
+			applyErr = err
 			s.lease.Revoke()
 			s.cancel()
 			s.stopped = true
-			err = errors.Join(err, s.releaseHandles())
+			releaseErr = s.releaseHandles()
+			err = errors.Join(err, releaseErr)
 		}
 	}()
 	if err := s.lifetime.Err(); err != nil {
@@ -326,10 +342,12 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	}
 	// Reserve before the first native effect. An old generation whose workers
 	// have not stopped must still occupy its slot, even after lease revocation.
+	stage = "apply_engine_reserve"
 	s.primary, err = s.resources.budget.reserve(s.lease, "", enginePrimary)
 	if err != nil {
 		return err
 	}
+	stage = "apply_adapter_create"
 	prepared, err := PreparedWindowsAdapter(s.id)
 	if err != nil {
 		return err
@@ -341,6 +359,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 		return err
 	}
 	record := s.tunnel.Record()
+	stage = "apply_adapter_identity"
 	row, err := s.identity(record.LUID)
 	if err != nil {
 		return adapterError(err)
@@ -348,24 +367,30 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if row.Index == 0 || adapterProof(row) != record.Fingerprint {
 		return ErrAdapterOwnership
 	}
+	stage = "apply_adapter_mtu"
 	if err := s.setMTU(apply, record, s.config.MTU); err != nil {
 		return err
 	}
+	stage = "apply_ip_plan"
 	ipPlan, err := PrepareIPPlan(m, s.id, record.LUID, s.config.RouteMetric, s.config.MaxPeers)
 	if err != nil {
 		return err
 	}
+	stage = "apply_wfp_plan"
 	plan, err := s.planFilters(apply, m, s.id, record.LUID, row.Index, s.config.MaxGrants, s.config.MaxProtected, false)
 	if err != nil {
 		return err
 	}
+	stage = "apply_journal"
 	j, err := s.change(apply, m, func(*state.ResourceJournal) error { return nil })
 	if err != nil {
 		return err
 	}
+	stage = "apply_ip_preflight"
 	if err := s.ip.Preflight(apply, ipPlan, *j); err != nil {
 		return err
 	}
+	stage = "apply_wfp_open"
 	s.filters, err = s.makeFilters(s.id, s.config.TransactionWait, func(ctx context.Context, records []state.FilterRecord) error {
 		return s.store.RecordPreparedGuardIDs(ctx, s.profileID, s.id, s.generation, records)
 	})
@@ -373,10 +398,12 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 		return err
 	}
 	// Denies exist before any protected address or /32 route reaches Windows.
+	stage = "apply_wfp_deny"
 	if err := s.replaceFilters(apply, m, plan.DenyAllTraffic()); err != nil {
 		return err
 	}
 	a, routes := ipPlan.Prepared()
+	stage = "apply_journal"
 	j, err = s.change(apply, m, func(j *state.ResourceJournal) error {
 		j.Addresses = []state.AddressRecord{a}
 		j.Routes = routes
@@ -385,11 +412,13 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if err != nil {
 		return err
 	}
+	stage = "apply_address"
 	effect, err := s.ip.CreateAddress(apply, ipPlan, *j)
 	if err != nil {
 		return err
 	}
 	for {
+		stage = "apply_journal"
 		j, err = s.change(apply, m, func(j *state.ResourceJournal) error { j.Addresses[0] = effect.Record; return nil })
 		if err != nil {
 			return err
@@ -397,6 +426,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 		if effect.Ready {
 			break
 		}
+		stage = "apply_address_ready"
 		timer := time.NewTimer(s.config.DADPollInterval)
 		select {
 		case <-apply.Done():
@@ -410,15 +440,18 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 		}
 	}
 	for i, route := range routes {
+		stage = "apply_route"
 		receipt, err := s.ip.CreateRoute(apply, ipPlan, route, *j)
 		if err != nil {
 			return err
 		}
+		stage = "apply_journal"
 		j, err = s.change(apply, m, func(j *state.ResourceJournal) error { j.Routes[i] = receipt; return nil })
 		if err != nil {
 			return err
 		}
 	}
+	stage = "apply_wfp_policy"
 	if err := s.replaceFilters(apply, m, plan); err != nil {
 		return err
 	}
@@ -432,6 +465,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if s.lease.Permissions().ClockUnsafe {
 		return connectivity.ErrClock
 	}
+	stage = "apply_engine"
 	s.packets, err = newPacketSwitch(s.lifetime, s.tunnel, s.lease, m, s.config.MTU, s.config.MaxPeers)
 	if err != nil {
 		return err
@@ -447,6 +481,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if _, err := s.engine.BoundPort(); err != nil {
 		return err
 	}
+	stage = "apply_activation"
 	if err := s.activationFence(apply, m); err != nil {
 		return err
 	}
@@ -454,6 +489,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 		return err
 	}
 	s.current, s.policy = m, plan
+	stage = "apply_transport"
 	s.supervisor, err = newTransportSupervisor(s.lifetime, m, s.lease, s.clock, s.profileID, s.generation, current.Keys.WireGuardPrivate, s.resources.budget, s.packets, s.engine, supervisorConfig{relay: RelayConfig{DialTimeout: s.config.RelayDialTimeout, IOTimeout: s.config.RelayIOTimeout, HeartbeatInterval: s.config.RelayHeartbeatInterval, Now: func() time.Time {
 		sample, err := s.clock.Sample()
 		if err != nil {
@@ -573,7 +609,16 @@ func (s *WindowsSession) Stop(ctx context.Context) error {
 			clearSessionKeys(value)
 		}
 	}
-	if err := errors.Join(markErr, s.releaseHandles()); err != nil {
+	releaseErr := s.releaseHandles()
+	if s.config.ReportFailure != nil {
+		if markErr != nil {
+			s.config.ReportFailure(s.generation, "cleanup_journal", markErr)
+		}
+		if releaseErr != nil {
+			s.config.ReportFailure(s.generation, "cleanup_release_handles", releaseErr)
+		}
+	}
+	if err := errors.Join(markErr, releaseErr); err != nil {
 		return err
 	}
 	return s.cleanup.Run(ctx, s.profileID, s.id, s.generation)

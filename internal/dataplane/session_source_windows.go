@@ -30,6 +30,9 @@ func (s *WindowsSession) RevokeSource()       { s.lease.Revoke(); s.cancel() }
 func (s *WindowsSession) resumeSource(epoch uint64) (bool, error) {
 	err := s.lease.EndSourceTransition(epoch)
 	if errors.Is(err, connectivity.ErrSourceChanged) {
+		if report := s.config.ReportFailure; report != nil {
+			report(s.generation, "apply_source_superseded", err)
+		}
 		return false, nil
 	}
 	if err != nil {

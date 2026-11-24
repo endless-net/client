@@ -46,6 +46,7 @@ type RelayTransport struct {
 	peers                  map[string]bool
 	permission             permissionCheck
 	scope                  func(connectivity.Map) bool
+	originalExpiryCurrent  func(time.Time) bool
 	handshakeMap           func() connectivity.Map
 	mapValue               connectivity.Map
 	lifetime               context.Context
@@ -75,6 +76,9 @@ func NewRelayTransport(parent context.Context, m connectivity.Map, lease *connec
 		return nil, err
 	}
 	transport.scope = lease.MatchesMap
+	transport.originalExpiryCurrent = func(wall time.Time) bool {
+		return lease.OriginalExpiryCurrent(m, transport.credential.ExpiresAt, wall)
+	}
 	transport.handshakeMap = lease.CurrentMap
 	transport.mapValue = m
 	return transport, nil
@@ -135,13 +139,20 @@ func (t *RelayTransport) permitted(newFlow bool) bool {
 		return false
 	}
 	p := t.permission()
-	return !p.ClockUnsafe && !p.Revoked && p.ExistingFlows && (!newFlow || p.NewFlows) && t.config.Now().Before(t.credential.ExpiresAt)
+	return !p.ClockUnsafe && !p.Revoked && p.ExistingFlows && (!newFlow || p.NewFlows) && t.credentialCurrent(t.config.Now())
 }
 
 func (t *RelayTransport) authorityGone() bool {
 	p := t.permission()
 	now := t.config.Now()
-	return p.Revoked || p.ClockUnsafe || !now.Before(t.credential.ExpiresAt) || p.ExpiresAt.IsZero() || !now.Before(p.ExpiresAt)
+	return p.Revoked || p.ClockUnsafe || p.ExpiresAt.IsZero() || !now.Before(p.ExpiresAt) || !t.credentialCurrent(now)
+}
+
+func (t *RelayTransport) credentialCurrent(now time.Time) bool {
+	if t.originalExpiryCurrent == nil {
+		return now.Before(t.credential.ExpiresAt)
+	}
+	return t.originalExpiryCurrent(now)
 }
 
 func (t *RelayTransport) deadline(ctx context.Context) time.Time {

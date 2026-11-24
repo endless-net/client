@@ -412,7 +412,10 @@ Build helper закрепляет version/tag, exact clean commit и дату co
 Отдельный Windows integration test
 `TestWindowsRuntimeAgainstActualOwnerChain` принимает путь
 `ENDLESSNET_CLIENT_OWNER_CHAIN_FIXTURE` к Temp JSON с `address` (loopback), `ca`
-(base64 PEM) и `bootstrap` (base64 Signing JSON). Внешний изолированный fixture
+(base64 PEM), `bootstrap` (base64 канонический Signing JSON) и `bootstrap_root`
+(base64 32-байтного открытого ключа Ed25519). Клиент проверяет подписанный
+`BootstrapService.GetBootstrap` по этому отдельно переданному ключу.
+Внешний изолированный fixture
 готовит Account/Network и native session, явно заданные в test source. Проверка
 использует настоящие DPAPI/pipe, List/Select через SDK, теряет committed response
 и восстанавливает тот же outcome после нового App lifetime. Без explicit input
@@ -439,7 +442,7 @@ Client keys/request/deadlines и UI correlation journal без второго en
 [Скрипт](scripts/install.sh) подключает signed-by источник и вызывает
 `apt-get install endlessnet-client`; запуск службы выполняет сам пакет.
 Это APT-установка без ручной распаковки или сборки бинарника.
-Проверка команд без изменения системы: `python3 -B scripts/test_install.py`
+Проверка команд без изменения системы: `go test -short ./scripts -run TestAptBootstrap`
 в Ubuntu26.04. Проверка реальной установки на отдельном хосте ещё требуется.
 
 Скрипт также устанавливает команду `endlessnet` в `/usr/local/bin`.
@@ -447,7 +450,7 @@ Client keys/request/deadlines и UI correlation journal без второго en
 Команда обновляет APT-индекс, показывает установленную/доступную версии и
 спрашивает подтверждение. Только ответ `y`/`yes`/`да` запускает APT upgrade;
 отмена и EOF ничего не устанавливают. Данные пакета не удаляются.
-Unit-проверка команды: `python3 -B scripts/test_endlessnet.py`.
+Unit-проверка команды: `go test -short ./scripts -run TestCheckUpdates`.
 
 ## Подключение Windows-установщика
 
@@ -474,7 +477,7 @@ Windows runtime artifact содержит `install-defaults.json` с внутр�
 ## Самостоятельный Windows Client без UI
 
 `scripts/build-windows-installer.ps1` собирает MSI службы и консольного
-`endlessnet.exe` без Flutter/Client UI. Нужны Windows, CMake/MSVC, Python и WiX7,
+`endlessnet.exe` без Flutter/Client UI. Нужны Windows, CMake/MSVC, Go 1.27.4 и WiX 7,
 готовый Windows x64 runtime bundle с `install-defaults.json` и собранный CLI:
 
 ```powershell
@@ -514,6 +517,6 @@ Production root, подписанный server bootstrap и серверное �
 сети не создаются установщиком; их отсутствие не разрешает обход доверия.
 Сборка MSI не подтверждает готовность полного `endlessnet up` или соединения.
 
-Проверка packaging без установки: `python -B scripts/test_windows_installer.py`.
+Проверка packaging без установки: `go test -short ./scripts/installer`.
 Реальная установка/обновление и сохранение DPAPI identity требуют отдельной
 Windows-проверки; обычная сборка не запускает MSI и не меняет службу.

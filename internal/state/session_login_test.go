@@ -174,7 +174,7 @@ func TestV7SessionLoginUpgradePreservesUnknownRenewalAndIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	after, err := store.Load(t.Context())
-	if err != nil || after.Version != 8 || after.Revision != before.Revision+1 || !reflect.DeepEqual(before.Profiles, after.Profiles) {
+	if err != nil || after.Version != CurrentVersion || after.Revision != before.Revision+1 || !reflect.DeepEqual(before.Profiles, after.Profiles) {
 		t.Fatal("v7 data changed or current authority invented", err)
 	}
 	if err := store.Upgrade(t.Context()); err != nil {
@@ -183,6 +183,73 @@ func TestV7SessionLoginUpgradePreservesUnknownRenewalAndIdentity(t *testing.T) {
 	again, err := store.Load(t.Context())
 	if err != nil || again.Revision != after.Revision {
 		t.Fatal("upgrade repeated", err)
+	}
+}
+
+func TestV8UpgradeMovesBothConsentURLsWithoutChangingTransactions(t *testing.T) {
+	store, backend, now := sessionLoginFixture(t)
+	preparedLogin(t, store, now)
+	value, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	value.Version = 8
+	profile := value.Profiles[profileID]
+	tx := &identityapi.NativeLoginTransaction{}
+	if err := proto.Unmarshal(nativeLoginSuccess(t, profile, now, "original-user"), tx); err != nil {
+		t.Fatal(err)
+	}
+	tx.State = identityapi.NativeLoginState_NATIVE_LOGIN_STATE_PENDING
+	tx.PollAfterSeconds = 1
+	tx.Outcome = &identityapi.NativeLoginTransaction_BrowserAction{
+		BrowserAction: &identityapi.NativeLoginBrowserAction{
+			VerificationUrl: profile.ControlOrigin + "/auth/native-login/" + tx.TransactionId,
+			ExpiresAt:       tx.ExpiresAt,
+		},
+	}
+	login := profile.SessionLogin
+	login.Phase = SessionLoginPending
+	login.ObservedAt = now.Add(time.Second)
+	login.InFlightAt = time.Time{}
+	login.NextPollAt = now.Add(2 * time.Second)
+	login.PollProof = strings.Repeat("p", 43)
+	login.Transaction, err = proto.Marshal(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile.Secrets.TransactionID = "2d34f818-cfa5-416a-a83d-c0905bf46977"
+	profile.Secrets.PollProof = strings.Repeat("z", 43)
+	profile.Login = LoginProgress{
+		CreatedAt: now, ExpiresAt: tx.ExpiresAt.AsTime(), ReplayUntil: tx.ReplayExpiresAt.AsTime(),
+		VerificationURL: profile.ControlOrigin + "/api/v1/auth/native-login/" + profile.Secrets.TransactionID,
+	}
+	value.Profiles[profileID] = profile
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.data, err = store.protector.Seal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Upgrade(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile.Login.VerificationURL = profile.ControlOrigin + "/native-login/" + profile.Secrets.TransactionID
+	tx.GetBrowserAction().VerificationUrl = profile.ControlOrigin + "/native-login/" + tx.TransactionId
+	login.Transaction, err = proto.Marshal(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value.Profiles[profileID] = profile
+	value.Version = CurrentVersion
+	value.Revision++
+	if !reflect.DeepEqual(upgraded, value) {
+		t.Fatal("upgrade changed fields outside the two consent URLs and state version")
 	}
 }
 

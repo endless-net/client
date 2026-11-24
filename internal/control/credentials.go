@@ -1,14 +1,11 @@
 package control
 
 import (
-	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"io"
-	"mime"
 	"net/http"
 	"sync"
 	"time"
@@ -17,6 +14,7 @@ import (
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
 	sessionv1 "github.com/endless-net/identity/api/session/v1"
 	"github.com/endless-net/identity/api/session/v1/sessionv1connect"
 	signing "github.com/endless-net/signing/api/contract"
@@ -421,42 +419,32 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 		}
 		r.SentAt = sent
 	}
-	httpRequest, err := http.NewRequestWithContext(call, http.MethodPost, p.ControlOrigin+"/nodes/register", bytes.NewBufferString(r.Request))
-	if err != nil {
-		return ErrCredentialsProtocol
-	}
-	httpRequest.Header.Set("Authorization", "Bearer "+current.Access)
-	httpRequest.Header.Set("Content-Type", "application/json")
-	httpRequest.Header.Set("Accept", "application/json")
-	response, err := c.remote.http.Do(httpRequest)
-	if err != nil {
-		return credentialCallError(call, err)
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-		return ErrCredentialsLogin
-	}
-	if response.StatusCode == http.StatusBadRequest {
-		return ErrCredentialsProtocol
-	}
-	if response.StatusCode == http.StatusConflict {
-		return ErrNodeRenewalUnresolved
-	}
-	media, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	if err != nil || media != "application/json" || response.StatusCode != http.StatusOK {
-		return ErrCredentialsUnavailable
-	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, int64(c.remote.config.MaxResponseBytes)+1))
-	if err != nil || len(raw) > c.remote.config.MaxResponseBytes {
-		return credentialCallError(call, err)
-	}
 	request, err := coordinator.DecodeRegisterNodeRequest([]byte(r.Request), c.remote.config.MaxRequestBytes)
 	if err != nil {
 		return ErrCredentialsProtocol
 	}
-	result, err := coordinator.DecodeNodeCredentialRenewalResponse(raw, c.remote.config.MaxResponseBytes)
+	requestRPC := bearer(&wire.RegisterNodeRequest{
+		Proof: registrationProof(request),
+		Authorization: &wire.RegisterNodeRequest_Renewal{Renewal: &wire.NodeCredentialRenewal{
+			NodeCredential: request.NodeCredential, RegistrationBinding: request.RegistrationBinding,
+			SessionTokenBinding: request.SessionTokenBinding,
+		}},
+	}, current.Access)
+	response, err := c.remote.rpc(p.ControlOrigin).RegisterNode(call, requestRPC)
 	if err != nil {
+		if connect.CodeOf(err) == connect.CodeAborted {
+			return ErrNodeRenewalUnresolved
+		}
+		return credentialCallError(call, err)
+	}
+	m := response.Msg.GetRenewal()
+	if !knownRPC(response.Msg.ProtoReflect()) || m == nil || m.IssuedAt.CheckValid() != nil || m.ExpiresAt.CheckValid() != nil {
 		return ErrCredentialsProtocol
+	}
+	result := coordinator.NodeCredentialRenewalResponse{
+		SchemaVersion: 1, IdempotencyID: m.IdempotencyId, RenewalBinding: m.RenewalBinding,
+		RegistrationBinding: m.RegistrationBinding, PreviousCredentialSHA256: m.PreviousCredentialSha256,
+		NetworkID: m.NetworkId, NodeID: m.NodeId, NodeCredential: m.NodeCredential, IssuedAt: m.IssuedAt.AsTime(), ExpiresAt: m.ExpiresAt.AsTime(),
 	}
 	// Keep the same receipt and deadline if the server clock is ahead.
 	// Wait for local time before checking trust or accepting the credential.
@@ -493,6 +481,10 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 		return ErrBootstrap
 	}
 	if _, err = coordinator.VerifyNodeCredentialRenewalResult(request, result, p.Attempt.NetworkID, p.Attempt.NodeID, request.RegistrationBinding, c.remote.config.MaxCredentialBytes, ed25519.PublicKey(public), c.config.Now()); err != nil {
+		return ErrCredentialsProtocol
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
 		return ErrCredentialsProtocol
 	}
 	return c.save(ctx, id, generation, func(p *state.Profile) error {
