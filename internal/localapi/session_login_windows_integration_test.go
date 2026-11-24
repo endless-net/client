@@ -15,17 +15,53 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	billing "github.com/endless-net/billing/api/public/v1"
+	"github.com/endless-net/billing/api/public/v1/billingpublicapiconnect"
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	"github.com/endless-net/identity/api/v1/identityapiconnect"
+	management "github.com/endless-net/management/api/v1"
+	"github.com/endless-net/management/api/v1/managementapiconnect"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 )
+
+type reloginDashboardFixture struct {
+	billingpublicapiconnect.UnimplementedBillingUserServiceHandler
+	managementapiconnect.UnimplementedManagementDashboardServiceHandler
+}
+
+func (reloginDashboardFixture) ListAccounts(_ context.Context, req *connect.Request[billing.ListAccountsRequest]) (*connect.Response[billing.ListAccountsResponse], error) {
+	if req.Header().Get("Authorization") != "Bearer "+strings.Repeat("x", 43) {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("new session required"))
+	}
+	return connect.NewResponse(&billing.ListAccountsResponse{Accounts: []*billing.Account{{AccountId: "account", Name: "Personal"}}}), nil
+}
+
+func (reloginDashboardFixture) GetPrimaryAccount(_ context.Context, req *connect.Request[billing.GetPrimaryAccountRequest]) (*connect.Response[billing.GetPrimaryAccountResponse], error) {
+	if req.Header().Get("Authorization") != "Bearer "+strings.Repeat("x", 43) {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("new session required"))
+	}
+	return connect.NewResponse(&billing.GetPrimaryAccountResponse{Account: &billing.Account{AccountId: "account", Name: "Personal"}}), nil
+}
+
+func (reloginDashboardFixture) GetBoard(_ context.Context, req *connect.Request[management.GetBoardRequest]) (*connect.Response[management.GetBoardResponse], error) {
+	if req.Header().Get("Authorization") != "Bearer "+strings.Repeat("x", 43) {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("new session required"))
+	}
+	if req.Msg.GetAccountId() != "account" {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("unknown account"))
+	}
+	return connect.NewResponse(&management.GetBoardResponse{Board: &management.DashboardBoard{
+		AccountId: req.Msg.GetAccountId(),
+		Layout:    &management.DashboardLayout{Image: management.DashboardImage_DASHBOARD_IMAGE_RIBBON},
+	}}), nil
+}
 
 func TestWindowsSessionLoginOwnerPipeDPAPIAndUIReopen(t *testing.T) {
 	if testing.Short() {
@@ -39,7 +75,17 @@ func TestWindowsSessionLoginOwnerPipeDPAPIAndUIReopen(t *testing.T) {
 	upstream := &nativeHTTPFixture{store: s, relogin: true}
 	path, handler := identityapiconnect.NewNativeLoginServiceHandler(upstream)
 	mux.Handle(path, handler)
-	native, err := control.NewNative(&http.Client{Transport: nativeFixtureTransport{mux}}, cfg.Announcements, 65536, time.Now)
+	mux.Handle(billingpublicapiconnect.NewBillingUserServiceHandler(reloginDashboardFixture{}))
+	mux.Handle(managementapiconnect.NewManagementDashboardServiceHandler(reloginDashboardFixture{}))
+	upstreamHTTP := &http.Client{Transport: nativeFixtureTransport{mux}}
+	dashboard, err := control.NewDashboard(upstreamHTTP, cfg.Announcements, control.TargetConfig{
+		MaxCalls: 4, MaxAccounts: 4, MaxResponseBytes: 65536, UpstreamPageSize: 4, Now: time.Now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Dashboard = dashboard
+	native, err := control.NewNative(upstreamHTTP, cfg.Announcements, 65536, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,6 +220,14 @@ func TestWindowsSessionLoginOwnerPipeDPAPIAndUIReopen(t *testing.T) {
 			session, err := client.GetSession(ctx, &clientv0.GetSessionRequest{})
 			if err != nil || session.Session.State != clientv0.SessionState_SESSION_STATE_ACTIVE {
 				t.Fatal("new session not projected", err)
+			}
+			spaces, err := client.ListDashboardSpaces(ctx, &clientv0.ListDashboardSpacesRequest{})
+			if err != nil || len(spaces.GetSpaces()) != 1 || spaces.GetPrimaryAccountId() != "account" {
+				t.Fatal("could not list dashboard spaces after re-login", err)
+			}
+			board, err := client.GetDashboardBoard(ctx, &clientv0.GetDashboardBoardRequest{AccountId: spaces.GetPrimaryAccountId()})
+			if err != nil || board.GetBoard().GetLayout().GetImage() != clientv0.DashboardImage_DASHBOARD_IMAGE_RIBBON {
+				t.Fatal("could not load dashboard board after re-login", err)
 			}
 			after, err := s.Load(ctx)
 			if err != nil {

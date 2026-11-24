@@ -28,34 +28,37 @@ func dashboardSession(profile state.Profile, now time.Time) (bool, error) {
 	return session.Access != "" && session.SessionID != "" && session.UserID != "" && now.Before(session.ExpiresAt), nil
 }
 
-func (c *Controller) dashboardProfile(ctx context.Context, ref *clientv0.ProfileRef) (state.Profile, error) {
+func withDashboardProfile[T any](ctx context.Context, c *Controller, ref *clientv0.ProfileRef, run func(state.Profile) (*T, error)) (*T, error) {
 	caller, err := localipc.Caller(ctx)
 	if err != nil {
-		return state.Profile{}, err
+		return nil, err
 	}
 	current, err := c.store.Load(ctx)
 	if err != nil {
-		return state.Profile{}, rpcError(err)
+		return nil, rpcError(err)
 	}
+	// A session adopted after re-login needs the profile keys for validation
+	// inside the dashboard source. Clear the snapshot after the source returns.
 	defer clearProfileKeys(current)
 	if err = owner(&current, caller, false); err != nil {
-		return state.Profile{}, err
+		return nil, err
 	}
 	if c.config.Dashboard == nil {
-		return state.Profile{}, status.Error(codes.Unavailable, "dashboard service unavailable")
+		return nil, status.Error(codes.Unavailable, "dashboard service unavailable")
 	}
 	profile, found := current.Profiles[profileID(ref, current.ActiveProfileID)]
 	if !found {
-		return state.Profile{}, status.Error(codes.NotFound, "profile not found")
+		return nil, status.Error(codes.NotFound, "profile not found")
 	}
 	available, err := dashboardSession(profile, c.config.Now())
 	if err != nil {
-		return state.Profile{}, rpcError(err)
+		return nil, rpcError(err)
 	}
 	if !available {
-		return state.Profile{}, dashboardRPCError(control.ErrSessionDenied)
+		return nil, dashboardRPCError(control.ErrSessionDenied)
 	}
-	return profile, nil
+	result, err := run(profile)
+	return result, dashboardRPCError(err)
 }
 
 func dashboardRPCError(err error) error {
@@ -90,25 +93,20 @@ func (c *Controller) ListDashboardSpaces(ctx context.Context, req *clientv0.List
 	if !validDashboardRequest(req, req.GetProfile()) {
 		return nil, dashboardRPCError(control.ErrDashboardInput)
 	}
-	profile, err := c.dashboardProfile(ctx, req.Profile)
-	if err != nil {
-		return nil, err
-	}
-	result, err := c.config.Dashboard.List(ctx, profile)
-	return result, dashboardRPCError(err)
+	return withDashboardProfile(ctx, c, req.Profile, func(profile state.Profile) (*clientv0.ListDashboardSpacesResponse, error) {
+		return c.config.Dashboard.List(ctx, profile)
+	})
 }
 
 func (c *Controller) GetDashboardBoard(ctx context.Context, req *clientv0.GetDashboardBoardRequest) (*clientv0.GetDashboardBoardResponse, error) {
 	if !validDashboardRequest(req, req.GetProfile()) {
 		return nil, dashboardRPCError(control.ErrDashboardInput)
 	}
-	profile, err := c.dashboardProfile(ctx, req.Profile)
+	board, err := withDashboardProfile(ctx, c, req.Profile, func(profile state.Profile) (*clientv0.DashboardBoard, error) {
+		return c.config.Dashboard.Get(ctx, profile, req.AccountId)
+	})
 	if err != nil {
 		return nil, err
-	}
-	board, err := c.config.Dashboard.Get(ctx, profile, req.AccountId)
-	if err != nil {
-		return nil, dashboardRPCError(err)
 	}
 	return &clientv0.GetDashboardBoardResponse{Board: board}, nil
 }
@@ -117,13 +115,11 @@ func (c *Controller) ReplaceDashboardBoard(ctx context.Context, req *clientv0.Re
 	if !validDashboardRequest(req, req.GetProfile()) {
 		return nil, dashboardRPCError(control.ErrDashboardInput)
 	}
-	profile, err := c.dashboardProfile(ctx, req.Profile)
+	board, err := withDashboardProfile(ctx, c, req.Profile, func(profile state.Profile) (*clientv0.DashboardBoard, error) {
+		return c.config.Dashboard.Replace(ctx, profile, req)
+	})
 	if err != nil {
 		return nil, err
-	}
-	board, err := c.config.Dashboard.Replace(ctx, profile, req)
-	if err != nil {
-		return nil, dashboardRPCError(err)
 	}
 	return &clientv0.ReplaceDashboardBoardResponse{Board: board}, nil
 }
