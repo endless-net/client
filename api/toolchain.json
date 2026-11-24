@@ -171,5 +171,15 @@
     "descriptor_sha256": "89d0be4956ad399cdae24065f32016db210c19ad593ae1b1d29351ddfc00c933",
     "generated_files": 20,
     "generation_environment": "Ubuntu26.04.1 / Go1.27.4 / Buf1.50.0 / pinned local plugins / Dart3.13.5; two byte-identical generations"
+  },
+  "system_016": {
+    "status": "api-release-candidate",
+    "target_api_tag": "api/v0.8.0",
+    "baseline_tag": "api/v0.7.0",
+    "runtime_adopted": false,
+    "scope": "OS-owner list, read and revision-bound replace of an Account dashboard",
+    "generated_files": 24,
+    "generated_manifest_sha256": "e902077c545f9678af4cd19d41e46f3739308325def83fe5d4960886b5383949",
+    "descriptor_sha256": "6ecbb4474e7b5734d0561e2d6861fc05a0681d193667cb9449859e4a8edf873f"
   }
 }

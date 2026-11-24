@@ -11,11 +11,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/endless-net/signing/api/v1/signingapiconnect"
 	"io"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
 
 	"github.com/endless-net/client/internal/state"
 	signing "github.com/endless-net/signing/api/contract"

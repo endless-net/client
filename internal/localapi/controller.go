@@ -46,6 +46,7 @@ type Config struct {
 	ConnectionObservations                            connectivity.ObservationSource
 	WatchInterval                                     time.Duration
 	Targets                                           TargetSource
+	Dashboard                                         DashboardSource
 	TargetPageKey                                     [32]byte
 	Announcements                                     control.Announcements
 	RuntimeID, DefaultProfileID, DefaultControlOrigin string
@@ -256,6 +257,16 @@ func (c *Controller) runtimeInfo(ctx context.Context, p localipc.Principal) (*cl
 			}
 		}
 		capabilities = append(capabilities, &clientv0.CapabilityStatus{Capability: clientv0.Capability_CAPABILITY_SESSION_LOGIN, Restriction: restriction, Platform: c.config.Build.Platform})
+	}
+	if c.config.Dashboard != nil {
+		restriction := &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_PERMISSION_REQUIRED, ReasonKey: "client.owner.required", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}
+		if s.OwnerSID != "" && s.OwnerSID == p.SID {
+			restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "client.session.login_required", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}
+			if available, err := dashboardSession(s.Profiles[s.ActiveProfileID], c.config.Now()); err == nil && available {
+				restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_AVAILABLE}
+			}
+		}
+		capabilities = append(capabilities, &clientv0.CapabilityStatus{Capability: clientv0.Capability_CAPABILITY_DASHBOARD, Restriction: restriction, Platform: c.config.Build.Platform})
 	}
 	if c.config.Connections != nil && c.config.ConnectionObservations != nil {
 		restriction := &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_PERMISSION_REQUIRED, ReasonKey: "client.owner.required", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}

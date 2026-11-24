@@ -4,7 +4,6 @@ package clientapp
 
 import (
 	"bytes"
-	"connectrpc.com/connect"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -13,11 +12,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/endless-net/client/internal/testwire"
-	wire "github.com/endless-net/coordinator/api/publicquery/v1"
-	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
-	"github.com/endless-net/signing/api/v1/signingapiconnect"
-	"google.golang.org/protobuf/proto"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,6 +20,13 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"connectrpc.com/connect"
+	"github.com/endless-net/client/internal/testwire"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
+	"google.golang.org/protobuf/proto"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	approvalmodel "github.com/endless-net/client/internal/approval"

@@ -252,3 +252,33 @@ func TestCleanupWaitsForOwnedAdapterAbsenceWithoutNativeDeletion(t *testing.T) {
 		t.Fatal("absence was not observed or resources recreated")
 	}
 }
+
+type cleanupGuardFailure struct{ removeErr, releaseErr error }
+
+func (g cleanupGuardFailure) CloseAfterIPCleanup(context.Context, *WindowsIP) error {
+	return g.removeErr
+}
+func (g cleanupGuardFailure) ReleaseForRecovery() error { return g.releaseErr }
+
+func TestWindowsCleanupRetriesOnlyBeforeWFPDeletionWithReleasedHandle(t *testing.T) {
+	for _, tc := range []struct {
+		name, step string
+		releaseErr error
+		retry      bool
+	}{
+		{name: "begin deadline", step: "begin_transaction", retry: true},
+		{name: "unknown commit", step: "commit_transaction"},
+		{name: "unreleased handle", step: "begin_transaction", releaseErr: ErrPolicyUncertain},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, store, _, _ := cleanupFixture(t)
+			c.guards = func(context.Context, state.ResourceJournal) (recoveredGuards, error) {
+				return cleanupGuardFailure{removeErr: wfpCleanupFailure(tc.step, ErrPolicyUncertain, context.DeadlineExceeded), releaseErr: tc.releaseErr}, nil
+			}
+			err := c.Run(cleanupContext(t), cleanupProfile, policySession, 1)
+			if CanRetryCleanup(err) != tc.retry || store.value.Profiles[cleanupProfile].Connection.Journal == nil {
+				t.Fatalf("unexpected retry classification or lost journal: %v", err)
+			}
+		})
+	}
+}

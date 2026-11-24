@@ -8,12 +8,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/endless-net/signing/api/v1/signingapiconnect"
-	"google.golang.org/protobuf/proto"
 	"io"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
+	"google.golang.org/protobuf/proto"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/control"

@@ -8,13 +8,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/endless-net/signing/api/v1/signingapiconnect"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
 
 	signingcontract "github.com/endless-net/signing/api/contract"
 )

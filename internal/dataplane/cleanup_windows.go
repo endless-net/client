@@ -268,7 +268,14 @@ func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, g
 		if err := guards.CloseAfterIPCleanup(ctx, c.ip); err != nil {
 			// Close only this recovery handle/unfinished transaction. Persistent
 			// denies survive; this is not an acknowledgment of native cleanup.
-			return errors.Join(err, guards.ReleaseForRecovery())
+			if releaseErr := guards.ReleaseForRecovery(); releaseErr != nil {
+				return errors.Join(err, releaseErr)
+			}
+			var diagnostic wfpCleanupDiagnostic
+			if errors.As(err, &diagnostic) && diagnostic.step == "begin_transaction" && diagnostic.deadline {
+				return cleanupTransactionTimeout{cause: err}
+			}
+			return err
 		}
 		stage = "cleanup_journal"
 		j, err = c.change(ctx, profileID, *j, func(j *state.ResourceJournal) { j.Filters = nil })
@@ -282,6 +289,18 @@ func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, g
 		return err
 	}
 	return c.retire(ctx, profileID, *j)
+}
+
+type cleanupTransactionTimeout struct{ cause error }
+
+func (e cleanupTransactionTimeout) Error() string { return e.cause.Error() }
+func (e cleanupTransactionTimeout) Unwrap() error { return e.cause }
+
+// CanRetryCleanup reports a pre-mutation transaction timeout with the recovery
+// handle successfully released.
+func CanRetryCleanup(err error) bool {
+	var timeout cleanupTransactionTimeout
+	return errors.As(err, &timeout)
 }
 
 // Close releases the original creation handle; Windows may finish removing the

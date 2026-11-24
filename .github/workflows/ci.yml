@@ -57,7 +57,7 @@ jobs:
           app-id: ${{ vars.FIRST_PARTY_API_APP_ID }}
           private-key: ${{ secrets.FIRST_PARTY_API_APP_PRIVATE_KEY }}
           owner: endless-net
-          repositories: billing,coordinator,identity,signing,client,relay
+          repositories: billing,coordinator,identity,signing,client,relay,management
           permission-contents: read
       - name: Fetch pinned producer APIs with protected read-only access
         if: ${{ !startsWith(github.ref, 'refs/tags/api/') }}

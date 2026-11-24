@@ -64,27 +64,30 @@ func (w *ConnectionWorker) startSessionMaintenance(ctx context.Context, target c
 		if previous != nil {
 			<-previous.done
 		}
-		if ctx.Err() == nil {
-			w.maintainSession(ctx, target)
+		if ctx.Err() == nil && errors.Is(w.maintainSession(ctx, target), control.ErrCredentialsLogin) {
+			select {
+			case w.loginNeeded <- m:
+			case <-ctx.Done():
+			}
 		}
 	}()
 	return m
 }
 
-func (w *ConnectionWorker) maintainSession(ctx context.Context, target connectionTarget) {
+func (w *ConnectionWorker) maintainSession(ctx context.Context, target connectionTarget) error {
 	var schedule credentialDeadline
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-timer.C:
 		}
 		delay, err := w.maintainSessionOnce(ctx, target, &schedule)
 		if err != nil {
 			if !credentialRetry(err) && !errors.Is(err, control.ErrNodeRenewalPending) {
-				return
+				return err
 			}
 			delay = w.config.SessionRetryInterval
 		}

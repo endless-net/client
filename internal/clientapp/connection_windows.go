@@ -395,8 +395,11 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 	probe := time.NewTicker(d.factory.config.ProbeInterval)
 	defer probe.Stop()
 	started := false
+	waitingForReady := initial.Done()
 	for {
 		select {
+		case <-waitingForReady:
+			return initial.Err()
 		case <-d.lifetime.Done():
 			return d.lifetime.Err()
 		case err := <-d.fatal:
@@ -408,29 +411,32 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				d.mapApplyMu.Unlock()
 				continue
 			}
-			ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.Native.ApplyTimeout)
+			parent := d.lifetime
+			if waitingForReady != nil {
+				parent = initial
+			}
+			var ctx context.Context
+			var cancel context.CancelFunc
+			if !started && frame.err == nil {
+				ctx, cancel = context.WithCancel(parent)
+			} else {
+				ctx, cancel = context.WithTimeout(parent, d.factory.config.Native.ApplyTimeout)
+			}
 			ctx = dataplane.WithSourceEpoch(ctx, frame.epoch)
 			if frame.err != nil {
+				var err error
 				if started {
-					err := native.Offline(ctx)
-					cancel()
-					d.mapApplyMu.Unlock()
-					if err != nil {
-						d.reportNativeFailure("apply_offline", err)
-						return nativeConnectionFailure(err, connectivity.FailureApply)
-					}
-				} else {
-					cancel()
-					d.mapApplyMu.Unlock()
+					err = native.Offline(ctx)
+				}
+				cancel()
+				d.mapApplyMu.Unlock()
+				if err != nil {
+					d.reportNativeFailure("apply_offline", err)
+					return nativeConnectionFailure(err, connectivity.FailureApply)
 				}
 				continue
 			}
 			var err error
-			if !started {
-				cancel()
-				ctx, cancel = context.WithCancel(initial)
-				ctx = dataplane.WithSourceEpoch(ctx, frame.epoch)
-			}
 			stop := context.AfterFunc(frame.ctx, cancel)
 			if !started {
 				if restore {
@@ -455,9 +461,16 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				if err := d.announce(initial, true, native); err != nil {
 					return err
 				}
-				if err := native.CheckReady(initial); err != nil {
+			}
+			if waitingForReady != nil {
+				err := native.CheckReady(dataplane.WithSourceEpoch(initial, frame.epoch))
+				if errors.Is(err, connectivity.ErrSourceChanged) {
+					continue
+				}
+				if err != nil {
 					return nativeConnectionFailure(err, connectivity.FailureApply)
 				}
+				waitingForReady = nil
 				close(d.credentialsReady)
 				select {
 				case d.applied <- struct{}{}:
@@ -465,7 +478,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				}
 			}
 		case <-renew.C:
-			if started {
+			if started && waitingForReady == nil {
 				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
 				err := d.announceCurrent(ctx, native)
 				cancel()
@@ -474,7 +487,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				}
 			}
 		case <-advertisements:
-			if started {
+			if started && waitingForReady == nil {
 				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
 				err := d.announceCurrent(ctx, native)
 				cancel()
@@ -483,7 +496,7 @@ func (d *windowsConnection) applyMaps(initial context.Context, restore bool, nat
 				}
 			}
 		case <-probe.C:
-			if started {
+			if started && waitingForReady == nil {
 				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
 				err := native.ProbePaths(ctx)
 				cancel()
@@ -622,7 +635,7 @@ func (d *windowsConnection) Disconnect(ctx context.Context) error {
 	d.mu.Unlock()
 	if native != nil {
 		if err := native.Stop(ctx); err != nil {
-			return nativeConnectionFailure(err, connectivity.FailureCleanup)
+			return windowsCleanupFailure(err)
 		}
 	}
 	if done != nil {
@@ -633,7 +646,7 @@ func (d *windowsConnection) Disconnect(ctx context.Context) error {
 		}
 	}
 	if err := d.factory.cleanup(ctx, d.profile); err != nil {
-		return nativeConnectionFailure(err, connectivity.FailureCleanup)
+		return windowsCleanupFailure(err)
 	}
 	// Cleanup of an old generation never publishes against the newer intent.
 	value, p, err := d.profileAt(ctx)

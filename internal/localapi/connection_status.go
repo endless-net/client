@@ -167,6 +167,12 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_READY
 		}
 	case connectivity.PhaseFailed:
+		if v.RetryScheduled {
+			r.Failures = append(r.Failures, &clientv0.Failure{
+				Code: clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "client.connection.retry_scheduled",
+				Retryable: true, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER,
+			})
+		}
 		r.ServiceState = clientv0.ServiceState_SERVICE_STATE_ERROR
 		if !v.CleanupPending && connection.Journal == nil {
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED

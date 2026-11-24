@@ -7,10 +7,11 @@ require (
 	github.com/Microsoft/go-winio v0.6.3
 	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260814
 	github.com/caarlos0/env/v11 v11.4.1
-	github.com/endless-net/billing/api v0.5.0
-	github.com/endless-net/client/api v0.7.0
+	github.com/endless-net/billing/api v0.9.0
+	github.com/endless-net/client/api v0.8.0
 	github.com/endless-net/coordinator/api v0.17.0
 	github.com/endless-net/identity/api v0.9.0
+	github.com/endless-net/management/api v0.6.0
 	github.com/endless-net/relay/api v0.4.0
 	github.com/endless-net/signing/api v0.3.0
 	github.com/google/uuid v1.6.0

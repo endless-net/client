@@ -54,6 +54,7 @@ enum Capability {
   CAPABILITY_SUPPORT_INFO = 17;
   // Explicit same-user browser login, separate from seamless renewal.
   CAPABILITY_SESSION_LOGIN = 18;
+  CAPABILITY_DASHBOARD = 19;
 }
 
 enum Availability {

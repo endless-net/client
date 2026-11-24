@@ -31,7 +31,7 @@ func (s *WindowsSession) CheckReady(ctx context.Context) (err error) {
 	}
 	stage := "apply_readiness_packets"
 	defer func() {
-		if err != nil {
+		if err != nil && err != connectivity.ErrSourceChanged {
 			err = s.failUpdate(report(stage, err))
 		}
 	}()
@@ -46,7 +46,13 @@ func (s *WindowsSession) CheckReady(ctx context.Context) (err error) {
 	if err := connectivity.CheckOperation(ctx); err != nil {
 		return err
 	}
-	if stage = s.tunnelReadinessIssue(); stage != "" {
+	stage = s.tunnelReadinessIssue()
+	if expected, ok := ctx.Value(sourceEpochKey{}).(uint64); ok {
+		if current, _ := s.lease.SourceSignal(); current != expected {
+			return report("apply_readiness_source", connectivity.ErrSourceChanged)
+		}
+	}
+	if stage != "" {
 		return ErrNoAuthority
 	}
 	return nil

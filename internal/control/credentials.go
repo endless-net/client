@@ -23,7 +23,6 @@ import (
 )
 
 var ErrCredentialsLogin = errors.New("current user login required")
-var ErrCredentialsExpired = errors.New("credential renewal command expired")
 var ErrNodeRenewalUnresolved = errors.New("node credential renewal outcome unresolved")
 var ErrNodeRenewalPending = errors.New("node credential renewal can still be replayed")
 var ErrCredentialsProtocol = errors.New("credential renewal response invalid")
@@ -222,7 +221,7 @@ func (c *Credentials) ensureSession(ctx context.Context, id string, generation u
 	}
 	r := *p.SessionRefresh
 	if !c.config.Now().Before(r.Deadline) || !r.ReplayUntil.IsZero() && !c.config.Now().Before(r.ReplayUntil) {
-		return ErrCredentialsExpired
+		return ErrCredentialsLogin
 	}
 	call, stop := context.WithTimeout(ctx, min(r.Deadline.Sub(c.config.Now()), 30*time.Second))
 	defer stop()
@@ -247,8 +246,7 @@ func (c *Credentials) ensureSession(ctx context.Context, id string, generation u
 	poll := r.PollAuthorization
 	request := &sessionv1.RenewSessionRequest{RequestId: r.RequestID, ExpectedSessionId: r.ExpectedSessionID}
 	if r.OperationID == "" {
-		req := connect.NewRequest(request)
-		req.Header().Set("Authorization", "Bearer "+r.Renewal)
+		req := bearer(request, r.Renewal)
 		response, callErr := client.RenewSession(call, req)
 		if callErr != nil {
 			return credentialCallError(call, callErr)
@@ -258,8 +256,7 @@ func (c *Credentials) ensureSession(ctx context.Context, id string, generation u
 		}
 		operation, poll = response.Msg.Operation, response.Msg.PollAuthorization
 	} else {
-		req := connect.NewRequest(&sessionv1.GetSessionRenewalRequest{OperationId: r.OperationID})
-		req.Header().Set("Authorization", "Bearer "+poll)
+		req := bearer(&sessionv1.GetSessionRenewalRequest{OperationId: r.OperationID}, poll)
 		response, callErr := client.GetSessionRenewal(call, req)
 		if callErr != nil {
 			return credentialCallError(call, callErr)
@@ -387,7 +384,7 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 	if !c.config.Now().Before(r.Deadline) {
 		return ErrNodeRenewalUnresolved
 	}
-	frozen, decodeErr := coordinator.DecodeRegisterNodeRequest([]byte(r.Request), c.remote.config.MaxRequestBytes)
+	request, decodeErr := coordinator.DecodeRegisterNodeRequest([]byte(r.Request), c.remote.config.MaxRequestBytes)
 	if decodeErr != nil {
 		return ErrCredentialsProtocol
 	}
@@ -395,7 +392,7 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 	if err != nil {
 		return err
 	}
-	if r.SentAt.IsZero() && frozen.SessionTokenBinding != coordinator.RegistrationSessionTokenBinding(current.Access) {
+	if r.SentAt.IsZero() && request.SessionTokenBinding != coordinator.RegistrationSessionTokenBinding(current.Access) {
 		return ErrNodeRenewalUnresolved
 	}
 	// Coordinator authorizes a known frozen command against the current
@@ -418,10 +415,6 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 			return err
 		}
 		r.SentAt = sent
-	}
-	request, err := coordinator.DecodeRegisterNodeRequest([]byte(r.Request), c.remote.config.MaxRequestBytes)
-	if err != nil {
-		return ErrCredentialsProtocol
 	}
 	requestRPC := bearer(&wire.RegisterNodeRequest{
 		Proof: registrationProof(request),

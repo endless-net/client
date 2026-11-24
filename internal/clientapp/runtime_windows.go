@@ -158,11 +158,15 @@ func newWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
+			dashboard, err := control.NewDashboard(r.http, bootstrap, control.TargetConfig{MaxCalls: c.MaxQueryCalls, MaxAccounts: c.MaxAccounts, MaxResponseBytes: c.MaxResponseBytes, UpstreamPageSize: c.UpstreamPageSize, Now: time.Now})
+			if err != nil {
+				return err
+			}
 			revocations, err := control.NewRevocations(r.http, bootstrap, control.RevocationConfig{MaxBytes: min(c.MaxRequestBytes, c.MaxResponseBytes), MaxTargets: c.MaxTargets, Now: time.Now})
 			if err != nil {
 				return err
 			}
-			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{RecentLogs: t.RecentLogs, LogPageKey: pageKey, LogResponseBytes: c.MaxMessageBytes, Revocations: revocations, Connections: r.connection, SessionLogins: sessionLogin, MaxSessionLogins: c.MaxPending, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
+			r.controller, err = localapi.New(r.state.Store(), worker, localapi.Config{RecentLogs: t.RecentLogs, LogPageKey: pageKey, LogResponseBytes: c.MaxMessageBytes, Revocations: revocations, Connections: r.connection, SessionLogins: sessionLogin, MaxSessionLogins: c.MaxPending, ConnectionClock: clock, ConnectionObservations: r.connection, WatchInterval: c.PollInterval, Targets: targets, Dashboard: dashboard, TargetPageKey: pageKey, Announcements: bootstrap, RuntimeID: instance, DefaultProfileID: c.DefaultProfileID, DefaultControlOrigin: c.ControlOrigin, DefaultProfileDisplayName: c.ProfileDisplayName, ContractDigest: digest, Build: build, MaxProfiles: c.MaxProfiles, MaxDisplayNameBytes: c.MaxDisplayNameBytes, MaxHostnameBytes: c.MaxHostnameBytes, Now: time.Now})
 			if err != nil {
 				return err
 			}

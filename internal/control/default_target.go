@@ -2,7 +2,6 @@ package control
 
 import (
 	"bytes"
-	"connectrpc.com/connect"
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
@@ -10,6 +9,8 @@ import (
 	"errors"
 	"net/http"
 	"time"
+
+	"connectrpc.com/connect"
 
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"

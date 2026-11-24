@@ -12,7 +12,7 @@ import (
 
 func TestDescriptorAccessAndInitialClaim(t *testing.T) {
 	service := clientv0.File_client_v0_service_proto.Services().ByName("ClientService")
-	if service.Methods().Len() != 45 {
+	if service.Methods().Len() != 48 {
 		t.Fatalf("unexpected RPC inventory: %d", service.Methods().Len())
 	}
 	claims := map[string]bool{"CreateProfile": true, "Enroll": true}
@@ -105,7 +105,7 @@ func TestSharedDartExitSelectionVector(t *testing.T) {
 }
 
 func TestNoPrivateKeyExportField(t *testing.T) {
-	files := []protoreflect.FileDescriptor{clientv0.File_client_v0_common_proto, clientv0.File_client_v0_runtime_proto, clientv0.File_client_v0_features_proto, clientv0.File_client_v0_service_proto}
+	files := []protoreflect.FileDescriptor{clientv0.File_client_v0_common_proto, clientv0.File_client_v0_runtime_proto, clientv0.File_client_v0_features_proto, clientv0.File_client_v0_dashboard_proto, clientv0.File_client_v0_service_proto}
 	for _, file := range files {
 		for i := 0; i < file.Messages().Len(); i++ {
 			message := file.Messages().Get(i)
@@ -116,5 +116,25 @@ func TestNoPrivateKeyExportField(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestDashboardOperationsRequireOSOwner(t *testing.T) {
+	service := clientv0.File_client_v0_service_proto.Services().ByName("ClientService")
+	for _, name := range []protoreflect.Name{"ListDashboardSpaces", "GetDashboardBoard", "ReplaceDashboardBoard"} {
+		method := service.Methods().ByName(name)
+		if method == nil || proto.GetExtension(method.Options(), clientv0.E_Access) != clientv0.Access_ACCESS_OWNER ||
+			proto.GetExtension(method.Options(), clientv0.E_AllowsInitialOwnershipClaim) != false {
+			t.Fatalf("%s allows unauthorized local caller", name)
+		}
+	}
+	initial := &clientv0.ReplaceDashboardBoardRequest{AccountId: "acc_fixture", ExpectedRevision: proto.Uint64(0)}
+	wire, err := proto.Marshal(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded clientv0.ReplaceDashboardBoardRequest
+	if err := proto.Unmarshal(wire, &decoded); err != nil || decoded.ExpectedRevision == nil {
+		t.Fatalf("explicit initial revision lost: %v", err)
 	}
 }

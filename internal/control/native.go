@@ -90,8 +90,7 @@ func (n *Native) Call(ctx context.Context, p state.Profile, cancelLogin bool) (*
 		if cancelLogin || !validProof(p.Secrets.RequestProof) {
 			return nil, "", ErrNativeProtocol
 		}
-		req := connect.NewRequest(&identityapi.StartNativeLoginRequest{RequestId: p.Attempt.RequestID, AttemptBindingSha256: binding[:], DeviceIdentityPublicKey: public})
-		req.Header().Set("Authorization", "Bearer "+p.Secrets.RequestProof)
+		req := bearer(&identityapi.StartNativeLoginRequest{RequestId: p.Attempt.RequestID, AttemptBindingSha256: binding[:], DeviceIdentityPublicKey: public}, p.Secrets.RequestProof)
 		response, err := client.StartNativeLogin(ctx, req)
 		if err != nil {
 			return nil, "", nativeError(err)
@@ -106,16 +105,14 @@ func (n *Native) Call(ctx context.Context, p state.Profile, cancelLogin bool) (*
 			return nil, "", ErrNativeProtocol
 		}
 		if cancelLogin {
-			req := connect.NewRequest(&identityapi.CancelNativeLoginRequest{TransactionId: p.Secrets.TransactionID})
-			req.Header().Set("Authorization", "Bearer "+poll)
+			req := bearer(&identityapi.CancelNativeLoginRequest{TransactionId: p.Secrets.TransactionID}, poll)
 			response, err := client.CancelNativeLogin(ctx, req)
 			if err != nil {
 				return nil, "", nativeError(err)
 			}
 			transaction = response.Msg.Transaction
 		} else {
-			req := connect.NewRequest(&identityapi.GetNativeLoginRequest{TransactionId: p.Secrets.TransactionID})
-			req.Header().Set("Authorization", "Bearer "+poll)
+			req := bearer(&identityapi.GetNativeLoginRequest{TransactionId: p.Secrets.TransactionID}, poll)
 			response, err := client.GetNativeLogin(ctx, req)
 			if err != nil {
 				return nil, "", nativeError(err)

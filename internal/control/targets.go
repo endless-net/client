@@ -104,8 +104,7 @@ func (q *Targets) Fetch(ctx context.Context, p state.Profile) ([]*clientv0.Enrol
 		if err := admit(); err != nil {
 			return nil, err
 		}
-		req := connect.NewRequest(&billingapi.ListAccountsRequest{Page: &billingapi.PageRequest{PageSize: q.config.UpstreamPageSize, PageToken: token}})
-		req.Header().Set("Authorization", "Bearer "+p.Secrets.Access)
+		req := bearer(&billingapi.ListAccountsRequest{Page: &billingapi.PageRequest{PageSize: q.config.UpstreamPageSize, PageToken: token}}, p.Secrets.Access)
 		response, err := billing.ListAccounts(ctx, req)
 		if err != nil {
 			return nil, targetQueryError(err)
@@ -128,8 +127,7 @@ func (q *Targets) Fetch(ctx context.Context, p state.Profile) ([]*clientv0.Enrol
 				if err := admit(); err != nil {
 					return nil, err
 				}
-				req := connect.NewRequest(&coordinatorapi.ListNetworksRequest{AccountId: account.AccountId, Page: &coordinatorapi.PageRequest{PageSize: q.config.UpstreamPageSize, PageToken: networkToken}})
-				req.Header().Set("Authorization", "Bearer "+p.Secrets.Access)
+				req := bearer(&coordinatorapi.ListNetworksRequest{AccountId: account.AccountId, Page: &coordinatorapi.PageRequest{PageSize: q.config.UpstreamPageSize, PageToken: networkToken}}, p.Secrets.Access)
 				response, err := coordinator.ListNetworks(ctx, req)
 				if err != nil {
 					return nil, targetQueryError(err)

@@ -26,7 +26,7 @@ import (
 )
 
 const clientSDK = "github.com/endless-net/client/api"
-const clientSDKVersion = "v0.7.0"
+const clientSDKVersion = "v0.8.0"
 
 var digestPattern = regexp.MustCompile("^[0-9a-f]{64}$")
 

@@ -67,6 +67,9 @@ const (
 	ClientService_NotifyLifecycle_FullMethodName           = "/client.v0.ClientService/NotifyLifecycle"
 	ClientService_GetUpdateInfo_FullMethodName             = "/client.v0.ClientService/GetUpdateInfo"
 	ClientService_GetSupportInfo_FullMethodName            = "/client.v0.ClientService/GetSupportInfo"
+	ClientService_ListDashboardSpaces_FullMethodName       = "/client.v0.ClientService/ListDashboardSpaces"
+	ClientService_GetDashboardBoard_FullMethodName         = "/client.v0.ClientService/GetDashboardBoard"
+	ClientService_ReplaceDashboardBoard_FullMethodName     = "/client.v0.ClientService/ReplaceDashboardBoard"
 )
 
 // ClientServiceClient is the client API for ClientService service.
@@ -164,6 +167,11 @@ type ClientServiceClient interface {
 	GetUpdateInfo(ctx context.Context, in *GetUpdateInfoRequest, opts ...grpc.CallOption) (*GetUpdateInfoResponse, error)
 	// UF-23: validated product links and offline-help key.
 	GetSupportInfo(ctx context.Context, in *GetSupportInfoRequest, opts ...grpc.CallOption) (*GetSupportInfoResponse, error)
+	// 016: OS owner and an existing native user session. No tunnel changes.
+	ListDashboardSpaces(ctx context.Context, in *ListDashboardSpacesRequest, opts ...grpc.CallOption) (*ListDashboardSpacesResponse, error)
+	GetDashboardBoard(ctx context.Context, in *GetDashboardBoardRequest, opts ...grpc.CallOption) (*GetDashboardBoardResponse, error)
+	// Server authorizes this Account and applies a single revision-bound replace.
+	ReplaceDashboardBoard(ctx context.Context, in *ReplaceDashboardBoardRequest, opts ...grpc.CallOption) (*ReplaceDashboardBoardResponse, error)
 }
 
 type clientServiceClient struct {
@@ -633,6 +641,36 @@ func (c *clientServiceClient) GetSupportInfo(ctx context.Context, in *GetSupport
 	return out, nil
 }
 
+func (c *clientServiceClient) ListDashboardSpaces(ctx context.Context, in *ListDashboardSpacesRequest, opts ...grpc.CallOption) (*ListDashboardSpacesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDashboardSpacesResponse)
+	err := c.cc.Invoke(ctx, ClientService_ListDashboardSpaces_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientServiceClient) GetDashboardBoard(ctx context.Context, in *GetDashboardBoardRequest, opts ...grpc.CallOption) (*GetDashboardBoardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDashboardBoardResponse)
+	err := c.cc.Invoke(ctx, ClientService_GetDashboardBoard_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientServiceClient) ReplaceDashboardBoard(ctx context.Context, in *ReplaceDashboardBoardRequest, opts ...grpc.CallOption) (*ReplaceDashboardBoardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplaceDashboardBoardResponse)
+	err := c.cc.Invoke(ctx, ClientService_ReplaceDashboardBoard_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientServiceServer is the server API for ClientService service.
 // All implementations must embed UnimplementedClientServiceServer
 // for forward compatibility.
@@ -728,6 +766,11 @@ type ClientServiceServer interface {
 	GetUpdateInfo(context.Context, *GetUpdateInfoRequest) (*GetUpdateInfoResponse, error)
 	// UF-23: validated product links and offline-help key.
 	GetSupportInfo(context.Context, *GetSupportInfoRequest) (*GetSupportInfoResponse, error)
+	// 016: OS owner and an existing native user session. No tunnel changes.
+	ListDashboardSpaces(context.Context, *ListDashboardSpacesRequest) (*ListDashboardSpacesResponse, error)
+	GetDashboardBoard(context.Context, *GetDashboardBoardRequest) (*GetDashboardBoardResponse, error)
+	// Server authorizes this Account and applies a single revision-bound replace.
+	ReplaceDashboardBoard(context.Context, *ReplaceDashboardBoardRequest) (*ReplaceDashboardBoardResponse, error)
 	mustEmbedUnimplementedClientServiceServer()
 }
 
@@ -872,6 +915,15 @@ func (UnimplementedClientServiceServer) GetUpdateInfo(context.Context, *GetUpdat
 }
 func (UnimplementedClientServiceServer) GetSupportInfo(context.Context, *GetSupportInfoRequest) (*GetSupportInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSupportInfo not implemented")
+}
+func (UnimplementedClientServiceServer) ListDashboardSpaces(context.Context, *ListDashboardSpacesRequest) (*ListDashboardSpacesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListDashboardSpaces not implemented")
+}
+func (UnimplementedClientServiceServer) GetDashboardBoard(context.Context, *GetDashboardBoardRequest) (*GetDashboardBoardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetDashboardBoard not implemented")
+}
+func (UnimplementedClientServiceServer) ReplaceDashboardBoard(context.Context, *ReplaceDashboardBoardRequest) (*ReplaceDashboardBoardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReplaceDashboardBoard not implemented")
 }
 func (UnimplementedClientServiceServer) mustEmbedUnimplementedClientServiceServer() {}
 func (UnimplementedClientServiceServer) testEmbeddedByValue()                       {}
@@ -1697,6 +1749,60 @@ func _ClientService_GetSupportInfo_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientService_ListDashboardSpaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDashboardSpacesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).ListDashboardSpaces(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_ListDashboardSpaces_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).ListDashboardSpaces(ctx, req.(*ListDashboardSpacesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientService_GetDashboardBoard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDashboardBoardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).GetDashboardBoard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_GetDashboardBoard_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).GetDashboardBoard(ctx, req.(*GetDashboardBoardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientService_ReplaceDashboardBoard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplaceDashboardBoardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).ReplaceDashboardBoard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_ReplaceDashboardBoard_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).ReplaceDashboardBoard(ctx, req.(*ReplaceDashboardBoardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientService_ServiceDesc is the grpc.ServiceDesc for ClientService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1879,6 +1985,18 @@ var ClientService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSupportInfo",
 			Handler:    _ClientService_GetSupportInfo_Handler,
+		},
+		{
+			MethodName: "ListDashboardSpaces",
+			Handler:    _ClientService_ListDashboardSpaces_Handler,
+		},
+		{
+			MethodName: "GetDashboardBoard",
+			Handler:    _ClientService_GetDashboardBoard_Handler,
+		},
+		{
+			MethodName: "ReplaceDashboardBoard",
+			Handler:    _ClientService_ReplaceDashboardBoard_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

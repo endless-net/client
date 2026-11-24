@@ -4,6 +4,7 @@ syntax = "proto3";
 package client.v0;
 
 import "client/v0/common.proto";
+import "client/v0/dashboard.proto";
 import "client/v0/features.proto";
 import "client/v0/runtime.proto";
 import "google/protobuf/timestamp.proto";
@@ -193,6 +194,17 @@ service ClientService {
   // UF-23: validated product links and offline-help key.
   rpc GetSupportInfo(GetSupportInfoRequest) returns (GetSupportInfoResponse) {
     option (access) = ACCESS_OBSERVER;
+  }
+  // 016: OS owner and an existing native user session. No tunnel changes.
+  rpc ListDashboardSpaces(ListDashboardSpacesRequest) returns (ListDashboardSpacesResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  rpc GetDashboardBoard(GetDashboardBoardRequest) returns (GetDashboardBoardResponse) {
+    option (access) = ACCESS_OWNER;
+  }
+  // Server authorizes this Account and applies a single revision-bound replace.
+  rpc ReplaceDashboardBoard(ReplaceDashboardBoardRequest) returns (ReplaceDashboardBoardResponse) {
+    option (access) = ACCESS_OWNER;
   }
 }
 

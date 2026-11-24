@@ -6,13 +6,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"github.com/endless-net/signing/api/v1/signingapiconnect"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
 
 	"errors"
 

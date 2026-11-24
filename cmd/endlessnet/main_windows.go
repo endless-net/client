@@ -14,8 +14,8 @@ import (
 	"github.com/endless-net/client/internal/headless"
 )
 
-// Contract digest is checked against the published SDK pin by scripts/ci.
-const contractSHA256 = "89d0be4956ad399cdae24065f32016db210c19ad593ae1b1d29351ddfc00c933"
+// The CI runner checks the contract digest against the published SDK pin.
+const contractSHA256 = "6ecbb4474e7b5734d0561e2d6861fc05a0681d193667cb9449859e4a8edf873f"
 
 func main() {
 	if err := run(); err != nil {

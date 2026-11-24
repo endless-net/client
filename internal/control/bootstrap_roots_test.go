@@ -4,10 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"github.com/endless-net/signing/api/v1/signingapiconnect"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/endless-net/signing/api/v1/signingapiconnect"
 )
 
 func TestEmbeddedBootstrapRootsBindCanonicalOriginToExpectedPublicRoot(t *testing.T) {

@@ -129,6 +129,8 @@ func failureMessage(reason string) string {
 		return "Для обновления подключения требуется снова войти в EndlessNet."
 	case "client.connection.registration_revoked":
 		return "Регистрация устройства отозвана администратором."
+	case "client.connection.retry_scheduled":
+		return "Запланирована новая попытка подключения."
 	case "client.connection.deadline":
 		return "Истекло время ожидания подключения."
 	case "client.connection.clock_unsafe":

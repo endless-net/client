@@ -225,7 +225,7 @@ func TestRecoveryNeverOverridesDisconnectedIntent(t *testing.T) {
 	}
 }
 
-func TestReconcileWaitsForTransientCleanupAndOriginalAttemptRetry(t *testing.T) {
+func TestReconcileReportsFailureBeforeIndependentBackgroundAttempt(t *testing.T) {
 	for _, failure := range []error{connectivity.FailurePath, connectivity.FailureControl} {
 		t.Run(failure.Error(), func(t *testing.T) {
 			s, _ := workerStore(t)
@@ -260,25 +260,23 @@ func TestReconcileWaitsForTransientCleanupAndOriginalAttemptRetry(t *testing.T) 
 			case <-time.After(20 * time.Millisecond):
 			}
 			close(cleanup)
-			second := awaitWorkerSession(t, h)
-			retry := <-second.connectCalls
-			if !retry.restore || !retry.deadline.Equal(original.deadline) || first.lifetime.Err() == nil || second.generation != first.generation {
-				t.Fatal("retry reset deadline/generation or overlapped native owners")
-			}
+			awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.RetryScheduled })
 			select {
 			case err := <-done:
-				t.Fatal("cleanup completion escaped as terminal failure before retry", err)
-			default:
-			}
-			close(connect)
-			select {
-			case err := <-done:
-				if err != nil {
-					t.Fatal(err)
+				if !errors.Is(err, failure) {
+					t.Fatalf("original call lost its failure: %v", err)
 				}
 			case <-time.After(time.Second):
-				t.Fatal("successful retry did not complete original wait")
+				t.Fatal("original call waited for a background retry")
 			}
+			second := awaitWorkerSession(t, h)
+			retry := <-second.connectCalls
+			if !retry.restore || retry.deadline.Sub(original.deadline) < 700*time.Millisecond ||
+				first.lifetime.Err() == nil || second.generation != first.generation {
+				t.Fatal("retry did not get its own budget or overlapped native owners")
+			}
+			close(connect)
+			awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.Phase == ConnectionConnected })
 			after, err := s.Load(context.Background())
 			if err != nil || after.Revision != before.Revision || *after.Profiles[workerProfile].Connection.Request != *before.Profiles[workerProfile].Connection.Request || after.Profiles[workerProfile].Connection.Deadline != before.Profiles[workerProfile].Connection.Deadline {
 				t.Fatal("retry changed durable request or deadline", err)
@@ -346,5 +344,97 @@ func TestReconcileTransientWaitHonorsCancelAndOriginalBudget(t *testing.T) {
 	}
 	if len(h.created) != 0 {
 		t.Fatal("expired original attempt created another owner")
+	}
+}
+
+func TestTimedOutAttemptSchedulesRetryWithoutNewIntent(t *testing.T) {
+	s, _ := workerStore(t)
+	if err := workerIntent(t, s, state.IntentConnected, time.Now().UTC().Add(-30*time.Second+100*time.Millisecond), workerRuntime); err != nil {
+		t.Fatal(err)
+	}
+	gate := make(chan struct{})
+	h := &workerHarness{created: make(chan *workerSession, 8), setup: func(owner *workerSession) {
+		owner.connectGate = gate
+	}}
+	w := testConnectionWorker(t, s, h)
+	startConnectionWorker(t, w)
+	original := awaitWorkerSession(t, h)
+	first := <-original.connectCalls
+	view := awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.RetryScheduled })
+	if !errors.Is(view.Failure, context.DeadlineExceeded) || view.CleanupPending {
+		t.Fatalf("retry was scheduled with the wrong outcome: %+v", view)
+	}
+	retry := awaitWorkerSession(t, h)
+	next := <-retry.connectCalls
+	close(gate)
+	if retry.generation != original.generation || !next.restore || next.deadline.Sub(first.deadline) < 29*time.Second {
+		t.Fatal("background retry did not get a fresh 30-second budget for the original generation")
+	}
+	awaitWorkerView(t, w, func(v ConnectionObservation) bool {
+		return v.Phase == ConnectionConnected && !v.RetryScheduled
+	})
+}
+
+func TestDisconnectCancelsScheduledRetry(t *testing.T) {
+	s, _ := workerStore(t)
+	if err := workerIntent(t, s, state.IntentConnected, time.Now(), workerRuntime); err != nil {
+		t.Fatal(err)
+	}
+	h := &workerHarness{created: make(chan *workerSession, 8), setup: func(owner *workerSession) {
+		owner.connectErr = connectivity.FailureControl
+	}}
+	w := testConnectionWorker(t, s, h)
+	startConnectionWorker(t, w)
+	awaitWorkerSession(t, h)
+	awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.RetryScheduled })
+	if err := workerIntent(t, s, state.IntentDisconnected, time.Now(), workerRuntime); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Reconcile(workerCallContext(t), workerProfile, 2, true); err != nil {
+		t.Fatal(err)
+	}
+	disconnecting := awaitWorkerSession(t, h)
+	if disconnecting.generation != 2 || len(disconnecting.connectCalls) != 0 || w.Observe().RetryScheduled {
+		t.Fatal("old background retry survived Disconnect")
+	}
+	w.Recover(workerProfile, 1)
+	if len(h.created) != 0 {
+		t.Fatal("old recovery hint bypassed Disconnect")
+	}
+}
+
+func TestLoginFailureStopsNetworkTriggeredRecovery(t *testing.T) {
+	s, _ := workerStore(t)
+	if err := workerIntent(t, s, state.IntentConnected, time.Now(), workerRuntime); err != nil {
+		t.Fatal(err)
+	}
+	h := &workerHarness{created: make(chan *workerSession, 8), setup: func(owner *workerSession) {
+		owner.connectErr = connectivity.FailureLogin
+	}}
+	w := testConnectionWorker(t, s, h)
+	startConnectionWorker(t, w)
+	awaitWorkerSession(t, h)
+	awaitWorkerView(t, w, func(v ConnectionObservation) bool {
+		return errors.Is(v.Failure, connectivity.FailureLogin) && !v.CleanupPending
+	})
+	w.Recover(workerProfile, 1)
+	select {
+	case <-h.created:
+		t.Fatal("network change bypassed required login")
+	case <-time.After(40 * time.Millisecond):
+	}
+	if view := w.Observe(); view.RetryScheduled || view.Failure != connectivity.FailureLogin {
+		t.Fatalf("expected a stopped login-required state, got %+v", view)
+	}
+}
+
+func TestReconnectBackoffIncreasesWithBoundedJitter(t *testing.T) {
+	var base time.Duration
+	for _, want := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 15 * time.Second, 15 * time.Second} {
+		var delay time.Duration
+		base, delay = reconnectBackoff(base)
+		if base != want || delay < want-want/5 || delay > want {
+			t.Fatalf("base %v, delay %v, expected bounded jitter around %v", base, delay, want)
+		}
 	}
 }

@@ -4,7 +4,6 @@ package clientapp
 
 import (
 	"bytes"
-	"connectrpc.com/connect"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -13,9 +12,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	wire "github.com/endless-net/coordinator/api/publicquery/v1"
-	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
-	signing "github.com/endless-net/signing/api/contract"
 	"io"
 	"net"
 	"net/http"
@@ -26,6 +22,11 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"connectrpc.com/connect"
+	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
+	signing "github.com/endless-net/signing/api/contract"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/control"

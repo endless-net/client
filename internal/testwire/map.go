@@ -1,12 +1,13 @@
 package testwire
 
 import (
+	"time"
+
 	"github.com/endless-net/client/api/transport"
 	contract "github.com/endless-net/coordinator/api/enrollment"
 	wire "github.com/endless-net/coordinator/api/publicquery/v1"
 	relayauth "github.com/endless-net/relay/api/wire"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"time"
 )
 
 func Map(m contract.NetworkMapSnapshot) *wire.NetworkMapSnapshot {

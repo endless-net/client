@@ -161,6 +161,7 @@ const (
 	Capability_CAPABILITY_SUPPORT_INFO      Capability = 17
 	// Explicit same-user browser login, separate from seamless renewal.
 	Capability_CAPABILITY_SESSION_LOGIN Capability = 18
+	Capability_CAPABILITY_DASHBOARD     Capability = 19
 )
 
 // Enum value maps for Capability.
@@ -185,6 +186,7 @@ var (
 		16: "CAPABILITY_UPDATE_DISCOVERY",
 		17: "CAPABILITY_SUPPORT_INFO",
 		18: "CAPABILITY_SESSION_LOGIN",
+		19: "CAPABILITY_DASHBOARD",
 	}
 	Capability_value = map[string]int32{
 		"CAPABILITY_UNSPECIFIED":       0,
@@ -206,6 +208,7 @@ var (
 		"CAPABILITY_UPDATE_DISCOVERY":  16,
 		"CAPABILITY_SUPPORT_INFO":      17,
 		"CAPABILITY_SESSION_LOGIN":     18,
+		"CAPABILITY_DASHBOARD":         19,
 	}
 )
 
@@ -1613,7 +1616,7 @@ const file_client_v0_common_proto_rawDesc = "" +
 	"\x0ePLATFORM_MACOS\x10\x02\x12\x12\n" +
 	"\x0ePLATFORM_LINUX\x10\x03\x12\x14\n" +
 	"\x10PLATFORM_ANDROID\x10\x04\x12\x10\n" +
-	"\fPLATFORM_IOS\x10\x05*\xb0\x04\n" +
+	"\fPLATFORM_IOS\x10\x05*\xca\x04\n" +
 	"\n" +
 	"Capability\x12\x1a\n" +
 	"\x16CAPABILITY_UNSPECIFIED\x10\x00\x12\x19\n" +
@@ -1635,7 +1638,8 @@ const file_client_v0_common_proto_rawDesc = "" +
 	"\x1cCAPABILITY_RUNTIME_LIFECYCLE\x10\x0f\x12\x1f\n" +
 	"\x1bCAPABILITY_UPDATE_DISCOVERY\x10\x10\x12\x1b\n" +
 	"\x17CAPABILITY_SUPPORT_INFO\x10\x11\x12\x1c\n" +
-	"\x18CAPABILITY_SESSION_LOGIN\x10\x12*\xd7\x01\n" +
+	"\x18CAPABILITY_SESSION_LOGIN\x10\x12\x12\x18\n" +
+	"\x14CAPABILITY_DASHBOARD\x10\x13*\xd7\x01\n" +
 	"\fAvailability\x12\x1c\n" +
 	"\x18AVAILABILITY_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16AVAILABILITY_AVAILABLE\x10\x01\x12\x1c\n" +

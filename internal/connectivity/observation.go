@@ -62,6 +62,7 @@ type Observation struct {
 	Failure        error
 	CleanupFailure error
 	CleanupPending bool
+	RetryScheduled bool
 	Local          LocalObservation
 }
 
