@@ -127,6 +127,9 @@ func (v *Verifier) currentTrust(parent context.Context, scope string) (mapTrust,
 	if ctx.Err() != nil {
 		return empty, ctx.Err()
 	}
+	if errors.Is(err, control.ErrBootstrapUnavailable) {
+		return empty, ErrUnavailable
+	}
 	now := v.config.Now()
 	rootVerified := announcement.Checkpoint().Revision != 0
 	// An HTTPS response or a new self-consistent bundle is not an authorized

@@ -46,6 +46,7 @@ const (
 type LocalObservation struct {
 	Known, Applied                     bool
 	SoleNodeReady                      bool
+	ControlUnavailable                 bool
 	Permission                         Permission
 	MapRevision                        uint64
 	Address                            string

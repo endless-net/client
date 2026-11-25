@@ -56,6 +56,7 @@ func TestConnectionStatusRequiresCurrentGenerationAndAppliedTunnel(t *testing.T)
 	sole := connectivity.LocalObservation{Known: true, Applied: true, SoleNodeReady: true, Permission: online.Permission, MapRevision: 8, Address: "100.64.0.7"}
 	soleOffline := sole
 	soleOffline.Permission = connectivity.Permission{ExistingFlows: true}
+	soleOffline.ControlUnavailable = true
 	soleWithPeer := sole
 	soleWithPeer.PeerCount = 1
 	soleWithPeer.SoleNodeReady = false
@@ -100,6 +101,9 @@ func TestConnectionStatusRequiresCurrentGenerationAndAppliedTunnel(t *testing.T)
 			got, err := c.snapshot(context.Background(), caller)
 			if err != nil || got.Status.ServiceState != tc.want || got.Status.ConnectionPhase != tc.wantPhase || got.Status.Intent.DesiredState != clientv0.DesiredState_DESIRED_STATE_CONNECTED {
 				t.Fatal("intent, application and path conflated", got, err)
+			}
+			if tc.local.ControlUnavailable && (len(got.Status.Failures) != 1 || got.Status.Failures[0].ReasonKey != "client.connection.control_unavailable" || !got.Status.Failures[0].Retryable) {
+				t.Fatal("offline retry was not reported as temporary control failure", got.Status.Failures)
 			}
 			if tc.stale && (got.Status.MapRevision != 0 || got.Status.Agent != nil || len(got.Status.PeerTransports) != 0) {
 				t.Fatal("stale backend generation leaked into current snapshot")

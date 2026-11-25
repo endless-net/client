@@ -147,6 +147,9 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 		}
 	case connectivity.PhaseConnected:
 		local := v.Local
+		if local.ControlUnavailable {
+			r.Failures = append(r.Failures, connectionDetails(connectivity.FailureControl))
+		}
 		if !local.Known || !local.Applied {
 			return
 		}

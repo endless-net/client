@@ -400,3 +400,61 @@ func TestVerifierCancellationProtocolRecoveryAndSafeDiagnostics(t *testing.T) {
 		t.Fatal("unbound verifier accepted")
 	}
 }
+
+func TestMapAndEndpointKeepBootstrapOutageSeparateFromTrust(t *testing.T) {
+	f := newMapFixture(t)
+	current := f.trust
+	var bundle signing.ServerKeyResponse
+	if err := json.Unmarshal(current.Bundle, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	private := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{65}, ed25519.SeedSize))
+	public := private.Public().(ed25519.PublicKey)
+	digest := sha256.Sum256(public)
+	key := &bundle.TrustBundle.Keys[0]
+	key.KeyID = "ed25519:" + base64.RawURLEncoding.EncodeToString(digest[:])
+	key.PublicKey = base64.RawURLEncoding.EncodeToString(public)
+	bundle.TrustBundle.ActiveKeyID = key.KeyID
+	raw, err := json.Marshal(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err := control.DecodeAnnouncement(current.Origin, raw, f.now)
+	if err != nil || changed.ID == current.ID || changed.KeyID == current.KeyID {
+		t.Fatalf("expected a valid changed identity: %v", err)
+	}
+	for _, scope := range []string{"node:map", "node:endpoint"} {
+		t.Run(scope, func(t *testing.T) {
+			config := f.config
+			var announcement control.Announcement
+			var fetchErr error
+			config.Announcements = announcementsFunc(func(context.Context, string) (control.Announcement, error) {
+				return announcement, fetchErr
+			})
+			v, err := NewVerifier(f.profile, config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, tc := range []struct {
+				name         string
+				announcement control.Announcement
+				fetchErr     error
+				want         error
+			}{
+				{"503", control.Announcement{}, control.ErrBootstrapUnavailable, ErrUnavailable},
+				{"recovered", current, nil, nil},
+				{"unauthorized key change", changed, nil, ErrTrust},
+				{"rejected bootstrap", control.Announcement{}, control.ErrBootstrap, ErrTrust},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					announcement, fetchErr = tc.announcement, tc.fetchErr
+					trust, err := v.currentTrust(t.Context(), scope)
+					if !errors.Is(err, tc.want) || trust.announcement.ID != tc.announcement.ID && err == nil ||
+						err != nil && trust.announcement.ID != "" {
+						t.Errorf("trust = %q, error = %v, expected %v", trust.announcement.ID, err, tc.want)
+					}
+				})
+			}
+		})
+	}
+}

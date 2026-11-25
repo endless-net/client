@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/endless-net/client/internal/connectivity"
@@ -89,6 +90,7 @@ type connectionDriver struct {
 	frames               chan connectionFrame
 	fatal                chan error
 	applied              chan struct{}
+	mapOffline           atomic.Bool
 }
 
 func (*connectionDriver) String() string   { return "[private connection]" }
@@ -101,7 +103,9 @@ func (d *connectionDriver) ConnectionLocal() connectivity.LocalObservation {
 	if native == nil {
 		return connectivity.LocalObservation{}
 	}
-	return native.ConnectionLocal()
+	local := native.ConnectionLocal()
+	local.ControlUnavailable = d.mapOffline.Load() && !local.Permission.NewFlows
+	return local
 }
 
 func (f *connectionFactory) newOwner(lifetime context.Context, profile string, generation uint64) (ConnectionSession, error) {
@@ -386,6 +390,7 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 					d.reportNativeFailure("apply_offline", err)
 					return nativeConnectionFailure(err, connectivity.FailureApply)
 				}
+				d.mapOffline.Store(true)
 				continue
 			}
 			var err error
@@ -407,6 +412,9 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 					d.reportNativeFailure("apply_refresh", err)
 				}
 				return nativeConnectionFailure(err, connectivity.FailureApply)
+			}
+			if err == nil {
+				d.mapOffline.Store(false)
 			}
 			if !started {
 				started = true

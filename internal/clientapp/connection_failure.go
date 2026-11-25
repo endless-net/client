@@ -21,6 +21,8 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 		return connectivity.FailureNodeRenewal
 	case errors.Is(err, control.ErrCredentialsLogin):
 		return connectivity.FailureLogin
+	case errors.Is(err, control.ErrBootstrapUnavailable), errors.Is(err, connectivity.ErrUnavailable):
+		return connectivity.FailureControl
 	case errors.Is(err, control.ErrBootstrap), errors.Is(err, control.ErrCredentialsProtocol):
 		return connectivity.FailureTrust
 	case errors.Is(err, dataplane.ErrAdapterPermission), errors.Is(err, dataplane.ErrIPPermission), errors.Is(err, dataplane.ErrPolicyPermission):

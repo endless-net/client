@@ -65,9 +65,31 @@ func TestLinuxSignedMapStartsAndRevokesNativeSession(t *testing.T) {
 	if local := session.ConnectionLocal(); !local.Applied || !local.SoleNodeReady || local.Address != "100.70.0.1" || !local.Permission.NewFlows {
 		t.Fatalf("unexpected Linux readiness: %#v", local)
 	}
-	fixture.clock.advance(time.Minute, time.Minute)
-	if local := session.ConnectionLocal(); local.Permission.NewFlows || local.Permission.ExistingFlows {
-		t.Fatal("expired map retained packet authority")
+	for _, outage := range []time.Duration{time.Second, time.Minute} {
+		original := session.ConnectionLocal().Permission
+		epoch := session.BlockSource()
+		if err := session.Offline(WithSourceEpoch(ctx, epoch)); err != nil {
+			t.Fatal(err)
+		}
+		if offline := session.ConnectionLocal().Permission; offline.NewFlows || !offline.ExistingFlows || !offline.ExpiresAt.Equal(original.ExpiresAt) {
+			t.Fatalf("offline changed the original lease: %#v", offline)
+		}
+		fixture.clock.advance(outage, outage)
+		offline := session.ConnectionLocal().Permission
+		if offline.NewFlows || offline.ExistingFlows != (outage < time.Minute) || !offline.ExpiresAt.Equal(original.ExpiresAt) {
+			t.Fatalf("offline applied the wrong lease after %v: %#v", outage, offline)
+		}
+		previous := fixture.verified.Cursor()
+		fixture.snapshot.Revision.Network++
+		fixture.snapshot.Network.Revision = fixture.snapshot.Revision.Network
+		fixture.verify(t, &previous)
+		epoch = session.BlockSource()
+		if err := session.Refresh(WithSourceEpoch(ctx, epoch), fixture.verified); err != nil {
+			t.Fatal(err)
+		}
+		if local := session.ConnectionLocal(); !local.Permission.NewFlows || !local.Permission.ExistingFlows || local.MapRevision != fixture.snapshot.Revision.Network {
+			t.Fatalf("fresh map did not restore packet authority after %v: %#v", outage, local)
+		}
 	}
 	session.RevokeSource()
 	if local := session.ConnectionLocal(); local.Permission.NewFlows || local.Permission.ExistingFlows {
