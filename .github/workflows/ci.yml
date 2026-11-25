@@ -110,3 +110,58 @@ jobs:
           TAG: ${{ github.ref_name }}
           SOURCE_SHA: ${{ github.sha }}
         run: go run ./scripts/ci publish --tag "$TAG" --sha "$SOURCE_SHA" --go-only
+
+  apt:
+    needs: release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v0.')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: client-release-${{ github.sha }}
+          path: .artifacts
+      - name: Install APT publishing tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends apt-utils dpkg-dev gnupg
+      - name: Create APT repository token
+        id: apt-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        with:
+          app-id: ${{ secrets.APT_APP_ID }}
+          private-key: ${{ secrets.APT_APP_PRIVATE_KEY }}
+          owner: endless-net
+          repositories: apt
+          permission-contents: write
+      - name: Checkout APT Pages repository
+        uses: actions/checkout@v4
+        with:
+          repository: endless-net/apt
+          ref: main
+          path: apt-pages
+          token: ${{ steps.apt-token.outputs.token }}
+      - name: Verify package and sign APT index
+        env:
+          APT_SIGNING_PRIVATE_KEY: ${{ secrets.APT_SIGNING_PRIVATE_KEY }}
+          APT_SIGNING_PASSPHRASE: ${{ secrets.APT_SIGNING_PASSPHRASE }}
+        run: bash scripts/publish-apt.sh .artifacts apt-pages "$GITHUB_REF_NAME" "$GITHUB_SHA"
+      - name: Publish signed APT repository
+        working-directory: apt-pages
+        run: |
+          set -euo pipefail
+          version=${GITHUB_REF_NAME#v}
+          git add -- "apt/pool/main/e/endlessnet-client/endlessnet-client_${version}_amd64.deb" \
+            apt/dists/stable/{Release,InRelease,Release.gpg,main/binary-amd64/Packages,main/binary-amd64/Packages.gz}
+          if git diff --cached --quiet; then
+            echo "APT already contains this release"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "Publish EndlessNet Client $version for Ubuntu amd64"
+          git push origin HEAD:refs/heads/main
