@@ -16,6 +16,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -49,6 +50,14 @@ func (a artifact) filename(version string) string {
 		extension = ".zip"
 	}
 	return a.Name + "-" + version + "-" + target.OS + "-" + target.Arch + extension
+}
+
+func (a artifact) ubuntuClient() bool {
+	return a.Kind == "go" && a.Package == "./cmd/client" && a.Target.OS == "linux" && a.Target.Arch == "amd64"
+}
+
+func debFilename(tag string) string {
+	return "endlessnet-client_" + strings.TrimPrefix(tag, "v") + "_amd64.deb"
 }
 
 func selectArtifacts(p profile, tag string) ([]artifact, error) {
@@ -198,6 +207,14 @@ func (r runner) build(ctx context.Context, p profile, output, tag string) error 
 		}
 		names = append(names, name)
 		fmt.Println("BUILT", name)
+		if tag != "" && entry.ubuntuClient() && runtime.GOOS == "linux" {
+			deb := debFilename(tag)
+			if err := r.buildDeb(ctx, files, filepath.Join(output, deb), tag, sha); err != nil {
+				return err
+			}
+			names = append(names, deb)
+			fmt.Println("BUILT", deb)
+		}
 	}
 	current, err := r.cleanCommit(ctx)
 	if err != nil {
@@ -266,6 +283,33 @@ func (r runner) buildEntries(ctx context.Context, a artifact, sha, version strin
 		return nil, err
 	}
 	entries = append(entries, notices...)
+	if a.ubuntuClient() {
+		console := filepath.Join(tmp, "endlessnet")
+		if _, err := r.run(ctx, r.root, env, "go", "build", "-trimpath", "-buildvcs=false", "-o", console, "./cmd/endlessnet"); err != nil {
+			return nil, err
+		}
+		data, err := os.ReadFile(console)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, archiveEntry{name: "endlessnet", content: data, mode: 0o755})
+		for _, name := range []string{"endlessnet-client.service", "preinst", "postinst", "prerm", "postrm", "build-deb.sh"} {
+			source, err := os.ReadFile(filepath.Join(r.root, "packaging/linux", name))
+			if err != nil {
+				return nil, err
+			}
+			mode := fs.FileMode(0o755)
+			if name == "endlessnet-client.service" {
+				mode = 0o644
+			}
+			entries = append(entries, archiveEntry{name: "packaging/" + name, content: source, mode: mode})
+		}
+		updateHelper, err := os.ReadFile(filepath.Join(r.root, "scripts", "endlessnet"))
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, archiveEntry{name: "packaging/check-updates", content: updateHelper, mode: 0o755})
+	}
 	if !windowsClient {
 		return entries, nil
 	}

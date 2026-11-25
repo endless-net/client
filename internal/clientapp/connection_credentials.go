@@ -1,5 +1,3 @@
-//go:build windows
-
 package clientapp
 
 import (
@@ -15,7 +13,7 @@ var errCredentialHandoff = errors.New("map credential handoff")
 
 // parkMaps cancels and joins the old credential's stream before dispatching a
 // rotation. The native owner remains alive and its signed lease is not extended.
-func (d *windowsConnection) parkMaps(ctx context.Context) error {
+func (d *connectionDriver) parkMaps(ctx context.Context) error {
 	// Let an already admitted native apply finish before cancelling its source.
 	// Queued frames see the cancelled context and are skipped after this barrier.
 	d.mapApplyMu.Lock()
@@ -37,7 +35,7 @@ func (d *windowsConnection) parkMaps(ctx context.Context) error {
 	}
 }
 
-func (d *windowsConnection) resumeMaps() {
+func (d *connectionDriver) resumeMaps() {
 	d.mapMu.Lock()
 	defer d.mapMu.Unlock()
 	if d.mapResume != nil {
@@ -46,7 +44,7 @@ func (d *windowsConnection) resumeMaps() {
 	}
 }
 
-func (d *windowsConnection) beginMapStream() (context.Context, context.CancelCauseFunc) {
+func (d *connectionDriver) beginMapStream() (context.Context, context.CancelCauseFunc) {
 	for {
 		d.mapMu.Lock()
 		if d.mapResume == nil {
@@ -71,7 +69,7 @@ func (d *windowsConnection) beginMapStream() (context.Context, context.CancelCau
 	}
 }
 
-func (d *windowsConnection) credentialPlan(schedule *credentialSchedule) (credentialPlan, error) {
+func (d *connectionDriver) credentialPlan(schedule *credentialSchedule) (credentialPlan, error) {
 	ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
 	defer cancel()
 	value, p, err := d.profileAt(ctx)
@@ -87,7 +85,7 @@ func (d *windowsConnection) credentialPlan(schedule *credentialSchedule) (creden
 
 // One loop owns all credential calls and frozen replay. It does not block the
 // map apply/probe loop while waiting for network or durable result adoption.
-func (d *windowsConnection) maintainCredentials(native windowsConnectionNative) {
+func (d *connectionDriver) maintainCredentials(native nativeConnectionSession) {
 	if d.factory.config.RefreshCredentials == nil {
 		return
 	}

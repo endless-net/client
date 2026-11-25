@@ -22,17 +22,12 @@ install -d -m 0755 /etc/apt/keyrings /etc/apt/sources.list.d
 install -m 0644 "$temporary/endlessnet.gpg" /etc/apt/keyrings/endlessnet.gpg
 install -m 0644 "$temporary/endlessnet.list" /etc/apt/sources.list.d/endlessnet.list
 apt-get -o APT::Update::Error-Mode=any update
-apt-get install -y endlessnet-client
-script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-if [ -f "$0" ] && [ -f "$script_directory/endlessnet" ]; then
-  command_source="$script_directory/endlessnet"
-else
-  command_source="$temporary/endlessnet"
-  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
-    --max-time 30 https://raw.githubusercontent.com/endless-net/client/main/scripts/endlessnet -o "$command_source"
-fi
-[ -s "$command_source" ] || fail 'Не удалось получить команду endlessnet.'
-install -d -m 0755 /usr/local/bin
-install -m 0755 "$command_source" /usr/local/bin/endlessnet
+policy=$(apt-cache policy endlessnet-client) || fail 'Не удалось прочитать доступную версию из APT.'
+candidate=$(printf '%s\n' "$policy" | awk '$1 == "Candidate:" { print $2 }')
+[ -n "$candidate" ] && [ "$candidate" != '(none)' ] || fail 'В APT нет пакета EndlessNet Client.'
+metadata=$(apt-cache show "endlessnet-client=$candidate") || fail 'Не удалось проверить пакет EndlessNet Client.'
+printf '%s\n' "$metadata" | grep -qx 'Provides: endlessnet-client-linux-runtime' ||
+  fail 'В APT пока нет выпуска с рабочим Linux runtime.'
+apt-get install -y "endlessnet-client=$candidate"
 printf '%s\n' 'Client установлен через APT. Запуском службы управляет установленный пакет.'
 printf '%s\n' 'Проверка обновлений: sudo endlessnet check-updates'

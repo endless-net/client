@@ -22,6 +22,11 @@ import (
 
 func (f *candidateFixture) withRelay(t *testing.T) {
 	t.Helper()
+	f.withRelayAt(t, "relay.example:443")
+}
+
+func (f *candidateFixture) withRelayAt(t *testing.T, address string) {
+	t.Helper()
 	sample, _ := f.clock.Sample()
 	expires := sample.Wall.Add(30 * time.Second)
 	var trust signing.ServerKeyResponse
@@ -35,7 +40,7 @@ func (f *candidateFixture) withRelay(t *testing.T) {
 	}
 	credential.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(ed25519.NewKeyFromSeed(bytes.Repeat([]byte{83}, 32)), payload))
 	f.snapshot.RelayCredential = credential
-	f.snapshot.Relays = []relay.Endpoint{{ID: "edge", Addr: "relay.example:443", Protocol: relay.EndpointProtocolTLS}}
+	f.snapshot.Relays = []relay.Endpoint{{ID: "edge", Addr: address, Protocol: relay.EndpointProtocolTLS}}
 	cursor := f.verified.Cursor()
 	f.clock.advance(time.Millisecond, time.Millisecond)
 	f.refresh(t, &cursor)

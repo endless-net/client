@@ -17,10 +17,7 @@ import (
 
 var (
 	ErrAdapter                = errors.New("tunnel adapter failed")
-	ErrAdapterConflict        = errors.New("tunnel adapter conflicts with existing interface")
-	ErrAdapterOwnership       = errors.New("tunnel adapter ownership changed")
 	ErrAdapterUncertain       = errors.New("tunnel adapter outcome uncertain")
-	ErrAdapterPermission      = errors.New("tunnel adapter permission denied")
 	ErrAdapterLimit           = errors.New("interface inventory limit exceeded")
 	ErrAdapterCleanupRequired = errors.New("tunnel adapter cleanup required")
 )

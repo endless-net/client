@@ -171,7 +171,7 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeReady(t *t
 				})
 				f.afterACK = func(coordinator.UpdateNodeEndpointResponse) { jumped.Store(true) }
 			}
-			f.factory.config = f.config
+			f.factory.config = f.config.shared()
 			endpoint := f.config.Endpoint.String()
 			if mode == "changed" {
 				endpoint = "192.0.2.99:51821"
@@ -221,7 +221,7 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeReady(t *t
 			if err != nil {
 				t.Fatal(err)
 			}
-			d := owner.(*windowsConnection)
+			d := owner.(*connectionDriver)
 			defer func() {
 				if err := d.Disconnect(workerCallContext(t)); err != nil {
 					t.Error(err)
@@ -267,7 +267,7 @@ type connectionBackendFixture struct {
 	checkRequest func(*http.Request)
 	store        *state.Store
 	native       *connectionNativeFixture
-	factory      *windowsConnections
+	factory      *connectionFactory
 	config       WindowsConnectionConfig
 	transport    *connectivity.Transport
 	mu           sync.Mutex
@@ -434,7 +434,7 @@ func newConnectionBackendFixturePrepared(t *testing.T, prepare func(*state.Profi
 	}
 	fixture.transport = transport
 	fixture.config = WindowsConnectionConfig{Verifier: connectivity.VerifierConfig{Announcements: connectionAnnouncement{announcement}, Now: time.Now, Clock: workerFixtureClock{}, CallTimeout: time.Second, MaxBytes: 65536, MaxPeers: 8, MaxRules: 16, MaxCredentialBytes: 8192}, Native: dataplane.WindowsSessionConfig{MaxPeers: 8, MaxGrants: 16, MaxProtected: 16, MaxInventoryRows: 256, MaxInterfaces: 256, MTU: 1420, ListenPort: 51820, RouteMetric: 7, DADPollInterval: time.Millisecond, TransactionWait: 100 * time.Millisecond, ApplyTimeout: time.Second, RelayDialTimeout: time.Second, RelayIOTimeout: 3 * time.Second, RelayHeartbeatInterval: time.Second, ProbeInterval: 10 * time.Millisecond, RelayRetryInterval: 20 * time.Millisecond}, Endpoint: netip.MustParseAddrPort("192.0.2.1:51820"), EndpointTTL: 200 * time.Millisecond, RenewalInterval: 20 * time.Millisecond, RetryInterval: 20 * time.Millisecond, ProbeInterval: 10 * time.Millisecond, WriteBudget: time.Second, MaxQueuedMaps: 8}
-	fixture.factory = &windowsConnections{store: fixture.store, transport: transport, config: fixture.config, stream: transport.StreamSnapshot, cleanup: func(context.Context, string) error { return nil }, makeNative: func(context.Context, string, uint64) (windowsConnectionNative, error) { return fixture.native, nil }}
+	fixture.factory = &connectionFactory{store: fixture.store, transport: transport, config: fixture.config.shared(), stream: transport.StreamSnapshot, cleanup: func(context.Context, string) error { return nil }, makeNative: func(context.Context, string, uint64) (nativeConnectionSession, error) { return fixture.native, nil }}
 	return fixture
 }
 
@@ -462,7 +462,7 @@ func TestWindowsConnectionDriverCompletesAfterACKWithNoPeerPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := owner.(*windowsConnection)
+	d := owner.(*connectionDriver)
 	t.Cleanup(func() {
 		if err := d.Disconnect(workerCallContext(t)); err != nil {
 			t.Error(err)
@@ -507,7 +507,7 @@ func TestPreparedListenerSignalPublishesBeforePeriodicRenewal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := owner.(*windowsConnection)
+	d := owner.(*connectionDriver)
 	t.Cleanup(func() { _ = d.Disconnect(workerCallContext(t)) })
 	if err := d.Connect(backendOperation(t, f), false); err != nil {
 		t.Fatal(err)
@@ -547,7 +547,7 @@ func TestWindowsConnectionDriverRenewalReplaysLostACKWithoutNewGeneration(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := owner.(*windowsConnection)
+	d := owner.(*connectionDriver)
 	t.Cleanup(func() {
 		if err := d.Disconnect(workerCallContext(t)); err != nil {
 			t.Error(err)
@@ -580,7 +580,7 @@ func TestWindowsConnectionDriverReconnectsWithFullSnapshotWithoutResettingCursor
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := owner.(*windowsConnection)
+	d := owner.(*connectionDriver)
 	t.Cleanup(func() {
 		if err := d.Disconnect(workerCallContext(t)); err != nil {
 			t.Error(err)
@@ -660,7 +660,7 @@ func TestWindowsConnectionDriverRotatesMapStreamWithoutEnteringOffline(t *testin
 			if err != nil {
 				t.Fatal(err)
 			}
-			d := owner.(*windowsConnection)
+			d := owner.(*connectionDriver)
 			t.Cleanup(func() { _ = d.Disconnect(workerCallContext(t)) })
 			if err := d.Connect(backendOperation(t, f), false); err != nil {
 				t.Fatal(err)
@@ -704,7 +704,7 @@ func TestWindowsConnectionDriverRejectsBindMismatchBeforeAnnouncementOrReadiness
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := owner.(*windowsConnection)
+	d := owner.(*connectionDriver)
 	defer func() {
 		if err := d.Disconnect(workerCallContext(t)); err != nil {
 			t.Error(err)
@@ -730,7 +730,7 @@ func TestWindowsConnectionDriverQueueOverflowRevokesWithoutBlocking(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := owner.(*windowsConnection)
+	d := owner.(*connectionDriver)
 	defer d.cancel()
 	if err := d.enqueue(f.native, connectionFrame{}); err != nil {
 		t.Fatal(err)
@@ -765,7 +765,7 @@ func TestTerminalSourceFailurePurgesHintsButOldGenerationCannotPurgeNewIntent(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := owner.(*windowsConnection)
+	d := owner.(*connectionDriver)
 	defer d.cancel()
 	d.failSource(f.native, connectivity.ErrRevoked)
 	if err := d.applyMaps(t.Context(), false, f.native); !errors.Is(err, connectivity.ErrRevoked) {

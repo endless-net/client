@@ -1,0 +1,260 @@
+package dataplane
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net"
+	"net/netip"
+	"os"
+	"os/exec"
+	"slices"
+
+	"github.com/tailscale/wireguard-go/tun"
+	"golang.org/x/sys/unix"
+)
+
+const linuxIP = "/usr/sbin/ip"
+const linuxRouteProtocol = "99"
+
+type linuxLink struct {
+	device  tun.Device
+	name    string
+	index   int
+	address netip.Addr
+	routes  []netip.Addr
+}
+
+type linuxPacketDevice struct{ tun.Device }
+
+// NativeTun.Write on Linux returns bytes. The packet switch uses the Device
+// interface's packet count and submits complete IP packets without offload.
+func (d linuxPacketDevice) Write(bufs [][]byte, offset int) (int, error) {
+	for i, buf := range bufs {
+		if offset < 0 || offset >= len(buf) {
+			return i, ErrPacketIO
+		}
+		written, err := d.Device.Write(bufs[i:i+1], offset)
+		if err != nil {
+			return i, err
+		}
+		if written != len(buf)-offset {
+			return i, ErrPacketIO
+		}
+	}
+	return len(bufs), nil
+}
+
+func openLinuxLink(ctx context.Context, name string, mtu int) (*linuxLink, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if !linuxObjectName.MatchString(name) || mtu < 576 || mtu > 1500 {
+		return nil, ErrConfiguration
+	}
+	ifr, err := unix.NewIfreq(name)
+	if err != nil {
+		return nil, ErrConfiguration
+	}
+	fd, err := unix.Open("/dev/net/tun", unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, linuxLinkError(err)
+	}
+	ifr.SetUint16(unix.IFF_TUN | unix.IFF_NO_PI | unix.IFF_TUN_EXCL)
+	if err := unix.IoctlIfreq(fd, unix.TUNSETIFF, ifr); err != nil {
+		_ = unix.Close(fd)
+		return nil, linuxLinkError(err)
+	}
+	if ifr.Name() != name {
+		_ = unix.Close(fd)
+		return nil, ErrAdapterOwnership
+	}
+	if err := unix.SetNonblock(fd, true); err != nil {
+		_ = unix.Close(fd)
+		return nil, linuxLinkError(err)
+	}
+	// The runtime poller must see an attached, nonblocking descriptor.
+	file := os.NewFile(uintptr(fd), "/dev/net/tun")
+	device, err := tun.CreateTUNFromFile(file, mtu)
+	if err != nil {
+		return nil, linuxLinkError(err)
+	}
+	iface, err := net.InterfaceByName(name)
+	if err != nil || iface.Index <= 0 || ctx.Err() != nil {
+		_ = device.Close()
+		return nil, ErrAdapterOwnership
+	}
+	return &linuxLink{device: linuxPacketDevice{device}, name: name, index: iface.Index}, nil
+}
+
+func linuxLinkError(err error) error {
+	switch {
+	case errors.Is(err, unix.EPERM), errors.Is(err, unix.EACCES):
+		return ErrAdapterPermission
+	case errors.Is(err, unix.EBUSY), errors.Is(err, unix.EEXIST):
+		return ErrAdapterConflict
+	default:
+		return ErrConfiguration
+	}
+}
+
+func (l *linuxLink) checkOwnership() (*net.Interface, error) {
+	iface, err := net.InterfaceByName(l.name)
+	if err != nil || iface.Index != l.index {
+		return nil, ErrAdapterOwnership
+	}
+	// Check the live fd as well as the inventory. A reused ifindex or name
+	// alone never authorizes writes to an interface.
+	ifr, err := unix.NewIfreq(l.name)
+	if err != nil {
+		return nil, ErrAdapterOwnership
+	}
+	raw, err := l.device.File().SyscallConn()
+	if err != nil {
+		return nil, ErrAdapterOwnership
+	}
+	var ioctlErr error
+	err = raw.Control(func(fd uintptr) { ioctlErr = unix.IoctlIfreq(int(fd), unix.TUNGETIFF, ifr) })
+	if err != nil || ioctlErr != nil || ifr.Name() != l.name {
+		return nil, ErrAdapterOwnership
+	}
+	return iface, nil
+}
+
+func (l *linuxLink) configure(ctx context.Context, address netip.Addr, peers []netip.Addr) error {
+	if !address.Is4() || !address.IsGlobalUnicast() {
+		return ErrConfiguration
+	}
+	if _, err := l.checkOwnership(); err != nil {
+		return err
+	}
+	if l.address.IsValid() && l.address != address {
+		return ErrIPConflict
+	}
+	for _, peer := range peers {
+		if !peer.Is4() || !peer.IsGlobalUnicast() || peer == address {
+			return ErrConfiguration
+		}
+		if !slices.Contains(l.routes, peer) {
+			existing, err := exec.CommandContext(ctx, linuxIP, "-4", "route", "show", "table", "all", "exact", peer.String()+"/32").Output()
+			if err != nil {
+				return ErrConfiguration
+			}
+			if len(existing) != 0 {
+				return ErrIPConflict
+			}
+		}
+	}
+	if !l.address.IsValid() {
+		if err := linuxAddressAvailable(address); err != nil {
+			return err
+		}
+		if err := l.ip(ctx, "-4", "address", "add", address.String()+"/32", "dev", l.name); err != nil {
+			return err
+		}
+		if err := l.ip(ctx, "link", "set", "dev", l.name, "up"); err != nil {
+			return err
+		}
+		l.address = address
+	}
+	for _, old := range slices.Clone(l.routes) {
+		if !slices.Contains(peers, old) {
+			if err := l.route(ctx, "del", old); err != nil {
+				return err
+			}
+			l.routes = slices.DeleteFunc(l.routes, func(candidate netip.Addr) bool { return candidate == old })
+		}
+	}
+	for _, peer := range peers {
+		if !slices.Contains(l.routes, peer) {
+			if err := l.route(ctx, "add", peer); err != nil {
+				return err
+			}
+			l.routes = append(l.routes, peer)
+		}
+	}
+	return l.verify(ctx)
+}
+
+func (l *linuxLink) verify(ctx context.Context) error {
+	iface, err := l.checkOwnership()
+	if err != nil || iface.Flags&net.FlagUp == 0 {
+		return ErrAdapterOwnership
+	}
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return ErrIPOwnership
+	}
+	found := false
+	for _, value := range addrs {
+		prefix, err := netip.ParsePrefix(value.String())
+		if err == nil && prefix.Addr().Is4() {
+			if prefix != netip.PrefixFrom(l.address, 32) || found {
+				return ErrIPOwnership
+			}
+			found = true
+		}
+	}
+	if !found {
+		return ErrIPOwnership
+	}
+	raw, err := exec.CommandContext(ctx, linuxIP, "-j", "-4", "route", "show", "table", "main", "dev", l.name,
+		"proto", linuxRouteProtocol).Output()
+	if err != nil {
+		return ErrIPOwnership
+	}
+	var records []struct {
+		Destination string `json:"dst"`
+		Source      string `json:"prefsrc"`
+	}
+	if err := json.Unmarshal(raw, &records); err != nil || len(records) != len(l.routes) {
+		return ErrIPOwnership
+	}
+	seen := make(map[netip.Addr]bool, len(l.routes))
+	for _, record := range records {
+		address, err := netip.ParseAddr(record.Destination)
+		if err != nil {
+			prefix, prefixErr := netip.ParsePrefix(record.Destination)
+			if prefixErr != nil || prefix.Bits() != 32 {
+				return ErrIPOwnership
+			}
+			address = prefix.Addr()
+		}
+		if record.Source != l.address.String() || seen[address] || !slices.Contains(l.routes, address) {
+			return ErrIPOwnership
+		}
+		seen[address] = true
+	}
+	return ctx.Err()
+}
+
+func (l *linuxLink) route(ctx context.Context, action string, peer netip.Addr) error {
+	return l.ip(ctx, "-4", "route", action, "table", "main", peer.String()+"/32",
+		"dev", l.name, "src", l.address.String(), "proto", linuxRouteProtocol)
+}
+
+func (l *linuxLink) ip(ctx context.Context, args ...string) error {
+	if _, err := l.checkOwnership(); err != nil {
+		return err
+	}
+	if err := exec.CommandContext(ctx, linuxIP, args...).Run(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return ErrIPOwnership
+	}
+	return nil
+}
+
+func linuxAddressAvailable(address netip.Addr) error {
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		return ErrConfiguration
+	}
+	for _, value := range addresses {
+		if prefix, err := netip.ParsePrefix(value.String()); err == nil && prefix.Addr() == address {
+			return ErrIPConflict
+		}
+	}
+	return nil
+}

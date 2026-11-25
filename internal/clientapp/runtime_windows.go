@@ -114,43 +114,9 @@ func newWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 			if err != nil {
 				return err
 			}
-			native, err := control.NewNative(r.http, bootstrap, c.MaxResponseBytes, time.Now)
-			if err != nil {
-				return err
-			}
-			login, err := control.NewLoginExecutor(r.state.Store(), native, control.LoginConfig{MaxPending: c.MaxPending, MaxCommitRetries: c.MaxCommitRetries, RetryInterval: c.RetryInterval, WriteBudget: c.WriteBudget, Now: time.Now})
-			if err != nil {
-				return err
-			}
-			sessionLogin, err := t.NewSessionLoginWorker(r.state.Store(), native, control.LoginConfig{MaxPending: c.MaxPending, MaxCommitRetries: c.MaxCommitRetries, RetryInterval: c.RetryInterval, WriteBudget: c.WriteBudget, Now: time.Now})
-			if err != nil {
-				return err
-			}
-			registration, err := control.NewRegistration(r.http, bootstrap, control.RegistrationConfig{MaxRequestBytes: c.MaxRequestBytes, MaxResponseBytes: c.MaxResponseBytes, MaxCredentialBytes: c.MaxCredentialBytes, Now: time.Now})
-			if err != nil {
-				return err
-			}
-			register, err := control.NewRegistrationExecutor(r.state.Store(), registration, control.RegistrationExecutorConfig{MaxCommitRetries: c.MaxCommitRetries, RetryInterval: c.RetryInterval, WriteBudget: c.WriteBudget, Now: time.Now})
-			if err != nil {
-				return err
-			}
-			approval, err := control.NewApproval(r.http, bootstrap, control.ApprovalConfig{RegistrationConfig: control.RegistrationConfig{MaxRequestBytes: c.MaxRequestBytes, MaxResponseBytes: c.MaxResponseBytes, MaxCredentialBytes: c.MaxCredentialBytes, Now: time.Now}, ApprovalBase: c.ApprovalBase})
-			if err != nil {
-				return err
-			}
-			approve, err := control.NewApprovalExecutor(r.state.Store(), approval, control.ApprovalExecutorConfig{MaxCommitRetries: c.MaxCommitRetries, RetryInterval: c.RetryInterval, WriteBudget: c.WriteBudget, Now: time.Now})
-			if err != nil {
-				return err
-			}
-			defaultTarget, err := control.NewDefaultTarget(r.http, bootstrap, control.RegistrationConfig{MaxRequestBytes: c.MaxRequestBytes, MaxResponseBytes: c.MaxResponseBytes, MaxCredentialBytes: c.MaxCredentialBytes, Now: time.Now})
-			if err != nil {
-				return err
-			}
-			resolve, err := control.NewDefaultTargetExecutor(r.state.Store(), defaultTarget, control.RegistrationExecutorConfig{MaxCommitRetries: c.MaxCommitRetries, RetryInterval: c.RetryInterval, WriteBudget: c.WriteBudget, Now: time.Now})
-			if err != nil {
-				return err
-			}
-			worker, err := t.NewDefaultEnrollmentWorker(login, register, approve, resolve)
+			worker, sessionLogin, err := t.enrollmentWorkers(r.state.Store(), r.http, bootstrap,
+				control.LoginConfig{MaxPending: c.MaxPending, MaxCommitRetries: c.MaxCommitRetries, RetryInterval: c.RetryInterval, WriteBudget: c.WriteBudget, Now: time.Now},
+				control.RegistrationConfig{MaxRequestBytes: c.MaxRequestBytes, MaxResponseBytes: c.MaxResponseBytes, MaxCredentialBytes: c.MaxCredentialBytes, Now: time.Now}, c.ApprovalBase)
 			if err != nil {
 				return err
 			}

@@ -1,0 +1,25 @@
+[Unit]
+Description=EndlessNet Client
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/libexec/endlessnet-client/client installed-run
+RuntimeDirectory=endlessnet-client
+RuntimeDirectoryMode=0700
+StateDirectory=endlessnet-client
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=12s
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_ADMIN
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

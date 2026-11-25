@@ -69,10 +69,12 @@ govulncheck ./...
 
 Непустой вывод `goimports -l` означает ошибку форматирования; исправления
 просматриваются отдельно. Общая точка входа `cmd/client/main.go` вызывает
-платформенный запуск. Windows запускает runtime003 через SCM.
-Windows amd64, Linux amd64 и macOS amd64/arm64 outputs проверяют сборку,
-но не доказывают реализацию туннеля, маршрутов или системную приёмку.
+платформенный запуск. Windows запускает runtime003 через SCM, Ubuntu
+26.04 amd64 через systemd. Общий CLI собирается из `cmd/endlessnet`.
 Сборка выполняется отдельно командой `go run ./scripts/ci build`.
+Linux CI для runtime-тега готовит `.deb` с теми же `client` и `endlessnet`,
+что находятся в Linux-архиве. Native-проверки туннеля и установка пакета
+выполняются отдельно от базового unit-профиля.
 
 Версии инструментов и producer-owned generation/fixtures описаны в
 [контрактном README](api/README.md). При изменении схемы использовать закреплённые

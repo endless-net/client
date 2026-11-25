@@ -16,6 +16,21 @@ Connected либо LOCAL_READY для единственного устройс�
 и grants хранятся только в защищённом состоянии службы. Текущие права и лимиты
 проверяются сервером отдельно от наличия личного Account.
 
+## Ubuntu 26.04 amd64 без UI
+
+Пакет `endlessnet-client` устанавливает команду `endlessnet` и службу
+`endlessnet-client.service`. Для входа и подключения выполните
+`sudo endlessnet up`. Ссылка из консоли открывается и на другом устройстве.
+`sudo endlessnet status` показывает этап регистрации и фактический путь
+Direct или Relay. `sudo endlessnet down` отключает туннель с сохранением
+регистрации. `sudo endlessnet check-updates` проверяет доступный пакет через APT
+и запрашивает подтверждение обновления.
+
+Служба держит локальное состояние в `/var/lib/endlessnet-client`, а Unix-сокет
+в `/run/endlessnet-client`. Пакет сохраняет состояние при обновлении и удалении.
+Если установленный клиент APT 0.6.2 оставил старый `client.json`, пакет
+останавливает обновление и сохраняет этот файл для отдельного перехода.
+
 ## Повторный вход зарегистрированного устройства
 
 Owner-only IPC api/v0.7.0 предоставляет StartSessionLogin/GetSessionLogin и
@@ -370,8 +385,9 @@ state при обычном запуске не инициализируется
 или запускает службу. Existing/corrupt state не перезаписывается, migration/reset
 и генерация keys/attempt/credentials не выполняются. Для v0.6 эта команда не является
 переходом на новую версию. Установка и запуск установленной службы здесь не выполняются.
-На Linux и macOS `client print-contract` выводит отпечаток контракта. Запуск
-службы завершится с ошибкой, пока для этих платформ нет реализации runtime.
+На Linux эта точка входа запускает headless runtime под systemd. На macOS
+`client print-contract` выводит отпечаток контракта и запуск службы
+возвращает ошибку недоступности runtime.
 Approval/recovery, legacy adoption и системная приёмка003 ещё не завершены.
 
 Private browser approval state хранит исходный device-only request и receipt под

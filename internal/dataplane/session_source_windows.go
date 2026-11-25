@@ -9,11 +9,6 @@ import (
 	"github.com/endless-net/client/internal/connectivity"
 )
 
-type sourceEpochKey struct{}
-
-func WithSourceEpoch(ctx context.Context, epoch uint64) context.Context {
-	return context.WithValue(ctx, sourceEpochKey{}, epoch)
-}
 func (s *WindowsSession) sourceEpoch(ctx context.Context) uint64 {
 	if epoch, ok := ctx.Value(sourceEpochKey{}).(uint64); ok {
 		return epoch

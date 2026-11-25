@@ -18,10 +18,7 @@ import (
 )
 
 var ErrIP = errors.New("IP configuration failed")
-var ErrIPConflict = errors.New("IP configuration conflict")
-var ErrIPOwnership = errors.New("IP configuration ownership changed")
 var ErrIPUncertain = errors.New("IP configuration outcome uncertain")
-var ErrIPPermission = errors.New("IP configuration permission denied")
 var ErrIPLimit = errors.New("IP configuration inventory limit exceeded")
 
 // IPPlan describes only one address and exact peer /32 routes. No API here

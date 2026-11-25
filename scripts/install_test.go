@@ -38,39 +38,49 @@ func shellFixture(t *testing.T, script string, tools map[string]string, input st
 }
 
 func TestAptBootstrap(t *testing.T) {
+	root := t.TempDir()
+	osRelease := filepath.Join(root, "os-release")
+	if err := os.WriteFile(osRelease, []byte("ID=ubuntu\nVERSION_ID=26.04\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	source, err := os.ReadFile("install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(root, "install.sh")
+	const probe = ". /etc/os-release"
+	if !strings.Contains(string(source), probe) {
+		t.Fatal("installation script platform probe changed")
+	}
+	contents := strings.Replace(string(source), probe, `. "$FIXTURE_OS_RELEASE"`, 1)
+	if err := os.WriteFile(script, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	tools := map[string]string{
 		"id": "echo 0", "dpkg": "echo amd64",
 		"install": "printf 'install %s\\n' \"$*\" >> \"$COMMAND_LOG\"",
 		"apt-get": "printf 'apt %s\\n' \"$*\" >> \"$COMMAND_LOG\"; [ \"$FAILURE\" != apt ]",
+		"apt-cache": `case "$*" in
+  'policy endlessnet-client') echo '  Candidate: 0.17.4' ;;
+  'show endlessnet-client=0.17.4') [ "$FAILURE" = legacy ] || echo 'Provides: endlessnet-client-linux-runtime' ;;
+esac`,
 		"curl": `[ "$FAILURE" != curl ] || exit 1
-case "$*:$FAILURE" in *raw.githubusercontent.com*:command) exit 1;; esac
 for arg do output="$arg"; done
 [ "$FAILURE" = empty ] || printf fixture-key > "$output"`,
 	}
-	for _, failure := range []string{"", "curl", "empty", "apt", "command"} {
+	for _, failure := range []string{"", "curl", "empty", "apt", "legacy"} {
 		name := failure
 		if name == "" {
 			name = "success"
 		}
 		t.Run(name, func(t *testing.T) {
-			script := "install.sh"
-			if failure == "command" {
-				data, err := os.ReadFile(script)
-				if err != nil {
-					t.Fatal(err)
-				}
-				script = filepath.Join(t.TempDir(), "install.sh")
-				if err := os.WriteFile(script, data, 0o644); err != nil {
-					t.Fatal(err)
-				}
-			}
-			output, commands, err := shellFixture(t, script, tools, "", "FAILURE="+failure)
+			output, commands, err := shellFixture(t, script, tools, "", "FAILURE="+failure, "FIXTURE_OS_RELEASE="+osRelease)
 			if (err == nil) != (failure == "") {
 				t.Fatalf("unexpected result: %v\n%s", err, output)
 			}
 			switch failure {
 			case "":
-				for _, want := range []string{"/etc/apt/keyrings/endlessnet.gpg", "apt -o APT::Update::Error-Mode=any update", "apt install -y endlessnet-client", "/usr/local/bin/endlessnet"} {
+				for _, want := range []string{"/etc/apt/keyrings/endlessnet.gpg", "apt -o APT::Update::Error-Mode=any update", "apt install -y endlessnet-client=0.17.4"} {
 					if !strings.Contains(commands, want) {
 						t.Fatalf("missing %s in %s", want, commands)
 					}
@@ -83,10 +93,9 @@ for arg do output="$arg"; done
 				if strings.Contains(commands, "apt install") || strings.Contains(output, "Client установлен") {
 					t.Fatal("reported install after failed index")
 				}
-			case "command":
-				if !strings.Contains(commands, "apt install -y endlessnet-client") || strings.Contains(commands, "/usr/local/bin/endlessnet") ||
-					strings.Contains(output, "Client установлен") {
-					t.Fatal("reported complete installation after failed CLI download")
+			case "legacy":
+				if strings.Contains(commands, "apt install") || strings.Contains(output, "Client установлен") {
+					t.Fatal("accepted the obsolete APT package")
 				}
 			}
 		})

@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+# The historical package used a different state format and server API.
+if [ -e /var/lib/endlessnet/client.json ]; then
+    printf '%s\n' 'Обнаружено состояние прежнего Client. Перенос требует явного решения оператора.' >&2
+    exit 1
+fi

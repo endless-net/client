@@ -22,13 +22,19 @@ type Principal struct {
 	Administrator bool
 }
 
-// AuthInfo can only be created on a real connection by the pipe credentials.
+// AuthInfo carries the principal checked by the local OS transport.
 type AuthInfo struct {
 	credentials.CommonAuthInfo
 	principal Principal
+	transport string
 }
 
-func (AuthInfo) AuthType() string { return "windows-named-pipe" }
+func (a AuthInfo) AuthType() string {
+	if a.transport == "" {
+		return "windows-named-pipe"
+	}
+	return a.transport
+}
 
 func Caller(ctx context.Context) (Principal, error) {
 	p, ok := peer.FromContext(ctx)

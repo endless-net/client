@@ -106,7 +106,7 @@ func TestWindowsAssemblyDoesNotAcquireStateOrPipeDuringConstruction(t *testing.T
 		t.Fatal("missing contract digest accepted")
 	}
 	c.AllowedSIDs[0] = "forged"
-	if r.config.AllowedSIDs[0] == "forged" || r.ipc.allowed[0] == "forged" {
+	if r.config.AllowedSIDs[0] == "forged" {
 		t.Fatal("caller mutated IPC admission")
 	}
 

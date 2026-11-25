@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+if [ "$1" = configure ]; then
+    install -d -o root -g root -m 0700 /var/lib/endlessnet-client
+    /usr/libexec/endlessnet-client/client installed-init
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload
+    fi
+    if deb-systemd-helper was-enabled endlessnet-client.service; then
+        deb-systemd-helper enable endlessnet-client.service
+    else
+        deb-systemd-helper update-state endlessnet-client.service
+    fi
+    if [ -d /run/systemd/system ]; then
+        deb-systemd-invoke start endlessnet-client.service
+    fi
+    helper=/usr/local/bin/endlessnet
+    if [ -e "$helper" ] || [ -L "$helper" ]; then
+        if [ -f "$helper" ] && [ ! -L "$helper" ] &&
+            [ "$(stat -c '%u:%h' "$helper")" = '0:1' ] &&
+            printf '%s\n' '9e9cdd0d5d6095a86786f70dc152b6f02efa2db02c957521d9f7aed25fa470df  /usr/local/bin/endlessnet' | sha256sum -cs &&
+            [ ! -e /var/lib/endlessnet-client/legacy-cli ] && [ ! -L /var/lib/endlessnet-client/legacy-cli ]; then
+            mv -- "$helper" /var/lib/endlessnet-client/legacy-cli
+        else
+            printf '%s\n' 'Существующая команда в /usr/local/bin сохранена. Используйте /usr/bin/endlessnet.' >&2
+        fi
+    fi
+fi

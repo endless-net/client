@@ -39,6 +39,9 @@ func verifyOutput(output, sha, tag string, p profile) ([]string, error) {
 	expected := make(map[string]bool)
 	for _, entry := range selected {
 		expected[entry.filename(strings.ReplaceAll(tag, "/", "-"))] = true
+		if entry.ubuntuClient() {
+			expected[debFilename(tag)] = true
+		}
 	}
 	data, err = os.ReadFile(filepath.Join(output, checksumFile))
 	if err != nil {

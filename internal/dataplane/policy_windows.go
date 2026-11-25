@@ -23,9 +23,7 @@ import (
 )
 
 var ErrPolicy = errors.New("packet policy failed")
-var ErrPolicyOwnership = errors.New("packet policy ownership changed")
 var ErrPolicyUncertain = errors.New("packet policy outcome uncertain")
-var ErrPolicyPermission = errors.New("packet policy permission denied")
 var ErrPolicyLimit = errors.New("packet policy scope limit exceeded")
 var ErrPolicyCleanupRequired = errors.New("native cleanup not confirmed")
 

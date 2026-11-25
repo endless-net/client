@@ -73,7 +73,7 @@ func (r runner) verifyClientContract(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	console, err := extractConstant(filepath.Join(r.root, "cmd/endlessnet/main_windows.go"), "contractSHA256", 64)
+	console, err := extractConstant(filepath.Join(r.root, "cmd/endlessnet/main.go"), "contractSHA256", 64)
 	if err != nil {
 		return err
 	}

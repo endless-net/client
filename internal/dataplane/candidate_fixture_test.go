@@ -143,6 +143,9 @@ func (f *candidateFixture) verify(t *testing.T, previous *state.MapCursor) {
 	now := sample.Wall
 	expires := now.Add(45 * time.Second)
 	for i := range f.snapshot.Peers {
+		if f.snapshot.Peers[i].Transport == nil {
+			continue
+		}
 		f.snapshot.Peers[i].Transport.IssuedAt = now
 		f.snapshot.Peers[i].Transport.ExpiresAt = expires
 		if f.planTTL > 0 {

@@ -54,14 +54,14 @@ type onlineRenewalFixture struct {
 
 func (f *onlineRenewalFixture) now() time.Time { return f.base.Add(time.Duration(f.offset.Load())) }
 
-func newOnlineRenewalFixture(t *testing.T, mode string) (*onlineRenewalFixture, *windowsConnection) {
+func newOnlineRenewalFixture(t *testing.T, mode string) (*onlineRenewalFixture, *connectionDriver) {
 	t.Helper()
 	f := newOnlineRenewalBackend(t, mode)
 	owner, err := f.f.factory.newOwner(context.Background(), workerProfile, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := owner.(*windowsConnection)
+	d := owner.(*connectionDriver)
 	t.Cleanup(func() {
 		if err := d.Disconnect(workerCallContext(t)); err != nil {
 			t.Error(err)
@@ -404,7 +404,7 @@ func TestOnlineSessionRenewsIndependentlyOfNode(t *testing.T) {
 }
 
 type unconfirmedCleanupConnection struct {
-	*windowsConnection
+	*connectionDriver
 	started chan struct{}
 	fail    <-chan struct{}
 	called  bool
@@ -412,7 +412,7 @@ type unconfirmedCleanupConnection struct {
 
 func (d *unconfirmedCleanupConnection) Disconnect(ctx context.Context) error {
 	if d.called {
-		return d.windowsConnection.Disconnect(ctx)
+		return d.connectionDriver.Disconnect(ctx)
 	}
 	d.called = true
 	close(d.started)
@@ -427,17 +427,17 @@ func (d *unconfirmedCleanupConnection) Disconnect(ctx context.Context) error {
 func TestConnectedIntentRenewsSessionDuringAndAfterUnconfirmedCleanup(t *testing.T) {
 	f := newOnlineRenewalBackend(t, "valid")
 	f.offset.Store(int64(time.Since(f.base)))
-	owners := make(chan *windowsConnection, 4)
+	owners := make(chan *connectionDriver, 4)
 	cleanupStarted, cleanupFails := make(chan struct{}), make(chan struct{})
 	w, err := NewConnectionWorker(f.f.store, func(ctx context.Context, profile string, generation uint64) (ConnectionSession, error) {
 		session, err := f.f.factory.newOwner(ctx, profile, generation)
 		if err != nil {
 			return nil, err
 		}
-		owner := session.(*windowsConnection)
+		owner := session.(*connectionDriver)
 		owners <- owner
 		if generation == 1 {
-			return &unconfirmedCleanupConnection{windowsConnection: owner, started: cleanupStarted, fail: cleanupFails}, nil
+			return &unconfirmedCleanupConnection{connectionDriver: owner, started: cleanupStarted, fail: cleanupFails}, nil
 		}
 		return owner, nil
 	}, ConnectionWorkerConfig{
