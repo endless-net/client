@@ -140,6 +140,17 @@ func TestWindowsReadyChecksIntentWithoutWaitingForPeer(t *testing.T) {
 	if local.PeerCount != 1 || local.DirectPaths != 0 || local.RelayPaths != 0 || len(local.PeerTransports) != 1 || local.PeerTransports[0].GetSelectedPath() != 0 {
 		t.Fatal("ready tunnel must report its peer without inventing a path", local)
 	}
+	snapshot, err := m.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := snapshot.Peers[0]
+	if len(local.Peers) != 1 || local.Peers[0].GetId() != peer.ID ||
+		local.Peers[0].GetHostname() != peer.Hostname ||
+		len(local.Peers[0].GetOverlayAddresses()) != 1 ||
+		local.Peers[0].OverlayAddresses[0]+"/32" != peer.AllowedIPs[0] {
+		t.Fatal("applied map peer was not projected for local reads", local.Peers)
+	}
 	if !b.Active() {
 		t.Fatal("local readiness completed operation without worker fence")
 	}

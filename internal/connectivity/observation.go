@@ -51,6 +51,7 @@ type LocalObservation struct {
 	Address                            string
 	PeerCount, DirectPaths, RelayPaths uint32
 	GeneratedAt                        time.Time
+	Peers                              []*clientv0.Peer
 	PeerTransports                     []*clientv0.PeerTransportStatus
 }
 
