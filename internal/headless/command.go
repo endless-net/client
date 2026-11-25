@@ -123,6 +123,8 @@ func failureMessage(reason string) string {
 		return "Службе не хватает прав для настройки сети. Обратитесь к администратору устройства."
 	case "client.connection.resource_conflict":
 		return "Обнаружен конфликт сетевых ресурсов. Обратитесь к администратору устройства."
+	case "client.connection.credential_rejected":
+		return "Не удалось проверить учётные данные устройства."
 	case "client.connection.credential_expired":
 		return "Срок действия учётных данных устройства истёк."
 	case "client.connection.login_required":
@@ -139,6 +141,16 @@ func failureMessage(reason string) string {
 		return "Подключение запрещено действующей политикой доступа."
 	case "client.connection.trust_required":
 		return "Не удалось проверить доверие к серверу."
+	case "client.connection.protocol_rejected":
+		return "Сервер управления сообщил об ошибке протокола или конфигурации."
+	case "client.connection.map_rejected":
+		return "Карта сети отклонена при проверке."
+	case "client.connection.configuration_invalid":
+		return "Конфигурация подключения на устройстве некорректна."
+	case "client.connection.checkpoint_unavailable":
+		return "Не удалось подтвердить сохранение или чтение доверенной версии bootstrap на устройстве."
+	case "client.connection.endpoint_refresh_unconfirmed":
+		return "Сервер не подтвердил обновление сетевого адреса устройства."
 	default:
 		return "Соединение не готово. Проверьте состояние службы и сервера."
 	}

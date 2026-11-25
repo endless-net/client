@@ -91,6 +91,7 @@ type connectionDriver struct {
 	fatal                chan error
 	applied              chan struct{}
 	mapOffline           atomic.Bool
+	endpointUnconfirmed  atomic.Bool
 }
 
 func (*connectionDriver) String() string   { return "[private connection]" }
@@ -105,6 +106,7 @@ func (d *connectionDriver) ConnectionLocal() connectivity.LocalObservation {
 	}
 	local := native.ConnectionLocal()
 	local.ControlUnavailable = d.mapOffline.Load() && !local.Permission.NewFlows
+	local.EndpointRefreshUnconfirmed = d.endpointUnconfirmed.Load()
 	return local
 }
 
@@ -439,19 +441,13 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 			}
 		case <-renew.C:
 			if started && waitingForReady == nil {
-				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
-				err := d.announceCurrent(ctx, native)
-				cancel()
-				if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, connectivity.ErrEndpointUncertain) && !errors.Is(err, connectivity.ErrUnavailable) {
+				if err := d.refreshEndpoint(native); err != nil {
 					return err
 				}
 			}
 		case <-advertisements:
 			if started && waitingForReady == nil {
-				ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
-				err := d.announceCurrent(ctx, native)
-				cancel()
-				if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, connectivity.ErrEndpointUncertain) && !errors.Is(err, connectivity.ErrUnavailable) {
+				if err := d.refreshEndpoint(native); err != nil {
 					return err
 				}
 			}
@@ -474,6 +470,22 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 
 // Endpoint requests never race a credential-head transition. A parked renewal
 // must not stall native map apply/probe; the next timer uses the latest state.
+func (d *connectionDriver) refreshEndpoint(native nativeConnectionSession) error {
+	ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
+	defer cancel()
+	err := d.announceCurrent(ctx, native)
+	switch {
+	case err == nil:
+		d.endpointUnconfirmed.Store(false)
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, connectivity.ErrEndpointUncertain), errors.Is(err, connectivity.ErrUnavailable):
+		d.endpointUnconfirmed.Store(true)
+		d.reportNativeFailure("endpoint_refresh", err)
+	default:
+		return err
+	}
+	return nil
+}
+
 func (d *connectionDriver) announceCurrent(ctx context.Context, native nativeConnectionSession) error {
 	if !d.credentialMu.TryRLock() {
 		return nil

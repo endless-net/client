@@ -110,9 +110,9 @@ func (w *LoginWorker) startable(p state.Profile) bool {
 		return p.Login.BlockedReason == ""
 	}
 	if p.Attempt.Phase == enrollment.ChoosingContext {
-		return p.DefaultTarget == nil || p.DefaultTarget.BlockedReason != "client.default_target.invalid_response"
+		return p.DefaultTarget == nil || !enrollmentFailureStopsCalls(p.DefaultTarget.BlockedReason)
 	}
-	return p.Registration.BlockedReason != "client.registration.invalid_response"
+	return !enrollmentFailureStopsCalls(p.Registration.BlockedReason)
 }
 func (w *LoginWorker) Wake(ctx context.Context, profile, attempt string) error {
 	return w.wake(ctx, profile, attempt, false)

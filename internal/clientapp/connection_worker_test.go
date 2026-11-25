@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/connectivity"
+	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 )
@@ -799,5 +800,24 @@ func TestFailedSessionRetriesOnlySafeCleanupTimeout(t *testing.T) {
 				t.Fatalf("cleanup calls = %d, error = %v", calls, err)
 			}
 		})
+	}
+}
+
+func TestPermanentConnectionFailuresSurviveWorkerWithoutRetry(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want connectivity.FailureKind
+	}{
+		{connectivity.ErrMap, connectivity.FailureMap},
+		{connectivity.ErrStale, connectivity.FailureMap},
+		{connectivity.ErrCredentialInvalid, connectivity.FailureCredentialInvalid},
+		{connectivity.ErrConfig, connectivity.FailureConfiguration},
+		{connectivity.ErrProtocol, connectivity.FailureProtocol},
+		{errors.Join(control.ErrBootstrapState, state.ErrStale), connectivity.FailureCheckpoint},
+	} {
+		got := connectionOperationError(tc.err)
+		if got != tc.want || transientMapError(tc.err) || reconnectAfterFailure(got) {
+			t.Errorf("%v became %v or was marked retryable", tc.err, got)
+		}
 	}
 }

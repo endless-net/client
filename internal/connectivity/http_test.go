@@ -4,16 +4,19 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/endless-net/client/internal/state"
 	"github.com/endless-net/client/internal/testwire"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
@@ -625,6 +628,27 @@ func TestOpeningTimeProofCannotAuthorizeLaterStreamRecords(t *testing.T) {
 					t.Fatal("later record violated its authorization boundary", err, received)
 				}
 			})
+		})
+	}
+}
+
+func TestMapStreamFailureClassification(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		err, want error
+	}{
+		{"missing procedure", connect.NewWireError(connect.CodeUnimplemented, nil), ErrProtocol},
+		{"damaged upstream frame", connect.NewWireError(connect.CodeDataLoss, nil), ErrProtocol},
+		{"invalid configuration", connect.NewWireError(connect.CodeFailedPrecondition, nil), ErrProtocol},
+		{"TLS hostname rejected", &url.Error{Err: x509.HostnameError{Certificate: &x509.Certificate{}}}, ErrTrust},
+		{"server limit", connect.NewWireError(connect.CodeResourceExhausted, nil), ErrUnavailable},
+		{"local size limit", connect.NewError(connect.CodeResourceExhausted, nil), ErrMap},
+		{"outage", connect.NewWireError(connect.CodeUnavailable, nil), ErrUnavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := connectivityCallError(tc.err, false); !errors.Is(got, tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
 		})
 	}
 }

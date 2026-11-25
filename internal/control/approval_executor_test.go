@@ -509,3 +509,18 @@ func TestApprovalExecutorUsesVerifiedCompletionBundleAfterKeyRotation(t *testing
 		t.Fatal("expired metadata reached local credential commit", err)
 	}
 }
+
+func TestApprovalBootstrapOutageIsVisibleBeforeDispatch(t *testing.T) {
+	f, _ := newApprovalStateFixture(t, false)
+	calls := 0
+	e := f.approvalExecutor(t, func(*http.Request) (*http.Response, error) {
+		calls++
+		return nil, ErrRegistrationUnavailable
+	})
+	e.remote.registration.announcements = failedEnrollmentAnnouncement{ErrBootstrapUnavailable}
+	due, err := e.Reconcile(t.Context(), f.p.ID, loginAttempt)
+	p := f.persisted(t)
+	if err != nil || due.IsZero() || calls != 0 || p.RemoteInFlight || p.Attempt.Uncertain || p.Approval.BlockedReason != "client.approval.control_unavailable" {
+		t.Fatal("bootstrap outage was misclassified", err)
+	}
+}

@@ -16,7 +16,7 @@ func (s *Signals) windowsNetworkFailure(generation uint64, stage string, err err
 	if err == nil || errors.Is(err, context.Canceled) {
 		return
 	}
-	class := "failed"
+	class := connectionFailureCode(err)
 	switch {
 	case errors.Is(err, dataplane.ErrAdapterCleanupRequired):
 		class = "adapter_still_present"
@@ -26,16 +26,12 @@ func (s *Signals) windowsNetworkFailure(generation uint64, stage string, err err
 		class = "no_authority"
 	case errors.Is(err, connectivity.ErrSourceChanged):
 		class = "source_changed"
-	case errors.Is(err, connectivity.ErrUnavailable):
-		class = "unavailable"
 	case errors.Is(err, connectivity.ErrResync):
 		class = "resync_required"
 	case errors.Is(err, dataplane.ErrClosed):
 		class = "closed"
 	case errors.Is(err, connectivity.ErrConfig), errors.Is(err, dataplane.ErrConfiguration):
 		class = "invalid_configuration"
-	case errors.Is(err, context.DeadlineExceeded):
-		class = "deadline"
 	case errors.Is(err, state.ErrStale):
 		class = "stale_state"
 	case errors.Is(err, dataplane.ErrAdapterPermission), errors.Is(err, dataplane.ErrIPPermission), errors.Is(err, dataplane.ErrPolicyPermission), errors.Is(err, windows.ERROR_ACCESS_DENIED):

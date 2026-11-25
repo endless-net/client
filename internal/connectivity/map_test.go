@@ -442,6 +442,8 @@ func TestMapAndEndpointKeepBootstrapOutageSeparateFromTrust(t *testing.T) {
 				want         error
 			}{
 				{"503", control.Announcement{}, control.ErrBootstrapUnavailable, ErrUnavailable},
+				{"upstream rejected", control.Announcement{}, control.ErrBootstrapProtocol, ErrProtocol},
+				{"local checkpoint", control.Announcement{}, errors.Join(control.ErrBootstrapState, state.ErrUncertain), control.ErrBootstrapState},
 				{"recovered", current, nil, nil},
 				{"unauthorized key change", changed, nil, ErrTrust},
 				{"rejected bootstrap", control.Announcement{}, control.ErrBootstrap, ErrTrust},
@@ -456,5 +458,17 @@ func TestMapAndEndpointKeepBootstrapOutageSeparateFromTrust(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestInvalidNodeCredentialIsNotReportedAsInvalidMap(t *testing.T) {
+	f := newMapFixture(t)
+	v, err := NewVerifier(f.profile, f.config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v.credential = "invalid"
+	if _, err := v.currentTrust(t.Context(), "node:map"); !errors.Is(err, ErrCredentialInvalid) {
+		t.Fatalf("invalid credential was misclassified: %v", err)
 	}
 }

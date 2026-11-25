@@ -38,8 +38,18 @@ func connectionDetails(err error) *clientv0.Failure {
 		f.Code, f.ReasonKey, f.ActionOwner = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.cleanup_unconfirmed", clientv0.ActionOwner_ACTION_OWNER_DEVICE_ADMINISTRATOR
 	case connectivity.FailureControl:
 		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.control_unavailable"
+	case connectivity.FailureMap:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.map_rejected", clientv0.ActionOwner_ACTION_OWNER_SUPPORT, false
+	case connectivity.FailureConfiguration:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.configuration_invalid", clientv0.ActionOwner_ACTION_OWNER_DEVICE_ADMINISTRATOR, false
+	case connectivity.FailureCheckpoint:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.checkpoint_unavailable", clientv0.ActionOwner_ACTION_OWNER_SUPPORT, false
+	case connectivity.FailureProtocol:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.protocol_rejected", clientv0.ActionOwner_ACTION_OWNER_SUPPORT, false
 	case connectivity.FailureTrust:
 		f.Code, f.ReasonKey, f.Retryable = clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "client.connection.trust_required", false
+	case connectivity.FailureCredentialInvalid:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "client.connection.credential_rejected", clientv0.ActionOwner_ACTION_OWNER_SUPPORT, false
 	case connectivity.FailureCredential:
 		f.Code, f.ReasonKey, f.Retryable = clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "client.connection.credential_expired", false
 	case connectivity.FailureLogin:
@@ -150,6 +160,12 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 		if local.ControlUnavailable {
 			r.Failures = append(r.Failures, connectionDetails(connectivity.FailureControl))
 		}
+		if local.EndpointRefreshUnconfirmed {
+			r.Failures = append(r.Failures, &clientv0.Failure{
+				Code: clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, ReasonKey: "client.connection.endpoint_refresh_unconfirmed",
+				Retryable: true, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_SUPPORT,
+			})
+		}
 		if !local.Known || !local.Applied {
 			return
 		}
@@ -168,6 +184,9 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_LOCAL_READY
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_READY
+		}
+		if local.EndpointRefreshUnconfirmed && r.ControlState == clientv0.ControlState_CONTROL_STATE_READY {
+			r.ControlState = clientv0.ControlState_CONTROL_STATE_DEGRADED
 		}
 	case connectivity.PhaseFailed:
 		if v.RetryScheduled {

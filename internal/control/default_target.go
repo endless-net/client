@@ -77,7 +77,10 @@ func (d *DefaultTarget) Resolve(ctx context.Context, p state.Profile, original [
 	ctx, cancel := context.WithTimeout(ctx, remaining)
 	defer cancel()
 	a, err := d.registration.announcements.Fetch(ctx, p.ControlOrigin)
-	if err != nil || !a.MatchesProfile(p, d.registration.config.Now()) {
+	if err != nil {
+		return zero, enrollmentBootstrapError{err}
+	}
+	if !a.MatchesProfile(p, d.registration.config.Now()) {
 		return zero, ErrBootstrap
 	}
 	req := bearer(&wire.EnsureDefaultEnrollmentTargetRequest{
@@ -90,7 +93,7 @@ func (d *DefaultTarget) Resolve(ctx context.Context, p state.Profile, original [
 		connect.WithReadMaxBytes(min(coordinator.DefaultTargetMaxBytes, d.registration.config.MaxResponseBytes)))
 	response, err := client.EnsureDefaultEnrollmentTarget(ctx, req)
 	if err != nil {
-		return zero, registrationCallError(ctx)
+		return zero, registrationCallError(ctx, err)
 	}
 	m := response.Msg
 	if !knownRPC(m.ProtoReflect()) || m.ResolvedAt.CheckValid() != nil || m.ExpiresAt.CheckValid() != nil {
@@ -107,7 +110,7 @@ func (d *DefaultTarget) Resolve(ctx context.Context, p state.Profile, original [
 		return zero, ctx.Err()
 	}
 	if !a.MatchesProfile(p, d.registration.config.Now()) {
-		return zero, ErrBootstrap
+		return zero, errEnrollmentTrustAfterCall
 	}
 	return result, nil
 }

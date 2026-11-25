@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -23,7 +24,11 @@ import (
 	"github.com/endless-net/signing/api/v1/signingapiconnect"
 )
 
-var ErrBootstrap = errors.New("server trust announcement unavailable")
+var (
+	ErrBootstrap         = errors.New("server trust announcement rejected")
+	ErrBootstrapProtocol = errors.New("bootstrap protocol or configuration rejected")
+	ErrBootstrapState    = errors.New("local bootstrap checkpoint unavailable")
+)
 
 // Still classifies as ErrBootstrap for existing callers. Renewal can distinguish
 // a transport outage from rejected signed trust without accepting either as trust.
@@ -139,11 +144,14 @@ func (b *Bootstrap) Fetch(ctx context.Context, origin string) (Announcement, err
 	client := signingapiconnect.NewBootstrapServiceClient(b.client, origin,
 		connect.WithReadMaxBytes(int(b.maxBytes)), connect.WithSendMaxBytes(1024))
 	response, err := client.GetBootstrap(ctx, connect.NewRequest(&signingapi.GetBootstrapRequest{}))
+	if ctx.Err() != nil {
+		return Announcement{}, ctx.Err()
+	}
 	if err != nil {
 		return Announcement{}, bootstrapResponseError(err)
 	}
-	if response == nil || response.Msg == nil || ctx.Err() != nil {
-		return Announcement{}, ErrBootstrap
+	if response == nil || response.Msg == nil {
+		return Announcement{}, ErrBootstrapProtocol
 	}
 	var accepted Announcement
 	err = b.store.AcceptBootstrap(ctx, origin, func(previous state.BootstrapCheckpoint) (state.BootstrapCheckpoint, error) {
@@ -163,23 +171,41 @@ func (b *Bootstrap) Fetch(ctx context.Context, origin string) (Announcement, err
 		accepted.checkpoint = state.BootstrapCheckpoint{Revision: checkpoint.Revision, Digest: checkpoint.Digest}
 		return accepted.checkpoint, nil
 	})
-	if err != nil || ctx.Err() != nil || !accepted.VerifiedAt(b.now()) {
+	if ctx.Err() != nil {
+		return Announcement{}, ctx.Err()
+	}
+	if err != nil {
+		if errors.Is(err, ErrBootstrap) {
+			return Announcement{}, ErrBootstrap
+		}
+		return Announcement{}, fmt.Errorf("%w: %w", ErrBootstrapState, err)
+	}
+	if !accepted.VerifiedAt(b.now()) {
 		return Announcement{}, ErrBootstrap
 	}
 	return accepted, nil
 }
 
-func bootstrapResponseError(err error) error {
+// RejectedControlTransport identifies TLS trust failures and refused redirects.
+func RejectedControlTransport(err error) bool {
 	var verification *tls.CertificateVerificationError
 	var authority x509.UnknownAuthorityError
 	var invalid x509.CertificateInvalidError
 	var hostname x509.HostnameError
-	if errors.Is(err, ErrBootstrap) || errors.As(err, &verification) || errors.As(err, &authority) ||
-		errors.As(err, &invalid) || errors.As(err, &hostname) {
+	return errors.Is(err, ErrBootstrap) || errors.As(err, &verification) || errors.As(err, &authority) ||
+		errors.As(err, &invalid) || errors.As(err, &hostname)
+}
+
+func bootstrapResponseError(err error) error {
+	if RejectedControlTransport(err) {
 		return ErrBootstrap
 	}
 	var transport *url.Error
 	code := connect.CodeOf(err)
+	switch code {
+	case connect.CodeFailedPrecondition, connect.CodeUnimplemented, connect.CodeDataLoss:
+		return ErrBootstrapProtocol
+	}
 	if errors.As(err, &transport) || code == connect.CodeUnavailable || code == connect.CodeDeadlineExceeded ||
 		code == connect.CodeResourceExhausted && connect.IsWireError(err) {
 		return ErrBootstrapUnavailable

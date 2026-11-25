@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
@@ -22,6 +23,54 @@ import (
 
 var ErrRegistrationProtocol = errors.New("registration response invalid")
 var ErrRegistrationUnavailable = errors.New("registration outcome unavailable")
+var errEnrollmentTrustAfterCall = errors.New("bootstrap trust no longer confirms the enrollment result")
+
+type enrollmentBootstrapError struct{ cause error }
+
+func (e enrollmentBootstrapError) Error() string {
+	return "bootstrap check before enrollment RPC failed"
+}
+func (e enrollmentBootstrapError) Unwrap() error { return e.cause }
+
+// The second result means this invocation could not have committed. The
+// executor must still retain uncertainty from an earlier invocation.
+func enrollmentFailureReason(err error) (string, bool) {
+	var fetch enrollmentBootstrapError
+	switch {
+	case errors.Is(err, errEnrollmentTrustAfterCall):
+		return "trust_required", false
+	case errors.Is(err, ErrBootstrapUnavailable):
+		return "control_unavailable", true
+	case errors.Is(err, ErrBootstrapState):
+		return "checkpoint_unavailable", true
+	case errors.Is(err, ErrBootstrapProtocol):
+		return "bootstrap_protocol", true
+	case errors.Is(err, ErrBootstrap):
+		return "trust_required", true
+	case errors.As(err, &fetch):
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "control_unavailable", true
+		}
+		return "bootstrap_failed", true
+	}
+	switch connect.CodeOf(err) {
+	case connect.CodeUnauthenticated, connect.CodePermissionDenied:
+		return "access_denied", true
+	case connect.CodeInvalidArgument, connect.CodeUnimplemented, connect.CodeFailedPrecondition:
+		return "request_rejected", true
+	default:
+		return "", false
+	}
+}
+
+func enrollmentFailureStopsCalls(reason string) bool {
+	switch reason[strings.LastIndexByte(reason, '.')+1:] {
+	case "invalid_response", "access_denied", "request_rejected", "bootstrap_protocol", "checkpoint_unavailable":
+		return true
+	default:
+		return false
+	}
+}
 
 type RegistrationConfig struct {
 	MaxRequestBytes, MaxResponseBytes, MaxCredentialBytes int
@@ -137,7 +186,10 @@ func (r *Registration) Register(ctx context.Context, p state.Profile, original [
 	ctx, cancel := context.WithTimeout(ctx, remaining)
 	defer cancel()
 	a, err := r.announcements.Fetch(ctx, p.ControlOrigin)
-	if err != nil || !a.MatchesProfile(p, r.config.Now()) {
+	if err != nil {
+		return RegisteredResult{}, enrollmentBootstrapError{err}
+	}
+	if !a.MatchesProfile(p, r.config.Now()) {
 		return RegisteredResult{}, ErrBootstrap
 	}
 	p.Trust = state.ServerTrust{KeyID: a.KeyID, AnnouncementID: a.ID, Bundle: a.Bundle}
@@ -149,7 +201,7 @@ func (r *Registration) Register(ctx context.Context, p state.Profile, original [
 	}, p.Secrets.Access)
 	response, err := r.rpc(p.ControlOrigin).RegisterNode(ctx, requestRPC)
 	if err != nil || ctx.Err() != nil {
-		return RegisteredResult{}, registrationCallError(ctx)
+		return RegisteredResult{}, registrationCallError(ctx, err)
 	}
 	if !knownRPC(response.Msg.ProtoReflect()) {
 		return RegisteredResult{}, ErrRegistrationProtocol
@@ -159,16 +211,23 @@ func (r *Registration) Register(ctx context.Context, p state.Profile, original [
 		return RegisteredResult{}, err
 	}
 	if !a.MatchesProfile(p, r.config.Now()) {
-		return RegisteredResult{}, ErrBootstrap
+		return RegisteredResult{}, errEnrollmentTrustAfterCall
 	}
 	verified, err := r.verify(p, request, result)
 	if ctx.Err() != nil {
-		return RegisteredResult{}, registrationCallError(ctx)
+		return RegisteredResult{}, ctx.Err()
 	}
 	return verified, err
 }
 
-func registrationCallError(ctx context.Context) error {
+func registrationCallError(ctx context.Context, err error) error {
+	if connect.IsWireError(err) {
+		switch code := connect.CodeOf(err); code {
+		case connect.CodeUnauthenticated, connect.CodePermissionDenied, connect.CodeInvalidArgument,
+			connect.CodeUnimplemented, connect.CodeFailedPrecondition:
+			return connect.NewError(code, errors.New("enrollment request rejected"))
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -213,6 +272,9 @@ func (r *Registration) credentialKey(p state.Profile, credential string, now tim
 
 func (r *Registration) verifyResult(p state.Profile, request coordinator.RegisterNodeRequest, result coordinator.RegisterNodeResponse, now time.Time) (RegisteredResult, error) {
 	public, err := r.credentialKey(p, result.NodeCredential, now)
+	if errors.Is(err, ErrBootstrap) {
+		return RegisteredResult{}, errEnrollmentTrustAfterCall
+	}
 	if err != nil {
 		return RegisteredResult{}, err
 	}

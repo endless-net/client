@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/endless-net/client/internal/connectivity"
+	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/state"
 	"github.com/google/uuid"
 )
@@ -304,6 +305,10 @@ func connectionOperationError(err error) error {
 		return kind
 	}
 	switch {
+	case errors.Is(err, control.ErrBootstrapState), errors.Is(err, connectivity.ErrProtocol),
+		errors.Is(err, connectivity.ErrMap), errors.Is(err, connectivity.ErrStale),
+		errors.Is(err, connectivity.ErrConfig), errors.Is(err, connectivity.ErrCredentialInvalid):
+		return nativeConnectionFailure(err, connectivity.FailureUnknown)
 	case errors.Is(err, connectivity.ErrUnavailable), errors.Is(err, connectivity.ErrEndpointUncertain):
 		return connectivity.FailureControl
 	case errors.Is(err, connectivity.ErrRevoked):

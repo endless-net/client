@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/endless-net/signing/api/v1/signingapiconnect"
 
 	"github.com/endless-net/client/internal/state"
@@ -261,8 +262,8 @@ func TestSignedBootstrapDurableReplayRollbackEquivocationAndLostACK(t *testing.T
 	}
 	raw, _ = signedFixture(t, "https://control.example", now, 8)
 	backend.lose = true
-	if result, err := source.Fetch(t.Context(), "https://control.example"); !errors.Is(err, ErrBootstrap) || result.ID != "" {
-		t.Fatal("lost commit ACK yielded usable bundle", err)
+	if result, err := source.Fetch(t.Context(), "https://control.example"); !errors.Is(err, ErrBootstrapState) || !errors.Is(err, state.ErrUncertain) || errors.Is(err, ErrBootstrap) || result.ID != "" {
+		t.Fatal("lost commit ACK was misclassified or yielded a usable bundle", err)
 	}
 	if _, err := source.Fetch(t.Context(), "https://control.example"); err != nil {
 		t.Fatal("fresh verify/read did not resolve lost ACK", err)
@@ -326,4 +327,12 @@ func bootstrapReply(r *http.Request, raw []byte) *http.Response {
 	}
 	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/proto"}},
 		Body: io.NopCloser(bytes.NewReader(raw)), Request: r}
+}
+
+func TestBootstrapSeparatesPermanentUpstreamErrorsFromOutages(t *testing.T) {
+	for _, code := range []connect.Code{connect.CodeFailedPrecondition, connect.CodeDataLoss, connect.CodeUnimplemented} {
+		if got := bootstrapResponseError(connect.NewError(code, errors.New("fixture"))); !errors.Is(got, ErrBootstrapProtocol) {
+			t.Errorf("%v became %v", code, got)
+		}
+	}
 }

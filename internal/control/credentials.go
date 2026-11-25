@@ -86,7 +86,10 @@ func (c *Credentials) trusted(ctx context.Context, p state.Profile) (Announcemen
 	if errors.Is(err, ErrBootstrapUnavailable) {
 		return Announcement{}, ErrCredentialsUnavailable
 	}
-	if err != nil || !a.MatchesProfile(p, c.config.Now()) {
+	if err != nil {
+		return Announcement{}, err
+	}
+	if !a.MatchesProfile(p, c.config.Now()) {
 		return Announcement{}, ErrBootstrap
 	}
 	return a, nil

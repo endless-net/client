@@ -23,6 +23,14 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 		return connectivity.FailureLogin
 	case errors.Is(err, control.ErrBootstrapUnavailable), errors.Is(err, connectivity.ErrUnavailable):
 		return connectivity.FailureControl
+	case errors.Is(err, control.ErrBootstrapState):
+		return connectivity.FailureCheckpoint
+	case errors.Is(err, control.ErrBootstrapProtocol), errors.Is(err, connectivity.ErrProtocol):
+		return connectivity.FailureProtocol
+	case errors.Is(err, connectivity.ErrMap), errors.Is(err, connectivity.ErrStale):
+		return connectivity.FailureMap
+	case errors.Is(err, connectivity.ErrConfig):
+		return connectivity.FailureConfiguration
 	case errors.Is(err, control.ErrBootstrap), errors.Is(err, control.ErrCredentialsProtocol):
 		return connectivity.FailureTrust
 	case errors.Is(err, dataplane.ErrAdapterPermission), errors.Is(err, dataplane.ErrIPPermission), errors.Is(err, dataplane.ErrPolicyPermission):
@@ -33,6 +41,8 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 		return connectivity.ErrClock
 	case errors.Is(err, connectivity.ErrTrust):
 		return connectivity.FailureTrust
+	case errors.Is(err, connectivity.ErrCredentialInvalid):
+		return connectivity.FailureCredentialInvalid
 	case errors.Is(err, connectivity.ErrCredentialExpired):
 		return connectivity.FailureCredential
 	case errors.Is(err, connectivity.ErrRevoked):
@@ -50,5 +60,33 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 		return context.DeadlineExceeded
 	default:
 		return fallback
+	}
+}
+
+// connectionFailureCode returns an allowlisted diagnostic code shared by both runtimes.
+func connectionFailureCode(err error) string {
+	switch {
+	case errors.Is(err, connectivity.ErrEndpointUncertain):
+		return "endpoint_outcome_unknown"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline"
+	}
+	switch nativeConnectionFailure(err, connectivity.FailureUnknown) {
+	case connectivity.FailureControl:
+		return "unavailable"
+	case connectivity.FailureCheckpoint:
+		return "checkpoint_unavailable"
+	case connectivity.FailureProtocol:
+		return "protocol_rejected"
+	case connectivity.FailureCredentialInvalid:
+		return "credential_rejected"
+	case connectivity.FailureMap:
+		return "map_rejected"
+	case connectivity.FailureTrust:
+		return "trust_required"
+	case connectivity.FailureConfiguration:
+		return "invalid_configuration"
+	default:
+		return "failed"
 	}
 }

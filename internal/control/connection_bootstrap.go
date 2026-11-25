@@ -3,6 +3,8 @@ package control
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/endless-net/client/internal/state"
 )
@@ -49,6 +51,12 @@ func (b *connectionBootstrap) Fetch(ctx context.Context, origin string) (Announc
 			}
 			return current, nil
 		})
+		if ctx.Err() != nil {
+			return Announcement{}, ctx.Err()
+		}
+		if err != nil && !errors.Is(err, ErrBootstrap) {
+			return Announcement{}, fmt.Errorf("%w: %w", ErrBootstrapState, err)
+		}
 		if err == nil && b.operation.Err() == nil && b.cached.VerifiedAt(b.source.now()) {
 			result := b.cached
 			result.Bundle = bytes.Clone(result.Bundle)

@@ -252,13 +252,9 @@ func linuxConnections(store *state.Store, ledger state.LinuxNetworkLedger, clock
 			PrepareCredentials: credentials.Ensure, RefreshCredentials: credentials.Refresh,
 			ReportFailure: func(generation uint64, stage string, err error) {
 				if err != nil && !errors.Is(err, context.Canceled) {
-					failure := nativeConnectionFailure(err, connectivity.FailureApply)
-					code := failure.Error()
-					switch failure {
-					case connectivity.FailureControl:
+					code := connectionFailureCode(err)
+					if code == "unavailable" {
 						code = "control_unavailable"
-					case connectivity.FailureTrust:
-						code = "trust_required"
 					}
 					signals.logger.Warn("client.connection.native_failure", "component", "connection", "generation", generation,
 						"operation", stage, "error_code", code)

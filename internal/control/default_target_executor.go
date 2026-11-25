@@ -59,7 +59,7 @@ func (e *DefaultTargetExecutor) Reconcile(ctx context.Context, id, attempt strin
 		}
 		s.Revision++
 	}
-	if a.Phase != enrollment.ChoosingContext || p.Trust.KeyID == "" || p.DefaultTarget != nil && p.DefaultTarget.BlockedReason == "client.default_target.invalid_response" {
+	if a.Phase != enrollment.ChoosingContext || p.Trust.KeyID == "" || p.DefaultTarget != nil && enrollmentFailureStopsCalls(p.DefaultTarget.BlockedReason) {
 		return time.Time{}, nil
 	}
 	if p.DefaultTarget != nil && now.Before(p.DefaultTarget.NextCallAt) {
@@ -114,7 +114,7 @@ func (e *DefaultTargetExecutor) Reconcile(ctx context.Context, id, attempt strin
 		if next.Attempt.Phase == enrollment.Registering {
 			return e.config.Now(), nil
 		}
-		if next.Attempt.Phase != enrollment.ChoosingContext || next.DefaultTarget.BlockedReason == "client.default_target.invalid_response" {
+		if next.Attempt.Phase != enrollment.ChoosingContext || enrollmentFailureStopsCalls(next.DefaultTarget.BlockedReason) {
 			return time.Time{}, nil
 		}
 		return next.DefaultTarget.NextCallAt, nil
@@ -131,12 +131,12 @@ func (e *DefaultTargetExecutor) apply(p state.Profile, result coordinator.Defaul
 	progress := *p.DefaultTarget
 	p.DefaultTarget = &progress
 	if callErr != nil {
-		if errors.Is(callErr, ErrBootstrap) {
+		reason, rejected := enrollmentFailureReason(callErr)
+		if rejected {
 			if !a.Uncertain {
 				p.RemoteInFlight = false
 				p.InFlightAt = time.Time{}
 			}
-			progress.BlockedReason = "client.default_target.trust_required"
 		} else {
 			if a.Phase == enrollment.ChoosingContext {
 				a, err = a.MarkUncertain(now)
@@ -147,8 +147,13 @@ func (e *DefaultTargetExecutor) apply(p state.Profile, result coordinator.Defaul
 				return p, err
 			}
 			if errors.Is(callErr, ErrDefaultTargetProtocol) {
-				progress.BlockedReason = "client.default_target.invalid_response"
+				reason = "invalid_response"
 			}
+		}
+		if reason != "" {
+			progress.BlockedReason = "client.default_target." + reason
+		} else {
+			progress.BlockedReason = ""
 		}
 		p.Attempt = &a
 		progress.NextCallAt = now.Add(e.config.RetryInterval)

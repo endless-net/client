@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -290,5 +292,88 @@ func TestRegistrationExecutorInvalidResultPausesWithoutNewEffect(t *testing.T) {
 	_, err = e.Reconcile(context.Background(), f.p.ID, loginAttempt)
 	if err != nil || calls != 1 {
 		t.Fatal("invalid response retried", err)
+	}
+}
+
+type failedEnrollmentAnnouncement struct{ err error }
+
+func (a failedEnrollmentAnnouncement) Fetch(context.Context, string) (Announcement, error) {
+	return Announcement{}, a.err
+}
+
+func TestRegistrationBootstrapOutageKeepsKnownRequest(t *testing.T) {
+	f := newRegistrationFixture(t)
+	calls := 0
+	e := f.executor(t, func(req *http.Request) (*http.Response, error) {
+		calls++
+		return f.response(req, t), nil
+	})
+	e.remote.announcements = failedEnrollmentAnnouncement{ErrBootstrapUnavailable}
+	due, err := e.Reconcile(t.Context(), f.p.ID, loginAttempt)
+	p := f.persisted(t)
+	if err != nil || due.IsZero() || calls != 0 || p.RemoteInFlight || p.Attempt.Uncertain || p.Registration.BlockedReason != "client.registration.control_unavailable" {
+		t.Fatalf("bootstrap outage changed enrollment outcome: %v", err)
+	}
+	request := p.Secrets.RegistrationRequest
+	f.now = due
+	e.remote.announcements = staticAnnouncement{f.announcement}
+	if _, err := e.Reconcile(t.Context(), f.p.ID, loginAttempt); err != nil {
+		t.Fatal(err)
+	}
+	p = f.persisted(t)
+	if calls != 1 || p.Attempt.Phase != enrollment.Registered || p.Registration.BlockedReason != "" || p.Secrets.RegistrationRequest != request {
+		t.Fatal("registration failed to resume the original request")
+	}
+}
+
+func TestRegistrationWireRejectionPreservesEarlierUnknownOutcome(t *testing.T) {
+	for _, tc := range []struct {
+		wire            string
+		httpStatus      int
+		reason          string
+		previousUnknown bool
+	}{
+		{"permission_denied", http.StatusForbidden, "client.registration.access_denied", false},
+		{"permission_denied", http.StatusForbidden, "client.registration.access_denied", true},
+		{"invalid_argument", http.StatusBadRequest, "client.registration.request_rejected", false},
+	} {
+		name := tc.wire
+		if tc.previousUnknown {
+			name += "_after_unknown"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newRegistrationFixture(t)
+			calls := 0
+			e := f.executor(t, func(req *http.Request) (*http.Response, error) {
+				calls++
+				if tc.previousUnknown && calls == 1 {
+					return nil, io.ErrUnexpectedEOF
+				}
+				return &http.Response{
+					StatusCode: tc.httpStatus, Header: http.Header{"Content-Type": {"application/json"}},
+					Body: io.NopCloser(strings.NewReader(`{"code":"` + tc.wire + `","message":"private fixture"}`)), Request: req,
+				}, nil
+			})
+			var earlier time.Time
+			if tc.previousUnknown {
+				due, err := e.Reconcile(t.Context(), f.p.ID, loginAttempt)
+				if err != nil || due.IsZero() {
+					t.Fatal("lost response did not schedule exact recovery", err)
+				}
+				earlier = f.persisted(t).Attempt.RecoveryUntil
+				f.now = due
+			}
+			due, err := e.Reconcile(t.Context(), f.p.ID, loginAttempt)
+			p := f.persisted(t)
+			if err != nil || !due.IsZero() || p.Registration.BlockedReason != tc.reason ||
+				p.Attempt.Uncertain != tc.previousUnknown || p.RemoteInFlight != tc.previousUnknown || !p.Attempt.RecoveryUntil.Equal(earlier) {
+				t.Fatalf("wire rejection lost its reason or changed prior certainty: %v", err)
+			}
+			before := calls
+			f.now = f.now.Add(time.Second)
+			if _, err := e.Reconcile(t.Context(), f.p.ID, loginAttempt); err != nil || calls != before {
+				t.Fatal("definite rejection caused another dispatch", err)
+			}
+		})
 	}
 }

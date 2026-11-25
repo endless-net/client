@@ -165,7 +165,10 @@ func (a *Approval) call(ctx context.Context, p *state.Profile, proof *Announceme
 	defer cancel()
 	r := a.registration
 	current, err := r.announcements.Fetch(ctx, p.ControlOrigin)
-	if err != nil || !current.MatchesProfile(*p, r.config.Now()) {
+	if err != nil {
+		return enrollmentBootstrapError{err}
+	}
+	if !current.MatchesProfile(*p, r.config.Now()) {
 		return ErrBootstrap
 	}
 	p.Trust = state.ServerTrust{KeyID: current.KeyID, AnnouncementID: current.ID, Bundle: current.Bundle}
@@ -173,16 +176,16 @@ func (a *Approval) call(ctx context.Context, p *state.Profile, proof *Announceme
 		return context.DeadlineExceeded
 	}
 	if err := send(ctx, r.rpc(p.ControlOrigin)); err != nil {
-		return registrationCallError(ctx)
+		return registrationCallError(ctx, err)
 	}
 	if ctx.Err() != nil {
-		return registrationCallError(ctx)
+		return ctx.Err()
 	}
 	if a.budget(*p, previous) <= 0 {
 		return context.DeadlineExceeded
 	}
 	if !current.MatchesProfile(*p, r.config.Now()) {
-		return ErrBootstrap
+		return errEnrollmentTrustAfterCall
 	}
 	if proof != nil {
 		*proof = current

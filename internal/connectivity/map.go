@@ -32,6 +32,7 @@ var (
 	ErrNoMap             = errors.New("event is not a new authoritative map")
 	ErrResync            = errors.New("network map resynchronization required")
 	ErrCredentialExpired = errors.New("node credential expired or unknown")
+	ErrCredentialInvalid = errors.New("node credential verification failed")
 )
 
 type VerifierConfig struct {
@@ -127,8 +128,13 @@ func (v *Verifier) currentTrust(parent context.Context, scope string) (mapTrust,
 	if ctx.Err() != nil {
 		return empty, ctx.Err()
 	}
-	if errors.Is(err, control.ErrBootstrapUnavailable) {
+	switch {
+	case errors.Is(err, control.ErrBootstrapUnavailable):
 		return empty, ErrUnavailable
+	case errors.Is(err, control.ErrBootstrapState):
+		return empty, err
+	case errors.Is(err, control.ErrBootstrapProtocol):
+		return empty, ErrProtocol
 	}
 	now := v.config.Now()
 	rootVerified := announcement.Checkpoint().Revision != 0
@@ -143,7 +149,7 @@ func (v *Verifier) currentTrust(parent context.Context, scope string) (mapTrust,
 	}
 	claims, err := coordinator.DecodeNodeCredential(v.credential, v.config.MaxCredentialBytes)
 	if err != nil {
-		return empty, ErrMap
+		return empty, ErrCredentialInvalid
 	}
 	key, err := signing.ResolveBootstrapKey(trust.NodeCredentialTrustBundle, claims.KeyID, now)
 	if err != nil || key.NotAfter != nil && claims.ExpiresAt.After(*key.NotAfter) {
@@ -155,7 +161,7 @@ func (v *Verifier) currentTrust(parent context.Context, scope string) (mapTrust,
 	}
 	verified, err := coordinator.VerifyNodeCredential(v.credential, v.config.MaxCredentialBytes, ed25519.PublicKey(public), v.network, v.node, scope, now)
 	if err != nil || !verified.ExpiresAt.Equal(v.credentialEnds) {
-		return empty, ErrMap
+		return empty, ErrCredentialInvalid
 	}
 	return mapTrust{ServerKeyResponse: trust, announcement: announcement, rootVerified: rootVerified, nodeKey: key}, nil
 }

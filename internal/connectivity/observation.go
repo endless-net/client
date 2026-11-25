@@ -25,6 +25,11 @@ const (
 	FailureRevoked
 	FailureLogin
 	FailureNodeRenewal
+	FailureCheckpoint
+	FailureProtocol
+	FailureMap
+	FailureConfiguration
+	FailureCredentialInvalid
 )
 
 func (FailureKind) Error() string { return "connection failure" }
@@ -47,6 +52,7 @@ type LocalObservation struct {
 	Known, Applied                     bool
 	SoleNodeReady                      bool
 	ControlUnavailable                 bool
+	EndpointRefreshUnconfirmed         bool
 	Permission                         Permission
 	MapRevision                        uint64
 	Address                            string

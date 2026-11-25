@@ -34,7 +34,7 @@ func NewApprovalExecutor(store *state.Store, remote *Approval, c ApprovalExecuto
 }
 
 func approvalActive(p state.Profile) bool {
-	return p.Attempt != nil && p.Attempt.BrowserApproval && p.Approval != nil && (p.Attempt.Phase == enrollment.PendingApproval || p.Attempt.Phase == enrollment.Completing) && p.Approval.BlockedReason != "client.approval.invalid_response"
+	return p.Attempt != nil && p.Attempt.BrowserApproval && p.Approval != nil && (p.Attempt.Phase == enrollment.PendingApproval || p.Attempt.Phase == enrollment.Completing) && !enrollmentFailureStopsCalls(p.Approval.BlockedReason)
 }
 
 func approvalDue(p state.Profile, due time.Time) time.Time {
@@ -170,13 +170,11 @@ func (e *ApprovalExecutor) apply(p state.Profile, result ApprovalCompletion, cal
 	progress := *p.Approval
 	p.Approval = &progress
 	if callErr != nil {
-		if errors.Is(callErr, ErrBootstrap) || errors.Is(callErr, ErrApprovalNotDue) {
+		reason, rejected := enrollmentFailureReason(callErr)
+		if rejected || errors.Is(callErr, ErrApprovalNotDue) {
 			if !a.Uncertain {
 				p.RemoteInFlight = false
 				p.InFlightAt = time.Time{}
-			}
-			if errors.Is(callErr, ErrBootstrap) {
-				p.Approval.BlockedReason = "client.approval.trust_required"
 			}
 		} else {
 			a, err = p.Attempt.RecoverLostCall(p.InFlightAt, now)
@@ -184,8 +182,13 @@ func (e *ApprovalExecutor) apply(p state.Profile, result ApprovalCompletion, cal
 				return p, err
 			}
 			if errors.Is(callErr, approvalmodel.ErrProtocol) || errors.Is(callErr, ErrRegistrationProtocol) {
-				p.Approval.BlockedReason = "client.approval.invalid_response"
+				reason = "invalid_response"
 			}
+		}
+		if reason != "" {
+			p.Approval.BlockedReason = "client.approval." + reason
+		} else if !errors.Is(callErr, ErrApprovalNotDue) {
+			p.Approval.BlockedReason = ""
 		}
 		p.Attempt = &a
 		p.Approval.NextCallAt = e.next(p, now)

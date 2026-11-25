@@ -74,7 +74,7 @@ func (e *RegistrationExecutor) Reconcile(ctx context.Context, id, attempt string
 		}
 		s.Revision++
 	}
-	if a.Phase != enrollment.Registering || p.Trust.KeyID == "" || p.Registration.BlockedReason == "client.registration.invalid_response" {
+	if a.Phase != enrollment.Registering || p.Trust.KeyID == "" || enrollmentFailureStopsCalls(p.Registration.BlockedReason) {
 		return time.Time{}, nil
 	}
 	if now.Before(p.Registration.NextCallAt) {
@@ -125,7 +125,7 @@ func (e *RegistrationExecutor) Reconcile(ctx context.Context, id, attempt string
 		if err != nil {
 			return time.Time{}, err
 		}
-		if next.Attempt.Phase != enrollment.Registering || next.Registration.BlockedReason == "client.registration.invalid_response" {
+		if next.Attempt.Phase != enrollment.Registering || enrollmentFailureStopsCalls(next.Registration.BlockedReason) {
 			return time.Time{}, nil
 		}
 		return next.Registration.NextCallAt, nil
@@ -140,14 +140,13 @@ func (e *RegistrationExecutor) apply(p state.Profile, result RegisteredResult, c
 		return p, err
 	}
 	if callErr != nil {
-		if errors.Is(callErr, ErrBootstrap) {
-			// Trust refusal happens before the mutation. Retain a previous unknown
-			// call's marker rather than asserting that it rolled back remotely.
+		reason, rejected := enrollmentFailureReason(callErr)
+		if rejected {
+			// A rejection here cannot settle an earlier invocation's outcome.
 			if !a.Uncertain {
 				p.RemoteInFlight = false
 				p.InFlightAt = time.Time{}
 			}
-			p.Registration.BlockedReason = "client.registration.trust_required"
 		} else {
 			if a.Phase == enrollment.Registering {
 				a, err = a.MarkUncertain(now)
@@ -158,8 +157,13 @@ func (e *RegistrationExecutor) apply(p state.Profile, result RegisteredResult, c
 				return p, err
 			}
 			if errors.Is(callErr, ErrRegistrationProtocol) {
-				p.Registration.BlockedReason = "client.registration.invalid_response"
+				reason = "invalid_response"
 			}
+		}
+		if reason != "" {
+			p.Registration.BlockedReason = "client.registration." + reason
+		} else {
+			p.Registration.BlockedReason = ""
 		}
 		p.Attempt = &a
 		p.Registration.NextCallAt = registrationNextCall(a, now.Add(e.config.RetryInterval))

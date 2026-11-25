@@ -339,3 +339,13 @@ func TestDefaultResolverFailsClosedBeforeCredentialSend(t *testing.T) {
 		t.Fatal("bootstrap failure sent credentials or asserted uncertainty", err)
 	}
 }
+
+func TestDefaultTargetBootstrapOutageIsVisibleBeforeDispatch(t *testing.T) {
+	f := defaultTargetFixture(t)
+	f.e.remote.registration.announcements = failedEnrollmentAnnouncement{ErrBootstrapUnavailable}
+	due, err := f.e.Reconcile(t.Context(), loginProfile, loginAttempt)
+	p := f.profile(t)
+	if err != nil || due.IsZero() || f.calls != 0 || p.RemoteInFlight || p.Attempt.Uncertain || p.DefaultTarget.BlockedReason != "client.default_target.control_unavailable" {
+		t.Fatal("bootstrap outage was misclassified", err)
+	}
+}

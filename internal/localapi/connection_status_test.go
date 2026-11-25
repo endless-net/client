@@ -22,21 +22,31 @@ type observedConnection struct {
 
 func TestRecoveryFailuresRemainDistinctAndSafe(t *testing.T) {
 	for kind, reason := range map[connectivity.FailureKind]string{
-		connectivity.FailureTrust:       "client.connection.trust_required",
-		connectivity.FailureCredential:  "client.connection.credential_expired",
-		connectivity.FailureNodeRenewal: "client.connection.node_renewal_unresolved",
-		connectivity.FailureAccess:      "client.connection.access_denied",
-		connectivity.FailureRevoked:     "client.connection.registration_revoked",
-		connectivity.FailurePath:        "client.connection.path_unconfirmed",
-		connectivity.FailureCleanup:     "client.connection.cleanup_unconfirmed",
-		connectivity.FailureLogin:       "client.connection.login_required",
+		connectivity.FailureTrust:             "client.connection.trust_required",
+		connectivity.FailureCredential:        "client.connection.credential_expired",
+		connectivity.FailureNodeRenewal:       "client.connection.node_renewal_unresolved",
+		connectivity.FailureAccess:            "client.connection.access_denied",
+		connectivity.FailureRevoked:           "client.connection.registration_revoked",
+		connectivity.FailurePath:              "client.connection.path_unconfirmed",
+		connectivity.FailureCleanup:           "client.connection.cleanup_unconfirmed",
+		connectivity.FailureLogin:             "client.connection.login_required",
+		connectivity.FailureMap:               "client.connection.map_rejected",
+		connectivity.FailureConfiguration:     "client.connection.configuration_invalid",
+		connectivity.FailureCheckpoint:        "client.connection.checkpoint_unavailable",
+		connectivity.FailureProtocol:          "client.connection.protocol_rejected",
+		connectivity.FailureCredentialInvalid: "client.connection.credential_rejected",
 	} {
 		f := observedConnectionFailure(kind)
 		if f == nil || f.ReasonKey != reason {
 			t.Fatal("unsafe or conflated recovery reason", kind, f)
 		}
-		if (kind == connectivity.FailureTrust || kind == connectivity.FailureCredential) && f.Retryable {
-			t.Fatal("safety action replaced by automatic retry")
+		switch kind {
+		case connectivity.FailureTrust, connectivity.FailureCredential, connectivity.FailureMap,
+			connectivity.FailureConfiguration, connectivity.FailureCheckpoint, connectivity.FailureProtocol,
+			connectivity.FailureCredentialInvalid:
+			if f.Retryable {
+				t.Fatal("terminal condition advertised as retryable")
+			}
 		}
 	}
 }
@@ -179,5 +189,30 @@ func TestTypedConnectionRPCFailuresNeverExposeBackendText(t *testing.T) {
 		if len(details) != 1 || details[0].(*clientv0.Failure).Code != tc.typed {
 			t.Fatal("typed detail lost", details)
 		}
+	}
+}
+
+func TestEndpointRefreshDegradesControlWhileTunnelRemainsApplied(t *testing.T) {
+	c, _, _, _, caller := connectionFixture(t)
+	if _, err := c.connect(t.Context(), caller, &clientv0.ConnectRequest{Mutation: connectionMutation(3), Async: true}); err != nil {
+		t.Fatal(err)
+	}
+	local := connectivity.LocalObservation{
+		Known: true, Applied: true, MapRevision: 8, Address: "100.64.0.7", PeerCount: 1, DirectPaths: 1,
+		Permission:                 connectivity.Permission{NewFlows: true, ExistingFlows: true},
+		EndpointRefreshUnconfirmed: true,
+	}
+	o := &observedConnection{value: connectivity.Observation{Profile: defaultID, Generation: 1, Intent: state.IntentConnected, Phase: connectivity.PhaseConnected, Local: local}}
+	c.config.ConnectionObservations = o
+	got, err := c.snapshot(t.Context(), caller)
+	if err != nil || got.Status.ControlState != clientv0.ControlState_CONTROL_STATE_DEGRADED ||
+		got.Status.ServiceState != clientv0.ServiceState_SERVICE_STATE_CONNECTED ||
+		len(got.Status.Failures) != 1 || got.Status.Failures[0].ReasonKey != "client.connection.endpoint_refresh_unconfirmed" {
+		t.Fatal("endpoint failure hidden or tunnel incorrectly demoted", err)
+	}
+	o.value.Local.EndpointRefreshUnconfirmed = false
+	got, err = c.snapshot(t.Context(), caller)
+	if err != nil || got.Status.ControlState != clientv0.ControlState_CONTROL_STATE_READY || len(got.Status.Failures) != 0 {
+		t.Fatal("confirmed discovery did not restore the ready control status", err)
 	}
 }

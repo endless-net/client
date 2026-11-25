@@ -24,6 +24,7 @@ import (
 var (
 	ErrUnavailable       = errors.New("connectivity control plane unavailable")
 	ErrStreamRotation    = errors.New("scheduled map stream rotation")
+	ErrProtocol          = errors.New("connectivity protocol or configuration rejected")
 	ErrDenied            = errors.New("connectivity access denied")
 	ErrRevoked           = errors.New("connectivity access explicitly revoked")
 	ErrEndpointUncertain = errors.New("endpoint announcement outcome uncertain")
@@ -89,13 +90,29 @@ func pathID(value string) bool {
 }
 
 func connectivityCallError(err error, mutation bool) error {
+	if !mutation && control.RejectedControlTransport(err) {
+		return ErrTrust
+	}
 	switch connect.CodeOf(err) {
 	case connect.CodeUnauthenticated, connect.CodePermissionDenied:
 		return ErrDenied
 	case connect.CodeAborted:
 		return ErrStale
 	case connect.CodeInvalidArgument:
-		if !mutation || connect.IsWireError(err) {
+		if connect.IsWireError(err) {
+			return ErrProtocol
+		}
+		if !mutation {
+			return ErrMap
+		}
+	case connect.CodeUnimplemented, connect.CodeFailedPrecondition:
+		return ErrProtocol
+	case connect.CodeDataLoss:
+		if !mutation {
+			return ErrProtocol
+		}
+	case connect.CodeResourceExhausted:
+		if !mutation && !connect.IsWireError(err) {
 			return ErrMap
 		}
 	}
@@ -292,9 +309,6 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 			return streamContextError(ctx)
 		}
 		if !hasMessage {
-			if connect.CodeOf(stream.Err()) == connect.CodeResourceExhausted {
-				return ErrMap
-			}
 			return connectivityCallError(stream.Err(), false)
 		}
 		event, err := control.MapUpdate(stream.Msg())

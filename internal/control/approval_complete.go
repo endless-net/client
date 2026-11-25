@@ -90,7 +90,7 @@ func (a *Approval) Complete(ctx context.Context, p state.Profile, original []byt
 	}
 	trust := Announcement{Origin: p.ControlOrigin, KeyID: p.Trust.KeyID, ID: p.Trust.AnnouncementID, Bundle: p.Trust.Bundle}
 	if trust.Validate(a.registration.config.Now()) != nil {
-		return ApprovalCompletion{}, ErrBootstrap
+		return ApprovalCompletion{}, errEnrollmentTrustAfterCall
 	}
 	if completion.Registered != nil && !a.registration.config.Now().Before(completion.Registered.CredentialEnds) {
 		return ApprovalCompletion{}, ErrRegistrationProtocol

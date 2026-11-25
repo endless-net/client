@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/netip"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -891,5 +892,45 @@ func TestWindowsConnectionCompletesStartupAfterMapIsSupersededAtACK(t *testing.T
 	if f.native.starts.Load() != 1 || f.native.refreshes.Load() != 1 ||
 		f.native.checks.Load() != 2 || f.native.revoked.Load() {
 		t.Fatal("expected readiness only after processing the replacement map in the original session")
+	}
+}
+
+func TestEndpointRefreshReportsLostACKUntilExactReplaySucceeds(t *testing.T) {
+	f := newConnectionBackendFixture(t)
+	f.loseSecond = true
+	f.factory.config.RenewalInterval = time.Minute
+	reports := make(chan error, 2)
+	f.factory.config.ReportFailure = func(_ uint64, stage string, err error) {
+		if stage == "endpoint_refresh" {
+			reports <- err
+		}
+	}
+	owner, err := f.factory.newOwner(t.Context(), workerProfile, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := owner.(*connectionDriver)
+	t.Cleanup(func() { _ = d.Disconnect(workerCallContext(t)) })
+	if err := d.Connect(backendOperation(t, f), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.refreshEndpoint(f.native); err != nil || !d.ConnectionLocal().EndpointRefreshUnconfirmed {
+		t.Fatal("lost endpoint ACK did not degrade discovery", err)
+	}
+	select {
+	case err := <-reports:
+		if !errors.Is(err, connectivity.ErrEndpointUncertain) {
+			t.Fatal("lost endpoint ACK was misclassified", err)
+		}
+	default:
+		t.Fatal("lost endpoint ACK produced no diagnostic")
+	}
+	if err := d.refreshEndpoint(f.native); err != nil || d.ConnectionLocal().EndpointRefreshUnconfirmed {
+		t.Fatal("successful exact replay did not clear the discovery failure", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.requests) != 3 || !reflect.DeepEqual(f.requests[1], f.requests[2]) {
+		t.Fatal("endpoint recovery changed the unresolved request")
 	}
 }

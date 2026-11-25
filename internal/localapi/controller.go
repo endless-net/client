@@ -129,6 +129,10 @@ func rpcError(err error) error {
 			code = codes.FailedPrecondition
 		case clientv0.ErrorCode_ERROR_CODE_RESOURCE_CONFLICT:
 			code = codes.FailedPrecondition
+		case clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED:
+			if !failure.Retryable {
+				code = codes.FailedPrecondition
+			}
 		}
 		s, detailErr := status.New(code, failure.ReasonKey).WithDetails(failure)
 		if detailErr == nil {
@@ -468,6 +472,12 @@ func (c *Controller) project(s *state.State, p state.Profile, a enrollment.Attem
 	}
 	if p.DefaultTarget != nil && p.DefaultTarget.BlockedReason != "" {
 		r.Restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: p.DefaultTarget.BlockedReason, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_SUPPORT}
+	}
+	if p.Approval != nil && p.Approval.BlockedReason != "" {
+		r.Restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: p.Approval.BlockedReason, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_SUPPORT}
+	}
+	if r.Restriction.GetReasonKey() != "" && strings.HasSuffix(r.Restriction.ReasonKey, ".access_denied") {
+		r.Restriction.ActionOwner = clientv0.ActionOwner_ACTION_OWNER_ACCESS_ADMINISTRATOR
 	}
 	switch a.Phase {
 	case enrollment.Denied:
