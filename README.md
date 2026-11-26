@@ -267,11 +267,12 @@ Renewal после потерянного ACK повторяет тот же fro
 `MAX_PROTECTED`, `MAX_INVENTORY_ROWS`, `MAX_INTERFACES`, `MAX_QUEUED_MAPS`,
 `MAX_MAP_BYTES`, `MAX_STREAM_RECORDS`, `MAX_CALLS`, `MAX_STREAMS`, `STREAM_DURATION`,
 `READ_IDLE_TIMEOUT`, `ENDPOINT_TTL`, `RENEWAL_INTERVAL`, `RETRY_INTERVAL`,
-`PROBE_INTERVAL`, `POLL_INTERVAL`, `CLEANUP_TIMEOUT`, `DAD_POLL_INTERVAL`,
+`PROBE_INTERVAL`, `POLL_INTERVAL`, `DAD_POLL_INTERVAL`,
 `TRANSACTION_WAIT`, `APPLY_TIMEOUT`. ENDPOINT — явно заданный numeric IPv4:port,
 не loopback; external port может отличаться от LISTEN_PORT без автоматического
-NAT discovery. TTL не более300s, renewal раньше expiry, apply не более30s,
-cleanup не более10s и меньше STOP_TIMEOUT. Parsing не обращается к сети/ОС.
+NAT discovery. TTL не более300s, renewal раньше expiry, apply не более30s.
+После сбоя подключения Windows Client отводит на каждый проход фоновой очистки
+30 секунд. Срок задан в коде. При остановке службы действует общий предел STOP_TIMEOUT. Parsing не обращается к сети/ОС.
 Один native Clock с epoch runtime UUID используется Controller/Worker/Session.
 Fx связывает IPC, enrollment и connection как три обязательных цикла. Ошибка
 очистки при остановке не скрывается cancellation и завершает shutdown ошибкой.

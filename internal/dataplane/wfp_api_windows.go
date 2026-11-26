@@ -130,6 +130,9 @@ type nativeFilterAPI struct {
 }
 
 func classifyPolicyError(err error) error {
+	if errors.Is(err, ErrConfiguration) {
+		return ErrConfiguration
+	}
 	if errors.Is(err, ErrPolicyOwnership) || errors.Is(err, windows.Errno(windows.FWP_E_FILTER_NOT_FOUND)) || errors.Is(err, windows.Errno(windows.FWP_E_SUBLAYER_NOT_FOUND)) {
 		return ErrPolicyOwnership
 	}
@@ -367,17 +370,18 @@ func supportedNativeRule(r *wf.Rule) bool {
 	if r.Action == wf.ActionBlock {
 		return true
 	}
-	port := wf.FieldIPRemotePort
-	if r.Layer == wf.LayerALEAuthRecvAcceptV4 {
-		port = wf.FieldIPLocalPort
-	}
 	if !seen[wf.FieldIPLocalAddress] || !seen[wf.FieldIPRemoteAddress] {
 		return false
 	}
+	// An all-protocol grant has neither transport condition. A scoped grant
+	// must have both the protocol and the port for this direction.
 	if !seen[wf.FieldIPProtocol] {
 		return !seen[wf.FieldIPLocalPort] && !seen[wf.FieldIPRemotePort]
 	}
-	return seen[port] && !(seen[wf.FieldIPLocalPort] && seen[wf.FieldIPRemotePort])
+	if r.Layer == wf.LayerALEAuthRecvAcceptV4 {
+		return seen[wf.FieldIPLocalPort] && !seen[wf.FieldIPRemotePort]
+	}
+	return seen[wf.FieldIPRemotePort] && !seen[wf.FieldIPLocalPort]
 }
 
 func supportedPacketGuard(r *wf.Rule) bool {

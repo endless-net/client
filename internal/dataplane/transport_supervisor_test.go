@@ -153,6 +153,7 @@ func TestSupervisorSelectsActualEncryptedRelayAfterOwnProofAndRoutesNativePacket
 		t.Fatal(err)
 	}
 	seen, gate := make(chan struct{}, 1), make(chan struct{})
+	dropped := make(chan string, 1)
 	var dropEcho atomic.Bool
 	var release sync.Once
 	unblock := func() { release.Do(func() { close(gate) }) }
@@ -167,12 +168,18 @@ func TestSupervisorSelectsActualEncryptedRelayAfterOwnProofAndRoutesNativePacket
 			return err
 		}
 		if claimed {
+			if dropEcho.Load() {
+				if value.Kind == transport.Challenge {
+					select {
+					case dropped <- value.CandidateID:
+					default:
+					}
+				}
+				return nil
+			}
 			select {
 			case seen <- struct{}{}:
 			default:
-			}
-			if dropEcho.Load() {
-				return nil
 			}
 			select {
 			case <-gate:
@@ -286,10 +293,25 @@ func TestSupervisorSelectsActualEncryptedRelayAfterOwnProofAndRoutesNativePacket
 	dropEcho.Store(true)
 	f.clock.advance(10*time.Second, 10*time.Second)
 	g.notify()
+	var cycleID string
 	select {
-	case <-seen:
+	case cycleID = <-dropped:
 	case <-time.After(time.Second):
 		t.Fatal("next health probe was not scheduled")
+	}
+	// Other transport probes share the budget. Observe the permit for the
+	// challenge the fixture actually dropped, before advancing its clock.
+	var healthPermit *probePermit
+	budget.mu.Lock()
+	for permit := range budget.probes {
+		if permit.attempt.cycle.id == cycleID {
+			healthPermit = permit
+			break
+		}
+	}
+	budget.mu.Unlock()
+	if healthPermit == nil {
+		t.Fatal("dropped health probe has no active permit")
 	}
 	f.clock.advance(4*time.Second, 4*time.Second)
 	g.notify()
@@ -297,9 +319,9 @@ func TestSupervisorSelectsActualEncryptedRelayAfterOwnProofAndRoutesNativePacket
 	defer expired.Stop()
 	for {
 		budget.mu.Lock()
-		pending := len(budget.probes)
+		pending := budget.probes[healthPermit]
 		budget.mu.Unlock()
-		if pending == 0 {
+		if !pending {
 			break
 		}
 		select {

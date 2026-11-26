@@ -17,6 +17,9 @@ func TestInstallationDefaultsNeedOnlyMachineFactsAndServer(t *testing.T) {
 	if err := json.Unmarshal(data, &values); err != nil {
 		t.Fatal(err)
 	}
+	if _, present := values["ENDLESSNET_CLIENT_CONNECTION_CLEANUP_TIMEOUT"]; present {
+		t.Fatal("MSI would install a registry override for the Windows cleanup timeout")
+	}
 	fixture := configEnvironment()
 	for _, key := range []string{"APPROVAL_BASE", "INSTALLATION_ID", "DEFAULT_PROFILE_ID", "STATE_DIRECTORY", "SERVICE_SID", "ALLOWED_SIDS", "CONTROL_ORIGIN", "CONNECTION_ENDPOINT"} {
 		name := "ENDLESSNET_CLIENT_" + key

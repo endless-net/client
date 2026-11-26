@@ -11,6 +11,8 @@ import (
 	"github.com/endless-net/client/internal/dataplane"
 )
 
+const windowsCleanupTimeout = 30 * time.Second
+
 // ConnectionConfig has no defaults: the announced address is explicit discovery
 // input, never inferred from a local NIC or an unverified NAT mapping.
 type ConnectionConfig struct {
@@ -35,7 +37,6 @@ type ConnectionConfig struct {
 	RetryInterval          time.Duration `env:"RETRY_INTERVAL,required"`
 	ProbeInterval          time.Duration `env:"PROBE_INTERVAL,required"`
 	PollInterval           time.Duration `env:"POLL_INTERVAL,required"`
-	CleanupTimeout         time.Duration `env:"CLEANUP_TIMEOUT,required"`
 	DADPollInterval        time.Duration `env:"DAD_POLL_INTERVAL,required"`
 	TransactionWait        time.Duration `env:"TRANSACTION_WAIT,required"`
 	ApplyTimeout           time.Duration `env:"APPLY_TIMEOUT,required"`
@@ -62,7 +63,7 @@ func (c Config) connectionDriver(clock connectivity.Clock, announcements control
 func (c Config) validateConnection() error {
 	d := c.ConnectionConfig
 	driver := c.connectionDriver(nil, nil)
-	if c.connectionHTTP().Validate() != nil || driver.validateSettings() != nil || driver.Endpoint.String() != d.Endpoint || d.PollInterval < time.Millisecond || d.PollInterval > 10*time.Second || d.CleanupTimeout < time.Millisecond || d.CleanupTimeout > 10*time.Second || d.CleanupTimeout >= c.StopTimeout {
+	if c.connectionHTTP().Validate() != nil || driver.validateSettings() != nil || driver.Endpoint.String() != d.Endpoint || d.PollInterval < time.Millisecond || d.PollInterval > 10*time.Second {
 		return ErrConfig
 	}
 	return nil

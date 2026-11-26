@@ -116,7 +116,7 @@ func (*ConnectionWorker) GoString() string { return "[private connection worker]
 
 func NewConnectionWorker(store *state.Store, factory ConnectionFactory, c ConnectionWorkerConfig) (*ConnectionWorker, error) {
 	id, err := uuid.Parse(c.RuntimeID)
-	if store == nil || factory == nil || c.Clock == nil || err != nil || id == uuid.Nil || id.String() != c.RuntimeID || c.ReadTimeout < time.Millisecond || c.ReadTimeout > 30*time.Second || c.PollInterval < time.Millisecond || c.PollInterval > 10*time.Second || c.CleanupTimeout < time.Millisecond || c.CleanupTimeout > 10*time.Second {
+	if store == nil || factory == nil || c.Clock == nil || err != nil || id == uuid.Nil || id.String() != c.RuntimeID || c.ReadTimeout < time.Millisecond || c.ReadTimeout > 30*time.Second || c.PollInterval < time.Millisecond || c.PollInterval > 10*time.Second || c.CleanupTimeout < time.Millisecond || c.CleanupTimeout > 30*time.Second {
 		return nil, ErrConnectionWorker
 	}
 	if c.RefreshSession != nil && (c.SessionRetryInterval < time.Millisecond || c.SessionRetryInterval > 30*time.Second) {
@@ -514,10 +514,24 @@ func (w *ConnectionWorker) disconnectFailedSession(daemon context.Context, sessi
 
 func (w *ConnectionWorker) cleanupContext(daemon context.Context) (context.Context, context.CancelFunc) {
 	var shutdown *workerShutdown
-	if daemon != nil && errors.As(context.Cause(daemon), &shutdown) {
+	if errors.As(context.Cause(daemon), &shutdown) {
 		return context.WithDeadline(context.Background(), shutdown.deadline)
 	}
-	return context.WithTimeout(context.Background(), w.config.CleanupTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), w.config.CleanupTimeout)
+	// Shutdown can start while cleanup is waiting for a WFP transaction.
+	stop := context.AfterFunc(daemon, func() {
+		var stopping *workerShutdown
+		if errors.As(context.Cause(daemon), &stopping) {
+			timer := time.NewTimer(time.Until(stopping.deadline))
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+				cancel()
+			case <-ctx.Done():
+			}
+		}
+	})
+	return ctx, func() { stop(); cancel() }
 }
 
 func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {

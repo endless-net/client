@@ -163,10 +163,6 @@ bool PreserveServiceSettings(MSIHANDLE session) {
     // The producer owns this lifecycle bound; retain the validated package
     // value so upgrades receive stop-budget fixes rather than an old default.
     if (name == L"ENDLESSNET_CLIENT_STOP_TIMEOUT") continue;
-    // Move installations still on the original cleanup default to the new
-    // package value. Preserve other explicit cleanup budgets.
-    if (name == L"ENDLESSNET_CLIENT_CONNECTION_CLEANUP_TIMEOUT" &&
-        entry.substr(equals + 1) == L"1s") continue;
     // Preserve only fields in this package, never introduce arbitrary registry
     // properties. New producer settings retain their validated package value.
     if (PropertyPresent(session, property.c_str()) &&

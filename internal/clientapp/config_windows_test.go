@@ -19,7 +19,7 @@ func configEnvironment() map[string]string {
 		"CONNECTION_MAX_PEERS": "16", "CONNECTION_MAX_RULES": "32", "CONNECTION_MAX_PROTECTED": "32", "CONNECTION_MAX_INVENTORY_ROWS": "1024", "CONNECTION_MAX_INTERFACES": "256",
 		"CONNECTION_MAX_QUEUED_MAPS": "8", "CONNECTION_MAX_MAP_BYTES": "65536", "CONNECTION_MAX_STREAM_RECORDS": "128", "CONNECTION_MAX_CALLS": "2", "CONNECTION_MAX_STREAMS": "1",
 		"CONNECTION_STREAM_DURATION": "60s", "CONNECTION_READ_IDLE_TIMEOUT": "15s", "CONNECTION_ENDPOINT_TTL": "120s", "CONNECTION_RENEWAL_INTERVAL": "30s", "CONNECTION_RETRY_INTERVAL": "1s", "CONNECTION_PROBE_INTERVAL": "1s",
-		"CONNECTION_POLL_INTERVAL": "100ms", "CONNECTION_CLEANUP_TIMEOUT": "1s", "CONNECTION_DAD_POLL_INTERVAL": "10ms", "CONNECTION_TRANSACTION_WAIT": "100ms", "CONNECTION_APPLY_TIMEOUT": "20s",
+		"CONNECTION_POLL_INTERVAL": "100ms", "CONNECTION_DAD_POLL_INTERVAL": "10ms", "CONNECTION_TRANSACTION_WAIT": "100ms", "CONNECTION_APPLY_TIMEOUT": "20s",
 		"CONNECTION_RELAY_DIAL_TIMEOUT": "3s", "CONNECTION_RELAY_IO_TIMEOUT": "5s", "CONNECTION_RELAY_HEARTBEAT_INTERVAL": "1s",
 		"START_TIMEOUT": "3s", "STOP_TIMEOUT": "3s", "STATUS_TIMEOUT": "100ms", "CHECKPOINT_INTERVAL": "100ms",
 		"HANDSHAKE_TIMEOUT": "1s", "DRAIN_TIMEOUT": "1s", "STATE_LOCK_RETRY": "10ms", "CALL_TIMEOUT": "30s", "RETRY_INTERVAL": "1s", "WRITE_BUDGET": "1s",
@@ -64,6 +64,19 @@ func TestWindowsConfigUsesOnlyExplicitEnvironmentWithoutIO(t *testing.T) {
 	}
 }
 
+func TestWindowsConfigIgnoresRetiredCleanupTimeout(t *testing.T) {
+	environment := configEnvironment()
+	want, err := ParseWindows(environment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	environment["ENDLESSNET_CLIENT_CONNECTION_CLEANUP_TIMEOUT"] = "invalid"
+	got, err := ParseWindows(environment)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatal("legacy service environment changed cleanup configuration", err)
+	}
+}
+
 func TestWindowsConfigRejectsInvalidBoundariesWithoutDisclosingValues(t *testing.T) {
 	for _, tc := range []struct{ key, value string }{
 		{"APPROVAL_BASE", "http://approval.invalid"}, {"APPROVAL_BASE", "https://user:synthetic-secret@approval.invalid"},
@@ -85,7 +98,7 @@ func TestWindowsConfigRejectsInvalidBoundariesWithoutDisclosingValues(t *testing
 		{"CONNECTION_ENDPOINT", "localhost:51820"}, {"CONNECTION_ENDPOINT", "[::1]:51820"}, {"CONNECTION_ENDPOINT", "127.0.0.1:51820"}, {"CONNECTION_ENDPOINT", "192.0.2.1:0"},
 		{"CONNECTION_LISTEN_PORT", "0"}, {"CONNECTION_MTU", "575"}, {"CONNECTION_MAX_PEERS", "0"}, {"CONNECTION_MAX_RULES", "0"}, {"CONNECTION_MAX_PROTECTED", "0"},
 		{"CONNECTION_MAX_MAP_BYTES", "1048577"}, {"CONNECTION_MAX_STREAM_RECORDS", "0"}, {"CONNECTION_MAX_QUEUED_MAPS", "0"}, {"CONNECTION_MAX_CALLS", "0"}, {"CONNECTION_MAX_STREAMS", "0"},
-		{"CONNECTION_ENDPOINT_TTL", "301s"}, {"CONNECTION_RENEWAL_INTERVAL", "120s"}, {"CONNECTION_CLEANUP_TIMEOUT", "3s"}, {"CONNECTION_POLL_INTERVAL", "0"},
+		{"CONNECTION_ENDPOINT_TTL", "301s"}, {"CONNECTION_RENEWAL_INTERVAL", "120s"}, {"CONNECTION_POLL_INTERVAL", "0"},
 		{"CONNECTION_APPLY_TIMEOUT", "31s"}, {"CONNECTION_TRANSACTION_WAIT", "100us"}, {"CONNECTION_READ_IDLE_TIMEOUT", "61s"},
 		{"CONNECTION_RELAY_DIAL_TIMEOUT", "31s"}, {"CONNECTION_RELAY_IO_TIMEOUT", "1s"}, {"CONNECTION_RELAY_HEARTBEAT_INTERVAL", "100us"}, {"CONNECTION_MTU", "65535"},
 	} {

@@ -179,6 +179,42 @@ func TestWindowsAllProtocolsPermitOnlySignedDirectionAndAddress(t *testing.T) {
 	}
 }
 
+func TestWindowsMarshalSignedAllProtocols(t *testing.T) {
+	m, _ := engineMap(t)
+	peer := &m.Peers[0]
+	all := []coordinator.ACLPort{{Protocol: coordinator.ProtocolAll}}
+	peer.ACLGrants = []coordinator.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: all}}
+	peer.IngressACLGrants = []coordinator.ACLGrant{{DestinationCIDRs: []string{m.Node.AssignedIP + "/32"}, AllowedPorts: all}}
+	for _, offline := range []bool{false, true} {
+		plan, err := filterPlan(m, policySession, 12345, 17, 8, 8, offline)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rule := range plan.rules {
+			var arena filterArena
+			_, err := marshalNativeFilter(&arena, rule)
+			arena.close()
+			if err != nil {
+				t.Fatalf("marshal layer %v, offline %v: %v", rule.Layer, offline, err)
+			}
+			if rule.Action != wf.ActionPermit || (rule.Layer != wf.LayerALEAuthConnectV4 && rule.Layer != wf.LayerALEAuthRecvAcceptV4) {
+				continue
+			}
+			for _, field := range []*wf.Match{
+				{Field: wf.FieldIPProtocol, Op: wf.MatchTypeEqual, Value: wf.IPProto(6)},
+				{Field: wf.FieldIPLocalPort, Op: wf.MatchTypeEqual, Value: uint16(443)},
+				{Field: wf.FieldIPRemotePort, Op: wf.MatchTypeEqual, Value: uint16(443)},
+			} {
+				partial := *rule
+				partial.Conditions = append(append([]*wf.Match(nil), rule.Conditions...), field)
+				if supportedNativeRule(&partial) {
+					t.Fatal("accepted a partial transport restriction", field.Field)
+				}
+			}
+		}
+	}
+}
+
 type mockFilterAPI struct {
 	persistent, layerLive, layerPending    bool
 	layerOwner, dynamicRef                 *mockFilterAPI

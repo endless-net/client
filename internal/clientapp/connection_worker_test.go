@@ -760,6 +760,24 @@ type cleanupRetrySession struct {
 
 func (s *cleanupRetrySession) Disconnect(ctx context.Context) error { return s.disconnect(ctx) }
 
+func TestRunningCleanupRespectsSubsequentShutdownDeadline(t *testing.T) {
+	daemon, stop := context.WithCancelCause(t.Context())
+	defer stop(nil)
+	w := &ConnectionWorker{config: ConnectionWorkerConfig{CleanupTimeout: 30 * time.Second}}
+	ctx, cancel := w.cleanupContext(daemon)
+	defer cancel()
+	deadline := time.Now().Add(40 * time.Millisecond)
+	stop(&workerShutdown{deadline: deadline})
+	select {
+	case <-ctx.Done():
+		if time.Now().Before(deadline) {
+			t.Fatal("cleanup lost the remaining shutdown budget")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("background cleanup outlived shutdown")
+	}
+}
+
 func TestFailedSessionRetriesOnlySafeCleanupTimeout(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
