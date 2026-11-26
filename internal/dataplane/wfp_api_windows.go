@@ -314,7 +314,7 @@ func supportedNativeRule(r *wf.Rule) bool {
 			return false
 		}
 	case wf.ActionPermit:
-		if r.HardAction || r.Weight != 2 || len(r.Conditions) < 5 || len(r.Conditions) > 6 {
+		if r.HardAction || r.Weight != 2 || len(r.Conditions) < 3 || len(r.Conditions) > 6 {
 			return false
 		}
 	default:
@@ -371,7 +371,13 @@ func supportedNativeRule(r *wf.Rule) bool {
 	if r.Layer == wf.LayerALEAuthRecvAcceptV4 {
 		port = wf.FieldIPLocalPort
 	}
-	return seen[wf.FieldIPLocalAddress] && seen[wf.FieldIPRemoteAddress] && seen[wf.FieldIPProtocol] && seen[port] && (len(seen) == 5 || len(seen) == 6 && seen[wf.FieldFlags])
+	if !seen[wf.FieldIPLocalAddress] || !seen[wf.FieldIPRemoteAddress] {
+		return false
+	}
+	if !seen[wf.FieldIPProtocol] {
+		return !seen[wf.FieldIPLocalPort] && !seen[wf.FieldIPRemotePort]
+	}
+	return seen[port] && !(seen[wf.FieldIPLocalPort] && seen[wf.FieldIPRemotePort])
 }
 
 func supportedPacketGuard(r *wf.Rule) bool {

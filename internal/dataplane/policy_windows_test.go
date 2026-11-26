@@ -150,6 +150,20 @@ func TestWindowsAllProtocolsPermitOnlySignedDirectionAndAddress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, offline := range []bool{false, true} {
+		nativePlan, err := filterPlan(m, policySession, 12345, 17, 8, 8, offline)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range nativePlan.rules {
+			var arena filterArena
+			_, err := marshalNativeFilter(&arena, r)
+			arena.close()
+			if err != nil {
+				t.Fatalf("native rule for offline=%v: %v", offline, err)
+			}
+		}
+	}
 	fields := map[wf.FieldID]any{
 		wf.FieldIPLocalInterface: uint64(12345), wf.FieldIPLocalAddress: netip.MustParseAddr("100.64.0.1"),
 		wf.FieldIPRemoteAddress: netip.MustParseAddr("100.64.0.2"), wf.FieldIPProtocol: wf.IPProto(1),
