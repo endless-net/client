@@ -6,6 +6,7 @@ import (
 	"crypto/ecdh"
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"io"
 	"net"
@@ -25,20 +26,24 @@ import (
 )
 
 func TestLinuxDirectBetweenNativeNamespaces(t *testing.T) {
-	testLinuxNativePeers(t, false)
+	testLinuxNativePeers(t, false, false)
 }
 
 func TestLinuxRelayBetweenNativeNamespaces(t *testing.T) {
-	testLinuxNativePeers(t, true)
+	testLinuxNativePeers(t, true, false)
 }
 
-func testLinuxNativePeers(t *testing.T, withRelay bool) {
+func TestLinuxAllProtocolsBetweenNativeNamespaces(t *testing.T) {
+	testLinuxNativePeers(t, false, true)
+}
+
+func testLinuxNativePeers(t *testing.T, withRelay, allProtocols bool) {
 	t.Helper()
 	if !linuxNetworkTest(t) {
 		return
 	}
 	if role := os.Getenv("EN_DIRECT_TEST_ROLE"); role != "" {
-		runLinuxDirectPeer(t, role, os.Getenv("EN_DIRECT_TEST_DIR"), withRelay)
+		runLinuxDirectPeer(t, role, os.Getenv("EN_DIRECT_TEST_DIR"), withRelay, allProtocols)
 		return
 	}
 	dir := t.TempDir()
@@ -118,7 +123,7 @@ func testLinuxNativePeers(t *testing.T, withRelay bool) {
 	}
 }
 
-func runLinuxDirectPeer(t *testing.T, role, directory string, withRelay bool) {
+func runLinuxDirectPeer(t *testing.T, role, directory string, withRelay, allProtocols bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), 35*time.Second)
 	defer cancel()
 	if err := os.WriteFile(filepath.Join(directory, "spawn-"+role), nil, 0600); err != nil {
@@ -136,6 +141,12 @@ func runLinuxDirectPeer(t *testing.T, role, directory string, withRelay bool) {
 		relayAddress = string(raw)
 	}
 	fixture := linuxDirectFixture(t, role, relayAddress)
+	if allProtocols {
+		peer := &fixture.snapshot.Peers[0]
+		for _, grant := range [][]coordinator.ACLGrant{peer.ACLGrants, peer.IngressACLGrants} {
+			grant[0].AllowedPorts = []coordinator.ACLPort{{Protocol: coordinator.ProtocolAll}}
+		}
+	}
 	store, _ := hintStoreFixture(t, fixture)
 	ledgerDir := t.TempDir()
 	if err := os.Chmod(ledgerDir, 0700); err != nil {
@@ -230,13 +241,16 @@ func runLinuxDirectPeer(t *testing.T, role, directory string, withRelay bool) {
 	if !waitLinuxTestFile(ctx, filepath.Join(directory, "listeners-ready")) {
 		t.Fatal("server peer did not bind")
 	}
-	checkLinuxNativeTraffic(t, ctx, session, directory, withRelay, poll)
+	checkLinuxNativeTraffic(t, ctx, session, directory, withRelay, allProtocols, poll)
+	if allProtocols {
+		checkLinuxICMPEcho(t, ctx)
+	}
 	if withRelay {
 		enableLinuxTestDirect(t, ctx)
 		if err := os.WriteFile(filepath.Join(directory, "enable-direct"), nil, 0600); err != nil {
 			t.Fatal(err)
 		}
-		checkLinuxNativeTraffic(t, ctx, session, directory, false, poll)
+		checkLinuxNativeTraffic(t, ctx, session, directory, false, allProtocols, poll)
 	}
 	connection, err := (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "udp4", "100.70.0.2:4100")
 	if err != nil {
@@ -264,7 +278,30 @@ func enableLinuxTestDirect(t *testing.T, ctx context.Context) {
 	runLinuxTestCommand(t, ctx, "/usr/sbin/nft", "delete", "table", "inet", "underlay_test")
 }
 
-func checkLinuxNativeTraffic(t *testing.T, ctx context.Context, session *LinuxSession, directory string, withRelay bool, poll func() error) {
+func checkLinuxICMPEcho(t *testing.T, ctx context.Context) {
+	t.Helper()
+	peer := &net.IPAddr{IP: net.ParseIP("100.70.0.2")}
+	c, err := (&net.ListenConfig{}).ListenPacket(ctx, "ip4:icmp", "100.70.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if err := c.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	request := []byte{8, 0, 0, 0, 0x45, 0x4e, 0, 1, 1, 2, 3, 4}
+	binary.BigEndian.PutUint16(request[2:4], packetChecksum(request, 0))
+	if _, err := c.WriteTo(request, peer); err != nil {
+		t.Fatal(err)
+	}
+	var reply [1500]byte
+	n, from, err := c.ReadFrom(reply[:])
+	if err != nil || from.String() != peer.String() || n != len(request) || reply[0] != 0 || !bytes.Equal(reply[4:n], request[4:]) {
+		t.Fatalf("ICMP echo through the tunnel: %d bytes, %v", n, err)
+	}
+}
+
+func checkLinuxNativeTraffic(t *testing.T, ctx context.Context, session *LinuxSession, directory string, withRelay, allProtocols bool, poll func() error) {
 	t.Helper()
 	var wantDirect, wantRelay uint32 = 1, 0
 	if withRelay {
@@ -296,8 +333,8 @@ func checkLinuxNativeTraffic(t *testing.T, ctx context.Context, session *LinuxSe
 				t.Fatal(err)
 			}
 		}
-		if linuxTestRoundTrip(ctx, network, "100.70.0.2:4101") {
-			t.Fatalf("unsigned %s port reached the peer", network)
+		if got := linuxTestRoundTrip(ctx, network, "100.70.0.2:4101"); got != allProtocols {
+			t.Fatalf("%s port 4101 reachable=%v with all protocols=%v", network, got, allProtocols)
 		}
 	}
 	if err := session.ProbePaths(ctx); err != nil {

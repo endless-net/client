@@ -142,6 +142,29 @@ func TestWindowsPolicyStableIDsAndPreparedJournal(t *testing.T) {
 	}
 }
 
+func TestWindowsAllProtocolsPermitOnlySignedDirectionAndAddress(t *testing.T) {
+	m, _ := engineMap(t)
+	peer := &m.Peers[0]
+	peer.ACLGrants = []coordinator.ACLGrant{{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []coordinator.ACLPort{{Protocol: coordinator.ProtocolAll}}}}
+	plan, err := filterPlan(m, policySession, 12345, 17, 8, 8, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := map[wf.FieldID]any{
+		wf.FieldIPLocalInterface: uint64(12345), wf.FieldIPLocalAddress: netip.MustParseAddr("100.64.0.1"),
+		wf.FieldIPRemoteAddress: netip.MustParseAddr("100.64.0.2"), wf.FieldIPProtocol: wf.IPProto(1),
+		wf.FieldFlags: wf.ConditionFlag(0),
+	}
+	if policyVerdict(plan, wf.LayerALEAuthConnectV4, fields) != wf.ActionPermit ||
+		policyVerdict(plan, wf.LayerALEAuthRecvAcceptV4, fields) != wf.ActionBlock {
+		t.Fatal("ICMP permit lost its direction")
+	}
+	fields[wf.FieldIPRemoteAddress] = netip.MustParseAddr("100.64.0.3")
+	if policyVerdict(plan, wf.LayerALEAuthConnectV4, fields) != wf.ActionBlock {
+		t.Fatal("unrelated peer matched")
+	}
+}
+
 type mockFilterAPI struct {
 	persistent, layerLive, layerPending    bool
 	layerOwner, dynamicRef                 *mockFilterAPI

@@ -148,14 +148,17 @@ func filterPlan(m coordinator.NetworkMapSnapshot, sessionID string, luid uint64,
 				}
 				for _, port := range grant.AllowedPorts {
 					count++
-					if count > maxGrants || port.Port < 1 || port.Port > 65535 || port.Protocol != "tcp" && port.Protocol != "udp" {
+					if count > maxGrants || !port.Valid() {
 						return FilterPlan{}, ErrConfiguration
 					}
-					protocol := wf.IPProto(6)
-					if port.Protocol == "udp" {
-						protocol = 17
+					conditions := []*wf.Match{equal(wf.FieldIPLocalAddress, local), equal(wf.FieldIPRemoteAddress, remote.Addr())}
+					if port.Protocol != coordinator.ProtocolAll {
+						protocol := wf.IPProto(6)
+						if port.Protocol == "udp" {
+							protocol = 17
+						}
+						conditions = append(conditions, equal(wf.FieldIPProtocol, protocol), equal(direction.portField, uint16(port.Port)))
 					}
-					conditions := []*wf.Match{equal(wf.FieldIPLocalAddress, local), equal(wf.FieldIPRemoteAddress, remote.Addr()), equal(wf.FieldIPProtocol, protocol), equal(direction.portField, uint16(port.Port))}
 					if offline {
 						conditions = append(conditions, &wf.Match{Field: wf.FieldFlags, Op: wf.MatchTypeFlagsAllSet, Value: wf.ConditionFlagIsReauthorize})
 					}

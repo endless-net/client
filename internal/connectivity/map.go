@@ -437,7 +437,7 @@ func (v *Verifier) profile(value coordinator.NetworkMapSnapshot, now time.Time, 
 				}
 				for _, port := range grant.AllowedPorts {
 					rules++
-					if rules > v.config.MaxRules || port.Protocol != "tcp" && port.Protocol != "udp" || port.Port < 1 || port.Port > 65535 {
+					if rules > v.config.MaxRules || !port.Valid() {
 						return ErrMap
 					}
 				}

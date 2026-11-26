@@ -61,7 +61,7 @@ func prepareLinuxFilter(snapshot coordinator.NetworkMapSnapshot, maxGrants, maxP
 					return linuxFilterPlan{}, ErrConfiguration
 				}
 				for _, port := range grant.AllowedPorts {
-					if len(plan.grants) == maxGrants || port.Port < 1 || port.Port > 65535 || (port.Protocol != "tcp" && port.Protocol != "udp") {
+					if len(plan.grants) == maxGrants || !port.Valid() {
 						return linuxFilterPlan{}, ErrConfiguration
 					}
 					plan.grants = append(plan.grants, linuxFlowGrant{
@@ -131,8 +131,17 @@ func (p linuxFilterPlan) transaction(id linuxFilterIdentity, install bool, mode 
 			if grant.egress {
 				originalChain, originalInterface, replyChain, replyInterface = replyChain, replyInterface, originalChain, originalInterface
 			}
-			original := fmt.Sprintf("%s %s %q ip saddr %s ip daddr %s ct direction original %s dport %d",
-				originalChain, originalInterface, id.tunnel, grant.source, grant.destination, grant.protocol, grant.port)
+			forward := fmt.Sprintf("%s %s %q ip saddr %s ip daddr %s", originalChain, originalInterface, id.tunnel, grant.source, grant.destination)
+			original := forward + " ct direction original"
+			reply := fmt.Sprintf("%s %s %q ip saddr %s ip daddr %s ct direction reply", replyChain, replyInterface, id.tunnel, grant.destination, grant.source)
+			if grant.protocol != coordinator.ProtocolAll {
+				original += fmt.Sprintf(" %s dport %d", grant.protocol, grant.port)
+				reply += fmt.Sprintf(" %s sport %d", grant.protocol, grant.port)
+			} else if mode == linuxOnline {
+				// Some IP protocols and ICMP errors have no independent tracked
+				// flow. Only the currently authorized direction admits them.
+				_, _ = fmt.Fprintf(&rules, "add rule %s %s ct state { invalid, untracked, related } accept\n", table, forward)
+			}
 			if mode == linuxOnline {
 				newFlow := "ct state new"
 				if grant.protocol == "tcp" {
@@ -141,8 +150,7 @@ func (p linuxFilterPlan) transaction(id linuxFilterIdentity, install bool, mode 
 				_, _ = fmt.Fprintf(&rules, "add rule %s %s %s ct mark set %d accept\n", table, original, newFlow, id.mark)
 			}
 			_, _ = fmt.Fprintf(&rules, "add rule %s %s ct state established ct mark %d accept\n", table, original, id.mark)
-			_, _ = fmt.Fprintf(&rules, "add rule %s %s %s %q ip saddr %s ip daddr %s ct direction reply %s sport %d ct state established ct mark %d accept\n",
-				table, replyChain, replyInterface, id.tunnel, grant.destination, grant.source, grant.protocol, grant.port, id.mark)
+			_, _ = fmt.Fprintf(&rules, "add rule %s %s ct state established ct mark %d accept\n", table, reply, id.mark)
 		}
 	}
 	for _, name := range []string{"input", "output", "forward"} {
