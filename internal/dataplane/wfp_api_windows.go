@@ -472,8 +472,12 @@ func equalNativeValue(a, b nativeValue) bool {
 	}
 	return false
 }
+
+// BFE may add FWPM_FILTER_FLAG_INDEXED during classification setup.
+const nativeFilterFlagIndexed uint32 = 0x40
+
 func sameNativeFilter(a, b *nativeFilter) bool {
-	if a == nil || a.Key != b.Key || a.Layer != b.Layer || a.Sublayer != b.Sublayer || a.Flags != b.Flags || a.Provider != nil || a.ProviderData.Size != 0 || a.Action != b.Action || a.Context != b.Context || a.Reserved != nil || a.Count != b.Count || a.Count > 8 || a.Conditions == nil || !equalNativeValue(a.Weight, b.Weight) {
+	if a == nil || a.Key != b.Key || a.Layer != b.Layer || a.Sublayer != b.Sublayer || a.Flags&^nativeFilterFlagIndexed != b.Flags || a.Provider != nil || a.ProviderData.Size != 0 || a.Action != b.Action || a.Context != b.Context || a.Reserved != nil || a.Count != b.Count || a.Count > 8 || a.Conditions == nil || !equalNativeValue(a.Weight, b.Weight) {
 		return false
 	}
 	// Names are immutable ownership metadata, not authority or credentials.

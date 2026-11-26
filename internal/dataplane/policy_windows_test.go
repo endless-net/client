@@ -519,6 +519,15 @@ func TestWindowsFilterSDKLayoutAndOwnershipComparison(t *testing.T) {
 	if !sameNativeFilter(a, b) {
 		t.Fatal("OS condition reordering broke ownership proof")
 	}
+	a.Flags |= nativeFilterFlagIndexed
+	if !sameNativeFilter(a, b) {
+		t.Fatal("BFE indexing changed ownership proof")
+	}
+	a.Flags ^= 0x20 // FWPM_FILTER_FLAG_DISABLED
+	if sameNativeFilter(a, b) {
+		t.Fatal("disabled filter accepted as active")
+	}
+	a.Flags ^= 0x20
 	conditions[0].Match = uint32(wf.MatchTypeNotEqual)
 	if sameNativeFilter(a, b) {
 		t.Fatal("changed native condition accepted")
