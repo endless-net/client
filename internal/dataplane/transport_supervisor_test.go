@@ -127,7 +127,15 @@ func TestRelayAdmissionDoesNotStarveBehindUnconfirmedPassivePeers(t *testing.T) 
 }
 
 func TestSupervisorSelectsActualEncryptedRelayAfterOwnProofAndRoutesNativePackets(t *testing.T) {
-	connection, f, sent, inject := relayPipeFixture(t)
+	f := newCandidateFixture(t)
+	a := f.assignment(t)
+	// This peer tests Relay health without negotiating a concurrent Direct path.
+	plan := f.snapshot.Peers[0].Transport
+	plan.Availability = coordinator.TransportUnconfigured
+	plan.Profiles = []coordinator.TransportProfileOffer{}
+	plan.PeerAdvertisement.Endpoints = []coordinator.TransportEndpoint{}
+	f.withRelay(t)
+	connection, _, sent, inject := relayPipeFixtureFor(t, f)
 	packets, native := switchFixture(t, f)
 	budget, err := newTransportBudget(1)
 	if err != nil {
@@ -147,7 +155,6 @@ func TestSupervisorSelectsActualEncryptedRelayAfterOwnProofAndRoutesNativePacket
 	if err := primary.Apply(t.Context(), f.verified, f.profile.Keys.WireGuardPrivate); err != nil {
 		t.Fatal(err)
 	}
-	a := f.assignment(t)
 	local, peer, err := a.addresses()
 	if err != nil {
 		t.Fatal(err)
