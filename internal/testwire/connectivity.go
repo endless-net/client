@@ -4,6 +4,7 @@ package testwire
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -77,6 +78,17 @@ func EndpointRequest(raw []byte) (contract.UpdateNodeEndpointRequest, error) {
 			for _, e := range c.Engines {
 				r.Transport.Capabilities.Engines = append(r.Transport.Capabilities.Engines, clientCapability(e))
 			}
+		}
+		for _, incoming := range a.ProposedProfiles {
+			raw, err := json.Marshal(incoming)
+			if err != nil {
+				return contract.UpdateNodeEndpointRequest{}, err
+			}
+			p := transport.Profile{Prelude: []transport.Datagram{}}
+			if err := json.Unmarshal(raw, &p); err != nil {
+				return contract.UpdateNodeEndpointRequest{}, err
+			}
+			r.Transport.ProposedProfiles = append(r.Transport.ProposedProfiles, p)
 		}
 		for _, e := range a.Endpoints {
 			r.Transport.Endpoints = append(r.Transport.Endpoints, contract.TransportEndpoint{ProfileID: e.ProfileId, ProfileDigest: e.ProfileDigest, Endpoint: e.Endpoint})

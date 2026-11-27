@@ -200,6 +200,7 @@ func (d *mapDecoder) advertisement(a *wire.TransportAdvertisement) *coordinator.
 	}
 	return &coordinator.TransportAdvertisement{
 		IntentGeneration: a.IntentGeneration,
+		ProposedProfiles: decodeSlice(a.ProposedProfiles, d.transportProfile),
 		Capabilities: clienttransport.Capabilities{Version: a.Capabilities.Version,
 			Engines: decodeSlice(a.Capabilities.Engines, func(e *wire.TransportCapability) clienttransport.Capability {
 				return clienttransport.Capability{Engine: e.Engine, ProtocolVersion: e.ProtocolVersion, ProfileVersion: e.ProfileVersion}

@@ -368,6 +368,23 @@ func TestCompiledAdvertisementReturnsIndependentProducerValidatedMetadata(t *tes
 	if err := coordinator.ValidateTransportAdvertisement(ad); err != nil {
 		t.Fatal(err)
 	}
+	if len(ad.ProposedProfiles) != len(ad.Capabilities.Engines) {
+		t.Fatal("each compiled transport must offer an executable profile")
+	}
+	renewed := transportAdvertisement(7)
+	for i, p := range ad.ProposedProfiles {
+		digest, err := transport.ProfileDigest(p)
+		next, nextErr := transport.ProfileDigest(renewed.ProposedProfiles[i])
+		if err != nil || nextErr != nil || digest != next {
+			t.Fatal("an endpoint renewal changed the proposal")
+		}
+		if p.AWG != nil {
+			p.AWG.HeaderProtectionKey[0] ^= 1
+			if p.AWG.HeaderProtectionKey[0] == renewed.ProposedProfiles[i].AWG.HeaderProtectionKey[0] {
+				t.Fatal("announcements share mutable header protection material")
+			}
+		}
+	}
 	ad.Capabilities.Engines[0].ProtocolVersion = "changed"
 	if fresh := transportAdvertisement(7); coordinator.ValidateTransportAdvertisement(fresh) != nil || len(fresh.Endpoints) != 0 {
 		t.Fatal("caller changed compiled capabilities or a fictitious listener was advertised")

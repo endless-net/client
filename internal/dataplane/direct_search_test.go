@@ -430,6 +430,7 @@ func testTwoSupervisorsThroughSelection(t *testing.T, filterWG, preferAWG bool, 
 			f.snapshot.Node.Transport = &local
 			plan := f.snapshot.Peers[0].Transport
 			plan.PeerAdvertisement = remote
+			plan.PeerAdvertisement.ProposedProfiles = nil
 			for j := range plan.Profiles {
 				offer := &plan.Profiles[j]
 				offer.LocalEndpoints = coordinator.ProfileEndpoints(local, offer.Profile.ID, offer.Digest)
@@ -562,9 +563,9 @@ func testTwoSupervisorsThroughSelection(t *testing.T, filterWG, preferAWG bool, 
 	}
 	if ga.outputChoices()["peer"] != peerRouteDirect || gb.outputChoices()["node"] != peerRouteDirect {
 		if rejectRoute {
-			t.Fatalf("validated route commits from %d/2 expected engines, A=%v B=%v ads=%s", len(qualified), ga.transportStatuses(a.verified), gb.transportStatuses(b.verified), lastAds)
+			t.Fatalf("validated route commits from %d/2 expected engines, A=%v B=%v", len(qualified), ga.transportStatuses(a.verified), gb.transportStatuses(b.verified))
 		}
-		t.Fatalf("Direct recovery did not finish: choices A=%v B=%v ads=%s", ga.outputChoices(), gb.outputChoices(), lastAds)
+		t.Fatalf("Direct recovery did not finish: choices A=%v B=%v", ga.outputChoices(), gb.outputChoices())
 	}
 	if rejectRoute {
 		t.Fatal("Direct was selected despite route rejection")

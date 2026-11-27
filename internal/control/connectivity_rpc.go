@@ -3,10 +3,37 @@ package control
 import (
 	"time"
 
+	clienttransport "github.com/endless-net/client/api/transport"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 	wire "github.com/endless-net/coordinator/api/publicquery/v1"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
+
+func wireTransportProfile(p clienttransport.Profile) *wire.TransportProfile {
+	response := &wire.TransportProfile{
+		Version: p.Version, Id: p.ID, Revision: p.Revision, Engine: p.Engine, ProtocolVersion: p.ProtocolVersion,
+		Prelude: decodeSlice(p.Prelude, func(d clienttransport.Datagram) *wire.TransportDatagram {
+			return &wire.TransportDatagram{
+				DelayMs: uint32(d.DelayMS),
+				Segments: decodeSlice(d.Segments, func(s clienttransport.Segment) *wire.TransportSegment {
+					return &wire.TransportSegment{Bytes: s.Bytes, Random: uint32(s.Random)}
+				}),
+			}
+		}),
+	}
+	if a := p.AWG; a != nil {
+		response.Awg = &wire.TransportAmneziaWG{
+			Headers: decodeSlice(a.Headers, wireTransportRange), Padding: decodeSlice(a.Padding, func(v uint16) uint32 { return uint32(v) }),
+			HeaderProtectionKey: a.HeaderProtectionKey, ContentPadding: wireTransportRange(a.ContentPadding),
+			RandomTrailers: a.RandomTrailers, DisableCookies: a.DisableCookies,
+		}
+	}
+	return response
+}
+
+func wireTransportRange(r clienttransport.Range) *wire.TransportRange {
+	return &wire.TransportRange{Min: r.Min, Max: r.Max}
+}
 
 func EndpointRequest(node string, r coordinator.UpdateNodeEndpointRequest) *wire.UpdateNodeEndpointRequest {
 	ttl, _ := time.ParseDuration(r.TTL) // Validated against the durable request before dispatch.
@@ -15,6 +42,7 @@ func EndpointRequest(node string, r coordinator.UpdateNodeEndpointRequest) *wire
 	if a := r.Transport; a != nil {
 		value.Transport = &wire.TransportAdvertisement{IntentGeneration: a.IntentGeneration,
 			Capabilities: &wire.TransportCapabilities{Version: a.Capabilities.Version}}
+		value.Transport.ProposedProfiles = decodeSlice(a.ProposedProfiles, wireTransportProfile)
 		for _, e := range a.Capabilities.Engines {
 			value.Transport.Capabilities.Engines = append(value.Transport.Capabilities.Engines, &wire.TransportCapability{
 				Engine: e.Engine, ProtocolVersion: e.ProtocolVersion, ProfileVersion: e.ProfileVersion,

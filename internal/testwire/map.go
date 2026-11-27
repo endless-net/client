@@ -229,6 +229,7 @@ func wireAdvertisement(a *contract.TransportAdvertisement) *wire.TransportAdvert
 		IntentGeneration: a.IntentGeneration,
 		Capabilities:     &wire.TransportCapabilities{Version: a.Capabilities.Version},
 	}
+	result.ProposedProfiles = mapWireSlice(a.ProposedProfiles, wireTransportProfile)
 	for _, engine := range a.Capabilities.Engines {
 		result.Capabilities.Engines = append(result.Capabilities.Engines, &wire.TransportCapability{
 			Engine: engine.Engine, ProtocolVersion: engine.ProtocolVersion, ProfileVersion: engine.ProfileVersion,
