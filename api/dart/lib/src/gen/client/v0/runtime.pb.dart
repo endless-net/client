@@ -3662,18 +3662,158 @@ class DnsRecord extends $pb.GeneratedMessage {
   $pb.PbList<$core.String> get addresses => $_getList(4);
 }
 
+/// OS result for one assignment scope. Never carry applied history across scopes.
+class DnsApplication extends $pb.GeneratedMessage {
+  factory DnsApplication({
+    $core.String? accountId,
+    $core.String? networkId,
+    $core.String? nodeId,
+    $fixnum.Int64? targetMapRevision,
+    $fixnum.Int64? lastAppliedMapRevision,
+    DnsApplyState? state,
+    DnsApplyFailure? failure,
+  }) {
+    final result = create();
+    if (accountId != null) result.accountId = accountId;
+    if (networkId != null) result.networkId = networkId;
+    if (nodeId != null) result.nodeId = nodeId;
+    if (targetMapRevision != null) result.targetMapRevision = targetMapRevision;
+    if (lastAppliedMapRevision != null)
+      result.lastAppliedMapRevision = lastAppliedMapRevision;
+    if (state != null) result.state = state;
+    if (failure != null) result.failure = failure;
+    return result;
+  }
+
+  DnsApplication._();
+
+  factory DnsApplication.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory DnsApplication.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DnsApplication',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'accountId')
+    ..aOS(2, _omitFieldNames ? '' : 'networkId')
+    ..aOS(3, _omitFieldNames ? '' : 'nodeId')
+    ..a<$fixnum.Int64>(
+        4, _omitFieldNames ? '' : 'targetMapRevision', $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
+    ..a<$fixnum.Int64>(
+        5, _omitFieldNames ? '' : 'lastAppliedMapRevision', $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
+    ..aE<DnsApplyState>(6, _omitFieldNames ? '' : 'state',
+        enumValues: DnsApplyState.values)
+    ..aE<DnsApplyFailure>(7, _omitFieldNames ? '' : 'failure',
+        enumValues: DnsApplyFailure.values)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DnsApplication clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DnsApplication copyWith(void Function(DnsApplication) updates) =>
+      super.copyWith((message) => updates(message as DnsApplication))
+          as DnsApplication;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static DnsApplication create() => DnsApplication._();
+  @$core.override
+  DnsApplication createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static DnsApplication getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DnsApplication>(create);
+  static DnsApplication? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get accountId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set accountId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAccountId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAccountId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get networkId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set networkId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNetworkId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNetworkId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get nodeId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set nodeId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasNodeId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearNodeId() => $_clearField(3);
+
+  /// Last map driving this operation, including cleanup on disconnect.
+  @$pb.TagNumber(4)
+  $fixnum.Int64 get targetMapRevision => $_getI64(3);
+  @$pb.TagNumber(4)
+  set targetMapRevision($fixnum.Int64 value) => $_setInt64(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasTargetMapRevision() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearTargetMapRevision() => $_clearField(4);
+
+  /// Last confirmed successful assignment in this scope. Cleared on confirmed cleanup.
+  @$pb.TagNumber(5)
+  $fixnum.Int64 get lastAppliedMapRevision => $_getI64(4);
+  @$pb.TagNumber(5)
+  set lastAppliedMapRevision($fixnum.Int64 value) => $_setInt64(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasLastAppliedMapRevision() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearLastAppliedMapRevision() => $_clearField(5);
+
+  /// WITHDRAWN requires confirmed cleanup of Client-owned DNS settings.
+  @$pb.TagNumber(6)
+  DnsApplyState get state => $_getN(5);
+  @$pb.TagNumber(6)
+  set state(DnsApplyState value) => $_setField(6, value);
+  @$pb.TagNumber(6)
+  $core.bool hasState() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearState() => $_clearField(6);
+
+  /// Set only on failure. Never carries command output or private queries.
+  @$pb.TagNumber(7)
+  DnsApplyFailure get failure => $_getN(6);
+  @$pb.TagNumber(7)
+  set failure(DnsApplyFailure value) => $_setField(7, value);
+  @$pb.TagNumber(7)
+  $core.bool hasFailure() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearFailure() => $_clearField(7);
+}
+
 class DnsDiagnostics extends $pb.GeneratedMessage {
   factory DnsDiagnostics({
     $core.String? searchDomain,
     $2.Duration? ttl,
     $core.Iterable<$core.String>? servers,
     $core.Iterable<DnsRecord>? records,
+    DnsApplication? application,
   }) {
     final result = create();
     if (searchDomain != null) result.searchDomain = searchDomain;
     if (ttl != null) result.ttl = ttl;
     if (servers != null) result.servers.addAll(servers);
     if (records != null) result.records.addAll(records);
+    if (application != null) result.application = application;
     return result;
   }
 
@@ -3696,6 +3836,8 @@ class DnsDiagnostics extends $pb.GeneratedMessage {
     ..pPS(3, _omitFieldNames ? '' : 'servers')
     ..pPM<DnsRecord>(4, _omitFieldNames ? '' : 'records',
         subBuilder: DnsRecord.create)
+    ..aOM<DnsApplication>(5, _omitFieldNames ? '' : 'application',
+        subBuilder: DnsApplication.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3742,6 +3884,18 @@ class DnsDiagnostics extends $pb.GeneratedMessage {
 
   @$pb.TagNumber(4)
   $pb.PbList<DnsRecord> get records => $_getList(3);
+
+  /// Absent when local DNS application has not been observed.
+  @$pb.TagNumber(5)
+  DnsApplication get application => $_getN(4);
+  @$pb.TagNumber(5)
+  set application(DnsApplication value) => $_setField(5, value);
+  @$pb.TagNumber(5)
+  $core.bool hasApplication() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearApplication() => $_clearField(5);
+  @$pb.TagNumber(5)
+  DnsApplication ensureApplication() => $_ensure(4);
 }
 
 class LogEntry extends $pb.GeneratedMessage {

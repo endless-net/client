@@ -936,6 +936,116 @@ func (TransportSearchState) EnumDescriptor() ([]byte, []int) {
 	return file_client_v0_runtime_proto_rawDescGZIP(), []int{14}
 }
 
+type DnsApplyState int32
+
+const (
+	DnsApplyState_DNS_APPLY_STATE_UNSPECIFIED DnsApplyState = 0
+	DnsApplyState_DNS_APPLY_STATE_PENDING     DnsApplyState = 1
+	DnsApplyState_DNS_APPLY_STATE_APPLIED     DnsApplyState = 2
+	DnsApplyState_DNS_APPLY_STATE_FAILED      DnsApplyState = 3
+	DnsApplyState_DNS_APPLY_STATE_WITHDRAWN   DnsApplyState = 4
+)
+
+// Enum value maps for DnsApplyState.
+var (
+	DnsApplyState_name = map[int32]string{
+		0: "DNS_APPLY_STATE_UNSPECIFIED",
+		1: "DNS_APPLY_STATE_PENDING",
+		2: "DNS_APPLY_STATE_APPLIED",
+		3: "DNS_APPLY_STATE_FAILED",
+		4: "DNS_APPLY_STATE_WITHDRAWN",
+	}
+	DnsApplyState_value = map[string]int32{
+		"DNS_APPLY_STATE_UNSPECIFIED": 0,
+		"DNS_APPLY_STATE_PENDING":     1,
+		"DNS_APPLY_STATE_APPLIED":     2,
+		"DNS_APPLY_STATE_FAILED":      3,
+		"DNS_APPLY_STATE_WITHDRAWN":   4,
+	}
+)
+
+func (x DnsApplyState) Enum() *DnsApplyState {
+	p := new(DnsApplyState)
+	*p = x
+	return p
+}
+
+func (x DnsApplyState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (DnsApplyState) Descriptor() protoreflect.EnumDescriptor {
+	return file_client_v0_runtime_proto_enumTypes[15].Descriptor()
+}
+
+func (DnsApplyState) Type() protoreflect.EnumType {
+	return &file_client_v0_runtime_proto_enumTypes[15]
+}
+
+func (x DnsApplyState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use DnsApplyState.Descriptor instead.
+func (DnsApplyState) EnumDescriptor() ([]byte, []int) {
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{15}
+}
+
+type DnsApplyFailure int32
+
+const (
+	DnsApplyFailure_DNS_APPLY_FAILURE_UNSPECIFIED        DnsApplyFailure = 0
+	DnsApplyFailure_DNS_APPLY_FAILURE_UNSUPPORTED        DnsApplyFailure = 1
+	DnsApplyFailure_DNS_APPLY_FAILURE_INVALID_ASSIGNMENT DnsApplyFailure = 2
+	DnsApplyFailure_DNS_APPLY_FAILURE_OS_APPLY           DnsApplyFailure = 3
+	DnsApplyFailure_DNS_APPLY_FAILURE_OS_CLEANUP         DnsApplyFailure = 4
+)
+
+// Enum value maps for DnsApplyFailure.
+var (
+	DnsApplyFailure_name = map[int32]string{
+		0: "DNS_APPLY_FAILURE_UNSPECIFIED",
+		1: "DNS_APPLY_FAILURE_UNSUPPORTED",
+		2: "DNS_APPLY_FAILURE_INVALID_ASSIGNMENT",
+		3: "DNS_APPLY_FAILURE_OS_APPLY",
+		4: "DNS_APPLY_FAILURE_OS_CLEANUP",
+	}
+	DnsApplyFailure_value = map[string]int32{
+		"DNS_APPLY_FAILURE_UNSPECIFIED":        0,
+		"DNS_APPLY_FAILURE_UNSUPPORTED":        1,
+		"DNS_APPLY_FAILURE_INVALID_ASSIGNMENT": 2,
+		"DNS_APPLY_FAILURE_OS_APPLY":           3,
+		"DNS_APPLY_FAILURE_OS_CLEANUP":         4,
+	}
+)
+
+func (x DnsApplyFailure) Enum() *DnsApplyFailure {
+	p := new(DnsApplyFailure)
+	*p = x
+	return p
+}
+
+func (x DnsApplyFailure) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (DnsApplyFailure) Descriptor() protoreflect.EnumDescriptor {
+	return file_client_v0_runtime_proto_enumTypes[16].Descriptor()
+}
+
+func (DnsApplyFailure) Type() protoreflect.EnumType {
+	return &file_client_v0_runtime_proto_enumTypes[16]
+}
+
+func (x DnsApplyFailure) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use DnsApplyFailure.Descriptor instead.
+func (DnsApplyFailure) EnumDescriptor() ([]byte, []int) {
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{16}
+}
+
 type EnrollmentBrowserAction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Trusted HTTPS URL from Identity; no proof/bearer/provider code.
@@ -3499,19 +3609,118 @@ func (x *DnsRecord) GetAddresses() []string {
 	return nil
 }
 
+// OS result for one assignment scope. Never carry applied history across scopes.
+type DnsApplication struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	AccountId string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	NetworkId string                 `protobuf:"bytes,2,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	NodeId    string                 `protobuf:"bytes,3,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	// Last map driving this operation, including cleanup on disconnect.
+	TargetMapRevision uint64 `protobuf:"varint,4,opt,name=target_map_revision,json=targetMapRevision,proto3" json:"target_map_revision,omitempty"`
+	// Last confirmed successful assignment in this scope. Cleared on confirmed cleanup.
+	LastAppliedMapRevision *uint64 `protobuf:"varint,5,opt,name=last_applied_map_revision,json=lastAppliedMapRevision,proto3,oneof" json:"last_applied_map_revision,omitempty"`
+	// WITHDRAWN requires confirmed cleanup of Client-owned DNS settings.
+	State DnsApplyState `protobuf:"varint,6,opt,name=state,proto3,enum=client.v0.DnsApplyState" json:"state,omitempty"`
+	// Set only on failure. Never carries command output or private queries.
+	Failure       DnsApplyFailure `protobuf:"varint,7,opt,name=failure,proto3,enum=client.v0.DnsApplyFailure" json:"failure,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DnsApplication) Reset() {
+	*x = DnsApplication{}
+	mi := &file_client_v0_runtime_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DnsApplication) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DnsApplication) ProtoMessage() {}
+
+func (x *DnsApplication) ProtoReflect() protoreflect.Message {
+	mi := &file_client_v0_runtime_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DnsApplication.ProtoReflect.Descriptor instead.
+func (*DnsApplication) Descriptor() ([]byte, []int) {
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *DnsApplication) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *DnsApplication) GetNetworkId() string {
+	if x != nil {
+		return x.NetworkId
+	}
+	return ""
+}
+
+func (x *DnsApplication) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *DnsApplication) GetTargetMapRevision() uint64 {
+	if x != nil {
+		return x.TargetMapRevision
+	}
+	return 0
+}
+
+func (x *DnsApplication) GetLastAppliedMapRevision() uint64 {
+	if x != nil && x.LastAppliedMapRevision != nil {
+		return *x.LastAppliedMapRevision
+	}
+	return 0
+}
+
+func (x *DnsApplication) GetState() DnsApplyState {
+	if x != nil {
+		return x.State
+	}
+	return DnsApplyState_DNS_APPLY_STATE_UNSPECIFIED
+}
+
+func (x *DnsApplication) GetFailure() DnsApplyFailure {
+	if x != nil {
+		return x.Failure
+	}
+	return DnsApplyFailure_DNS_APPLY_FAILURE_UNSPECIFIED
+}
+
 type DnsDiagnostics struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SearchDomain  string                 `protobuf:"bytes,1,opt,name=search_domain,json=searchDomain,proto3" json:"search_domain,omitempty"`
-	Ttl           *durationpb.Duration   `protobuf:"bytes,2,opt,name=ttl,proto3" json:"ttl,omitempty"`
-	Servers       []string               `protobuf:"bytes,3,rep,name=servers,proto3" json:"servers,omitempty"`
-	Records       []*DnsRecord           `protobuf:"bytes,4,rep,name=records,proto3" json:"records,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	SearchDomain string                 `protobuf:"bytes,1,opt,name=search_domain,json=searchDomain,proto3" json:"search_domain,omitempty"`
+	Ttl          *durationpb.Duration   `protobuf:"bytes,2,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	Servers      []string               `protobuf:"bytes,3,rep,name=servers,proto3" json:"servers,omitempty"`
+	Records      []*DnsRecord           `protobuf:"bytes,4,rep,name=records,proto3" json:"records,omitempty"`
+	// Absent when local DNS application has not been observed.
+	Application   *DnsApplication `protobuf:"bytes,5,opt,name=application,proto3" json:"application,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DnsDiagnostics) Reset() {
 	*x = DnsDiagnostics{}
-	mi := &file_client_v0_runtime_proto_msgTypes[26]
+	mi := &file_client_v0_runtime_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3523,7 +3732,7 @@ func (x *DnsDiagnostics) String() string {
 func (*DnsDiagnostics) ProtoMessage() {}
 
 func (x *DnsDiagnostics) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[26]
+	mi := &file_client_v0_runtime_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3536,7 +3745,7 @@ func (x *DnsDiagnostics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DnsDiagnostics.ProtoReflect.Descriptor instead.
 func (*DnsDiagnostics) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{26}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *DnsDiagnostics) GetSearchDomain() string {
@@ -3567,6 +3776,13 @@ func (x *DnsDiagnostics) GetRecords() []*DnsRecord {
 	return nil
 }
 
+func (x *DnsDiagnostics) GetApplication() *DnsApplication {
+	if x != nil {
+		return x.Application
+	}
+	return nil
+}
+
 type LogEntry struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Timestamp *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -3578,7 +3794,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_client_v0_runtime_proto_msgTypes[27]
+	mi := &file_client_v0_runtime_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3590,7 +3806,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[27]
+	mi := &file_client_v0_runtime_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3603,7 +3819,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{27}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *LogEntry) GetTimestamp() *timestamppb.Timestamp {
@@ -3644,7 +3860,7 @@ type Diagnostics struct {
 
 func (x *Diagnostics) Reset() {
 	*x = Diagnostics{}
-	mi := &file_client_v0_runtime_proto_msgTypes[28]
+	mi := &file_client_v0_runtime_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3656,7 +3872,7 @@ func (x *Diagnostics) String() string {
 func (*Diagnostics) ProtoMessage() {}
 
 func (x *Diagnostics) ProtoReflect() protoreflect.Message {
-	mi := &file_client_v0_runtime_proto_msgTypes[28]
+	mi := &file_client_v0_runtime_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3669,7 +3885,7 @@ func (x *Diagnostics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Diagnostics.ProtoReflect.Descriptor instead.
 func (*Diagnostics) Descriptor() ([]byte, []int) {
-	return file_client_v0_runtime_proto_rawDescGZIP(), []int{28}
+	return file_client_v0_runtime_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *Diagnostics) GetMetadata() *SnapshotMetadata {
@@ -4066,12 +4282,24 @@ const file_client_v0_runtime_proto_rawDesc = "" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x14\n" +
 	"\x05label\x18\x03 \x01(\tR\x05label\x12\x12\n" +
 	"\x04fqdn\x18\x04 \x01(\tR\x04fqdn\x12\x1c\n" +
-	"\taddresses\x18\x05 \x03(\tR\taddresses\"\xac\x01\n" +
+	"\taddresses\x18\x05 \x03(\tR\taddresses\"\xdb\x02\n" +
+	"\x0eDnsApplication\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x01 \x01(\tR\taccountId\x12\x1d\n" +
+	"\n" +
+	"network_id\x18\x02 \x01(\tR\tnetworkId\x12\x17\n" +
+	"\anode_id\x18\x03 \x01(\tR\x06nodeId\x12.\n" +
+	"\x13target_map_revision\x18\x04 \x01(\x04R\x11targetMapRevision\x12>\n" +
+	"\x19last_applied_map_revision\x18\x05 \x01(\x04H\x00R\x16lastAppliedMapRevision\x88\x01\x01\x12.\n" +
+	"\x05state\x18\x06 \x01(\x0e2\x18.client.v0.DnsApplyStateR\x05state\x124\n" +
+	"\afailure\x18\a \x01(\x0e2\x1a.client.v0.DnsApplyFailureR\afailureB\x1c\n" +
+	"\x1a_last_applied_map_revision\"\xe9\x01\n" +
 	"\x0eDnsDiagnostics\x12#\n" +
 	"\rsearch_domain\x18\x01 \x01(\tR\fsearchDomain\x12+\n" +
 	"\x03ttl\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\x12\x18\n" +
 	"\aservers\x18\x03 \x03(\tR\aservers\x12.\n" +
-	"\arecords\x18\x04 \x03(\v2\x14.client.v0.DnsRecordR\arecords\"^\n" +
+	"\arecords\x18\x04 \x03(\v2\x14.client.v0.DnsRecordR\arecords\x12;\n" +
+	"\vapplication\x18\x05 \x01(\v2\x19.client.v0.DnsApplicationR\vapplication\"^\n" +
 	"\bLogEntry\x128\n" +
 	"\ttimestamp\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\xe8\x05\n" +
@@ -4215,7 +4443,19 @@ const file_client_v0_runtime_proto_rawDesc = "" +
 	" TRANSPORT_SEARCH_STATE_SEARCHING\x10\x02\x12\"\n" +
 	"\x1eTRANSPORT_SEARCH_STATE_BACKOFF\x10\x03\x12&\n" +
 	"\"TRANSPORT_SEARCH_STATE_UNSUPPORTED\x10\x04\x12$\n" +
-	" TRANSPORT_SEARCH_STATE_EXHAUSTED\x10\x05B6Z4github.com/endless-net/client/api/client/v0;clientv0b\x06proto3"
+	" TRANSPORT_SEARCH_STATE_EXHAUSTED\x10\x05*\xa5\x01\n" +
+	"\rDnsApplyState\x12\x1f\n" +
+	"\x1bDNS_APPLY_STATE_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17DNS_APPLY_STATE_PENDING\x10\x01\x12\x1b\n" +
+	"\x17DNS_APPLY_STATE_APPLIED\x10\x02\x12\x1a\n" +
+	"\x16DNS_APPLY_STATE_FAILED\x10\x03\x12\x1d\n" +
+	"\x19DNS_APPLY_STATE_WITHDRAWN\x10\x04*\xc3\x01\n" +
+	"\x0fDnsApplyFailure\x12!\n" +
+	"\x1dDNS_APPLY_FAILURE_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dDNS_APPLY_FAILURE_UNSUPPORTED\x10\x01\x12(\n" +
+	"$DNS_APPLY_FAILURE_INVALID_ASSIGNMENT\x10\x02\x12\x1e\n" +
+	"\x1aDNS_APPLY_FAILURE_OS_APPLY\x10\x03\x12 \n" +
+	"\x1cDNS_APPLY_FAILURE_OS_CLEANUP\x10\x04B6Z4github.com/endless-net/client/api/client/v0;clientv0b\x06proto3"
 
 var (
 	file_client_v0_runtime_proto_rawDescOnce sync.Once
@@ -4229,8 +4469,8 @@ func file_client_v0_runtime_proto_rawDescGZIP() []byte {
 	return file_client_v0_runtime_proto_rawDescData
 }
 
-var file_client_v0_runtime_proto_enumTypes = make([]protoimpl.EnumInfo, 15)
-var file_client_v0_runtime_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_client_v0_runtime_proto_enumTypes = make([]protoimpl.EnumInfo, 17)
+var file_client_v0_runtime_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_client_v0_runtime_proto_goTypes = []any{
 	(ServiceState)(0),                 // 0: client.v0.ServiceState
 	(ControlState)(0),                 // 1: client.v0.ControlState
@@ -4247,139 +4487,145 @@ var file_client_v0_runtime_proto_goTypes = []any{
 	(ConnectionPhase)(0),              // 12: client.v0.ConnectionPhase
 	(SessionLoginPhase)(0),            // 13: client.v0.SessionLoginPhase
 	(TransportSearchState)(0),         // 14: client.v0.TransportSearchState
-	(*EnrollmentBrowserAction)(nil),   // 15: client.v0.EnrollmentBrowserAction
-	(*EnrollmentTarget)(nil),          // 16: client.v0.EnrollmentTarget
-	(*EnrollmentAttempt)(nil),         // 17: client.v0.EnrollmentAttempt
-	(*ConnectionIntent)(nil),          // 18: client.v0.ConnectionIntent
-	(*StoredStatePresence)(nil),       // 19: client.v0.StoredStatePresence
-	(*Network)(nil),                   // 20: client.v0.Network
-	(*Profile)(nil),                   // 21: client.v0.Profile
-	(*CredentialStatus)(nil),          // 22: client.v0.CredentialStatus
-	(*Session)(nil),                   // 23: client.v0.Session
-	(*SessionLoginBrowserAction)(nil), // 24: client.v0.SessionLoginBrowserAction
-	(*SessionLoginAttempt)(nil),       // 25: client.v0.SessionLoginAttempt
-	(*Recovery)(nil),                  // 26: client.v0.Recovery
-	(*ServerIdentity)(nil),            // 27: client.v0.ServerIdentity
-	(*Endpoint)(nil),                  // 28: client.v0.Endpoint
-	(*PathCandidate)(nil),             // 29: client.v0.PathCandidate
-	(*Peer)(nil),                      // 30: client.v0.Peer
-	(*PeerTransportStatus)(nil),       // 31: client.v0.PeerTransportStatus
-	(*AgentStatus)(nil),               // 32: client.v0.AgentStatus
-	(*ControlProbe)(nil),              // 33: client.v0.ControlProbe
-	(*Status)(nil),                    // 34: client.v0.Status
-	(*TunnelPeer)(nil),                // 35: client.v0.TunnelPeer
-	(*TunnelInspection)(nil),          // 36: client.v0.TunnelInspection
-	(*Interface)(nil),                 // 37: client.v0.Interface
-	(*RouteInspection)(nil),           // 38: client.v0.RouteInspection
-	(*RouteConflict)(nil),             // 39: client.v0.RouteConflict
-	(*DnsRecord)(nil),                 // 40: client.v0.DnsRecord
-	(*DnsDiagnostics)(nil),            // 41: client.v0.DnsDiagnostics
-	(*LogEntry)(nil),                  // 42: client.v0.LogEntry
-	(*Diagnostics)(nil),               // 43: client.v0.Diagnostics
-	(*timestamppb.Timestamp)(nil),     // 44: google.protobuf.Timestamp
-	(*Restriction)(nil),               // 45: client.v0.Restriction
-	(*SnapshotMetadata)(nil),          // 46: client.v0.SnapshotMetadata
-	(*Failure)(nil),                   // 47: client.v0.Failure
-	(*durationpb.Duration)(nil),       // 48: google.protobuf.Duration
-	(*BuildIdentity)(nil),             // 49: client.v0.BuildIdentity
+	(DnsApplyState)(0),                // 15: client.v0.DnsApplyState
+	(DnsApplyFailure)(0),              // 16: client.v0.DnsApplyFailure
+	(*EnrollmentBrowserAction)(nil),   // 17: client.v0.EnrollmentBrowserAction
+	(*EnrollmentTarget)(nil),          // 18: client.v0.EnrollmentTarget
+	(*EnrollmentAttempt)(nil),         // 19: client.v0.EnrollmentAttempt
+	(*ConnectionIntent)(nil),          // 20: client.v0.ConnectionIntent
+	(*StoredStatePresence)(nil),       // 21: client.v0.StoredStatePresence
+	(*Network)(nil),                   // 22: client.v0.Network
+	(*Profile)(nil),                   // 23: client.v0.Profile
+	(*CredentialStatus)(nil),          // 24: client.v0.CredentialStatus
+	(*Session)(nil),                   // 25: client.v0.Session
+	(*SessionLoginBrowserAction)(nil), // 26: client.v0.SessionLoginBrowserAction
+	(*SessionLoginAttempt)(nil),       // 27: client.v0.SessionLoginAttempt
+	(*Recovery)(nil),                  // 28: client.v0.Recovery
+	(*ServerIdentity)(nil),            // 29: client.v0.ServerIdentity
+	(*Endpoint)(nil),                  // 30: client.v0.Endpoint
+	(*PathCandidate)(nil),             // 31: client.v0.PathCandidate
+	(*Peer)(nil),                      // 32: client.v0.Peer
+	(*PeerTransportStatus)(nil),       // 33: client.v0.PeerTransportStatus
+	(*AgentStatus)(nil),               // 34: client.v0.AgentStatus
+	(*ControlProbe)(nil),              // 35: client.v0.ControlProbe
+	(*Status)(nil),                    // 36: client.v0.Status
+	(*TunnelPeer)(nil),                // 37: client.v0.TunnelPeer
+	(*TunnelInspection)(nil),          // 38: client.v0.TunnelInspection
+	(*Interface)(nil),                 // 39: client.v0.Interface
+	(*RouteInspection)(nil),           // 40: client.v0.RouteInspection
+	(*RouteConflict)(nil),             // 41: client.v0.RouteConflict
+	(*DnsRecord)(nil),                 // 42: client.v0.DnsRecord
+	(*DnsApplication)(nil),            // 43: client.v0.DnsApplication
+	(*DnsDiagnostics)(nil),            // 44: client.v0.DnsDiagnostics
+	(*LogEntry)(nil),                  // 45: client.v0.LogEntry
+	(*Diagnostics)(nil),               // 46: client.v0.Diagnostics
+	(*timestamppb.Timestamp)(nil),     // 47: google.protobuf.Timestamp
+	(*Restriction)(nil),               // 48: client.v0.Restriction
+	(*SnapshotMetadata)(nil),          // 49: client.v0.SnapshotMetadata
+	(*Failure)(nil),                   // 50: client.v0.Failure
+	(*durationpb.Duration)(nil),       // 51: google.protobuf.Duration
+	(*BuildIdentity)(nil),             // 52: client.v0.BuildIdentity
 }
 var file_client_v0_runtime_proto_depIdxs = []int32{
-	44, // 0: client.v0.EnrollmentBrowserAction.expires_at:type_name -> google.protobuf.Timestamp
-	45, // 1: client.v0.EnrollmentTarget.restriction:type_name -> client.v0.Restriction
+	47, // 0: client.v0.EnrollmentBrowserAction.expires_at:type_name -> google.protobuf.Timestamp
+	48, // 1: client.v0.EnrollmentTarget.restriction:type_name -> client.v0.Restriction
 	9,  // 2: client.v0.EnrollmentAttempt.phase:type_name -> client.v0.EnrollmentPhase
 	10, // 3: client.v0.EnrollmentAttempt.certainty:type_name -> client.v0.EnrollmentCertainty
-	46, // 4: client.v0.EnrollmentAttempt.metadata:type_name -> client.v0.SnapshotMetadata
-	44, // 5: client.v0.EnrollmentAttempt.created_at:type_name -> google.protobuf.Timestamp
-	44, // 6: client.v0.EnrollmentAttempt.deadline:type_name -> google.protobuf.Timestamp
-	15, // 7: client.v0.EnrollmentAttempt.browser_action:type_name -> client.v0.EnrollmentBrowserAction
-	45, // 8: client.v0.EnrollmentAttempt.restriction:type_name -> client.v0.Restriction
-	44, // 9: client.v0.EnrollmentAttempt.login_expires_at:type_name -> google.protobuf.Timestamp
-	44, // 10: client.v0.EnrollmentAttempt.approval_expires_at:type_name -> google.protobuf.Timestamp
-	44, // 11: client.v0.EnrollmentAttempt.recovery_deadline:type_name -> google.protobuf.Timestamp
+	49, // 4: client.v0.EnrollmentAttempt.metadata:type_name -> client.v0.SnapshotMetadata
+	47, // 5: client.v0.EnrollmentAttempt.created_at:type_name -> google.protobuf.Timestamp
+	47, // 6: client.v0.EnrollmentAttempt.deadline:type_name -> google.protobuf.Timestamp
+	17, // 7: client.v0.EnrollmentAttempt.browser_action:type_name -> client.v0.EnrollmentBrowserAction
+	48, // 8: client.v0.EnrollmentAttempt.restriction:type_name -> client.v0.Restriction
+	47, // 9: client.v0.EnrollmentAttempt.login_expires_at:type_name -> google.protobuf.Timestamp
+	47, // 10: client.v0.EnrollmentAttempt.approval_expires_at:type_name -> google.protobuf.Timestamp
+	47, // 11: client.v0.EnrollmentAttempt.recovery_deadline:type_name -> google.protobuf.Timestamp
 	7,  // 12: client.v0.EnrollmentAttempt.mode:type_name -> client.v0.EnrollmentMode
 	2,  // 13: client.v0.ConnectionIntent.desired_state:type_name -> client.v0.DesiredState
-	44, // 14: client.v0.ConnectionIntent.updated_at:type_name -> google.protobuf.Timestamp
-	45, // 15: client.v0.Network.selection:type_name -> client.v0.Restriction
+	47, // 14: client.v0.ConnectionIntent.updated_at:type_name -> google.protobuf.Timestamp
+	48, // 15: client.v0.Network.selection:type_name -> client.v0.Restriction
 	8,  // 16: client.v0.Profile.state:type_name -> client.v0.ProfileState
-	45, // 17: client.v0.Profile.selection:type_name -> client.v0.Restriction
+	48, // 17: client.v0.Profile.selection:type_name -> client.v0.Restriction
 	11, // 18: client.v0.CredentialStatus.state:type_name -> client.v0.CredentialState
-	44, // 19: client.v0.CredentialStatus.expires_at:type_name -> google.protobuf.Timestamp
-	44, // 20: client.v0.CredentialStatus.warning_at:type_name -> google.protobuf.Timestamp
-	45, // 21: client.v0.CredentialStatus.recovery:type_name -> client.v0.Restriction
+	47, // 19: client.v0.CredentialStatus.expires_at:type_name -> google.protobuf.Timestamp
+	47, // 20: client.v0.CredentialStatus.warning_at:type_name -> google.protobuf.Timestamp
+	48, // 21: client.v0.CredentialStatus.recovery:type_name -> client.v0.Restriction
 	6,  // 22: client.v0.Session.state:type_name -> client.v0.SessionState
-	44, // 23: client.v0.Session.expires_at:type_name -> google.protobuf.Timestamp
-	44, // 24: client.v0.Session.warning_at:type_name -> google.protobuf.Timestamp
-	45, // 25: client.v0.Session.renewal:type_name -> client.v0.Restriction
-	44, // 26: client.v0.SessionLoginBrowserAction.expires_at:type_name -> google.protobuf.Timestamp
+	47, // 23: client.v0.Session.expires_at:type_name -> google.protobuf.Timestamp
+	47, // 24: client.v0.Session.warning_at:type_name -> google.protobuf.Timestamp
+	48, // 25: client.v0.Session.renewal:type_name -> client.v0.Restriction
+	47, // 26: client.v0.SessionLoginBrowserAction.expires_at:type_name -> google.protobuf.Timestamp
 	13, // 27: client.v0.SessionLoginAttempt.phase:type_name -> client.v0.SessionLoginPhase
-	46, // 28: client.v0.SessionLoginAttempt.metadata:type_name -> client.v0.SnapshotMetadata
-	44, // 29: client.v0.SessionLoginAttempt.created_at:type_name -> google.protobuf.Timestamp
-	44, // 30: client.v0.SessionLoginAttempt.deadline:type_name -> google.protobuf.Timestamp
-	24, // 31: client.v0.SessionLoginAttempt.browser_action:type_name -> client.v0.SessionLoginBrowserAction
-	45, // 32: client.v0.SessionLoginAttempt.restriction:type_name -> client.v0.Restriction
-	23, // 33: client.v0.SessionLoginAttempt.session:type_name -> client.v0.Session
+	49, // 28: client.v0.SessionLoginAttempt.metadata:type_name -> client.v0.SnapshotMetadata
+	47, // 29: client.v0.SessionLoginAttempt.created_at:type_name -> google.protobuf.Timestamp
+	47, // 30: client.v0.SessionLoginAttempt.deadline:type_name -> google.protobuf.Timestamp
+	26, // 31: client.v0.SessionLoginAttempt.browser_action:type_name -> client.v0.SessionLoginBrowserAction
+	48, // 32: client.v0.SessionLoginAttempt.restriction:type_name -> client.v0.Restriction
+	25, // 33: client.v0.SessionLoginAttempt.session:type_name -> client.v0.Session
 	0,  // 34: client.v0.Recovery.state:type_name -> client.v0.ServiceState
-	47, // 35: client.v0.Recovery.failure:type_name -> client.v0.Failure
+	50, // 35: client.v0.Recovery.failure:type_name -> client.v0.Failure
 	4,  // 36: client.v0.PathCandidate.kind:type_name -> client.v0.PathKind
 	5,  // 37: client.v0.PathCandidate.health:type_name -> client.v0.PathHealth
-	48, // 38: client.v0.PathCandidate.rtt:type_name -> google.protobuf.Duration
-	44, // 39: client.v0.PathCandidate.checked_at:type_name -> google.protobuf.Timestamp
-	44, // 40: client.v0.PathCandidate.last_reachable_at:type_name -> google.protobuf.Timestamp
-	29, // 41: client.v0.Peer.candidates:type_name -> client.v0.PathCandidate
+	51, // 38: client.v0.PathCandidate.rtt:type_name -> google.protobuf.Duration
+	47, // 39: client.v0.PathCandidate.checked_at:type_name -> google.protobuf.Timestamp
+	47, // 40: client.v0.PathCandidate.last_reachable_at:type_name -> google.protobuf.Timestamp
+	31, // 41: client.v0.Peer.candidates:type_name -> client.v0.PathCandidate
 	4,  // 42: client.v0.Peer.selected_path:type_name -> client.v0.PathKind
-	44, // 43: client.v0.Peer.last_transition_at:type_name -> google.protobuf.Timestamp
-	31, // 44: client.v0.Peer.transport:type_name -> client.v0.PeerTransportStatus
+	47, // 43: client.v0.Peer.last_transition_at:type_name -> google.protobuf.Timestamp
+	33, // 44: client.v0.Peer.transport:type_name -> client.v0.PeerTransportStatus
 	4,  // 45: client.v0.PeerTransportStatus.selected_path:type_name -> client.v0.PathKind
 	14, // 46: client.v0.PeerTransportStatus.search_state:type_name -> client.v0.TransportSearchState
-	44, // 47: client.v0.PeerTransportStatus.checked_at:type_name -> google.protobuf.Timestamp
-	44, // 48: client.v0.PeerTransportStatus.next_search_at:type_name -> google.protobuf.Timestamp
+	47, // 47: client.v0.PeerTransportStatus.checked_at:type_name -> google.protobuf.Timestamp
+	47, // 48: client.v0.PeerTransportStatus.next_search_at:type_name -> google.protobuf.Timestamp
 	3,  // 49: client.v0.AgentStatus.snapshot_state:type_name -> client.v0.AgentSnapshotState
-	44, // 50: client.v0.AgentStatus.generated_at:type_name -> google.protobuf.Timestamp
-	28, // 51: client.v0.AgentStatus.selected_relay:type_name -> client.v0.Endpoint
-	47, // 52: client.v0.AgentStatus.last_failure:type_name -> client.v0.Failure
-	47, // 53: client.v0.ControlProbe.failure:type_name -> client.v0.Failure
-	33, // 54: client.v0.ControlProbe.attempts:type_name -> client.v0.ControlProbe
-	46, // 55: client.v0.Status.metadata:type_name -> client.v0.SnapshotMetadata
+	47, // 50: client.v0.AgentStatus.generated_at:type_name -> google.protobuf.Timestamp
+	30, // 51: client.v0.AgentStatus.selected_relay:type_name -> client.v0.Endpoint
+	50, // 52: client.v0.AgentStatus.last_failure:type_name -> client.v0.Failure
+	50, // 53: client.v0.ControlProbe.failure:type_name -> client.v0.Failure
+	35, // 54: client.v0.ControlProbe.attempts:type_name -> client.v0.ControlProbe
+	49, // 55: client.v0.Status.metadata:type_name -> client.v0.SnapshotMetadata
 	0,  // 56: client.v0.Status.service_state:type_name -> client.v0.ServiceState
 	1,  // 57: client.v0.Status.control_state:type_name -> client.v0.ControlState
-	18, // 58: client.v0.Status.intent:type_name -> client.v0.ConnectionIntent
-	20, // 59: client.v0.Status.network:type_name -> client.v0.Network
-	19, // 60: client.v0.Status.stored_state:type_name -> client.v0.StoredStatePresence
-	26, // 61: client.v0.Status.recovery:type_name -> client.v0.Recovery
-	23, // 62: client.v0.Status.session:type_name -> client.v0.Session
-	32, // 63: client.v0.Status.agent:type_name -> client.v0.AgentStatus
-	33, // 64: client.v0.Status.control:type_name -> client.v0.ControlProbe
-	28, // 65: client.v0.Status.stun_endpoints:type_name -> client.v0.Endpoint
-	28, // 66: client.v0.Status.relay_endpoints:type_name -> client.v0.Endpoint
-	47, // 67: client.v0.Status.failures:type_name -> client.v0.Failure
+	20, // 58: client.v0.Status.intent:type_name -> client.v0.ConnectionIntent
+	22, // 59: client.v0.Status.network:type_name -> client.v0.Network
+	21, // 60: client.v0.Status.stored_state:type_name -> client.v0.StoredStatePresence
+	28, // 61: client.v0.Status.recovery:type_name -> client.v0.Recovery
+	25, // 62: client.v0.Status.session:type_name -> client.v0.Session
+	34, // 63: client.v0.Status.agent:type_name -> client.v0.AgentStatus
+	35, // 64: client.v0.Status.control:type_name -> client.v0.ControlProbe
+	30, // 65: client.v0.Status.stun_endpoints:type_name -> client.v0.Endpoint
+	30, // 66: client.v0.Status.relay_endpoints:type_name -> client.v0.Endpoint
+	50, // 67: client.v0.Status.failures:type_name -> client.v0.Failure
 	12, // 68: client.v0.Status.connection_phase:type_name -> client.v0.ConnectionPhase
-	22, // 69: client.v0.Status.credential:type_name -> client.v0.CredentialStatus
-	31, // 70: client.v0.Status.peer_transports:type_name -> client.v0.PeerTransportStatus
-	44, // 71: client.v0.TunnelPeer.latest_handshake:type_name -> google.protobuf.Timestamp
-	48, // 72: client.v0.TunnelPeer.persistent_keepalive:type_name -> google.protobuf.Duration
-	35, // 73: client.v0.TunnelInspection.peers:type_name -> client.v0.TunnelPeer
-	47, // 74: client.v0.TunnelInspection.failure:type_name -> client.v0.Failure
-	47, // 75: client.v0.Interface.failure:type_name -> client.v0.Failure
-	47, // 76: client.v0.RouteInspection.failure:type_name -> client.v0.Failure
-	48, // 77: client.v0.DnsDiagnostics.ttl:type_name -> google.protobuf.Duration
-	40, // 78: client.v0.DnsDiagnostics.records:type_name -> client.v0.DnsRecord
-	44, // 79: client.v0.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
-	46, // 80: client.v0.Diagnostics.metadata:type_name -> client.v0.SnapshotMetadata
-	49, // 81: client.v0.Diagnostics.client:type_name -> client.v0.BuildIdentity
-	34, // 82: client.v0.Diagnostics.status:type_name -> client.v0.Status
-	36, // 83: client.v0.Diagnostics.tunnel:type_name -> client.v0.TunnelInspection
-	37, // 84: client.v0.Diagnostics.interfaces:type_name -> client.v0.Interface
-	38, // 85: client.v0.Diagnostics.routes:type_name -> client.v0.RouteInspection
-	39, // 86: client.v0.Diagnostics.route_conflicts:type_name -> client.v0.RouteConflict
-	41, // 87: client.v0.Diagnostics.dns:type_name -> client.v0.DnsDiagnostics
-	42, // 88: client.v0.Diagnostics.recent_logs:type_name -> client.v0.LogEntry
-	47, // 89: client.v0.Diagnostics.failures:type_name -> client.v0.Failure
-	30, // 90: client.v0.Diagnostics.peers:type_name -> client.v0.Peer
-	91, // [91:91] is the sub-list for method output_type
-	91, // [91:91] is the sub-list for method input_type
-	91, // [91:91] is the sub-list for extension type_name
-	91, // [91:91] is the sub-list for extension extendee
-	0,  // [0:91] is the sub-list for field type_name
+	24, // 69: client.v0.Status.credential:type_name -> client.v0.CredentialStatus
+	33, // 70: client.v0.Status.peer_transports:type_name -> client.v0.PeerTransportStatus
+	47, // 71: client.v0.TunnelPeer.latest_handshake:type_name -> google.protobuf.Timestamp
+	51, // 72: client.v0.TunnelPeer.persistent_keepalive:type_name -> google.protobuf.Duration
+	37, // 73: client.v0.TunnelInspection.peers:type_name -> client.v0.TunnelPeer
+	50, // 74: client.v0.TunnelInspection.failure:type_name -> client.v0.Failure
+	50, // 75: client.v0.Interface.failure:type_name -> client.v0.Failure
+	50, // 76: client.v0.RouteInspection.failure:type_name -> client.v0.Failure
+	15, // 77: client.v0.DnsApplication.state:type_name -> client.v0.DnsApplyState
+	16, // 78: client.v0.DnsApplication.failure:type_name -> client.v0.DnsApplyFailure
+	51, // 79: client.v0.DnsDiagnostics.ttl:type_name -> google.protobuf.Duration
+	42, // 80: client.v0.DnsDiagnostics.records:type_name -> client.v0.DnsRecord
+	43, // 81: client.v0.DnsDiagnostics.application:type_name -> client.v0.DnsApplication
+	47, // 82: client.v0.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
+	49, // 83: client.v0.Diagnostics.metadata:type_name -> client.v0.SnapshotMetadata
+	52, // 84: client.v0.Diagnostics.client:type_name -> client.v0.BuildIdentity
+	36, // 85: client.v0.Diagnostics.status:type_name -> client.v0.Status
+	38, // 86: client.v0.Diagnostics.tunnel:type_name -> client.v0.TunnelInspection
+	39, // 87: client.v0.Diagnostics.interfaces:type_name -> client.v0.Interface
+	40, // 88: client.v0.Diagnostics.routes:type_name -> client.v0.RouteInspection
+	41, // 89: client.v0.Diagnostics.route_conflicts:type_name -> client.v0.RouteConflict
+	44, // 90: client.v0.Diagnostics.dns:type_name -> client.v0.DnsDiagnostics
+	45, // 91: client.v0.Diagnostics.recent_logs:type_name -> client.v0.LogEntry
+	50, // 92: client.v0.Diagnostics.failures:type_name -> client.v0.Failure
+	32, // 93: client.v0.Diagnostics.peers:type_name -> client.v0.Peer
+	94, // [94:94] is the sub-list for method output_type
+	94, // [94:94] is the sub-list for method input_type
+	94, // [94:94] is the sub-list for extension type_name
+	94, // [94:94] is the sub-list for extension extendee
+	0,  // [0:94] is the sub-list for field type_name
 }
 
 func init() { file_client_v0_runtime_proto_init() }
@@ -4389,13 +4635,14 @@ func file_client_v0_runtime_proto_init() {
 	}
 	file_client_v0_common_proto_init()
 	file_client_v0_runtime_proto_msgTypes[2].OneofWrappers = []any{}
+	file_client_v0_runtime_proto_msgTypes[26].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_client_v0_runtime_proto_rawDesc), len(file_client_v0_runtime_proto_rawDesc)),
-			NumEnums:      15,
-			NumMessages:   29,
+			NumEnums:      17,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

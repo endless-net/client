@@ -469,11 +469,44 @@ message DnsRecord {
   repeated string addresses = 5;
 }
 
+enum DnsApplyState {
+  DNS_APPLY_STATE_UNSPECIFIED = 0;
+  DNS_APPLY_STATE_PENDING = 1;
+  DNS_APPLY_STATE_APPLIED = 2;
+  DNS_APPLY_STATE_FAILED = 3;
+  DNS_APPLY_STATE_WITHDRAWN = 4;
+}
+
+enum DnsApplyFailure {
+  DNS_APPLY_FAILURE_UNSPECIFIED = 0;
+  DNS_APPLY_FAILURE_UNSUPPORTED = 1;
+  DNS_APPLY_FAILURE_INVALID_ASSIGNMENT = 2;
+  DNS_APPLY_FAILURE_OS_APPLY = 3;
+  DNS_APPLY_FAILURE_OS_CLEANUP = 4;
+}
+
+// OS result for one assignment scope. Never carry applied history across scopes.
+message DnsApplication {
+  string account_id = 1;
+  string network_id = 2;
+  string node_id = 3;
+  // Last map driving this operation, including cleanup on disconnect.
+  uint64 target_map_revision = 4;
+  // Last confirmed successful assignment in this scope. Cleared on confirmed cleanup.
+  optional uint64 last_applied_map_revision = 5;
+  // WITHDRAWN requires confirmed cleanup of Client-owned DNS settings.
+  DnsApplyState state = 6;
+  // Set only on failure. Never carries command output or private queries.
+  DnsApplyFailure failure = 7;
+}
+
 message DnsDiagnostics {
   string search_domain = 1;
   google.protobuf.Duration ttl = 2;
   repeated string servers = 3;
   repeated DnsRecord records = 4;
+  // Absent when local DNS application has not been observed.
+  DnsApplication application = 5;
 }
 
 message LogEntry {

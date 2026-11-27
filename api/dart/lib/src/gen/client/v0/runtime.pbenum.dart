@@ -549,5 +549,64 @@ class TransportSearchState extends $pb.ProtobufEnum {
   const TransportSearchState._(super.value, super.name);
 }
 
+class DnsApplyState extends $pb.ProtobufEnum {
+  static const DnsApplyState DNS_APPLY_STATE_UNSPECIFIED =
+      DnsApplyState._(0, _omitEnumNames ? '' : 'DNS_APPLY_STATE_UNSPECIFIED');
+  static const DnsApplyState DNS_APPLY_STATE_PENDING =
+      DnsApplyState._(1, _omitEnumNames ? '' : 'DNS_APPLY_STATE_PENDING');
+  static const DnsApplyState DNS_APPLY_STATE_APPLIED =
+      DnsApplyState._(2, _omitEnumNames ? '' : 'DNS_APPLY_STATE_APPLIED');
+  static const DnsApplyState DNS_APPLY_STATE_FAILED =
+      DnsApplyState._(3, _omitEnumNames ? '' : 'DNS_APPLY_STATE_FAILED');
+  static const DnsApplyState DNS_APPLY_STATE_WITHDRAWN =
+      DnsApplyState._(4, _omitEnumNames ? '' : 'DNS_APPLY_STATE_WITHDRAWN');
+
+  static const $core.List<DnsApplyState> values = <DnsApplyState>[
+    DNS_APPLY_STATE_UNSPECIFIED,
+    DNS_APPLY_STATE_PENDING,
+    DNS_APPLY_STATE_APPLIED,
+    DNS_APPLY_STATE_FAILED,
+    DNS_APPLY_STATE_WITHDRAWN,
+  ];
+
+  static final $core.List<DnsApplyState?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 4);
+  static DnsApplyState? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const DnsApplyState._(super.value, super.name);
+}
+
+class DnsApplyFailure extends $pb.ProtobufEnum {
+  static const DnsApplyFailure DNS_APPLY_FAILURE_UNSPECIFIED =
+      DnsApplyFailure._(
+          0, _omitEnumNames ? '' : 'DNS_APPLY_FAILURE_UNSPECIFIED');
+  static const DnsApplyFailure DNS_APPLY_FAILURE_UNSUPPORTED =
+      DnsApplyFailure._(
+          1, _omitEnumNames ? '' : 'DNS_APPLY_FAILURE_UNSUPPORTED');
+  static const DnsApplyFailure DNS_APPLY_FAILURE_INVALID_ASSIGNMENT =
+      DnsApplyFailure._(
+          2, _omitEnumNames ? '' : 'DNS_APPLY_FAILURE_INVALID_ASSIGNMENT');
+  static const DnsApplyFailure DNS_APPLY_FAILURE_OS_APPLY =
+      DnsApplyFailure._(3, _omitEnumNames ? '' : 'DNS_APPLY_FAILURE_OS_APPLY');
+  static const DnsApplyFailure DNS_APPLY_FAILURE_OS_CLEANUP = DnsApplyFailure._(
+      4, _omitEnumNames ? '' : 'DNS_APPLY_FAILURE_OS_CLEANUP');
+
+  static const $core.List<DnsApplyFailure> values = <DnsApplyFailure>[
+    DNS_APPLY_FAILURE_UNSPECIFIED,
+    DNS_APPLY_FAILURE_UNSUPPORTED,
+    DNS_APPLY_FAILURE_INVALID_ASSIGNMENT,
+    DNS_APPLY_FAILURE_OS_APPLY,
+    DNS_APPLY_FAILURE_OS_CLEANUP,
+  ];
+
+  static final $core.List<DnsApplyFailure?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 4);
+  static DnsApplyFailure? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const DnsApplyFailure._(super.value, super.name);
+}
+
 const $core.bool _omitEnumNames =
     $core.bool.fromEnvironment('protobuf.omit_enum_names');

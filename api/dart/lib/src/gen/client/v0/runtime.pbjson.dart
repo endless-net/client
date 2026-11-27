@@ -334,6 +334,43 @@ final $typed_data.Uint8List transportSearchStateDescriptor = $convert.base64Deco
     'YQAxImCiJUUkFOU1BPUlRfU0VBUkNIX1NUQVRFX1VOU1VQUE9SVEVEEAQSJAogVFJBTlNQT1JU'
     'X1NFQVJDSF9TVEFURV9FWEhBVVNURUQQBQ==');
 
+@$core.Deprecated('Use dnsApplyStateDescriptor instead')
+const DnsApplyState$json = {
+  '1': 'DnsApplyState',
+  '2': [
+    {'1': 'DNS_APPLY_STATE_UNSPECIFIED', '2': 0},
+    {'1': 'DNS_APPLY_STATE_PENDING', '2': 1},
+    {'1': 'DNS_APPLY_STATE_APPLIED', '2': 2},
+    {'1': 'DNS_APPLY_STATE_FAILED', '2': 3},
+    {'1': 'DNS_APPLY_STATE_WITHDRAWN', '2': 4},
+  ],
+};
+
+/// Descriptor for `DnsApplyState`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List dnsApplyStateDescriptor = $convert.base64Decode(
+    'Cg1EbnNBcHBseVN0YXRlEh8KG0ROU19BUFBMWV9TVEFURV9VTlNQRUNJRklFRBAAEhsKF0ROU1'
+    '9BUFBMWV9TVEFURV9QRU5ESU5HEAESGwoXRE5TX0FQUExZX1NUQVRFX0FQUExJRUQQAhIaChZE'
+    'TlNfQVBQTFlfU1RBVEVfRkFJTEVEEAMSHQoZRE5TX0FQUExZX1NUQVRFX1dJVEhEUkFXThAE');
+
+@$core.Deprecated('Use dnsApplyFailureDescriptor instead')
+const DnsApplyFailure$json = {
+  '1': 'DnsApplyFailure',
+  '2': [
+    {'1': 'DNS_APPLY_FAILURE_UNSPECIFIED', '2': 0},
+    {'1': 'DNS_APPLY_FAILURE_UNSUPPORTED', '2': 1},
+    {'1': 'DNS_APPLY_FAILURE_INVALID_ASSIGNMENT', '2': 2},
+    {'1': 'DNS_APPLY_FAILURE_OS_APPLY', '2': 3},
+    {'1': 'DNS_APPLY_FAILURE_OS_CLEANUP', '2': 4},
+  ],
+};
+
+/// Descriptor for `DnsApplyFailure`. Decode as a `google.protobuf.EnumDescriptorProto`.
+final $typed_data.Uint8List dnsApplyFailureDescriptor = $convert.base64Decode(
+    'Cg9EbnNBcHBseUZhaWx1cmUSIQodRE5TX0FQUExZX0ZBSUxVUkVfVU5TUEVDSUZJRUQQABIhCh'
+    '1ETlNfQVBQTFlfRkFJTFVSRV9VTlNVUFBPUlRFRBABEigKJEROU19BUFBMWV9GQUlMVVJFX0lO'
+    'VkFMSURfQVNTSUdOTUVOVBACEh4KGkROU19BUFBMWV9GQUlMVVJFX09TX0FQUExZEAMSIAocRE'
+    '5TX0FQUExZX0ZBSUxVUkVfT1NfQ0xFQU5VUBAE');
+
 @$core.Deprecated('Use enrollmentBrowserActionDescriptor instead')
 const EnrollmentBrowserAction$json = {
   '1': 'EnrollmentBrowserAction',
@@ -1695,6 +1732,61 @@ final $typed_data.Uint8List dnsRecordDescriptor = $convert.base64Decode(
     'hob3N0bmFtZRIUCgVsYWJlbBgDIAEoCVIFbGFiZWwSEgoEZnFkbhgEIAEoCVIEZnFkbhIcCglh'
     'ZGRyZXNzZXMYBSADKAlSCWFkZHJlc3Nlcw==');
 
+@$core.Deprecated('Use dnsApplicationDescriptor instead')
+const DnsApplication$json = {
+  '1': 'DnsApplication',
+  '2': [
+    {'1': 'account_id', '3': 1, '4': 1, '5': 9, '10': 'accountId'},
+    {'1': 'network_id', '3': 2, '4': 1, '5': 9, '10': 'networkId'},
+    {'1': 'node_id', '3': 3, '4': 1, '5': 9, '10': 'nodeId'},
+    {
+      '1': 'target_map_revision',
+      '3': 4,
+      '4': 1,
+      '5': 4,
+      '10': 'targetMapRevision'
+    },
+    {
+      '1': 'last_applied_map_revision',
+      '3': 5,
+      '4': 1,
+      '5': 4,
+      '9': 0,
+      '10': 'lastAppliedMapRevision',
+      '17': true
+    },
+    {
+      '1': 'state',
+      '3': 6,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.DnsApplyState',
+      '10': 'state'
+    },
+    {
+      '1': 'failure',
+      '3': 7,
+      '4': 1,
+      '5': 14,
+      '6': '.client.v0.DnsApplyFailure',
+      '10': 'failure'
+    },
+  ],
+  '8': [
+    {'1': '_last_applied_map_revision'},
+  ],
+};
+
+/// Descriptor for `DnsApplication`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List dnsApplicationDescriptor = $convert.base64Decode(
+    'Cg5EbnNBcHBsaWNhdGlvbhIdCgphY2NvdW50X2lkGAEgASgJUglhY2NvdW50SWQSHQoKbmV0d2'
+    '9ya19pZBgCIAEoCVIJbmV0d29ya0lkEhcKB25vZGVfaWQYAyABKAlSBm5vZGVJZBIuChN0YXJn'
+    'ZXRfbWFwX3JldmlzaW9uGAQgASgEUhF0YXJnZXRNYXBSZXZpc2lvbhI+ChlsYXN0X2FwcGxpZW'
+    'RfbWFwX3JldmlzaW9uGAUgASgESABSFmxhc3RBcHBsaWVkTWFwUmV2aXNpb26IAQESLgoFc3Rh'
+    'dGUYBiABKA4yGC5jbGllbnQudjAuRG5zQXBwbHlTdGF0ZVIFc3RhdGUSNAoHZmFpbHVyZRgHIA'
+    'EoDjIaLmNsaWVudC52MC5EbnNBcHBseUZhaWx1cmVSB2ZhaWx1cmVCHAoaX2xhc3RfYXBwbGll'
+    'ZF9tYXBfcmV2aXNpb24=');
+
 @$core.Deprecated('Use dnsDiagnosticsDescriptor instead')
 const DnsDiagnostics$json = {
   '1': 'DnsDiagnostics',
@@ -1717,6 +1809,14 @@ const DnsDiagnostics$json = {
       '6': '.client.v0.DnsRecord',
       '10': 'records'
     },
+    {
+      '1': 'application',
+      '3': 5,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.DnsApplication',
+      '10': 'application'
+    },
   ],
 };
 
@@ -1725,7 +1825,8 @@ final $typed_data.Uint8List dnsDiagnosticsDescriptor = $convert.base64Decode(
     'Cg5EbnNEaWFnbm9zdGljcxIjCg1zZWFyY2hfZG9tYWluGAEgASgJUgxzZWFyY2hEb21haW4SKw'
     'oDdHRsGAIgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uUgN0dGwSGAoHc2VydmVycxgD'
     'IAMoCVIHc2VydmVycxIuCgdyZWNvcmRzGAQgAygLMhQuY2xpZW50LnYwLkRuc1JlY29yZFIHcm'
-    'Vjb3Jkcw==');
+    'Vjb3JkcxI7CgthcHBsaWNhdGlvbhgFIAEoCzIZLmNsaWVudC52MC5EbnNBcHBsaWNhdGlvblIL'
+    'YXBwbGljYXRpb24=');
 
 @$core.Deprecated('Use logEntryDescriptor instead')
 const LogEntry$json = {

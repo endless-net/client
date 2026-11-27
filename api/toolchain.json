@@ -189,5 +189,13 @@
     "generated_files": 24,
     "generated_manifest_sha256": "1909e2b11f956c27c0aa6ee1a7c513116698606383cc58feb7be54e774ff1482",
     "descriptor_sha256": "20f01f24f43d3b2e185224b7aa085879472aa1af24650d6ac0e9751eb4524a91"
+  },
+  "system_017_dns_application": {
+    "target_api_tag": "api/v0.10.0",
+    "baseline_tag": "api/v0.9.0",
+    "runtime_adopted": false,
+    "generated_files": 24,
+    "generated_manifest_sha256": "4c2b6373d9150b7ae2af6db65b1e0613c392931d4ec68dccbf334428b851ab95",
+    "descriptor_sha256": "ea9131e97cc16e629a4e88009a7ed51fc0f20229b5320f9d6f8617f14793f738"
   }
 }
