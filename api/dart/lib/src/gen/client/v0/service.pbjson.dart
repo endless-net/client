@@ -157,6 +157,14 @@ const EnrollRequest$json = {
     },
     {'1': 'hostname', '3': 4, '4': 1, '5': 9, '10': 'hostname'},
     {'1': 'request_id', '3': 7, '4': 1, '5': 9, '10': 'requestId'},
+    {
+      '1': 'join_token_enrollment',
+      '3': 8,
+      '4': 1,
+      '5': 11,
+      '6': '.client.v0.JoinTokenEnrollment',
+      '10': 'joinTokenEnrollment'
+    },
   ],
   '9': [
     {'1': 5, '2': 6},
@@ -171,7 +179,9 @@ final $typed_data.Uint8List enrollRequestDescriptor = $convert.base64Decode(
     '9udGV4dFIIbXV0YXRpb24SLwoHcHJvZmlsZRgCIAEoCzIVLmNsaWVudC52MC5Qcm9maWxlUmVm'
     'Ugdwcm9maWxlEi0KBG1vZGUYAyABKA4yGS5jbGllbnQudjAuRW5yb2xsbWVudE1vZGVSBG1vZG'
     'USGgoIaG9zdG5hbWUYBCABKAlSCGhvc3RuYW1lEh0KCnJlcXVlc3RfaWQYByABKAlSCXJlcXVl'
-    'c3RJZEoECAUQBkoECAYQB1IQZW5yb2xsbWVudF90b2tlblINYnJvd3Nlcl9sb2dpbg==');
+    'c3RJZBJSChVqb2luX3Rva2VuX2Vucm9sbG1lbnQYCCABKAsyHi5jbGllbnQudjAuSm9pblRva2'
+    'VuRW5yb2xsbWVudFITam9pblRva2VuRW5yb2xsbWVudEoECAUQBkoECAYQB1IQZW5yb2xsbWVu'
+    'dF90b2tlblINYnJvd3Nlcl9sb2dpbg==');
 
 @$core.Deprecated('Use enrollResponseDescriptor instead')
 const EnrollResponse$json = {
@@ -2571,3 +2581,19 @@ final $typed_data.Uint8List getNodeRevocationResponseDescriptor =
     $convert.base64Decode(
         'ChlHZXROb2RlUmV2b2NhdGlvblJlc3BvbnNlEjcKBnJlc3VsdBgBIAEoCzIfLmNsaWVudC52MC'
         '5Ob2RlUmV2b2NhdGlvblJlc3VsdFIGcmVzdWx0');
+
+@$core.Deprecated('Use joinTokenEnrollmentDescriptor instead')
+const JoinTokenEnrollment$json = {
+  '1': 'JoinTokenEnrollment',
+  '2': [
+    {'1': 'account_id', '3': 1, '4': 1, '5': 9, '10': 'accountId'},
+    {'1': 'network_id', '3': 2, '4': 1, '5': 9, '10': 'networkId'},
+    {'1': 'join_token', '3': 3, '4': 1, '5': 9, '10': 'joinToken'},
+  ],
+};
+
+/// Descriptor for `JoinTokenEnrollment`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List joinTokenEnrollmentDescriptor = $convert.base64Decode(
+    'ChNKb2luVG9rZW5FbnJvbGxtZW50Eh0KCmFjY291bnRfaWQYASABKAlSCWFjY291bnRJZBIdCg'
+    'puZXR3b3JrX2lkGAIgASgJUgluZXR3b3JrSWQSHQoKam9pbl90b2tlbhgDIAEoCVIJam9pblRv'
+    'a2Vu');

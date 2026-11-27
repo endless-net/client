@@ -263,6 +263,7 @@ class EnrollRequest extends $pb.GeneratedMessage {
     $3.EnrollmentMode? mode,
     $core.String? hostname,
     $core.String? requestId,
+    JoinTokenEnrollment? joinTokenEnrollment,
   }) {
     final result = create();
     if (mutation != null) result.mutation = mutation;
@@ -270,6 +271,8 @@ class EnrollRequest extends $pb.GeneratedMessage {
     if (mode != null) result.mode = mode;
     if (hostname != null) result.hostname = hostname;
     if (requestId != null) result.requestId = requestId;
+    if (joinTokenEnrollment != null)
+      result.joinTokenEnrollment = joinTokenEnrollment;
     return result;
   }
 
@@ -294,6 +297,8 @@ class EnrollRequest extends $pb.GeneratedMessage {
         enumValues: $3.EnrollmentMode.values)
     ..aOS(4, _omitFieldNames ? '' : 'hostname')
     ..aOS(7, _omitFieldNames ? '' : 'requestId')
+    ..aOM<JoinTokenEnrollment>(8, _omitFieldNames ? '' : 'joinTokenEnrollment',
+        subBuilder: JoinTokenEnrollment.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -368,6 +373,21 @@ class EnrollRequest extends $pb.GeneratedMessage {
   $core.bool hasRequestId() => $_has(4);
   @$pb.TagNumber(7)
   void clearRequestId() => $_clearField(7);
+
+  /// Absent: start native login through Identity. Present: enroll directly in
+  /// the specified Account/Network with the owner's registration key. A present
+  /// but incomplete target is invalid and must never start a native login.
+  /// Its target and key binding participate in the request_id conflict check.
+  @$pb.TagNumber(8)
+  JoinTokenEnrollment get joinTokenEnrollment => $_getN(5);
+  @$pb.TagNumber(8)
+  set joinTokenEnrollment(JoinTokenEnrollment value) => $_setField(8, value);
+  @$pb.TagNumber(8)
+  $core.bool hasJoinTokenEnrollment() => $_has(5);
+  @$pb.TagNumber(8)
+  void clearJoinTokenEnrollment() => $_clearField(8);
+  @$pb.TagNumber(8)
+  JoinTokenEnrollment ensureJoinTokenEnrollment() => $_ensure(5);
 }
 
 class EnrollResponse extends $pb.GeneratedMessage {
@@ -6918,6 +6938,86 @@ class GetNodeRevocationResponse extends $pb.GeneratedMessage {
   void clearResult() => $_clearField(1);
   @$pb.TagNumber(1)
   NodeRevocationResult ensureResult() => $_ensure(0);
+}
+
+/// Write-only local input. The daemon signs the target and the key binding with
+/// the device identity. Status, events, attempts and errors must omit the key.
+class JoinTokenEnrollment extends $pb.GeneratedMessage {
+  factory JoinTokenEnrollment({
+    $core.String? accountId,
+    $core.String? networkId,
+    $core.String? joinToken,
+  }) {
+    final result = create();
+    if (accountId != null) result.accountId = accountId;
+    if (networkId != null) result.networkId = networkId;
+    if (joinToken != null) result.joinToken = joinToken;
+    return result;
+  }
+
+  JoinTokenEnrollment._();
+
+  factory JoinTokenEnrollment.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory JoinTokenEnrollment.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'JoinTokenEnrollment',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'client.v0'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'accountId')
+    ..aOS(2, _omitFieldNames ? '' : 'networkId')
+    ..aOS(3, _omitFieldNames ? '' : 'joinToken')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  JoinTokenEnrollment clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  JoinTokenEnrollment copyWith(void Function(JoinTokenEnrollment) updates) =>
+      super.copyWith((message) => updates(message as JoinTokenEnrollment))
+          as JoinTokenEnrollment;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static JoinTokenEnrollment create() => JoinTokenEnrollment._();
+  @$core.override
+  JoinTokenEnrollment createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static JoinTokenEnrollment getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<JoinTokenEnrollment>(create);
+  static JoinTokenEnrollment? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get accountId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set accountId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAccountId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAccountId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get networkId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set networkId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNetworkId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNetworkId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get joinToken => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set joinToken($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasJoinToken() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearJoinToken() => $_clearField(3);
 }
 
 const $core.bool _omitFieldNames =

@@ -46,6 +46,42 @@ func TestCurrentEnrollmentLookupShapeAndOwnerBoundary(t *testing.T) {
 	}
 }
 
+func TestJoinTokenEnrollmentIsWriteOnlyAndPreservesPresence(t *testing.T) {
+	target := &clientv0.JoinTokenEnrollment{AccountId: "account", NetworkId: "network", JoinToken: "fixture-key"}
+	for _, input := range []*clientv0.JoinTokenEnrollment{nil, {}, target} {
+		raw, err := proto.Marshal(&clientv0.EnrollRequest{JoinTokenEnrollment: input})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded clientv0.EnrollRequest
+		if err := proto.Unmarshal(raw, &decoded); err != nil || !proto.Equal(decoded.JoinTokenEnrollment, input) {
+			t.Fatal("enrollment target presence or value changed", err)
+		}
+	}
+	secret := target.ProtoReflect().Descriptor().FullName()
+	visited := map[protoreflect.FullName]bool{}
+	var checkOutput func(protoreflect.MessageDescriptor)
+	checkOutput = func(message protoreflect.MessageDescriptor) {
+		if visited[message.FullName()] {
+			return
+		}
+		visited[message.FullName()] = true
+		for i := 0; i < message.Fields().Len(); i++ {
+			field := message.Fields().Get(i)
+			if field.Name() == "join_token" || field.Message() != nil && field.Message().FullName() == secret {
+				t.Fatalf("registration key exposed through %s", field.FullName())
+			}
+			if field.Message() != nil {
+				checkOutput(field.Message())
+			}
+		}
+	}
+	methods := clientv0.File_client_v0_service_proto.Services().ByName("ClientService").Methods()
+	for i := 0; i < methods.Len(); i++ {
+		checkOutput(methods.Get(i).Output())
+	}
+}
+
 func TestEnrollmentLookupRetainsStandardBinaryOneofLastWins(t *testing.T) {
 	current, err := proto.Marshal(&clientv0.GetEnrollmentAttemptRequest{Selector: &clientv0.GetEnrollmentAttemptRequest_Current{Current: true}})
 	if err != nil {

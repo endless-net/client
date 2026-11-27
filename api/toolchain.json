@@ -181,5 +181,13 @@
     "generated_files": 24,
     "generated_manifest_sha256": "e902077c545f9678af4cd19d41e46f3739308325def83fe5d4960886b5383949",
     "descriptor_sha256": "6ecbb4474e7b5734d0561e2d6861fc05a0681d193667cb9449859e4a8edf873f"
+  },
+  "system_017_join_token_enrollment": {
+    "target_api_tag": "api/v0.9.0",
+    "baseline_tag": "api/v0.8.0",
+    "runtime_adopted": false,
+    "generated_files": 24,
+    "generated_manifest_sha256": "1909e2b11f956c27c0aa6ee1a7c513116698606383cc58feb7be54e774ff1482",
+    "descriptor_sha256": "20f01f24f43d3b2e185224b7aa085879472aa1af24650d6ac0e9751eb4524a91"
   }
 }
