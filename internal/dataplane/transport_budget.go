@@ -20,6 +20,7 @@ func NewTransportResources(maxPeers int) (*TransportResources, error) {
 	if err != nil {
 		return nil, err
 	}
+	budget.kernel = platformDirectPreparer
 	return &TransportResources{budget: budget}, nil
 }
 
@@ -36,6 +37,7 @@ const (
 // primary engine is included in 2*MaxPeers+2; two transient slots are a ceiling,
 // not a promise of two free slots when all other roles are occupied.
 type transportBudget struct {
+	kernel   kernelPreparer
 	mu       sync.Mutex
 	maxPeers int
 	engines  map[*engineReservation]bool
@@ -194,12 +196,12 @@ func (b *transportBudget) newCycle(parent context.Context, clock connectivity.Cl
 	return cycle, nil
 }
 
-func (b *transportBudget) newAssigned(parent context.Context, value connectivity.Map, lease *connectivity.Lease, peerID, profileID string, private []byte, mtu int, clock connectivity.Clock, sink func([]byte) error, socketFactory func(uint16) (candidateSocket, error)) (*assignedCipher, error) {
+func (b *transportBudget) newAssigned(parent context.Context, value connectivity.Map, lease *connectivity.Lease, peerID, profileID string, private []byte, mtu int, clock connectivity.Clock, sink func([]byte) error, socketFactory func(uint16) (candidateSocket, error), kernel kernelPreparer) (*assignedCipher, error) {
 	slot, err := b.reserve(lease, peerID, engineTransient)
 	if err != nil {
 		return nil, err
 	}
-	channel, err := buildAssignedCipher(parent, value, lease, peerID, profileID, private, mtu, clock, sink, socketFactory)
+	channel, err := prepareAssignedCipher(parent, value, lease, peerID, profileID, private, mtu, clock, sink, socketFactory, kernel)
 	if err != nil {
 		slot.release()
 		return nil, err

@@ -45,10 +45,12 @@ func (g *transportSupervisor) preparedListeners() []preparedListener {
 	return result
 }
 
-func listenerAdvertisement(generation uint64, listeners []preparedListener, address netip.Addr) coordinator.TransportAdvertisement {
+func listenerAdvertisement(generation uint64, listeners []preparedListener, addresses ...netip.Addr) coordinator.TransportAdvertisement {
 	ad := transportAdvertisement(generation)
 	for _, ep := range listeners {
-		ad.Endpoints = append(ad.Endpoints, coordinator.TransportEndpoint{ProfileID: ep.id, ProfileDigest: ep.digest, Endpoint: netip.AddrPortFrom(address, ep.port).String()})
+		for _, address := range addresses {
+			ad.Endpoints = append(ad.Endpoints, coordinator.TransportEndpoint{ProfileID: ep.id, ProfileDigest: ep.digest, Endpoint: netip.AddrPortFrom(address, ep.port).String()})
+		}
 	}
 	return ad
 }
@@ -57,6 +59,10 @@ func (g *transportSupervisor) listenersFit() bool {
 	// Include the whole existing Gateway/Coordinator request envelope, with
 	// maximum numeric generations and IPv4 endpoint width, not only the ad.
 	ad := listenerAdvertisement(g.generation, g.preparedListeners(), netip.MustParseAddr("255.255.255.254"))
+	return announcementFits(ad)
+}
+
+func announcementFits(ad coordinator.TransportAdvertisement) bool {
 	if coordinator.ValidateTransportAdvertisement(ad) != nil {
 		return false
 	}
@@ -84,9 +90,9 @@ func (g *transportSupervisor) publishListeners() {
 	}
 }
 
-func (g *transportSupervisor) advertisement(address netip.Addr) coordinator.TransportAdvertisement {
+func (g *transportSupervisor) advertisement(addresses ...netip.Addr) coordinator.TransportAdvertisement {
 	g.mu.Lock()
 	listeners := append([]preparedListener(nil), g.listeners...)
 	g.mu.Unlock()
-	return listenerAdvertisement(g.generation, listeners, address)
+	return listenerAdvertisement(g.generation, listeners, addresses...)
 }

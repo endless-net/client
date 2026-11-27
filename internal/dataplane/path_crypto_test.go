@@ -102,7 +102,7 @@ func TestActualIsolatedCryptoChallengeEchoOverCandidateSocket(t *testing.T) {
 				select {
 				case <-second.done:
 					return net.ErrClosed
-				case second.reads <- candidateDatagram{p.raw, netip.MustParseAddrPort(a.offer.LocalEndpoint)}:
+				case second.reads <- candidateDatagram{p.raw, netip.MustParseAddrPort(a.localEndpoint)}:
 					return nil
 				default:
 					return nil
@@ -112,7 +112,7 @@ func TestActualIsolatedCryptoChallengeEchoOverCandidateSocket(t *testing.T) {
 				select {
 				case <-first.done:
 					return net.ErrClosed
-				case first.reads <- candidateDatagram{p.raw, netip.MustParseAddrPort(a.offer.PeerEndpoint)}:
+				case first.reads <- candidateDatagram{p.raw, netip.MustParseAddrPort(a.peerEndpoint)}:
 					return nil
 				default:
 					return nil
@@ -145,7 +145,7 @@ func TestActualIsolatedCryptoChallengeEchoOverCandidateSocket(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			other, err = newPeerCipher(t.Context(), coordinator.Node{ID: a.peer.ID, PublicKey: a.peer.PublicKey, AssignedIP: peerIP.String()}, coordinator.Peer{ID: a.local.ID, PublicKey: a.local.PublicKey, AllowedIPs: []string{localIP.String() + "/32"}, ACLRestricted: true, Endpoint: a.offer.LocalEndpoint}, bytes.Repeat([]byte{84}, 32), a.offer.Profile, peerPort, &socketCipherFixtureBind{socket: second, port: 51820})
+			other, err = newPeerCipher(t.Context(), coordinator.Node{ID: a.peer.ID, PublicKey: a.peer.PublicKey, AssignedIP: peerIP.String()}, coordinator.Peer{ID: a.local.ID, PublicKey: a.local.PublicKey, AllowedIPs: []string{localIP.String() + "/32"}, ACLRestricted: true, Endpoint: a.localEndpoint}, bytes.Repeat([]byte{84}, 32), a.offer.Profile, peerPort, &socketCipherFixtureBind{socket: second, port: 51820})
 			if err != nil {
 				_ = peerPort.Close()
 				t.Fatal(err)

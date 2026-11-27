@@ -40,7 +40,7 @@ var sidPattern = regexp.MustCompile("^S-1(-[0-9]+)+$")
 var settingPattern = regexp.MustCompile("^ENDLESSNET_CLIENT_[A-Z0-9_]+$")
 var decimal = regexp.MustCompile("^[0-9]+$")
 
-var payload = []string{"client.exe", "endlessnet.exe", "wintun.dll", "WINTUN-LICENSE.txt"}
+var payload = []string{"client.exe", "endlessnet.exe", "wintun.dll", "WINTUN-LICENSE.txt", "wireguard.dll", "WIREGUARD-NT-LICENSE.txt"}
 var uiPayload = []string{"endlessnet_client_ui.exe", "endlessnet_updater.exe", "install-update.ps1", "release-signature.ps1", "update-worker.ps1"}
 
 func uuidText(b []byte) string {

@@ -205,7 +205,8 @@ func (a *nativeFilterAPI) close() error {
 	a.handle = 0
 	return nil
 }
-func (a *nativeFilterAPI) sublayer(key windows.GUID) error {
+func (a *nativeFilterAPI) sublayer(key windows.GUID) error { return a.addSublayer(key, 1) }
+func (a *nativeFilterAPI) addSublayer(key windows.GUID, flags uint32) error {
 	var arena filterArena
 	defer arena.close()
 	name, err := arena.text("EndlessNet device policy")
@@ -214,7 +215,7 @@ func (a *nativeFilterAPI) sublayer(key windows.GUID) error {
 	}
 	// Relative priority within this owner's sublayer is defined by rule
 	// weights. Soft permits preserve firewall vetoes in other sublayers.
-	sub := nativeSublayer{Key: key, Display: nativeDisplay{Name: name}, Flags: 1, Weight: nativeSublayerWeight}
+	sub := nativeSublayer{Key: key, Display: nativeDisplay{Name: name}, Flags: flags, Weight: nativeSublayerWeight}
 	return a.call("FwpmSubLayerAdd0", uintptr(a.handle), uintptr(unsafe.Pointer(&sub)), 0)
 }
 func (a *nativeFilterAPI) checkSublayer(key windows.GUID) error {
@@ -306,7 +307,13 @@ func supportedNativeRule(r *wf.Rule) bool {
 		return false
 	}
 	if r.Layer == wf.LayerInboundIPPacketV4 || r.Layer == wf.LayerOutboundIPPacketV4 {
-		return supportedPacketGuard(r)
+		return supportedPacketGuard(r) || supportedProbeBlock(r)
+	}
+	if r.Layer == wf.LayerInboundTransportV4 || r.Layer == wf.LayerOutboundTransportV4 {
+		return supportedProbeBlock(r)
+	}
+	if r.Layer == wf.LayerDatagramDataV4 || r.Layer == wf.LayerDatagramDataV6 {
+		return supportedDriverSocketBlock(r)
 	}
 	if r.Persistent || r.Layer != wf.LayerALEAuthConnectV4 && r.Layer != wf.LayerALEAuthRecvAcceptV4 {
 		return false
@@ -324,6 +331,8 @@ func supportedNativeRule(r *wf.Rule) bool {
 		return false
 	}
 	seen := make(map[wf.FieldID]bool, len(r.Conditions))
+	zeroPorts := 0
+	var protocol wf.IPProto
 	for _, c := range r.Conditions {
 		if c == nil || seen[c.Field] {
 			return false
@@ -355,10 +364,14 @@ func supportedNativeRule(r *wf.Rule) bool {
 			if !ok || value != 6 && value != 17 {
 				return false
 			}
+			protocol = value
 		case wf.FieldIPLocalPort, wf.FieldIPRemotePort:
 			value, ok := c.Value.(uint16)
-			if !ok || value == 0 {
+			if !ok {
 				return false
+			}
+			if value == 0 {
+				zeroPorts++
 			}
 		default:
 			return false
@@ -373,6 +386,9 @@ func supportedNativeRule(r *wf.Rule) bool {
 	if !seen[wf.FieldIPLocalAddress] || !seen[wf.FieldIPRemoteAddress] {
 		return false
 	}
+	if zeroPorts != 0 {
+		return zeroPorts == 2 && protocol == 17 && len(r.Conditions) == 6
+	}
 	// An all-protocol grant has neither transport condition. A scoped grant
 	// must have both the protocol and the port for this direction.
 	if !seen[wf.FieldIPProtocol] {
@@ -385,13 +401,21 @@ func supportedNativeRule(r *wf.Rule) bool {
 }
 
 func supportedPacketGuard(r *wf.Rule) bool {
+	if r.Action == wf.ActionBlock && !r.Persistent && r.HardAction && r.Weight == 1 && len(r.Conditions) == 1 {
+		c := r.Conditions[0]
+		if c == nil || c.Op != wf.MatchTypeEqual || c.Field != wf.FieldInterfaceIndex {
+			return false
+		}
+		index, ok := c.Value.(uint32)
+		return ok && index != 0
+	}
 	switch r.Action {
 	case wf.ActionBlock:
 		if !r.Persistent || !r.HardAction || r.Weight != 1 || len(r.Conditions) != 1 {
 			return false
 		}
 	case wf.ActionPermit:
-		if r.Persistent || r.HardAction || r.Weight != 2 || len(r.Conditions) != 3 {
+		if r.Persistent || r.HardAction || r.Weight != 2 || (len(r.Conditions) != 3 && len(r.Conditions) != 4) {
 			return false
 		}
 	default:
@@ -425,7 +449,10 @@ func supportedPacketGuard(r *wf.Rule) bool {
 			return false
 		}
 	}
-	return scopes == 1 && (r.Action == wf.ActionBlock || seen[wf.FieldIPLocalInterface] && seen[wf.FieldInterfaceIndex])
+	if r.Action == wf.ActionBlock {
+		return scopes == 1
+	}
+	return (scopes == 1 || scopes == 2) && seen[wf.FieldIPLocalInterface] && seen[wf.FieldInterfaceIndex]
 }
 func (a *nativeFilterAPI) add(rule *wf.Rule) (uint64, error) {
 	var arena filterArena
@@ -472,12 +499,11 @@ func equalNativeValue(a, b nativeValue) bool {
 	}
 	return false
 }
-
-// BFE may add FWPM_FILTER_FLAG_INDEXED during classification setup.
-const nativeFilterFlagIndexed uint32 = 0x40
-
 func sameNativeFilter(a, b *nativeFilter) bool {
-	if a == nil || a.Key != b.Key || a.Layer != b.Layer || a.Sublayer != b.Sublayer || a.Flags&^nativeFilterFlagIndexed != b.Flags || a.Provider != nil || a.ProviderData.Size != 0 || a.Action != b.Action || a.Context != b.Context || a.Reserved != nil || a.Count != b.Count || a.Count > 8 || a.Conditions == nil || !equalNativeValue(a.Weight, b.Weight) {
+	// BFE may index an exact-match filter during installation. This bit
+	// describes the lookup implementation, not its conditions or action.
+	const fwpmFilterFlagIndexed = 0x40
+	if a == nil || a.Key != b.Key || a.Layer != b.Layer || a.Sublayer != b.Sublayer || a.Flags&^fwpmFilterFlagIndexed != b.Flags || a.Provider != nil || a.ProviderData.Size != 0 || a.Action != b.Action || a.Context != b.Context || a.Reserved != nil || a.Count != b.Count || a.Count > 8 || a.Conditions == nil || !equalNativeValue(a.Weight, b.Weight) {
 		return false
 	}
 	// Names are immutable ownership metadata, not authority or credentials.

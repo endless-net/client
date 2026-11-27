@@ -14,6 +14,8 @@ import (
 )
 
 type ipAPI interface {
+	setWeakSend(adapterIdentity, bool) (bool, error)
+	bestInterface(netip.Addr) (uint32, error)
 	devicePresent(context.Context, windows.GUID, int) (bool, error)
 	guid(winipcfg.LUID) (*windows.GUID, error)
 	addresses() ([]winipcfg.MibUnicastIPAddressRow, error)
@@ -27,6 +29,16 @@ type ipAPI interface {
 }
 
 type nativeIPAPI struct{}
+
+func (nativeIPAPI) setWeakSend(id adapterIdentity, enable bool) (bool, error) {
+	return setOwnedWeakHost(id, enable, false)
+}
+
+func (nativeIPAPI) bestInterface(addr netip.Addr) (uint32, error) {
+	var index uint32
+	err := windows.GetBestInterfaceEx(&windows.SockaddrInet4{Addr: addr.As4()}, &index)
+	return index, err
+}
 
 func (nativeIPAPI) devicePresent(ctx context.Context, key windows.GUID, limit int) (bool, error) {
 	return windowsAdapterPresent(ctx, key, limit)
@@ -54,6 +66,7 @@ func (nativeIPAPI) deleteRoute(r *winipcfg.MibIPforwardRow2) error         { ret
 // journal entries before each mutation, commits returned receipts before native
 // activation, and keeps the tunnel denied on any error or uncertain outcome.
 type WindowsIP struct {
+	direct  map[netip.Addr]*windowsDirectRoute
 	mu      sync.Mutex
 	api     ipAPI
 	maxRows int
@@ -131,8 +144,8 @@ func (w *WindowsIP) inventory(ctx context.Context) ([]winipcfg.MibUnicastIPAddre
 }
 
 // Preflight rejects any non-default route that would be overridden for a device
-// address, and any conflicting local assignment. Only exact journal proofs may
-// exempt an existing own row. The check is repeated before each individual add;
+// address, and any conflicting local assignment. Existing rows require a
+// journal receipt or an exact receipt for the live Direct candidate. The check is repeated before each individual add;
 // it is not a reservation against later administrative changes.
 func (w *WindowsIP) Preflight(ctx context.Context, p IPPlan, j state.ResourceJournal) error {
 	w.mu.Lock()
@@ -172,7 +185,24 @@ func (w *WindowsIP) preflight(ctx context.Context, p IPPlan, j state.ResourceJou
 			return ErrIPConflict
 		}
 	}
+	seenDirect := 0
 	for _, r := range routes {
+		dest := r.DestinationPrefix.Prefix()
+		if entry := w.direct[dest.Addr()]; entry != nil && entry.candidate.luid == r.InterfaceLUID && dest.Bits() == 32 {
+			if entry.primaryGUID != p.adapter || entry.primaryLUID != p.luid || entry.generation != j.Generation ||
+				!routeMatches(entry.candidate, r, entry.record) {
+				return ErrIPOwnership
+			}
+			if err := w.guard(ctx, entry.candidate); err != nil {
+				return err
+			}
+			index, err := w.api.bestInterface(dest.Addr())
+			if err != nil || index != r.InterfaceIndex {
+				return ErrIPConflict
+			}
+			seenDirect++
+			continue
+		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -211,6 +241,9 @@ func (w *WindowsIP) preflight(ctx context.Context, p IPPlan, j state.ResourceJou
 		if !owned {
 			return ErrIPConflict
 		}
+	}
+	if seenDirect != len(w.direct) {
+		return ErrIPOwnership
 	}
 	return nil
 }
@@ -369,7 +402,11 @@ func (w *WindowsIP) CreateRoute(ctx context.Context, p IPPlan, prepared state.Ro
 	if err := w.guard(ctx, p); err != nil {
 		return state.RouteRecord{}, err
 	}
-	row := *desired
+	return w.createRouteReceipt(ctx, p, *desired, prepared)
+}
+
+func (w *WindowsIP) createRouteReceipt(ctx context.Context, p IPPlan, row winipcfg.MibIPforwardRow2, prepared state.RouteRecord) (state.RouteRecord, error) {
+	expected := row
 	if err := w.api.createRoute(&row); err != nil {
 		if reason := ipError(err); reason != ErrIP {
 			return state.RouteRecord{}, reason
@@ -383,7 +420,7 @@ func (w *WindowsIP) CreateRoute(ctx context.Context, p IPPlan, prepared state.Ro
 	if err != nil || actual == nil {
 		return state.RouteRecord{}, ErrIPUncertain
 	}
-	if !routeShape(*desired, *actual) {
+	if !routeShape(expected, *actual) {
 		return state.RouteRecord{}, ErrIPOwnership
 	}
 	prepared.Phase, prepared.Fingerprint = state.EffectApplied, routeProof(p.adapter, *actual)
@@ -423,6 +460,15 @@ func (w *WindowsIP) inspectRoute(ctx context.Context, p IPPlan, record state.Rou
 func (w *WindowsIP) RemoveRoute(ctx context.Context, p IPPlan, record state.RouteRecord) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if prefix, err := netip.ParsePrefix(record.Destination); err == nil {
+		if entry := w.direct[prefix.Addr()]; entry != nil && entry.primaryGUID == p.adapter && entry.primaryLUID == p.luid {
+			return ErrIPConflict
+		}
+	}
+	return w.removeRoute(ctx, p, record)
+}
+
+func (w *WindowsIP) removeRoute(ctx context.Context, p IPPlan, record state.RouteRecord) error {
 	prefix, err := netip.ParsePrefix(record.Destination)
 	if err != nil || prefix.Bits() != 32 || !hostIPv4(prefix.Addr()) || record.NextHop != "0.0.0.0" || record.Phase != state.EffectRemoving || ctx == nil || w.api == nil {
 		return ErrConfiguration
@@ -458,6 +504,11 @@ func (w *WindowsIP) RemoveRoute(ctx context.Context, p IPPlan, record state.Rout
 func (w *WindowsIP) RemoveAddress(ctx context.Context, p IPPlan, record state.AddressRecord) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	for _, entry := range w.direct {
+		if entry.primaryGUID == p.adapter && entry.primaryLUID == p.luid {
+			return ErrIPConflict
+		}
+	}
 	prefix, err := netip.ParsePrefix(record.Prefix)
 	if err != nil || prefix.Bits() != 32 || prefix.Addr() != p.address.Address.Addr() || record.Phase != state.EffectRemoving || ctx == nil || w.api == nil {
 		return ErrConfiguration
@@ -520,6 +571,11 @@ func (w *WindowsIP) confirmFilterCleanup(ctx context.Context, p FilterPlan) erro
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	for _, entry := range w.direct {
+		if entry.primaryGUID == p.session && uint64(entry.primaryLUID) == p.luid {
+			return ErrPolicyCleanupRequired
+		}
 	}
 	id, err := w.api.guid(winipcfg.LUID(p.luid))
 	if err == nil {

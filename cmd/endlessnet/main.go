@@ -15,7 +15,7 @@ import (
 )
 
 // The CI runner checks the contract digest against the published SDK pin.
-const contractSHA256 = "6ecbb4474e7b5734d0561e2d6861fc05a0681d193667cb9449859e4a8edf873f"
+const contractSHA256 = "ea9131e97cc16e629a4e88009a7ed51fc0f20229b5320f9d6f8617f14793f738"
 
 func main() {
 	if err := run(); err != nil {

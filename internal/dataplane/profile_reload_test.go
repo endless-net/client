@@ -65,7 +65,7 @@ func TestProfileReloadResetsCooldownOnlyForChangedProfileSet(t *testing.T) {
 	}
 	p.cooldown, p.failures, p.resumeProfile = delay, 6, "resume"
 	g.snapshot.Revision.Network++
-	g.snapshot.Peers[0].Transport.Profiles[0].PeerEndpoint = "192.0.2.99:51820"
+	g.snapshot.Peers[0].Transport.Profiles[0].PeerEndpoints = []string{"192.0.2.99:51820"}
 	g.refreshProfileSet(p)
 	if p.cooldown != delay || p.failures != 6 || p.resumeProfile != "resume" {
 		t.Fatal("unrelated map renewal or endpoint ACK reset backoff")

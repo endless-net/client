@@ -8,6 +8,7 @@ import (
 
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/state"
+	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
 
 func (s *WindowsSession) updateContext(parent context.Context) (context.Context, func(), error) {
@@ -55,6 +56,51 @@ func (s *WindowsSession) retainedPlan(ctx context.Context, m connectivity.Map, j
 		}
 	}
 	p.canonicalize()
+	if len(s.policy.direct) == 0 || m.Denied() {
+		return p, nil
+	}
+	snapshot, err := m.Snapshot()
+	if err != nil {
+		return FilterPlan{}, err
+	}
+	sample, err := s.clock.Sample()
+	if err != nil {
+		return FilterPlan{}, connectivity.ErrClock
+	}
+	previousMap, err := s.current.Snapshot()
+	if err != nil {
+		return FilterPlan{}, err
+	}
+	oldPeers := make(map[string]coordinator.Peer, len(previousMap.Peers))
+	for _, peer := range previousMap.Peers {
+		oldPeers[peer.ID] = peer
+	}
+	peers := make(map[string]coordinator.Peer, len(snapshot.Peers))
+	for _, peer := range snapshot.Peers {
+		peers[peer.ID] = peer
+	}
+	for luid, previous := range s.policy.direct {
+		a, err := offeredAssignment(s.current, s.lease, previousMap.Node, oldPeers[previous.peerID], previous.profileID)
+		if err != nil {
+			return FilterPlan{}, ErrNoAuthority
+		}
+		peer, ok := peers[previous.peerID]
+		if !ok {
+			continue
+		}
+		current, err := signedPeerAssignment(m, s.lease, snapshot, peer, a.offer.Profile.ID, sample.Wall)
+		if err != nil || !a.keepPair(previous.localEndpoint, previous.peerEndpoint) || !current.keepPair(previous.localEndpoint, previous.peerEndpoint) || !a.sameProbe(current) {
+			continue
+		}
+		identity, err := s.identity(luid)
+		if err != nil || identity.GUID != previous.adapter || identity.LUID != luid || identity.Index != previous.index {
+			return FilterPlan{}, ErrAdapterOwnership
+		}
+		p, err = p.withConfirmedPeer(current, identity, offline)
+		if err != nil {
+			return FilterPlan{}, err
+		}
+	}
 	return p, nil
 }
 
@@ -132,6 +178,9 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 	// Atomic replacement retains unchanged permit IDs. An intermediate deny-all
 	// would reauthorize/terminate unchanged TCP flows, so it is not used here.
 	if err := s.replaceFilters(ctx, m, plan); err != nil {
+		return err
+	}
+	if err := s.retireUnconfirmedDirectRoutes(ctx, plan, *j); err != nil {
 		return err
 	}
 	wanted := make(map[string]state.RouteRecord, len(desired))
@@ -283,11 +332,23 @@ func (s *WindowsSession) Offline(parent context.Context) (err error) {
 	if err != nil {
 		return err
 	}
+	if len(s.policy.direct) != 0 {
+		ipPlan, err := PrepareIPPlan(s.current, s.id, j.Adapter.LUID, s.config.RouteMetric, s.config.MaxPeers)
+		if err != nil {
+			return err
+		}
+		if err := s.ip.Preflight(ctx, ipPlan, *j); err != nil {
+			return err
+		}
+	}
 	plan, err := s.retainedPlan(ctx, s.current, *j, true)
 	if err != nil {
 		return err
 	}
 	if err := s.replaceFilters(ctx, s.current, plan); err != nil {
+		return err
+	}
+	if err := s.retireUnconfirmedDirectRoutes(ctx, plan, *j); err != nil {
 		return err
 	}
 	if err := s.activationFence(ctx, s.current); err != nil {

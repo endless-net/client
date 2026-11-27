@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -62,6 +63,17 @@ type RelayTransport struct {
 
 func (*RelayTransport) String() string   { return "[encrypted Relay transport]" }
 func (*RelayTransport) GoString() string { return "[encrypted Relay transport]" }
+
+func (t *RelayTransport) remoteIP() netip.Addr {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.socket != nil {
+		if addr, ok := t.socket.RemoteAddr().(*net.TCPAddr); ok && addr != nil {
+			return addr.AddrPort().Addr().Unmap()
+		}
+	}
+	return netip.Addr{}
+}
 
 func NewRelayTransport(parent context.Context, m connectivity.Map, lease *connectivity.Lease, edgeID string, c RelayConfig) (*RelayTransport, error) {
 	if parent == nil || parent.Err() != nil || lease == nil || !lease.MatchesMap(m) || m.Denied() || c.Validate() != nil {

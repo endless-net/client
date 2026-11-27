@@ -223,6 +223,7 @@ func (s *LinuxSession) startTransport(ctx context.Context, value connectivity.Ma
 	}
 	s.supervisor, err = newTransportSupervisor(s.ctx, value, s.lease, s.clock, s.profile, s.generation, key,
 		s.resources.budget, s.packets, s.engine, supervisorConfig{
+			hintStore: s.store, networkContext: linuxTransportContext,
 			relay: s.config.Relay, probeInterval: s.config.ProbeInterval, retry: s.config.RetryInterval,
 			mtu: s.config.MTU, maxPeers: s.config.MaxPeers, advertise: func() {
 				select {

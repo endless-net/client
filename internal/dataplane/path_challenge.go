@@ -77,6 +77,18 @@ func (c *assignedCipher) BeginProbe(cycle *probeCycle, candidateID string) (*pat
 		attempt.cancel()
 		return nil, err
 	}
+	if engine, ok := c.cipher.(interface {
+		startProbe(candidateAssignment) error
+	}); ok {
+		if err := engine.startProbe(a); err != nil {
+			attempt.cancel()
+			return nil, err
+		}
+		if err := attempt.check(); err != nil {
+			attempt.cancel()
+			return nil, err
+		}
+	}
 	p := &pathChallenge{channel: c, attempt: attempt, assignment: a, request: value, done: make(chan struct{}), permit: permit}
 	if c.probe != nil {
 		c.probe.attempt.cancel()
@@ -96,7 +108,7 @@ func (p *pathChallenge) admit() error {
 	if !current {
 		return ErrNoAuthority
 	}
-	endpoint, err := netip.ParseAddrPort(p.assignment.offer.PeerEndpoint)
+	endpoint, err := netip.ParseAddrPort(p.assignment.peerEndpoint)
 	if err != nil {
 		return ErrNoAuthority
 	}
@@ -116,6 +128,38 @@ func (a candidateAssignment) addresses() (netip.Addr, netip.Addr, error) {
 	return local, peer.Addr(), nil
 }
 
+func (a candidateAssignment) controlAddresses() (netip.Addr, netip.Addr, error) {
+	local, peer, err := a.addresses()
+	if err != nil || a.plan.LocalProbeIPv4 == "" && a.plan.PeerProbeIPv4 == "" {
+		return local, peer, err
+	}
+	source, err := netip.ParseAddr(a.plan.LocalProbeIPv4)
+	if err != nil || !source.Is4() || !source.IsGlobalUnicast() || source == local || source == peer {
+		return netip.Addr{}, netip.Addr{}, ErrConfiguration
+	}
+	target, err := netip.ParseAddr(a.plan.PeerProbeIPv4)
+	if err != nil || !target.Is4() || !target.IsGlobalUnicast() || target == local || target == peer || target == source {
+		return netip.Addr{}, netip.Addr{}, ErrConfiguration
+	}
+	return source, target, nil
+}
+
+// Only these exact destinations may enter a Direct peer's cryptographic route table.
+func (a candidateAssignment) directPeerIPs() ([]netip.Addr, error) {
+	_, peer, err := a.addresses()
+	if err != nil {
+		return nil, err
+	}
+	_, probe, err := a.controlAddresses()
+	if err != nil {
+		return nil, err
+	}
+	if probe == peer {
+		return []netip.Addr{peer}, nil
+	}
+	return []netip.Addr{peer, probe}, nil
+}
+
 func (p *pathChallenge) Send() error {
 	if err := p.admit(); err != nil {
 		return err
@@ -123,7 +167,7 @@ func (p *pathChallenge) Send() error {
 	if err := p.channel.bind.resendHandshake(p.attempt); err != nil {
 		return err
 	}
-	source, destination, err := p.assignment.addresses()
+	source, destination, err := p.assignment.controlAddresses()
 	if err != nil {
 		return err
 	}
@@ -212,7 +256,7 @@ func (p *pathChallenge) receive(value transport.Control) error {
 	if err != nil || !bytes.Equal(encoded, actual) {
 		return ErrNoAuthority
 	}
-	source, destination, err := p.assignment.addresses()
+	source, destination, err := p.assignment.controlAddresses()
 	if err != nil {
 		return err
 	}

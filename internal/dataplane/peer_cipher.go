@@ -183,7 +183,7 @@ func profileUAPI(profile transport.Profile) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
-func cipherConfiguration(local coordinator.Node, peer coordinator.Peer, private []byte, profile transport.Profile) ([]byte, error) {
+func peerPublicKey(local coordinator.Node, peer coordinator.Peer, private []byte) ([]byte, error) {
 	key, err := ecdh.X25519().NewPrivateKey(private)
 	if err != nil || bytes.Equal(private, make([]byte, 32)) || base64.StdEncoding.EncodeToString(key.PublicKey().Bytes()) != local.PublicKey || peer.PublicKey == local.PublicKey || !peer.ACLRestricted || len(peer.AllowedIPs) != 1 {
 		return nil, ErrConfiguration
@@ -203,6 +203,14 @@ func cipherConfiguration(local coordinator.Node, peer coordinator.Peer, private 
 			return nil, ErrConfiguration
 		}
 	}
+	return public, nil
+}
+
+func cipherConfiguration(local coordinator.Node, peer coordinator.Peer, private []byte, profile transport.Profile) ([]byte, error) {
+	public, err := peerPublicKey(local, peer, private)
+	if err != nil {
+		return nil, err
+	}
 	parameters, err := profileUAPI(profile)
 	if err != nil {
 		return nil, err
@@ -212,6 +220,16 @@ func cipherConfiguration(local coordinator.Node, peer coordinator.Peer, private 
 	_, _ = fmt.Fprintf(&output, "private_key=%s\nlisten_port=0\n", hex.EncodeToString(private))
 	output.Write(parameters)
 	_, _ = fmt.Fprintf(&output, "public_key=%s\nreplace_allowed_ips=true\nallowed_ip=%s\npersistent_keepalive_interval=0\n", hex.EncodeToString(public), peer.AllowedIPs[0])
+	if peer.Transport != nil {
+		a := candidateAssignment{local: local, peer: peer, plan: *peer.Transport}
+		_, probe, err := a.controlAddresses()
+		if err != nil {
+			return nil, err
+		}
+		if a.plan.PeerProbeIPv4 != "" {
+			_, _ = fmt.Fprintf(&output, "allowed_ip=%s/32\n", probe)
+		}
+	}
 	if peer.Endpoint != "" {
 		_, _ = fmt.Fprintf(&output, "endpoint=%s\n", peer.Endpoint)
 	}
@@ -221,6 +239,30 @@ func cipherConfiguration(local coordinator.Node, peer coordinator.Peer, private 
 
 func newPeerCipher(ctx context.Context, local coordinator.Node, peer coordinator.Peer, private []byte, profile transport.Profile, port *packetPort, bind awgconn.Bind) (*peerCipher, error) {
 	return buildPeerCipher(ctx, local, peer, private, profile, port, bind, nil, nil)
+}
+
+// Both clients advertise these wire formats even when an optional kernel
+// implementation is unavailable. Each entry provides the built-in Go device.
+var compiledPeerEngines = [...]struct {
+	capability transport.Capability
+	open       func(*packetPort, *cipherBind, transport.Profile, <-chan struct{}, wgdevice.PeerSessionStateFunc) wireGuardDevice
+}{
+	{
+		capability: transport.Capability{Engine: transport.AmneziaWG, ProtocolVersion: "3.1", ProfileVersion: transport.Version},
+		open: func(port *packetPort, bind *cipherBind, profile transport.Profile, configured <-chan struct{}, _ wgdevice.PeerSessionStateFunc) wireGuardDevice {
+			tun := &amneziaPort{packetPort: port, configured: configured, expectedOffset: awgdevice.MessageTransportHeaderSize + int(profile.AWG.Padding[3])}
+			return awgdevice.NewDevice(tun, bind, awgdevice.NewLogger(awgdevice.LogLevelSilent, ""))
+		},
+	},
+	{
+		capability: transport.Capability{Engine: transport.WireGuard, ProtocolVersion: "1", ProfileVersion: transport.Version},
+		open: func(port *packetPort, bind *cipherBind, _ transport.Profile, _ <-chan struct{}, observe wgdevice.PeerSessionStateFunc) wireGuardDevice {
+			d := wgdevice.NewDevice(wireGuardPort{port}, &wireGuardBind{Bind: bind}, wgdevice.NewLogger(wgdevice.LogLevelSilent, ""))
+			// Upstream does not replay state. Install the observer before IpcSet/Up.
+			d.SetSessionStateFunc(observe)
+			return d
+		},
+	},
 }
 
 func buildPeerCipher(ctx context.Context, local coordinator.Node, peer coordinator.Peer, private []byte, profile transport.Profile, port *packetPort, bind awgconn.Bind, observe wgdevice.PeerSessionStateFunc, publish func(*peerCipher)) (*peerCipher, error) {
@@ -239,16 +281,14 @@ func buildPeerCipher(ctx context.Context, local coordinator.Node, peer coordinat
 	guarded := &cipherBind{Bind: bind}
 	var device wireGuardDevice
 	configured := make(chan struct{})
-	switch profile.Engine {
-	case transport.WireGuard:
-		d := wgdevice.NewDevice(wireGuardPort{port}, &wireGuardBind{Bind: guarded}, wgdevice.NewLogger(wgdevice.LogLevelSilent, ""))
-		// Upstream does not replay current state to a newly installed observer.
-		// Register before IpcSet/Up can start peers or receive a handshake.
-		d.SetSessionStateFunc(observe)
-		device = d
-	case transport.AmneziaWG:
-		device = awgdevice.NewDevice(&amneziaPort{packetPort: port, configured: configured, expectedOffset: awgdevice.MessageTransportHeaderSize + int(profile.AWG.Padding[3])}, guarded, awgdevice.NewLogger(awgdevice.LogLevelSilent, ""))
-	default:
+	want := transport.Capability{Engine: profile.Engine, ProtocolVersion: profile.ProtocolVersion, ProfileVersion: profile.Version}
+	for _, engine := range compiledPeerEngines {
+		if engine.capability == want {
+			device = engine.open(port, guarded, profile, configured, observe)
+			break
+		}
+	}
+	if device == nil {
 		return nil, ErrConfiguration
 	}
 	cipher := &peerCipher{device: device, bind: guarded, port: port, profileDigest: digest, peer: peer, done: make(chan struct{})}
@@ -305,6 +345,10 @@ func (c *peerCipher) handshakePacket(raw []byte) bool {
 		_, kind, _ := d.DeterminePacketTypeAndPadding(raw, hash[:])
 		return kind == awgdevice.MessageInitiationType || kind == awgdevice.MessageResponseType
 	}
+	return wireGuardHandshakePacket(raw)
+}
+
+func wireGuardHandshakePacket(raw []byte) bool {
 	if len(raw) < 4 {
 		return false
 	}

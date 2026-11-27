@@ -2,11 +2,72 @@ package dataplane
 
 import (
 	"errors"
+	"net"
 	"testing"
 	"time"
 
 	"github.com/endless-net/client/api/transport"
+	"github.com/endless-net/client/internal/connectivity"
 )
+
+func TestAttachedAdapterCannotSendAcrossSocketReplacement(t *testing.T) {
+	_, n, _, _ := routedDirectFixture(t)
+	bind := n.direct.bind
+	endpoint, err := bind.ParseEndpoint(n.assignment.peerEndpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement := newCandidateSocketFixture()
+	defer func() { _ = replacement.Close() }()
+	bind.mu.Lock()
+	original := bind.socket
+	bind.adapterSocket = original
+	bind.mu.Unlock()
+	defer func() {
+		bind.mu.Lock()
+		bind.socket = original
+		bind.mu.Unlock()
+	}()
+	packets := [][]byte{{1, 2, 3}}
+	err = bind.send(packets, endpoint, func(int) error {
+		bind.mu.Lock()
+		bind.socket = replacement
+		bind.mu.Unlock()
+		return nil
+	})
+	if !errors.Is(err, net.ErrClosed) {
+		t.Fatalf("socket replaced during send: %v", err)
+	}
+	if err := bind.send(packets, endpoint, nil); !errors.Is(err, net.ErrClosed) {
+		t.Fatalf("subsequent send on replaced socket: %v", err)
+	}
+	select {
+	case <-replacement.wrote:
+		t.Fatal("replacement socket received old adapter output")
+	default:
+	}
+}
+
+func TestConfirmedSendDropsCiphertextAcrossSourcePause(t *testing.T) {
+	_, n, f, _ := routedDirectFixture(t)
+	bind := n.direct.bind
+	endpoint, err := bind.ParseEndpoint(n.assignment.peerEndpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	packets := [][]byte{{1, 2, 3}}
+	err = bind.send(packets, endpoint, func(int) error {
+		f.lease.PausePackets(true)
+		f.lease.PausePackets(false)
+		return nil
+	})
+	if !errors.Is(err, connectivity.ErrSourceChanged) {
+		t.Fatalf("queued send after source pause: %v", err)
+	}
+	if err := bind.send(packets, endpoint, nil); err != nil {
+		t.Fatalf("fresh send after source resume: %v", err)
+	}
+}
 
 func routeRelayProof(t *testing.T, n *candidateNegotiation, f *candidateFixture) *relayHealthProbe {
 	t.Helper()
@@ -91,6 +152,22 @@ func TestPeerRouteRequiresPeerProofAndInvalidatesPreviousOutputReceipts(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := route.selectDirect(token, func() error { return ErrPolicyOwnership }); !errors.Is(err, ErrPolicyOwnership) {
+		t.Fatalf("native policy rejection: %v", err)
+	}
+	if token.used.Load() || route.Current() != peerRouteRelay || !route.guard(peerRouteRelay, epoch) {
+		t.Fatal("failure to enable the adapter consumed the token or invalidated Relay")
+	}
+	b := n.direct.bind
+	b.mu.Lock()
+	b.adapterSocket = b.socket
+	b.mu.Unlock()
+	if _, err := route.SelectDirect(token); !errors.Is(err, ErrNoAuthority) || token.used.Load() {
+		t.Fatal("routed adapter activated without OS route commit", err)
+	}
+	b.mu.Lock()
+	b.adapterSocket = nil
+	b.mu.Unlock()
 	if old, err := route.SelectDirect(token); err != nil || old != nil {
 		t.Fatal(err)
 	}
@@ -106,6 +183,39 @@ func TestPeerRouteRequiresPeerProofAndInvalidatesPreviousOutputReceipts(t *testi
 	route.Invalidate()
 	if route.Current() != peerRouteNone || route.Send(raw) != ErrClosed {
 		t.Fatal("invalidated route remained live")
+	}
+}
+
+func TestPeerRouteFailedSelectionPreservesRelayAndActivation(t *testing.T) {
+	n, f := qualifiedNegotiation(t)
+	route, err := newPeerRoute(n.relay, f.clock, f.profile.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := route.ConfirmRelay(routeRelayProof(t, n, f)); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.Handle(replyControl(*n.commit, transport.Committed)); err != nil {
+		t.Fatal(err)
+	}
+	token, err := n.TakeActivation()
+	if err != nil {
+		t.Fatal(err)
+	}
+	epoch := route.epoch
+	route.clock = &probeClock{err: errors.New("clock unavailable")}
+	if _, err := route.SelectDirect(token); !errors.Is(err, connectivity.ErrClock) {
+		t.Fatal("expected selection clock failure", err)
+	}
+	route.clock = f.clock
+	if route.Current() != peerRouteRelay || route.epoch != epoch || token.used.Load() {
+		t.Fatal("failed selection changed Relay or consumed the bilateral commit")
+	}
+	if _, err := n.direct.bind.transmitEpoch(); err == nil {
+		t.Fatal("rejected candidate gained application output")
+	}
+	if _, err := route.SelectDirect(token); err != nil || route.Current() != peerRouteDirect {
+		t.Fatal("could not retry the same bilateral commit", err)
 	}
 }
 

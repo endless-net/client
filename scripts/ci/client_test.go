@@ -90,7 +90,7 @@ func TestCryptoWorkerBytes(t *testing.T) {
 func TestWintunArchive(t *testing.T) {
 	var buffer bytes.Buffer
 	w := zip.NewWriter(&buffer)
-	manifest := wintunManifest{Files: make(map[string]wintunFile)}
+	manifest := driverManifest{Files: make(map[string]driverFile)}
 	for name, entry := range map[string]string{"wintun.dll": "wintun/bin/amd64/wintun.dll", "WINTUN-LICENSE.txt": "wintun/LICENSE.txt"} {
 		file, err := w.Create(entry)
 		if err != nil {
@@ -99,19 +99,19 @@ func TestWintunArchive(t *testing.T) {
 		if _, err := file.Write([]byte(name)); err != nil {
 			t.Fatal(err)
 		}
-		manifest.Files[name] = wintunFile{Entry: entry, Size: int64(len(name)), SHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(name)))}
+		manifest.Files[name] = driverFile{Entry: entry, Size: int64(len(name)), SHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(name)))}
 	}
 	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := extractWintun(buffer.Bytes(), manifest)
+	entries, err := extractDriver(buffer.Bytes(), manifest)
 	if err != nil || len(entries) != 2 {
 		t.Fatalf("extract Wintun: %v %v", entries, err)
 	}
 	file := manifest.Files["wintun.dll"]
 	file.SHA256 = strings.Repeat("0", 64)
 	manifest.Files["wintun.dll"] = file
-	if _, err := extractWintun(buffer.Bytes(), manifest); err == nil {
+	if _, err := extractDriver(buffer.Bytes(), manifest); err == nil {
 		t.Fatal("accepted changed Wintun bytes")
 	}
 }

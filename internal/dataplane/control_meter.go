@@ -59,24 +59,38 @@ func (c *assignedCipher) serviceCycleLocked() (*probeCycle, error) {
 	return window, nil
 }
 
-func (c *assignedCipher) rememberChallenge(a candidateAssignment, value transport.Control) (*serviceReceipt, error) {
-	c.meterMu.Lock()
-	defer c.meterMu.Unlock()
-	window, err := c.serviceCycleLocked()
-	if err != nil {
-		return nil, err
-	}
+func (c *assignedCipher) admitChallenge(a candidateAssignment, value transport.Control, account func(*probeCycle) error) error {
 	key := controlKey(replyControl(value, transport.Echo))
-	if receipt := c.serviceReceipts[key]; receipt != nil {
-		return receipt, receipt.attempt.check()
+	c.meterMu.Lock()
+	window, err := c.serviceCycleLocked()
+	c.meterMu.Unlock()
+	if err != nil {
+		return err
 	}
+	// Even concurrent duplicates share the deadline of the first arrival.
+	// An attempt alone does not authorize an Echo.
 	attempt, err := window.attempt(hex.EncodeToString(key[:]))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	receipt := &serviceReceipt{window: window, attempt: attempt, assignment: a, request: value}
-	c.serviceReceipts[key] = receipt
-	return receipt, nil
+	if err := attempt.check(); err != nil {
+		return err
+	}
+	if err := account(window); err != nil {
+		return err
+	}
+	c.meterMu.Lock()
+	defer c.meterMu.Unlock()
+	if c.serviceWindow != window {
+		return ErrNoAuthority
+	}
+	if err := attempt.check(); err != nil {
+		return err
+	}
+	if c.serviceReceipts[key] == nil {
+		c.serviceReceipts[key] = &serviceReceipt{window: window, attempt: attempt, assignment: a, request: value}
+	}
+	return nil
 }
 
 func (c *assignedCipher) receiptCurrent(receipt *serviceReceipt) error {
@@ -116,7 +130,7 @@ func (c *assignedCipher) chargeService(size int, required *probeCycle) (result e
 		return ErrProbeBudget
 	}
 	c.bind.mu.Lock()
-	confirmed := c.bind.receiveConfirmed || c.bind.transmitConfirmed
+	confirmed := c.bind.confirmedTrafficLocked()
 	c.bind.mu.Unlock()
 	if !confirmed {
 		return nil
@@ -130,20 +144,30 @@ func (c *assignedCipher) chargeService(size int, required *probeCycle) (result e
 	if required != nil && required != window {
 		return ErrNoAuthority
 	}
-	if err := window.charge(size + 28); err != nil {
-		return err
-	}
 	c.mu.Lock()
 	p := c.probe
 	c.mu.Unlock()
 	if p != nil {
-		if err := p.attempt.cycle.check(); err == nil {
-			return p.attempt.cycle.charge(size + 28)
+		search := p.attempt.cycle
+		if err := search.check(); err == nil {
+			// The search ledger can also be charged by a cold candidate.
+			// Reserve both budgets before committing either one. A service
+			// window is private to this channel and never a search ledger.
+			search.wire.mu.Lock()
+			defer search.wire.mu.Unlock()
+			if size+28 > transport.MaxProbeBytes-search.wire.used {
+				return ErrProbeBudget
+			}
+			if err := window.charge(size + 28); err != nil {
+				return err
+			}
+			search.wire.used += size + 28
+			return nil
 		} else if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
 	}
-	return nil
+	return window.charge(size + 28)
 }
 
 func (c *assignedCipher) serviceReady() error {
@@ -199,7 +223,7 @@ func (c *assignedCipher) serviceWriteDeadline(attempt *probeAttempt) error {
 
 func (c *assignedCipher) controlSendGuard(raw []byte) func(int) error {
 	a, p, closed := c.controlSnapshot()
-	local, peer, err := a.addresses()
+	local, peer, err := a.controlAddresses()
 	if err != nil {
 		return func(int) error { return ErrNoAuthority }
 	}
@@ -242,8 +266,12 @@ func (c *assignedCipher) controlSendGuard(raw []byte) func(int) error {
 // Bad/reserved controls are dropped here, never delivered into the OS. A peer
 // challenge may permit an Echo but cannot satisfy our own path evidence.
 func (c *assignedCipher) controlReceived(raw []byte, wireBytes int) error {
+	return c.receiveControl(raw, func(window *probeCycle) error { return c.chargeService(wireBytes, window) })
+}
+
+func (c *assignedCipher) receiveControl(raw []byte, account func(*probeCycle) error) error {
 	a, p, closed := c.controlSnapshot()
-	local, peer, err := a.addresses()
+	local, peer, err := a.controlAddresses()
 	if err != nil {
 		return err
 	}
@@ -264,13 +292,13 @@ func (c *assignedCipher) controlReceived(raw []byte, wireBytes int) error {
 		if err := p.admit(); err != nil {
 			return err
 		}
-		return c.chargeService(wireBytes, nil)
+		return account(nil)
 	}
 	if value.Kind != transport.Challenge {
 		return ErrNoAuthority
 	}
 	c.bind.mu.Lock()
-	confirmed := c.bind.receiveConfirmed || c.bind.transmitConfirmed
+	confirmed := c.bind.confirmedTrafficLocked()
 	c.bind.mu.Unlock()
 	if !confirmed {
 		if p == nil {
@@ -284,9 +312,5 @@ func (c *assignedCipher) controlReceived(raw []byte, wireBytes int) error {
 			return ErrNoAuthority
 		}
 	}
-	receipt, err := c.rememberChallenge(a, value)
-	if err != nil {
-		return err
-	}
-	return c.chargeService(wireBytes, receipt.window)
+	return c.admitChallenge(a, value, account)
 }

@@ -27,8 +27,13 @@ func (f *candidateFixture) withRelay(t *testing.T) {
 
 func (f *candidateFixture) withRelayAt(t *testing.T, address string) {
 	t.Helper()
+	f.withRelayLifetime(t, address, 30*time.Second)
+}
+
+func (f *candidateFixture) withRelayLifetime(t *testing.T, address string, lifetime time.Duration) {
+	t.Helper()
 	sample, _ := f.clock.Sample()
-	expires := sample.Wall.Add(30 * time.Second)
+	expires := sample.Wall.Add(lifetime)
 	var trust signing.ServerKeyResponse
 	if err := json.Unmarshal(f.trust.Bundle, &trust); err != nil {
 		t.Fatal(err)
@@ -49,6 +54,10 @@ func (f *candidateFixture) withRelayAt(t *testing.T, address string) {
 // net.Pipe and the injected TLS state exercise published frame I/O only. This
 // fixture does not claim a real TLS handshake or external Relay authentication.
 type relayPipeSocket struct{ net.Conn }
+
+func (*relayPipeSocket) RemoteAddr() net.Addr {
+	return &net.TCPAddr{IP: net.IPv4(192, 0, 2, 96), Port: 443}
+}
 
 func (*relayPipeSocket) ConnectionState() tls.ConnectionState {
 	return tls.ConnectionState{Version: tls.VersionTLS13, HandshakeComplete: true, VerifiedChains: [][]*x509.Certificate{{{}}}}

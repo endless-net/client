@@ -53,6 +53,11 @@ func wireNetwork(n contract.Network) *wire.MapNetwork {
 		response.DnsConfig = &wire.MapDNSConfig{
 			MagicdnsEnabled: d.MagicDNSEnabled, HttpsCertsEnabled: d.HTTPSCertsEnabled,
 			OverrideLocalDns: d.OverrideLocalDNS, Suffix: d.Suffix, SearchDomains: d.SearchDomains,
+			Zones: mapWireSlice(d.Zones, func(z contract.DNSZone) *wire.MapDNSZone {
+				return &wire.MapDNSZone{Name: z.Name, Version: z.Version, Records: mapWireSlice(z.Records, func(r contract.DNSRecord) *wire.MapDNSRecord {
+					return &wire.MapDNSRecord{Name: r.Name, Type: r.Type, Value: r.Value, Ttl: r.TTL}
+				})}
+			}),
 			Nameservers: mapWireSlice(d.Nameservers, func(s contract.DNSNameserver) *wire.MapDNSNameserver {
 				return &wire.MapDNSNameserver{Id: s.ID, Address: s.Address, Scope: s.Scope, Priority: s.Priority, SplitDomains: s.SplitDomains}
 			}),
@@ -140,10 +145,11 @@ func wirePeer(p contract.Peer) *wire.MapPeer {
 		response.Transport = &wire.PeerTransportPlan{
 			Version: t.Version, Availability: string(t.Availability), AccountId: t.AccountID, NetworkId: t.NetworkID,
 			LocalNodeId: t.LocalNodeID, LocalPublicKey: t.LocalPublicKey, PeerNodeId: t.PeerNodeID, PeerPublicKey: t.PeerPublicKey,
+			LocalProbeIpv4: t.LocalProbeIPv4, PeerProbeIpv4: t.PeerProbeIPv4,
 			LocalIntentGeneration: t.LocalIntentGeneration, Revision: wireRevision(t.Revision),
 			IssuedAt: timestamppb.New(t.IssuedAt), ExpiresAt: timestamppb.New(t.ExpiresAt), PeerAdvertisement: wireAdvertisement(&t.PeerAdvertisement),
 			Profiles: mapWireSlice(t.Profiles, func(o contract.TransportProfileOffer) *wire.TransportProfileOffer {
-				return &wire.TransportProfileOffer{Profile: wireTransportProfile(o.Profile), Digest: o.Digest, LocalEndpoint: o.LocalEndpoint, PeerEndpoint: o.PeerEndpoint}
+				return &wire.TransportProfileOffer{Profile: wireTransportProfile(o.Profile), Digest: o.Digest, LocalEndpoints: o.LocalEndpoints, PeerEndpoints: o.PeerEndpoints}
 			}),
 		}
 	}

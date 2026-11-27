@@ -393,8 +393,8 @@ func linuxTestTransportDiscovery(t *testing.T, ctx context.Context, session *Lin
 		p := &f.snapshot.Peers[0]
 		p.Transport.PeerAdvertisement = remote
 		offer := &p.Transport.Profiles[0]
-		offer.LocalEndpoint = linuxTestProfileEndpoint(local, *offer)
-		offer.PeerEndpoint = linuxTestProfileEndpoint(remote, *offer)
+		offer.LocalEndpoints = coordinator.ProfileEndpoints(local, offer.Profile.ID, offer.Digest)
+		offer.PeerEndpoints = coordinator.ProfileEndpoints(remote, offer.Profile.ID, offer.Digest)
 		cursor := f.verified.Cursor()
 		f.snapshot.Revision.Network++
 		f.snapshot.Network.Revision++
@@ -411,15 +411,6 @@ func linuxTestTransportDiscovery(t *testing.T, ctx context.Context, session *Lin
 		}
 		previousLocal, previousRemote = localRaw, remoteRaw
 	}
-}
-
-func linuxTestProfileEndpoint(ad coordinator.TransportAdvertisement, offer coordinator.TransportProfileOffer) string {
-	for _, endpoint := range ad.Endpoints {
-		if endpoint.ProfileID == offer.Profile.ID && endpoint.ProfileDigest == offer.Digest {
-			return endpoint.Endpoint
-		}
-	}
-	return ""
 }
 
 func logLinuxDirectTest(t *testing.T, session *LinuxSession) {
@@ -494,7 +485,7 @@ func linuxDirectFixture(t *testing.T, role, relayAddress string) *candidateFixtu
 		p.Transport.LocalNodeID, p.Transport.LocalPublicKey = node, f.snapshot.Node.PublicKey
 		p.Transport.PeerNodeID, p.Transport.PeerPublicKey = peer, p.PublicKey
 		p.Transport.PeerAdvertisement = local
-		p.Transport.Profiles = []coordinator.TransportProfileOffer{{Profile: profile, Digest: digest}}
+		p.Transport.Profiles = []coordinator.TransportProfileOffer{{Profile: profile, Digest: digest, LocalEndpoints: []string{}, PeerEndpoints: []string{}}}
 	}
 	f.verify(t, nil)
 	if relayAddress != "" {

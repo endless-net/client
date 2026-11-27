@@ -28,12 +28,16 @@ type manifest struct {
 }
 
 func bundled() (manifest, error) {
+	return parseManifest(manifestBytes, "wintun", "wintun.dll")
+}
+
+func parseManifest(raw []byte, directory, dll string) (manifest, error) {
 	var m manifest
-	if json.Unmarshal(manifestBytes, &m) != nil || m.Version == "" {
+	if json.Unmarshal(raw, &m) != nil || m.Version == "" {
 		return manifest{}, ErrDriver
 	}
-	p := m.Files["wintun.dll"]
-	if p.Size <= 0 || len(p.SHA256) != 64 || p.Entry != "wintun/bin/amd64/wintun.dll" {
+	p := m.Files[dll]
+	if p.Size <= 0 || len(p.SHA256) != 64 || p.Entry != directory+"/bin/amd64/"+dll {
 		return manifest{}, ErrDriver
 	}
 	return m, nil

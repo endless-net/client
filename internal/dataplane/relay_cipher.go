@@ -58,6 +58,7 @@ func newRelayCipher(parent context.Context, mux *relayMux, value connectivity.Ma
 	bind.mu.Lock()
 	local, peer := bind.local, bind.peer
 	peer.Endpoint = bind.endpoint.String()
+	peer.Transport = nil // Service address routes belong only to the Direct cipher.
 	bind.mu.Unlock()
 	_, err = buildPeerCipher(ctx, local, peer, private, relayBaseline(), port, bind, func(_ wgdevice.NoisePublicKey, state wgdevice.PeerSessionState) {
 		if state == wgdevice.PeerSessionEstablished {

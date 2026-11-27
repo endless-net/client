@@ -25,6 +25,8 @@ type candidateSocket interface {
 // roam to a peer-supplied endpoint or use DNS. Unconfirmed I/O requires an
 // admitted probe; application output requires a bilateral activation token.
 type candidateBind struct {
+	shutdownOnce                        sync.Once
+	shutdownErr                         error
 	mu                                  sync.Mutex
 	ctx                                 context.Context
 	cancel                              context.CancelFunc
@@ -42,6 +44,11 @@ type candidateBind struct {
 	handshake                           func([]byte) bool
 	lastHandshake                       []byte
 	handshakeAttempt                    *probeAttempt
+	// An OS-routed adapter can retain ciphertext across a source transition.
+	// Attach it to the preparation lifetime for both directions of socket I/O.
+	adapterSource    <-chan struct{}
+	adapterSocket    candidateSocket
+	adapterProbeOnly bool // The routed adapter still has its discovery-only WFP policy.
 }
 
 func newCandidateBind(parent context.Context, a candidateAssignment, clock connectivity.Clock) (*candidateBind, error) {
@@ -59,9 +66,8 @@ func newCandidateBind(parent context.Context, a candidateAssignment, clock conne
 	// A new channel has no prior nonce/history. A peer may have prepared it
 	// before our construction; current pair authority and fresh own proofs still
 	// apply. Only an observed semantic change advances the rejection floor.
-	b := &candidateBind{ctx: ctx, cancel: cancel, assignment: a, revisionFloor: 1, clock: clock, sendGate: make(chan struct{}, 1), listen: func(port uint16) (candidateSocket, error) {
-		return net.ListenUDP("udp4", &net.UDPAddr{Port: int(port)})
-	}}
+	b := &candidateBind{ctx: ctx, cancel: cancel, assignment: a, revisionFloor: 1, clock: clock, sendGate: make(chan struct{}, 1)}
+	b.listen = b.listenUDP
 	b.sendGate <- struct{}{}
 	context.AfterFunc(ctx, b.shutdown)
 	return b, nil
@@ -98,11 +104,18 @@ func (b *candidateBind) Close() error {
 // Bind.Close must permit upstream's Close/Open during Up and BindUpdate.
 // Only cancellation of the channel owner permanently shuts this bind down.
 func (b *candidateBind) shutdown() {
-	b.mu.Lock()
-	b.closed = true
-	b.mu.Unlock()
-	b.cancel()
-	_ = b.Close()
+	_ = b.shutdownResult()
+}
+
+func (b *candidateBind) shutdownResult() error {
+	b.shutdownOnce.Do(func() {
+		b.mu.Lock()
+		b.closed = true
+		b.mu.Unlock()
+		b.cancel()
+		b.shutdownErr = b.Close()
+	})
+	return b.shutdownErr
 }
 
 func (b *candidateBind) Open(port uint16) ([]awgconn.ReceiveFunc, uint16, error) {
@@ -141,7 +154,7 @@ func (b *candidateBind) ParseEndpoint(value string) (awgconn.Endpoint, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	address, err := netip.ParseAddrPort(value)
-	if err != nil || !address.Addr().Is4() || address.Port() == 0 || value != address.String() || value != b.assignment.offer.PeerEndpoint {
+	if err != nil || !address.Addr().Is4() || address.Port() == 0 || value != address.String() || value != b.assignment.peerEndpoint {
 		return nil, ErrConfiguration
 	}
 	return &awgconn.StdNetEndpoint{AddrPort: address}, nil
@@ -209,7 +222,7 @@ func (b *candidateBind) update(a candidateAssignment) error {
 		b.lastHandshake, b.handshakeAttempt = nil, nil
 		b.revisionFloor = a.plan.Revision.Network
 		b.confirmationEpoch++
-		if b.assignment.offer.LocalEndpoint != a.offer.LocalEndpoint || b.assignment.offer.PeerEndpoint != a.offer.PeerEndpoint {
+		if b.assignment.localEndpoint != a.localEndpoint || b.assignment.peerEndpoint != a.peerEndpoint {
 			b.receiveConfirmed = false
 			b.transmitConfirmed = false
 		}
@@ -228,13 +241,34 @@ func (b *candidateBind) revisionAllowed(revision uint64) bool {
 	return !b.closed && revision != 0 && revision >= b.revisionFloor && revision <= b.assignment.plan.Revision.Network
 }
 
+// A receive grant may precede the OS route commit. While WFP permits only
+// probes, the broker must continue metering complete external datagrams.
+func (b *candidateBind) confirmedTrafficLocked() bool {
+	return !b.adapterProbeOnly && (b.receiveConfirmed || b.transmitConfirmed)
+}
+
+func (b *candidateBind) checkAdapterLocked() error {
+	if b.adapterSocket != nil && b.adapterSocket != b.socket {
+		return net.ErrClosed
+	}
+	select {
+	case <-b.adapterSource:
+		return connectivity.ErrSourceChanged
+	default:
+		return nil
+	}
+}
+
 func (b *candidateBind) admit(p *probeAttempt, endpoint netip.AddrPort) (candidateSocket, time.Time, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if err := b.checkAdapterLocked(); err != nil {
+		return nil, time.Time{}, err
+	}
 	if b.closed || b.ctx.Err() != nil || b.socket == nil {
 		return nil, time.Time{}, net.ErrClosed
 	}
-	if p == nil || p != b.probe || endpoint.String() != b.assignment.offer.PeerEndpoint || !b.endpointsReady() {
+	if p == nil || p != b.probe || endpoint.String() != b.assignment.peerEndpoint || !b.endpointsReady() {
 		return nil, time.Time{}, ErrNoAuthority
 	}
 	sample, err := b.clock.Sample()
@@ -264,8 +298,8 @@ func (b *candidateBind) admit(p *probeAttempt, endpoint netip.AddrPort) (candida
 // Called with mu held. A prepared listener is not probe-ready until the signed
 // local advertisement confirms its acknowledged port and the peer has an endpoint.
 func (b *candidateBind) endpointsReady() bool {
-	local, err := netip.ParseAddrPort(b.assignment.offer.LocalEndpoint)
-	return err == nil && b.socket != nil && b.port != 0 && local.Port() == b.port && b.assignment.offer.PeerEndpoint != ""
+	local, err := netip.ParseAddrPort(b.assignment.localEndpoint)
+	return err == nil && b.socket != nil && b.port != 0 && local.Port() == b.port && b.assignment.peerEndpoint != ""
 }
 
 func minTime(a, b time.Time) time.Time {
@@ -281,7 +315,7 @@ func (b *candidateBind) write(p *probeAttempt, endpoint netip.AddrPort, raw []by
 		return err
 	}
 	// Count both directions at this endpoint, including IPv4 and UDP headers.
-	if err := p.cycle.charge(len(raw) + 28); err != nil {
+	if err := p.chargeDatagram(len(raw)); err != nil {
 		return err
 	}
 	if socket.SetWriteDeadline(deadline) != nil {
@@ -324,10 +358,14 @@ func (b *candidateBind) send(packets [][]byte, endpoint awgconn.Endpoint, guard 
 	}
 	b.mu.Lock()
 	p := b.probe
-	confirmed, epoch := b.receiveConfirmed || b.transmitConfirmed, b.confirmationEpoch
+	confirmed, epoch := b.confirmedTrafficLocked(), b.confirmationEpoch
+	var changed <-chan struct{}
+	if confirmed {
+		_, changed = b.assignment.lease.SourceSignal()
+	}
 	b.mu.Unlock()
 	if confirmed {
-		return b.sendConfirmed(packets[0], address, epoch, guard)
+		return b.sendConfirmed(packets[0], address, epoch, changed, guard)
 	}
 	if p == nil {
 		return ErrNoAuthority
@@ -346,7 +384,7 @@ func (b *candidateBind) send(packets [][]byte, endpoint awgconn.Endpoint, guard 
 	if err := b.emitPrelude(p, address); err != nil {
 		return err
 	}
-	if b.handshake != nil && b.handshake(packets[0]) {
+	if guard == nil && b.handshake != nil && b.handshake(packets[0]) {
 		b.mu.Lock()
 		if b.probe == p && !b.closed {
 			clear(b.lastHandshake)
@@ -367,12 +405,12 @@ func (b *candidateBind) resendHandshake(p *probeAttempt) error {
 		return err
 	}
 	b.mu.Lock()
-	if b.probe != p || b.handshakeAttempt != p || b.receiveConfirmed || b.transmitConfirmed || len(b.lastHandshake) == 0 {
+	if b.probe != p || b.handshakeAttempt != p || b.confirmedTrafficLocked() || len(b.lastHandshake) == 0 {
 		b.mu.Unlock()
 		return nil
 	}
 	raw := bytes.Clone(b.lastHandshake)
-	address, err := netip.ParseAddrPort(b.assignment.offer.PeerEndpoint)
+	address, err := netip.ParseAddrPort(b.assignment.peerEndpoint)
 	b.mu.Unlock()
 	defer clear(raw)
 	if err != nil {
@@ -459,7 +497,7 @@ func (b *candidateBind) receive(socket candidateSocket, packets [][]byte, sizes 
 	b.mu.Lock()
 	p := b.probe
 	current := b.socket == socket
-	confirmed, epoch := b.receiveConfirmed, b.confirmationEpoch
+	confirmed, epoch := b.receiveConfirmed && !b.adapterProbeOnly, b.confirmationEpoch
 	b.mu.Unlock()
 	if !current {
 		return 0, net.ErrClosed
@@ -477,7 +515,7 @@ func (b *candidateBind) receive(socket candidateSocket, packets [][]byte, sizes 
 		clear(packets[0][:count])
 		return 0, nil
 	}
-	if err := p.cycle.charge(count + 28); err != nil {
+	if err := p.chargeDatagram(count); err != nil {
 		clear(packets[0][:count])
 		return 0, nil
 	}

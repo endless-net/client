@@ -1,0 +1,188 @@
+package dataplane
+
+import (
+	"context"
+	"errors"
+	"net"
+	"sync"
+	"time"
+
+	"github.com/endless-net/client/api/transport"
+	"golang.org/x/sys/windows"
+)
+
+var platformDirectPreparer kernelPreparer = prepareWindowsDirect
+
+// The candidate owns the routed probe interface and both encrypted socket
+// directions. Installing an application route requires a separate grant.
+type windowsDirectEngine struct {
+	channel     *assignedCipher
+	port        *packetPort
+	device      *windowsPeerDevice
+	workers     sync.WaitGroup
+	routeMu     sync.Mutex
+	retireRoute func()
+}
+
+func prepareWindowsDirect(ctx context.Context, cfg directCipherConfig, channel *assignedCipher, port *packetPort) (directPeerEngine, error) {
+	if cfg.assignment.offer.Profile.Engine != transport.WireGuard || cfg.assignment.plan.LocalProbeIPv4 == "" {
+		return nil, errKernelUnavailable
+	}
+	device, err := openWindowsPeerDevice(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	fail := func(err error) (directPeerEngine, error) { return nil, errors.Join(err, device.Close()) }
+	if _, _, err := channel.bind.Open(0); err != nil {
+		return fail(err)
+	}
+	return &windowsDirectEngine{channel: channel, port: port, device: device}, nil
+}
+
+// BeginProbe serializes this with map updates and Close, after the signed
+// offer acknowledges our actual public port and the peer's endpoint. Until
+// then the adapter is down and cannot queue driver ciphertext across an ACK.
+func (e *windowsDirectEngine) startProbe(a candidateAssignment) error {
+	channel, port, device := e.channel, e.port, e.device
+	ctx := channel.bind.ctx
+	epoch, changed := a.lease.SourceSignal()
+	if epoch != device.sourceEpoch || !a.sameChannel(device.assignment) || a.lease != device.assignment.lease ||
+		!canFinishPreparation(ctx, channel.clock, a, changed) {
+		return ErrNoAuthority
+	}
+	if device.driverPort != 0 {
+		if changed != device.sourceChanged {
+			return ErrNoAuthority
+		}
+		return nil
+	}
+	device.assignment, device.sourceChanged = a, changed
+	cfg := directCipherConfig{assignment: a, clock: channel.clock}
+	if err := device.activate(ctx, cfg); err != nil {
+		channel.cancel()
+		return err
+	}
+	if err := device.beginRoutedProbe(ctx, cfg); err != nil {
+		channel.cancel()
+		return err
+	}
+	broker, err := device.attachCandidate(channel.bind)
+	if err != nil {
+		channel.cancel()
+		return err
+	}
+	socket := device.probeSocket
+	start := func(run func()) {
+		e.workers.Go(func() { defer channel.cancel(); run() })
+	}
+	start(func() { _ = broker.receive() })
+	start(func() { _ = broker.send(nil) })
+	start(func() {
+		select {
+		case <-ctx.Done():
+		case <-device.sourceChanged:
+		}
+	})
+	start(func() {
+		for {
+			packet, err := port.next()
+			if err != nil {
+				return
+			}
+			if guard := channel.controlSendGuard(packet.data); guard != nil {
+				_ = socket.send(packet.data, func(size int) error {
+					if !port.allowed(true) || packet.guard != nil && !packet.guard() {
+						return ErrNoAuthority
+					}
+					return guard(size)
+				})
+			}
+			clear(packet.data)
+		}
+	})
+	start(func() {
+		var raw [28 + transport.MaxDatagramBytes]byte
+		for ctx.Err() == nil {
+			n, err := socket.receive(raw[:])
+			if errors.Is(err, windows.WSAETIMEDOUT) || errors.Is(err, windows.WSAEMSGSIZE) || errors.Is(err, ErrNoAuthority) {
+				continue
+			}
+			if err != nil {
+				return
+			}
+			if channel.receiveControl(raw[:n], func(window *probeCycle) error {
+				return e.checkProbeIngress(window, broker)
+			}) == nil {
+				_, _ = port.Write([][]byte{raw[:n]}, 0)
+			}
+		}
+	})
+	return nil
+}
+
+func (e *windowsDirectEngine) checkProbeIngress(window *probeCycle, broker *windowsCandidateBroker) error {
+	b := e.channel.bind
+	b.mu.Lock()
+	if b.closed || b.ctx.Err() != nil || b.adapterSocket != broker.external {
+		b.mu.Unlock()
+		return ErrNoAuthority
+	}
+	guarded := b.adapterProbeOnly
+	err := b.checkAdapterLocked()
+	b.mu.Unlock()
+	if err != nil || guarded {
+		// Discovery ingress was already charged on the external socket.
+		return err
+	}
+	return e.channel.chargeService(int(broker.largestIngress.Load()), window)
+}
+
+func (e *windowsDirectEngine) Queue(raw []byte, control bool) error {
+	return e.queueChecked(raw, control, nil)
+}
+
+func (e *windowsDirectEngine) queueChecked(raw []byte, control bool, guard func() bool) error {
+	if !control {
+		return ErrNoAuthority
+	}
+	return e.port.enqueueChecked(raw, true, guard)
+}
+
+func (e *windowsDirectEngine) BoundPort() (uint16, error) {
+	b := e.channel.bind
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed || b.ctx.Err() != nil || b.port == 0 {
+		return 0, net.ErrClosed
+	}
+	if epoch, _ := b.assignment.lease.SourceSignal(); epoch != e.device.sourceEpoch {
+		return 0, ErrNoAuthority
+	}
+	if err := b.checkAdapterLocked(); err != nil {
+		return 0, err
+	}
+	return b.port, nil
+}
+
+func (e *windowsDirectEngine) SetEndpoint(ctx context.Context, addr string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	_, err := e.channel.bind.ParseEndpoint(addr)
+	return err
+}
+
+func (e *windowsDirectEngine) Close() {
+	e.channel.cancel()
+	e.channel.bind.shutdown()
+	_ = e.port.Close()
+	_ = e.device.socket.SetReadDeadline(time.Now())
+	e.workers.Wait()
+	e.routeMu.Lock()
+	defer e.routeMu.Unlock()
+	if e.retireRoute != nil {
+		e.retireRoute()
+		e.retireRoute = nil
+	}
+	_ = e.device.Close()
+}

@@ -7,14 +7,17 @@ require (
 	github.com/Microsoft/go-winio v0.6.3
 	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260814
 	github.com/caarlos0/env/v11 v11.4.1
+	github.com/cilium/ebpf v0.22.0
 	github.com/endless-net/billing/api v0.9.0
-	github.com/endless-net/client/api v0.8.0
-	github.com/endless-net/coordinator/api v0.18.0
+	github.com/endless-net/client/api v0.10.0
+	github.com/endless-net/coordinator/api v0.32.0
 	github.com/endless-net/identity/api v0.9.0
 	github.com/endless-net/management/api v0.6.0
 	github.com/endless-net/relay/api v0.4.0
 	github.com/endless-net/signing/api v0.3.0
 	github.com/google/uuid v1.6.0
+	github.com/mdlayher/genetlink v1.4.0
+	github.com/mdlayher/netlink v1.9.0
 	github.com/tailscale/wf v0.0.0-20240214030419-6fbb0a674ee6
 	github.com/tailscale/wireguard-go v0.0.0-20261028173945-db3888e688e9
 	go.opentelemetry.io/otel v1.47.0
@@ -32,10 +35,12 @@ require (
 )
 
 require (
-	github.com/BurntSushi/toml v0.4.1 // indirect
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/mdlayher/socket v0.6.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
 	go.uber.org/dig v1.19.0 // indirect
@@ -43,14 +48,14 @@ require (
 	go.uber.org/zap v1.26.0 // indirect
 	go4.org/netipx v0.0.0-20220725152314-7e7bdc8411bf // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/exp/typeparams v0.0.0-20220218215828-6cf2b201936e // indirect
+	golang.org/x/exp/typeparams v0.0.0-20260209203927-2842357ff358 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/tools v0.51.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	honnef.co/go/tools v0.3.2 // indirect
+	honnef.co/go/tools v0.7.0 // indirect
 )
 
 replace github.com/amnezia-vpn/amneziawg-go/v3 => ./third_party/vendor/amneziawg

@@ -2,6 +2,8 @@ package dataplane
 
 import (
 	"bytes"
+	"crypto/ecdh"
+	"encoding/base64"
 	"errors"
 	"os"
 	"sync/atomic"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/endless-net/client/api/transport"
 	"github.com/endless-net/client/internal/connectivity"
+	coordinator "github.com/endless-net/coordinator/api/enrollment"
 	"github.com/tailscale/wireguard-go/tun"
 )
 
@@ -31,7 +34,10 @@ func (t *switchTUN) Read(slab []byte, packets []tun.ReadPacket) (int, error) {
 	defer t.active.Add(-1)
 	for previous := t.peak.Load(); current > previous && !t.peak.CompareAndSwap(previous, current); previous = t.peak.Load() {
 	}
-	t.reading <- struct{}{}
+	select {
+	case t.reading <- struct{}{}:
+	default:
+	}
 	select {
 	case <-t.done:
 		return 0, os.ErrClosed
@@ -159,6 +165,82 @@ func TestPacketSwitchSelectedRouteNeverRetriesPayloadThroughPrimary(t *testing.T
 	}
 	if err := s.send(current); err != nil || len(s.primary.queue) != 0 {
 		t.Fatal("confirmed Relay payload fanned out to primary", err)
+	}
+}
+
+func TestPeerRouteChangePreservesOtherPeerQueue(t *testing.T) {
+	n, f := qualifiedNegotiation(t)
+	s, native := switchFixture(t, f)
+	route, err := newPeerRoute(n.relay, f.clock, f.profile.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetRoute("peer", route); err != nil {
+		t.Fatal(err)
+	}
+	other := f.snapshot.Peers[0]
+	otherKey, err := ecdh.X25519().NewPrivateKey(bytes.Repeat([]byte{35}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	other.ID, other.PublicKey = "second", base64.StdEncoding.EncodeToString(otherKey.PublicKey().Bytes())
+	other.Endpoint = "192.0.2.30:51820"
+	other.AllowedIPs = []string{"100.70.0.3/32"}
+	other.ACLGrants = []coordinator.ACLGrant{{DestinationCIDRs: other.AllowedIPs, AllowedPorts: other.ACLGrants[0].AllowedPorts}}
+	other.Transport = nil
+	f.snapshot.Peers = append(f.snapshot.Peers, other)
+	update := func() {
+		t.Helper()
+		previous := f.verified.Cursor()
+		f.clock.advance(time.Millisecond, time.Millisecond)
+		f.snapshot.Revision.Network++
+		f.snapshot.Network.Revision++
+		f.refresh(t, &previous)
+		if err := s.Update(f.verified); err != nil {
+			t.Fatal(err)
+		}
+	}
+	update()
+	local := f.snapshot.Node.AssignedIP
+	out := cipherIPv4(local, "100.70.0.3", 17)
+	if err := s.send(out); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetRoute("peer", nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := nextSwitchPrimary(t, s); !bytes.Equal(got.data, out) {
+		t.Fatal("changing the first peer's route lost the second peer's queued packet")
+	}
+	revoked, err := s.Sink(f.verified, "peer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained, err := s.Sink(f.verified, other.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := cipherIPv4(local, "100.70.0.2", 18)
+	if err := s.send(first); err != nil {
+		t.Fatal(err)
+	}
+	f.snapshot.Peers = f.snapshot.Peers[1:]
+	update()
+	if err := s.send(first); !errors.Is(err, ErrNoAuthority) {
+		t.Fatalf("removed peer's outbound packet: %v", err)
+	}
+	if err := revoked(cipherIPv4("100.70.0.2", local, 19)); !errors.Is(err, ErrNoAuthority) {
+		t.Fatalf("removed peer's ingress: %v", err)
+	}
+	in := cipherIPv4("100.70.0.3", local, 20)
+	if err := retained(in); err != nil || !bytes.Equal(<-native.output, in) {
+		t.Fatal("unchanged peer lost its ingress", err)
+	}
+	if err := s.send(out); err != nil {
+		t.Fatal(err)
+	}
+	if got := nextSwitchPrimary(t, s); !bytes.Equal(got.data, out) || len(s.primary.queue) != 0 {
+		t.Fatal("removed peer's queued packet survived its signed revocation")
 	}
 }
 

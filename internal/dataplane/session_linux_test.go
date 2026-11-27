@@ -17,39 +17,7 @@ func TestLinuxSignedMapStartsAndRevokesNativeSession(t *testing.T) {
 	fixture := newCandidateFixture(t)
 	fixture.snapshot.Peers = nil
 	fixture.verify(t, nil)
-	store, _ := hintStoreFixture(t, fixture)
-	directory := t.TempDir()
-	if err := os.Chmod(directory, 0700); err != nil {
-		t.Fatal(err)
-	}
-	ledger := state.NewLinuxNetworkLedger(directory)
-	resources, err := NewTransportResources(8)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sample, err := fixture.clock.Sample()
-	if err != nil {
-		t.Fatal(err)
-	}
-	budget, err := connectivity.NewOperationBudget(fixture.clock, fixture.profile.ID, 1, sample, 10*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	session, err := NewLinuxSession(t.Context(), store, ledger, fixture.clock, fixture.profile.ID, 1, LinuxSessionConfig{
-		MTU: 1420, MaxPeers: 8, MaxGrants: 16, MaxProtected: 16, ListenPort: 51820,
-		ProbeInterval: time.Second, RetryInterval: time.Second,
-		Relay: RelayConfig{DialTimeout: time.Second, IOTimeout: 3 * time.Second, HeartbeatInterval: time.Second, Now: func() time.Time { return sample.Wall }},
-	}, resources)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := session.Stop(cleanup); err != nil {
-			t.Error(err)
-		}
-	})
+	session, budget := linuxTestSession(t, fixture)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ctx = connectivity.WithOperationBudget(ctx, budget)
@@ -95,4 +63,46 @@ func TestLinuxSignedMapStartsAndRevokesNativeSession(t *testing.T) {
 	if local := session.ConnectionLocal(); local.Permission.NewFlows || local.Permission.ExistingFlows {
 		t.Fatal("revoked session retained packet authority")
 	}
+}
+
+func linuxTestSession(t *testing.T, fixture *candidateFixture) (*LinuxSession, *connectivity.OperationBudget) {
+	t.Helper()
+	store, _ := hintStoreFixture(t, fixture)
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return linuxTestSessionWithStore(t, fixture, store, directory)
+}
+func linuxTestSessionWithStore(t *testing.T, fixture *candidateFixture, store *state.Store, directory string) (*LinuxSession, *connectivity.OperationBudget) {
+	t.Helper()
+	ledger := state.NewLinuxNetworkLedger(directory)
+	resources, err := NewTransportResources(8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sample, err := fixture.clock.Sample()
+	if err != nil {
+		t.Fatal(err)
+	}
+	budget, err := connectivity.NewOperationBudget(fixture.clock, fixture.profile.ID, 1, sample, 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := NewLinuxSession(t.Context(), store, ledger, fixture.clock, fixture.profile.ID, 1, LinuxSessionConfig{
+		MTU: 1420, MaxPeers: 8, MaxGrants: 16, MaxProtected: 16, ListenPort: 51820,
+		ProbeInterval: time.Second, RetryInterval: time.Second,
+		Relay: RelayConfig{DialTimeout: time.Second, IOTimeout: 3 * time.Second, HeartbeatInterval: time.Second, Now: func() time.Time { return sample.Wall }},
+	}, resources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := session.Stop(cleanup); err != nil {
+			t.Error(err)
+		}
+	})
+	return session, budget
 }

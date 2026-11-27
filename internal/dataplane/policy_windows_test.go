@@ -514,20 +514,20 @@ func TestWindowsFilterSDKLayoutAndOwnershipComparison(t *testing.T) {
 	if !sameNativeFilter(a, b) {
 		t.Fatal("same native configuration differs")
 	}
+	a.Flags |= 0x40
+	if !sameNativeFilter(a, b) {
+		t.Fatal("automatic BFE index changed ownership")
+	}
+	a.Flags |= 0x20
+	if sameNativeFilter(a, b) {
+		t.Fatal("accepted a disabled filter")
+	}
+	a.Flags &^= 0x20
 	conditions := unsafe.Slice(a.Conditions, int(a.Count))
 	slices.Reverse(conditions)
 	if !sameNativeFilter(a, b) {
 		t.Fatal("OS condition reordering broke ownership proof")
 	}
-	a.Flags |= nativeFilterFlagIndexed
-	if !sameNativeFilter(a, b) {
-		t.Fatal("BFE indexing changed ownership proof")
-	}
-	a.Flags ^= 0x20 // FWPM_FILTER_FLAG_DISABLED
-	if sameNativeFilter(a, b) {
-		t.Fatal("disabled filter accepted as active")
-	}
-	a.Flags ^= 0x20
 	conditions[0].Match = uint32(wf.MatchTypeNotEqual)
 	if sameNativeFilter(a, b) {
 		t.Fatal("changed native condition accepted")
@@ -541,5 +541,123 @@ func TestPolicyDiagnosticKeepsTypedWindowsError(t *testing.T) {
 	if !errors.Is(err, ErrPolicy) || !errors.As(err, &code) || code != native ||
 		strings.Contains(err.Error(), "private transport details") {
 		t.Fatal("policy diagnostic lost its safe code", err)
+	}
+}
+func TestWindowsPolicyKeepsPeerAndPortTogetherAcrossReplacement(t *testing.T) {
+	m, _ := engineMap(t)
+	makePeer := func(address string, port int) coordinator.Peer {
+		prefix := address + "/32"
+		return coordinator.Peer{AllowedIPs: []string{prefix}, ACLRestricted: true, ACLGrants: []coordinator.ACLGrant{
+			{DestinationCIDRs: []string{prefix}, AllowedPorts: []coordinator.ACLPort{{Protocol: "tcp", Port: port}}},
+		}}
+	}
+	const b, c = "100.64.0.2", "100.64.0.3"
+	m.Peers = []coordinator.Peer{makePeer(b, 443), makePeer(c, 22)}
+	for _, removed := range []bool{false, true} {
+		if removed {
+			m.Peers[0].ACLGrants = nil
+		}
+		plan, err := filterPlan(m, policySession, 12345, 17, 8, 8, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !removed {
+			local := netip.MustParseAddr(m.Node.AssignedIP)
+			first, second := netip.MustParseAddr(b), netip.MustParseAddr(c)
+			one, err := plan.withDirectPeer(local, first, 54321, 18)
+			if err != nil {
+				t.Fatal(err)
+			}
+			both, err := one.withDirectPeer(local, second, 54322, 19)
+			if err != nil {
+				t.Fatal(err)
+			}
+			remaining, err := both.withoutDirectPeer(first, 54321)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := plan.withDirectPeer(local, second, 54322, 19)
+			if err != nil || !reflect.DeepEqual(remaining.Records(), want.Records()) {
+				t.Fatal("retirement changed rules of the other active peer", err)
+			}
+			if _, err := both.withoutDirectPeer(second, 54321); err != ErrPolicyOwnership {
+				t.Fatal("accepted another peer's receipt", err)
+			}
+		}
+		for _, remote := range []string{b, c} {
+			for _, port := range []uint16{22, 443} {
+				for _, layer := range []wf.LayerID{wf.LayerALEAuthConnectV4, wf.LayerALEAuthRecvAcceptV4} {
+					localPort, remotePort := uint16(50000), port
+					if layer == wf.LayerALEAuthRecvAcceptV4 {
+						localPort, remotePort = remotePort, localPort
+					}
+					fields := map[wf.FieldID]any{
+						wf.FieldIPLocalInterface: uint64(12345), wf.FieldIPLocalAddress: netip.MustParseAddr(m.Node.AssignedIP),
+						wf.FieldIPRemoteAddress: netip.MustParseAddr(remote), wf.FieldIPProtocol: wf.IPProto(6),
+						wf.FieldIPLocalPort: localPort, wf.FieldIPRemotePort: remotePort,
+					}
+					want := wf.ActionBlock
+					if layer == wf.LayerALEAuthConnectV4 && ((remote == b && port == 443 && !removed) || (remote == c && port == 22)) {
+						want = wf.ActionPermit
+					}
+					if got := policyVerdict(plan, layer, fields); got != want {
+						t.Fatalf("removed=%t remote=%s port=%d layer=%v got=%v want=%v", removed, remote, port, layer, got, want)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestWindowsDirectPeerFilterPlanPreservesPairAuthority(t *testing.T) {
+	local := netip.MustParseAddr("100.64.0.1")
+	peer := netip.MustParseAddr("100.64.0.2")
+	other := netip.MustParseAddr("100.64.0.3")
+	for _, offline := range []bool{false, true} {
+		base := policyFixture(t, offline)
+		const candidateLUID, candidateIndex = uint64(23456), uint32(18)
+		active, err := base.withDirectPeer(local, peer, candidateLUID, candidateIndex)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range active.rules {
+			if !supportedNativeRule(r) {
+				t.Fatal("cannot encode Direct policy rule", r.Layer)
+			}
+		}
+		fields := map[wf.FieldID]any{wf.FieldIPLocalInterface: candidateLUID, wf.FieldInterfaceIndex: candidateIndex,
+			wf.FieldIPLocalAddress: local, wf.FieldIPRemoteAddress: peer, wf.FieldIPProtocol: wf.IPProto(6),
+			wf.FieldIPRemotePort: uint16(443), wf.FieldIPLocalPort: uint16(57000), wf.FieldFlags: wf.ConditionFlag(0)}
+		want := wf.ActionPermit
+		if offline {
+			want = wf.ActionBlock
+		}
+		if got := policyVerdict(active, wf.LayerALEAuthConnectV4, fields); got != want {
+			t.Fatal("unexpected Direct TCP decision", got, want)
+		}
+		fields[wf.FieldFlags] = wf.ConditionFlagIsReauthorize
+		if policyVerdict(active, wf.LayerALEAuthConnectV4, fields) != wf.ActionPermit || policyVerdict(active, wf.LayerALEAuthRecvAcceptV4, fields) != wf.ActionBlock {
+			t.Fatal("directions of signed grant changed")
+		}
+		fields[wf.FieldIPProtocol] = wf.IPProto(17)
+		if policyVerdict(active, wf.LayerALEAuthConnectV4, fields) != wf.ActionBlock {
+			t.Fatal("wrong protocol acquired a grant")
+		}
+		for _, owner := range []uint64{base.luid, candidateLUID} {
+			fields[wf.FieldIPLocalInterface] = owner
+			for _, layer := range []wf.LayerID{wf.LayerOutboundIPPacketV4, wf.LayerInboundIPPacketV4} {
+				fields[wf.FieldIPRemoteAddress] = peer
+				if policyVerdict(active, layer, fields) != wf.ActionPermit || policyVerdict(base, layer, fields) != wf.ActionBlock {
+					t.Fatal("missing or leaked pair exception")
+				}
+				fields[wf.FieldIPRemoteAddress] = other
+				if policyVerdict(active, layer, fields) != wf.ActionBlock {
+					t.Fatal("other peer inherited the active route")
+				}
+			}
+		}
+		if _, err := base.DenyAllTraffic().withDirectPeer(local, peer, candidateLUID, candidateIndex); err != ErrNoAuthority {
+			t.Fatal("denied plan generated a route exception", err)
+		}
 	}
 }

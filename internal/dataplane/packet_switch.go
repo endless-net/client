@@ -23,24 +23,25 @@ type packetBinding struct {
 // WireGuard, read virtual ports. Closing an engine cannot close the shared TUN.
 // The native session must remove dynamic permits before calling Close.
 type packetSwitch struct {
-	mu        sync.Mutex
-	writeMu   sync.Mutex
-	closeOnce sync.Once
-	ctx       context.Context
-	cancel    context.CancelFunc
-	native    tun.Device
-	primary   *packetPort
-	lease     *connectivity.Lease
-	maxPeers  int
-	mapValue  connectivity.Map
-	pairs     map[string]packetBinding
-	byIP      map[netip.Addr]string
-	routes    map[string]*peerRoute
-	epoch     uint64
-	closed    bool
-	err       error
-	closeErr  error
-	done      chan struct{}
+	mu         sync.Mutex
+	writeMu    sync.Mutex
+	closeOnce  sync.Once
+	ctx        context.Context
+	cancel     context.CancelFunc
+	native     tun.Device
+	primary    *packetPort
+	lease      *connectivity.Lease
+	maxPeers   int
+	mapValue   connectivity.Map
+	pairs      map[string]packetBinding
+	byIP       map[netip.Addr]string
+	routes     map[string]*peerRoute
+	nextEpoch  uint64
+	routeEpoch map[string]uint64
+	closed     bool
+	err        error
+	closeErr   error
+	done       chan struct{}
 }
 
 func newPacketSwitch(parent context.Context, native tun.Device, lease *connectivity.Lease, value connectivity.Map, mtu, maxPeers int) (*packetSwitch, error) {
@@ -116,8 +117,14 @@ func (s *packetSwitch) Update(value connectivity.Map) error {
 			removed = append(removed, route)
 		}
 	}
-	if value.Cursor().Revision != s.mapValue.Cursor().Revision {
-		s.epoch++
+	if s.routeEpoch == nil || value.Cursor().Revision != s.mapValue.Cursor().Revision {
+		// A new signed revision may narrow grants even for an unchanged
+		// identity. Fence all queued output admitted under its predecessor.
+		s.nextEpoch++
+		s.routeEpoch = make(map[string]uint64, len(pairs))
+		for id := range pairs {
+			s.routeEpoch[id] = s.nextEpoch
+		}
 	}
 	s.mapValue, s.pairs, s.byIP = value, pairs, byIP
 	s.mu.Unlock()
@@ -163,9 +170,15 @@ func (s *packetSwitch) SetRoute(peer string, route *peerRoute) error {
 		}
 		s.routes[peer] = route
 	} else {
+		if s.routes[peer] == nil {
+			return nil
+		}
 		delete(s.routes, peer)
 	}
-	s.epoch++
+	// Only this pair changed output path. Preserve queue guards for peers
+	// sharing the same switch, including their primary-engine packets.
+	s.nextEpoch++
+	s.routeEpoch[peer] = s.nextEpoch
 	return nil
 }
 
@@ -183,7 +196,7 @@ func (s *packetSwitch) primaryCurrent(b packetBinding, epoch uint64) bool {
 func (s *packetSwitch) routeCurrent(b packetBinding, route *peerRoute, epoch uint64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.admittedLocked() && s.epoch == epoch && s.pairs[b.peerID] == b && s.routes[b.peerID] == route
+	return s.admittedLocked() && s.routeEpoch[b.peerID] == epoch && s.pairs[b.peerID] == b && s.routes[b.peerID] == route
 }
 
 func (s *packetSwitch) send(raw []byte) error {
@@ -193,7 +206,7 @@ func (s *packetSwitch) send(raw []byte) error {
 	}
 	s.mu.Lock()
 	b, exists := s.pairs[s.byIP[destination]]
-	route, epoch := s.routes[b.peerID], s.epoch
+	route, epoch := s.routes[b.peerID], s.routeEpoch[b.peerID]
 	allowed := exists && s.admittedLocked()
 	s.mu.Unlock()
 	if !allowed || applicationForPair(raw, b.local, b.peer) != nil {
@@ -322,7 +335,6 @@ func (s *packetSwitch) Close() error {
 	s.closeOnce.Do(func() {
 		s.mu.Lock()
 		s.closed = true
-		s.epoch++
 		s.mu.Unlock()
 		s.cancel()
 		_ = s.primary.Close()

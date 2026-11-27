@@ -11,20 +11,44 @@ import (
 
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wintun"
+	"golang.zx2c4.com/wireguard/windows/driver"
 )
 
-var loader struct {
+type pinnedLoader struct {
 	sync.Once
 	handle windows.Handle // retained for the process lifetime
 	err    error
 }
 
+var loader, kernelLoader pinnedLoader
+
 // Load verifies and pins the adjacent DLL before the upstream lazy loader can
 // search by basename. A prior foreign module or any failure is terminal for
 // this process. It never searches PATH/System32 for a substitute Wintun binary.
 func Load() error {
-	loader.Do(func() { loader.handle, loader.err = load() })
+	loader.Do(func() {
+		m, err := bundled()
+		if err != nil {
+			loader.err = err
+			return
+		}
+		loader.handle, loader.err = load("wintun.dll", "WintunSetLogger", m, wintun.Version)
+	})
 	return loader.err
+}
+
+// LoadWireGuardNT pins the bundled SDK without creating an adapter or
+// installing its driver. The Go binding initializes only after verification.
+func LoadWireGuardNT() error {
+	kernelLoader.Do(func() {
+		m, err := parseManifest(kernelManifestBytes, "wireguard-nt", "wireguard.dll")
+		if err != nil {
+			kernelLoader.err = err
+			return
+		}
+		kernelLoader.handle, kernelLoader.err = load("wireguard.dll", "WireGuardSetLogger", m, driver.Version)
+	})
+	return kernelLoader.err
 }
 
 func module(name string) (windows.Handle, error) {
@@ -37,30 +61,26 @@ func module(name string) (windows.Handle, error) {
 	return h, err
 }
 
-func load() (windows.Handle, error) {
+func load(name, logger string, m manifest, version func() string) (windows.Handle, error) {
 	if runtime.GOARCH != "amd64" {
 		return 0, ErrDriver
 	}
-	m, err := bundled()
-	if err != nil {
-		return 0, err
-	}
 	// The package's own Once owns all accepted preloads. Do not adopt an
 	// already mapped same-name module whose original bytes cannot be proven.
-	if _, err := module("wintun.dll"); !os.IsNotExist(err) && err != windows.ERROR_MOD_NOT_FOUND {
+	if _, err := module(name); !os.IsNotExist(err) && err != windows.ERROR_MOD_NOT_FOUND {
 		return 0, ErrDriver
 	}
 	executable, err := os.Executable()
 	if err != nil {
 		return 0, ErrDriver
 	}
-	path := filepath.Join(filepath.Dir(executable), "wintun.dll")
-	file, unlock, err := lockBinary(path)
+	path := filepath.Join(filepath.Dir(executable), name)
+	file, unlock, err := lockBinary(path, name)
 	if err != nil {
 		return 0, ErrDriver
 	}
 	defer unlock()
-	if verify(file, m.Files["wintun.dll"]) != nil {
+	if verify(file, m.Files[name]) != nil {
 		return 0, ErrDriver
 	}
 	h, err := windows.LoadLibraryEx(path, 0, windows.LOAD_LIBRARY_SEARCH_SYSTEM32)
@@ -73,16 +93,16 @@ func load() (windows.Handle, error) {
 			_ = windows.FreeLibrary(h)
 		}
 	}()
-	actual, err := module("wintun.dll")
+	actual, err := module(name)
 	if err != nil || actual != h {
 		return 0, ErrDriver
 	}
 	// Trigger upstream initialization while only the verified DLL is mapped.
 	// Its default logger is then disabled before any adapter operation.
-	if wintun.Version() != m.Version {
+	if version() != m.Version {
 		return 0, ErrDriver
 	}
-	setLogger, err := windows.GetProcAddress(h, "WintunSetLogger")
+	setLogger, err := windows.GetProcAddress(h, logger)
 	if err != nil {
 		return 0, ErrDriver
 	}
@@ -94,7 +114,7 @@ func load() (windows.Handle, error) {
 // lockBinary holds every ancestor against rename/replacement and holds the DLL
 // against writes/deletion from before hashing through LoadLibraryEx. Reparse
 // points and UNC/device paths are rejected. No ACL or file content is changed.
-func lockBinary(path string) (*os.File, func(), error) {
+func lockBinary(path, name string) (*os.File, func(), error) {
 	var handles []windows.Handle
 	var file *os.File
 	var released sync.Once
@@ -110,7 +130,7 @@ func lockBinary(path string) (*os.File, func(), error) {
 	}
 	fail := func() (*os.File, func(), error) { unlock(); return nil, nil, ErrDriver }
 	volume := filepath.VolumeName(path)
-	if len(volume) != 2 || volume[1] != ':' || !filepath.IsAbs(path) || filepath.Clean(path) != path || !strings.EqualFold(filepath.Base(path), "wintun.dll") {
+	if len(volume) != 2 || volume[1] != ':' || !filepath.IsAbs(path) || filepath.Clean(path) != path || !strings.EqualFold(filepath.Base(path), name) {
 		return fail()
 	}
 	current := volume + `\`

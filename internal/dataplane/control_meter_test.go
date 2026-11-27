@@ -81,13 +81,16 @@ func TestConfirmedControlMetersActualWireBothWaysWithoutAppOrRekeyQuota(t *testi
 	if err := guard(73); !errors.Is(err, ErrProbeBudget) {
 		t.Fatal("confirmed own proof bypassed exhausted shared search ledger", err)
 	}
+	if used := c.serviceWindow.wire.consumed(); used != want {
+		t.Fatalf("rejected output consumed maintenance bytes: got %d want %d", used, want)
+	}
 	a, _, _ := c.controlSnapshot()
 	local, peer, _ := a.addresses()
 	app := cipherIPv4(local.String(), peer.String(), 8)
 	if c.controlSendGuard(app) != nil || c.controlReceived(cipherIPv4(peer.String(), local.String(), 9), 91) != nil {
 		t.Fatal("application inherited service quota")
 	}
-	endpoint, _ := c.bind.ParseEndpoint(a.offer.PeerEndpoint)
+	endpoint, _ := c.bind.ParseEndpoint(a.peerEndpoint)
 	// Crypto maintenance bypasses service hooks and still needs current channel
 	// admission. It must not inherit an exhausted search or service window.
 	if err := c.bind.Send([][]byte{{1, 2, 3}}, endpoint); err != nil {
@@ -120,6 +123,33 @@ func TestConfirmedServiceGuardRetainsOriginalNonceDeadlineAndCancellation(t *tes
 				t.Fatal("rejected queued control consumed another probe's wire allowance", got)
 			}
 		})
+	}
+}
+
+func TestIncomingChallengeCannotAuthorizeEchoBeforeAccounting(t *testing.T) {
+	c, _, p := confirmedMeterFixture(t)
+	challenge := peerMeterChallenge(p)
+	incoming := meterRaw(t, c, challenge, true)
+	reply := meterRaw(t, c, replyControl(challenge, transport.Echo), false)
+	canEcho := func() error { return c.controlSendGuard(reply)(300) }
+	err := c.receiveControl(incoming, func(*probeCycle) error {
+		if err := canEcho(); !errors.Is(err, ErrNoAuthority) {
+			t.Fatalf("pending input authorized an echo: %v", err)
+		}
+		return ErrProbeBudget
+	})
+	if !errors.Is(err, ErrProbeBudget) || !errors.Is(canEcho(), ErrNoAuthority) {
+		t.Fatal("rejected input published an echo receipt", err)
+	}
+	if err := c.controlReceived(incoming, 361); err != nil {
+		t.Fatal(err)
+	}
+	// A rejected duplicate cannot remove the original paid receipt.
+	if err := c.receiveControl(incoming, func(*probeCycle) error { return ErrNoAuthority }); !errors.Is(err, ErrNoAuthority) {
+		t.Fatal(err)
+	}
+	if err := canEcho(); err != nil {
+		t.Fatal("paid input lost its echo receipt", err)
 	}
 }
 
@@ -179,7 +209,7 @@ func TestConfirmedServiceWindowSurvivesNewCandidateAndExhaustion(t *testing.T) {
 	// Ordinary data keeps working even after the search is over and both probe
 	// quotas are exhausted; only original map/profile/lease still authorize it.
 	a, _, _ := c.controlSnapshot()
-	endpoint, _ := c.bind.ParseEndpoint(a.offer.PeerEndpoint)
+	endpoint, _ := c.bind.ParseEndpoint(a.peerEndpoint)
 	if err := c.bind.Send([][]byte{{4}}, endpoint); err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +239,7 @@ func TestServiceMetadataCannotOutliveSemanticEndpointChange(t *testing.T) {
 	f.clock.advance(time.Millisecond, time.Millisecond)
 	f.snapshot.Revision.Network++
 	f.snapshot.Network.Revision = f.snapshot.Revision.Network
-	f.snapshot.Peers[0].Transport.Profiles[0].PeerEndpoint = "192.0.2.21:51820"
+	f.snapshot.Peers[0].Transport.Profiles[0].PeerEndpoints = []string{"192.0.2.21:51820"}
 	f.snapshot.Peers[0].Transport.PeerAdvertisement.Endpoints[0].Endpoint = "192.0.2.21:51820"
 	f.refresh(t, &cursor)
 	if err := c.Update(t.Context(), f.verified); err != nil {
@@ -227,7 +257,7 @@ func TestServiceGuardNarrowsPhysicalWriteDeadlineAndNeverWritesAfterQuota(t *tes
 	c, f, p := confirmedMeterFixture(t)
 	guard := c.controlSendGuard(meterRaw(t, c, p.request, false))
 	f.clock.advance(2*time.Second, 2*time.Second)
-	endpoint, err := c.bind.ParseEndpoint(p.assignment.offer.PeerEndpoint)
+	endpoint, err := c.bind.ParseEndpoint(p.assignment.peerEndpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,6 +379,11 @@ func TestSupervisorLocalServiceQuotaKeepsSelectedDirectAndOldProofTime(t *testin
 // transmit eligibility is a deliberate unit seam after the cold own Echo; full
 // three-proof bilateral activation is covered by the two-supervisor tests.
 func TestRetainedControlMeterWithActualPinnedCryptoAndApplicationTraffic(t *testing.T) {
+	testRetainedControlMeter(t, nil)
+}
+
+func testRetainedControlMeter(t *testing.T, kernel kernelPreparer) {
+	t.Helper()
 	for _, engine := range []string{transport.WireGuard, transport.AmneziaWG} {
 		t.Run(engine, func(t *testing.T) {
 			a := newCandidateFixture(t)
@@ -393,7 +428,7 @@ func TestRetainedControlMeterWithActualPinnedCryptoAndApplicationTraffic(t *test
 			for i, f := range fixtures {
 				socket := sockets[i]
 				peer := f.snapshot.Peers[0].ID
-				channels[i], err = buildAssignedCipher(t.Context(), f.verified, f.lease, peer, profile.ID, f.profile.Keys.WireGuardPrivate, 1420, f.clock, func(raw []byte) error { output <- bytes.Clone(raw); return nil }, func(uint16) (candidateSocket, error) { return socket, nil })
+				channels[i], err = prepareAssignedCipher(t.Context(), f.verified, f.lease, peer, profile.ID, f.profile.Keys.WireGuardPrivate, 1420, f.clock, func(raw []byte) error { output <- bytes.Clone(raw); return nil }, func(uint16) (candidateSocket, error) { return socket, nil }, kernel)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -431,8 +466,61 @@ func TestRetainedControlMeterWithActualPinnedCryptoAndApplicationTraffic(t *test
 			if err != nil {
 				t.Fatal(err)
 			}
+			wireTotals := func() [2]int {
+				var totals [2]int
+				for i, s := range sockets {
+					s.mu.Lock()
+					for _, packet := range s.writes {
+						totals[i] += len(packet.raw) + 28
+					}
+					s.mu.Unlock()
+				}
+				return totals
+			}
+			before := wireTotals()
+			// Hold one encrypted application datagram in the simulated network
+			// until the maintenance challenge has also reached the same socket.
+			app := cipherIPv4("100.70.0.1", "100.70.0.2", 18)
+			sender := sockets[0]
+			holdNext := func(socket *searchSocket) (<-chan candidateDatagram, func(candidateDatagram) error) {
+				held := make(chan candidateDatagram, 1)
+				socket.mu.Lock()
+				deliver := socket.forward
+				socket.forward = func(packet candidateDatagram) error {
+					socket.mu.Lock()
+					socket.forward = deliver
+					socket.mu.Unlock()
+					held <- packet
+					return nil
+				}
+				socket.mu.Unlock()
+				return held, deliver
+			}
+			held, deliver := holdNext(sender)
+			if err := channels[0].QueueApplication(app); err != nil {
+				t.Fatal(err)
+			}
+			var inFlight candidateDatagram
+			select {
+			case inFlight = <-held:
+			case <-time.After(time.Second):
+				t.Fatal("application packet did not reach the public socket")
+			}
+			echoes, deliverEcho := holdNext(sockets[1])
 			if err := proof.Send(); err != nil {
 				t.Fatal(err)
+			}
+			select {
+			case echo := <-echoes:
+				challengeBytes := wireTotals()[0] - before[0] - len(inFlight.raw) - 28
+				if challengeBytes <= 28 || fresh.wire.consumed() != challengeBytes || channels[1].serviceWindow.wire.consumed() != challengeBytes+len(echo.raw)+28 {
+					t.Fatal("challenge and echo debits differ from individual socket writes")
+				}
+				if err := deliverEcho(echo); err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("maintenance echo did not reach the public socket")
 			}
 			select {
 			case <-proof.done:
@@ -442,12 +530,28 @@ func TestRetainedControlMeterWithActualPinnedCryptoAndApplicationTraffic(t *test
 			if _, err := proof.Evidence(); err != nil {
 				t.Fatal(err)
 			}
+			if err := deliver(inFlight); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case got := <-output:
+				if !bytes.Equal(got, app) {
+					t.Fatal("reordered application payload changed")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("application datagram lost during maintenance exchange")
+			}
 			consumed := fresh.wire.consumed()
+			after := wireTotals()
+			sent, received := after[0]-before[0]-len(inFlight.raw)-28, after[1]-before[1]
+			if sent == 0 || received == 0 || consumed != sent+received {
+				t.Fatalf("service ledger %d, challenge wire %d, echo wire %d", consumed, sent, received)
+			}
 			plain := len(meterRaw(t, channels[0], proof.request, false))
 			if consumed <= 2*(plain+28) || consumed != channels[0].serviceWindow.wire.consumed() || consumed != channels[1].serviceWindow.wire.consumed() {
 				t.Fatal("actual bidirectional ciphertext size lost between supplier hooks and service ledger", consumed, plain, channels[0].serviceWindow.wire.consumed(), channels[1].serviceWindow.wire.consumed())
 			}
-			app := cipherIPv4("100.70.0.1", "100.70.0.2", 19)
+			app = cipherIPv4("100.70.0.1", "100.70.0.2", 19)
 			if err := channels[0].QueueApplication(app); err != nil {
 				t.Fatal(err)
 			}
@@ -461,6 +565,42 @@ func TestRetainedControlMeterWithActualPinnedCryptoAndApplicationTraffic(t *test
 			}
 			if fresh.wire.consumed() != consumed || channels[0].serviceWindow.wire.consumed() != consumed || channels[1].serviceWindow.wire.consumed() != consumed {
 				t.Fatal("application wire consumed probe/service allowance")
+			}
+			expiring, err := channels[0].BeginProbe(fresh, fresh.id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Queue maintenance and app traffic behind the same closed wire
+			// gate. The first packet's nonce expires before either can leave.
+			gate := channels[0].bind.sendGate
+			<-gate
+			beforeExpiry := wireTotals()
+			sender.mu.Lock()
+			writeCount := len(sender.writes)
+			sender.mu.Unlock()
+			err = expiring.Send()
+			if err == nil {
+				err = channels[0].QueueApplication(app)
+			}
+			a.clock.advance(4*time.Second, 4*time.Second)
+			gate <- struct{}{}
+			if err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case got := <-output:
+				if !bytes.Equal(got, app) {
+					t.Fatal("application packet changed while maintenance expired")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("application queue stopped behind expired maintenance")
+			}
+			afterExpiry := wireTotals()
+			sender.mu.Lock()
+			outgoing := len(sender.writes) - writeCount
+			sender.mu.Unlock()
+			if !errors.Is(expiring.attempt.check(), context.DeadlineExceeded) || outgoing != 1 || afterExpiry[0] <= beforeExpiry[0] || afterExpiry[1] != beforeExpiry[1] || fresh.wire.consumed() != consumed {
+				t.Fatal("expired maintenance emitted an echo or charged the wire ledger")
 			}
 			if err := channels[0].serviceWindow.charge(transport.MaxProbeBytes - consumed); err != nil {
 				t.Fatal(err)

@@ -5,6 +5,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -41,6 +42,8 @@ func (c WindowsSessionConfig) Validate() error {
 // application and an acknowledged listener, never a peer handshake/Connected UI.
 // Refresh/offline delivery and the daemon worker are separate lifecycle steps.
 type WindowsSession struct {
+	lanInterfaces    map[netip.Addr]uint32
+	weakSendOwned    bool
 	mu               sync.Mutex
 	store            *state.Store
 	profileID, id    string
@@ -496,7 +499,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 			return time.Time{}
 		}
 		return sample.Wall
-	}}, probeInterval: s.config.ProbeInterval, retry: s.config.RelayRetryInterval, mtu: s.config.MTU, maxPeers: s.config.MaxPeers, hintStore: s.store, networkContext: s.networkContext, advertise: func() {
+	}}, probeInterval: s.config.ProbeInterval, retry: s.config.RelayRetryInterval, mtu: s.config.MTU, maxPeers: s.config.MaxPeers, selectDirect: s.selectDirect, hintStore: s.store, networkContext: s.networkContext, advertise: func() {
 		select {
 		case s.adsChanged <- struct{}{}:
 		default:

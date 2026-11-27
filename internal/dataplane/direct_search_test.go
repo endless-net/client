@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/netip"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -24,6 +25,11 @@ import (
 
 func reverseSearchFixture(t *testing.T, a *candidateFixture) *candidateFixture {
 	t.Helper()
+	return reverseSearchPeer(t, a, a.snapshot.Peers[0], bytes.Repeat([]byte{84}, 32))
+}
+
+func reverseSearchPeer(t *testing.T, a *candidateFixture, remote coordinator.Peer, private []byte) *candidateFixture {
+	t.Helper()
 	var profile state.Profile
 	raw, _ := json.Marshal(a.profile)
 	if err := json.Unmarshal(raw, &profile); err != nil {
@@ -33,41 +39,47 @@ func reverseSearchFixture(t *testing.T, a *candidateFixture) *candidateFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys.WireGuardPrivate = bytes.Repeat([]byte{84}, 32)
+	keys.WireGuardPrivate = private
 	profile.Keys = keys
 	fingerprint, err := keys.Fingerprint()
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile.Attempt.DeviceKeyHash, profile.Attempt.NodeID = fingerprint, "peer"
-	profile.Connection.Generation = 4
+	profile.Attempt.DeviceKeyHash, profile.Attempt.NodeID = fingerprint, remote.ID
+	profile.Connection.Generation = remote.Transport.PeerAdvertisement.IntentGeneration
 	var trust signing.ServerKeyResponse
 	if err := json.Unmarshal(a.trust.Bundle, &trust); err != nil {
 		t.Fatal(err)
 	}
 	scopes := []string{"node:register", "node:map", "node:endpoint"}
-	payload, err := coordinator.NodeCredentialSigningPayload(trust.NodeCredentialTrustBundle.ActiveKeyID, "network", "peer", scopes, profile.Attempt.CredentialEnds)
+	payload, err := coordinator.NodeCredentialSigningPayload(trust.NodeCredentialTrustBundle.ActiveKeyID, "network", remote.ID, scopes, profile.Attempt.CredentialEnds)
 	if err != nil {
 		t.Fatal(err)
 	}
-	claims := coordinator.NodeCredentialClaims{Version: 3, Algorithm: "ed25519-node-credential-v3", KeyID: trust.NodeCredentialTrustBundle.ActiveKeyID, NetworkID: "network", NodeID: "peer", Scopes: scopes, ExpiresAt: profile.Attempt.CredentialEnds, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(ed25519.NewKeyFromSeed(bytes.Repeat([]byte{82}, 32)), payload))}
+	claims := coordinator.NodeCredentialClaims{Version: 3, Algorithm: "ed25519-node-credential-v3", KeyID: trust.NodeCredentialTrustBundle.ActiveKeyID, NetworkID: "network", NodeID: remote.ID, Scopes: scopes, ExpiresAt: profile.Attempt.CredentialEnds, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(ed25519.NewKeyFromSeed(bytes.Repeat([]byte{82}, 32)), payload))}
 	raw, err = json.Marshal(claims)
 	if err != nil {
 		t.Fatal(err)
 	}
 	profile.Secrets.NodeCredential = "enc_" + base64.RawURLEncoding.EncodeToString(raw)
 	b := &candidateFixture{clock: a.clock, profile: profile, mapKey: a.mapKey, trust: a.trust}
-	local, remote := a.snapshot.Node, a.snapshot.Peers[0]
+	local := a.snapshot.Node
 	localAd := remote.Transport.PeerAdvertisement
-	node := coordinator.Node{ID: remote.ID, NetworkID: "network", PublicKey: remote.PublicKey, AssignedIP: "100.70.0.2", ApprovalState: "approved", Status: "online", EndpointExpiresAt: remote.EndpointExpiresAt, Transport: &localAd}
+	node := coordinator.Node{ID: remote.ID, NetworkID: "network", PublicKey: remote.PublicKey, AssignedIP: strings.TrimSuffix(remote.AllowedIPs[0], "/32"), ApprovalState: "approved", Status: "online", EndpointExpiresAt: remote.EndpointExpiresAt, Transport: &localAd}
 	peer := coordinator.Peer{ID: local.ID, NetworkID: "network", PublicKey: local.PublicKey, Endpoint: "192.0.2.10:51821", EndpointGeneration: 1, EndpointExpiresAt: local.EndpointExpiresAt, AllowedIPs: []string{"100.70.0.1/32"}, ACLRestricted: true, ACLGrants: []coordinator.ACLGrant{{DestinationCIDRs: []string{"100.70.0.1/32"}, AllowedPorts: []coordinator.ACLPort{{Protocol: "tcp", Port: 443}}}}}
-	peer.Transport = &coordinator.PeerTransportPlan{Version: coordinator.PeerTransportPlanVersion, Availability: remote.Transport.Availability, AccountID: "account", NetworkID: "network", LocalNodeID: node.ID, LocalPublicKey: node.PublicKey, PeerNodeID: peer.ID, PeerPublicKey: peer.PublicKey, LocalIntentGeneration: 4, Revision: a.snapshot.Revision, IssuedAt: remote.Transport.IssuedAt, ExpiresAt: remote.Transport.ExpiresAt, PeerAdvertisement: *local.Transport, Profiles: append([]coordinator.TransportProfileOffer(nil), remote.Transport.Profiles...)}
+	peer.Transport = &coordinator.PeerTransportPlan{Version: coordinator.PeerTransportPlanVersion, Availability: remote.Transport.Availability, AccountID: "account", NetworkID: "network", LocalProbeIPv4: remote.Transport.PeerProbeIPv4, PeerProbeIPv4: remote.Transport.LocalProbeIPv4, LocalNodeID: node.ID, LocalPublicKey: node.PublicKey, PeerNodeID: peer.ID, PeerPublicKey: peer.PublicKey, LocalIntentGeneration: profile.Connection.Generation, Revision: a.snapshot.Revision, IssuedAt: remote.Transport.IssuedAt, ExpiresAt: remote.Transport.ExpiresAt, PeerAdvertisement: *local.Transport, Profiles: append([]coordinator.TransportProfileOffer(nil), remote.Transport.Profiles...)}
+	peer.Transport.PeerAdvertisement.Endpoints = []coordinator.TransportEndpoint{}
 	for i := range peer.Transport.Profiles {
 		offer := &peer.Transport.Profiles[i]
-		offer.LocalEndpoint, offer.PeerEndpoint = offer.PeerEndpoint, offer.LocalEndpoint
+		offer.LocalEndpoints, offer.PeerEndpoints = offer.PeerEndpoints, offer.LocalEndpoints
+		for _, ep := range local.Transport.Endpoints {
+			if ep.ProfileID == offer.Profile.ID && ep.ProfileDigest == offer.Digest {
+				peer.Transport.PeerAdvertisement.Endpoints = append(peer.Transport.PeerAdvertisement.Endpoints, ep)
+			}
+		}
 	}
 	b.snapshot = coordinator.NetworkMapSnapshot{Revision: a.snapshot.Revision, Network: a.snapshot.Network, Node: node, Peers: []coordinator.Peer{peer}}
-	b.lease, err = connectivity.NewLease(t.Context(), b.clock, profile.ID, 4)
+	b.lease, err = connectivity.NewLease(t.Context(), b.clock, profile.ID, profile.Connection.Generation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,6 +96,11 @@ func (s *searchSocket) LocalAddr() net.Addr { return net.UDPAddrFromAddrPort(s.a
 
 func TestTwoSupervisorsRecoverDirectWithActualAWGAfterFilteredWG(t *testing.T) {
 	testTwoSupervisorsRecoverDirect(t, true, false, 0)
+}
+
+func TestDirectOverSecondLANAddress(t *testing.T) {
+	backend := searchTestBackend{newTransportBudget, (*peerCipher)(nil)}
+	testTwoSupervisorsThroughSelection(t, false, false, 0, backend, backend, false, nil, true)
 }
 
 func TestTwoSupervisorsRecoverDirectWithActualWG(t *testing.T) {
@@ -103,7 +120,64 @@ func TestTwoSupervisorsRecoverRelayAndAWGWhenRevisionFasterThanRTT(t *testing.T)
 }
 
 func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, revisionInterval time.Duration) {
+	backend := searchTestBackend{newTransportBudget, (*peerCipher)(nil)}
+	testTwoSupervisorsWithBudget(t, filterWG, preferAWG, revisionInterval, backend, backend)
+}
+
+type searchTestBackend struct {
+	makeBudget func(int) (*transportBudget, error)
+	expected   directPeerEngine
+}
+
+func productionSearchTestBudget(maxPeers int) (*transportBudget, error) {
+	resources, err := NewTransportResources(maxPeers)
+	if err != nil {
+		return nil, err
+	}
+	return resources.budget, nil
+}
+
+func testTwoSupervisorsWithBudget(t *testing.T, filterWG, preferAWG bool, revisionInterval time.Duration, firstBackend, secondBackend searchTestBackend) {
+	t.Helper()
+	testTwoSupervisorsThroughSelection(t, filterWG, preferAWG, revisionInterval, firstBackend, secondBackend, false, nil, false)
+}
+
+func sendWindowsRoutedUDP(t *testing.T, remote *switchTUN) *net.UDPConn {
+	t.Helper()
+	udp, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(100, 70, 0, 2), Port: 443})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = udp.Close() })
+	if _, err := udp.Write([]byte("selected-native-route")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case packet := <-remote.output:
+		if len(packet) < 28 || [4]byte(packet[12:16]) != [4]byte{100, 70, 0, 1} || !bytes.Equal(packet[28:], []byte("selected-native-route")) {
+			t.Fatal("incorrect routed application packet at remote peer")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("selected native route failed to deliver application data")
+	}
+	return udp
+}
+
+type searchRouteFixture struct {
+	refresh        func(connectivity.Map)
+	verifyFallback func(*net.UDPConn)
+}
+
+func testTwoSupervisorsThroughSelection(t *testing.T, filterWG, preferAWG bool, revisionInterval time.Duration, firstBackend, secondBackend searchTestBackend, rejectRoute bool, setupRoute func(*testing.T, *candidateFixture, *supervisorConfig) searchRouteFixture, multipleLAN bool) {
+	t.Helper()
+	qualified := make(chan string, 2)
 	a := newCandidateFixture(t)
+	var hostRoute searchRouteFixture
+	if setupRoute != nil {
+		a.clock.startRealTime()
+		grant := &a.snapshot.Peers[0].ACLGrants[0]
+		grant.AllowedPorts = append(grant.AllowedPorts, coordinator.ACLPort{Protocol: "udp", Port: 443})
+	}
 	caps := TransportCapabilities()
 	a.snapshot.Node.Transport.Capabilities = caps
 	a.snapshot.Node.Transport.Endpoints = []coordinator.TransportEndpoint{}
@@ -111,14 +185,19 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 	a.snapshot.Peers[0].Transport.PeerAdvertisement.Endpoints = []coordinator.TransportEndpoint{}
 	profiles := []transport.Profile{cipherProfile(transport.WireGuard), cipherProfile(transport.AmneziaWG)}
 	profiles[0].ID, profiles[1].ID = "plain", "obfuscated"
+	if multipleLAN {
+		profiles = profiles[:1]
+	}
 	var offers []coordinator.TransportProfileOffer
 	for _, profile := range profiles {
 		digest, err := transport.ProfileDigest(profile)
 		if err != nil {
 			t.Fatal(err)
 		}
-		offers = append(offers, coordinator.TransportProfileOffer{Profile: profile, Digest: digest})
+		offers = append(offers, coordinator.TransportProfileOffer{Profile: profile, Digest: digest, LocalEndpoints: []string{}, PeerEndpoints: []string{}})
 	}
+	a.snapshot.Peers[0].Transport.LocalProbeIPv4 = "172.20.4.10"
+	a.snapshot.Peers[0].Transport.PeerProbeIPv4 = "172.20.4.11"
 	a.snapshot.Peers[0].Transport.Profiles = offers
 	previous := a.verified.Cursor()
 	a.clock.advance(time.Millisecond, time.Millisecond)
@@ -126,8 +205,24 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 	a.snapshot.Network.Revision++
 	a.refresh(t, &previous)
 	b := reverseSearchFixture(t, a)
-	a.withRelay(t)
-	b.withRelay(t)
+	// Relay remains authorized throughout initial qualification, Direct recovery
+	// and fallback. Credential expiry is a separate failure mode.
+	const transportMapTTL = 2 * time.Minute
+	const discoveryTTL = transportMapTTL + time.Minute
+	for _, f := range []*candidateFixture{a, b} {
+		f.mapTTL = transportMapTTL
+		sample, _ := f.clock.Sample()
+		discoveryExpiry := sample.Wall.Add(discoveryTTL)
+		f.snapshot.Node.EndpointExpiresAt = &discoveryExpiry
+		f.snapshot.Peers[0].EndpointExpiresAt = &discoveryExpiry
+		f.withRelayLifetime(t, "relay.example:443", transportMapTTL)
+	}
+	// Open the Relay transports only after Wintun DAD and initial WFP setup.
+	// Their heartbeat and socket deadlines start as soon as Open returns.
+	var routeConfig supervisorConfig
+	if setupRoute != nil {
+		hostRoute = setupRoute(t, a, &routeConfig)
+	}
 	first, _, firstFrames, injectFirst := relayPipeFixtureFor(t, a)
 	second, _, secondFrames, injectSecond := relayPipeFixtureFor(t, b)
 	bridge := func(source *RelayTransport, frames <-chan *relaywire.ClientFrame, inject func(string, []byte), node string) {
@@ -151,7 +246,9 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 	bridge(second, secondFrames, injectFirst, "peer")
 	var networkMu sync.Mutex
 	sockets := make(map[string]*searchSocket)
-	var plainWrites, obfuscatedWrites int
+	var plainWrites, obfuscatedWrites, failedLANWrites int
+	var socketSequence uint16
+	blockDirect := false
 	stores := make(map[string]*state.Store)
 	contextDigest := strings.Repeat("9", 64)
 	listen := func(node string) func(string, string, uint16) (candidateSocket, error) {
@@ -165,13 +262,20 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 			if profile == "obfuscated" {
 				address = netip.AddrPortFrom(address.Addr(), address.Port()+1)
 			}
-			socket := &searchSocket{newCandidateSocketFixture(), address}
 			networkMu.Lock()
+			if multipleLAN {
+				socketSequence++
+				address = netip.AddrPortFrom(address.Addr(), address.Port()+socketSequence)
+			}
+			socket := &searchSocket{newCandidateSocketFixture(), address}
 			sockets[node+"/"+profile] = socket
 			networkMu.Unlock()
 			inFlight := make(chan struct{}, portQueueFrames)
 			socket.forward = func(packet candidateDatagram) error {
 				networkMu.Lock()
+				if multipleLAN && packet.address.Addr() == netip.MustParseAddr("10.0.0.20") {
+					failedLANWrites++
+				}
 				if profile == "plain" {
 					plainWrites++
 					if filterWG {
@@ -185,8 +289,9 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 				deliver := func() {
 					networkMu.Lock()
 					target := sockets[other+"/"+profile]
+					blocked := blockDirect
 					networkMu.Unlock()
-					if target == nil || packet.address != target.address {
+					if blocked || target == nil || packet.address != target.address {
 						return
 					}
 					select {
@@ -221,7 +326,7 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 			return socket, nil
 		}
 	}
-	start := func(f *candidateFixture, connection *RelayTransport) (*transportSupervisor, *packetSwitch, *switchTUN) {
+	start := func(f *candidateFixture, connection *RelayTransport, backend searchTestBackend) (*transportSupervisor, *packetSwitch, *switchTUN) {
 		store, _ := hintStoreFixture(t, f)
 		stores[f.snapshot.Node.ID] = store
 		if preferAWG || filterWG {
@@ -248,7 +353,7 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 			}
 		}
 		packets, native := switchFixture(t, f)
-		budget, err := newTransportBudget(1)
+		budget, err := backend.makeBudget(1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -265,7 +370,24 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 		if err := primary.Apply(t.Context(), f.verified, f.profile.Keys.WireGuardPrivate); err != nil {
 			t.Fatal(err)
 		}
-		g, err := newTransportSupervisor(t.Context(), f.verified, f.lease, f.clock, f.profile.ID, f.profile.Connection.Generation, f.profile.Keys.WireGuardPrivate, budget, packets, primary, supervisorConfig{relay: connection.config, probeInterval: time.Millisecond, retry: time.Second, mtu: 576, maxPeers: 1, listenCandidate: listen(f.snapshot.Node.ID), hintStore: store, networkContext: func(context.Context, []byte) (string, error) { return contextDigest, nil }}, func(context.Context, connectivity.Map, string) (*RelayTransport, error) { return connection, nil })
+		config := supervisorConfig{relay: connection.config, probeInterval: time.Millisecond, retry: time.Second, mtu: 576, maxPeers: 1, listenCandidate: listen(f.snapshot.Node.ID), hintStore: store, networkContext: func(context.Context, []byte) (string, error) { return contextDigest, nil }}
+		if setupRoute != nil && f == a {
+			config.selectDirect = routeConfig.selectDirect
+		}
+		if rejectRoute {
+			node := f.snapshot.Node.ID
+			var once sync.Once
+			config.selectDirect = func(route *peerRoute, activation *directActivation) (*assignedCipher, error) {
+				if err := activation.check(); err != nil {
+					return nil, err
+				}
+				if activation.commit.ProfileDigest == offers[0].Digest && reflect.TypeOf(activation.direct.cipher) == reflect.TypeOf(backend.expected) {
+					once.Do(func() { qualified <- node })
+				}
+				return nil, ErrIPConflict
+			}
+		}
+		g, err := newTransportSupervisor(t.Context(), f.verified, f.lease, f.clock, f.profile.ID, f.profile.Connection.Generation, f.profile.Keys.WireGuardPrivate, budget, packets, primary, config, func(context.Context, connectivity.Map, string) (*RelayTransport, error) { return connection, nil })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -273,14 +395,22 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 		return g, packets, native
 	}
 	lastAdvance := time.Now()
-	ga, pa, na := start(a, first)
-	gb, pb, nb := start(b, second)
+	ga, pa, na := start(a, first, firstBackend)
+	gb, pb, nb := start(b, second, secondBackend)
 	lastAds := ""
+	withdrawnLAN := false
 	var lastMapAt time.Duration
 	globalChanges := 0
 	update := func() {
 		adA := ga.advertisement(netip.MustParseAddr("192.0.2.10"))
 		adB := gb.advertisement(netip.MustParseAddr("192.0.2.20"))
+		if multipleLAN {
+			if withdrawnLAN {
+				adB = gb.advertisement(netip.MustParseAddr("10.0.0.20"))
+			} else {
+				adB = gb.advertisement(netip.MustParseAddr("10.0.0.20"), netip.MustParseAddr("192.0.2.20"))
+			}
+		}
 		raw, _ := json.Marshal([]coordinator.TransportAdvertisement{adA, adB})
 		sample, _ := a.clock.Sample()
 		renewal := revisionInterval > 0 && sample.Uptime-lastMapAt >= revisionInterval
@@ -302,23 +432,14 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 			plan.PeerAdvertisement = remote
 			for j := range plan.Profiles {
 				offer := &plan.Profiles[j]
-				offer.LocalEndpoint, offer.PeerEndpoint = "", ""
-				for _, ep := range local.Endpoints {
-					if ep.ProfileID == offer.Profile.ID && ep.ProfileDigest == offer.Digest {
-						offer.LocalEndpoint = ep.Endpoint
-					}
-				}
-				for _, ep := range remote.Endpoints {
-					if ep.ProfileID == offer.Profile.ID && ep.ProfileDigest == offer.Digest {
-						offer.PeerEndpoint = ep.Endpoint
-					}
-				}
+				offer.LocalEndpoints = coordinator.ProfileEndpoints(local, offer.Profile.ID, offer.Digest)
+				offer.PeerEndpoints = coordinator.ProfileEndpoints(remote, offer.Profile.ID, offer.Digest)
 			}
 			previous := f.verified.Cursor()
 			f.snapshot.Revision.Network++
 			f.snapshot.Network.Revision++
 			sample, _ := f.clock.Sample()
-			discoveryExpiry := sample.Wall.Add(time.Minute)
+			discoveryExpiry := sample.Wall.Add(discoveryTTL)
 			f.snapshot.Node.EndpointExpiresAt = &discoveryExpiry
 			f.snapshot.Peers[0].EndpointExpiresAt = &discoveryExpiry
 			f.verify(t, &previous)
@@ -335,6 +456,9 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 		}
 		if err := pb.Update(b.verified); err != nil {
 			t.Fatal(err)
+		}
+		if hostRoute.refresh != nil {
+			hostRoute.refresh(a.verified)
 		}
 		ga.Update(a.verified)
 		gb.Update(b.verified)
@@ -358,7 +482,9 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 		now := time.Now()
 		elapsed := now.Sub(lastAdvance)
 		lastAdvance = now
-		a.clock.advance(elapsed, elapsed)
+		if setupRoute == nil {
+			a.clock.advance(elapsed, elapsed)
+		}
 		update()
 		if time.Since(lastProgress) >= 5*time.Second {
 			ea, pra := resources(ga)
@@ -387,11 +513,18 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 		t.Fatal("background candidates interrupted the selected Relay")
 	}
 	lastAdvance = time.Now()
-	for i := 0; i < 2500; i++ {
+	selectionWait := time.Duration(25) * time.Second
+	if multipleLAN {
+		selectionWait = 90 * time.Second
+	} // Includes bounded cooldown between discovery cycles.
+	selectionDeadline := time.Now().Add(selectionWait)
+	for time.Now().Before(selectionDeadline) {
 		now := time.Now()
 		elapsed := now.Sub(lastAdvance)
 		lastAdvance = now
-		a.clock.advance(elapsed, elapsed)
+		if setupRoute == nil {
+			a.clock.advance(elapsed, elapsed)
+		}
 		update()
 		if time.Since(lastProgress) >= 5*time.Second {
 			t.Logf("waiting for Direct: connected=%v/%v status=%v/%v", first.connected(), second.connected(), ga.transportStatuses(a.verified), gb.transportStatuses(b.verified))
@@ -405,6 +538,22 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 		}
 		ga.notify()
 		gb.notify()
+		if rejectRoute && len(qualified) == 2 {
+			if ga.outputChoices()["peer"] != peerRouteRelay || gb.outputChoices()["node"] != peerRouteRelay {
+				t.Fatal("native route rejection displaced a confirmed Relay")
+			}
+			proof := cipherIPv4("100.70.0.2", "100.70.0.1", 31)
+			nb.input <- proof
+			select {
+			case got := <-na.output:
+				if !bytes.Equal(got, proof) {
+					t.Fatal("Relay payload changed after route rejection")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("confirmed Relay failed after native route rejection")
+			}
+			return
+		}
 		statusA, statusB := ga.transportStatuses(a.verified), gb.transportStatuses(b.verified)
 		if ga.outputChoices()["peer"] == peerRouteDirect && gb.outputChoices()["node"] == peerRouteDirect && len(statusA) == 1 && len(statusB) == 1 && statusA[0].SelectedPath == clientv0.PathKind_PATH_KIND_DIRECT && statusB[0].SelectedPath == clientv0.PathKind_PATH_KIND_DIRECT {
 			break
@@ -412,14 +561,23 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 		time.Sleep(10 * time.Millisecond)
 	}
 	if ga.outputChoices()["peer"] != peerRouteDirect || gb.outputChoices()["node"] != peerRouteDirect {
+		if rejectRoute {
+			t.Fatalf("validated route commits from %d/2 expected engines, A=%v B=%v ads=%s", len(qualified), ga.transportStatuses(a.verified), gb.transportStatuses(b.verified), lastAds)
+		}
 		t.Fatalf("Direct recovery did not finish: choices A=%v B=%v ads=%s", ga.outputChoices(), gb.outputChoices(), lastAds)
+	}
+	if rejectRoute {
+		t.Fatal("Direct was selected despite route rejection")
 	}
 	if revisionInterval > 0 && globalChanges < 2 {
 		t.Fatal("scenario did not exercise frequent unrelated map updates")
 	}
 	networkMu.Lock()
-	filtered := plainWrites
+	filtered, missedLAN := plainWrites, failedLANWrites
 	networkMu.Unlock()
+	if multipleLAN && missedLAN == 0 {
+		t.Fatal("unreachable first LAN was never tried")
+	}
 	if filterWG && filtered == 0 {
 		t.Fatal("plain WG was not attempted before AWG")
 	}
@@ -466,28 +624,143 @@ func testTwoSupervisorsRecoverDirect(t *testing.T, filterWG, preferAWG bool, rev
 			time.Sleep(time.Millisecond)
 		}
 	}
-	raw := cipherIPv4("100.70.0.1", "100.70.0.2", 9)
-	na.input <- raw
-	select {
-	case got := <-nb.output:
-		if !bytes.Equal(got, raw) || len(pa.primary.queue) != 0 {
-			t.Fatal("selected Direct payload changed or duplicated through primary")
+	var nativeApp *net.UDPConn
+	if setupRoute != nil {
+		nativeApp = sendWindowsRoutedUDP(t, nb)
+	} else {
+		raw := cipherIPv4("100.70.0.1", "100.70.0.2", 9)
+		na.input <- raw
+		select {
+		case got := <-nb.output:
+			if !bytes.Equal(got, raw) || len(pa.primary.queue) != 0 {
+				t.Fatal("selected Direct payload changed or duplicated through primary")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("selected AWG did not deliver native plaintext")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("selected AWG did not deliver native plaintext")
+		reverse := cipherIPv4("100.70.0.2", "100.70.0.1", 10)
+		nb.input <- reverse
+		select {
+		case got := <-na.output:
+			if !bytes.Equal(got, reverse) || len(pb.primary.queue) != 0 {
+				t.Fatal("reverse Direct payload changed or duplicated")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("reverse selected AWG path failed")
+		}
 	}
-	reverse := cipherIPv4("100.70.0.2", "100.70.0.1", 10)
-	nb.input <- reverse
-	select {
-	case got := <-na.output:
-		if !bytes.Equal(got, reverse) || len(pb.primary.queue) != 0 {
-			t.Fatal("reverse Direct payload changed or duplicated")
+	offer := offers[0]
+	if filterWG || preferAWG {
+		offer = offers[1]
+	}
+	selected := checkSelectedPeerEngine(t, pa, a.snapshot.Node.ID, b.snapshot.Node.ID, offer, firstBackend.expected)
+	checkSelectedPeerEngine(t, pb, b.snapshot.Node.ID, a.snapshot.Node.ID, offer, secondBackend.expected)
+	// Drop both directions at the simulated network boundary, including
+	// delayed datagrams and every candidate socket opened during recovery.
+	networkMu.Lock()
+	blockDirect = true
+	networkMu.Unlock()
+	withdrawnLAN = multipleLAN
+	lastAdvance = time.Now()
+	until := lastAdvance.Add(15 * time.Second)
+	for ga.outputChoices()["peer"] != peerRouteRelay || gb.outputChoices()["node"] != peerRouteRelay {
+		now := time.Now()
+		if now.After(until) {
+			t.Fatalf("blocked Direct did not fall back to Relay: A=%v B=%v", ga.transportStatuses(a.verified), gb.transportStatuses(b.verified))
 		}
-	case <-time.After(time.Second):
-		t.Fatal("reverse selected AWG path failed")
+		elapsed := now.Sub(lastAdvance)
+		lastAdvance = now
+		if setupRoute == nil {
+			a.clock.advance(elapsed, elapsed)
+		}
+		update()
+		ga.notify()
+		gb.notify()
+		time.Sleep(5 * time.Millisecond)
+	}
+	if setupRoute != nil {
+		select {
+		case <-selected.done:
+		case <-time.After(6 * time.Second):
+			t.Fatal("native route owner did not finish retirement after Direct loss")
+		}
+		hostRoute.verifyFallback(nativeApp)
+	}
+	forwardRelay := cipherIPv4("100.70.0.1", "100.70.0.2", 21)
+	reverseRelay := cipherIPv4("100.70.0.2", "100.70.0.1", 22)
+	na.input <- forwardRelay
+	nb.input <- reverseRelay
+	for _, direction := range []struct {
+		receiver *switchTUN
+		want     []byte
+	}{{nb, forwardRelay}, {na, reverseRelay}} {
+		select {
+		case got := <-direction.receiver.output:
+			if !bytes.Equal(got, direction.want) {
+				t.Fatal("incorrect application packet after Direct loss")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("Relay did not carry new application traffic after Direct loss")
+		}
+	}
+	if multipleLAN {
+		withdrawnLAN = false
+		networkMu.Lock()
+		blockDirect = false
+		networkMu.Unlock()
+		until := time.Now().Add(90 * time.Second)
+		lastAdvance = time.Now()
+		for ga.outputChoices()["peer"] != peerRouteDirect || gb.outputChoices()["node"] != peerRouteDirect {
+			now := time.Now()
+			if now.After(until) {
+				t.Fatal("Direct did not recover after the working address returned")
+			}
+			elapsed := now.Sub(lastAdvance)
+			lastAdvance = now
+			a.clock.advance(elapsed, elapsed)
+			update()
+			ga.notify()
+			gb.notify()
+			time.Sleep(10 * time.Millisecond)
+		}
+		na.input <- forwardRelay
+		select {
+		case got := <-nb.output:
+			if !bytes.Equal(got, forwardRelay) {
+				t.Fatal("restored Direct changed the payload")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("restored Direct did not carry application traffic")
+		}
 	}
 	// Cipher peer proof is verified above; native app ACL classification is
 	// outside this memory TUN fixture and is not claimed by this test.
+}
+
+// Read the engine on the route that delivered the application traffic.
+// A prepared candidate or a protocol name alone cannot establish this.
+func checkSelectedPeerEngine(t *testing.T, packets *packetSwitch, local, peer string, offer coordinator.TransportProfileOffer, expected directPeerEngine) *assignedCipher {
+	t.Helper()
+	packets.mu.Lock()
+	route := packets.routes[peer]
+	packets.mu.Unlock()
+	if route == nil {
+		t.Fatalf("missing output route for %s -> %s", local, peer)
+	}
+	route.mu.Lock()
+	defer route.mu.Unlock()
+	if route.closed || route.kind != peerRouteDirect || route.direct == nil || route.temporarilyFencedLocked() {
+		t.Fatalf("no selected Direct channel for %s -> %s", local, peer)
+	}
+	channel := route.direct
+	channel.bind.mu.Lock()
+	defer channel.bind.mu.Unlock()
+	a := channel.bind.assignment
+	if !channel.bind.transmitConfirmed || a.local.ID != local || a.peer.ID != peer || a.offer.Digest != offer.Digest || reflect.TypeOf(channel.cipher) != reflect.TypeOf(expected) {
+		t.Fatalf("selected route mismatch: %s -> %s digest=%s engine=%T", a.local.ID, a.peer.ID, a.offer.Digest, channel.cipher)
+	}
+	t.Logf("selected Direct %s -> %s protocol=%s/%s digest=%s implementation=%T", local, peer, offer.Profile.Engine, offer.Profile.ProtocolVersion, a.offer.Digest, channel.cipher)
+	return channel
 }
 
 func TestSearchChildrenKeepOriginalCounterDeadlineAcrossProfiles(t *testing.T) {
@@ -717,7 +990,7 @@ func TestSearchResumesUnfinishedLastProfileBeforeRepeatingFailedProfiles(t *test
 	capability := transport.Capability{Engine: transport.WireGuard, ProtocolVersion: "1", ProfileVersion: 1}
 	f.snapshot.Node.Transport.Capabilities.Engines = append(f.snapshot.Node.Transport.Capabilities.Engines, capability)
 	f.snapshot.Peers[0].Transport.PeerAdvertisement.Capabilities.Engines = append(f.snapshot.Peers[0].Transport.PeerAdvertisement.Capabilities.Engines, capability)
-	f.snapshot.Peers[0].Transport.Profiles = append(f.snapshot.Peers[0].Transport.Profiles, coordinator.TransportProfileOffer{Profile: plain, Digest: digest})
+	f.snapshot.Peers[0].Transport.Profiles = append(f.snapshot.Peers[0].Transport.Profiles, coordinator.TransportProfileOffer{Profile: plain, Digest: digest, LocalEndpoints: []string{}, PeerEndpoints: []string{}})
 	cursor := f.verified.Cursor()
 	f.clock.advance(time.Millisecond, time.Millisecond)
 	f.snapshot.Revision.Network++
@@ -737,13 +1010,53 @@ func TestSearchResumesUnfinishedLastProfileBeforeRepeatingFailedProfiles(t *test
 	s := &directSearch{parent: n.cycle, child: n.cycle, candidate: n.direct, negotiation: n, order: []string{plain.ID, n.direct.profileID}, tried: map[string]bool{plain.ID: true, n.direct.profileID: true}}
 	p := &supervisedRelay{channel: n.relay, route: route, scope: packetBinding{localID: "node", peerID: "peer"}, search: s}
 	g := &transportSupervisor{ctx: t.Context(), current: f.verified, snapshot: f.snapshot, lease: f.lease, clock: f.clock, profile: f.profile.ID, generation: 1, budget: budget}
+	// Earlier LAN combinations consumed the first cycle's probe budget.
+	p.profileSet = map[string]string{}
+	for _, offer := range g.offers(p) {
+		p.profileSet[offer.Profile.ID] = offer.Digest
+	}
+	p.nextPair = map[string]uint32{n.direct.profileID: 3}
 	g.finishSearch(p, true)
 	f.clock.advance(15*time.Second, 15*time.Second)
 	if err := g.startSearch(p); err != nil {
 		t.Fatal(err)
 	}
 	defer g.finishSearch(p, false)
+	if p.nextPair[n.direct.profileID] != 3 {
+		t.Fatal("next cycle restarted the LAN pair search")
+	}
 	if p.search.parent == n.cycle || len(p.search.order) != 2 || p.search.order[0] != n.direct.profileID || len(p.search.tried) != 0 {
 		t.Fatal("unfinished last profile starved behind already failed profiles or inherited old trial state")
+	}
+}
+
+func TestEndpointPairOrderAndRetention(t *testing.T) {
+	f := newCandidateFixture(t)
+	offer := f.snapshot.Peers[0].Transport.Profiles[0]
+	offer.LocalEndpoints = []string{"10.0.0.1:2", "172.16.0.1:2", "192.168.0.1:2"}
+	offer.PeerEndpoints = []string{"10.0.0.2:3", "192.168.0.2:3"}
+	a := candidateAssignment{offer: offer}
+	a.plan.LocalNodeID, a.plan.PeerNodeID = "a", "b"
+	b := a
+	b.plan.LocalNodeID, b.plan.PeerNodeID = "b", "a"
+	b.offer.LocalEndpoints, b.offer.PeerEndpoints = offer.PeerEndpoints, offer.LocalEndpoints
+	seen := map[[2]string]bool{}
+	for i := uint32(0); i < 6; i++ {
+		a.selectPair(i)
+		b.selectPair(i)
+		pair := [2]string{a.localEndpoint, a.peerEndpoint}
+		if seen[pair] || pair != [2]string{b.peerEndpoint, b.localEndpoint} {
+			t.Fatal("candidate repeated or oriented differently", i)
+		}
+		seen[pair] = true
+	}
+	original := [2]string{a.localEndpoint, a.peerEndpoint}
+	a.offer.LocalEndpoints = a.offer.LocalEndpoints[1:]
+	if !a.keepPair(original[0], original[1]) {
+		t.Fatal("unrelated withdrawal discarded a working pair")
+	}
+	a.offer.PeerEndpoints = a.offer.PeerEndpoints[:1]
+	if a.keepPair(original[0], original[1]) {
+		t.Fatal("withdrawn endpoint retained")
 	}
 }

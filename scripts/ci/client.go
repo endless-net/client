@@ -26,7 +26,7 @@ import (
 )
 
 const clientSDK = "github.com/endless-net/client/api"
-const clientSDKVersion = "v0.8.0"
+const clientSDKVersion = "v0.10.0"
 
 var digestPattern = regexp.MustCompile("^[0-9a-f]{64}$")
 
@@ -457,41 +457,72 @@ func cryptoNotices(root string) ([]archiveEntry, error) {
 	return append(files, archiveEntry{name: "crypto-sources.json", content: append(data, '\n'), mode: 0o644}), err
 }
 
-type wintunFile struct {
+type driverFile struct {
 	Entry  string
 	Size   int64
 	SHA256 string
 }
-type wintunManifest struct {
+type driverManifest struct {
 	Version, URL, SHA256 string
 	Size                 int64
-	Files                map[string]wintunFile
+	Files                map[string]driverFile
 }
 
-var driverVersion = regexp.MustCompile("^[0-9]+[.][0-9]+[.][0-9]+$")
+type driverSource struct {
+	manifest      string
+	archivePrefix string
+	directory     string
+	dll           string
+	license       string
+	version       *regexp.Regexp
+}
 
-func wintunEntries(ctx context.Context, root string, t target) ([]archiveEntry, error) {
+var windowsDrivers = []driverSource{
+	{
+		manifest: "manifest.json", archivePrefix: "https://www.wintun.net/builds/wintun-",
+		directory: "wintun", dll: "wintun.dll", license: "WINTUN-LICENSE.txt",
+		version: regexp.MustCompile(`^[0-9]+[.][0-9]+[.][0-9]+$`),
+	},
+	{
+		manifest: "wireguard-nt.json", archivePrefix: "https://download.wireguard.com/wireguard-nt/wireguard-nt-",
+		directory: "wireguard-nt", dll: "wireguard.dll", license: "WIREGUARD-NT-LICENSE.txt",
+		version: regexp.MustCompile(`^[0-9]+[.][0-9]+$`),
+	},
+}
+
+func windowsDriverEntries(ctx context.Context, root string, t target) ([]archiveEntry, error) {
 	if t != (target{OS: "windows", Arch: "amd64"}) {
-		return nil, errors.New("the Wintun runtime requires Windows amd64")
+		return nil, errors.New("the Windows drivers require Windows amd64")
 	}
-	var manifest wintunManifest
-	data, err := os.ReadFile(filepath.Join(root, "internal/wintundriver/manifest.json"))
+	var files []archiveEntry
+	for _, source := range windowsDrivers {
+		entries, err := downloadDriverEntries(ctx, root, source)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, entries...)
+	}
+	return files, nil
+}
+
+func downloadDriverEntries(ctx context.Context, root string, source driverSource) ([]archiveEntry, error) {
+	var manifest driverManifest
+	data, err := os.ReadFile(filepath.Join(root, "internal/wintundriver", source.manifest))
 	if err != nil {
 		return nil, err
 	}
 	if err := decodeJSON(data, &manifest); err != nil {
 		return nil, err
 	}
-	prefix := "https://www.wintun.net/builds/wintun-"
-	if !driverVersion.MatchString(manifest.Version) || manifest.URL != prefix+manifest.Version+".zip" ||
+	if !source.version.MatchString(manifest.Version) || manifest.URL != source.archivePrefix+manifest.Version+".zip" ||
 		manifest.Size <= 0 || !digestPattern.MatchString(manifest.SHA256) || len(manifest.Files) != 2 {
-		return nil, errors.New("invalid pinned Wintun manifest")
+		return nil, fmt.Errorf("invalid pinned %s manifest", source.directory)
 	}
-	expected := map[string]string{"wintun.dll": "wintun/bin/amd64/wintun.dll", "WINTUN-LICENSE.txt": "wintun/LICENSE.txt"}
+	expected := map[string]string{source.dll: source.directory + "/bin/amd64/" + source.dll, source.license: source.directory + "/LICENSE.txt"}
 	for name, path := range expected {
 		file := manifest.Files[name]
 		if file.Entry != path || file.Size <= 0 || file.Size > manifest.Size || !digestPattern.MatchString(file.SHA256) {
-			return nil, errors.New("invalid pinned Wintun file")
+			return nil, fmt.Errorf("invalid pinned file %s", name)
 		}
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, manifest.URL, nil)
@@ -509,12 +540,12 @@ func wintunEntries(ctx context.Context, root string, t target) ([]archiveEntry, 
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK || int64(len(data)) != manifest.Size || fmt.Sprintf("%x", sha256.Sum256(data)) != manifest.SHA256 {
-		return nil, errors.New("pinned Wintun archive mismatch")
+		return nil, fmt.Errorf("pinned %s archive mismatch", source.directory)
 	}
-	return extractWintun(data, manifest)
+	return extractDriver(data, manifest)
 }
 
-func extractWintun(data []byte, manifest wintunManifest) ([]archiveEntry, error) {
+func extractDriver(data []byte, manifest driverManifest) ([]archiveEntry, error) {
 	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return nil, err
@@ -522,7 +553,7 @@ func extractWintun(data []byte, manifest wintunManifest) ([]archiveEntry, error)
 	files := make(map[string]*zip.File)
 	for _, file := range archive.File {
 		if files[file.Name] != nil {
-			return nil, errors.New("duplicate Wintun archive entry")
+			return nil, errors.New("duplicate driver archive entry")
 		}
 		files[file.Name] = file
 	}
@@ -530,14 +561,14 @@ func extractWintun(data []byte, manifest wintunManifest) ([]archiveEntry, error)
 	for name, expected := range manifest.Files {
 		file := files[expected.Entry]
 		if file == nil || file.FileInfo().IsDir() || file.UncompressedSize64 != uint64(expected.Size) {
-			return nil, errors.New("pinned Wintun entry size differs")
+			return nil, errors.New("pinned driver entry size differs")
 		}
 		content, err := zipContents(file)
 		if err != nil {
 			return nil, err
 		}
 		if fmt.Sprintf("%x", sha256.Sum256(content)) != expected.SHA256 {
-			return nil, errors.New("pinned Wintun entry checksum differs")
+			return nil, errors.New("pinned driver entry checksum differs")
 		}
 		entries = append(entries, archiveEntry{name: name, content: content, mode: 0o644})
 	}

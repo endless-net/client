@@ -71,7 +71,7 @@ func TestActualRelayWireGuardControlAndApplicationStaySeparatedFromDirect(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err = newPeerCipher(t.Context(), coordinator.Node{ID: a.peer.ID, PublicKey: a.peer.PublicKey, AssignedIP: peerIP.String()}, coordinator.Peer{ID: a.local.ID, PublicKey: a.local.PublicKey, AllowedIPs: []string{localIP.String() + "/32"}, ACLRestricted: true, Endpoint: a.offer.LocalEndpoint}, bytes.Repeat([]byte{84}, 32), relayBaseline(), port, peerBind)
+	other, err = newPeerCipher(t.Context(), coordinator.Node{ID: a.peer.ID, PublicKey: a.peer.PublicKey, AssignedIP: peerIP.String()}, coordinator.Peer{ID: a.local.ID, PublicKey: a.local.PublicKey, AllowedIPs: []string{localIP.String() + "/32"}, ACLRestricted: true, Endpoint: a.localEndpoint}, bytes.Repeat([]byte{84}, 32), relayBaseline(), port, peerBind)
 	if err != nil {
 		_ = port.Close()
 		t.Fatal(err)
@@ -92,7 +92,7 @@ func TestActualRelayWireGuardControlAndApplicationStaySeparatedFromDirect(t *tes
 				select {
 				case <-socket.done:
 					return
-				case socket.packets <- memoryWirePacket{data: bytes.Clone(frame.Payload), source: a.offer.LocalEndpoint}:
+				case socket.packets <- memoryWirePacket{data: bytes.Clone(frame.Payload), source: a.localEndpoint}:
 				}
 			}
 		}

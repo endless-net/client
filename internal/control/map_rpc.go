@@ -86,6 +86,11 @@ func (d *mapDecoder) network(n *wire.MapNetwork) coordinator.Network {
 	if v := n.DnsConfig; v != nil {
 		value.DNSConfig = &coordinator.DNSConfig{MagicDNSEnabled: v.MagicdnsEnabled, HTTPSCertsEnabled: v.HttpsCertsEnabled,
 			OverrideLocalDNS: v.OverrideLocalDns, Suffix: v.Suffix, SearchDomains: v.SearchDomains,
+			Zones: decodeSlice(v.Zones, func(z *wire.MapDNSZone) coordinator.DNSZone {
+				return coordinator.DNSZone{Name: z.GetName(), Version: z.GetVersion(), Records: decodeSlice(z.GetRecords(), func(r *wire.MapDNSRecord) coordinator.DNSRecord {
+					return coordinator.DNSRecord{Name: r.GetName(), Type: r.GetType(), Value: r.GetValue(), TTL: r.GetTtl()}
+				})}
+			}),
 			Nameservers: decodeSlice(v.Nameservers, func(s *wire.MapDNSNameserver) coordinator.DNSNameserver {
 				return coordinator.DNSNameserver{ID: s.Id, Address: s.Address, Scope: s.Scope, Priority: s.Priority, SplitDomains: s.SplitDomains}
 			}),
@@ -217,11 +222,12 @@ func (d *mapDecoder) peerTransport(p *wire.PeerTransportPlan) *coordinator.PeerT
 	}
 	profiles := make([]coordinator.TransportProfileOffer, 0, len(p.Profiles))
 	for _, o := range p.Profiles {
-		profiles = append(profiles, coordinator.TransportProfileOffer{Profile: d.transportProfile(o.Profile), Digest: o.Digest, LocalEndpoint: o.LocalEndpoint, PeerEndpoint: o.PeerEndpoint})
+		profiles = append(profiles, coordinator.TransportProfileOffer{Profile: d.transportProfile(o.Profile), Digest: o.Digest, LocalEndpoints: append([]string{}, o.LocalEndpoints...), PeerEndpoints: append([]string{}, o.PeerEndpoints...)})
 	}
 	return &coordinator.PeerTransportPlan{
 		Version: p.Version, Availability: coordinator.TransportAvailability(p.Availability), AccountID: p.AccountId, NetworkID: p.NetworkId,
 		LocalNodeID: p.LocalNodeId, LocalPublicKey: p.LocalPublicKey, PeerNodeID: p.PeerNodeId, PeerPublicKey: p.PeerPublicKey,
+		LocalProbeIPv4: p.LocalProbeIpv4, PeerProbeIPv4: p.PeerProbeIpv4,
 		LocalIntentGeneration: p.LocalIntentGeneration, Revision: MapRevision(p.Revision), IssuedAt: d.timestamp(p.IssuedAt),
 		ExpiresAt: d.timestamp(p.ExpiresAt), PeerAdvertisement: *advertisement, Profiles: profiles,
 	}

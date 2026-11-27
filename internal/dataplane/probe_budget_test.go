@@ -12,15 +12,29 @@ import (
 )
 
 type probeClock struct {
-	mu     sync.Mutex
-	sample connectivity.ClockSample
-	err    error
+	mu        sync.Mutex
+	realStart time.Time
+	sample    connectivity.ClockSample
+	err       error
+}
+
+func (c *probeClock) startRealTime() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.realStart = time.Now()
 }
 
 func (c *probeClock) Sample() (connectivity.ClockSample, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.sample, c.err
+	s := c.sample
+	if !c.realStart.IsZero() {
+		d := time.Since(c.realStart)
+		s.Wall = s.Wall.Add(d)
+		s.Uptime += d
+		s.UpperUptime += d
+	}
+	return s, c.err
 }
 func (c *probeClock) advance(wall, uptime time.Duration) {
 	c.mu.Lock()

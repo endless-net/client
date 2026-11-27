@@ -16,10 +16,13 @@ import (
 func (b *candidateBind) confirmedAdmission(endpoint netip.AddrPort, epoch uint64) (candidateSocket, time.Time, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if err := b.checkAdapterLocked(); err != nil {
+		return nil, time.Time{}, err
+	}
 	if b.closed || b.ctx.Err() != nil || b.socket == nil {
 		return nil, time.Time{}, net.ErrClosed
 	}
-	if !b.receiveConfirmed && !b.transmitConfirmed || b.confirmationEpoch != epoch || !b.endpointsReady() || endpoint.String() != b.assignment.offer.PeerEndpoint {
+	if !b.receiveConfirmed && !b.transmitConfirmed || b.confirmationEpoch != epoch || !b.endpointsReady() || endpoint.String() != b.assignment.peerEndpoint {
 		return nil, time.Time{}, ErrNoAuthority
 	}
 	sample, err := b.clock.Sample()
@@ -36,12 +39,14 @@ func (b *candidateBind) confirmedAdmission(endpoint netip.AddrPort, epoch uint64
 	return b.socket, deadline, nil
 }
 
-func (b *candidateBind) sendConfirmed(raw []byte, endpoint netip.AddrPort, epoch uint64, guard func(int) error) error {
+func (b *candidateBind) sendConfirmed(raw []byte, endpoint netip.AddrPort, epoch uint64, changed <-chan struct{}, guard func(int) error) error {
 	ctx, cancel := context.WithTimeout(b.ctx, 3*time.Second)
 	defer cancel()
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
+	case <-changed:
+		return connectivity.ErrSourceChanged
 	case <-b.sendGate:
 	}
 	defer func() { b.sendGate <- struct{}{} }()
@@ -66,6 +71,13 @@ func (b *candidateBind) sendConfirmed(raw []byte, endpoint netip.AddrPort, epoch
 	if _, _, err := b.confirmedAdmission(endpoint, epoch); err != nil {
 		return err
 	}
+	// A pause and resume can complete while this ciphertext waits. Current
+	// permission alone would admit the old write under the renewed source.
+	select {
+	case <-changed:
+		return connectivity.ErrSourceChanged
+	default:
+	}
 	count, err := socket.WriteToUDPAddrPort(raw, endpoint)
 	if err != nil || count != len(raw) {
 		return ErrPacketIO
@@ -76,7 +88,7 @@ func (b *candidateBind) sendConfirmed(raw []byte, endpoint netip.AddrPort, epoch
 
 func (b *candidateBind) transmitEpoch() (uint64, error) {
 	b.mu.Lock()
-	allowed, epoch, endpoint := b.transmitConfirmed, b.confirmationEpoch, b.assignment.offer.PeerEndpoint
+	allowed, epoch, endpoint := b.transmitConfirmed, b.confirmationEpoch, b.assignment.peerEndpoint
 	b.mu.Unlock()
 	if !allowed {
 		return 0, ErrNoAuthority
@@ -104,6 +116,12 @@ func (c *assignedCipher) Activate(value *directActivation) error {
 	if err := value.check(); err != nil {
 		return err
 	}
+	return c.activateChecked(value, nil)
+}
+
+// The caller holds updateMu and has validated the bilateral commit. This last
+// step can fail before consuming the token, but cannot fail once it grants TX.
+func (c *assignedCipher) activateChecked(value *directActivation, enable func() error) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed {
@@ -127,9 +145,16 @@ func (c *assignedCipher) Activate(value *directActivation) error {
 	if !c.bind.assignment.sameProbe(value.qualified.stability.assignment) {
 		return ErrNoAuthority
 	}
-	if !value.used.CompareAndSwap(false, true) {
+	if value.used.Load() || c.bind.adapterSocket != nil && enable == nil {
 		return ErrNoAuthority
 	}
+	if enable != nil {
+		if err := enable(); err != nil {
+			return err
+		}
+	}
+	// updateMu serializes every consumer of this channel's activation.
+	value.used.Store(true)
 	c.bind.receiveConfirmed = true
 	c.bind.transmitConfirmed = true
 	clear(c.bind.lastHandshake)
@@ -179,8 +204,10 @@ func (c *assignedCipher) AllowReceive(value *directReceiveGrant) error {
 	}
 	if !c.bind.receiveConfirmed {
 		c.bind.receiveConfirmed = true
-		clear(c.bind.lastHandshake)
-		c.bind.lastHandshake, c.bind.handshakeAttempt = nil, nil
+		if !c.bind.adapterProbeOnly {
+			clear(c.bind.lastHandshake)
+			c.bind.lastHandshake, c.bind.handshakeAttempt = nil, nil
+		}
 		c.bind.confirmationEpoch++
 	}
 	return nil
@@ -264,7 +291,7 @@ func (c *assignedCipher) echoConfirmed(value transport.Control) error {
 	c.bind.mu.Lock()
 	a := c.bind.assignment
 	c.bind.mu.Unlock()
-	source, destination, err := a.addresses()
+	source, destination, err := a.controlAddresses()
 	if err != nil {
 		return err
 	}

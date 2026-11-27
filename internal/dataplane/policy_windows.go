@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/netip"
 	"sort"
 	"strings"
@@ -42,12 +43,22 @@ func canonicalGUID(value string) (windows.GUID, error) {
 // FilterPlan contains only native effects, no key or credential. Prepare its
 // Records in the durable journal before calling WindowsFilters.Replace.
 type FilterPlan struct {
+	direct       map[uint64]directPeerFilters
 	session      windows.GUID
 	luid         uint64
 	index        uint32
 	maxProtected int
 	scopes       map[ipGuardScope]bool
 	rules        []*wf.Rule
+}
+
+type directPeerFilters struct {
+	adapter                     windows.GUID
+	peerID, profileID           string
+	localEndpoint, peerEndpoint string
+	peer                        netip.Addr
+	index                       uint32
+	rules                       map[wf.RuleID]bool
 }
 
 type ipGuardScope struct {
@@ -207,6 +218,130 @@ func (p *FilterPlan) protect(field wf.FieldID, address netip.Addr) error {
 		p.addRule(&wf.Rule{Layer: layer, Action: wf.ActionPermit, Weight: 2, Conditions: []*wf.Match{{Field: field, Op: wf.MatchTypeEqual, Value: address}, {Field: wf.FieldIPLocalInterface, Op: wf.MatchTypeEqual, Value: p.luid}, {Field: wf.FieldInterfaceIndex, Op: wf.MatchTypeEqual, Value: p.index}}})
 	}
 	return nil
+}
+
+// withDirectPeer extends this session's current WFP policy to one owned
+// WireGuardNT interface. Derive every ALE exception from the source plan so a
+// removed grant or offline reauthorization restriction survives the transition.
+func (p FilterPlan) withDirectPeer(local, remote netip.Addr, luid uint64, index uint32) (FilterPlan, error) {
+	if luid == 0 || luid == p.luid || index == 0 || index == p.index || local == remote ||
+		!p.scopes[ipGuardScope{wf.FieldIPLocalAddress, local}] || !p.scopes[ipGuardScope{wf.FieldIPRemoteAddress, remote}] {
+		return FilterPlan{}, ErrPolicyOwnership
+	}
+	equal := func(field wf.FieldID, value any) *wf.Match {
+		return &wf.Match{Field: field, Op: wf.MatchTypeEqual, Value: value}
+	}
+	next := p
+	next.rules = append([]*wf.Rule(nil), p.rules...)
+	for owner, filters := range p.direct {
+		if owner == luid || filters.peer == remote || filters.index == index {
+			return FilterPlan{}, ErrPolicyOwnership
+		}
+	}
+	granted := false
+	for _, r := range p.rules {
+		if r.Layer != wf.LayerALEAuthConnectV4 && r.Layer != wf.LayerALEAuthRecvAcceptV4 {
+			continue
+		}
+		if r.Action != wf.ActionPermit || len(r.Conditions) < 3 ||
+			r.Conditions[0].Field != wf.FieldIPLocalInterface || r.Conditions[0].Value != p.luid ||
+			r.Conditions[1].Field != wf.FieldIPLocalAddress || r.Conditions[1].Value != local ||
+			r.Conditions[2].Field != wf.FieldIPRemoteAddress || r.Conditions[2].Value != remote {
+			continue
+		}
+		copyRule := *r
+		copyRule.ID = wf.RuleID{}
+		copyRule.Conditions = append([]*wf.Match{equal(wf.FieldIPLocalInterface, luid)}, r.Conditions[1:]...)
+		next.addRule(&copyRule)
+		granted = true
+	}
+	if !granted {
+		return FilterPlan{}, ErrNoAuthority
+	}
+	for _, layer := range []wf.LayerID{wf.LayerALEAuthConnectV4, wf.LayerALEAuthRecvAcceptV4} {
+		next.addRule(&wf.Rule{Layer: layer, Action: wf.ActionBlock, HardAction: true, Weight: 1,
+			Conditions: []*wf.Match{equal(wf.FieldIPLocalInterface, luid)}})
+	}
+	// In weak-host mode the local address can still belong to Wintun. Both
+	// exceptions require the real WireGuardNT interface index and exact pair.
+	for _, layer := range []wf.LayerID{wf.LayerInboundIPPacketV4, wf.LayerOutboundIPPacketV4} {
+		for _, owner := range []uint64{p.luid, luid} {
+			next.addRule(&wf.Rule{Layer: layer, Action: wf.ActionPermit, Weight: 2,
+				Conditions: []*wf.Match{equal(wf.FieldIPLocalAddress, local), equal(wf.FieldIPRemoteAddress, remote),
+					equal(wf.FieldIPLocalInterface, owner), equal(wf.FieldInterfaceIndex, index)}})
+		}
+	}
+	ids := make(map[wf.RuleID]bool, len(next.rules)-len(p.rules))
+	for _, r := range next.rules[len(p.rules):] {
+		ids[r.ID] = true
+	}
+	next.direct = maps.Clone(p.direct)
+	if next.direct == nil {
+		next.direct = make(map[uint64]directPeerFilters)
+	}
+	next.direct[luid] = directPeerFilters{peer: remote, index: index, rules: ids}
+	next.canonicalize()
+	return next, nil
+}
+
+// The raw probe socket remains active alongside the signed application grants.
+// Install its two zero-port UDP exceptions only for online maintenance.
+func (p FilterPlan) withConfirmedPeer(a candidateAssignment, candidate adapterIdentity, offline bool) (FilterPlan, error) {
+	local, remote, err := a.addresses()
+	if err != nil {
+		return FilterPlan{}, err
+	}
+	probeLocal, probeRemote, err := a.controlAddresses()
+	if err != nil || a.plan.LocalProbeIPv4 == "" || a.plan.PeerProbeIPv4 == "" {
+		return FilterPlan{}, ErrNoAuthority
+	}
+	next, err := p.withDirectPeer(local, remote, candidate.LUID, candidate.Index)
+	if err != nil {
+		return FilterPlan{}, err
+	}
+	filters := next.direct[candidate.LUID]
+	filters.peerID, filters.profileID = a.peer.ID, a.offer.Profile.ID
+	filters.localEndpoint, filters.peerEndpoint = a.localEndpoint, a.peerEndpoint
+	filters.adapter = candidate.GUID
+	if !offline {
+		for _, layer := range []wf.LayerID{wf.LayerALEAuthConnectV4, wf.LayerALEAuthRecvAcceptV4} {
+			rule := &wf.Rule{Layer: layer, Action: wf.ActionPermit, Weight: 2, Conditions: []*wf.Match{
+				{Field: wf.FieldIPLocalInterface, Op: wf.MatchTypeEqual, Value: candidate.LUID},
+				{Field: wf.FieldIPLocalAddress, Op: wf.MatchTypeEqual, Value: probeLocal},
+				{Field: wf.FieldIPRemoteAddress, Op: wf.MatchTypeEqual, Value: probeRemote},
+				{Field: wf.FieldIPProtocol, Op: wf.MatchTypeEqual, Value: wf.IPProto(17)},
+				{Field: wf.FieldIPLocalPort, Op: wf.MatchTypeEqual, Value: uint16(0)},
+				{Field: wf.FieldIPRemotePort, Op: wf.MatchTypeEqual, Value: uint16(0)},
+			}}
+			next.addRule(rule)
+			filters.rules[rule.ID] = true
+		}
+		next.canonicalize()
+	}
+	next.direct[candidate.LUID] = filters
+	return next, nil
+}
+
+// A map refresh may already have removed the candidate's grants. Filter the
+// currently applied plan so retiring one peer cannot resurrect old ACLs.
+func (p FilterPlan) withoutDirectPeer(peer netip.Addr, luid uint64) (FilterPlan, error) {
+	owner, ok := p.direct[luid]
+	if !ok {
+		return p, nil
+	}
+	if owner.peer != peer {
+		return FilterPlan{}, ErrPolicyOwnership
+	}
+	next := p
+	next.direct = maps.Clone(p.direct)
+	delete(next.direct, luid)
+	next.rules = make([]*wf.Rule, 0, len(p.rules))
+	for _, rule := range p.rules {
+		if !owner.rules[rule.ID] {
+			next.rules = append(next.rules, rule)
+		}
+	}
+	return next, nil
 }
 
 // RetainIPGuards keeps the IP keys of unfinished effects, including removing

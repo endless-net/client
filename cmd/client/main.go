@@ -10,8 +10,8 @@ import (
 )
 
 // Packaging verifies these opaque pins against the resolved immutable SDK.
-const clientAPIRevision = "a50e997641466d504a216083cf7ddd9aeab6a755"
-const clientContractSHA256 = "6ecbb4474e7b5734d0561e2d6861fc05a0681d193667cb9449859e4a8edf873f"
+const clientAPIRevision = "3f488061215e0035cda11419d027c8f41bd1ae97"
+const clientContractSHA256 = "ea9131e97cc16e629a4e88009a7ed51fc0f20229b5320f9d6f8617f14793f738"
 
 // Set only by the owner build helper from the selected clean commit/tag.
 var version, commit, buildDate string

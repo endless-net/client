@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -9,6 +10,65 @@ import (
 	"github.com/endless-net/client/api/transport"
 	"github.com/endless-net/client/internal/connectivity"
 )
+
+func TestKernelPreparationFallbackUsesOneReservationAndCurrentAssignment(t *testing.T) {
+	cleanupFailed := errors.New("kernel cleanup incomplete")
+	for _, tc := range []struct {
+		name        string
+		kernelError error
+		transition  bool
+		revoke      bool
+		wantError   error
+	}{
+		{name: "same profile in Go", kernelError: errKernelUnavailable},
+		{name: "cleanup failure stops preparation", kernelError: cleanupFailed, wantError: cleanupFailed},
+		{name: "unavailable with cleanup failure", kernelError: errors.Join(errKernelUnavailable, cleanupFailed), wantError: cleanupFailed},
+		{name: "source changed during cleanup", kernelError: errKernelUnavailable, transition: true, wantError: ErrNoAuthority},
+		{name: "lease revoked during cleanup", kernelError: errKernelUnavailable, revoke: true, wantError: ErrNoAuthority},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newCandidateFixture(t)
+			budget, err := newTransportBudget(1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var digest string
+			budget.kernel = func(ctx context.Context, cfg directCipherConfig, channel *assignedCipher, port *packetPort) (directPeerEngine, error) {
+				if len(budget.engines) != 1 || cfg.assignment.lease != f.lease || cfg.assignment.peer.ID != "peer" {
+					t.Fatal("incorrect reservation or signed assignment")
+				}
+				digest = cfg.assignment.offer.Digest
+				if tc.revoke {
+					f.lease.Revoke()
+				}
+				if tc.transition {
+					epoch := f.lease.BlockSource()
+					if err := f.lease.EndSourceTransition(epoch); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return nil, tc.kernelError
+			}
+			opened := 0
+			factory := func(uint16) (candidateSocket, error) {
+				opened++
+				return newCandidateSocketFixture(), nil
+			}
+			channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel)
+			if tc.wantError == nil {
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer channel.Close()
+				if digest == "" || channel.cipher.(*peerCipher).profileDigest != digest || opened != 1 || len(budget.engines) != 1 {
+					t.Fatal("fallback changed the profile or allocation")
+				}
+			} else if !errors.Is(err, tc.wantError) || channel != nil || opened != 0 || len(budget.engines) != 0 {
+				t.Fatalf("unexpected fallback or retained allocation: %v", err)
+			}
+		})
+	}
+}
 
 func TestTransportBudgetCountsPrimaryRetainedAndTransientEngines(t *testing.T) {
 	f := newCandidateFixture(t)
@@ -200,7 +260,7 @@ func TestBudgetedFactoriesReturnFailedReservationsAndCompleteProbePermits(t *tes
 	}
 	socket := newCandidateSocketFixture()
 	factory := func(uint16) (candidateSocket, error) { return socket, nil }
-	if _, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", make([]byte, 32), 1280, f.clock, func([]byte) error { return nil }, factory); err == nil {
+	if _, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", make([]byte, 32), 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel); err == nil {
 		t.Fatal("invalid key constructed engine")
 	}
 	budget.mu.Lock()
@@ -209,7 +269,7 @@ func TestBudgetedFactoriesReturnFailedReservationsAndCompleteProbePermits(t *tes
 	if count != 0 {
 		t.Fatal("failed factory retained reservation")
 	}
-	channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory)
+	channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,4 +305,59 @@ func TestBudgetedFactoriesReturnFailedReservationsAndCompleteProbePermits(t *tes
 		t.Fatal("permit release invalidated frozen proof", err)
 	}
 	channel.Close()
+}
+
+type failingCloseSocket struct {
+	*candidateSocketFixture
+	err error
+}
+
+func (s *failingCloseSocket) Close() error {
+	_ = s.candidateSocketFixture.Close()
+	return s.err
+}
+
+func TestKernelPartialListenerCleanupBeforeGoFallback(t *testing.T) {
+	closeFailure := errors.New("listener close failed")
+	for _, closeErr := range []error{nil, closeFailure} {
+		f := newCandidateFixture(t)
+		first := &failingCloseSocket{newCandidateSocketFixture(), closeErr}
+		var staged *packetPort
+		preparer := func(_ context.Context, _ directCipherConfig, channel *assignedCipher, port *packetPort) (directPeerEngine, error) {
+			staged = port
+			if _, _, err := channel.bind.Open(0); err != nil {
+				return nil, err
+			}
+			return nil, errKernelUnavailable
+		}
+		opens := 0
+		listen := func(uint16) (candidateSocket, error) {
+			opens++
+			if opens == 1 {
+				return first, nil
+			}
+			select {
+			case <-first.done:
+			default:
+				t.Error("fallback before previous socket closed")
+			}
+			select {
+			case <-staged.done:
+			default:
+				t.Error("fallback before previous queue closed")
+			}
+			return newCandidateSocketFixture(), nil
+		}
+		channel, err := prepareAssignedCipher(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, listen, preparer)
+		if closeErr != nil {
+			if channel != nil || !errors.Is(err, closeErr) || opens != 1 {
+				t.Fatalf("retried after uncertain cleanup: opens %d, error %v", opens, err)
+			}
+			continue
+		}
+		if err != nil || opens != 2 {
+			t.Fatalf("fallback: opens %d, error %v", opens, err)
+		}
+		channel.Close()
+	}
 }

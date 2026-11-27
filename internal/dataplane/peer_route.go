@@ -90,6 +90,7 @@ func (r *peerRoute) refreshLocked() {
 			if _, err := r.direct.bind.transmitEpoch(); err == nil {
 				return
 			}
+			r.direct.stopRoutedAdapter()
 		}
 		r.kind = peerRouteNone
 		r.epoch++
@@ -148,10 +149,15 @@ func (r *peerRoute) canImproveLocked() error {
 func (r *peerRoute) CanImprove() error { r.mu.Lock(); defer r.mu.Unlock(); return r.canImproveLocked() }
 
 // SelectDirect returns the previous retained receiver to the resource owner.
-// Activation performs no network I/O, but is deliberately outside route.mu:
-// engine shutdown callbacks must remain able to report path failure.
+// Validate the handshake outside route.mu. Reserve the channel update lock
+// before the route lock so a concurrent map update cannot replace its binding
+// between validation and committing the route.
 func (r *peerRoute) SelectDirect(token *directActivation) (*assignedCipher, error) {
-	if token == nil {
+	return r.selectDirect(token, nil)
+}
+
+func (r *peerRoute) selectDirect(token *directActivation, enable func() error) (*assignedCipher, error) {
+	if token == nil || token.direct == nil {
 		return nil, ErrNoAuthority
 	}
 	r.mu.Lock()
@@ -167,16 +173,15 @@ func (r *peerRoute) SelectDirect(token *directActivation) (*assignedCipher, erro
 	previousKind := r.kind
 	previous := r.direct
 	r.mu.Unlock()
-	if err := token.direct.Activate(token); err != nil {
+	token.direct.updateMu.Lock()
+	defer token.direct.updateMu.Unlock()
+	if err := token.check(); err != nil {
 		return nil, err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed || r.epoch != epoch || token.relay != r.relay {
 		return nil, connectivity.ErrSourceChanged
-	}
-	if _, err := token.direct.bind.transmitEpoch(); err != nil {
-		return nil, err
 	}
 	sample, err := r.clock.Sample()
 	if err != nil {
@@ -188,6 +193,11 @@ func (r *peerRoute) SelectDirect(token *directActivation) (*assignedCipher, erro
 		if err != nil {
 			return nil, err
 		}
+	}
+	// No fallible work follows activation. Failed selection leaves the current
+	// route intact and does not grant transmission on its rejected replacement.
+	if err := token.direct.activateChecked(token, enable); err != nil {
+		return nil, err
 	}
 	r.direct = token.direct
 	r.kind = peerRouteDirect
@@ -205,6 +215,7 @@ func (r *peerRoute) FailDirect(channel *assignedCipher) {
 	if r.closed || r.direct != channel {
 		return
 	}
+	channel.stopRoutedAdapter()
 	channel.bind.mu.Lock()
 	channel.bind.transmitConfirmed = false
 	channel.bind.confirmationEpoch++

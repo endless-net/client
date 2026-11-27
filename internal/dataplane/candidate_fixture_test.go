@@ -37,12 +37,22 @@ type candidateFixture struct {
 	trust    control.Announcement
 	lease    *connectivity.Lease
 	verified connectivity.Map
+	mapTTL   time.Duration
 	planTTL  time.Duration
 }
 
 func newCandidateFixture(t *testing.T) *candidateFixture {
 	t.Helper()
-	now := time.Now().UTC()
+	return newCandidateEngineFixture(t, transport.AmneziaWG)
+}
+
+func newCandidateEngineFixture(t *testing.T, engine string) *candidateFixture {
+	t.Helper()
+	return candidateFixtureAt(t, engine, time.Now().UTC())
+}
+
+func candidateFixtureAt(t *testing.T, engine string, now time.Time) *candidateFixture {
+	t.Helper()
 	f := &candidateFixture{clock: &probeClock{sample: connectivity.ClockSample{Wall: now, Uptime: time.Hour, UpperUptime: time.Hour, Epoch: "candidate-unit"}}}
 	bundle := func(seed byte) (signing.BootstrapTrustBundle, ed25519.PrivateKey) {
 		key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{seed}, 32))
@@ -105,19 +115,19 @@ func newCandidateFixture(t *testing.T) *candidateFixture {
 		t.Fatal(err)
 	}
 	expires := now.Add(time.Minute)
-	profile := cipherProfile(transport.AmneziaWG)
+	profile := cipherProfile(engine)
 	profile.Prelude = []transport.Datagram{{Segments: []transport.Segment{{Bytes: []byte{1, 2}}, {Random: 4}}}}
 	digest, err := transport.ProfileDigest(profile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	caps := transport.Capabilities{Version: 1, Engines: []transport.Capability{{Engine: transport.AmneziaWG, ProtocolVersion: "3.1", ProfileVersion: 1}}}
+	caps := transport.Capabilities{Version: 1, Engines: []transport.Capability{{Engine: engine, ProtocolVersion: profile.ProtocolVersion, ProfileVersion: 1}}}
 	localAd := &coordinator.TransportAdvertisement{IntentGeneration: 1, Capabilities: caps, Endpoints: []coordinator.TransportEndpoint{{ProfileID: profile.ID, ProfileDigest: digest, Endpoint: "192.0.2.10:51821"}}}
 	peerAd := coordinator.TransportAdvertisement{IntentGeneration: 4, Capabilities: caps, Endpoints: []coordinator.TransportEndpoint{{ProfileID: profile.ID, ProfileDigest: digest, Endpoint: "192.0.2.20:51820"}}}
 	local := coordinator.Node{ID: "node", NetworkID: "network", PublicKey: base64.StdEncoding.EncodeToString(localKey.PublicKey().Bytes()), AssignedIP: "100.70.0.1", ApprovalState: "approved", Status: "online", EndpointExpiresAt: &expires, Transport: localAd}
 	peer := coordinator.Peer{ID: "peer", NetworkID: "network", PublicKey: base64.StdEncoding.EncodeToString(peerKey.PublicKey().Bytes()), Endpoint: "192.0.2.20:51820", EndpointGeneration: 1, EndpointExpiresAt: &expires, AllowedIPs: []string{"100.70.0.2/32"}, ACLRestricted: true, ACLGrants: []coordinator.ACLGrant{{DestinationCIDRs: []string{"100.70.0.2/32"}, AllowedPorts: []coordinator.ACLPort{{Protocol: "tcp", Port: 443}}}}}
 	revision := coordinator.MapRevision{Network: 1}
-	peer.Transport = &coordinator.PeerTransportPlan{Version: coordinator.PeerTransportPlanVersion, Availability: coordinator.TransportAvailable, AccountID: "account", NetworkID: "network", LocalNodeID: local.ID, LocalPublicKey: local.PublicKey, PeerNodeID: peer.ID, PeerPublicKey: peer.PublicKey, LocalIntentGeneration: 1, Revision: revision, IssuedAt: now, ExpiresAt: expires, PeerAdvertisement: peerAd, Profiles: []coordinator.TransportProfileOffer{{Profile: profile, Digest: digest, LocalEndpoint: localAd.Endpoints[0].Endpoint, PeerEndpoint: peerAd.Endpoints[0].Endpoint}}}
+	peer.Transport = &coordinator.PeerTransportPlan{Version: coordinator.PeerTransportPlanVersion, Availability: coordinator.TransportAvailable, AccountID: "account", NetworkID: "network", LocalNodeID: local.ID, LocalPublicKey: local.PublicKey, PeerNodeID: peer.ID, PeerPublicKey: peer.PublicKey, LocalIntentGeneration: 1, Revision: revision, IssuedAt: now, ExpiresAt: expires, PeerAdvertisement: peerAd, Profiles: []coordinator.TransportProfileOffer{{Profile: profile, Digest: digest, LocalEndpoints: []string{localAd.Endpoints[0].Endpoint}, PeerEndpoints: []string{peerAd.Endpoints[0].Endpoint}}}}
 	f.snapshot = coordinator.NetworkMapSnapshot{Revision: revision, Network: coordinator.Network{ID: "network", AccountID: "account", CIDR: "100.70.0.0/24", Revision: 1}, Node: local, Peers: []coordinator.Peer{peer}}
 	f.lease, err = connectivity.NewLease(t.Context(), f.clock, profileID, 1)
 	if err != nil {
@@ -139,9 +149,18 @@ func (f *candidateFixture) refresh(t *testing.T, previous *state.MapCursor) {
 // old signed lease remains current while untrusted input is being checked.
 func (f *candidateFixture) verify(t *testing.T, previous *state.MapCursor) {
 	t.Helper()
+	if err := f.verifyResult(t, previous); err != nil {
+		t.Fatal(err)
+	}
+}
+func (f *candidateFixture) verifyResult(t *testing.T, previous *state.MapCursor) error {
+	t.Helper()
 	sample, _ := f.clock.Sample()
 	now := sample.Wall
 	expires := now.Add(45 * time.Second)
+	if f.mapTTL > 0 {
+		expires = now.Add(f.mapTTL)
+	}
 	for i := range f.snapshot.Peers {
 		if f.snapshot.Peers[i].Transport == nil {
 			continue
@@ -170,9 +189,7 @@ func (f *candidateFixture) verify(t *testing.T, previous *state.MapCursor) {
 		t.Fatal(err)
 	}
 	f.verified, err = verifier.VerifySnapshot(t.Context(), raw, previous)
-	if err != nil {
-		t.Fatal(err)
-	}
+	return err
 }
 
 func (f *candidateFixture) assignment(t *testing.T) candidateAssignment {

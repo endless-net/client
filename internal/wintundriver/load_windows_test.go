@@ -21,7 +21,7 @@ func TestBinaryLockProtectsVerifiedFileAndAncestorIdentity(t *testing.T) {
 	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	file, unlock, err := lockBinary(path)
+	file, unlock, err := lockBinary(path, "wintun.dll")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestBinaryLockRejectsNoncanonicalPathsAndDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{directory, "wintun.dll", `\\server\share\wintun.dll`, filepath.Join(root, "missing", "wintun.dll"), filepath.Join(root, "other.dll")} {
-		_, unlock, err := lockBinary(path)
+		_, unlock, err := lockBinary(path, "wintun.dll")
 		if unlock != nil {
 			unlock()
 		}

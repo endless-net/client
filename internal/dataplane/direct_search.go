@@ -3,10 +3,13 @@ package dataplane
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"maps"
 	"math/big"
+	"runtime"
+	"slices"
 	"sort"
 	"time"
 
@@ -24,6 +27,7 @@ type directSearch struct {
 	order        []string
 	tried        map[string]bool
 	seen         map[string]bool
+	pairFailures map[string]uint64
 	traffic      map[string]*probeWireBudget
 	rx, finished bool
 	hintEpoch    uint64
@@ -54,11 +58,18 @@ func directRetryDelay(failures uint32) time.Duration {
 	return lower + time.Duration(value.Int64())
 }
 
-func (g *transportSupervisor) offers(p *supervisedRelay) []coordinator.TransportProfileOffer {
+func (g *transportSupervisor) peerPlan(p *supervisedRelay) *coordinator.PeerTransportPlan {
 	for _, peer := range g.snapshot.Peers {
-		if peer.ID == p.scope.peerID && peer.Transport != nil {
-			return peer.Transport.Profiles
+		if peer.ID == p.scope.peerID {
+			return peer.Transport
 		}
+	}
+	return nil
+}
+
+func (g *transportSupervisor) offers(p *supervisedRelay) []coordinator.TransportProfileOffer {
+	if plan := g.peerPlan(p); plan != nil {
+		return plan.Profiles
 	}
 	return nil
 }
@@ -146,6 +157,11 @@ func (g *transportSupervisor) refreshProfileSet(p *supervisedRelay) {
 	for _, offer := range g.offers(p) {
 		next[offer.Profile.ID] = offer.Digest
 	}
+	for id := range p.nextPair {
+		if p.profileSet[id] != next[id] {
+			delete(p.nextPair, id)
+		}
+	}
 	previous := p.profileSet
 	p.profileSet = next
 	if previous == nil || maps.Equal(previous, next) {
@@ -220,6 +236,20 @@ func (g *transportSupervisor) releaseCandidate(p *supervisedRelay, failed bool) 
 	}
 	if c := s.candidate; c != nil {
 		if failed {
+			c.bind.mu.Lock()
+			offer := c.bind.assignment.offer
+			c.bind.mu.Unlock()
+			if s.pairFailures == nil {
+				s.pairFailures = make(map[string]uint64)
+			}
+			s.pairFailures[c.profileID]++
+			if s.pairFailures[c.profileID] < uint64(len(offer.LocalEndpoints))*uint64(len(offer.PeerEndpoints)) {
+				delete(s.tried, c.profileID)
+				// Give other mutual profiles a turn before retrying this one.
+				if i := slices.Index(s.order, c.profileID); i >= 0 {
+					s.order = append(slices.Delete(s.order, i, i+1), c.profileID)
+				}
+			}
 			g.forgetCandidateHint(s, c)
 		}
 		if failed && c == p.spare {
@@ -236,6 +266,24 @@ func (g *transportSupervisor) releaseCandidate(p *supervisedRelay, failed bool) 
 	}
 	s.child, s.candidate, s.negotiation = nil, nil, nil
 	s.rx, s.finished = false, false
+}
+
+// Windows installs probe host routes in the same routing table as the TLS
+// connection. Use the established socket's IP even when the edge was named
+// by DNS. Linux kernel candidates use an isolated network namespace.
+func (g *transportSupervisor) kernelForPeer(p *supervisedRelay) kernelPreparer {
+	if g.budget.kernel == nil || runtime.GOOS != "windows" {
+		return g.budget.kernel
+	}
+	addr := p.channel.bind.mux.transport.remoteIP()
+	plan := g.peerPlan(p)
+	if !addr.IsValid() || plan == nil {
+		return nil
+	}
+	if relayIP := addr.String(); relayIP == plan.LocalProbeIPv4 || relayIP == plan.PeerProbeIPv4 {
+		return nil
+	}
+	return g.budget.kernel
 }
 
 func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordinator.TransportProfileOffer, id string) (result error) {
@@ -294,11 +342,27 @@ func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordin
 				return g.config.listenCandidate(p.scope.peerID, offer.Profile.ID, port)
 			}
 		}
-		c, err = g.budget.newAssigned(g.ctx, g.current, g.lease, p.scope.peerID, offer.Profile.ID, g.private, g.config.mtu, g.clock, sink, factory)
+		c, err = g.budget.newAssigned(g.ctx, g.current, g.lease, p.scope.peerID, offer.Profile.ID, g.private, g.config.mtu, g.clock, sink, factory, g.kernelForPeer(p))
 		if err != nil {
 			child.cancel()
 			return err
 		}
+	}
+	// The authenticated candidate ID carries the initiator's ordinal. The signed
+	// offers and ordered node identities define both ends without an address hint.
+	rawID, err := hex.DecodeString(id)
+	if err == nil && len(rawID) == 16 {
+		index := binary.BigEndian.Uint32(rawID[:4])
+		err = c.updatePair(g.ctx, g.current, &index)
+	} else {
+		err = ErrConfiguration
+	}
+	if err != nil {
+		child.cancel()
+		if c != p.direct && c != p.spare {
+			c.Close()
+		}
+		return err
 	}
 	n, err := newCandidateNegotiation(c, p.channel, child)
 	if err != nil {
@@ -356,6 +420,9 @@ func (g *transportSupervisor) updateDirect(p *supervisedRelay, value connectivit
 		current := c.bind.assignment
 		c.bind.mu.Unlock()
 		if !previous.sameProbe(current) {
+			if previous.localEndpoint != current.localEndpoint || previous.peerEndpoint != current.peerEndpoint {
+				p.route.FailDirect(c)
+			}
 			if p.directHealth != nil && p.directHealth.channel == c {
 				p.directCycle.cancel()
 				p.directHealth, p.directCycle = nil, nil
@@ -452,7 +519,11 @@ func (g *transportSupervisor) collectNegotiation(p *supervisedRelay) {
 	if err != nil {
 		return
 	}
-	if _, err := p.route.SelectDirect(activation); err != nil {
+	selectDirect := g.config.selectDirect
+	if selectDirect == nil {
+		selectDirect = (*peerRoute).SelectDirect
+	}
+	if _, err := selectDirect(p.route, activation); err != nil {
 		if !activation.used.Load() {
 			n.activationTaken = false
 		}
@@ -475,6 +546,7 @@ func (g *transportSupervisor) collectNegotiation(p *supervisedRelay) {
 	}
 	p.direct, p.spare, p.fallback = c, nil, true
 	p.checkedDirect = activation.qualified.stability.last
+	p.lastDirect = p.checkedDirect
 	p.directHint = g.recordCandidateHint(s, c)
 	p.failures, p.cooldown = 0, nil
 	s.finished, s.rx = true, true
@@ -533,6 +605,13 @@ func (g *transportSupervisor) tickSearch(p *supervisedRelay) {
 				if err != nil {
 					return
 				}
+				if p.nextPair == nil {
+					p.nextPair = make(map[string]uint32)
+				}
+				ordinal := p.nextPair[id]
+				var prefix [4]byte
+				binary.BigEndian.PutUint32(prefix[:], ordinal)
+				candidate = hex.EncodeToString(prefix[:]) + candidate[8:]
 				if err := g.prepareCandidate(p, offer, candidate); err != nil {
 					// A map handoff can fence I/O while the pinned device is
 					// opening. That is not a failed transport experiment and
@@ -546,6 +625,7 @@ func (g *transportSupervisor) tickSearch(p *supervisedRelay) {
 					s.tried[id] = true
 					continue
 				}
+				p.nextPair[id]++
 				break
 			}
 			if s.candidate != nil {
@@ -618,7 +698,9 @@ func (g *transportSupervisor) healthDirect(p *supervisedRelay, now connectivity.
 			p.cooldown, p.failures = nil, 0
 		}
 	}
-	if p.direct == nil || p.search != nil || p.route.Current() != peerRouteDirect || p.directHealth != nil || !negotiationDue(now, p.lastDirect, g.config.probeInterval) {
+	// After activation the search retains its transcript for duplicate Commit
+	// replies. That retention must not suspend health checks on the live path.
+	if p.direct == nil || (p.search != nil && !p.search.finished) || p.route.Current() != peerRouteDirect || p.directHealth != nil || !negotiationDue(now, p.lastDirect, g.config.probeInterval) {
 		return
 	}
 	if err := p.direct.serviceReady(); err != nil {
@@ -632,6 +714,9 @@ func (g *transportSupervisor) healthDirect(p *supervisedRelay, now connectivity.
 	cycle, err := g.budget.newCycle(g.ctx, g.clock, g.profile, g.generation, id)
 	if err != nil {
 		return
+	}
+	if p.search != nil && p.search.candidate == p.direct {
+		cycle.wire = p.search.child.wire
 	}
 	probe, err := p.direct.BeginProbe(cycle, id)
 	if err != nil {

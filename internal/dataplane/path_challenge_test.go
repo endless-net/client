@@ -220,3 +220,28 @@ func TestPathChallengeChangedAuthorityCannotBeReopenedByEcho(t *testing.T) {
 		t.Fatal("missing counter clock accepted")
 	}
 }
+
+func TestDirectServiceAddressesNeverDeliverApplicationPackets(t *testing.T) {
+	f := newCandidateFixture(t)
+	a := f.assignment(t)
+	a.plan.LocalProbeIPv4 = "172.20.4.10"
+	a.plan.PeerProbeIPv4 = "172.20.4.11"
+	var delivered int
+	c := assignedCipher{bind: &candidateBind{assignment: a}, sink: func([]byte) error { delivered++; return nil }}
+	local, peer, err := a.addresses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pair := range [][2]string{
+		{a.plan.PeerProbeIPv4, a.plan.LocalProbeIPv4},
+		{peer.String(), a.plan.LocalProbeIPv4},
+		{a.plan.PeerProbeIPv4, local.String()},
+	} {
+		if err := c.receivePlaintext(cipherIPv4(pair[0], pair[1], 7)); err != ErrNoAuthority {
+			t.Fatalf("accepted application payload for %v: %v", pair, err)
+		}
+	}
+	if err := c.receivePlaintext(cipherIPv4(peer.String(), local.String(), 7)); err != nil || delivered != 1 {
+		t.Fatal("application sink received the wrong packets", delivered, err)
+	}
+}

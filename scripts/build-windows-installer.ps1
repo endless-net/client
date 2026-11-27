@@ -23,7 +23,7 @@ New-Item -ItemType Directory -Force -Path $output | Out-Null
 $work = Join-Path ([IO.Path]::GetTempPath()) ('endlessnet-client-msi-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $work | Out-Null
 try {
-    foreach ($file in (Join-Path $ClientBundle 'client.exe'), (Join-Path $ClientBundle 'wintun.dll'), $Cli) {
+    foreach ($file in (Join-Path $ClientBundle 'client.exe'), (Join-Path $ClientBundle 'wintun.dll'), (Join-Path $ClientBundle 'wireguard.dll'), $Cli) {
         $stream = [IO.File]::OpenRead($file)
         try {
             $reader = [IO.BinaryReader]::new($stream)

@@ -20,6 +20,7 @@ type supervisorConfig struct {
 	mtu, maxPeers        int
 	advertise            func()
 	listenCandidate      func(string, string, uint16) (candidateSocket, error)
+	selectDirect         func(*peerRoute, *directActivation) (*assignedCipher, error)
 	hintStore            *state.Store
 	networkContext       func(context.Context, []byte) (string, error)
 }
@@ -41,6 +42,7 @@ type supervisedRelay struct {
 	retryBlocked                bool
 	failures                    uint32
 	resumeProfile               string
+	nextPair                    map[string]uint32
 	profileSet                  map[string]string
 	checkedRelay, checkedDirect connectivity.ClockSample
 	directHint                  *state.TransportHintKey

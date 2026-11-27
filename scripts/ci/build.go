@@ -313,7 +313,7 @@ func (r runner) buildEntries(ctx context.Context, a artifact, sha, version strin
 	if !windowsClient {
 		return entries, nil
 	}
-	driver, err := wintunEntries(ctx, r.root, a.Target)
+	driver, err := windowsDriverEntries(ctx, r.root, a.Target)
 	if err != nil {
 		return nil, err
 	}

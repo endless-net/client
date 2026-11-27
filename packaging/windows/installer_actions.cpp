@@ -35,33 +35,37 @@ bool LocalEndpoint(MSIHANDLE session) {
   MIB_IPFORWARD_TABLE2* routes = nullptr;
   if (GetIpForwardTable2(AF_INET, &routes) != NO_ERROR) return false;
   std::set<NET_IFINDEX> interfaces;
-  if (routes->NumEntries <= 1024) {
-    for (ULONG i = 0; i < routes->NumEntries; ++i) {
-      const auto& row = routes->Table[i];
-      if (row.DestinationPrefix.PrefixLength == 0 && !row.Loopback) interfaces.insert(row.InterfaceIndex);
-    }
+  if (routes->NumEntries > 1024) { FreeMibTable(routes); return false; }
+  for (ULONG i = 0; i < routes->NumEntries; ++i) {
+    const auto& row = routes->Table[i];
+    if (row.DestinationPrefix.PrefixLength == 0 && !row.Loopback) interfaces.insert(row.InterfaceIndex);
   }
   FreeMibTable(routes);
-  // Same no-NAT, single-default-interface model as the existing Client runtime.
-  // This is an OS address, never a fabricated public/NAT endpoint.
-  if (interfaces.size() != 1) return false;
+  // Prefer a default-route interface for registration. Direct listeners publish every eligible LAN.
   MIB_UNICASTIPADDRESS_TABLE* addresses = nullptr;
   if (GetUnicastIpAddressTable(AF_INET, &addresses) != NO_ERROR) return false;
-  std::set<std::wstring> candidates;
+  std::set<std::pair<bool, ULONG>> candidates;
   if (addresses->NumEntries <= 1024) {
     for (ULONG i = 0; i < addresses->NumEntries; ++i) {
       const auto& row = addresses->Table[i];
-      if (row.InterfaceIndex != *interfaces.begin() || row.SkipAsSource || row.DadState != IpDadStatePreferred) continue;
+      if (row.SkipAsSource || row.DadState != IpDadStatePreferred) continue;
+      MIB_IF_ROW2 nic{};
+      nic.InterfaceLuid = row.InterfaceLuid;
+      if (GetIfEntry2(&nic) != NO_ERROR || nic.OperStatus != IfOperStatusUp ||
+          nic.Type == IF_TYPE_SOFTWARE_LOOPBACK || _wcsnicmp(nic.Alias, L"EndlessNet-", 10) == 0) continue;
       const auto& addr = row.Address.Ipv4.sin_addr;
       const auto* bytes = reinterpret_cast<const unsigned char*>(&addr);
       if (!bytes[0] || bytes[0] == 127 || bytes[0] >= 224 || (bytes[0] == 169 && bytes[1] == 254)) continue;
-      wchar_t text[INET_ADDRSTRLEN]{};
-      if (InetNtopW(AF_INET, const_cast<IN_ADDR*>(&addr), text, INET_ADDRSTRLEN)) candidates.insert(text);
+      candidates.emplace(interfaces.count(row.InterfaceIndex) == 0, ntohl(addr.s_addr));
     }
   }
   FreeMibTable(addresses);
-  if (candidates.size() != 1) return false;
-  const auto endpoint = *candidates.begin() + L":" + port;
+  if (candidates.empty()) return false;
+  IN_ADDR selected{};
+  selected.s_addr = htonl(candidates.begin()->second);
+  wchar_t text[INET_ADDRSTRLEN]{};
+  if (!InetNtopW(AF_INET, &selected, text, INET_ADDRSTRLEN)) return false;
+  const auto endpoint = std::wstring(text) + L":" + port;
   return MsiSetPropertyW(session, L"ENDLESSNET_LOCAL_ENDPOINT", endpoint.c_str()) == ERROR_SUCCESS;
 }
 

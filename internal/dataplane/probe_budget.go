@@ -160,6 +160,17 @@ func (c *probeCycle) charge(size int) error {
 	return nil
 }
 
+// Charge the encrypted datagram and its outer IPv4/UDP headers before
+// forwarding. Record exhaustion on the attempt so the selector can distinguish
+// a local budget limit from an unreachable peer.
+func (p *probeAttempt) chargeDatagram(payload int) error {
+	err := p.cycle.charge(payload + 28)
+	if errors.Is(err, ErrProbeBudget) {
+		p.abort(err)
+	}
+	return err
+}
+
 func (c *probeCycle) attempt(id string) (*probeAttempt, error) {
 	if id == "" || len(id) > 128 {
 		return nil, ErrConfiguration

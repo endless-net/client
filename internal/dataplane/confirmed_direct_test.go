@@ -63,7 +63,7 @@ func TestConfirmedDirectOutlivesSearchButNeverMapProfileOrLease(t *testing.T) {
 	}
 	n.cycle.cancel()
 	f.clock.advance(31*time.Second, 31*time.Second)
-	endpoint, err := n.direct.bind.ParseEndpoint(n.assignment.offer.PeerEndpoint)
+	endpoint, err := n.direct.bind.ParseEndpoint(n.assignment.peerEndpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestLostACKRetainsQualifiedReceiverWithoutApplicationOutput(t *testing.T) {
 	if !receive {
 		t.Fatal("lost ACK discarded receive eligibility")
 	}
-	if _, _, err := n.direct.bind.confirmedAdmission(netip.MustParseAddrPort(n.assignment.offer.PeerEndpoint), epoch); err != nil {
+	if _, _, err := n.direct.bind.confirmedAdmission(netip.MustParseAddrPort(n.assignment.peerEndpoint), epoch); err != nil {
 		t.Fatal("qualified receive admission stopped with search", err)
 	}
 	if _, _, err := n.direct.bind.confirmedAdmission(netip.MustParseAddrPort("192.0.2.30:51820"), epoch); err == nil {
@@ -186,7 +186,7 @@ func TestConfirmedDirectRenewalAndSemanticFences(t *testing.T) {
 	}
 	cursor = f.verified.Cursor()
 	f.clock.advance(time.Millisecond, time.Millisecond)
-	f.snapshot.Peers[0].Transport.Profiles[0].PeerEndpoint = "192.0.2.21:51820"
+	f.snapshot.Peers[0].Transport.Profiles[0].PeerEndpoints = []string{"192.0.2.21:51820"}
 	f.snapshot.Peers[0].Transport.PeerAdvertisement.Endpoints[0].Endpoint = "192.0.2.21:51820"
 	f.refresh(t, &cursor)
 	if err := n.direct.Update(t.Context(), f.verified); err != nil {
@@ -210,7 +210,7 @@ func TestConfirmedDirectRechecksAfterBlockingDeadlineBoundary(t *testing.T) {
 	socket.beforeDeadline = func() { f.lease.Revoke() }
 	socket.mu.Unlock()
 	n.direct.bind.sendGate <- struct{}{}
-	endpoint, err := n.direct.bind.ParseEndpoint(n.assignment.offer.PeerEndpoint)
+	endpoint, err := n.direct.bind.ParseEndpoint(n.assignment.peerEndpoint)
 	if err != nil {
 		t.Fatal(err)
 	}

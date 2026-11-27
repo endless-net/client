@@ -330,7 +330,7 @@ func TestActualAWGUsesCandidateBindCloseOpenAndBoundedPrelude(t *testing.T) {
 		t.Fatal(err)
 	}
 	peer := a.peer
-	peer.Endpoint = a.offer.PeerEndpoint
+	peer.Endpoint = a.peerEndpoint
 	cipher, err := newPeerCipher(t.Context(), a.local, peer, f.profile.Keys.WireGuardPrivate, a.offer.Profile, port, b)
 	if err != nil {
 		_ = port.Close()
@@ -442,7 +442,7 @@ func TestCandidateBindCannotProbeUntilSignedLocalPortMatchesListener(t *testing.
 	cursor := f.verified.Cursor()
 	f.clock.advance(time.Millisecond, time.Millisecond)
 	f.snapshot.Node.Transport.Endpoints[0].Endpoint = "192.0.2.10:51822"
-	f.snapshot.Peers[0].Transport.Profiles[0].LocalEndpoint = "192.0.2.10:51822"
+	f.snapshot.Peers[0].Transport.Profiles[0].LocalEndpoints = []string{"192.0.2.10:51822"}
 	f.refresh(t, &cursor)
 	if err := b.update(f.assignment(t)); err != nil {
 		t.Fatal(err)

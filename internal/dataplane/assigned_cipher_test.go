@@ -45,7 +45,7 @@ func TestAssignedCipherFactoryFencesMapAndOwnsWholeIsolatedChannel(t *testing.T)
 		t.Fatal("channel close left socket open")
 	}
 	select {
-	case <-channel.cipher.port.done:
+	case <-channel.cipher.(*peerCipher).port.done:
 	default:
 		t.Fatal("channel close left virtual TUN open")
 	}
@@ -72,15 +72,16 @@ func TestAssignedUpdateFailureDoesNotHoldSinkLockWhileClosingEngine(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	channel.cipher.mu.Lock()
-	original := channel.cipher.device
-	channel.cipher.device = &closingCallbackDevice{wireGuardDevice: original, callback: func() { _ = channel.receivePlaintext(packet) }}
-	channel.cipher.mu.Unlock()
+	goEngine := channel.cipher.(*peerCipher)
+	goEngine.mu.Lock()
+	original := goEngine.device
+	goEngine.device = &closingCallbackDevice{wireGuardDevice: original, callback: func() { _ = channel.receivePlaintext(packet) }}
+	goEngine.mu.Unlock()
 	// An unchanged endpoint is intentionally not sent through crypto IPC.
 	// Change the actual signed endpoint to exercise the failing IPC/Close path.
 	cursor := f.verified.Cursor()
 	f.clock.advance(time.Millisecond, time.Millisecond)
-	f.snapshot.Peers[0].Transport.Profiles[0].PeerEndpoint = "192.0.2.21:51820"
+	f.snapshot.Peers[0].Transport.Profiles[0].PeerEndpoints = []string{"192.0.2.21:51820"}
 	f.snapshot.Peers[0].Transport.PeerAdvertisement.Endpoints[0].Endpoint = "192.0.2.21:51820"
 	f.refresh(t, &cursor)
 	done := make(chan error, 1)
