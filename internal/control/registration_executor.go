@@ -9,6 +9,7 @@ import (
 
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
+	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
 
 type RegistrationExecutorConfig struct {
@@ -139,6 +140,21 @@ func (e *RegistrationExecutor) apply(p state.Profile, result RegisteredResult, c
 	if err != nil {
 		return p, err
 	}
+	if p.JoinTokenDigest != "" && coordinator.IsDeviceQuotaExhausted(callErr) {
+		denied, err := a.Reject(now)
+		if err != nil {
+			return p, err
+		}
+		if denied.Phase != enrollment.Denied {
+			return p, state.ErrStale
+		}
+		p.Attempt = &denied
+		p.Secrets.RegistrationRequest = ""
+		p.RemoteInFlight = false
+		p.InFlightAt = time.Time{}
+		p.Registration = state.RegistrationProgress{BlockedReason: state.QuotaDeniedReason}
+		return p, nil
+	}
 	if callErr != nil {
 		reason, rejected := enrollmentFailureReason(callErr)
 		if rejected {
@@ -180,6 +196,14 @@ func (e *RegistrationExecutor) apply(p state.Profile, result RegisteredResult, c
 	}
 	p.Attempt = &a
 	p.Secrets.NodeCredential = result.Credential
+	if p.JoinTokenDigest != "" {
+		identity, err := p.RegistrationIdentity(len(p.Secrets.RegistrationRequest))
+		if err != nil {
+			return p, err
+		}
+		p.JoinReceipt = &identity
+		p.Secrets.RegistrationRequest = ""
+	}
 	p.RemoteInFlight = false
 	p.InFlightAt = time.Time{}
 	p.Registration = state.RegistrationProgress{}

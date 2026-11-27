@@ -3,6 +3,8 @@ package control
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
@@ -176,6 +178,110 @@ func TestDirectRegistrationRejectsForeignOrInvalidCredential(t *testing.T) {
 				t.Fatal("invalid result accepted", err)
 			}
 		})
+	}
+}
+
+func TestJoinRegistrationReplaysFrozenProofWithoutSession(t *testing.T) {
+	f := newRegistrationFixture(t)
+	const key = "fixture-registration-key"
+	f.p.Secrets.Access = ""
+	f.p.Secrets.SessionExpiresAt = time.Time{}
+	f.p.JoinTokenDigest = state.CredentialDigest(key)
+	original, err := PrepareJoinRegistration(f.p, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.p.Secrets.RegistrationRequest = string(original)
+	request, err := coordinator.DecodeRegisterNodeRequest(original, len(original))
+	if err != nil || coordinator.VerifyRegisterNodeIdentityProof(request) != nil || request.SessionTokenBinding != "" {
+		t.Fatal("invalid join proof", err)
+	}
+	f.result.RegistrationBinding = coordinator.RegistrationIdentityProofBinding(request)
+	var first []byte
+	calls := 0
+	r := f.adapter(t, func(req *http.Request) (*http.Response, error) {
+		calls++
+		message := &wire.RegisterNodeRequest{}
+		body := readRPC(t, req, message)
+		if message.GetJoinToken() != key || !proto.Equal(message.Proof, registrationProof(request)) || req.Header.Get("Authorization") != "" || req.Header.Get("Cookie") != "" || req.Header.Get("X-EndlessNet-Node-Credential") != "" {
+			t.Fatal("wrong join request")
+		}
+		if calls == 1 {
+			first = bytes.Clone(body)
+			return nil, io.ErrUnexpectedEOF
+		}
+		if !bytes.Equal(first, body) {
+			t.Fatal("changed replay")
+		}
+		return rpcResponse(t, req, registrationMessage(f.result)), nil
+	})
+	if _, err := r.Register(t.Context(), f.p, original); !errors.Is(err, ErrRegistrationUnavailable) || calls != 1 {
+		t.Fatal("lost reply", err, calls)
+	}
+	replay, err := PrepareRegistration(f.p)
+	if err != nil || !bytes.Equal(replay, original) {
+		t.Fatal("could not restore request", err)
+	}
+	got, err := r.Register(t.Context(), f.p, replay)
+	if err != nil || calls != 2 || got.NodeID != "node" || got.Credential != f.result.NodeCredential {
+		t.Fatal("failed to verify receipt", err, calls)
+	}
+	f.p.JoinTokenDigest = state.CredentialDigest("different-key")
+	if _, err := r.Register(t.Context(), f.p, original); !errors.Is(err, ErrRegistrationProtocol) || calls != 2 {
+		t.Fatal("changed key binding permitted a call")
+	}
+	// Exercise the protected-store commit too: restart the executor with only
+	// persisted data after losing a reply, then inspect the terminal profile.
+	f.p.JoinTokenDigest = state.CredentialDigest(key)
+	f.p.RemoteInFlight, f.p.InFlightAt = false, time.Time{}
+	block, err := aes.NewCipher(bytes.Repeat([]byte{2}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slot := &memory{}
+	open := func() *state.Store {
+		store, err := state.New(slot, testCodec{aead}, "e0802a1d-0c1c-43cc-86c5-cbe0ec3f25e8", 1<<20, 2<<20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return store
+	}
+	store := open()
+	if err := store.Initialize(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Update(t.Context(), 1, func(s *state.State) error {
+		s.OwnerSID, s.ActiveProfileID = f.p.Attempt.Owner, f.p.ID
+		s.Profiles[f.p.ID] = f.p
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	config := RegistrationExecutorConfig{MaxCommitRetries: 3, RetryInterval: time.Second, WriteBudget: time.Second, Now: func() time.Time { return f.now }}
+	calls = 0
+	for range 2 {
+		e, err := NewRegistrationExecutor(open(), r, config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.Reconcile(t.Context(), f.p.ID, f.p.Attempt.AttemptID); err != nil {
+			t.Fatal(err)
+		}
+		f.now = f.now.Add(time.Second)
+	}
+	saved, err := open().Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := saved.Profiles[f.p.ID]
+	payload, err := json.Marshal(p)
+	if err != nil || bytes.Contains(payload, []byte(key)) || p.Secrets.RegistrationRequest != "" ||
+		p.Secrets.NodeCredential != f.result.NodeCredential || p.JoinReceipt == nil || p.JoinReceipt.Binding != f.result.RegistrationBinding || calls != 2 {
+		t.Fatal("key not retired together with verified registration", err, calls)
 	}
 }
 

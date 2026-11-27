@@ -77,6 +77,16 @@ func (c *Controller) getObserved(ctx context.Context, p localipc.Principal, req 
 	}
 	id := profileID(req.Profile, s.ActiveProfileID)
 	profile, ok := s.Profiles[id]
+	if denial, found := profile.DeniedJoins[req.GetRequestId()]; found {
+		return &clientv0.GetEnrollmentAttemptResponse{Attempt: c.projectDeniedJoin(&s, id, denial)}, nil
+	}
+	if req.GetAttemptId() != "" {
+		for _, denial := range profile.DeniedJoins {
+			if denial.Attempt.AttemptID == req.GetAttemptId() {
+				return &clientv0.GetEnrollmentAttemptResponse{Attempt: c.projectDeniedJoin(&s, id, denial)}, nil
+			}
+		}
+	}
 	if !ok || profile.Attempt == nil || (req.GetAttemptId() != "" && req.GetAttemptId() != profile.Attempt.AttemptID) || (req.GetRequestId() != "" && req.GetRequestId() != profile.Attempt.RequestID) {
 		return nil, status.Error(codes.NotFound, "enrollment not found")
 	}

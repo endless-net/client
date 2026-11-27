@@ -50,18 +50,21 @@ func (d *credentialDeadline) observeSession(p state.Profile, now time.Time) (at 
 }
 
 func (s *credentialSchedule) plan(p state.Profile, now time.Time) (credentialPlan, error) {
-	sessionAt, sessionDue, err := s.session.observeSession(p, now)
-	if err != nil {
-		return credentialPlan{}, err
-	}
 	credential, expires, err := p.CurrentNodeCredential()
 	if err != nil {
 		return credentialPlan{}, err
 	}
 	nodeAt := s.node.observe(state.CredentialDigest(credential), expires, now)
-	plan := credentialPlan{session: sessionDue, node: !now.Before(nodeAt), next: sessionAt}
-	if nodeAt.Before(plan.next) {
-		plan.next = nodeAt
+	plan := credentialPlan{node: !now.Before(nodeAt), next: nodeAt}
+	if p.JoinReceipt == nil {
+		sessionAt, due, err := s.session.observeSession(p, now)
+		if err != nil {
+			return credentialPlan{}, err
+		}
+		plan.session = due
+		if sessionAt.Before(plan.next) {
+			plan.next = sessionAt
+		}
 	}
 	if p.NodeRenewal != nil && (p.ActiveNodeCredential == nil || p.ActiveNodeCredential.Request != p.NodeRenewal.Request) {
 		// Recover the frozen session-bound Node command before rotating its bearer.

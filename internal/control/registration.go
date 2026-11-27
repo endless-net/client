@@ -56,7 +56,7 @@ func enrollmentFailureReason(err error) (string, bool) {
 	switch connect.CodeOf(err) {
 	case connect.CodeUnauthenticated, connect.CodePermissionDenied:
 		return "access_denied", true
-	case connect.CodeInvalidArgument, connect.CodeUnimplemented, connect.CodeFailedPrecondition:
+	case connect.CodeInvalidArgument, connect.CodeAlreadyExists, connect.CodeUnimplemented, connect.CodeFailedPrecondition:
 		return "request_rejected", true
 	default:
 		return "", false
@@ -109,7 +109,29 @@ func NewRegistration(client *http.Client, announcements Announcements, config Re
 // selection and registration UUID. The caller must persist these bytes and the
 // original session before marking a send in flight. It performs no network IO.
 func PrepareRegistration(p state.Profile) ([]byte, error) {
-	if p.Attempt == nil || p.Attempt.BrowserApproval || p.Approval != nil || p.Attempt.Validate() != nil || p.Attempt.Phase != enrollment.Registering || !identifier(p.Secrets.RegistrationID) || p.Attempt.AccountID == "" || p.Attempt.NetworkID == "" || !validProof(p.Secrets.Access) || !targetID(p.Hostname) {
+	if p.JoinTokenDigest != "" {
+		frozen, err := coordinator.DecodeRegisterNodeRequest([]byte(p.Secrets.RegistrationRequest), len(p.Secrets.RegistrationRequest))
+		if err != nil || frozen.JoinToken == "" {
+			return nil, ErrRegistrationProtocol
+		}
+		return PrepareJoinRegistration(p, frozen.JoinToken)
+	}
+	if !validProof(p.Secrets.Access) {
+		return nil, ErrRegistrationProtocol
+	}
+	return prepareRegistration(p, "")
+}
+
+// PrepareJoinRegistration freezes the key in the signed request stored by the daemon.
+func PrepareJoinRegistration(p state.Profile, key string) ([]byte, error) {
+	if key == "" || state.CredentialDigest(key) != p.JoinTokenDigest || p.Secrets.Access != "" || p.DefaultTarget != nil || !p.Secrets.SessionExpiresAt.IsZero() {
+		return nil, ErrRegistrationProtocol
+	}
+	return prepareRegistration(p, key)
+}
+
+func prepareRegistration(p state.Profile, key string) ([]byte, error) {
+	if p.Attempt == nil || p.Attempt.BrowserApproval || p.Approval != nil || p.Attempt.Validate() != nil || p.Attempt.Phase != enrollment.Registering || !identifier(p.Secrets.RegistrationID) || p.Attempt.AccountID == "" || p.Attempt.NetworkID == "" || !targetID(p.Hostname) {
 		return nil, ErrRegistrationProtocol
 	}
 	_, _, err := NativeBinding(p)
@@ -129,6 +151,7 @@ func PrepareRegistration(p state.Profile) ([]byte, error) {
 	request := coordinator.RegisterNodeRequest{
 		SchemaVersion: coordinator.SchemaVersion, IdempotencyID: p.Secrets.RegistrationID,
 		AccountID: p.Attempt.AccountID, NetworkID: p.Attempt.NetworkID, Hostname: p.Hostname,
+		JoinToken:           key,
 		SessionTokenBinding: coordinator.RegistrationSessionTokenBinding(p.Secrets.Access),
 		PublicKey:           base64.StdEncoding.EncodeToString(wg.PublicKey().Bytes()), DeviceFingerprint: hex.EncodeToString(fingerprint[:]),
 	}
@@ -177,7 +200,7 @@ func (r *Registration) Register(ctx context.Context, p state.Profile, original [
 			remaining = deadline.Sub(r.config.Now())
 		}
 	}
-	if p.Secrets.SessionExpiresAt.IsZero() || remaining <= 0 {
+	if (request.JoinToken == "" && p.Secrets.SessionExpiresAt.IsZero()) || remaining <= 0 {
 		return RegisteredResult{}, context.DeadlineExceeded
 	}
 	if remaining > 30*time.Second {
@@ -193,14 +216,21 @@ func (r *Registration) Register(ctx context.Context, p state.Profile, original [
 		return RegisteredResult{}, ErrBootstrap
 	}
 	p.Trust = state.ServerTrust{KeyID: a.KeyID, AnnouncementID: a.ID, Bundle: a.Bundle}
-	requestRPC := bearer(&wire.RegisterNodeRequest{
-		Proof: registrationProof(request),
-		Authorization: &wire.RegisterNodeRequest_NativeSession{NativeSession: &wire.NativeSessionRegistration{
+	message := &wire.RegisterNodeRequest{Proof: registrationProof(request)}
+	requestRPC := connect.NewRequest(message)
+	if request.JoinToken != "" {
+		message.Authorization = &wire.RegisterNodeRequest_JoinToken{JoinToken: request.JoinToken}
+	} else {
+		message.Authorization = &wire.RegisterNodeRequest_NativeSession{NativeSession: &wire.NativeSessionRegistration{
 			SessionTokenBinding: request.SessionTokenBinding,
-		}},
-	}, p.Secrets.Access)
+		}}
+		requestRPC = bearer(message, p.Secrets.Access)
+	}
 	response, err := r.rpc(p.ControlOrigin).RegisterNode(ctx, requestRPC)
 	if err != nil || ctx.Err() != nil {
+		if request.JoinToken != "" && connect.IsWireError(err) && coordinator.IsDeviceQuotaExhausted(err) {
+			return RegisteredResult{}, coordinator.DeviceQuotaExhausted()
+		}
 		return RegisteredResult{}, registrationCallError(ctx, err)
 	}
 	if !knownRPC(response.Msg.ProtoReflect()) {
@@ -223,7 +253,7 @@ func (r *Registration) Register(ctx context.Context, p state.Profile, original [
 func registrationCallError(ctx context.Context, err error) error {
 	if connect.IsWireError(err) {
 		switch code := connect.CodeOf(err); code {
-		case connect.CodeUnauthenticated, connect.CodePermissionDenied, connect.CodeInvalidArgument,
+		case connect.CodeUnauthenticated, connect.CodePermissionDenied, connect.CodeInvalidArgument, connect.CodeAlreadyExists,
 			connect.CodeUnimplemented, connect.CodeFailedPrecondition:
 			return connect.NewError(code, errors.New("enrollment request rejected"))
 		}
@@ -236,7 +266,7 @@ func registrationCallError(ctx context.Context, err error) error {
 
 func (r *Registration) verify(p state.Profile, request coordinator.RegisterNodeRequest, result coordinator.RegisterNodeResponse) (RegisteredResult, error) {
 	now := r.config.Now()
-	if !now.Before(p.Attempt.Deadline) || !now.Before(p.Secrets.SessionExpiresAt) || p.Attempt.Uncertain && !now.Before(p.Attempt.RecoveryUntil) {
+	if !now.Before(p.Attempt.Deadline) || request.JoinToken == "" && !now.Before(p.Secrets.SessionExpiresAt) || p.Attempt.Uncertain && !now.Before(p.Attempt.RecoveryUntil) {
 		return RegisteredResult{}, context.DeadlineExceeded
 	}
 	return r.verifyResult(p, request, result, now)

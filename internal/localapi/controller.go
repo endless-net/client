@@ -53,7 +53,7 @@ type Config struct {
 	DefaultProfileDisplayName                         string
 	ContractDigest                                    [32]byte
 	Build                                             *clientv0.BuildIdentity
-	MaxProfiles                                       int
+	MaxProfiles, MaxRegistrationBytes                 int
 	MaxDisplayNameBytes, MaxHostnameBytes             int
 	Now                                               func() time.Time
 }
@@ -101,7 +101,7 @@ func New(store *state.Store, runner Runner, config Config) (*Controller, error) 
 	if (config.Targets == nil) != (config.TargetPageKey == [32]byte{}) {
 		return nil, state.ErrCorrupt
 	}
-	if store == nil || runner == nil || config.Announcements == nil || !validID(config.RuntimeID) || !validID(config.DefaultProfileID) || !validOrigin(config.DefaultControlOrigin) || config.ContractDigest == [32]byte{} || config.Build == nil || config.MaxProfiles <= 0 || config.MaxDisplayNameBytes <= 0 || config.MaxHostnameBytes <= 0 || strings.TrimSpace(config.DefaultProfileDisplayName) == "" || len(config.DefaultProfileDisplayName) > config.MaxDisplayNameBytes || strings.IndexFunc(config.DefaultProfileDisplayName, unicode.IsControl) >= 0 {
+	if store == nil || runner == nil || config.Announcements == nil || !validID(config.RuntimeID) || !validID(config.DefaultProfileID) || !validOrigin(config.DefaultControlOrigin) || config.ContractDigest == [32]byte{} || config.Build == nil || config.MaxProfiles <= 0 || config.MaxRegistrationBytes <= 0 || config.MaxDisplayNameBytes <= 0 || config.MaxHostnameBytes <= 0 || strings.TrimSpace(config.DefaultProfileDisplayName) == "" || len(config.DefaultProfileDisplayName) > config.MaxDisplayNameBytes || strings.IndexFunc(config.DefaultProfileDisplayName, unicode.IsControl) >= 0 {
 		return nil, state.ErrCorrupt
 	}
 	config.Build = proto.Clone(config.Build).(*clientv0.BuildIdentity)
@@ -341,6 +341,16 @@ func (c *Controller) begin(ctx context.Context, p localipc.Principal, req *clien
 	if err := c.mutation(req.Mutation); err != nil {
 		return nil, err
 	}
+	target := req.JoinTokenEnrollment
+	var keyDigest string
+	if target != nil {
+		for _, value := range []string{target.AccountId, target.NetworkId, target.JoinToken} {
+			if value == "" || strings.TrimSpace(value) != value || strings.IndexFunc(value, unicode.IsControl) >= 0 {
+				return nil, status.Error(codes.InvalidArgument, "incomplete or invalid registration key input")
+			}
+		}
+		keyDigest = state.CredentialDigest(target.JoinToken)
+	}
 	if !validID(req.RequestId) || req.Hostname == "" || len(req.Hostname) > c.config.MaxHostnameBytes || strings.TrimSpace(req.Hostname) != req.Hostname || strings.IndexFunc(req.Hostname, unicode.IsControl) >= 0 || req.Mode < clientv0.EnrollmentMode_ENROLLMENT_MODE_WORKSTATION || req.Mode > clientv0.EnrollmentMode_ENROLLMENT_MODE_INTERACTIVE {
 		return nil, status.Error(codes.InvalidArgument, "invalid enrollment input")
 	}
@@ -362,11 +372,29 @@ func (c *Controller) begin(ctx context.Context, p localipc.Principal, req *clien
 			s.ActiveProfileID = id
 		}
 		for otherID, other := range s.Profiles {
-			if otherID != id && other.Attempt != nil && other.Attempt.RequestID == req.RequestId {
+			if _, archived := other.DeniedJoins[req.RequestId]; otherID != id && (archived || other.Attempt != nil && other.Attempt.RequestID == req.RequestId) {
 				return errBindingConflict
 			}
 		}
+		if denial, found := profile.DeniedJoins[req.RequestId]; found {
+			if target == nil || denial.KeyDigest != keyDigest || denial.Attempt.AccountID != target.AccountId || denial.Attempt.NetworkID != target.NetworkId || denial.Mode != int32(req.Mode) || denial.Hostname != req.Hostname {
+				return errBindingConflict
+			}
+			result = c.projectDeniedJoin(s, profile.ID, denial)
+			return errReplay
+		}
+		if profile.CanRetryQuotaDenial() && target != nil && profile.Attempt.RequestID != req.RequestId {
+			if profile.DeniedJoins == nil {
+				profile.DeniedJoins = make(map[string]state.DeniedJoin)
+			}
+			profile.DeniedJoins[profile.Attempt.RequestID] = profile.DeniedJoinReceipt()
+			profile.Attempt = nil
+			profile.Registration = state.RegistrationProgress{}
+		}
 		if profile.Attempt != nil {
+			if profile.JoinTokenDigest != keyDigest || target != nil && (target.AccountId != profile.Attempt.AccountID || target.NetworkId != profile.Attempt.NetworkID) {
+				return errBindingConflict
+			}
 			if profile.Attempt.RequestID != req.RequestId || profile.Mode != int32(req.Mode) || profile.Hostname != req.Hostname {
 				return errBindingConflict
 			}
@@ -390,9 +418,13 @@ func (c *Controller) begin(ctx context.Context, p localipc.Principal, req *clien
 			result.Metadata.Revision++
 			return nil
 		}
-		keys, err := state.GenerateKeys()
-		if err != nil {
-			return err
+		keys := profile.Keys
+		if len(keys.IdentityPrivate) == 0 {
+			var err error
+			keys, err = state.GenerateKeys()
+			if err != nil {
+				return err
+			}
 		}
 		fingerprint, err := keys.Fingerprint()
 		if err != nil {
@@ -415,6 +447,16 @@ func (c *Controller) begin(ctx context.Context, p localipc.Principal, req *clien
 		profile.Mode = int32(req.Mode)
 		profile.Hostname = req.Hostname
 		profile.Secrets.RequestProof = proof
+		if target != nil {
+			a.Phase, a.AccountID, a.NetworkID = enrollment.Registering, target.AccountId, target.NetworkId
+			profile.JoinTokenDigest = keyDigest
+			profile.Secrets.RegistrationID = req.RequestId
+			original, err := control.PrepareJoinRegistration(profile, target.JoinToken)
+			if err != nil || len(original) > c.config.MaxRegistrationBytes {
+				return status.Error(codes.InvalidArgument, "invalid registration key request")
+			}
+			profile.Secrets.RegistrationRequest = string(original)
+		}
 		if s.Profiles == nil {
 			s.Profiles = map[string]state.Profile{}
 		}
@@ -432,6 +474,10 @@ func (c *Controller) begin(ctx context.Context, p localipc.Principal, req *clien
 		return nil, err
 	}
 	return &clientv0.EnrollResponse{Attempt: result}, nil
+}
+
+func (c *Controller) projectDeniedJoin(s *state.State, id string, d state.DeniedJoin) *clientv0.EnrollmentAttempt {
+	return c.project(s, state.Profile{ID: id, Mode: d.Mode, Hostname: d.Hostname, Registration: state.RegistrationProgress{BlockedReason: state.QuotaDeniedReason}}, d.Attempt)
 }
 
 func pending(p clientv0.EnrollmentPhase) bool {
@@ -482,6 +528,9 @@ func (c *Controller) project(s *state.State, p state.Profile, a enrollment.Attem
 	switch a.Phase {
 	case enrollment.Denied:
 		r.Restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_POLICY_BLOCKED, ReasonKey: "client.enrollment.denied", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_ACCESS_ADMINISTRATOR}
+		if p.Registration.BlockedReason == state.QuotaDeniedReason {
+			r.Restriction.ReasonKey = p.Registration.BlockedReason
+		}
 	case enrollment.Cancelled:
 		r.Restriction = &clientv0.Restriction{Availability: clientv0.Availability_AVAILABILITY_TEMPORARILY_UNAVAILABLE, ReasonKey: "client.enrollment.cancelled", ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}
 	case enrollment.Expired:

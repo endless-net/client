@@ -208,7 +208,7 @@ func composeLinux(lc fx.Lifecycle, shutdown fx.Shutdowner, t *Telemetry, store *
 		Targets: targets, Dashboard: dashboard, TargetPageKey: pageKey, Announcements: bootstrap,
 		RuntimeID: instance.String(), DefaultProfileID: uuid.NewSHA1(installation, []byte("default-profile")).String(),
 		DefaultControlOrigin: linuxControlOrigin, DefaultProfileDisplayName: "EndlessNet",
-		ContractDigest: digest, Build: build, MaxProfiles: 4, MaxDisplayNameBytes: 128, MaxHostnameBytes: 128, Now: time.Now,
+		ContractDigest: digest, Build: build, MaxProfiles: 4, MaxRegistrationBytes: linuxMessageBytes, MaxDisplayNameBytes: 128, MaxHostnameBytes: 128, Now: time.Now,
 	})
 	if err != nil {
 		return err

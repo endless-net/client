@@ -77,6 +77,23 @@ type ServerTrust struct {
 	Bundle                []byte
 }
 
+// DeniedJoin retains the local command receipt without retaining the secret.
+type DeniedJoin struct {
+	Attempt             enrollment.Attempt
+	Mode                int32
+	Hostname, KeyDigest string
+}
+
+const QuotaDeniedReason = "client.registration.quota_exhausted"
+
+func (p Profile) CanRetryQuotaDenial() bool {
+	return p.Attempt != nil && p.Attempt.Phase == enrollment.Denied && !p.Attempt.Uncertain && !p.RemoteInFlight && p.JoinTokenDigest != "" && p.Registration.BlockedReason == QuotaDeniedReason && p.Secrets.NodeCredential == ""
+}
+
+func (p Profile) DeniedJoinReceipt() DeniedJoin {
+	return DeniedJoin{Attempt: *p.Attempt, Mode: p.Mode, Hostname: p.Hostname, KeyDigest: p.JoinTokenDigest}
+}
+
 type Profile struct {
 	ID, DisplayName, ControlOrigin string
 	Keys                           Keys
@@ -101,8 +118,11 @@ type Profile struct {
 	RemoteInFlight bool
 	InFlightAt     time.Time
 	// Exact caller inputs are persisted for changed-input conflict detection.
-	Mode     int32
-	Hostname string
+	Mode            int32
+	Hostname        string
+	DeniedJoins     map[string]DeniedJoin `json:",omitempty"`
+	JoinTokenDigest string                `json:",omitempty"`
+	JoinReceipt     *RegistrationIdentity `json:",omitempty"`
 }
 
 type BootstrapCheckpoint struct {
@@ -183,8 +203,13 @@ func (s State) Validate(installation string) error {
 				return ErrCorrupt
 			}
 		}
+		for request, d := range p.DeniedJoins {
+			if p.Attempt == nil || d.Attempt.Validate() != nil || request != d.Attempt.RequestID || request == p.Attempt.RequestID || d.Attempt.ProfileID != id || d.Attempt.Owner != s.OwnerSID || d.Attempt.ControlOrigin != p.ControlOrigin || d.Attempt.Phase != enrollment.Denied || d.Attempt.Uncertain || d.KeyDigest == "" || d.Hostname == "" {
+				return ErrCorrupt
+			}
+		}
 		if p.Attempt == nil {
-			if len(p.Keys.IdentityPrivate) != 0 || len(p.Keys.WireGuardPrivate) != 0 || p.Secrets != (RemoteSecrets{}) || p.RemoteInFlight || !p.InFlightAt.IsZero() || p.Login != (LoginProgress{}) || p.Registration != (RegistrationProgress{}) || p.Approval != nil {
+			if len(p.Keys.IdentityPrivate) != 0 || len(p.Keys.WireGuardPrivate) != 0 || p.Secrets != (RemoteSecrets{}) || p.RemoteInFlight || !p.InFlightAt.IsZero() || p.Login != (LoginProgress{}) || p.Registration != (RegistrationProgress{}) || p.Approval != nil || p.JoinTokenDigest != "" || p.JoinReceipt != nil {
 				return ErrCorrupt
 			}
 			continue
@@ -215,7 +240,13 @@ func (s State) Validate(installation string) error {
 		if validateApproval(p) != nil {
 			return ErrCorrupt
 		}
-		if p.Secrets.NodeCredential != "" && (p.Attempt.Phase != enrollment.Registered || p.Secrets.RegistrationRequest == "") {
+		if p.JoinTokenDigest != "" && (p.Attempt.BrowserApproval || p.DefaultTarget != nil || p.Secrets.RegistrationID == "" || (p.JoinReceipt == nil && p.Secrets.RegistrationRequest == "" && !p.CanRetryQuotaDenial())) {
+			return ErrCorrupt
+		}
+		if p.JoinReceipt != nil && (p.JoinTokenDigest == "" || p.Secrets.RegistrationRequest != "" || p.Secrets.NodeCredential == "" || p.JoinReceipt.Binding == "") {
+			return ErrCorrupt
+		}
+		if p.Secrets.NodeCredential != "" && (p.Attempt.Phase != enrollment.Registered || p.Secrets.RegistrationRequest == "" && p.JoinReceipt == nil) {
 			return ErrCorrupt
 		}
 		if p.Attempt.Phase == enrollment.Registered && p.Secrets.RegistrationRequest != "" && p.Secrets.NodeCredential == "" {
@@ -408,6 +439,20 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 			if connectionUpdate(p.Connection, next.Connection) != nil || !connectionRequestRevision(p.Connection, next.Connection, before.Revision) {
 				return ErrCorrupt
 			}
+			for request, denial := range p.DeniedJoins {
+				if next.DeniedJoins[request] != denial {
+					return ErrCorrupt
+				}
+			}
+			if p.CanRetryQuotaDenial() && next.Attempt != nil && next.Attempt.Phase == enrollment.Registering && next.JoinTokenDigest != "" && next.Attempt.RequestID != p.Attempt.RequestID && next.Attempt.AttemptID != p.Attempt.AttemptID && len(next.DeniedJoins) == len(p.DeniedJoins)+1 && next.DeniedJoins[p.Attempt.RequestID] == p.DeniedJoinReceipt() {
+				if !bytes.Equal(p.Keys.IdentityPrivate, next.Keys.IdentityPrivate) || !bytes.Equal(p.Keys.WireGuardPrivate, next.Keys.WireGuardPrivate) || next.Attempt.Uncertain || next.RemoteInFlight || next.Registration != (RegistrationProgress{}) || next.Secrets.NodeCredential != "" || next.Secrets.RegistrationID == p.Secrets.RegistrationID {
+					return ErrCorrupt
+				}
+				continue
+			}
+			if len(next.DeniedJoins) != len(p.DeniedJoins) {
+				return ErrCorrupt
+			}
 			if p.Attempt != nil && (next.Attempt == nil || p.Attempt.Binding != next.Attempt.Binding || !bytes.Equal(p.Keys.IdentityPrivate, next.Keys.IdentityPrivate) || !bytes.Equal(p.Keys.WireGuardPrivate, next.Keys.WireGuardPrivate) || p.Secrets.RequestProof != next.Secrets.RequestProof || p.Mode != next.Mode || p.Hostname != next.Hostname) {
 				return ErrCorrupt
 			}
@@ -422,7 +467,16 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 				if (p.Secrets.PollProof != "" && p.Secrets.PollProof != next.Secrets.PollProof) || (p.Secrets.TransactionID != "" && p.Secrets.TransactionID != next.Secrets.TransactionID) || (p.Secrets.RegistrationID != "" && p.Secrets.RegistrationID != next.Secrets.RegistrationID) {
 					return ErrCorrupt
 				}
-				if (p.Secrets.RegistrationRequest != "" && p.Secrets.RegistrationRequest != next.Secrets.RegistrationRequest) || (p.Secrets.NodeCredential != "" && p.Secrets.NodeCredential != next.Secrets.NodeCredential) {
+				if p.JoinTokenDigest != next.JoinTokenDigest || p.JoinReceipt != nil && (next.JoinReceipt == nil || *p.JoinReceipt != *next.JoinReceipt) {
+					return ErrCorrupt
+				}
+				clearedAfterQuotaDenial := p.JoinTokenDigest != "" && next.CanRetryQuotaDenial() && next.Secrets.RegistrationRequest == ""
+				requestChanged := p.Secrets.RegistrationRequest != "" && p.Secrets.RegistrationRequest != next.Secrets.RegistrationRequest
+				receiptAdded := p.JoinReceipt == nil && next.JoinReceipt != nil
+				if (requestChanged || receiptAdded) && !validJoinCommit(p, next) && !clearedAfterQuotaDenial {
+					return ErrCorrupt
+				}
+				if p.Secrets.NodeCredential != "" && p.Secrets.NodeCredential != next.Secrets.NodeCredential {
 					return ErrCorrupt
 				}
 				if p.Secrets.RegistrationRequest != "" && p.Secrets.Access != next.Secrets.Access {

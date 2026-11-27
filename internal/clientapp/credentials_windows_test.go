@@ -94,6 +94,13 @@ func newOnlineRenewalBackend(t *testing.T, mode string) *onlineRenewalFixture {
 			t.Fatal(err)
 		}
 		r := coordinator.RegisterNodeRequest{SchemaVersion: coordinator.SchemaVersion, IdempotencyID: p.Secrets.RegistrationID, AccountID: p.Attempt.AccountID, NetworkID: p.Attempt.NetworkID, Hostname: p.Hostname, PublicKey: base64.StdEncoding.EncodeToString(wg.PublicKey().Bytes()), DeviceFingerprint: hex.EncodeToString(fingerprint[:]), SessionTokenBinding: coordinator.RegistrationSessionTokenBinding(f.access)}
+		if mode == "account-device" {
+			r.SessionTokenBinding = ""
+			r.JoinToken = "fixture-enrollment-key"
+			p.JoinTokenDigest = state.CredentialDigest(r.JoinToken)
+			p.Secrets.Access, p.Secrets.Renewal, p.Secrets.UserID, p.Secrets.SessionID = "", "", "", ""
+			p.Secrets.SessionExpiresAt, p.Secrets.RenewalExpiresAt = time.Time{}, time.Time{}
+		}
 		if err := coordinator.SetRegisterNodeIdentityProof(&r, ed25519.PrivateKey(p.Keys.IdentityPrivate)); err != nil {
 			t.Fatal(err)
 		}
@@ -102,6 +109,14 @@ func newOnlineRenewalBackend(t *testing.T, mode string) *onlineRenewalFixture {
 			t.Fatal(err)
 		}
 		p.Secrets.RegistrationRequest = string(raw)
+		if mode == "account-device" {
+			initial, err := p.RegistrationIdentity(len(raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.JoinReceipt = &initial
+			p.Secrets.RegistrationRequest = ""
+		}
 	}, 30*time.Second)
 	// Long-running renewal scenarios do not consume the endpoint-observation
 	// channel used by the shorter backend tests. Keep it from stalling the RPC.
@@ -172,7 +187,13 @@ func (f *onlineRenewalFixture) node(r *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	request, err := testwire.RenewalRequest(raw)
-	if err != nil || coordinator.ValidateNodeCredentialRenewalRequest(request, 8192) != nil {
+	validate := coordinator.ValidateNodeCredentialRenewalRequest
+	authorization := "Bearer " + f.access
+	if f.mode == "account-device" {
+		validate = coordinator.ValidateAccountNodeRenewalRequest
+		authorization = ""
+	}
+	if err != nil || validate(request, 8192) != nil || r.Header.Get("Authorization") != authorization {
 		return nil, errors.New("invalid fixture request")
 	}
 	f.mu.Lock()
@@ -184,10 +205,10 @@ func (f *onlineRenewalFixture) node(r *http.Request) (*http.Response, error) {
 	}
 	response := f.nodes[request.IdempotencyID]
 	if response == nil {
-		recovery := f.mode == "expired-unknown" && f.lastCommand != "" &&
+		recovery := (f.mode == "expired-unknown" || f.mode == "account-device") && f.lastCommand != "" &&
 			request.IdempotencyID == coordinator.NodeRenewalRecoveryID(f.lastCommand) &&
 			request.NodeCredential == f.lastWire
-		if !recovery && request.NodeCredential != f.head || r.Header.Get("Authorization") != "Bearer "+f.access {
+		if !recovery && request.NodeCredential != f.head {
 			f.mu.Unlock()
 			return nil, errors.New("rotation used wrong head/session")
 		}
@@ -227,7 +248,7 @@ func (f *onlineRenewalFixture) node(r *http.Request) (*http.Response, error) {
 		f.head = credential
 	}
 	f.mu.Unlock()
-	if (f.mode == "lost-node" || f.mode == "expired-unknown") && call == 1 {
+	if (f.mode == "account-device" || f.mode == "lost-node" || f.mode == "expired-unknown") && call == 1 {
 		return nil, errors.New("fixture lost response")
 	}
 	if f.mode == "blocked" && call == 1 {
@@ -660,5 +681,40 @@ func TestOnlineLateResultCannotAdoptAfterDisconnectGeneration(t *testing.T) {
 	p := value.Profiles[workerProfile]
 	if p.ActiveNodeCredential != nil || p.NodeRenewal == nil || p.Connection.Intent != state.IntentDisconnected {
 		t.Fatal("stale completion restored authority")
+	}
+}
+
+func TestAccountDeviceRenewsAfterLostResponse(t *testing.T) {
+	for name, wait := range map[string]time.Duration{"exact retry": 0, "recovery after deadline": 11 * time.Minute} {
+		t.Run(name, func(t *testing.T) {
+			f := newOnlineRenewalBackend(t, "account-device")
+			f.offset.Store(int64(25 * time.Minute))
+			if err := f.credentials.Refresh(t.Context(), workerProfile, 1, true, true); !errors.Is(err, control.ErrCredentialsUnavailable) {
+				t.Fatal("lost device response", err)
+			}
+			f.offset.Store(int64(25*time.Minute + wait))
+			expectedCommands := 1
+			if wait > 0 {
+				expectedCommands = 2
+			}
+			if err := f.credentials.Ensure(t.Context(), workerProfile, 1); err != nil {
+				t.Fatal("device retry", err)
+			}
+			value, err := f.f.store.Load(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer clearConnectionKeys(value)
+			profile := value.Profiles[workerProfile]
+			active, expires, err := profile.CurrentNodeCredential()
+			if err != nil || active != f.head || !expires.Equal(f.now().Add(30*time.Minute)) || profile.ActiveSession != nil || f.sessionCalls != 0 || f.nodeCalls != 2 || len(f.nodes) != expectedCommands {
+				t.Fatal("device credential adoption", err, f.sessionCalls, f.nodeCalls)
+			}
+			var schedule credentialSchedule
+			plan, err := schedule.plan(profile, f.now())
+			if err != nil || plan.session || plan.node || !plan.next.After(f.now()) {
+				t.Fatal("device-only schedule", plan, err)
+			}
+		})
 	}
 }

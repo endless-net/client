@@ -95,7 +95,7 @@ func validateActiveCredentials(p Profile) error {
 	if p.ActiveSession == nil && p.ActiveNodeCredential == nil {
 		return nil
 	}
-	if p.Attempt == nil || p.Secrets.NodeCredential == "" || p.Secrets.UserID == "" {
+	if p.Attempt == nil || p.Secrets.NodeCredential == "" || (p.Secrets.UserID == "" && p.JoinReceipt == nil) || (p.ActiveSession != nil && p.JoinReceipt != nil) {
 		return ErrCorrupt
 	}
 	if p.ActiveSession != nil {
@@ -124,14 +124,43 @@ func validateActiveCredentials(p Profile) error {
 
 func profileRenewalRequest(p Profile, raw string) (coordinator.RegisterNodeRequest, error) {
 	request, err := coordinator.DecodeRegisterNodeRequest([]byte(raw), 65536)
-	if err != nil || p.Attempt == nil || coordinator.ValidateNodeCredentialRenewalRequest(request, 16384) != nil || request.AccountID != p.Attempt.AccountID || request.NetworkID != p.Attempt.NetworkID || request.IdempotencyID == p.Secrets.RegistrationID {
+	validate := coordinator.ValidateNodeCredentialRenewalRequest
+	if p.JoinReceipt != nil {
+		validate = coordinator.ValidateAccountNodeRenewalRequest
+	}
+	if err != nil || p.Attempt == nil || validate(request, 16384) != nil || request.AccountID != p.Attempt.AccountID || request.NetworkID != p.Attempt.NetworkID || request.IdempotencyID == p.Secrets.RegistrationID {
 		return request, ErrCorrupt
 	}
-	initial, err := coordinator.DecodeRegisterNodeRequest([]byte(p.Secrets.RegistrationRequest), 65536)
-	if err != nil || request.IdentityPublicKey != initial.IdentityPublicKey || request.PublicKey != initial.PublicKey || request.Hostname != initial.Hostname || request.DeviceFingerprint != initial.DeviceFingerprint || request.RegistrationBinding != coordinator.RegistrationIdentityProofBinding(initial) {
+	initial, err := p.RegistrationIdentity(65536)
+	if err != nil || request.IdentityPublicKey != initial.IdentityPublicKey || request.PublicKey != initial.PublicKey || request.Hostname != initial.Hostname || request.DeviceFingerprint != initial.DeviceFingerprint || request.RegistrationBinding != initial.Binding {
 		return request, ErrCorrupt
 	}
 	return request, nil
+}
+
+// RegistrationIdentity keeps exactly the public inputs needed for later renewal.
+type RegistrationIdentity struct {
+	IdentityPublicKey, PublicKey, Hostname, DeviceFingerprint, Binding string
+}
+
+func (p Profile) RegistrationIdentity(limit int) (RegistrationIdentity, error) {
+	if p.JoinReceipt != nil {
+		return *p.JoinReceipt, nil
+	}
+	r, err := coordinator.DecodeRegisterNodeRequest([]byte(p.Secrets.RegistrationRequest), limit)
+	if err != nil {
+		return RegistrationIdentity{}, ErrCorrupt
+	}
+	return RegistrationIdentity{r.IdentityPublicKey, r.PublicKey, r.Hostname, r.DeviceFingerprint, coordinator.RegistrationIdentityProofBinding(r)}, nil
+}
+
+func validJoinCommit(before, after Profile) bool {
+	if before.JoinTokenDigest == "" || before.JoinReceipt != nil || after.JoinReceipt == nil ||
+		after.Secrets.RegistrationRequest != "" || after.Attempt.Phase != enrollment.Registered || after.Secrets.NodeCredential == "" {
+		return false
+	}
+	expected, err := before.RegistrationIdentity(len(before.Secrets.RegistrationRequest))
+	return err == nil && expected == *after.JoinReceipt
 }
 
 // Local transitions require an exact predecessor. Fresh server/trust verification

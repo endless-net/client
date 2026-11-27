@@ -23,6 +23,7 @@ import (
 )
 
 var ErrCredentialsLogin = errors.New("current user login required")
+var ErrAccountNodeDenied = errors.New("account node renewal denied")
 var ErrNodeRenewalUnresolved = errors.New("node credential renewal outcome unresolved")
 var ErrNodeRenewalPending = errors.New("node credential renewal can still be replayed")
 var ErrCredentialsProtocol = errors.New("credential renewal response invalid")
@@ -114,6 +115,9 @@ func (c *Credentials) RefreshSession(ctx context.Context, id string, generation 
 	if err != nil {
 		return err
 	}
+	if p.JoinReceipt != nil {
+		return nil
+	}
 	if pendingNodeRenewal(p) && c.config.Now().Before(p.NodeRenewal.Deadline) {
 		return ErrNodeRenewalPending
 	}
@@ -138,6 +142,12 @@ func (c *Credentials) Refresh(ctx context.Context, id string, generation uint64,
 	_, ends, err := p.CurrentNodeCredential()
 	if err != nil {
 		return err
+	}
+	if p.JoinReceipt != nil {
+		if node || pendingNodeRenewal(p) || !ends.After(c.config.Now()) {
+			return c.ensureNode(ctx, id, generation)
+		}
+		return nil
 	}
 	if pendingNodeRenewal(p) {
 		now := c.config.Now()
@@ -325,12 +335,15 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 	if err != nil {
 		return err
 	}
-	current, err := p.CurrentSession()
-	if err != nil {
-		return err
-	}
-	if !current.ExpiresAt.After(c.config.Now()) {
-		return ErrCredentialsLogin
+	var current state.SessionCredentials
+	if p.JoinReceipt == nil {
+		current, err = p.CurrentSession()
+		if err != nil {
+			return err
+		}
+		if !current.ExpiresAt.After(c.config.Now()) {
+			return ErrCredentialsLogin
+		}
 	}
 	pending := pendingNodeRenewal(p)
 	now := c.config.Now().UTC()
@@ -351,11 +364,11 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 		if err != nil {
 			return err
 		}
-		initial, err := coordinator.DecodeRegisterNodeRequest([]byte(p.Secrets.RegistrationRequest), c.remote.config.MaxRequestBytes)
+		initial, err := p.RegistrationIdentity(c.remote.config.MaxRequestBytes)
 		if err != nil {
 			return ErrCredentialsProtocol
 		}
-		request := coordinator.RegisterNodeRequest{SchemaVersion: 2, IdempotencyID: operationID, AccountID: p.Attempt.AccountID, NetworkID: p.Attempt.NetworkID, Hostname: initial.Hostname, PublicKey: initial.PublicKey, DeviceFingerprint: initial.DeviceFingerprint, NodeCredential: previous, RegistrationBinding: coordinator.RegistrationIdentityProofBinding(initial), SessionTokenBinding: coordinator.RegistrationSessionTokenBinding(current.Access)}
+		request := coordinator.RegisterNodeRequest{SchemaVersion: 2, IdempotencyID: operationID, AccountID: p.Attempt.AccountID, NetworkID: p.Attempt.NetworkID, Hostname: initial.Hostname, PublicKey: initial.PublicKey, DeviceFingerprint: initial.DeviceFingerprint, NodeCredential: previous, RegistrationBinding: initial.Binding, SessionTokenBinding: coordinator.RegistrationSessionTokenBinding(current.Access)}
 		if coordinator.SetRegisterNodeIdentityProof(&request, ed25519.PrivateKey(p.Keys.IdentityPrivate)) != nil {
 			return ErrCredentialsProtocol
 		}
@@ -364,7 +377,7 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 			return ErrCredentialsProtocol
 		}
 		deadline := now.Add(coordinator.NodeRenewalExecutionTTL)
-		if current.ExpiresAt.Before(deadline) {
+		if !current.ExpiresAt.IsZero() && current.ExpiresAt.Before(deadline) {
 			deadline = current.ExpiresAt
 		}
 		proposed := state.NodeRenewal{Request: string(raw), CreatedAt: now, Deadline: deadline}
@@ -391,12 +404,14 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 	if decodeErr != nil {
 		return ErrCredentialsProtocol
 	}
-	current, err = p.CurrentSession()
-	if err != nil {
-		return err
-	}
-	if r.SentAt.IsZero() && request.SessionTokenBinding != coordinator.RegistrationSessionTokenBinding(current.Access) {
-		return ErrNodeRenewalUnresolved
+	if p.JoinReceipt == nil {
+		current, err = p.CurrentSession()
+		if err != nil {
+			return err
+		}
+		if r.SentAt.IsZero() && request.SessionTokenBinding != coordinator.RegistrationSessionTokenBinding(current.Access) {
+			return ErrNodeRenewalUnresolved
+		}
 	}
 	// Coordinator authorizes a known frozen command against the current
 	// same-user session, without changing the signed inputs.
@@ -419,15 +434,21 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 		}
 		r.SentAt = sent
 	}
-	requestRPC := bearer(&wire.RegisterNodeRequest{
+	requestRPC := connect.NewRequest(&wire.RegisterNodeRequest{
 		Proof: registrationProof(request),
 		Authorization: &wire.RegisterNodeRequest_Renewal{Renewal: &wire.NodeCredentialRenewal{
 			NodeCredential: request.NodeCredential, RegistrationBinding: request.RegistrationBinding,
 			SessionTokenBinding: request.SessionTokenBinding,
 		}},
-	}, current.Access)
+	})
+	if p.JoinReceipt == nil {
+		requestRPC.Header().Set("Authorization", "Bearer "+current.Access)
+	}
 	response, err := c.remote.rpc(p.ControlOrigin).RegisterNode(call, requestRPC)
 	if err != nil {
+		if p.JoinReceipt != nil && (connect.CodeOf(err) == connect.CodePermissionDenied || connect.CodeOf(err) == connect.CodeUnauthenticated) {
+			return ErrAccountNodeDenied
+		}
 		if connect.CodeOf(err) == connect.CodeAborted {
 			return ErrNodeRenewalUnresolved
 		}
@@ -476,7 +497,11 @@ func (c *Credentials) ensureNode(ctx context.Context, id string, generation uint
 	if err != nil {
 		return ErrBootstrap
 	}
-	if _, err = coordinator.VerifyNodeCredentialRenewalResult(request, result, p.Attempt.NetworkID, p.Attempt.NodeID, request.RegistrationBinding, c.remote.config.MaxCredentialBytes, ed25519.PublicKey(public), c.config.Now()); err != nil {
+	verify := coordinator.VerifyNodeCredentialRenewalResult
+	if p.JoinReceipt != nil {
+		verify = coordinator.VerifyAccountNodeRenewalResult
+	}
+	if _, err = verify(request, result, p.Attempt.NetworkID, p.Attempt.NodeID, request.RegistrationBinding, c.remote.config.MaxCredentialBytes, ed25519.PublicKey(public), c.config.Now()); err != nil {
 		return ErrCredentialsProtocol
 	}
 	raw, err := json.Marshal(result)

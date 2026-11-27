@@ -111,6 +111,9 @@ func (w *ConnectionWorker) maintainSessionOnce(ctx context.Context, target conne
 	if err != nil || sample.Epoch != w.config.RuntimeID {
 		return 0, connectivity.ErrClock
 	}
+	if p.JoinReceipt != nil {
+		return w.config.PollInterval, nil
+	}
 	at, due, err := schedule.observeSession(p, sample.Wall)
 	if err != nil {
 		return 0, err

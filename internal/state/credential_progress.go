@@ -159,6 +159,9 @@ func validNodeRecoveryTransition(profile Profile, old, next *NodeRenewal) bool {
 		request.NodeCredential != source.NodeCredential || request.RegistrationBinding != source.RegistrationBinding {
 		return false
 	}
+	if profile.JoinReceipt != nil {
+		return request.SessionTokenBinding == "" && source.SessionTokenBinding == ""
+	}
 	current, err := profile.CurrentSession()
 	return err == nil && next.CreatedAt.Before(current.ExpiresAt) &&
 		!next.Deadline.After(current.ExpiresAt) &&

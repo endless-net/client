@@ -6,13 +6,17 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
+	contract "github.com/endless-net/coordinator/api/enrollment"
 	wire "github.com/endless-net/coordinator/api/publicquery/v1"
+	"github.com/endless-net/coordinator/api/publicquery/v1/publicqueryv1connect"
 	signing "github.com/endless-net/signing/api/contract"
 )
 
@@ -335,6 +339,8 @@ func TestRegistrationWireRejectionPreservesEarlierUnknownOutcome(t *testing.T) {
 	}{
 		{"permission_denied", http.StatusForbidden, "client.registration.access_denied", false},
 		{"permission_denied", http.StatusForbidden, "client.registration.access_denied", true},
+		{"already_exists", http.StatusConflict, "client.registration.request_rejected", false},
+		{"already_exists", http.StatusConflict, "client.registration.request_rejected", true},
 		{"invalid_argument", http.StatusBadRequest, "client.registration.request_rejected", false},
 	} {
 		name := tc.wire
@@ -343,6 +349,9 @@ func TestRegistrationWireRejectionPreservesEarlierUnknownOutcome(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			f := newRegistrationFixture(t)
+			if tc.wire == "already_exists" {
+				f.useJoinKey(t)
+			}
 			calls := 0
 			e := f.executor(t, func(req *http.Request) (*http.Response, error) {
 				calls++
@@ -375,5 +384,71 @@ func TestRegistrationWireRejectionPreservesEarlierUnknownOutcome(t *testing.T) {
 				t.Fatal("definite rejection caused another dispatch", err)
 			}
 		})
+	}
+}
+
+func (f *registrationFixture) useJoinKey(t *testing.T) {
+	t.Helper()
+	const key = "fixture-join-key"
+	f.p.JoinTokenDigest = state.CredentialDigest(key)
+	f.p.Secrets.Access = ""
+	f.p.Secrets.SessionExpiresAt = time.Time{}
+	body, err := PrepareJoinRegistration(f.p, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.p.Secrets.RegistrationRequest = string(body)
+	f.store, f.memory = bootstrapStore(t)
+	f.p.RemoteInFlight = false
+	f.p.InFlightAt = time.Time{}
+	if err := f.store.Update(t.Context(), 1, func(s *state.State) error {
+		s.OwnerSID, s.ActiveProfileID = f.p.Attempt.Owner, f.p.ID
+		s.Profiles[f.p.ID] = f.p
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type quotaDeniedEnrollmentService struct {
+	publicqueryv1connect.UnimplementedEnrollmentServiceHandler
+}
+
+func (quotaDeniedEnrollmentService) RegisterNode(context.Context, *connect.Request[wire.RegisterNodeRequest]) (*connect.Response[wire.RegisterNodeResponse], error) {
+	return nil, contract.DeviceQuotaExhausted()
+}
+
+func TestConfirmedQuotaDenialSettlesLostRegistration(t *testing.T) {
+	f := newRegistrationFixture(t)
+	f.useJoinKey(t)
+	_, handler := publicqueryv1connect.NewEnrollmentServiceHandler(quotaDeniedEnrollmentService{})
+	calls := 0
+	e := f.executor(t, func(req *http.Request) (*http.Response, error) {
+		calls++
+		switch calls {
+		case 1:
+			return nil, io.ErrUnexpectedEOF
+		case 2:
+		default:
+			t.Fatal("request after terminal refusal")
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		response := w.Result()
+		response.Request = req
+		return response, nil
+	})
+	due, err := e.Reconcile(t.Context(), f.p.ID, loginAttempt)
+	if err != nil || due.IsZero() || !f.persisted(t).Attempt.Uncertain {
+		t.Fatal("lost response", err)
+	}
+	f.now = due
+	due, err = e.Reconcile(t.Context(), f.p.ID, loginAttempt)
+	p := f.persisted(t)
+	if err != nil || !due.IsZero() || p.Attempt.Phase != enrollment.Denied || p.RemoteInFlight || p.Attempt.Uncertain || p.Registration.BlockedReason != state.QuotaDeniedReason || p.Secrets.RegistrationRequest != "" {
+		t.Fatal("terminal refusal", err, p.Attempt.Phase, p.Registration.BlockedReason)
+	}
+	if _, err := e.Reconcile(t.Context(), f.p.ID, loginAttempt); err != nil || calls != 2 {
+		t.Fatal("resumed terminal refusal", err)
 	}
 }

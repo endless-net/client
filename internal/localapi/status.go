@@ -7,6 +7,7 @@ import (
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/localipc"
+	"github.com/endless-net/client/internal/state"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -64,6 +65,12 @@ func (c *Controller) snapshot(ctx context.Context, caller localipc.Principal) (*
 		case enrollment.AwaitingLogin:
 			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_NEEDS_LOGIN
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_NEEDS_LOGIN
+		case enrollment.Denied:
+			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT
+			r.ControlState = clientv0.ControlState_CONTROL_STATE_NOT_REGISTERED
+			if profile.Registration.BlockedReason == state.QuotaDeniedReason {
+				r.Failures = append(r.Failures, &clientv0.Failure{Code: clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, ReasonKey: profile.Registration.BlockedReason, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_ACCESS_ADMINISTRATOR})
+			}
 		case enrollment.ChoosingContext:
 			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_NEEDS_ENROLLMENT
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_NOT_REGISTERED

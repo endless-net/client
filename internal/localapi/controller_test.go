@@ -102,7 +102,7 @@ func (r *testRunner) Wake(ctx context.Context, profile, attempt string) error {
 	return r.err
 }
 func config(now *time.Time) Config {
-	return Config{WatchInterval: time.Millisecond, Announcements: &testAnnouncements{now: now}, RuntimeID: runtimeID, DefaultProfileID: defaultID, DefaultControlOrigin: "https://control.example", ContractDigest: [32]byte{7}, Build: &clientv0.BuildIdentity{Version: "fixture", Commit: "fixture", Architecture: "amd64"}, MaxProfiles: 2, MaxDisplayNameBytes: 128, MaxHostnameBytes: 253, DefaultProfileDisplayName: "fixture-profile", Now: func() time.Time { return *now }}
+	return Config{WatchInterval: time.Millisecond, Announcements: &testAnnouncements{now: now}, RuntimeID: runtimeID, DefaultProfileID: defaultID, DefaultControlOrigin: "https://control.example", ContractDigest: [32]byte{7}, Build: &clientv0.BuildIdentity{Version: "fixture", Commit: "fixture", Architecture: "amd64"}, MaxProfiles: 2, MaxRegistrationBytes: 16384, MaxDisplayNameBytes: 128, MaxHostnameBytes: 253, DefaultProfileDisplayName: "fixture-profile", Now: func() time.Time { return *now }}
 }
 func fixture(t *testing.T) (*Controller, *memory, *testRunner, *time.Time) {
 	t.Helper()
@@ -135,6 +135,58 @@ func request(revision uint64) *clientv0.EnrollRequest {
 }
 func getRequest() *clientv0.GetEnrollmentAttemptRequest {
 	return &clientv0.GetEnrollmentAttemptRequest{Selector: &clientv0.GetEnrollmentAttemptRequest_RequestId{RequestId: requestID}}
+}
+
+func TestInvalidJoinTargetNeverStartsNativeEnrollment(t *testing.T) {
+	c, _, runner, _ := fixture(t)
+	ctx := context.Background()
+	caller := localipc.Principal{SID: "S-1-5-21-11"}
+	for _, target := range []*clientv0.JoinTokenEnrollment{
+		{},
+		{AccountId: "a", JoinToken: "fixture-key"},
+		{NetworkId: "n", JoinToken: "fixture-key"},
+		{AccountId: "a", NetworkId: "n"},
+		{AccountId: "a", NetworkId: "n", JoinToken: " fixture-key"},
+	} {
+		req := request(1)
+		req.JoinTokenEnrollment = target
+		if _, err := c.begin(ctx, caller, req); status.Code(err) != codes.InvalidArgument {
+			t.Fatal("expected invalid key enrollment input", status.Code(err))
+		}
+	}
+	s, err := c.store.Load(ctx)
+	if err != nil || s.Revision != 1 || s.OwnerSID != "" || len(s.Profiles) != 0 || runner.calls != 0 {
+		t.Fatal("invalid key enrollment changed local state or dispatched work", err)
+	}
+}
+
+func TestJoinEnrollmentFreezesRequestBeforeTrustAndRejectsChangedKey(t *testing.T) {
+	c, _, runner, _ := fixture(t)
+	ctx := t.Context()
+	caller := localipc.Principal{SID: "S-1-5-21-11"}
+	req := request(1)
+	req.JoinTokenEnrollment = &clientv0.JoinTokenEnrollment{AccountId: "a", NetworkId: "n", JoinToken: "fixture-key"}
+	response, err := c.begin(ctx, caller, req)
+	if err != nil || response.GetAttempt().GetPhase() != clientv0.EnrollmentPhase_ENROLLMENT_PHASE_REGISTERING || response.GetAttempt().GetNetworkId() != "n" || runner.calls != 0 {
+		t.Fatal("local preparation or trust gating failed", err)
+	}
+	s, err := c.store.Load(ctx)
+	if err != nil || s.Profiles[defaultID].Secrets.RegistrationRequest == "" {
+		t.Fatal("missing frozen request", err)
+	}
+	req.Mutation.ExpectedRevision = s.Revision
+	same, err := c.begin(ctx, caller, req)
+	if err != nil || same.GetAttempt().GetAttemptId() != response.Attempt.AttemptId {
+		t.Fatal("lost local receipt could not be recovered", err)
+	}
+	req.JoinTokenEnrollment.JoinToken = "different"
+	if _, err = c.begin(ctx, caller, req); err == nil {
+		t.Fatal("another key reused an existing attempt")
+	}
+	req.JoinTokenEnrollment = nil
+	if _, err = c.begin(ctx, caller, req); err == nil {
+		t.Fatal("native login reused a join attempt")
+	}
 }
 
 func TestDurableClaimExactReplayAndRuntimeRestart(t *testing.T) {
@@ -394,4 +446,49 @@ func confirmation(t *testing.T, c *Controller) *clientv0.TrustServerIdentityRequ
 		t.Fatal(err)
 	}
 	return &clientv0.TrustServerIdentityRequest{Mutation: &clientv0.MutationContext{ExpectedInstanceId: c.config.RuntimeID, ExpectedRevision: s.Revision}, Profile: &clientv0.ProfileRef{ProfileId: p.ID}, ConfirmedControlOrigin: a.Origin, ConfirmedKeyId: a.KeyID, ConfirmedAnnouncementId: a.ID}
+}
+
+func TestQuotaDenialAllowsNewJoinAndPreservesEarlierReceipt(t *testing.T) {
+	c, _, _, now := fixture(t)
+	ctx := t.Context()
+	caller := localipc.Principal{SID: "S-1-5-21-11"}
+	req := request(1)
+	req.JoinTokenEnrollment = &clientv0.JoinTokenEnrollment{AccountId: "a", NetworkId: "n", JoinToken: "fixture-key"}
+	first, err := c.begin(ctx, caller, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = c.store.Update(ctx, first.Attempt.Metadata.Revision, func(s *state.State) error {
+		p := s.Profiles[defaultID]
+		a, err := p.Attempt.Reject(*now)
+		if err != nil {
+			return err
+		}
+		p.Attempt = &a
+		p.Registration.BlockedReason = state.QuotaDeniedReason
+		s.Profiles[defaultID] = p
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := proto.Clone(req).(*clientv0.EnrollRequest)
+	next.RequestId = "b6479406-2965-41df-8378-6c0a4ea9e12c"
+	next.Mutation.ExpectedRevision = first.Attempt.Metadata.Revision + 1
+	second, err := c.begin(ctx, caller, next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Attempt.AttemptId == first.Attempt.AttemptId || second.Attempt.Phase != clientv0.EnrollmentPhase_ENROLLMENT_PHASE_REGISTERING {
+		t.Fatal("new registration not started")
+	}
+	req.Mutation.ExpectedRevision = second.Attempt.Metadata.Revision
+	replay, err := c.begin(ctx, caller, req)
+	if err != nil || replay.GetAttempt().GetAttemptId() != first.Attempt.AttemptId || replay.GetAttempt().GetRestriction().GetReasonKey() != state.QuotaDeniedReason {
+		t.Fatal("old denial receipt", err)
+	}
+	lookup, err := c.get(ctx, caller, &clientv0.GetEnrollmentAttemptRequest{Selector: &clientv0.GetEnrollmentAttemptRequest_AttemptId{AttemptId: first.Attempt.AttemptId}})
+	if err != nil || lookup.GetAttempt().GetPhase() != clientv0.EnrollmentPhase_ENROLLMENT_PHASE_DENIED {
+		t.Fatal("denied attempt lookup", err)
+	}
 }
