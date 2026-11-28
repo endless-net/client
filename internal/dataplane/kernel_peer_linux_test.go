@@ -840,7 +840,7 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan.probes = []linuxProbeBinding{b}
+	// Initial host policy precedes the session-owned probe grant.
 	apply := func(install bool, mode linuxFilterMode) {
 		t.Helper()
 		rules, err := plan.transaction(id, install, mode, nil)
@@ -877,15 +877,16 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if err := session.configure(ctx, plan.address, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := session.addProbeRoute(ctx, b); err != nil {
-		t.Fatal(err)
-	}
-	// Apply the ordinary session refresh after installing the route. The
-	// signed map must restore the socket rule from the installed binding.
-	runtimeSession := &LinuxSession{link: session, clock: f.clock, lease: f.lease, identity: id,
-		receipt: state.LinuxNetworkReceipt{Table: id.table, Owner: id.owner}}
 	refreshed, err := prepareLinuxFilter(f.snapshot, 100, 100)
 	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeSession := &LinuxSession{link: session, clock: f.clock, lease: f.lease, identity: id, current: f.verified, policy: refreshed,
+		receipt: state.LinuxNetworkReceipt{Table: id.table, Owner: id.owner}}
+	if err := runtimeSession.installPeerProbe(ctx, sock, b.peer); !errors.Is(err, ErrIPConflict) {
+		t.Fatalf("probe route over the connected Relay: %v", err)
+	}
+	if err := runtimeSession.installPeerProbe(ctx, sock, netip.MustParseAddr("127.0.0.1")); err != nil {
 		t.Fatal(err)
 	}
 	if err := runtimeSession.filters(ctx, f.verified, refreshed, false, linuxOnline); err != nil {
@@ -967,7 +968,9 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if a.offer.Profile.Engine == transport.WireGuard {
 		testLinuxProbeQuotaOnWire(t, f, confirmed, sock, received, port, broker)
 	}
-	apply(false, linuxExisting)
+	if err := runtimeSession.filters(ctx, f.verified, refreshed, false, linuxExisting); err != nil {
+		t.Fatal(err)
+	}
 	if err := sock.send(raw, func() error { return nil }); !errors.Is(err, unix.EPERM) {
 		t.Fatalf("new offline probe: %v", err)
 	}

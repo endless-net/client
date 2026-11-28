@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"net"
 	"net/netip"
 	"slices"
 	"strings"
@@ -260,6 +261,78 @@ func (s *LinuxSession) profileForMap(ctx context.Context, value connectivity.Map
 		return state.Profile{}, state.ErrStale
 	}
 	return profile, nil
+}
+
+// Stage the socket grant before its routes. Session locking serializes the
+// firewall transaction and route changes with signed map and offline updates.
+func (s *LinuxSession) installPeerProbe(ctx context.Context, socket *linuxProbeSocket, relayIP netip.Addr) error {
+	if !s.mu.TryLock() {
+		return connectivity.ErrSourceChanged
+	}
+	defer s.mu.Unlock()
+	if s.stopped || s.link == nil || socket == nil || socket.conn == nil {
+		return ErrClosed
+	}
+	b := socket.binding
+	if !relayIP.IsValid() || b.local == relayIP.Unmap() || b.peer == relayIP.Unmap() {
+		return ErrIPConflict
+	}
+	if _, exists := s.link.probes[b.peer]; exists {
+		return ErrIPConflict
+	}
+	original := b.assignment
+	epoch, changed := s.lease.SourceSignal()
+	if original == nil || original.lease != s.lease || epoch != b.sourceEpoch {
+		return ErrNoAuthority
+	}
+	sample, err := s.clock.Sample()
+	if err != nil {
+		return err
+	}
+	a, err := newCandidateAssignment(s.current, s.lease, original.peer.ID, original.offer.Profile.ID, sample.Wall)
+	if err != nil || !a.keepPair(original.localEndpoint, original.peerEndpoint) || !original.sameProbe(a) {
+		return ErrNoAuthority
+	}
+	iface, err := net.InterfaceByIndex(socket.index)
+	if err != nil || iface.Name != b.device {
+		return ErrAdapterOwnership
+	}
+	if _, err := ownedLinuxPeer(ctx, iface, s.identity.owner); err != nil {
+		return err
+	}
+	policy := s.policy
+	policy.probes = []linuxProbeBinding{b}
+	if err = s.filters(ctx, s.current, policy, false, linuxOnline); err == nil {
+		err = s.link.addProbeRoute(ctx, b)
+	}
+	if err == nil && canFinishPreparation(ctx, s.clock, a, changed) {
+		return nil
+	}
+	if err == nil {
+		err = ErrNoAuthority
+	}
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+	defer cancel()
+	// Remove any route first while both addresses are still protected. A
+	// failure leaves the session fenced for owner-ledger recovery.
+	if current, ok := s.link.probes[b.peer]; ok && current == b {
+		if removeErr := s.link.removeProbeRoute(cleanup, b); removeErr != nil {
+			s.lease.Revoke()
+			return errors.Join(err, removeErr, s.filters(cleanup, s.current, s.policy, false, linuxDeny))
+		}
+	}
+	mode := linuxOnline
+	permissions := s.lease.Permissions()
+	if !permissions.ExistingFlows {
+		mode = linuxDeny
+	} else if !permissions.NewFlows {
+		mode = linuxExisting
+	}
+	if restoreErr := s.filters(cleanup, s.current, s.policy, false, mode); restoreErr != nil {
+		s.lease.Revoke()
+		return errors.Join(err, restoreErr, s.filters(cleanup, s.current, s.policy, false, linuxDeny))
+	}
+	return err
 }
 
 func (s *LinuxSession) filters(ctx context.Context, value connectivity.Map, policy linuxFilterPlan, install bool, mode linuxFilterMode) error {
