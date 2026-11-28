@@ -629,6 +629,78 @@ func TestWindowsConnectionDriverReconnectsWithFullSnapshotWithoutResettingCursor
 	}
 }
 
+func TestAdmittedRefreshSurvivesScheduledStreamRotation(t *testing.T) {
+	f := newConnectionBackendFixture(t)
+	connected := make(chan struct{})
+	entered := make(chan struct{})
+	rotated := make(chan struct{})
+	result := make(chan error, 1)
+	f.native.refreshHook = func(ctx context.Context) error {
+		close(entered)
+		<-rotated
+		select {
+		case <-ctx.Done():
+			result <- ctx.Err()
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+			result <- nil
+			return nil
+		}
+	}
+	stream := f.factory.stream
+	first := true
+	f.factory.stream = func(ctx context.Context, v *connectivity.Verifier, cursor *state.MapCursor, receive func(context.Context, connectivity.Map) error) error {
+		if first {
+			first = false
+			return stream(ctx, v, cursor, func(ctx context.Context, m connectivity.Map) error {
+				if err := receive(ctx, m); err != nil {
+					return err
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-connected:
+				}
+				return connectivity.ErrStreamRotation
+			})
+		}
+		return stream(ctx, v, cursor, func(ctx context.Context, m connectivity.Map) error {
+			frame, cancel := context.WithCancelCause(ctx)
+			defer cancel(nil)
+			if err := receive(frame, m); err != nil {
+				return err
+			}
+			select {
+			case <-entered:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			cancel(connectivity.ErrStreamRotation)
+			close(rotated)
+			<-ctx.Done()
+			return ctx.Err()
+		})
+	}
+	owner, err := f.factory.newOwner(t.Context(), workerProfile, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := owner.(*connectionDriver)
+	t.Cleanup(func() { _ = d.Disconnect(workerCallContext(t)) })
+	if err := d.Connect(backendOperation(t, f), false); err != nil {
+		t.Fatal(err)
+	}
+	close(connected)
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatal("rotation interrupted admitted refresh:", err)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("refresh did not run")
+	}
+}
+
 func TestWindowsConnectionDriverRotatesMapStreamWithoutEnteringOffline(t *testing.T) {
 	for _, name := range []string{"replacement-works", "replacement-unavailable"} {
 		t.Run(name, func(t *testing.T) {

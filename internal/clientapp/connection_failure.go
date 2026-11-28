@@ -70,6 +70,14 @@ func connectionFailureCode(err error) string {
 		return "map_stale"
 	case errors.Is(err, connectivity.ErrMapEvent):
 		return "map_event_invalid"
+	case errors.Is(err, connectivity.ErrMapNotYetValid):
+		return "map_issue_time_future"
+	case errors.Is(err, connectivity.ErrMapAlreadyExpired):
+		return "map_expired_at_verification"
+	case errors.Is(err, connectivity.ErrMapCredentialBound):
+		return "map_exceeds_credential"
+	case errors.Is(err, connectivity.ErrMapTTL):
+		return "map_ttl_exceeded"
 	case errors.Is(err, connectivity.ErrMapEnvelope):
 		return "map_envelope_invalid"
 	case errors.Is(err, connectivity.ErrMapRelay):

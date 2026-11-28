@@ -25,19 +25,23 @@ import (
 )
 
 var (
-	ErrConfig            = errors.New("invalid connectivity configuration")
-	ErrMap               = errors.New("invalid current network map")
-	ErrMapEvent          = fmt.Errorf("%w: stream event", ErrMap)
-	ErrMapEnvelope       = fmt.Errorf("%w: signed envelope", ErrMap)
-	ErrMapRelay          = fmt.Errorf("%w: relay configuration", ErrMap)
-	ErrMapProfile        = fmt.Errorf("%w: network or peer configuration", ErrMap)
-	ErrTrust             = errors.New("current connectivity trust unavailable")
-	ErrReplay            = errors.New("network map replay")
-	ErrStale             = errors.New("network map rollback")
-	ErrNoMap             = errors.New("event is not a new authoritative map")
-	ErrResync            = errors.New("network map resynchronization required")
-	ErrCredentialExpired = errors.New("node credential expired or unknown")
-	ErrCredentialInvalid = errors.New("node credential verification failed")
+	ErrConfig             = errors.New("invalid connectivity configuration")
+	ErrMap                = errors.New("invalid current network map")
+	ErrMapEvent           = fmt.Errorf("%w: stream event", ErrMap)
+	ErrMapEnvelope        = fmt.Errorf("%w: signed envelope", ErrMap)
+	ErrMapNotYetValid     = fmt.Errorf("%w: future issue time", ErrMapEnvelope)
+	ErrMapAlreadyExpired  = fmt.Errorf("%w: expired at verification time", ErrMapEnvelope)
+	ErrMapCredentialBound = fmt.Errorf("%w: exceeds credential lifetime", ErrMapEnvelope)
+	ErrMapTTL             = fmt.Errorf("%w: exceeds maximum map lifetime", ErrMapEnvelope)
+	ErrMapRelay           = fmt.Errorf("%w: relay configuration", ErrMap)
+	ErrMapProfile         = fmt.Errorf("%w: network or peer configuration", ErrMap)
+	ErrTrust              = errors.New("current connectivity trust unavailable")
+	ErrReplay             = errors.New("network map replay")
+	ErrStale              = errors.New("network map rollback")
+	ErrNoMap              = errors.New("event is not a new authoritative map")
+	ErrResync             = errors.New("network map resynchronization required")
+	ErrCredentialExpired  = errors.New("node credential expired or unknown")
+	ErrCredentialInvalid  = errors.New("node credential verification failed")
 )
 
 type VerifierConfig struct {
@@ -311,7 +315,19 @@ func (v *Verifier) verifyEvent(parent context.Context, event coordinator.MapStre
 			return empty, err
 		}
 	}
-	if coordinator.VerifyNetworkMap(*value, ed25519.PublicKey(public), v.account, v.network, v.node, v.public, start) != nil || sig.ExpiresAt.Sub(sig.IssuedAt) > 300*time.Second || sig.ExpiresAt.After(v.credentialEnds) {
+	if sig.IssuedAt.After(start) {
+		return empty, ErrMapNotYetValid
+	}
+	if !start.Before(sig.ExpiresAt) {
+		return empty, ErrMapAlreadyExpired
+	}
+	if sig.ExpiresAt.After(v.credentialEnds) {
+		return empty, ErrMapCredentialBound
+	}
+	if sig.ExpiresAt.Sub(sig.IssuedAt) > 300*time.Second {
+		return empty, ErrMapTTL
+	}
+	if coordinator.VerifyNetworkMap(*value, ed25519.PublicKey(public), v.account, v.network, v.node, v.public, start) != nil {
 		return empty, ErrMapEnvelope
 	}
 	if !end.Before(sig.ExpiresAt) || !now.Before(sig.ExpiresAt) {

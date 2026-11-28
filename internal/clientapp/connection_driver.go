@@ -396,7 +396,14 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 				continue
 			}
 			var err error
-			stop := context.AfterFunc(frame.ctx, cancel)
+			// An authenticated refresh already admitted under this epoch may
+			// finish during scheduled stream rotation. Its own apply deadline,
+			// owner cancellation and source fences still apply.
+			stop := context.AfterFunc(frame.ctx, func() {
+				if !errors.Is(context.Cause(frame.ctx), connectivity.ErrStreamRotation) {
+					cancel()
+				}
+			})
 			if !started {
 				if restore {
 					err = native.Restore(ctx, frame.value)

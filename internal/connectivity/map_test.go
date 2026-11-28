@@ -209,10 +209,10 @@ func TestVerifierAuthenticatesSubjectDirectionExpiryAndProtectsSnapshot(t *testi
 }
 
 func TestVerifierRejectsSignedButUnsafeDeviceProfiles(t *testing.T) {
-	for _, name := range []string{"foreign-account", "foreign-network", "foreign-node", "foreign-key", "ipv6", "dns", "subnet", "default", "fallback-ports", "unrestricted", "foreign-peer", "self-peer", "duplicate-peer", "duplicate-ip", "ingress-target", "egress-target", "wildcard-port", "protocol", "endpoint-expired", "endpoint-loopback", "endpoint-candidates", "key-expired", "unapproved", "ttl", "credential-bound", "peer-limit", "rule-limit", "denial-with-peers"} {
+	for _, name := range []string{"foreign-account", "foreign-network", "foreign-node", "foreign-key", "ipv6", "dns", "subnet", "default", "fallback-ports", "unrestricted", "foreign-peer", "self-peer", "duplicate-peer", "duplicate-ip", "ingress-target", "egress-target", "wildcard-port", "protocol", "endpoint-expired", "endpoint-loopback", "endpoint-candidates", "key-expired", "unapproved", "future-issued", "already-expired", "ttl", "credential-bound", "peer-limit", "rule-limit", "denial-with-peers"} {
 		t.Run(name, func(t *testing.T) {
 			f := newMapFixture(t)
-			expires := f.now.Add(time.Minute)
+			issued, expires := f.now, f.now.Add(time.Minute)
 			switch name {
 			case "foreign-account":
 				f.value.Network.AccountID = "foreign"
@@ -263,6 +263,11 @@ func TestVerifierRejectsSignedButUnsafeDeviceProfiles(t *testing.T) {
 				f.value.Node.KeyExpiresAt = &end
 			case "unapproved":
 				f.value.Node.ApprovalState = "pending"
+			case "future-issued":
+				issued = f.now.Add(time.Second)
+			case "already-expired":
+				issued = f.now.Add(-time.Minute)
+				expires = f.now
 			case "ttl":
 				expires = f.now.Add(301 * time.Second)
 			case "credential-bound":
@@ -279,13 +284,14 @@ func TestVerifierRejectsSignedButUnsafeDeviceProfiles(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			m, err := v.Verify(context.Background(), f.sign(t, nil, f.now, expires), nil)
+			m, err := v.Verify(context.Background(), f.sign(t, nil, issued, expires), nil)
 			if err == nil || !m.ExpiresAt().IsZero() {
 				t.Fatal("signed unsafe map accepted")
 			}
 			switch name {
-			case "ttl", "credential-bound":
-				if !errors.Is(err, ErrMapEnvelope) {
+			case "ttl", "credential-bound", "future-issued", "already-expired":
+				want := map[string]error{"ttl": ErrMapTTL, "credential-bound": ErrMapCredentialBound, "future-issued": ErrMapNotYetValid, "already-expired": ErrMapAlreadyExpired}[name]
+				if !errors.Is(err, want) || !errors.Is(err, ErrMapEnvelope) {
 					t.Fatalf("expected envelope rejection, got %v", err)
 				}
 			case "endpoint-loopback", "endpoint-expired":

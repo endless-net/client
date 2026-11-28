@@ -842,12 +842,17 @@ func TestPermanentConnectionFailuresSurviveWorkerWithoutRetry(t *testing.T) {
 
 func TestMapFailureDiagnosticsKeepTerminalDisposition(t *testing.T) {
 	for err, code := range map[error]string{
-		connectivity.ErrMap:         "map_rejected",
-		connectivity.ErrStale:       "map_stale",
-		connectivity.ErrMapEvent:    "map_event_invalid",
-		connectivity.ErrMapEnvelope: "map_envelope_invalid",
-		connectivity.ErrMapRelay:    "map_relay_invalid",
-		connectivity.ErrMapProfile:  "map_profile_invalid",
+		connectivity.ErrMap:                "map_rejected",
+		connectivity.ErrStale:              "map_stale",
+		connectivity.ErrMapEvent:           "map_event_invalid",
+		connectivity.ErrMapEnvelope:        "map_envelope_invalid",
+		connectivity.ErrMapNotYetValid:     "map_issue_time_future",
+		connectivity.ErrMapAlreadyExpired:  "map_expired_at_verification",
+		connectivity.ErrMapCredentialBound: "map_exceeds_credential",
+		connectivity.ErrMapTTL:             "map_ttl_exceeded",
+
+		connectivity.ErrMapRelay:   "map_relay_invalid",
+		connectivity.ErrMapProfile: "map_profile_invalid",
 	} {
 		if got := connectionFailureCode(err); got != code {
 			t.Errorf("diagnostic code for %v = %s, want %s", err, got, code)
