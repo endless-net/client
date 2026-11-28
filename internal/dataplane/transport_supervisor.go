@@ -351,6 +351,9 @@ func (g *transportSupervisor) ensurePeers() {
 			g.dropPeer(peer.ID)
 			continue
 		}
+		c.mu.Lock()
+		c.notifyControl = g.notify
+		c.mu.Unlock()
 		p.channel = c
 		created++
 		g.peerCursor = index + 1

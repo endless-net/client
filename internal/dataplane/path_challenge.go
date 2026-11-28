@@ -231,6 +231,9 @@ func (p *pathChallenge) receive(value transport.Control) error {
 			p.evidence = &pathEvidence{At: sample, RTT: sample.UpperUptime - p.sentAt.Uptime}
 			close(p.done)
 			p.permit.release()
+			if notify := p.attempt.cycle.onEvidence; notify != nil {
+				notify()
+			}
 		}
 		return nil
 	}

@@ -17,18 +17,19 @@ const relayMTUMax = (relay.MaxFramePayloadBytes - wgdevice.MessageTransportSize)
 // Downloaded obfuscation profiles do not mutate this working fallback. Its
 // logical bind port is never exposed as a Direct listener or reachability proof.
 type relayCipher struct {
-	mu          sync.Mutex
-	cipher      *peerCipher
-	bind        *relayPeerBind
-	cancel      context.CancelFunc
-	events      chan transport.Control
-	done        chan struct{}
-	sink        func([]byte) error
-	closed      bool
-	health      *relayHealthProbe
-	reservation *engineReservation
-	hadSession  atomic.Bool
-	sessionLost atomic.Bool
+	mu            sync.Mutex
+	cipher        *peerCipher
+	bind          *relayPeerBind
+	cancel        context.CancelFunc
+	events        chan transport.Control
+	notifyControl func()
+	done          chan struct{}
+	sink          func([]byte) error
+	closed        bool
+	health        *relayHealthProbe
+	reservation   *engineReservation
+	hadSession    atomic.Bool
+	sessionLost   atomic.Bool
 }
 
 func (*relayCipher) String() string   { return "[encrypted Relay peer channel]" }
@@ -199,6 +200,9 @@ func (c *relayCipher) receivePlaintext(raw []byte) error {
 		}
 		select {
 		case c.events <- value:
+			if c.notifyControl != nil {
+				c.notifyControl()
+			}
 		default:
 		}
 		return nil

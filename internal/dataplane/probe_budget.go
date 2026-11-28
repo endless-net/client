@@ -16,6 +16,7 @@ var ErrProbeBudget = errors.New("transport probe budget exhausted")
 // Connect budget. Its parent is the supervisor's shared search-cycle context.
 // New signatures or repeated control messages cannot renew either deadline.
 type probeCycle struct {
+	onEvidence func()
 	mu         sync.Mutex
 	ctx        context.Context
 	cancel     context.CancelFunc

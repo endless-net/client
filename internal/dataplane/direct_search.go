@@ -376,6 +376,7 @@ func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordin
 		}
 		return err
 	}
+	child.onEvidence = g.notify
 	n, err := newCandidateNegotiation(c, p.channel, child)
 	if err != nil {
 		child.cancel()
