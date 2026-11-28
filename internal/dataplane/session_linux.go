@@ -305,7 +305,7 @@ func (s *LinuxSession) installPeerProbe(ctx context.Context, socket *linuxProbeS
 	if err = s.filters(ctx, s.current, policy, false, linuxOnline); err == nil {
 		err = s.link.addProbeRoute(ctx, b)
 	}
-	if err == nil && relay.permitsProbeRoute(b.local.String(), b.peer.String()) && canFinishPreparation(ctx, s.clock, a, changed) {
+	if err == nil && canFinishPreparation(ctx, s.clock, a, changed) && relay.permitsProbeRoute(b.local.String(), b.peer.String()) {
 		return nil
 	}
 	if err == nil {

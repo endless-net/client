@@ -828,6 +828,10 @@ add rule ip en007test out ip saddr 192.0.2.10 ip daddr 192.0.2.20 udp dport 5182
 	}
 }
 
+type linuxRouteClock func() (connectivity.ClockSample, error)
+
+func (sample linuxRouteClock) Sample() (connectivity.ClockSample, error) { return sample() }
+
 func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssignment, id linuxFilterIdentity, device string, received <-chan []byte, port *packetPort, confirmed *assignedCipher, broker *kernelCandidateBroker) {
 	t.Helper()
 	ctx := t.Context()
@@ -889,29 +893,43 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	relayConn, err := net.Dial("tcp4", listener.Addr().String())
-	if err != nil {
-		t.Fatal(err)
+	openRelay := func() *RelayTransport {
+		relayConn, err := net.Dial("tcp4", listener.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = relayConn.Close() })
+		accepted, err := listener.Accept()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = accepted.Close() })
+		_, cancel := context.WithCancel(ctx)
+		rt := &RelayTransport{socket: tls.Client(relayConn, &tls.Config{}), ready: true, cancel: cancel, done: make(chan struct{})}
+		t.Cleanup(rt.Close)
+		return rt
 	}
-	defer relayConn.Close()
-	accepted, err := listener.Accept()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer accepted.Close()
-	rt := &RelayTransport{socket: tls.Client(relayConn, &tls.Config{}), ready: true}
+	rt := openRelay()
 	if err := runtimeSession.installPeerProbe(ctx, sock, nil); !errors.Is(err, ErrIPConflict) {
 		t.Fatalf("missing Relay: %v", err)
 	}
 	if rt.permitsProbeRoute(b.local.String(), "127.0.0.1") {
 		t.Fatal("allowed route over connected Relay")
 	}
-	rt.closed = true
+	runtimeSession.clock = linuxRouteClock(func() (connectivity.ClockSample, error) {
+		if len(session.probes) > 0 {
+			rt.Close()
+		}
+		return f.clock.Sample()
+	})
+	if err := runtimeSession.installPeerProbe(ctx, sock, rt); !errors.Is(err, ErrNoAuthority) || len(session.probes) != 0 {
+		t.Fatalf("lost Relay during route installation: err=%v routes=%d", err, len(session.probes))
+	}
+	runtimeSession.clock = f.clock
 	if err := runtimeSession.installPeerProbe(ctx, sock, rt); !errors.Is(err, ErrIPConflict) {
 		t.Fatalf("closed Relay: %v", err)
 	}
-	rt.closed = false
-	if err := runtimeSession.installPeerProbe(ctx, sock, rt); err != nil {
+	if err := runtimeSession.installPeerProbe(ctx, sock, openRelay()); err != nil {
 		t.Fatal(err)
 	}
 	if err := runtimeSession.filters(ctx, f.verified, refreshed, false, linuxOnline); err != nil {
