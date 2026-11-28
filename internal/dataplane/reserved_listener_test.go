@@ -97,3 +97,62 @@ func TestCandidateReopensReservedPortWithoutQueuedTraffic(t *testing.T) {
 		t.Fatalf("fresh socket got %q: %v", buf[:n], err)
 	}
 }
+
+func TestReservedListenerDuringSourcePause(t *testing.T) {
+	for _, action := range []string{"resume", "expire", "plan_expire", "removed_peer", "revoke"} {
+		t.Run(action, func(t *testing.T) {
+			f := newCandidateFixture(t)
+			if action == "plan_expire" {
+				f.planTTL = 5 * time.Second
+				cursor := f.verified.Cursor()
+				f.clock.advance(time.Millisecond, time.Millisecond)
+				f.refresh(t, &cursor)
+			}
+			snap, err := f.verified.Snapshot()
+			if err != nil {
+				t.Fatal(err)
+			}
+			peer := snap.Peers[0]
+			p := &supervisedRelay{}
+			g := &transportSupervisor{clock: f.clock, lease: f.lease, current: f.verified, snapshot: snap, applied: true, generation: 1, config: supervisorConfig{reserveListener: reserveUDPListener}, peers: map[string]*supervisedRelay{peer.ID: p}}
+			g.publishListeners()
+			listener := p.listeners[peer.Transport.Profiles[0].Profile.ID]
+			if listener == nil || listener.socket == nil {
+				t.Fatal("missing initial reservation")
+			}
+			defer listener.close()
+			port := listener.port
+			f.lease.PausePackets(true)
+			g.publishListeners()
+			if listener.socket == nil {
+				t.Fatal("lost an authorized port during a temporary pause")
+			}
+			switch action {
+			case "resume":
+				f.lease.PausePackets(false)
+				g.publishListeners()
+				if listener.socket == nil || port != listener.port {
+					t.Fatal("did not retain authorized listener")
+				}
+				return
+			case "expire":
+				f.clock.advance(2*time.Minute, 2*time.Minute)
+			case "plan_expire":
+				f.clock.advance(6*time.Second, 6*time.Second)
+			case "removed_peer":
+				g.snapshot.Peers = nil
+			case "revoke":
+				f.lease.Revoke()
+			}
+			g.publishListeners()
+			if len(g.listeners) != 0 || len(p.listeners) != 0 {
+				t.Fatal("obsolete listener retained after " + action)
+			}
+			conn, err := reserveUDPListener(port)
+			if err != nil {
+				t.Fatal(err)
+			}
+			conn.Close()
+		})
+	}
+}

@@ -59,25 +59,33 @@ func (g *transportSupervisor) authorizedOffers(peer coordinator.Peer, now time.T
 }
 
 func (g *transportSupervisor) reconcileReservedListeners() {
-	if g.config.reserveListener == nil || !g.applied || !g.mapAvailable(g.current) {
+	if g.config.reserveListener == nil {
 		return
 	}
 	now, err := g.clock.Sample()
-	if err != nil {
-		return
-	}
+	withinMapWindow := err == nil && g.snapshot.MapSignature != nil &&
+		g.lease.OriginalExpiryCurrent(g.current, g.snapshot.MapSignature.ExpiresAt, now.Wall)
+	plans := make(map[string][]coordinator.TransportProfileOffer, len(g.snapshot.Peers))
 	for _, peer := range g.snapshot.Peers {
-		p := g.peers[peer.ID]
-		if p == nil {
-			continue
+		// An interrupted source update can temporarily withhold new flows.
+		// Retain the port only within the original signed map and plan windows.
+		plan := peer.Transport
+		if withinMapWindow && plan != nil && pairGranted(peer) &&
+			g.lease.OriginalExpiryCurrent(g.current, plan.ExpiresAt, now.Wall) {
+			plans[peer.ID] = plan.Profiles
 		}
-		offers := g.authorizedOffers(peer, now.Wall)
+	}
+	for peerID, p := range g.peers {
+		offers := plans[peerID]
 		for id, l := range p.listeners {
 			if !slices.ContainsFunc(offers, func(o coordinator.TransportProfileOffer) bool { return o.Profile.ID == id && o.Digest == l.digest }) {
 				l.close()
 				delete(p.listeners, id)
 			}
 		}
+	}
+	if !withinMapWindow || !g.applied || !g.mapAvailable(g.current) {
+		return
 	}
 	// Reserve in signed map order. Include existing active candidates and idle
 	// ports in the same node-wide advertisement size limit.

@@ -511,6 +511,7 @@ func (g *transportSupervisor) step() {
 	g.applyDesired()
 	now, err := g.clock.Sample()
 	if err != nil {
+		g.publishListeners()
 		return
 	}
 	g.ensureMux(now)
