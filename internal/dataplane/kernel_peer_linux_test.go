@@ -1316,7 +1316,26 @@ func TestLinuxSupervisorPreparesHostCandidate(t *testing.T) {
 	g := &transportSupervisor{budget: &transportBudget{kernel: platformDirectPreparer}, config: supervisorConfig{hostKernel: session.prepareHostCandidate}, snapshot: f.snapshot}
 	peer := &supervisedRelay{channel: &relayCipher{bind: bind}, scope: packetBinding{peerID: "peer"}}
 	a := f.assignment(t)
-	external := newCandidateSocketFixture()
+	openUnderlay := func(endpoint string) *net.UDPConn {
+		address := netip.MustParseAddrPort(endpoint)
+		runLinuxTestCommand(t, ctx, linuxIP, "addr", "add", address.Addr().String()+"/32", "dev", "lo")
+		socket, err := net.ListenUDP("udp4", net.UDPAddrFromAddrPort(address))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = socket.Close() })
+		return socket
+	}
+	external := openUnderlay(a.localEndpoint)
+	remoteSocket := openUnderlay(a.peerEndpoint)
+	remote := reverseSearchFixture(t, f)
+	other := remote.snapshot.Peers[0]
+	remoteChannel, err := prepareAssignedCipher(ctx, remote.verified, remote.lease, other.ID, a.offer.Profile.ID, remote.profile.Keys.WireGuardPrivate, 1420, remote.clock, func([]byte) error { return nil }, func(uint16) (candidateSocket, error) { return remoteSocket, nil }, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remoteChannel.Close()
+
 	channel, err := prepareAssignedCipher(ctx, f.verified, f.lease, a.peer.ID, a.offer.Profile.ID, f.profile.Keys.WireGuardPrivate, 1420, f.clock, func([]byte) error { return nil }, func(uint16) (candidateSocket, error) { return external, nil }, g.kernelForPeer(peer))
 	if err != nil {
 		t.Fatal(err)
@@ -1346,25 +1365,24 @@ func TestLinuxSupervisorPreparesHostCandidate(t *testing.T) {
 	if len(session.link.probes) != 1 || len(session.link.direct) != 0 {
 		t.Fatal("expected a service route only")
 	}
+	otherCycle, err := newProbeCycle(ctx, remote.clock, remote.profile.ID, remote.profile.Connection.Generation, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer otherCycle.cancel()
+	if _, err := remoteChannel.BeginProbe(otherCycle, candidate); err != nil {
+		t.Fatal(err)
+	}
 	if err := probe.Send(); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.After(2 * time.Second)
-	found := false
-	for !found {
-		select {
-		case <-external.wrote:
-		case <-deadline:
-			t.Fatal("kernel did not send handshake through advertised socket")
-		}
-		external.mu.Lock()
-		for _, packet := range external.writes {
-			if packet.address.String() == a.peerEndpoint && wireGuardHandshakePacket(packet.raw) {
-				found = true
-				break
-			}
-		}
-		external.mu.Unlock()
+	select {
+	case <-probe.done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("missing authenticated echo from software peer")
+	}
+	if _, err := probe.Evidence(); err != nil {
+		t.Fatal(err)
 	}
 	channel.Close()
 	if len(session.link.probes) != 0 || f.lease.Permissions().Revoked {
