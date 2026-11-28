@@ -22,7 +22,7 @@ func reserveUDPListener(port uint16) (*net.UDPConn, error) {
 		return nil, err
 	}
 	if err := conn.SetReadBuffer(2048); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, err
 	}
 	return conn, nil
@@ -30,7 +30,7 @@ func reserveUDPListener(port uint16) (*net.UDPConn, error) {
 
 func (l *reservedListener) close() {
 	if l.socket != nil {
-		l.socket.Close()
+		_ = l.socket.Close()
 		l.socket = nil
 	}
 }

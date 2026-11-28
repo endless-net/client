@@ -34,7 +34,7 @@ func TestWindowsCandidateReportsDeliveredDatagramSize(t *testing.T) {
 		socket := conn.(*windowsLANCandidate)
 		// This test uses loopback in place of a discovered LAN interface.
 		socket.address, socket.index, socket.checked = address, index, time.Now()
-		t.Cleanup(func() { socket.Close() })
+		t.Cleanup(func() { _ = socket.Close() })
 		return socket
 	}
 	sender, receiver := open(), open()

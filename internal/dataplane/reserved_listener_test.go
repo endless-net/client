@@ -34,7 +34,7 @@ func TestReservedListenerHandoffAndWithdrawal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	// A different local process claimed the port; only a newly owned socket may be published.
 	g.publishListeners()
 	if l.socket == nil || l.port == port || len(g.preparedListeners()) == 0 {
@@ -50,7 +50,7 @@ func TestReservedListenerHandoffAndWithdrawal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reopened.Close()
+	_ = reopened.Close()
 }
 
 func TestCandidateReopensReservedPortWithoutQueuedTraffic(t *testing.T) {
@@ -67,15 +67,15 @@ func TestCandidateReopensReservedPortWithoutQueuedTraffic(t *testing.T) {
 	port := uint16(idle.LocalAddr().(*net.UDPAddr).Port)
 	sender, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: int(port)})
 	if err != nil {
-		idle.Close()
+		_ = idle.Close()
 		t.Fatal(err)
 	}
-	defer sender.Close()
+	defer func() { _ = sender.Close() }()
 	if _, err = sender.Write([]byte("old")); err != nil {
-		idle.Close()
+		_ = idle.Close()
 		t.Fatal(err)
 	}
-	idle.Close()
+	_ = idle.Close()
 	b.listen = func(port uint16) (candidateSocket, error) {
 		return net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: int(port)})
 	}
@@ -152,7 +152,7 @@ func TestReservedListenerDuringSourcePause(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			conn.Close()
+			_ = conn.Close()
 		})
 	}
 }

@@ -476,7 +476,7 @@ func TestPreparedPortSurvivesAdvertisementUntilAdapterAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer socket.Close()
+	defer func() { _ = socket.Close() }()
 	port := socket.LocalAddr().(*net.UDPAddr).AddrPort().Port()
 	b := &candidateBind{ctx: t.Context(), assignment: f.assignment(t), socket: socket, port: port}
 	epoch := f.lease.BlockSource()
