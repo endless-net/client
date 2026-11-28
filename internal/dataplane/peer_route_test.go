@@ -341,3 +341,37 @@ func TestPeerRouteRejectsForeignRelayProofAndReplacement(t *testing.T) {
 		t.Fatal("replacement did not accept its own proof")
 	}
 }
+
+func TestNativeRouteCommitRechecksProofAfterOSUpdate(t *testing.T) {
+	for _, event := range []string{"source rotation", "proof expiry"} {
+		t.Run(event, func(t *testing.T) {
+			n, f := qualifiedNegotiation(t)
+			route, err := newPeerRoute(n.relay, f.clock, f.profile.ID, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := route.ConfirmRelay(routeRelayProof(t, n, f)); err != nil {
+				t.Fatal(err)
+			}
+			if err := n.Handle(replyControl(*n.commit, transport.Committed)); err != nil {
+				t.Fatal(err)
+			}
+			token, err := n.TakeActivation()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = route.selectDirect(token, func() error {
+				if event == "source rotation" {
+					f.lease.PausePackets(true)
+					f.lease.PausePackets(false)
+				} else {
+					f.clock.advance(4*time.Second, 4*time.Second)
+				}
+				return nil
+			})
+			if err == nil || token.used.Load() || n.direct.bind.transmitConfirmed || route.kind != peerRouteRelay {
+				t.Fatal("published Direct after its proof became stale during OS update")
+			}
+		})
+	}
+}

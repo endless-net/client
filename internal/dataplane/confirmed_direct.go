@@ -129,6 +129,37 @@ func (c *assignedCipher) activateChecked(value *directActivation, enable func() 
 	}
 	c.bind.mu.Lock()
 	defer c.bind.mu.Unlock()
+	_, changed := c.bind.assignment.lease.SourceSignal()
+	if err := c.activationCurrentLocked(value, changed); err != nil {
+		return err
+	}
+	if value.used.Load() || c.bind.adapterSocket != nil && enable == nil {
+		return ErrNoAuthority
+	}
+	if enable != nil {
+		if err := enable(); err != nil {
+			return err
+		}
+		// Native policy operations can outlive the challenge or span a pause
+		// and resume. The platform caller rolls its OS transaction back if
+		// this commit fails; fence the candidate socket before releasing it.
+		if err := c.activationCurrentLocked(value, changed); err != nil {
+			c.bind.adapterProbeOnly = true
+			c.cancel()
+			return err
+		}
+	}
+	// updateMu serializes every consumer of this channel's activation.
+	value.used.Store(true)
+	c.bind.receiveConfirmed = true
+	c.bind.transmitConfirmed = true
+	clear(c.bind.lastHandshake)
+	c.bind.lastHandshake, c.bind.handshakeAttempt = nil, nil
+	c.bind.confirmationEpoch++
+	return nil
+}
+
+func (c *assignedCipher) activationCurrentLocked(value *directActivation, changed <-chan struct{}) error {
 	sample, err := c.clock.Sample()
 	if err != nil {
 		return connectivity.ErrClock
@@ -145,22 +176,12 @@ func (c *assignedCipher) activateChecked(value *directActivation, enable func() 
 	if !c.bind.assignment.sameProbe(value.qualified.stability.assignment) {
 		return ErrNoAuthority
 	}
-	if value.used.Load() || c.bind.adapterSocket != nil && enable == nil {
-		return ErrNoAuthority
+	select {
+	case <-changed:
+		return connectivity.ErrSourceChanged
+	default:
+		return nil
 	}
-	if enable != nil {
-		if err := enable(); err != nil {
-			return err
-		}
-	}
-	// updateMu serializes every consumer of this channel's activation.
-	value.used.Store(true)
-	c.bind.receiveConfirmed = true
-	c.bind.transmitConfirmed = true
-	clear(c.bind.lastHandshake)
-	c.bind.lastHandshake, c.bind.handshakeAttempt = nil, nil
-	c.bind.confirmationEpoch++
-	return nil
 }
 
 // AllowReceive retains a locally qualified channel while the initiator waits

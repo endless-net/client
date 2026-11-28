@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/tailscale/wireguard-go/tun"
 	"golang.org/x/sys/unix"
@@ -318,6 +319,40 @@ func (l *linuxLink) switchPeer(ctx context.Context, peer netip.Addr, target *net
 		l.direct[peer] = *target
 	}
 	return l.verify(ctx)
+}
+
+// Stage the route while the old firewall policy still denies application
+// traffic on the candidate. The caller commits the negotiated path and its
+// policy together. Restore the previous device on rejection or cancellation.
+func (l *linuxLink) commitPeerPath(ctx context.Context, peer netip.Addr, target *net.Interface, owner string, commit func() error) error {
+	if target == nil || commit == nil {
+		return ErrConfiguration
+	}
+	previous, wasDirect := l.direct[peer]
+	if err := l.switchPeer(ctx, peer, target, owner); err != nil {
+		// A read-back failure can follow a successful route mutation.
+		if current, ok := l.direct[peer]; !ok || current.Index != target.Index || wasDirect && previous.Index == target.Index {
+			return err
+		}
+		return errors.Join(err, l.restorePeerPath(ctx, peer, owner, previous, wasDirect))
+	}
+	err := ctx.Err()
+	if err == nil {
+		err = commit()
+	}
+	if err == nil {
+		return nil
+	}
+	return errors.Join(err, l.restorePeerPath(ctx, peer, owner, previous, wasDirect))
+}
+
+func (l *linuxLink) restorePeerPath(ctx context.Context, peer netip.Addr, owner string, previous net.Interface, wasDirect bool) error {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+	defer cancel()
+	if wasDirect {
+		return l.switchPeer(cleanup, peer, &previous, owner)
+	}
+	return l.switchPeer(cleanup, peer, nil, owner)
 }
 
 func (l *linuxLink) route(ctx context.Context, action string, peer netip.Addr) error {

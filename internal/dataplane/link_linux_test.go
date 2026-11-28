@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
 	"os/exec"
@@ -120,6 +121,22 @@ func TestLinuxKernelRouteExpiresWithSessionAddress(t *testing.T) {
 	}
 	if err := session.switchPeer(ctx, plan.protected[1], kernelPeer, "different-session"); err != ErrAdapterOwnership {
 		t.Fatalf("foreign session: %v", err)
+	}
+	stageCtx, cancelStage := context.WithCancel(ctx)
+	err = session.commitPeerPath(stageCtx, plan.protected[1], kernelPeer, receipt.Owner, func() error {
+		route, err := exec.CommandContext(ctx, linuxIP, "route", "get", peer).Output()
+		if err != nil || !strings.Contains(string(route), "dev "+candidate) {
+			t.Fatal("candidate route was not staged", err)
+		}
+		cancelStage()
+		return ErrNoAuthority
+	})
+	cancelStage()
+	if !errors.Is(err, ErrNoAuthority) || session.peerDevice(plan.protected[1]) != session.name {
+		t.Fatalf("late rejection did not return route to TUN: %v", err)
+	}
+	if err := session.verify(ctx); err != nil {
+		t.Fatalf("TUN route after rollback: %v", err)
 	}
 	for _, path := range []*net.Interface{kernelPeer, nil, kernelPeer} {
 		if err := session.switchPeer(ctx, plan.protected[1], path, receipt.Owner); err != nil {
