@@ -445,17 +445,13 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	}
 	ctx := t.Context()
 	f := newCandidateEngineFixture(t, engine)
-	var mux *relayMux
-	if engine == transport.WireGuard {
-		f.withRelay(t)
-		rt, _, _, _ := relayPipeFixtureFor(t, f)
-		var err error
-		mux, err = newRelayMux(t.Context(), rt, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(mux.Close)
+	f.withRelay(t)
+	rt, _, _, _ := relayPipeFixtureFor(t, f)
+	mux, err := newRelayMux(t.Context(), rt, 1)
+	if err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(mux.Close)
 	cursor := f.verified.Cursor()
 	f.snapshot.Revision.Network++
 	f.snapshot.Network.Revision = f.snapshot.Revision.Network
@@ -463,25 +459,19 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	f.snapshot.Peers[0].Transport.PeerProbeIPv4 = "172.20.4.11"
 	f.snapshot.Peers[0].ACLGrants[0].AllowedPorts = append(f.snapshot.Peers[0].ACLGrants[0].AllowedPorts, coordinator.ACLPort{Protocol: "udp", Port: 443})
 	f.refresh(t, &cursor)
-	var confirmed *assignedCipher
-	var negotiation *candidateNegotiation
-	var activation *directActivation
-	if mux != nil {
-		if err := mux.Update(f.verified); err != nil {
-			t.Fatal(err)
-		}
-		n := negotiationForFixture(t, mux, f, false)
-		qualifyProbeTrials(t, n, f)
-		if err := n.Handle(replyControl(*n.commit, transport.Committed)); err != nil {
-			t.Fatal(err)
-		}
-		token, err := n.TakeActivation()
-		if err != nil {
-			t.Fatal(err)
-		}
-		negotiation, activation = n, token
-		confirmed = n.direct
+	if err := mux.Update(f.verified); err != nil {
+		t.Fatal(err)
 	}
+	negotiation := negotiationForFixture(t, mux, f, false)
+	qualifyProbeTrials(t, negotiation, f)
+	if err := negotiation.Handle(replyControl(*negotiation.commit, transport.Committed)); err != nil {
+		t.Fatal(err)
+	}
+	token, err := negotiation.TakeActivation()
+	if err != nil {
+		t.Fatal(err)
+	}
+	confirmed := negotiation.direct
 	a := f.assignment(t)
 	local, peer, err := a.addresses()
 	if err != nil {
@@ -523,107 +513,96 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	defer func() { _ = conn.Close() }()
 	cfg := directCipherConfig{assignment: a, private: f.profile.Keys.WireGuardPrivate, clock: f.clock}
 	outer := netip.MustParseAddrPort("127.0.0.1:39101")
-	kernelTarget := outer
-	var proxy *net.UDPConn
-	if confirmed != nil {
-		proxy, err = openLinuxBrokerSocket(ctx, id.mark)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = proxy.Close() }()
-		kernelTarget = proxy.LocalAddr().(*net.UDPAddr).AddrPort()
+	proxy, err := openLinuxBrokerSocket(ctx, id.mark)
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer func() { _ = proxy.Close() }()
+	kernelTarget := proxy.LocalAddr().(*net.UDPAddr).AddrPort()
 	iface, err := prepareLinuxPeerLink(ctx, conn, cfg, kernelTarget, candidate, id.owner)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var guard *linuxKernelListener
-	var kernelPort uint16
-	if proxy != nil {
-		policy, err := prepareLinuxFilter(f.snapshot, 100, 100)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rules, err := policy.transaction(id, true, linuxDeny, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := linuxNFTApply(ctx, rules); err != nil {
-			t.Fatal(err)
-		}
-		unmarked, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = unmarked.Close() }()
-		if unexpected, err := startLinuxKernelListener(ctx, conn, iface, id, unmarked); unexpected != nil || !errors.Is(err, ErrConfiguration) {
-			t.Fatalf("unmarked broker: guard=%v error=%v", unexpected, err)
-		}
-		guard, err = startLinuxKernelListener(ctx, conn, iface, id, proxy)
-		if err != nil {
-			t.Fatal(err)
-		}
-		kernelPort = guard.port
-		if err := guard.retire(ctx); err != ErrAdapterOwnership {
-			t.Fatalf("retired guard before driver closed: %v", err)
-		}
-	} else {
-		runLinuxTestCommand(t, ctx, linuxIP, "link", "set", candidate, "up")
-		kernelPort, err = kernelListenPort(conn, engine, iface.Index)
-		if err != nil {
-			t.Fatal(err)
-		}
+	policy, err := prepareLinuxFilter(f.snapshot, 100, 100)
+	if err != nil {
+		t.Fatal(err)
 	}
-	reverse.Endpoint = netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), kernelPort).String()
-	var broker *kernelCandidateBroker
-	if proxy != nil {
-		driver := netip.AddrPortFrom(kernelTarget.Addr(), kernelPort)
-		_, changed := confirmed.lease.SourceSignal()
-		broker, err = attachWireGuardBroker(kernelPeerLink{socket: proxy, driver: driver}, confirmed.bind, a, changed)
-		if err != nil {
-			t.Fatal(err)
-		}
-		route, err := newPeerRoute(negotiation.relay, f.clock, f.profile.ID, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := route.ConfirmRelay(routeRelayProof(t, negotiation, f)); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := route.selectDirect(activation, func() error {
-			if err := confirmed.bind.checkAdapterLocked(); err != nil {
-				return err
-			}
-			confirmed.bind.adapterProbeOnly = false
-			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
-		negotiation.cycle.cancel()
-		reverse.Endpoint = kernelTarget.String()
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			var buf [65535]byte
-			for {
-				n, from, err := proxy.ReadFromUDPAddrPort(buf[:])
-				if err != nil {
-					return
-				}
-				switch from {
-				case driver:
-					_, err = proxy.WriteToUDPAddrPort(buf[:n], outer)
-				case outer:
-					err = broker.forwardIngress(buf[:n])
-				}
-				if err != nil {
-					return
-				}
-			}
-		}()
-		defer func() { _ = proxy.Close(); <-done }()
+	rules, err := policy.transaction(id, true, linuxDeny, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if err := linuxNFTApply(ctx, rules); err != nil {
+		t.Fatal(err)
+	}
+	unmarked, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = unmarked.Close() }()
+	if unexpected, err := startLinuxKernelListener(ctx, conn, iface, id, unmarked); unexpected != nil || !errors.Is(err, ErrConfiguration) {
+		t.Fatalf("unmarked broker: guard=%v error=%v", unexpected, err)
+	}
+	guard, err := startLinuxKernelListener(ctx, conn, iface, id, proxy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kernelPort := guard.port
+	if err := guard.retire(ctx); err != ErrAdapterOwnership {
+		t.Fatalf("retired guard before driver closed: %v", err)
+	}
+	driver := netip.AddrPortFrom(kernelTarget.Addr(), kernelPort)
+	_, changed := confirmed.lease.SourceSignal()
+	broker, err := attachKernelBroker(kernelPeerLink{socket: proxy, driver: driver}, confirmed.bind, a, changed, linuxKernelHandshake(a.offer.Profile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	route, err := newPeerRoute(negotiation.relay, f.clock, f.profile.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := route.ConfirmRelay(routeRelayProof(t, negotiation, f)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := route.selectDirect(token, func() error {
+		if err := confirmed.bind.checkAdapterLocked(); err != nil {
+			return err
+		}
+		confirmed.bind.adapterProbeOnly = false
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	negotiation.cycle.cancel()
+	reverse.Endpoint = kernelTarget.String()
+	handshake := make(chan struct{}, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var buf [65535]byte
+		for {
+			n, from, err := proxy.ReadFromUDPAddrPort(buf[:])
+			if err != nil {
+				return
+			}
+			switch from {
+			case driver:
+				if confirmed.bind.handshake(buf[:n]) {
+					select {
+					case handshake <- struct{}{}:
+					default:
+					}
+				}
+				_, err = proxy.WriteToUDPAddrPort(buf[:n], outer)
+			case outer:
+				err = broker.forwardIngress(buf[:n])
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	defer func() { _ = proxy.Close(); <-done }()
 	config, err := cipherConfiguration(coordinator.Node{PublicKey: a.peer.PublicKey, AssignedIP: peer.String()}, reverse, bytes.Repeat([]byte{84}, 32), a.offer.Profile)
 	if err != nil {
 		t.Fatal(err)
@@ -640,6 +619,11 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 		t.Fatal(err)
 	}
 	testLinuxServiceExchange(t, f, a, id, candidate, received, port, confirmed, broker)
+	select {
+	case <-handshake:
+	default:
+		t.Fatalf("candidate did not recognize a kernel handshake for %s", engine)
+	}
 	runLinuxTestCommand(t, ctx, linuxIP, "address", "add", local.String()+"/32", "dev", candidate)
 	runLinuxTestCommand(t, ctx, linuxIP, "route", "add", peer.String()+"/32", "dev", candidate)
 	sender, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: peer.AsSlice(), Port: 443})
@@ -679,16 +663,13 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	if err != nil || string(reply[:n]) != "Go to kernel" {
 		t.Fatalf("kernel did not deliver the Go peer's reply: %v", err)
 	}
-	if guard != nil {
-		runLinuxTestCommand(t, ctx, linuxIP, "link", "del", candidate)
-		if err := guard.retire(ctx); err != nil {
-			t.Fatal(err)
-		}
-		if err := guard.retire(ctx); err != nil {
-			t.Fatalf("repeated retirement: %v", err)
-		}
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "del", candidate)
+	if err := guard.retire(ctx); err != nil {
+		t.Fatal(err)
 	}
-
+	if err := guard.retire(ctx); err != nil {
+		t.Fatalf("repeated retirement: %v", err)
+	}
 }
 
 func TestLinuxKernelPeerWithoutNamespacePrivilege(t *testing.T) {

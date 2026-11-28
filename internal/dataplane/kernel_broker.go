@@ -20,8 +20,8 @@ type kernelCandidateBroker struct {
 	largestIngress atomic.Int32
 }
 
-func attachWireGuardBroker(link kernelPeerLink, b *candidateBind, assignment candidateAssignment, changed <-chan struct{}) (*kernelCandidateBroker, error) {
-	if b == nil || changed == nil || link.socket == nil || !link.driver.Addr().IsLoopback() || link.driver.Port() == 0 {
+func attachKernelBroker(link kernelPeerLink, b *candidateBind, assignment candidateAssignment, changed <-chan struct{}, handshake func([]byte) bool) (*kernelCandidateBroker, error) {
+	if b == nil || handshake == nil || changed == nil || link.socket == nil || !link.driver.Addr().IsLoopback() || link.driver.Port() == 0 {
 		return nil, ErrNoAuthority
 	}
 	b.mu.Lock()
@@ -33,7 +33,7 @@ func attachWireGuardBroker(link kernelPeerLink, b *candidateBind, assignment can
 	b.adapterSource = changed
 	b.adapterSocket = b.socket
 	b.adapterProbeOnly = true
-	b.handshake = wireGuardHandshakePacket
+	b.handshake = handshake
 	return &kernelCandidateBroker{link: link, bind: b, external: b.socket}, nil
 }
 

@@ -112,7 +112,7 @@ func (e *linuxHostEngine) startProbe(a candidateAssignment) error {
 		return err
 	}
 	driver := netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), e.guard.port)
-	broker, err := attachWireGuardBroker(kernelPeerLink{socket: e.proxy, driver: driver}, e.channel.bind, a, changed)
+	broker, err := attachKernelBroker(kernelPeerLink{socket: e.proxy, driver: driver}, e.channel.bind, a, changed, linuxKernelHandshake(a.offer.Profile))
 	if err != nil {
 		e.channel.cancel()
 		return err

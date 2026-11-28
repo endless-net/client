@@ -17,7 +17,7 @@ func (d *windowsPeerDevice) attachCandidate(b *candidateBind) (*kernelCandidateB
 	if err != nil {
 		return nil, err
 	}
-	return attachWireGuardBroker(link, b, d.assignment, d.sourceChanged)
+	return attachKernelBroker(link, b, d.assignment, d.sourceChanged, wireGuardHandshakePacket)
 }
 
 // Reserve a distinct loopback endpoint for this candidate before publishing

@@ -26,10 +26,7 @@ func prepareLinuxDirect(ctx context.Context, cfg directCipherConfig, channel *as
 		return nil, err
 	}
 	b := channel.bind
-	b.handshake = wireGuardHandshakePacket
-	if awg := cfg.assignment.offer.Profile.AWG; awg != nil {
-		b.handshake = func(raw []byte) bool { return kernelAWGHandshake(awg, raw) }
-	}
+	b.handshake = linuxKernelHandshake(cfg.assignment.offer.Profile)
 	rx, _, err := b.Open(0)
 	if err != nil {
 		device.Close()

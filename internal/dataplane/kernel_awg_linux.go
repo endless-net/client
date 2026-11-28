@@ -98,6 +98,13 @@ func verifyKernelAWGSettings(messages []genetlink.Message, expected []netlink.At
 	return nil
 }
 
+func linuxKernelHandshake(profile transport.Profile) func([]byte) bool {
+	if awg := profile.AWG; awg != nil {
+		return func(raw []byte) bool { return kernelAWGHandshake(awg, raw) }
+	}
+	return wireGuardHandshakePacket
+}
+
 // Match the two protected handshake headers produced by the configured kernel
 // for candidateBind's bounded retransmit cache (AWG 3.1).
 func kernelAWGHandshake(profile *transport.AWG, raw []byte) bool {
