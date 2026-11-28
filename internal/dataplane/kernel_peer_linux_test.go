@@ -22,6 +22,7 @@ import (
 	awgdevice "github.com/amnezia-vpn/amneziawg-go/v3/device"
 	"github.com/endless-net/client/api/transport"
 	"github.com/endless-net/client/internal/connectivity"
+	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 	"github.com/mdlayher/genetlink"
 	"github.com/mdlayher/netlink"
@@ -879,6 +880,17 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if err := session.addProbeRoute(ctx, b); err != nil {
 		t.Fatal(err)
 	}
+	// Apply the ordinary session refresh after installing the route. The
+	// signed map must restore the socket rule from the installed binding.
+	runtimeSession := &LinuxSession{link: session, clock: f.clock, lease: f.lease, identity: id,
+		receipt: state.LinuxNetworkReceipt{Table: id.table, Owner: id.owner}}
+	refreshed, err := prepareLinuxFilter(f.snapshot, 100, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtimeSession.filters(ctx, f.verified, refreshed, false, linuxOnline); err != nil {
+		t.Fatal(err)
+	}
 	if err := session.verify(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -1161,4 +1173,52 @@ func linuxFixtureInputDrops(t *testing.T, table, chainName string) uint64 {
 		}
 	}
 	return total
+}
+
+func TestLinuxBindingFollowsSignedPairAcrossRefresh(t *testing.T) {
+	f := newCandidateEngineFixture(t, transport.WireGuard)
+	cursor := f.verified.Cursor()
+	f.snapshot.Revision.Network++
+	f.snapshot.Network.Revision = f.snapshot.Revision.Network
+	f.snapshot.Peers[0].Transport.LocalProbeIPv4 = "172.20.4.10"
+	f.snapshot.Peers[0].Transport.PeerProbeIPv4 = "172.20.4.11"
+	f.refresh(t, &cursor)
+	a := f.assignment(t)
+	local, peer, err := a.controlAddresses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, application, err := a.addresses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	epoch, _ := f.lease.SourceSignal()
+	b := linuxProbeBinding{assignment: &a, sourceEpoch: epoch, local: local, peer: peer, port: 30001, device: "ep0000000000001"}
+	link := linuxLink{probes: map[netip.Addr]linuxProbeBinding{peer: b}, direct: map[netip.Addr]net.Interface{application: {Name: b.device}}}
+	check := func(granted bool) {
+		t.Helper()
+		plan := linuxFilterPlan{}
+		snap, err := f.verified.Snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		now, err := f.clock.Sample()
+		if err != nil {
+			t.Fatal(err)
+		}
+		retained := link.applyPeerBindings(&plan, nil, f.verified, snap, f.lease, now.Wall)
+		if (len(plan.probes) == 1) != granted || (plan.direct[application] == b.device) != granted || len(retained) != 2 || retained[0] != local || retained[1] != peer {
+			t.Fatalf("granted=%v probe count=%d direct=%q retained=%v", granted, len(plan.probes), plan.direct[application], retained)
+		}
+	}
+	cursor = f.verified.Cursor()
+	f.clock.advance(time.Millisecond, time.Millisecond)
+	f.refresh(t, &cursor)
+	check(true)
+	cursor = f.verified.Cursor()
+	f.snapshot.Revision.Network++
+	f.snapshot.Network.Revision = f.snapshot.Revision.Network
+	f.snapshot.Peers[0].Transport = nil
+	f.refresh(t, &cursor)
+	check(false)
 }

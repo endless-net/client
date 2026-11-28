@@ -151,14 +151,14 @@ func (s *LinuxSession) apply(ctx context.Context, value connectivity.Map, first 
 			return err
 		}
 		s.prepared = true
-		if err := s.filters(ctx, policy, true, linuxDeny); err != nil {
+		if err := s.filters(ctx, value, policy, true, linuxDeny); err != nil {
 			return err
 		}
 		s.link, err = openLinuxLink(ctx, s.identity.tunnel, s.config.MTU)
 		if err != nil {
 			return err
 		}
-	} else if err := s.filters(ctx, policy, false, linuxOnline); err != nil {
+	} else if err := s.filters(ctx, value, policy, false, linuxOnline); err != nil {
 		return err
 	}
 	if err := s.link.configure(ctx, policy.address, peers); err != nil {
@@ -182,7 +182,7 @@ func (s *LinuxSession) apply(ctx context.Context, value connectivity.Map, first 
 		return err
 	}
 	clear(fenced.Keys.WireGuardPrivate)
-	if err := s.filters(ctx, policy, false, linuxOnline); err != nil {
+	if err := s.filters(ctx, value, policy, false, linuxOnline); err != nil {
 		return err
 	}
 	s.current, s.policy = value, policy
@@ -262,26 +262,23 @@ func (s *LinuxSession) profileForMap(ctx context.Context, value connectivity.Map
 	return profile, nil
 }
 
-func (s *LinuxSession) filters(ctx context.Context, policy linuxFilterPlan, install bool, mode linuxFilterMode) error {
+func (s *LinuxSession) filters(ctx context.Context, value connectivity.Map, policy linuxFilterPlan, install bool, mode linuxFilterMode) error {
 	handle, err := linuxNFTLookup(ctx, s.receipt)
 	if err != nil || (handle == 0) != install {
 		return ErrPolicyOwnership
 	}
-	if s.link != nil && len(s.link.direct) > 0 {
-		policy.direct = make(map[netip.Addr]string, len(s.link.direct))
-		for peer, iface := range s.link.direct {
-			if slices.Contains(policy.protected, peer) {
-				policy.direct[peer] = iface.Name
-			}
-		}
-	}
 	retained := s.retained
-	// A refreshed map can retire a probe grant before its route and socket
-	// have been removed. Keep those addresses behind the session filter.
 	if s.link != nil && len(s.link.probes) > 0 {
-		retained = slices.Clone(retained)
-		for _, probe := range s.link.probes {
-			retained = append(retained, probe.local, probe.peer)
+		snapshot, snapshotErr := value.Snapshot()
+		sample, clockErr := s.clock.Sample()
+		if mode == linuxDeny || snapshotErr != nil || clockErr != nil {
+			retained = slices.Clone(retained)
+			for _, binding := range s.link.probes {
+				retained = append(retained, binding.local, binding.peer)
+			}
+			mode = linuxDeny
+		} else {
+			retained = s.link.applyPeerBindings(&policy, retained, value, snapshot, s.lease, sample.Wall)
 		}
 	}
 	transaction, err := policy.transaction(s.identity, install, mode, retained)
@@ -291,6 +288,41 @@ func (s *LinuxSession) filters(ctx context.Context, policy linuxFilterPlan, inst
 	return linuxNFTApply(ctx, transaction)
 }
 
+// Keep installed addresses protected until their routes are removed. Restore
+// per-device permissions only for the same pair in the newly verified map.
+func (l *linuxLink) applyPeerBindings(policy *linuxFilterPlan, retained []netip.Addr, value connectivity.Map, snapshot coordinator.NetworkMapSnapshot, lease *connectivity.Lease, now time.Time) []netip.Addr {
+	peers := make(map[string]coordinator.Peer, len(snapshot.Peers))
+	for _, peer := range snapshot.Peers {
+		peers[peer.ID] = peer
+	}
+	retained = slices.Clone(retained)
+	epoch, _ := lease.SourceSignal()
+	for _, binding := range l.probes {
+		retained = append(retained, binding.local, binding.peer)
+		original := binding.assignment
+		if original == nil || original.lease != lease || binding.sourceEpoch != epoch {
+			continue
+		}
+		peer, ok := peers[original.peer.ID]
+		if !ok {
+			continue
+		}
+		current, err := signedPeerAssignment(value, lease, snapshot, peer, original.offer.Profile.ID, now)
+		if err != nil || !current.keepPair(original.localEndpoint, original.peerEndpoint) || !original.sameProbe(current) {
+			continue
+		}
+		policy.probes = append(policy.probes, binding)
+		_, ip, err := current.addresses()
+		if iface, ok := l.direct[ip]; err == nil && ok && iface.Name == binding.device {
+			if policy.direct == nil {
+				policy.direct = make(map[netip.Addr]string)
+			}
+			policy.direct[ip] = iface.Name
+		}
+	}
+	return retained
+}
+
 func (s *LinuxSession) Offline(ctx context.Context) error {
 	s.lease.Unavailable()
 	s.mu.Lock()
@@ -298,7 +330,7 @@ func (s *LinuxSession) Offline(ctx context.Context) error {
 	if s.stopped || s.engine == nil {
 		return ErrClosed
 	}
-	if err := s.filters(ctx, s.policy, false, linuxExisting); err != nil {
+	if err := s.filters(ctx, s.current, s.policy, false, linuxExisting); err != nil {
 		s.lease.Revoke()
 		return err
 	}

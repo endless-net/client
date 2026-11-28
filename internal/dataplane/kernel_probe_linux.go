@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/endless-net/client/api/transport"
+	"github.com/endless-net/client/internal/connectivity"
 	"golang.org/x/sys/unix"
 )
 
@@ -32,6 +33,8 @@ func openLinuxBrokerSocket(ctx context.Context, mark uint32) (*net.UDPConn, erro
 }
 
 type linuxProbeBinding struct {
+	assignment  *candidateAssignment
+	sourceEpoch uint64
 	device      string
 	local, peer netip.Addr
 	port        uint16
@@ -48,7 +51,7 @@ type linuxProbeSocket struct {
 // reserved when the host policy starts delivering candidate traffic.
 func openLinuxProbeSocket(ctx context.Context, id linuxFilterIdentity, device string, a candidateAssignment) (*linuxProbeSocket, error) {
 	prefix, _ := linuxPeerScope(id.owner)
-	if id.mark == 0 || !linuxPeerLinkName.MatchString(device) || !strings.HasPrefix(device, prefix) || a.plan.LocalProbeIPv4 == "" || a.plan.PeerProbeIPv4 == "" {
+	if a.lease == nil || id.mark == 0 || !linuxPeerLinkName.MatchString(device) || !strings.HasPrefix(device, prefix) || a.plan.LocalProbeIPv4 == "" || a.plan.PeerProbeIPv4 == "" {
 		return nil, ErrConfiguration
 	}
 	local, peer, err := a.controlAddresses()
@@ -83,7 +86,11 @@ func openLinuxProbeSocket(ctx context.Context, id linuxFilterIdentity, device st
 		return nil, err
 	}
 	conn := listener.(*net.UDPConn)
-	return &linuxProbeSocket{conn: conn, index: iface.Index, engine: a.offer.Profile.Engine, binding: linuxProbeBinding{device: device, local: local, peer: peer, port: conn.LocalAddr().(*net.UDPAddr).AddrPort().Port()}}, nil
+	epoch, _ := a.lease.SourceSignal()
+	// Only the original pair is compared on refresh. Do not pin a complete
+	// historical network map for every open service socket.
+	a.mapValue = connectivity.Map{}
+	return &linuxProbeSocket{conn: conn, index: iface.Index, engine: a.offer.Profile.Engine, binding: linuxProbeBinding{assignment: &a, sourceEpoch: epoch, device: device, local: local, peer: peer, port: conn.LocalAddr().(*net.UDPAddr).AddrPort().Port()}}, nil
 }
 
 // The maintenance guard receives the size of the WireGuard UDP payload;
