@@ -670,7 +670,7 @@ func (d *connectionDriver) announce(ctx context.Context, mode endpointAnnounceme
 			return nil
 		}
 	}
-	return connectivity.ErrEndpointUncertain
+	return errEndpointReceiptNotCurrent
 }
 
 // Declarations belong to one enrollment and expire with its endpoint lease.

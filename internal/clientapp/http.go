@@ -42,6 +42,10 @@ func httpOperation(r *http.Request) string {
 	switch r.URL.Path {
 	case signingapiconnect.BootstrapServiceGetBootstrapProcedure:
 		return "server_key"
+	case publicqueryv1connect.ConnectivityServiceWatchMapsProcedure:
+		return "watch_maps"
+	case publicqueryv1connect.ConnectivityServiceUpdateNodeEndpointProcedure:
+		return "update_node_endpoint"
 	case publicqueryv1connect.EnrollmentServiceRegisterNodeProcedure:
 		return "register_node"
 	case identityapiconnect.NativeLoginServiceStartNativeLoginProcedure:

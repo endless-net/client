@@ -3,6 +3,7 @@ package clientapp
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/control"
@@ -78,6 +79,12 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 // connectionFailureCode returns an allowlisted diagnostic code shared by both runtimes.
 func connectionFailureCode(err error) string {
 	switch {
+	case errors.Is(err, connectivity.ErrExpired):
+		return "signed_map_expired"
+	case errors.Is(err, connectivity.ErrDenied):
+		return "access_denied"
+	case errors.Is(err, connectivity.ErrRevoked):
+		return "access_revoked"
 	case errors.Is(err, connectivity.ErrMapRevisionRollback):
 		return "map_revision_rollback"
 	case errors.Is(err, connectivity.ErrMapIssueRollback):
@@ -135,7 +142,20 @@ func connectionFailureCode(err error) string {
 	}
 }
 
+var errEndpointReceiptNotCurrent = fmt.Errorf("%w: receipt does not match current announcement after recovery", connectivity.ErrEndpointUncertain)
+
 func mapFailureFields(fields []any, err error) []any {
+	if errors.Is(err, errEndpointReceiptNotCurrent) {
+		return append(fields, "rpc", "UpdateNodeEndpoint", "endpoint_step", "reconcile_receipt")
+	}
+	var endpoint *connectivity.EndpointFailure
+	if errors.As(err, &endpoint) {
+		fields = append(fields, "rpc", "UpdateNodeEndpoint", "endpoint_step", endpoint.Step, "endpoint_generation", endpoint.Generation)
+		if endpoint.RPCCode != "" {
+			fields = append(fields, "rpc_code", endpoint.RPCCode)
+		}
+		return fields
+	}
 	var d *connectivity.MapStreamFailure
 	if !errors.As(err, &d) {
 		return fields

@@ -42,6 +42,15 @@ type MapStreamFailure struct {
 func (e *MapStreamFailure) Error() string { return e.cause.Error() }
 func (e *MapStreamFailure) Unwrap() error { return e.cause }
 
+type EndpointFailure struct {
+	cause         error
+	Step, RPCCode string
+	Generation    uint64
+}
+
+func (e *EndpointFailure) Error() string { return e.cause.Error() }
+func (e *EndpointFailure) Unwrap() error { return e.cause }
+
 type HTTPConfig struct {
 	CallTimeout, StreamDuration, ReadIdleTimeout                        time.Duration
 	MaxRequestBytes, MaxResponseBytes, MaxRecords, MaxCalls, MaxStreams int
@@ -195,16 +204,23 @@ func (t *Transport) UpdateEndpoint(parent context.Context, p state.Profile, c Ve
 	request.Header().Set("X-EndlessNet-Node-Credential", binding.credential)
 	response, err := t.client(t.calls, binding.origin).UpdateNodeEndpoint(ctx, request)
 	if err != nil {
-		return empty, connectivityCallError(err, true)
+		return empty, &EndpointFailure{cause: connectivityCallError(err, true), Step: "call", RPCCode: connect.CodeOf(err).String(), Generation: input.Generation}
+	}
+	uncertain := func(step string) error {
+		return &EndpointFailure{cause: ErrEndpointUncertain, Step: step, Generation: input.Generation}
 	}
 	if ctx.Err() != nil {
-		return empty, ErrEndpointUncertain
+		return empty, uncertain("response_deadline")
 	}
 	result, err := control.EndpointReceipt(response.Msg)
-	// This acknowledgement reports discovery state. Its timestamp uses the
-	// server clock and never supplies authority to start or extend traffic.
-	if err != nil || coordinator.ValidateEndpointReceipt(input, result, binding.node, binding.network) != nil || result.ExpiresAt.After(binding.credentialEnds) {
-		return empty, ErrEndpointUncertain
+	if err != nil {
+		return empty, uncertain("decode_receipt")
+	}
+	if coordinator.ValidateEndpointReceipt(input, result, binding.node, binding.network) != nil {
+		return empty, uncertain("receipt_mismatch")
+	}
+	if result.ExpiresAt.After(binding.credentialEnds) {
+		return empty, uncertain("receipt_exceeds_credential")
 	}
 	return result, nil
 }

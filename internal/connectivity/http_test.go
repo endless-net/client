@@ -317,6 +317,10 @@ func TestTransportRejectsBadStreamsAndBoundsIdleRecordsAndCapacity(t *testing.T)
 			err = transport.Stream(context.Background(), v, nil, func(context.Context, Map) error { received++; return nil })
 			want := ErrMap
 			if name == "denied" {
+				var detail *MapStreamFailure
+				if !errors.As(err, &detail) || detail.RPCCode != "permission_denied" || detail.Records != 0 {
+					t.Fatalf("missing stream failure context: %+v", detail)
+				}
 				want = ErrDenied
 			}
 			if name == "media" || name == "outage" || name == "records" || name == "capacity" || name == "idle" || name == "header-timeout" {
