@@ -31,6 +31,7 @@ type linuxFilterPlan struct {
 	address   netip.Addr
 	protected []netip.Addr
 	grants    []linuxFlowGrant
+	direct    map[netip.Addr]string
 }
 
 func prepareLinuxFilter(snapshot coordinator.NetworkMapSnapshot, maxGrants, maxProtected int) (linuxFilterPlan, error) {
@@ -93,6 +94,19 @@ func (p linuxFilterPlan) transaction(id linuxFilterIdentity, install bool, mode 
 		id.zone == 0 || id.mark == 0 || mode > linuxOnline || !p.address.Is4() {
 		return "", ErrConfiguration
 	}
+	prefix, group := linuxPeerScope(id.owner)
+	interfaces := make(map[string]bool, len(p.direct))
+	for peer, name := range p.direct {
+		if !peer.Is4() || peer == p.address || !slices.Contains(p.protected, peer) ||
+			!linuxPeerLinkName.MatchString(name) || !strings.HasPrefix(name, prefix) || interfaces[name] {
+			return "", ErrConfiguration
+		}
+		interfaces[name] = true
+	}
+	// The group and session-specific name prefix are assigned atomically at
+	// creation. Even an unselected peer link is covered by the terminal drops.
+	kernelInput := fmt.Sprintf("iifgroup %d iifname %q", group, prefix+"*")
+	kernelOutput := fmt.Sprintf("oifgroup %d oifname %q", group, prefix+"*")
 	var rules strings.Builder
 	table := "inet " + id.table
 	if install {
@@ -102,6 +116,8 @@ func (p linuxFilterPlan) transaction(id linuxFilterIdentity, install bool, mode 
 		_, _ = fmt.Fprintf(&rules, "add chain %s egress_zone { type filter hook output priority raw; policy accept; }\n", table)
 		_, _ = fmt.Fprintf(&rules, "add rule %s ingress_zone iifname %q ct zone set %d\n", table, id.tunnel, id.zone)
 		_, _ = fmt.Fprintf(&rules, "add rule %s egress_zone oifname %q ct zone set %d\n", table, id.tunnel, id.zone)
+		fmt.Fprintf(&rules, "add rule %s ingress_zone %s ct zone set %d\n", table, kernelInput, id.zone)
+		fmt.Fprintf(&rules, "add rule %s egress_zone %s ct zone set %d\n", table, kernelOutput, id.zone)
 		for _, name := range []string{"input", "output", "forward"} {
 			_, _ = fmt.Fprintf(&rules, "add chain %s %s { type filter hook %s priority -30; policy accept; }\n", table, name, name)
 		}
@@ -127,13 +143,23 @@ func (p linuxFilterPlan) transaction(id linuxFilterIdentity, install bool, mode 
 	_, _ = fmt.Fprintf(&rules, "add element %s protected { %s }\n", table, strings.Join(elements, ", "))
 	if mode != linuxDeny {
 		for _, grant := range p.grants {
-			originalChain, originalInterface, replyChain, replyInterface := "input", "iifname", "output", "oifname"
+			peer := grant.source
 			if grant.egress {
-				originalChain, originalInterface, replyChain, replyInterface = replyChain, replyInterface, originalChain, originalInterface
+				peer = grant.destination
 			}
-			forward := fmt.Sprintf("%s %s %q ip saddr %s ip daddr %s", originalChain, originalInterface, id.tunnel, grant.source, grant.destination)
+			input := fmt.Sprintf("iifname %q", id.tunnel)
+			output := fmt.Sprintf("oifname %q", id.tunnel)
+			if name, ok := p.direct[peer]; ok {
+				input = fmt.Sprintf("iifgroup %d iifname %q", group, name)
+				output = fmt.Sprintf("oifgroup %d oifname %q", group, name)
+			}
+			originalChain, replyChain := "input "+input, "output "+output
+			if grant.egress {
+				originalChain, replyChain = replyChain, originalChain
+			}
+			forward := fmt.Sprintf("%s ip saddr %s ip daddr %s", originalChain, grant.source, grant.destination)
 			original := forward + " ct direction original"
-			reply := fmt.Sprintf("%s %s %q ip saddr %s ip daddr %s ct direction reply", replyChain, replyInterface, id.tunnel, grant.destination, grant.source)
+			reply := fmt.Sprintf("%s ip saddr %s ip daddr %s ct direction reply", replyChain, grant.destination, grant.source)
 			if grant.protocol != coordinator.ProtocolAll {
 				original += fmt.Sprintf(" %s dport %d", grant.protocol, grant.port)
 				reply += fmt.Sprintf(" %s sport %d", grant.protocol, grant.port)
@@ -161,5 +187,9 @@ func (p linuxFilterPlan) transaction(id linuxFilterIdentity, install bool, mode 
 	_, _ = fmt.Fprintf(&rules, "add rule %s output oifname %q drop\n", table, id.tunnel)
 	_, _ = fmt.Fprintf(&rules, "add rule %s forward iifname %q drop\n", table, id.tunnel)
 	_, _ = fmt.Fprintf(&rules, "add rule %s forward oifname %q drop\n", table, id.tunnel)
+	fmt.Fprintf(&rules, "add rule %s input %s drop\n", table, kernelInput)
+	fmt.Fprintf(&rules, "add rule %s output %s drop\n", table, kernelOutput)
+	fmt.Fprintf(&rules, "add rule %s forward %s drop\n", table, kernelInput)
+	fmt.Fprintf(&rules, "add rule %s forward %s drop\n", table, kernelOutput)
 	return rules.String(), nil
 }

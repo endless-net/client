@@ -2,10 +2,14 @@ package dataplane
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/netip"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -73,4 +77,79 @@ func TestLinuxFilterNFTTransaction(t *testing.T) {
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("nft transaction: %v\n%s", err, output)
 	}
+}
+
+// Exercise the kernel output hook on each route. Dummy devices allow both
+// permitted datagrams and nftables rejections to be observed without a remote.
+func TestLinuxPerPeerPathKeepsSignedPortGrants(t *testing.T) {
+	if !linuxNetworkTest(t) {
+		return
+	}
+	ctx := t.Context()
+	id, plan := linuxPolicyFixture()
+	prefix, group := linuxPeerScope(id.owner)
+	direct := prefix + "00001"
+	spare := prefix + "00002"
+	for _, name := range []string{id.tunnel, direct, spare} {
+		runLinuxTestCommand(t, ctx, linuxIP, "link", "add", name, "type", "dummy")
+		if name != id.tunnel {
+			runLinuxTestCommand(t, ctx, linuxIP, "link", "set", name, "group", strconv.FormatUint(uint64(group), 10))
+		}
+		runLinuxTestCommand(t, ctx, linuxIP, "link", "set", name, "up")
+	}
+	runLinuxTestCommand(t, ctx, linuxIP, "address", "add", plan.address.String()+"/32", "dev", id.tunnel)
+	peer := plan.protected[1]
+	other := netip.MustParseAddr("100.96.0.3")
+	plan.protected = append(plan.protected, other)
+	for _, p := range []netip.Addr{peer, other} {
+		plan.grants = append(plan.grants, linuxFlowGrant{source: plan.address, destination: p, protocol: "udp", port: 8800, egress: true})
+	}
+	apply := func(install bool, mode linuxFilterMode) {
+		t.Helper()
+		rules, err := plan.transaction(id, install, mode, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := linuxNFTApply(ctx, rules); err != nil {
+			t.Fatal(err)
+		}
+	}
+	route := func(ip netip.Addr, name string) {
+		runLinuxTestCommand(t, ctx, linuxIP, "route", "replace", ip.String()+"/32", "dev", name, "src", plan.address.String())
+	}
+	send := func(ip netip.Addr, port int, allowed bool) {
+		t.Helper()
+		conn, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: ip.AsSlice(), Port: port})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		_, err = conn.Write([]byte{1})
+		if (allowed && err != nil) || (!allowed && !errors.Is(err, syscall.EPERM)) {
+			t.Fatalf("send to %s:%d, expected allowed=%t: %v", ip, port, allowed, err)
+		}
+	}
+	apply(true, linuxOnline)
+	route(peer, id.tunnel)
+	route(other, id.tunnel)
+	send(peer, 8800, true)
+	plan.direct = map[netip.Addr]string{peer: direct}
+	apply(false, linuxOnline)
+	send(peer, 8800, false)
+	route(peer, direct)
+	send(peer, 8800, true)
+	send(peer, 8801, false)
+	send(other, 8800, true)
+	route(other, direct)
+	send(other, 8800, false)
+	route(peer, spare)
+	send(peer, 8800, false)
+	route(peer, direct)
+	apply(false, linuxExisting)
+	send(peer, 8800, false)
+	plan.direct = nil
+	apply(false, linuxOnline)
+	send(peer, 8800, false)
+	route(peer, id.tunnel)
+	send(peer, 8800, true)
 }

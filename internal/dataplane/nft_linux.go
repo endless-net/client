@@ -108,25 +108,36 @@ func CleanLinuxNetwork(ctx context.Context, ledger state.LinuxNetworkLedger) err
 	return ledger.Retire(ctx, receipt)
 }
 
-// Read all links in this network namespace. The owner group is installed in
-// the exclusive creation request, before the device can receive a private key.
-func remainingLinuxPeers(ctx context.Context, receipt state.LinuxNetworkReceipt) ([]int, error) {
-	data, err := exec.CommandContext(ctx, linuxIP, "-N", "-j", "-d", "link", "show").Output()
+type linuxPeerLinkInfo struct {
+	Name  string   `json:"ifname"`
+	Index int      `json:"ifindex"`
+	Group string   `json:"group"`
+	Alias string   `json:"ifalias"`
+	Flags []string `json:"flags"`
+	Info  struct {
+		Kind string `json:"info_kind"`
+	} `json:"linkinfo"`
+}
+
+func linuxLinkDetails(ctx context.Context, name ...string) ([]linuxPeerLinkInfo, error) {
+	args := []string{"-N", "-j", "-d", "link", "show"}
+	data, err := exec.CommandContext(ctx, linuxIP, append(args, name...)...).Output()
 	if err != nil {
 		return nil, ErrAdapterOwnership
 	}
-	var links []struct {
-		Name  string   `json:"ifname"`
-		Index int      `json:"ifindex"`
-		Group string   `json:"group"`
-		Alias string   `json:"ifalias"`
-		Flags []string `json:"flags"`
-		Info  struct {
-			Kind string `json:"info_kind"`
-		} `json:"linkinfo"`
-	}
+	var links []linuxPeerLinkInfo
 	if err := json.Unmarshal(data, &links); err != nil || len(links) == 0 {
 		return nil, ErrAdapterOwnership
+	}
+	return links, nil
+}
+
+// Read all links in this network namespace. The owner group is installed in
+// the exclusive creation request, before the device can receive a private key.
+func remainingLinuxPeers(ctx context.Context, receipt state.LinuxNetworkReceipt) ([]int, error) {
+	links, err := linuxLinkDetails(ctx)
+	if err != nil {
+		return nil, err
 	}
 	prefix, group := linuxPeerScope(receipt.Owner)
 	groupID := strconv.FormatUint(uint64(group), 10)

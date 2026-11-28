@@ -267,6 +267,14 @@ func (s *LinuxSession) filters(ctx context.Context, policy linuxFilterPlan, inst
 	if err != nil || (handle == 0) != install {
 		return ErrPolicyOwnership
 	}
+	if s.link != nil && len(s.link.direct) > 0 {
+		policy.direct = make(map[netip.Addr]string, len(s.link.direct))
+		for peer, iface := range s.link.direct {
+			if slices.Contains(policy.protected, peer) {
+				policy.direct[peer] = iface.Name
+			}
+		}
+	}
 	transaction, err := policy.transaction(s.identity, install, mode, s.retained)
 	if err != nil {
 		return err

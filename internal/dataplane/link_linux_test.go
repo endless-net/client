@@ -114,8 +114,43 @@ func TestLinuxKernelRouteExpiresWithSessionAddress(t *testing.T) {
 	}
 	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", candidate, "up")
 	peer := plan.protected[1].String()
-	runLinuxTestCommand(t, ctx, linuxIP, "route", "change", peer+"/32", "dev", candidate,
-		"src", plan.address.String(), "proto", linuxRouteProtocol)
+	kernelPeer, err := net.InterfaceByName(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.switchPeer(ctx, plan.protected[1], kernelPeer, "different-session"); err != ErrAdapterOwnership {
+		t.Fatalf("foreign session: %v", err)
+	}
+	for _, path := range []*net.Interface{kernelPeer, nil, kernelPeer} {
+		if err := session.switchPeer(ctx, plan.protected[1], path, receipt.Owner); err != nil {
+			t.Fatal(err)
+		}
+		if err := session.configure(ctx, plan.address, plan.protected[1:]); err != nil {
+			t.Fatalf("map refresh after path change: %v", err)
+		}
+	}
+	// If the kernel link vanishes, preserve any intervening route and
+	// restore the TUN exclusively once the destination is available.
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "del", candidate)
+	runLinuxTestCommand(t, ctx, linuxIP, "route", "add", "blackhole", peer+"/32")
+	if err := session.switchPeer(ctx, plan.protected[1], nil, receipt.Owner); err != ErrIPConflict {
+		t.Fatalf("foreign route after removal: %v", err)
+	}
+	runLinuxTestCommand(t, ctx, linuxIP, "route", "del", "blackhole", peer+"/32")
+	if err := session.switchPeer(ctx, plan.protected[1], nil, receipt.Owner); err != nil {
+		t.Fatal(err)
+	}
+	if err := createLinuxKernelLink(ctx, candidate, "wireguard", receipt.Owner); err != nil {
+		t.Fatal(err)
+	}
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", candidate, "up")
+	kernelPeer, err = net.InterfaceByName(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.switchPeer(ctx, plan.protected[1], kernelPeer, receipt.Owner); err != nil {
+		t.Fatal(err)
+	}
 	route, err := exec.CommandContext(ctx, linuxIP, "route", "get", peer).Output()
 	if err != nil || !strings.Contains(string(route), "dev "+candidate+" src "+plan.address.String()) {
 		t.Fatalf("kernel route did not acquire the session source: %s, %v", route, err)
