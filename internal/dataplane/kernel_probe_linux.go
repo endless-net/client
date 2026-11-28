@@ -44,7 +44,6 @@ type linuxProbeSocket struct {
 	conn    *net.UDPConn
 	binding linuxProbeBinding
 	index   int
-	engine  string
 }
 
 // Bind before installing the service address so the ephemeral port is already
@@ -90,13 +89,44 @@ func openLinuxProbeSocket(ctx context.Context, id linuxFilterIdentity, device st
 	// Only the original pair is compared on refresh. Do not pin a complete
 	// historical network map for every open service socket.
 	a.mapValue = connectivity.Map{}
-	return &linuxProbeSocket{conn: conn, index: iface.Index, engine: a.offer.Profile.Engine, binding: linuxProbeBinding{assignment: &a, sourceEpoch: epoch, device: device, local: local, peer: peer, port: conn.LocalAddr().(*net.UDPAddr).AddrPort().Port()}}, nil
+	return &linuxProbeSocket{conn: conn, index: iface.Index, binding: linuxProbeBinding{assignment: &a, sourceEpoch: epoch, device: device, local: local, peer: peer, port: conn.LocalAddr().(*net.UDPAddr).AddrPort().Port()}}, nil
 }
 
-// The maintenance guard receives the size of the WireGuard UDP payload;
-// chargeService adds the outer IPv4 and UDP headers exactly once.
-func (s *linuxProbeSocket) sendWireGuard(raw []byte, channel *assignedCipher) error {
-	if s.engine != transport.WireGuard || channel == nil {
+// Without a signed content padding bound, random trailers depend on the
+// kernel peer's changing UDP window. Keep that profile on the existing
+// private-device or userspace path, where the socket meters actual bytes.
+func linuxHostProbeSupported(p transport.Profile) bool {
+	switch p.Engine {
+	case transport.WireGuard:
+		return true
+	case transport.AmneziaWG:
+		return p.AWG != nil && len(p.AWG.Padding) == 4 &&
+			(p.AWG.ContentPadding.Max != 0 || !p.AWG.RandomTrailers)
+	default:
+		return false
+	}
+}
+
+// Return the external UDP payload bound. chargeService adds IPv4/UDP once.
+// With nonzero ContentPadding the module replaces the ordinary alignment
+// padding with a random addition limited by the signed maximum.
+func linuxProbeCiphertextSize(p transport.Profile, length, mtu int) (int, error) {
+	if !linuxHostProbeSupported(p) {
+		return 0, ErrNoAuthority
+	}
+	size, err := wireGuardProbeCiphertextSize(length, mtu)
+	if err != nil || p.Engine == transport.WireGuard {
+		return size, err
+	}
+	if p.AWG.ContentPadding.Max != 0 {
+		const headerAndTag = 32
+		size = length + headerAndTag + int(p.AWG.ContentPadding.Max)
+	}
+	return size + int(p.AWG.Padding[3]), nil
+}
+
+func (s *linuxProbeSocket) sendControl(raw []byte, channel *assignedCipher) error {
+	if s.binding.assignment == nil || channel == nil {
 		return ErrNoAuthority
 	}
 	reserve := channel.controlSendGuard(raw)
@@ -108,7 +138,7 @@ func (s *linuxProbeSocket) sendWireGuard(raw []byte, channel *assignedCipher) er
 		if err != nil || iface.Name != s.binding.device {
 			return ErrAdapterOwnership
 		}
-		size, err := wireGuardProbeCiphertextSize(len(raw), iface.MTU)
+		size, err := linuxProbeCiphertextSize(s.binding.assignment.offer.Profile, len(raw), iface.MTU)
 		if err != nil {
 			return err
 		}
@@ -151,8 +181,8 @@ func (s *linuxProbeSocket) receive() (transport.Control, error) {
 
 // Account only authenticated service messages from this candidate. A remote
 // sender can add padding; the local interface MTU cannot establish wire size.
-func (s *linuxProbeSocket) receiveWireGuard(channel *assignedCipher, broker *kernelCandidateBroker) (transport.Control, error) {
-	if s.engine != transport.WireGuard || channel == nil || broker == nil || broker.bind != channel.bind {
+func (s *linuxProbeSocket) receiveControl(channel *assignedCipher, broker *kernelCandidateBroker) (transport.Control, error) {
+	if s.binding.assignment == nil || !linuxHostProbeSupported(s.binding.assignment.offer.Profile) || channel == nil || broker == nil || broker.bind != channel.bind {
 		return transport.Control{}, ErrNoAuthority
 	}
 	value, err := s.receive()

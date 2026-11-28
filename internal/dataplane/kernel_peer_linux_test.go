@@ -797,6 +797,16 @@ func TestLinuxSupervisorsSelectSameAmneziaProfileAcrossGoAndKernel(t *testing.T)
 	testTwoSupervisorsWithBudget(t, true, false, 0, goBackend, nativeBackend)
 }
 
+// Run with a loaded 3.1 module and the service's ordinary capabilities.
+func TestLinuxHostRouteSelectsKernelAmneziaWithGoPeer(t *testing.T) {
+	if !linuxNetworkTest(t) {
+		return
+	}
+	kernel := searchTestBackend{productionSearchTestBudget, (*linuxHostEngine)(nil)}
+	software := searchTestBackend{newTransportBudget, (*peerCipher)(nil)}
+	testTwoSupervisorsThroughSelection(t, true, false, 0, kernel, software, false, linuxSearchRouteFixture, false)
+}
+
 func TestLinuxThreeSupervisorsKeepKernelAmneziaPeer(t *testing.T) {
 	if !linuxNetworkTest(t) {
 		return
@@ -1035,7 +1045,7 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if err != nil || !transport.MatchesReply(req, response) {
 		t.Fatalf("kernel path echo: %v", err)
 	}
-	if a.offer.Profile.Engine == transport.WireGuard {
+	if linuxHostProbeSupported(a.offer.Profile) {
 		testLinuxProbeQuotaOnWire(t, f, confirmed, sock, received, port, broker)
 	}
 	if err := runtimeSession.filters(ctx, f.verified, refreshed, false, linuxExisting); err != nil {
@@ -1075,14 +1085,15 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assignedCipher, sock *linuxProbeSocket, received <-chan []byte, port *packetPort, broker *kernelCandidateBroker) {
 	t.Helper()
 	ctx := t.Context()
-	// Count WireGuard data on the outer loopback transport. Exclude handshake
-	// and empty keepalive datagrams. nft counts IPv4+UDP+encrypted payload.
+	// The established fixture sends only the challenge, echo and larger
+	// application packet above 500 bytes. This also works with AWG's
+	// protected message type. nft counts the outer IPv4 and UDP headers.
 	err := linuxNFTApply(ctx, `table ip probe_meter {
         counter outgoing {}
         counter incoming {}
         chain observe { type filter hook output priority 0; policy accept;
-            oifname "lo" udp dport 39101 @th,64,32 0x04000000 udp length > 40 counter name outgoing
-            oifname "lo" udp sport 39101 @th,64,32 0x04000000 udp length > 40 counter name incoming
+            oifname "lo" udp dport 39101 udp length > 500 counter name outgoing
+            oifname "lo" udp sport 39101 udp length > 500 counter name incoming
         }
     }`)
 	if err != nil {
@@ -1122,7 +1133,7 @@ func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assig
 		t.Fatal(err)
 	}
 
-	if err := sock.sendWireGuard(raw, channel); err != nil {
+	if err := sock.sendControl(raw, channel); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -1131,9 +1142,25 @@ func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assig
 		t.Fatal("charged datagram not received")
 	}
 	wire := readBytes("outgoing")
-	if wire == 0 || uint64(cycle.wire.consumed()) != wire || uint64(channel.serviceWindow.wire.consumed()) != wire {
-		t.Fatalf("budget %d bytes, observed %d", cycle.wire.consumed(), wire)
+	debit := cycle.wire.consumed()
+	if debit != channel.serviceWindow.wire.consumed() {
+		t.Fatal("service and candidate budgets differ")
 	}
+	profile := sock.binding.assignment.offer.Profile
+	checkDebit := func(measured uint64) {
+		t.Helper()
+		if measured == 0 || measured > uint64(debit) {
+			t.Fatalf("charged %d bytes, observed %d", debit, measured)
+		}
+		if profile.AWG == nil || profile.AWG.ContentPadding.Max == 0 {
+			if measured != uint64(debit) {
+				t.Fatalf("fixed padding charged %d, observed %d", debit, measured)
+			}
+		} else if uint64(debit)-measured > uint64(profile.AWG.ContentPadding.Max) {
+			t.Fatalf("charged excess exceeds signed padding: %d vs %d", debit, measured)
+		}
+	}
+	checkDebit(wire)
 	// First pass a larger application datagram through the same driver. It
 	// raises the inbound size bound without spending the probe allowance.
 	local, peer, err := f.assignment(t).addresses()
@@ -1153,7 +1180,7 @@ func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assig
 		time.Sleep(time.Millisecond)
 	}
 	beforeEcho := readBytes("incoming")
-	if beforeEcho == 0 || cycle.wire.consumed() != int(wire) {
+	if beforeEcho == 0 || cycle.wire.consumed() != debit {
 		t.Fatal("application data missing or charged to probe budget")
 	}
 	reply := replyControl(probe.request, transport.Echo)
@@ -1167,7 +1194,7 @@ func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assig
 	if err := sock.conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	value, err := sock.receiveWireGuard(channel, broker)
+	value, err := sock.receiveControl(channel, broker)
 	if err != nil || !transport.MatchesReply(probe.request, value) {
 		t.Fatalf("metered echo not accepted: %v", err)
 	}
@@ -1176,13 +1203,13 @@ func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assig
 	if echoBytes == 0 || uint64(ingress) <= echoBytes {
 		t.Fatalf("expected a conservative debit after a larger packet: echo %d, debit %d", echoBytes, ingress)
 	}
-	if delta := cycle.wire.consumed() - int(wire); delta != ingress || channel.serviceWindow.wire.consumed() != cycle.wire.consumed() {
+	if delta := cycle.wire.consumed() - debit; delta != ingress || channel.serviceWindow.wire.consumed() != cycle.wire.consumed() {
 		t.Fatalf("ingress debit %d, observed upper bound %d", delta, ingress)
 	}
-	if err := cycle.charge(transport.MaxProbeBytes - cycle.wire.consumed() - int(wire)); err != nil {
+	if err := cycle.charge(transport.MaxProbeBytes - cycle.wire.consumed() - debit); err != nil {
 		t.Fatal(err)
 	}
-	if err := sock.sendWireGuard(raw, channel); err != nil {
+	if err := sock.sendControl(raw, channel); err != nil {
 		t.Fatalf("packet exactly at limit: %v", err)
 	}
 	select {
@@ -1190,21 +1217,20 @@ func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assig
 	case <-time.After(3 * time.Second):
 		t.Fatal("final admitted datagram missing")
 	}
-	if observed := readBytes("outgoing"); observed != 2*wire {
-		t.Fatalf("expected %d bytes on the wire, got %d", 2*wire, observed)
-	}
-	t.Logf("WireGuard challenge: %d plaintext IPv4 bytes, %d outer IPv4 bytes; inbound echo %d, charged upper bound %d bytes", len(raw), wire, echoBytes, ingress)
+	final := readBytes("outgoing")
+	checkDebit(final - wire)
+	t.Logf("%s outbound %d charged %d, inbound %d charged %d", profile.Engine, wire, debit, echoBytes, ingress)
 	if err := port.enqueue(response, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sock.receiveWireGuard(channel, broker); !errors.Is(err, ErrProbeBudget) {
+	if _, err := sock.receiveControl(channel, broker); !errors.Is(err, ErrProbeBudget) {
 		t.Fatalf("accepted inbound echo after exhaustion: %v", err)
 	}
-	if err := sock.sendWireGuard(raw, channel); !errors.Is(err, ErrProbeBudget) {
+	if err := sock.sendControl(raw, channel); !errors.Is(err, ErrProbeBudget) {
 		t.Fatalf("exhausted probe budget: %v", err)
 	}
-	if next := readBytes("outgoing"); next != 2*wire {
-		t.Fatalf("sent %d more bytes after exhaustion", next-2*wire)
+	if next := readBytes("outgoing"); next != final {
+		t.Fatalf("sent %d more bytes after exhaustion", next-final)
 	}
 	if cycle.wire.consumed() != transport.MaxProbeBytes {
 		t.Fatal("failed admission changed the budget")
@@ -1518,4 +1544,42 @@ func linuxSearchRouteFixture(t *testing.T, f *candidateFixture, config *supervis
 			t.Fatal("fallback payload missing from primary interface")
 		}
 	}}
+}
+
+func TestLinuxHostProbeCiphertextBounds(t *testing.T) {
+	const length, mtu = 557, 1420
+	for _, tc := range []struct {
+		name           string
+		engine         string
+		contentMax     uint32
+		randomTrailers bool
+		want           int
+	}{
+		{"WireGuard", transport.WireGuard, 0, false, 592},
+		{"AWG aligned", transport.AmneziaWG, 0, false, 616},
+		{"AWG content padding", transport.AmneziaWG, 32, false, 645},
+		{"AWG content padding with random trailers", transport.AmneziaWG, 32, true, 645},
+		{"AWG dynamic window", transport.AmneziaWG, 0, true, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := cipherProfile(tc.engine)
+			if p.AWG != nil {
+				p.AWG.ContentPadding.Max = tc.contentMax
+				p.AWG.RandomTrailers = tc.randomTrailers
+			}
+			size, err := linuxProbeCiphertextSize(p, length, mtu)
+			if tc.want == 0 {
+				if !errors.Is(err, ErrNoAuthority) || linuxHostProbeSupported(p) {
+					t.Fatal("dynamic padding admitted on host route", size, err)
+				}
+				return
+			}
+			if err != nil || size != tc.want {
+				t.Fatalf("ciphertext size %d, want %d: %v", size, tc.want, err)
+			}
+			if _, err := linuxProbeCiphertextSize(p, length, length-1); err == nil {
+				t.Fatal("admitted probe larger than device MTU")
+			}
+		})
+	}
 }

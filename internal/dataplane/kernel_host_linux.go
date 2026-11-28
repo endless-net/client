@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/endless-net/client/api/transport"
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/google/uuid"
 	"github.com/mdlayher/genetlink"
@@ -34,7 +33,7 @@ type linuxHostEngine struct {
 
 func (s *LinuxSession) prepareHostCandidate(ctx context.Context, cfg directCipherConfig, channel *assignedCipher, port *packetPort) (directPeerEngine, error) {
 	a := cfg.assignment
-	if a.offer.Profile.Engine != transport.WireGuard || a.plan.LocalProbeIPv4 == "" {
+	if !linuxHostProbeSupported(a.offer.Profile) || a.plan.LocalProbeIPv4 == "" {
 		return prepareLinuxDirect(ctx, cfg, channel, port)
 	}
 	if !cfg.relay.permitsProbeRoute(a.plan.LocalProbeIPv4, a.plan.PeerProbeIPv4) {
@@ -133,14 +132,14 @@ func (e *linuxHostEngine) startProbe(a candidateAssignment) error {
 				return
 			}
 			if p.control && e.port.allowed(true) && (p.guard == nil || p.guard()) {
-				_ = e.service.sendWireGuard(p.data, e.channel)
+				_ = e.service.sendControl(p.data, e.channel)
 			}
 			clear(p.data)
 		}
 	})
 	start(func() {
 		for ctx.Err() == nil {
-			v, err := e.service.receiveWireGuard(e.channel, broker)
+			v, err := e.service.receiveControl(e.channel, broker)
 			if err != nil {
 				var op *net.OpError
 				if errors.As(err, &op) {
