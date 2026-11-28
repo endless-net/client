@@ -587,7 +587,7 @@ func testWindowsPeerExchange(t *testing.T, fixture *candidateFixture, adapter *w
 		t.Fatal(err)
 	}
 	clientAddr := external.LocalAddr().(*net.UDPAddr).AddrPort()
-	bind := &windowsTestPeerBind{Bind: conn.NewStdNetBind(), link: windowsPeerLink{socket: remoteSocket, driver: clientAddr}}
+	bind := &windowsTestPeerBind{Bind: conn.NewStdNetBind(), link: kernelPeerLink{socket: remoteSocket, driver: clientAddr}}
 	remote := device.NewDevice(wireGuardPort{port}, bind, device.NewLogger(device.LogLevelSilent, ""))
 	defer remote.Close()
 	var measure atomic.Bool
@@ -1139,7 +1139,7 @@ func testWindowsPeerExchange(t *testing.T, fixture *candidateFixture, adapter *w
 	}
 }
 
-func testWindowsInboundPadding(t *testing.T, socket *windowsProbeSocket, port *packetPort, observed *windowsObservedSocket, broker *windowsCandidateBroker, challenge transport.Control) {
+func testWindowsInboundPadding(t *testing.T, socket *windowsProbeSocket, port *packetPort, observed *windowsObservedSocket, broker *kernelCandidateBroker, challenge transport.Control) {
 	t.Helper()
 	echo, err := controlPacket(socket.peer, socket.local, replyControl(challenge, transport.Echo))
 	if err != nil {
@@ -1361,7 +1361,7 @@ func (s *windowsObservedSocket) ReadFromUDPAddrPort(buf []byte) (int, netip.Addr
 // failure to reach the socket from a rejected handshake in either engine.
 type windowsTestPeerBind struct {
 	conn.Bind
-	link           windowsPeerLink
+	link           kernelPeerLink
 	opened         atomic.Bool
 	received, sent atomic.Uint32
 }

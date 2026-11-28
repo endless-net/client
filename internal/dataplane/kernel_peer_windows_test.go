@@ -50,14 +50,13 @@ func TestWindowsProbeRoutesPreserveConnectedRelay(t *testing.T) {
 
 func TestWindowsConfirmedProbeIngressUsesLinkUpperBound(t *testing.T) {
 	channel, _, probe := confirmedMeterFixture(t)
-	engine := &windowsDirectEngine{channel: channel}
 	b := channel.bind
 	b.mu.Lock()
 	b.adapterSocket = b.socket
-	broker := &windowsCandidateBroker{external: b.socket}
+	broker := &kernelCandidateBroker{bind: b, external: b.socket}
 	b.mu.Unlock()
 	echo := meterRaw(t, channel, replyControl(probe.request, transport.Echo), true)
-	account := func(window *probeCycle) error { return engine.checkProbeIngress(window, broker) }
+	account := func(window *probeCycle) error { return broker.chargeIngress(channel, window) }
 	for index, size := range []int32{592, 624} {
 		broker.largestIngress.Store(size)
 		if err := channel.receiveControl(echo, account); err != nil {
@@ -126,7 +125,7 @@ func TestWindowsPeerSocketOwnsEndpointAndFiltersDriverSource(t *testing.T) {
 	if !errors.Is(err, windows.WSAEACCES) && !errors.Is(err, windows.WSAEADDRINUSE) {
 		t.Fatalf("unexpected bind failure: %v", err)
 	}
-	link := windowsPeerLink{broker, driverSocket.LocalAddr().(*net.UDPAddr).AddrPort()}
+	link := kernelPeerLink{broker, driverSocket.LocalAddr().(*net.UDPAddr).AddrPort()}
 	if _, err := unrelated.WriteToUDPAddrPort([]byte("unrelated"), serviceEndpoint); err != nil {
 		t.Fatal(err)
 	}

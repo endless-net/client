@@ -111,30 +111,13 @@ func (e *windowsDirectEngine) startProbe(a candidateAssignment) error {
 				return
 			}
 			if channel.receiveControl(raw[:n], func(window *probeCycle) error {
-				return e.checkProbeIngress(window, broker)
+				return broker.chargeIngress(channel, window)
 			}) == nil {
 				_, _ = port.Write([][]byte{raw[:n]}, 0)
 			}
 		}
 	})
 	return nil
-}
-
-func (e *windowsDirectEngine) checkProbeIngress(window *probeCycle, broker *windowsCandidateBroker) error {
-	b := e.channel.bind
-	b.mu.Lock()
-	if b.closed || b.ctx.Err() != nil || b.adapterSocket != broker.external {
-		b.mu.Unlock()
-		return ErrNoAuthority
-	}
-	guarded := b.adapterProbeOnly
-	err := b.checkAdapterLocked()
-	b.mu.Unlock()
-	if err != nil || guarded {
-		// Discovery ingress was already charged on the external socket.
-		return err
-	}
-	return e.channel.chargeService(int(broker.largestIngress.Load()), window)
 }
 
 func (e *windowsDirectEngine) Queue(raw []byte, control bool) error {

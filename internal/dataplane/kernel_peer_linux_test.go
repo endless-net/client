@@ -460,6 +460,8 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	f.snapshot.Peers[0].Transport.PeerProbeIPv4 = "172.20.4.11"
 	f.refresh(t, &cursor)
 	var confirmed *assignedCipher
+	var negotiation *candidateNegotiation
+	var activation *directActivation
 	if mux != nil {
 		if err := mux.Update(f.verified); err != nil {
 			t.Fatal(err)
@@ -473,10 +475,7 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := n.direct.Activate(token); err != nil {
-			t.Fatal(err)
-		}
-		n.cycle.cancel()
+		negotiation, activation = n, token
 		confirmed = n.direct
 	}
 	a := f.assignment(t)
@@ -526,7 +525,18 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	}
 	defer func() { _ = conn.Close() }()
 	cfg := directCipherConfig{assignment: a, private: f.profile.Keys.WireGuardPrivate, clock: f.clock}
-	if err := configureKernelWGPeer(ctx, conn, iface.Index, netip.MustParseAddrPort("127.0.0.1:39101"), cfg); err != nil {
+	outer := netip.MustParseAddrPort("127.0.0.1:39101")
+	kernelTarget := outer
+	var proxy *net.UDPConn
+	if confirmed != nil {
+		proxy, err = openLinuxBrokerSocket(ctx, id.mark)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer proxy.Close()
+		kernelTarget = proxy.LocalAddr().(*net.UDPAddr).AddrPort()
+	}
+	if err := configureKernelWGPeer(ctx, conn, iface.Index, kernelTarget, cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -536,6 +546,54 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 		t.Fatal(err)
 	}
 	reverse.Endpoint = netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), kernelPort).String()
+	var broker *kernelCandidateBroker
+	if proxy != nil {
+		driver := netip.AddrPortFrom(kernelTarget.Addr(), kernelPort)
+		_, changed := confirmed.lease.SourceSignal()
+		broker, err = attachWireGuardBroker(kernelPeerLink{socket: proxy, driver: driver}, confirmed.bind, a, changed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		route, err := newPeerRoute(negotiation.relay, f.clock, f.profile.ID, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := route.ConfirmRelay(routeRelayProof(t, negotiation, f)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := route.selectDirect(activation, func() error {
+			if err := confirmed.bind.checkAdapterLocked(); err != nil {
+				return err
+			}
+			confirmed.bind.adapterProbeOnly = false
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		negotiation.cycle.cancel()
+		reverse.Endpoint = kernelTarget.String()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			var buf [65535]byte
+			for {
+				n, from, err := proxy.ReadFromUDPAddrPort(buf[:])
+				if err != nil {
+					return
+				}
+				switch from {
+				case driver:
+					_, err = proxy.WriteToUDPAddrPort(buf[:n], outer)
+				case outer:
+					err = broker.forwardIngress(buf[:n])
+				}
+				if err != nil {
+					return
+				}
+			}
+		}()
+		defer func() { proxy.Close(); <-done }()
+	}
 	config, err := cipherConfiguration(coordinator.Node{PublicKey: a.peer.PublicKey, AssignedIP: peer.String()}, reverse, bytes.Repeat([]byte{84}, 32), a.offer.Profile)
 	if err != nil {
 		t.Fatal(err)
@@ -551,7 +609,7 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	if err := remote.Up(); err != nil {
 		t.Fatal(err)
 	}
-	testLinuxServiceExchange(t, f, a, id, candidate, received, port, confirmed)
+	testLinuxServiceExchange(t, f, a, id, candidate, received, port, confirmed, broker)
 	runLinuxTestCommand(t, ctx, linuxIP, "address", "add", local.String()+"/32", "dev", candidate)
 	runLinuxTestCommand(t, ctx, linuxIP, "route", "add", peer.String()+"/32", "dev", candidate)
 	sender, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: peer.AsSlice(), Port: 443})
@@ -731,7 +789,7 @@ add rule ip en007test out ip saddr 192.0.2.10 ip daddr 192.0.2.20 udp dport 5182
 	}
 }
 
-func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssignment, id linuxFilterIdentity, device string, received <-chan []byte, port *packetPort, confirmed *assignedCipher) {
+func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssignment, id linuxFilterIdentity, device string, received <-chan []byte, port *packetPort, confirmed *assignedCipher, broker *kernelCandidateBroker) {
 	t.Helper()
 	ctx := t.Context()
 	sock, err := openLinuxProbeSocket(ctx, id, device, a)
@@ -743,6 +801,9 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	plan, err := prepareLinuxFilter(f.snapshot, 100, 100)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if broker != nil {
+		plan.kernelPorts = []linuxKernelPort{{driver: broker.link.driver.Port(), broker: broker.link.socket.LocalAddr().(*net.UDPAddr).AddrPort().Port()}}
 	}
 	plan.probes = []linuxProbeBinding{b}
 	apply := func(install bool, mode linuxFilterMode) {
@@ -756,6 +817,23 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 		}
 	}
 	apply(true, linuxOnline)
+	if broker != nil {
+		// A local UDP socket reaching the wildcard listener must be dropped
+		// before WireGuard. Verify the exact input-rule counter in this netns.
+		before := linuxFixtureInputDrops(t, id.table)
+		other, err := net.DialUDP("udp4", nil, net.UDPAddrFromAddrPort(broker.link.driver))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = other.Write([]byte("fixture"))
+		other.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := linuxFixtureInputDrops(t, id.table); got != before+1 {
+			t.Fatalf("unbrokered delivery did not hit listener guard: %d -> %d", before, got)
+		}
+	}
 	session, err := openLinuxLink(ctx, id.tunnel, 1420)
 	if err != nil {
 		t.Fatal(err)
@@ -841,7 +919,7 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 		t.Fatalf("kernel path echo: %v", err)
 	}
 	if a.offer.Profile.Engine == transport.WireGuard {
-		testLinuxProbeQuotaOnWire(t, f, confirmed, sock, received)
+		testLinuxProbeQuotaOnWire(t, f, confirmed, sock, received, port, broker)
 	}
 	apply(false, linuxExisting)
 	if err := sock.send(raw, func() error { return nil }); !errors.Is(err, unix.EPERM) {
@@ -868,23 +946,25 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	}
 }
 
-func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assignedCipher, sock *linuxProbeSocket, received <-chan []byte) {
+func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assignedCipher, sock *linuxProbeSocket, received <-chan []byte, port *packetPort, broker *kernelCandidateBroker) {
 	t.Helper()
 	ctx := t.Context()
 	// Count WireGuard data on the outer loopback transport. Exclude handshake
 	// and empty keepalive datagrams. nft counts IPv4+UDP+encrypted payload.
 	err := linuxNFTApply(ctx, `table ip probe_meter {
         counter outgoing {}
+        counter incoming {}
         chain observe { type filter hook output priority 0; policy accept;
             oifname "lo" udp dport 39101 @th,64,32 0x04000000 udp length > 40 counter name outgoing
+            oifname "lo" udp sport 39101 @th,64,32 0x04000000 udp length > 40 counter name incoming
         }
     }`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	readBytes := func() uint64 {
+	readBytes := func(name string) uint64 {
 		t.Helper()
-		data, err := exec.CommandContext(ctx, linuxNFT, "-j", "list", "counter", "ip", "probe_meter", "outgoing").Output()
+		data, err := exec.CommandContext(ctx, linuxNFT, "-j", "list", "counter", "ip", "probe_meter", name).Output()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -924,11 +1004,56 @@ func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assig
 	case <-time.After(3 * time.Second):
 		t.Fatal("charged datagram not received")
 	}
-	wire := readBytes()
+	wire := readBytes("outgoing")
 	if wire == 0 || uint64(cycle.wire.consumed()) != wire || uint64(channel.serviceWindow.wire.consumed()) != wire {
 		t.Fatalf("budget %d bytes, observed %d", cycle.wire.consumed(), wire)
 	}
-	if err := cycle.charge(transport.MaxProbeBytes - 2*int(wire)); err != nil {
+	// First pass a larger application datagram through the same driver. It
+	// raises the inbound size bound without spending the probe allowance.
+	local, peer, err := f.assignment(t).addresses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := append(cipherIPv4(peer.String(), local.String(), 1), make([]byte, 900)...)
+	binary.BigEndian.PutUint16(app[2:4], uint16(len(app)))
+	binary.BigEndian.PutUint16(app[24:26], uint16(len(app)-20))
+	clear(app[10:12])
+	binary.BigEndian.PutUint16(app[10:12], packetChecksum(app[:20], 0))
+	if err := port.enqueue(app, false); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for int(broker.largestIngress.Load()) < len(app) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	beforeEcho := readBytes("incoming")
+	if beforeEcho == 0 || cycle.wire.consumed() != int(wire) {
+		t.Fatal("application data missing or charged to probe budget")
+	}
+	reply := replyControl(probe.request, transport.Echo)
+	response, err := controlPacket(sock.binding.peer, sock.binding.local, reply)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := port.enqueue(response, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := sock.conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	value, err := sock.receiveWireGuard(channel, broker)
+	if err != nil || !transport.MatchesReply(probe.request, value) {
+		t.Fatalf("metered echo not accepted: %v", err)
+	}
+	ingress := int(broker.largestIngress.Load()) + 28
+	echoBytes := readBytes("incoming") - beforeEcho
+	if echoBytes == 0 || uint64(ingress) <= echoBytes {
+		t.Fatalf("expected a conservative debit after a larger packet: echo %d, debit %d", echoBytes, ingress)
+	}
+	if delta := cycle.wire.consumed() - int(wire); delta != ingress || channel.serviceWindow.wire.consumed() != cycle.wire.consumed() {
+		t.Fatalf("ingress debit %d, observed upper bound %d", delta, ingress)
+	}
+	if err := cycle.charge(transport.MaxProbeBytes - cycle.wire.consumed() - int(wire)); err != nil {
 		t.Fatal(err)
 	}
 	if err := sock.sendWireGuard(raw, channel); err != nil {
@@ -939,17 +1064,60 @@ func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assig
 	case <-time.After(3 * time.Second):
 		t.Fatal("final admitted datagram missing")
 	}
-	if observed := readBytes(); observed != 2*wire {
+	if observed := readBytes("outgoing"); observed != 2*wire {
 		t.Fatalf("expected %d bytes on the wire, got %d", 2*wire, observed)
 	}
-	t.Logf("WireGuard challenge: %d plaintext IPv4 bytes, %d outer IPv4 bytes", len(raw), wire)
+	t.Logf("WireGuard challenge: %d plaintext IPv4 bytes, %d outer IPv4 bytes; inbound echo %d, charged upper bound %d bytes", len(raw), wire, echoBytes, ingress)
+	if err := port.enqueue(response, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sock.receiveWireGuard(channel, broker); !errors.Is(err, ErrProbeBudget) {
+		t.Fatalf("accepted inbound echo after exhaustion: %v", err)
+	}
 	if err := sock.sendWireGuard(raw, channel); !errors.Is(err, ErrProbeBudget) {
 		t.Fatalf("exhausted probe budget: %v", err)
 	}
-	if next := readBytes(); next != 2*wire {
+	if next := readBytes("outgoing"); next != 2*wire {
 		t.Fatalf("sent %d more bytes after exhaustion", next-2*wire)
 	}
 	if cycle.wire.consumed() != transport.MaxProbeBytes {
 		t.Fatal("failed admission changed the budget")
 	}
+}
+
+func linuxFixtureInputDrops(t *testing.T, table string) uint64 {
+	t.Helper()
+	data, err := exec.CommandContext(t.Context(), linuxNFT, "-j", "list", "chain", "inet", table, "input").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var chain struct {
+		NFTables []struct {
+			Rule *struct {
+				Expr []struct {
+					Counter *struct{ Packets uint64 }
+					Drop    json.RawMessage
+				}
+			}
+		}
+	}
+	if err := json.Unmarshal(data, &chain); err != nil {
+		t.Fatal(err)
+	}
+	var total uint64
+	for _, entry := range chain.NFTables {
+		if entry.Rule == nil {
+			continue
+		}
+		var count uint64
+		for _, expr := range entry.Rule.Expr {
+			if expr.Counter != nil {
+				count = expr.Counter.Packets
+			}
+			if expr.Drop != nil {
+				total += count
+			}
+		}
+	}
+	return total
 }

@@ -333,27 +333,27 @@ func (d *windowsPeerDevice) beginRoutedProbe(ctx context.Context, cfg directCiph
 	return nil
 }
 
-func (d *windowsPeerDevice) activeLink() (windowsPeerLink, error) {
+func (d *windowsPeerDevice) activeLink() (kernelPeerLink, error) {
 	if d.Adapter == nil || d.socket == nil || (d.guard == nil && d.probeGuard == nil) || d.outer == nil {
-		return windowsPeerLink{}, ErrClosed
+		return kernelPeerLink{}, ErrClosed
 	}
 	state, err := d.AdapterState()
 	if err != nil {
-		return windowsPeerLink{}, err
+		return kernelPeerLink{}, err
 	}
 	if state != driver.AdapterStateUp {
-		return windowsPeerLink{}, ErrEngine
+		return kernelPeerLink{}, ErrEngine
 	}
 	actual, err := d.Configuration()
 	if err != nil {
-		return windowsPeerLink{}, err
+		return kernelPeerLink{}, err
 	}
 	defer clear(actual.PrivateKey[:])
 	broker := d.socket.LocalAddr().(*net.UDPAddr).AddrPort()
 	if actual.ListenPort == 0 || actual.ListenPort != d.driverPort || actual.ListenPort == broker.Port() || actual.PeerCount != 1 || actual.FirstPeer().Endpoint.AddrPort() != broker {
-		return windowsPeerLink{}, ErrEngine
+		return kernelPeerLink{}, ErrEngine
 	}
-	return windowsPeerLink{d.socket, netip.AddrPortFrom(broker.Addr(), actual.ListenPort)}, nil
+	return kernelPeerLink{d.socket, netip.AddrPortFrom(broker.Addr(), actual.ListenPort)}, nil
 }
 
 // configureWindowsKernelPeer configures a newly owned, down adapter. The

@@ -15,6 +15,24 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+type linuxKernelPort struct{ driver, broker uint16 }
+
+func openLinuxBrokerSocket(ctx context.Context, mark uint32) (*net.UDPConn, error) {
+	if mark == 0 {
+		return nil, ErrConfiguration
+	}
+	config := net.ListenConfig{Control: func(_, _ string, c syscall.RawConn) error {
+		var opt error
+		err := c.Control(func(fd uintptr) { opt = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_MARK, int(mark)) })
+		return errors.Join(err, opt)
+	}}
+	socket, err := config.ListenPacket(ctx, "udp4", "127.0.0.1:0")
+	if err != nil {
+		return nil, err
+	}
+	return socket.(*net.UDPConn), nil
+}
+
 type linuxProbeBinding struct {
 	device      string
 	local, peer netip.Addr
@@ -124,6 +142,27 @@ func (s *linuxProbeSocket) receive() (transport.Control, error) {
 		return transport.Control{}, ErrPacketIO
 	}
 	return transport.DecodeControl(data[:n])
+}
+
+// Account only authenticated service messages from this candidate. A remote
+// sender can add padding; the local interface MTU cannot establish wire size.
+func (s *linuxProbeSocket) receiveWireGuard(channel *assignedCipher, broker *kernelCandidateBroker) (transport.Control, error) {
+	if s.engine != transport.WireGuard || channel == nil || broker == nil || broker.bind != channel.bind {
+		return transport.Control{}, ErrNoAuthority
+	}
+	value, err := s.receive()
+	if err != nil {
+		return transport.Control{}, err
+	}
+	raw, err := controlPacket(s.binding.peer, s.binding.local, value)
+	if err != nil {
+		return transport.Control{}, err
+	}
+	err = channel.receiveControl(raw, func(window *probeCycle) error { return broker.chargeIngress(channel, window) })
+	if err != nil {
+		return transport.Control{}, err
+	}
+	return value, nil
 }
 
 // Only the marked socket may originate UDP/0. Rewrite received packets only
