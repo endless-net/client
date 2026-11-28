@@ -354,7 +354,7 @@ func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordin
 				return g.config.listenCandidate(p.scope.peerID, offer.Profile.ID, port)
 			}
 		}
-		c, err = g.budget.newAssigned(g.ctx, g.current, g.lease, p.scope.peerID, offer.Profile.ID, g.private, g.config.mtu, g.clock, sink, factory, g.kernelForPeer(p))
+		c, err = g.budget.newAssigned(g.ctx, g.current, g.lease, p.scope.peerID, offer.Profile.ID, g.private, g.config.mtu, g.clock, sink, factory, g.kernelForPeer(p), p.takeListener(offer))
 		if err != nil {
 			child.cancel()
 			return err
@@ -389,7 +389,7 @@ func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordin
 	c.bind.mu.Lock()
 	s.rx = c.bind.receiveConfirmed
 	c.bind.mu.Unlock()
-	if !g.listenersFit() {
+	if !g.admitPreparedListener() {
 		g.releaseCandidate(p, false)
 		return ErrTransportCapacity
 	}

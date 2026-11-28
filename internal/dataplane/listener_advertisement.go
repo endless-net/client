@@ -18,6 +18,11 @@ func (g *transportSupervisor) preparedListeners() []preparedListener {
 	seen := make(map[*assignedCipher]bool)
 	byID := make(map[string]preparedListener)
 	for _, p := range g.peers {
+		for _, l := range p.listeners {
+			if l.socket != nil {
+				byID[l.id] = l.preparedListener
+			}
+		}
 		channels := []*assignedCipher{p.direct, p.spare}
 		if p.search != nil {
 			channels = append(channels, p.search.candidate)
@@ -72,6 +77,7 @@ func announcementFits(ad coordinator.TransportAdvertisement) bool {
 }
 
 func (g *transportSupervisor) publishListeners() {
+	g.reconcileReservedListeners()
 	listeners := g.preparedListeners()
 	g.mu.Lock()
 	changed := len(listeners) != len(g.listeners)

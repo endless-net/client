@@ -96,7 +96,7 @@ func TestLinuxOlderAWGModuleKeepsSignedProfile(t *testing.T) {
 	}
 	channel, err := prepareAssignedCipher(ctx, f.verified, f.lease, a.peer.ID, a.offer.Profile.ID,
 		f.profile.Keys.WireGuardPrivate, 1420, f.clock, func([]byte) error { return nil },
-		func(uint16) (candidateSocket, error) { return newCandidateSocketFixture(), nil }, prepare)
+		func(uint16) (candidateSocket, error) { return newCandidateSocketFixture(), nil }, prepare, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1383,13 +1383,13 @@ func TestLinuxSupervisorPreparesHostCandidate(t *testing.T) {
 	remoteSocket := openUnderlay(a.peerEndpoint)
 	remote := reverseSearchFixture(t, f)
 	other := remote.snapshot.Peers[0]
-	remoteChannel, err := prepareAssignedCipher(ctx, remote.verified, remote.lease, other.ID, a.offer.Profile.ID, remote.profile.Keys.WireGuardPrivate, 1420, remote.clock, func([]byte) error { return nil }, func(uint16) (candidateSocket, error) { return remoteSocket, nil }, nil)
+	remoteChannel, err := prepareAssignedCipher(ctx, remote.verified, remote.lease, other.ID, a.offer.Profile.ID, remote.profile.Keys.WireGuardPrivate, 1420, remote.clock, func([]byte) error { return nil }, func(uint16) (candidateSocket, error) { return remoteSocket, nil }, nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer remoteChannel.Close()
 
-	channel, err := prepareAssignedCipher(ctx, f.verified, f.lease, a.peer.ID, a.offer.Profile.ID, f.profile.Keys.WireGuardPrivate, 1420, f.clock, func([]byte) error { return nil }, func(uint16) (candidateSocket, error) { return external, nil }, g.kernelForPeer(peer))
+	channel, err := prepareAssignedCipher(ctx, f.verified, f.lease, a.peer.ID, a.offer.Profile.ID, f.profile.Keys.WireGuardPrivate, 1420, f.clock, func([]byte) error { return nil }, func(uint16) (candidateSocket, error) { return external, nil }, g.kernelForPeer(peer), 0)
 	if err != nil {
 		t.Fatal(err)
 	}

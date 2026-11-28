@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"net"
 	"sort"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 )
 
 type supervisorConfig struct {
+	reserveListener      func(uint16) (*net.UDPConn, error)
 	hostKernel           kernelPreparer
 	relay                RelayConfig
 	probeInterval, retry time.Duration
@@ -27,6 +29,7 @@ type supervisorConfig struct {
 }
 
 type supervisedRelay struct {
+	listeners                   map[string]*reservedListener
 	channel                     *relayCipher
 	route                       *peerRoute
 	fallback                    bool
@@ -172,6 +175,9 @@ func (g *transportSupervisor) dropPeer(id string) {
 		return
 	}
 	g.retire(id)
+	for _, l := range p.listeners {
+		l.close()
+	}
 	delete(g.peers, id)
 	if p.directCycle != nil {
 		p.directCycle.cancel()

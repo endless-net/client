@@ -54,7 +54,7 @@ func TestKernelPreparationFallbackUsesOneReservationAndCurrentAssignment(t *test
 				opened++
 				return newCandidateSocketFixture(), nil
 			}
-			channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel)
+			channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel, 0)
 			if tc.wantError == nil {
 				if err != nil {
 					t.Fatal(err)
@@ -260,7 +260,7 @@ func TestBudgetedFactoriesReturnFailedReservationsAndCompleteProbePermits(t *tes
 	}
 	socket := newCandidateSocketFixture()
 	factory := func(uint16) (candidateSocket, error) { return socket, nil }
-	if _, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", make([]byte, 32), 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel); err == nil {
+	if _, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", make([]byte, 32), 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel, 0); err == nil {
 		t.Fatal("invalid key constructed engine")
 	}
 	budget.mu.Lock()
@@ -269,7 +269,7 @@ func TestBudgetedFactoriesReturnFailedReservationsAndCompleteProbePermits(t *tes
 	if count != 0 {
 		t.Fatal("failed factory retained reservation")
 	}
-	channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel)
+	channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +348,7 @@ func TestKernelPartialListenerCleanupBeforeGoFallback(t *testing.T) {
 			}
 			return newCandidateSocketFixture(), nil
 		}
-		channel, err := prepareAssignedCipher(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, listen, preparer)
+		channel, err := prepareAssignedCipher(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, listen, preparer, 0)
 		if closeErr != nil {
 			if channel != nil || !errors.Is(err, closeErr) || opens != 1 {
 				t.Fatalf("retried after uncertain cleanup: opens %d, error %v", opens, err)

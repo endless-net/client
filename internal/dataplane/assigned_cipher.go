@@ -13,11 +13,12 @@ import (
 var errKernelUnavailable = errors.New("kernel peer transport unavailable")
 
 type directCipherConfig struct {
-	relay      *RelayTransport
-	assignment candidateAssignment
-	private    []byte
-	mtu        int
-	clock      connectivity.Clock
+	preferredPort uint16
+	relay         *RelayTransport
+	assignment    candidateAssignment
+	private       []byte
+	mtu           int
+	clock         connectivity.Clock
 }
 
 type kernelPreparer func(context.Context, directCipherConfig, *assignedCipher, *packetPort) (directPeerEngine, error)
@@ -61,10 +62,10 @@ func newAssignedCipher(parent context.Context, m connectivity.Map, lease *connec
 
 // socketFactory is a local unit I/O seam, never part of a delivered profile.
 func buildAssignedCipher(parent context.Context, m connectivity.Map, lease *connectivity.Lease, peerID, profileID string, private []byte, mtu int, clock connectivity.Clock, sink func([]byte) error, socketFactory func(uint16) (candidateSocket, error)) (*assignedCipher, error) {
-	return prepareAssignedCipher(parent, m, lease, peerID, profileID, private, mtu, clock, sink, socketFactory, nil)
+	return prepareAssignedCipher(parent, m, lease, peerID, profileID, private, mtu, clock, sink, socketFactory, nil, 0)
 }
 
-func prepareAssignedCipher(parent context.Context, m connectivity.Map, lease *connectivity.Lease, peerID, profileID string, private []byte, mtu int, clock connectivity.Clock, sink func([]byte) error, socketFactory func(uint16) (candidateSocket, error), kernel kernelPreparer) (*assignedCipher, error) {
+func prepareAssignedCipher(parent context.Context, m connectivity.Map, lease *connectivity.Lease, peerID, profileID string, private []byte, mtu int, clock connectivity.Clock, sink func([]byte) error, socketFactory func(uint16) (candidateSocket, error), kernel kernelPreparer, preferredPort uint16) (*assignedCipher, error) {
 	if parent == nil || parent.Err() != nil || clock == nil || lease == nil || sink == nil {
 		return nil, ErrConfiguration
 	}
@@ -77,7 +78,7 @@ func prepareAssignedCipher(parent context.Context, m connectivity.Map, lease *co
 	if err != nil {
 		return nil, err
 	}
-	cfg := directCipherConfig{assignment: assignment, private: private, mtu: mtu, clock: clock}
+	cfg := directCipherConfig{preferredPort: preferredPort, assignment: assignment, private: private, mtu: mtu, clock: clock}
 	if kernel != nil {
 		channel, err := openAssignedEngine(parent, cfg, sink, socketFactory, kernel)
 		if !canFinishPreparation(parent, clock, assignment, sourceChanged) {
@@ -109,6 +110,7 @@ func openAssignedEngine(parent context.Context, cfg directCipherConfig, sink fun
 		cancel()
 		return nil, err
 	}
+	bind.preferredPort = cfg.preferredPort
 	if socketFactory != nil {
 		bind.listen = socketFactory
 	}

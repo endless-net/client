@@ -493,7 +493,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	}
 	s.current, s.policy = m, plan
 	stage = "apply_transport"
-	s.supervisor, err = newTransportSupervisor(s.lifetime, m, s.lease, s.clock, s.profileID, s.generation, current.Keys.WireGuardPrivate, s.resources.budget, s.packets, s.engine, supervisorConfig{relay: RelayConfig{DialTimeout: s.config.RelayDialTimeout, IOTimeout: s.config.RelayIOTimeout, HeartbeatInterval: s.config.RelayHeartbeatInterval, Now: func() time.Time {
+	s.supervisor, err = newTransportSupervisor(s.lifetime, m, s.lease, s.clock, s.profileID, s.generation, current.Keys.WireGuardPrivate, s.resources.budget, s.packets, s.engine, supervisorConfig{reserveListener: reserveUDPListener, relay: RelayConfig{DialTimeout: s.config.RelayDialTimeout, IOTimeout: s.config.RelayIOTimeout, HeartbeatInterval: s.config.RelayHeartbeatInterval, Now: func() time.Time {
 		sample, err := s.clock.Sample()
 		if err != nil {
 			return time.Time{}

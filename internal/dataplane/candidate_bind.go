@@ -25,6 +25,7 @@ type candidateSocket interface {
 // roam to a peer-supplied endpoint or use DNS. Unconfirmed I/O requires an
 // admitted probe; application output requires a bilateral activation token.
 type candidateBind struct {
+	preferredPort                       uint16
 	shutdownOnce                        sync.Once
 	shutdownErr                         error
 	mu                                  sync.Mutex
@@ -134,12 +135,21 @@ func (b *candidateBind) Open(port uint16) ([]awgconn.ReceiveFunc, uint16, error)
 	if err := b.assignment.permission(sample.Wall, true); err != nil {
 		return nil, 0, err
 	}
-	socket, err := b.listen(port)
+	requested := port
+	if requested == 0 {
+		requested = b.preferredPort
+	}
+	socket, err := b.listen(requested)
+	if err != nil && requested != port {
+		// Another local socket can win the handoff. Advertise the actual replacement.
+		requested = port
+		socket, err = b.listen(requested)
+	}
 	if err != nil {
 		return nil, 0, ErrPacketIO
 	}
 	address, ok := socket.LocalAddr().(*net.UDPAddr)
-	if !ok || address.Port < 1 || address.Port > 65535 || port != 0 && address.Port != int(port) {
+	if !ok || address.Port < 1 || address.Port > 65535 || requested != 0 && address.Port != int(requested) {
 		_ = socket.Close()
 		return nil, 0, ErrPacketIO
 	}
