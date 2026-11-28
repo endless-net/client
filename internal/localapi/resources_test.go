@@ -1,13 +1,14 @@
 package localapi
 
 import (
+	"testing"
+
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/localipc"
 	"github.com/endless-net/client/internal/state"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"testing"
 )
 
 func TestListResourcesBindsCurrentOwnerNetworkAndPathState(t *testing.T) {

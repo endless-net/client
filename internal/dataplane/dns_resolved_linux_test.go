@@ -3,9 +3,6 @@ package dataplane
 import (
 	"context"
 	"errors"
-	clientv0 "github.com/endless-net/client/api/client/v0"
-	"github.com/endless-net/client/internal/connectivity"
-	"github.com/endless-net/client/internal/state"
 	"net"
 	"os"
 	"os/exec"
@@ -13,6 +10,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	clientv0 "github.com/endless-net/client/api/client/v0"
+	"github.com/endless-net/client/internal/connectivity"
+	"github.com/endless-net/client/internal/state"
 
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 	"golang.org/x/net/dns/dnsmessage"
@@ -59,17 +60,17 @@ func isolatedResolved(t *testing.T) *os.Process {
 			t.Fatal(err)
 		}
 	}
-	for _, cmd := range []*exec.Cmd{exec.Command("chown", "systemd-resolve:systemd-resolve", "/run/systemd/resolve"), exec.Command(linuxIP, "link", "set", "lo", "up")} {
+	for _, cmd := range []*exec.Cmd{exec.CommandContext(t.Context(), "chown", "systemd-resolve:systemd-resolve", "/run/systemd/resolve"), exec.CommandContext(t.Context(), linuxIP, "link", "set", "lo", "up")} {
 		if err := cmd.Run(); err != nil {
 			t.Fatal(err)
 		}
 	}
 	var resolver *os.Process
-	for _, cmd := range []*exec.Cmd{exec.Command("dbus-daemon", "--system", "--nofork", "--nopidfile"), exec.Command("/usr/lib/systemd/systemd-resolved")} {
+	for _, cmd := range []*exec.Cmd{exec.CommandContext(t.Context(), "dbus-daemon", "--system", "--nofork", "--nopidfile"), exec.CommandContext(t.Context(), "/usr/lib/systemd/systemd-resolved")} {
 		if err := cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() })
+		t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 		if cmd.Path == "/usr/lib/systemd/systemd-resolved" {
 			resolver = cmd.Process
 		}
@@ -83,7 +84,7 @@ func isolatedResolved(t *testing.T) *os.Process {
 		}
 	}
 	for i := 0; i < 100; i++ {
-		if exec.Command("/usr/bin/busctl", "--system", "status", resolvedBus).Run() == nil {
+		if exec.CommandContext(t.Context(), "/usr/bin/busctl", "--system", "status", resolvedBus).Run() == nil {
 			if err := unix.Mount("/run/test-resolv.conf", "/etc/resolv.conf", "", unix.MS_BIND, ""); err != nil {
 				t.Fatal(err)
 			}
@@ -112,11 +113,11 @@ func (l *dnsTestLog) received(name string) bool {
 }
 func (l *dnsTestLog) serve(t *testing.T, address string, answer [4]byte) func() {
 	t.Helper()
-	c, err := net.ListenPacket("udp4", address+":53")
+	c, err := (&net.ListenConfig{}).ListenPacket(t.Context(), "udp4", address+":53")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { c.Close() })
+	t.Cleanup(func() { _ = c.Close() })
 	go func() {
 		buf := make([]byte, 65535)
 		for {
@@ -142,11 +143,11 @@ func (l *dnsTestLog) serve(t *testing.T, address string, answer [4]byte) func() 
 			}
 			wire, err := reply.Pack()
 			if err == nil {
-				c.WriteTo(wire, src)
+				_, _ = c.WriteTo(wire, src)
 			}
 		}
 	}()
-	return func() { c.Close() }
+	return func() { _ = c.Close() }
 }
 
 func TestLinuxResolvedAssignedServersAndWithdrawal(t *testing.T) {
@@ -297,7 +298,7 @@ func testLinuxResolved(t *testing.T, withdrawConflict bool) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { conn.Close() })
+		t.Cleanup(func() { _ = conn.Close() })
 		if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
 			t.Fatal(err)
 		}
@@ -384,16 +385,16 @@ func testLinuxResolved(t *testing.T, withdrawConflict bool) {
 	if err := apply(cfg); err != nil {
 		t.Fatal("reinstall", err)
 	}
-	if err := exec.Command("/usr/bin/resolvectl", "domain", "en017other", "~x.corp.example").Run(); err != nil {
+	if err := exec.CommandContext(t.Context(), "/usr/bin/resolvectl", "domain", "en017other", "~x.corp.example").Run(); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkResolvedDomains(ctx, link.index, session.dns.domains); !errors.Is(err, ErrIPConflict) {
 		t.Fatal("competing private route accepted", err)
 	}
-	if err := exec.Command("/usr/bin/resolvectl", "domain", "en017other", "~other.example").Run(); err != nil {
+	if err := exec.CommandContext(t.Context(), "/usr/bin/resolvectl", "domain", "en017other", "~other.example").Run(); err != nil {
 		t.Fatal(err)
 	}
-	if err := exec.Command("/usr/bin/resolvectl", "domain", link.name, "~admin.example").Run(); err != nil {
+	if err := exec.CommandContext(t.Context(), "/usr/bin/resolvectl", "domain", link.name, "~admin.example").Run(); err != nil {
 		t.Fatal(err)
 	}
 	previousSuccess := fixture.snapshot.Revision.Network
@@ -499,7 +500,7 @@ func TestLinuxDNSRefreshRechecksGeneration(t *testing.T) {
 	if err := resolver.Signal(unix.SIGSTOP); err != nil {
 		t.Fatal(err)
 	}
-	defer resolver.Signal(unix.SIGCONT)
+	defer func() { _ = resolver.Signal(unix.SIGCONT) }()
 	done := make(chan error, 1)
 	go func() { done <- s.Refresh(ctx, f.verified) }()
 	for {

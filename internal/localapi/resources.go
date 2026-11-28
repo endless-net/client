@@ -7,6 +7,10 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
+
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/enrollment"
@@ -16,9 +20,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"slices"
-	"strings"
-	"time"
 )
 
 func (c *Controller) ListResources(ctx context.Context, req *clientv0.ListResourcesRequest) (*clientv0.ListResourcesResponse, error) {
@@ -73,7 +74,7 @@ func (c *Controller) listResources(ctx context.Context, caller localipc.Principa
 		return nil, status.Error(codes.Unavailable, "current resource observation unavailable")
 	}
 	digest := sha256.New()
-	fmt.Fprintf(digest, "client-resource-page/v1 %q %q %q %q %d %d %q %d %q %v ", c.config.RuntimeID, caller.SID, p.ID, p.Attempt.NetworkID, conn.Generation, local.MapRevision, local.MapPayloadHash, size, search, kinds)
+	_, _ = fmt.Fprintf(digest, "client-resource-page/v1 %q %q %q %q %d %d %q %d %q %v ", c.config.RuntimeID, caller.SID, p.ID, p.Attempt.NetworkID, conn.Generation, local.MapRevision, local.MapPayloadHash, size, search, kinds)
 	var rows []*clientv0.Resource
 	for _, r := range local.Resources {
 		if r.GetId() == "" || r.NetworkId != p.Attempt.NetworkID {
@@ -90,7 +91,7 @@ func (c *Controller) listResources(ctx context.Context, caller localipc.Principa
 		if err != nil {
 			return nil, status.Error(codes.Unavailable, "invalid resource")
 		}
-		fmt.Fprintf(digest, "%d:", len(data))
+		_, _ = fmt.Fprintf(digest, "%d:", len(data))
 		digest.Write(data)
 		rows = append(rows, r)
 	}

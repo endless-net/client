@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	clientv0 "github.com/endless-net/client/api/client/v0"
-	"google.golang.org/protobuf/proto"
 	"net"
 	"net/netip"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	clientv0 "github.com/endless-net/client/api/client/v0"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/endless-net/client/internal/underlay"
 

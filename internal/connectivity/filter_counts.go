@@ -56,7 +56,7 @@ func filterDeltas(before, after FilterSnapshot) ([]FilterCounter, []FilterClass,
 	details := make([]FilterCounter, 0, len(after.Details))
 	accounted := make(map[FilterClass]PacketCounts, 4)
 	for k, n := range after.Details {
-		if !k.FilterClass.valid() || !k.Source.Is4() || !k.Destination.Is4() || (k.Protocol != "tcp" && k.Protocol != "udp") {
+		if !k.valid() || !k.Source.Is4() || !k.Destination.Is4() || (k.Protocol != "tcp" && k.Protocol != "udp") {
 			return nil, nil, false
 		}
 		d, ok := n.delta(before.Details[k])

@@ -84,8 +84,8 @@ func dnsExchange(ctx context.Context, dialer dnsDialer, ip netip.Addr, network s
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
-	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer func() { _ = conn.Close() }()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {

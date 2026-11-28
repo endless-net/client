@@ -46,11 +46,11 @@ func TestDNSExchangeConfinesRetriesAndTCPToSelectedZone(t *testing.T) {
 	}
 	query := pack(dnsmessage.Header{ID: 734, RecursionDesired: true})
 	udp := func(reply []byte) string {
-		listener, err := net.ListenPacket("udp4", "127.0.0.1:0")
+		listener, err := (&net.ListenConfig{}).ListenPacket(t.Context(), "udp4", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { listener.Close() })
+		t.Cleanup(func() { _ = listener.Close() })
 		go func() {
 			var buf [512]byte
 			_, from, err := listener.ReadFrom(buf[:])
@@ -61,17 +61,17 @@ func TestDNSExchangeConfinesRetriesAndTCPToSelectedZone(t *testing.T) {
 		return listener.LocalAddr().String()
 	}
 	tcp := func(reply []byte) string {
-		listener, err := net.Listen("tcp4", "127.0.0.1:0")
+		listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp4", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { listener.Close() })
+		t.Cleanup(func() { _ = listener.Close() })
 		go func() {
 			conn, err := listener.Accept()
 			if err != nil {
 				return
 			}
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 			var size [2]byte
 			if _, err := io.ReadFull(conn, size[:]); err != nil {
 				return

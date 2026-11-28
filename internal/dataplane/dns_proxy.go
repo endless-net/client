@@ -40,7 +40,7 @@ func openSessionDNSProxy(parent context.Context, bind netip.AddrPort, listener n
 	addr := tcp.Addr().(*net.TCPAddr).AddrPort()
 	packet, err := listener.ListenPacket(parent, "udp4", addr.String())
 	if err != nil {
-		tcp.Close()
+		_ = tcp.Close()
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(parent)
@@ -53,8 +53,8 @@ func openSessionDNSProxy(parent context.Context, bind netip.AddrPort, listener n
 
 func (p *sessionDNSProxy) close() {
 	p.cancel()
-	p.udp.Close()
-	p.tcp.Close()
+	_ = p.udp.Close()
+	_ = p.tcp.Close()
 	p.wg.Wait()
 }
 
@@ -183,13 +183,13 @@ func (p *sessionDNSProxy) serveTCP() {
 			return
 		}
 		if c.RemoteAddr().(*net.TCPAddr).AddrPort().Addr().IsLoopback() {
-			stop := context.AfterFunc(p.ctx, func() { c.Close() })
+			stop := context.AfterFunc(p.ctx, func() { _ = c.Close() })
 			if c.SetDeadline(time.Now().Add(p.timeout)) == nil {
 				p.tcpQuery(c)
 			}
 			stop()
 		}
-		c.Close()
+		_ = c.Close()
 	}
 }
 func (p *sessionDNSProxy) tcpQuery(c *net.TCPConn) {

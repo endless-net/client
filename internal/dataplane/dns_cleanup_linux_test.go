@@ -72,7 +72,7 @@ func TestLinuxDNSPartialApplyAndCleanupRetry(t *testing.T) {
 	if err := resolver.Signal(unix.SIGSTOP); err != nil {
 		t.Fatal(err)
 	}
-	defer resolver.Signal(unix.SIGCONT)
+	defer func() { _ = resolver.Signal(unix.SIGCONT) }()
 	timeout, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
 	err = s.Stop(timeout)
 	cancel()
@@ -80,9 +80,9 @@ func TestLinuxDNSPartialApplyAndCleanupRetry(t *testing.T) {
 		t.Fatal("unconfirmed resolver cleanup acknowledged", err)
 	}
 	for _, endpoint := range []netip.AddrPort{old, next} {
-		l, err := net.Listen("tcp4", endpoint.String())
+		l, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp4", endpoint.String())
 		if err == nil {
-			l.Close()
+			_ = l.Close()
 			t.Fatal("port reusable before resolver confirmed removal", endpoint)
 		}
 		if !errors.Is(err, unix.EADDRINUSE) {
@@ -99,10 +99,10 @@ func TestLinuxDNSPartialApplyAndCleanupRetry(t *testing.T) {
 		t.Fatal("cleanup not confirmed", r)
 	}
 	for _, endpoint := range []netip.AddrPort{old, next} {
-		l, err := net.Listen("tcp4", endpoint.String())
+		l, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp4", endpoint.String())
 		if err != nil {
 			t.Fatal("port survived confirmed cleanup", err)
 		}
-		l.Close()
+		_ = l.Close()
 	}
 }

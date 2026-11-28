@@ -82,7 +82,7 @@ func TestLinuxDNSAfterProcessCrash(t *testing.T) {
 		if err := json.NewEncoder(pipe).Encode(crashDNSReady{s.link.name, s.link.index, s.dns.proxy.addr.String()}); err != nil {
 			t.Fatal(err)
 		}
-		pipe.Close()
+		_ = pipe.Close()
 		<-t.Context().Done()
 		return
 	}
@@ -126,8 +126,8 @@ func TestLinuxDNSAfterProcessCrash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
-	defer writer.Close()
+	defer func() { _ = reader.Close() }()
+	defer func() { _ = writer.Close() }()
 	binary, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -143,15 +143,15 @@ func TestLinuxDNSAfterProcessCrash(t *testing.T) {
 	}
 	defer func() {
 		if cmd.ProcessState == nil {
-			cmd.Process.Kill()
-			cmd.Wait()
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
 		}
 	}()
-	writer.Close()
+	_ = writer.Close()
 	var ready crashDNSReady
 	if err := json.NewDecoder(reader).Decode(&ready); err != nil {
-		cmd.Process.Kill()
-		cmd.Wait()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
 		t.Fatalf("child startup: %v %s", err, log)
 	}
 	query := func(name, answer string) {
@@ -165,7 +165,7 @@ func TestLinuxDNSAfterProcessCrash(t *testing.T) {
 	if err := resolver.Signal(syscall.SIGSTOP); err != nil {
 		t.Fatal(err)
 	}
-	defer resolver.Signal(syscall.SIGCONT)
+	defer func() { _ = resolver.Signal(syscall.SIGCONT) }()
 	if err := cmd.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
@@ -176,8 +176,8 @@ func TestLinuxDNSAfterProcessCrash(t *testing.T) {
 	if _, err := net.InterfaceByName(ready.Link); err == nil {
 		t.Fatal("dead owner's tunnel survived")
 	}
-	if conn, err := net.DialTimeout("tcp", ready.Endpoint, time.Second); err == nil {
-		conn.Close()
+	if conn, err := (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "tcp", ready.Endpoint); err == nil {
+		_ = conn.Close()
 		t.Fatal("dead owner's DNS endpoint accepts connections")
 	}
 	ledger := state.NewLinuxNetworkLedger(directory)
