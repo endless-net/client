@@ -120,7 +120,7 @@ func (b *relayPeerBind) controlAllowed(value transport.Control, incoming bool) e
 		return nil
 	}
 	now := b.mux.transport.config.Now()
-	if !b.lease.WindowCurrent(m, peer.Transport.IssuedAt, peer.Transport.ExpiresAt, now) {
+	if !b.lease.AllowsPeerPath(m, peer.ID) || !b.lease.WindowCurrent(m, peer.Transport.IssuedAt, peer.Transport.ExpiresAt, now) {
 		return ErrNoAuthority
 	}
 	for _, offer := range peer.Transport.Profiles {
@@ -167,7 +167,7 @@ func (c *relayCipher) queueApplication(raw []byte, routeGuard func() bool) error
 	if !end.IsZero() {
 		outer := routeGuard
 		routeGuard = func() bool {
-			return (outer == nil || outer()) && c.bind.lease.MatchesMap(observed) && c.bind.lease.GrantDeadlineCurrent(observed, end)
+			return (outer == nil || outer()) && c.bind.lease.AllowsPeerPath(observed, a.peer.ID) && c.bind.lease.GrantDeadlineCurrent(observed, end)
 		}
 		if !routeGuard() {
 			return ErrNoAuthority
@@ -219,7 +219,7 @@ func (c *relayCipher) receivePlaintext(raw []byte) error {
 		return err
 	}
 	end, err := peerPacketDeadline(a, rules, transit, raw, false)
-	if err != nil || !end.IsZero() && (!c.bind.lease.MatchesMap(observed) || !c.bind.lease.GrantDeadlineCurrent(observed, end)) {
+	if err != nil || !end.IsZero() && (!c.bind.lease.AllowsPeerPath(observed, a.peer.ID) || !c.bind.lease.GrantDeadlineCurrent(observed, end)) {
 		return ErrNoAuthority
 	}
 	return c.sink(raw)

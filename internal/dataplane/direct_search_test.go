@@ -460,9 +460,9 @@ func testTwoSupervisorsThroughSelection(t *testing.T, filterWG, preferAWG bool, 
 			f.snapshot.Peers[0].EndpointExpiresAt = &discoveryExpiry
 			f.verify(t, &previous)
 		}
-		a.lease.PausePackets(true)
-		b.lease.PausePackets(true)
+		epochs := [2]uint64{a.lease.MapEpoch(a.verified), b.lease.MapEpoch(b.verified)}
 		for _, f := range []*candidateFixture{a, b} {
+			f.lease.PauseForApply(f.verified)
 			if err := f.lease.Confirm(f.verified); err != nil {
 				t.Fatal(err)
 			}
@@ -478,6 +478,11 @@ func testTwoSupervisorsThroughSelection(t *testing.T, filterWG, preferAWG bool, 
 		}
 		ga.Update(a.verified)
 		gb.Update(b.verified)
+		for i, f := range []*candidateFixture{a, b} {
+			if err := f.lease.EndSourceTransition(epochs[i]); err != nil {
+				t.Fatal(err)
+			}
+		}
 		a.lease.PausePackets(false)
 		b.lease.PausePackets(false)
 	}

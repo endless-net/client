@@ -30,7 +30,7 @@ func openWindowsPeerDevice(ctx context.Context, cfg directCipherConfig) (_ *wind
 	if cfg.clock == nil || a.lease == nil {
 		return nil, ErrConfiguration
 	}
-	_, changed := a.lease.SourceSignal()
+	changed := a.lease.PeerSignal(a.peer.ID)
 	if !canFinishPreparation(ctx, cfg.clock, a, changed) {
 		return nil, ErrNoAuthority
 	}
@@ -363,7 +363,7 @@ func configureWindowsKernelPeer(ctx context.Context, adapter windowsKernelAdapte
 	if adapter == nil || cfg.clock == nil || a.lease == nil || !socket.Addr().Is4() || !socket.Addr().IsLoopback() || socket.Port() == 0 {
 		return ErrConfiguration
 	}
-	_, changed := a.lease.SourceSignal()
+	changed := a.lease.PeerSignal(a.peer.ID)
 	digest, err := transport.ProfileDigest(a.offer.Profile)
 	if err != nil || digest != a.offer.Digest {
 		return ErrConfiguration

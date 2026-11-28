@@ -58,10 +58,10 @@ func (r *peerRoute) temporarilyFencedLocked() bool {
 		return false
 	}
 	r.relay.bind.mu.Lock()
-	value := r.relay.bind.mapValue
+	value, peer := r.relay.bind.mapValue, r.relay.bind.peer.ID
 	r.relay.bind.mu.Unlock()
 	lease := r.relay.bind.lease
-	if !lease.Permissions().ExistingFlows || !lease.AllowsPathMap(value) {
+	if !lease.Permissions().ExistingFlows || !lease.AllowsPeerPath(value, peer) {
 		return true
 	}
 	if r.kind == peerRouteDirect && r.direct != nil {
@@ -70,7 +70,7 @@ func (r *peerRoute) temporarilyFencedLocked() bool {
 		r.direct.bind.mu.Unlock()
 		// Relay and Direct adopt a map in separate steps. A reader in the
 		// middle must fence output, not permanently replace selected Direct.
-		return !lease.AllowsPathMap(directMap)
+		return !lease.AllowsPeerPath(directMap, peer)
 	}
 	return false
 }

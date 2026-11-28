@@ -49,6 +49,7 @@ type RelayTransport struct {
 	peers                  map[string]bool
 	permission             permissionCheck
 	scope                  func(connectivity.Map) bool
+	lease                  *connectivity.Lease
 	originalExpiryCurrent  func(time.Time) bool
 	handshakeMap           func() connectivity.Map
 	mapValue               connectivity.Map
@@ -97,6 +98,7 @@ func NewRelayTransport(parent context.Context, m connectivity.Map, lease *connec
 	if err != nil {
 		return nil, err
 	}
+	transport.lease = lease
 	transport.scope = lease.MatchesMap
 	transport.originalExpiryCurrent = func(wall time.Time) bool {
 		return lease.OriginalExpiryCurrent(m, transport.credential.ExpiresAt, wall)
@@ -169,6 +171,9 @@ func (t *RelayTransport) permitted(newFlow bool) bool {
 	t.mu.Lock()
 	scope, m := t.scope, t.mapValue
 	t.mu.Unlock()
+	if !newFlow && t.lease != nil {
+		scope = t.lease.AllowsPathMap
+	}
 	if scope != nil && !scope(m) {
 		return false
 	}
@@ -326,7 +331,7 @@ func (t *RelayTransport) write(ctx context.Context, message relay.Message, newFl
 	}
 	if frame, ok := message.(*relay.ClientFrame); ok {
 		t.mu.Lock()
-		allowed := t.peers[frame.PeerID] && frame.PeerNetworkID == t.network
+		allowed := t.peerAllowedLocked(frame.PeerID) && frame.PeerNetworkID == t.network
 		t.mu.Unlock()
 		if !allowed {
 			return ErrRelayPeer
@@ -353,7 +358,7 @@ func (t *RelayTransport) write(ctx context.Context, message relay.Message, newFl
 	}
 	if frame, ok := message.(*relay.ClientFrame); ok {
 		t.mu.Lock()
-		allowed := t.peers[frame.PeerID] && frame.PeerNetworkID == t.network
+		allowed := t.peerAllowedLocked(frame.PeerID) && frame.PeerNetworkID == t.network
 		t.mu.Unlock()
 		if !allowed {
 			return ErrRelayPeer
@@ -412,12 +417,16 @@ func (t *RelayTransport) read(ctx context.Context, newFlow bool) (relay.Message,
 	return message, nil
 }
 
+func (t *RelayTransport) peerAllowedLocked(peer string) bool {
+	return t.peers[peer] && (t.lease == nil || t.lease.AllowsPeerPath(t.mapValue, peer))
+}
+
 func (t *RelayTransport) Send(ctx context.Context, peer string, encrypted []byte) error {
 	if len(encrypted) == 0 || len(encrypted) > relay.MaxFramePayloadBytes {
 		return ErrPacketIO
 	}
 	t.mu.Lock()
-	allowed, ready := t.peers[peer], t.ready && !t.closed
+	allowed, ready := t.peerAllowedLocked(peer), t.ready && !t.closed
 	t.mu.Unlock()
 	if !allowed {
 		return ErrRelayPeer
@@ -447,12 +456,15 @@ func (t *RelayTransport) Receive(ctx context.Context) (string, []byte, error) {
 			continue // Never adopt a remote clock or grant.
 		case *relay.ServerFrame:
 			t.mu.Lock()
-			allowed := t.peers[value.FromNodeID]
+			allowed := t.peerAllowedLocked(value.FromNodeID)
 			t.mu.Unlock()
-			if !allowed || value.FromNetworkID != t.network {
+			if value.FromNetworkID != t.network {
 				t.Close()
 				return "", nil, ErrRelayPeer
 			}
+			if !allowed {
+				continue
+			} // An in-flight frame can outlive its peer grant.
 			return value.FromNodeID, value.Payload, nil
 		default:
 			t.Close()

@@ -83,7 +83,7 @@ func (e *linuxHostEngine) deleteDevice(ctx context.Context) error {
 }
 func (e *linuxHostEngine) startProbe(a candidateAssignment) error {
 	ctx := e.channel.bind.ctx
-	_, changed := a.lease.SourceSignal()
+	changed := a.lease.PeerSignal(a.peer.ID)
 	if e.initial.lease != a.lease || !e.initial.sameChannel(a) || !canFinishPreparation(ctx, e.channel.clock, a, changed) {
 		return ErrNoAuthority
 	}

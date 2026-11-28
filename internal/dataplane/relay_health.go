@@ -35,12 +35,12 @@ func (*relayHealthProbe) GoString() string { return "[private Relay health chall
 
 func (b *relayPeerBind) newControl(kind, digest, candidateID string, nonce []byte) (transport.Control, error) {
 	b.mu.Lock()
-	local, peer, m, account := b.local, b.peer, b.mapValue, b.account
+	local, peer, m, account, revision := b.local, b.peer, b.mapValue, b.account, b.controlRevision
 	b.mu.Unlock()
 	if peer.Transport == nil {
 		return transport.Control{}, ErrNoAuthority
 	}
-	value := transport.Control{Version: transport.Version, Kind: kind, AccountID: account, NetworkID: b.mux.transport.network, SourceNodeID: local.ID, DestinationNodeID: peer.ID, SourcePublicKey: local.PublicKey, DestinationPublicKey: peer.PublicKey, SourceGeneration: m.IntentGeneration(), DestinationGeneration: peer.Transport.PeerAdvertisement.IntentGeneration, NetworkRevision: m.Cursor().Revision.Network, ProfileDigest: digest, CandidateID: candidateID, Nonce: append([]byte(nil), nonce...)}
+	value := transport.Control{Version: transport.Version, Kind: kind, AccountID: account, NetworkID: b.mux.transport.network, SourceNodeID: local.ID, DestinationNodeID: peer.ID, SourcePublicKey: local.PublicKey, DestinationPublicKey: peer.PublicKey, SourceGeneration: m.IntentGeneration(), DestinationGeneration: peer.Transport.PeerAdvertisement.IntentGeneration, NetworkRevision: revision, ProfileDigest: digest, CandidateID: candidateID, Nonce: append([]byte(nil), nonce...)}
 	if err := b.controlAllowed(value, false); err != nil {
 		return transport.Control{}, err
 	}

@@ -167,10 +167,23 @@ func TestEndpointRenewalKeepsEstablishedPathUntilOriginalDeadline(t *testing.T) 
 	if lease.AllowsPathMap(old) || !lease.Permit(true) {
 		t.Fatal("old and new path deadlines conflated")
 	}
-	restricted := next
-	restricted.snapshot.Peers = nil
-	if lease.MapEpoch(restricted) == epoch || lease.Permit(true) {
-		t.Fatal("peer withdrawal left traffic enabled")
+	peer := next.snapshot.Peers[0].ID
+	peerChanged := lease.PeerSignal(peer)
+	f.value.Peers = nil
+	f.value.Network.Revision++
+	f.value.Revision.Network++
+	cursor = next.Cursor()
+	restricted, err := v.Verify(t.Context(), f.sign(t, &cursor, f.now.Add(31*time.Second), end), &cursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lease.MapEpoch(restricted) != epoch || lease.AllowsPeerPath(next, peer) || !lease.Permit(true) {
+		t.Fatal("peer withdrawal failed to isolate the affected path")
+	}
+	select {
+	case <-peerChanged:
+	default:
+		t.Fatal("peer handler missed withdrawal")
 	}
 }
 

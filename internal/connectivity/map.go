@@ -279,6 +279,9 @@ func (v *Verifier) verifyEvent(parent context.Context, event coordinator.MapStre
 		return empty, ErrMap
 	}
 	if event.Type == "heartbeat" || event.Type == "checkpoint" {
+		if previous == nil || event.From != previous.Revision || event.To != previous.Revision {
+			return empty, ErrMap
+		}
 		return empty, ErrNoMap
 	}
 	if event.Type == "delta" {

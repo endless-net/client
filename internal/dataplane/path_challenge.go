@@ -48,13 +48,13 @@ func (c *assignedCipher) BeginProbe(cycle *probeCycle, candidateID string) (*pat
 		return nil, ErrConfiguration
 	}
 	c.bind.mu.Lock()
-	a := c.bind.assignment
+	a, revision := c.bind.assignment, c.bind.controlRevision
 	c.bind.mu.Unlock()
 	nonce := make([]byte, 32)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, ErrEngine
 	}
-	value := transport.Control{Version: transport.Version, Kind: transport.Challenge, AccountID: a.plan.AccountID, NetworkID: a.plan.NetworkID, SourceNodeID: a.plan.LocalNodeID, DestinationNodeID: a.plan.PeerNodeID, SourcePublicKey: a.plan.LocalPublicKey, DestinationPublicKey: a.plan.PeerPublicKey, SourceGeneration: a.plan.LocalIntentGeneration, DestinationGeneration: a.plan.PeerAdvertisement.IntentGeneration, NetworkRevision: a.plan.Revision.Network, ProfileDigest: a.offer.Digest, CandidateID: candidateID, Nonce: nonce}
+	value := transport.Control{Version: transport.Version, Kind: transport.Challenge, AccountID: a.plan.AccountID, NetworkID: a.plan.NetworkID, SourceNodeID: a.plan.LocalNodeID, DestinationNodeID: a.plan.PeerNodeID, SourcePublicKey: a.plan.LocalPublicKey, DestinationPublicKey: a.plan.PeerPublicKey, SourceGeneration: a.plan.LocalIntentGeneration, DestinationGeneration: a.plan.PeerAdvertisement.IntentGeneration, NetworkRevision: revision, ProfileDigest: a.offer.Digest, CandidateID: candidateID, Nonce: nonce}
 	if _, err := transport.MarshalControl(value); err != nil {
 		return nil, err
 	}

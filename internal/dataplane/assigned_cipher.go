@@ -69,7 +69,7 @@ func prepareAssignedCipher(parent context.Context, m connectivity.Map, lease *co
 	if parent == nil || parent.Err() != nil || clock == nil || lease == nil || sink == nil {
 		return nil, ErrConfiguration
 	}
-	_, sourceChanged := lease.SourceSignal()
+	sourceChanged := lease.PeerSignal(peerID)
 	sample, err := clock.Sample()
 	if err != nil {
 		return nil, connectivity.ErrClock

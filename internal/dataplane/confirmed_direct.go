@@ -129,7 +129,7 @@ func (c *assignedCipher) activateChecked(value *directActivation, enable func() 
 	}
 	c.bind.mu.Lock()
 	defer c.bind.mu.Unlock()
-	_, changed := c.bind.assignment.lease.SourceSignal()
+	changed := c.bind.assignment.lease.PeerSignal(c.bind.assignment.peer.ID)
 	if err := c.activationCurrentLocked(value, changed); err != nil {
 		return err
 	}

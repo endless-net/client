@@ -400,7 +400,7 @@ func (s *packetSwitch) updatePolicy(value connectivity.Map, paths []connectivity
 	epochs := make(map[string]uint64, len(policy.pairs))
 	for id, binding := range policy.pairs {
 		// Time-dependent grants can change on renewal without a revision bump.
-		if revised || binding != s.pairs[id] || !reflect.DeepEqual(s.grants[id], policy.grants[id]) {
+		if revised || !s.lease.PeerScopeCurrent(s.mapValue, id) || binding != s.pairs[id] || !reflect.DeepEqual(s.grants[id], policy.grants[id]) {
 			s.nextEpoch++
 			epochs[id] = s.nextEpoch
 		} else {
@@ -484,7 +484,7 @@ func packetAddress(raw []byte, offset int) (netip.Addr, error) {
 func (s *packetSwitch) routeCurrent(b packetBinding, route *peerRoute, epoch uint64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.admittedLocked() && s.routeEpoch[b.peerID] == epoch && s.pairs[b.peerID] == b && s.routes[b.peerID] == route
+	return s.lease.AllowsPeerPath(s.mapValue, b.peerID) && s.admittedLocked() && s.routeEpoch[b.peerID] == epoch && s.pairs[b.peerID] == b && s.routes[b.peerID] == route
 }
 
 func (s *packetSwitch) send(raw []byte) error {
@@ -511,7 +511,7 @@ func (s *packetSwitch) send(raw []byte) error {
 		sourceExpected = source
 	}
 	route, epoch, observedMap := s.routes[b.peerID], s.routeEpoch[b.peerID], s.mapValue
-	allowed := exists && s.admittedLocked()
+	allowed := exists && s.lease.AllowsPeerPath(s.mapValue, b.peerID) && s.admittedLocked()
 	if !allowed || applicationForPair(raw, sourceExpected, destination) != nil {
 		s.mu.Unlock()
 		return ErrNoAuthority
@@ -587,7 +587,7 @@ func (s *packetSwitch) ingress(b packetBinding, raw []byte) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	s.mu.Lock()
-	allowed := s.admittedLocked() && s.pairs[b.peerID] == b
+	allowed := s.lease.AllowsPeerPath(s.mapValue, b.peerID) && s.admittedLocked() && s.pairs[b.peerID] == b
 	var end time.Time
 	if destination != b.local {
 		r := s.transit.lookup(destination, source)
@@ -619,7 +619,7 @@ func (s *packetSwitch) ingress(b packetBinding, raw []byte) error {
 		return ErrPacketIO
 	}
 	s.mu.Lock()
-	allowed = s.admittedLocked() && s.pairs[b.peerID] == b
+	allowed = s.lease.AllowsPeerPath(s.mapValue, b.peerID) && s.admittedLocked() && s.pairs[b.peerID] == b
 	s.mu.Unlock()
 	if !allowed {
 		return ErrNoAuthority
@@ -658,7 +658,13 @@ func (s *packetSwitch) Sink(value connectivity.Map, peer string) (func([]byte) e
 	if !allowed {
 		return nil, ErrNoAuthority
 	}
-	return func(raw []byte) error { return s.ingress(b, raw) }, nil
+	cursor := value.Cursor()
+	return func(raw []byte) error {
+		if !s.lease.PeerBindingCurrent(cursor, peer) {
+			return ErrNoAuthority
+		}
+		return s.ingress(b, raw)
+	}, nil
 }
 
 func (s *packetSwitch) Err() error {

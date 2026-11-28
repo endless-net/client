@@ -91,6 +91,12 @@ func MapUpdate(m *wire.WatchMapsResponse) (coordinator.MapStreamEvent, error) {
 	event := coordinator.MapStreamEvent{EventID: m.EventId, From: MapRevision(m.From)}
 	var snapshot *wire.NetworkMapSnapshot
 	switch update := m.Update.(type) {
+	case *wire.WatchMapsResponse_Heartbeat:
+		if update.Heartbeat == nil || m.TimeProof != nil {
+			return coordinator.MapStreamEvent{}, errMapShape
+		}
+		event.Type, event.To = "heartbeat", event.From
+		return event, nil
 	case *wire.WatchMapsResponse_Snapshot:
 		event.Type, snapshot = "snapshot", update.Snapshot
 	case *wire.WatchMapsResponse_Resync:

@@ -18,6 +18,9 @@ import (
 
 func Update(event contract.MapStreamEvent) *wire.WatchMapsResponse {
 	message := &wire.WatchMapsResponse{EventId: event.EventID, From: wireRevision(event.From)}
+	if event.Type == "heartbeat" {
+		message.Update = &wire.WatchMapsResponse_Heartbeat{Heartbeat: &wire.MapHeartbeat{}}
+	}
 	if event.Snapshot != nil {
 		switch event.Type {
 		case "snapshot":

@@ -133,7 +133,7 @@ func (s *WindowsSession) stageDirectIP(parent context.Context, assignment candid
 	if err != nil {
 		return nil, err
 	}
-	_, changed := s.lease.SourceSignal()
+	changed := s.lease.PeerSignal(assignment.peer.ID)
 	currentAuthority := func() bool {
 		select {
 		case <-changed:

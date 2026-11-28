@@ -209,6 +209,57 @@ func TestEstablishedRouteRemainsUsableDuringEndpointRenewal(t *testing.T) {
 	}
 }
 
+func TestWindowsPeerChurnKeepsIndependentRouteDuringNativeApply(t *testing.T) {
+	s, _, _, current, _, _, _, _, clock := wiredSessionFixture(t)
+	if err := startSessionFixture(t, s, current); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := current.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := snapshot.Peers[0].ID
+	dev := s.engine.device.(*device.Device)
+	key := peerKey(t, snapshot.Peers[0].PublicKey)
+	wgPeer := dev.LookupPeer(key)
+	if wgPeer == nil {
+		t.Fatal("initial WireGuard peer missing")
+	}
+	s.packets.mu.Lock()
+	binding, route, epoch := s.packets.pairs[id], s.packets.routes[id], s.packets.routeEpoch[id]
+	s.packets.mu.Unlock()
+	live := func() bool { return s.packets.routeCurrent(binding, route, epoch) && dev.LookupPeer(key) == wgPeer }
+	plan := s.planFilters
+	s.planFilters = func(ctx context.Context, v connectivity.Map, owner string, luid uint64, index uint32, grants, protected int, offline bool) (FilterPlan, error) {
+		if !live() {
+			return FilterPlan{}, errors.New("independent route lost during native application")
+		}
+		return plan(ctx, v, owner, luid, index, grants, protected, offline)
+	}
+	for _, change := range []func(*coordinator.NetworkMapSnapshot){
+		func(m *coordinator.NetworkMapSnapshot) { addedPeerSnapshot(t, m) },
+		func(m *coordinator.NetworkMapSnapshot) {
+			m.Peers[1].Endpoint = "192.0.2.99:51820"
+			m.Peers[1].EndpointGeneration++
+		},
+		func(m *coordinator.NetworkMapSnapshot) { m.Peers = m.Peers[:1] },
+	} {
+		clock.advance(time.Second)
+		next := nextSessionMap(t, s, current, clock, change)
+		source := s.MapEpoch(next)
+		if !live() {
+			t.Fatal("map reception interrupted independent route")
+		}
+		if err := s.Refresh(WithSourceEpoch(t.Context(), source), next); err != nil {
+			t.Fatal(err)
+		}
+		if !live() {
+			t.Fatal("map application replaced independent session")
+		}
+		current = next
+	}
+}
+
 func TestSessionOfflineReauthorizationKeepsOriginalDeadlineAndPeer(t *testing.T) {
 	s, _, _, m, _, _, _, _, clock := wiredSessionFixture(t)
 	if err := startSessionFixture(t, s, m); err != nil {

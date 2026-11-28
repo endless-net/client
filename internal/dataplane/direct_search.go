@@ -299,7 +299,7 @@ func (relay *RelayTransport) bindKernelPreparer(prepare kernelPreparer) kernelPr
 }
 
 func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordinator.TransportProfileOffer, id string) (result error) {
-	_, sourceSignal := g.lease.SourceSignal()
+	sourceSignal := g.lease.PeerSignal(p.scope.peerID)
 	defer func() {
 		if result != nil {
 			select {

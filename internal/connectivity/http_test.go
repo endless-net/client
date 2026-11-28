@@ -97,7 +97,11 @@ func TestTransportStreamsMapsWithoutPromotingReplayAndPreservesRevocation(t *tes
 			t.Fatal("initial stream unexpectedly bound a cursor")
 		}
 		opening := f.openingRecord(t, first, request.Nonce)
-		body := fixtureFrames(t, opening, first, last)
+		heartbeat, err := json.Marshal(coordinator.MapStreamEvent{Type: "heartbeat", EventID: "heartbeat", From: cursor.Revision})
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := fixtureFrames(t, opening, heartbeat, first, last)
 		return testwire.StreamResponse(r, io.NopCloser(bytes.NewReader(body))), nil
 	})
 	var received []Map

@@ -96,7 +96,7 @@ func (g *transportSupervisor) transportStatuses(value connectivity.Map) []*clien
 	result := make([]*clientv0.PeerTransportStatus, len(g.status))
 	for i, v := range g.status {
 		result[i] = proto.Clone(v).(*clientv0.PeerTransportStatus)
-		if !g.lease.Permissions().ExistingFlows {
+		if !g.lease.Permissions().ExistingFlows || !g.lease.AllowsPeerPath(g.statusCursor, v.PeerId) {
 			result[i].SelectedPath = clientv0.PathKind_PATH_KIND_UNSPECIFIED
 			result[i].Engine, result[i].ProtocolVersion, result[i].TransportProfileId = "", "", ""
 			result[i].TransportProfileRevision = 0

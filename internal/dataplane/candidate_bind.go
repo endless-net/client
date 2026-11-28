@@ -42,6 +42,7 @@ type candidateBind struct {
 	receiveConfirmed, transmitConfirmed bool
 	confirmationEpoch                   uint64
 	revisionFloor                       uint64
+	controlRevision                     uint64
 	handshake                           func([]byte) bool
 	lastHandshake                       []byte
 	handshakeAttempt                    *probeAttempt
@@ -67,7 +68,7 @@ func newCandidateBind(parent context.Context, a candidateAssignment, clock conne
 	// A new channel has no prior nonce/history. A peer may have prepared it
 	// before our construction; current pair authority and fresh own proofs still
 	// apply. Only an observed semantic change advances the rejection floor.
-	b := &candidateBind{ctx: ctx, cancel: cancel, assignment: a, revisionFloor: 1, clock: clock, sendGate: make(chan struct{}, 1)}
+	b := &candidateBind{ctx: ctx, cancel: cancel, assignment: a, revisionFloor: 1, controlRevision: a.plan.Revision.Network, clock: clock, sendGate: make(chan struct{}, 1)}
 	b.listen = b.listenUDP
 	b.sendGate <- struct{}{}
 	context.AfterFunc(ctx, b.shutdown)
@@ -227,13 +228,14 @@ func (b *candidateBind) update(a candidateAssignment) error {
 	if b.closed {
 		return net.ErrClosed
 	}
-	if !b.assignment.sameChannel(a) {
+	if !a.lease.PeerBindingCurrent(b.assignment.mapValue.Cursor(), a.peer.ID) || !b.assignment.sameChannel(a) {
 		return ErrConfiguration
 	}
-	if !b.assignment.sameProbe(a) {
+	if !a.lease.PeerAccessCurrent(b.assignment.mapValue.Cursor(), a.peer.ID) || !b.assignment.sameProbe(a) {
 		clear(b.lastHandshake)
 		b.lastHandshake, b.handshakeAttempt = nil, nil
 		b.revisionFloor = a.plan.Revision.Network
+		b.controlRevision = b.revisionFloor
 		b.confirmationEpoch++
 		if b.assignment.localEndpoint != a.localEndpoint || b.assignment.peerEndpoint != a.peerEndpoint {
 			b.receiveConfirmed = false
@@ -392,7 +394,7 @@ func (b *candidateBind) send(packets [][]byte, endpoint awgconn.Endpoint, guard 
 	confirmed, epoch := b.confirmedTrafficLocked(), b.confirmationEpoch
 	var changed <-chan struct{}
 	if confirmed {
-		_, changed = b.assignment.lease.SourceSignal()
+		changed = b.assignment.lease.PeerSignal(b.assignment.peer.ID)
 	}
 	b.mu.Unlock()
 	if confirmed {

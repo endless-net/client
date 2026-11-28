@@ -37,12 +37,12 @@ type Lease struct {
 	paused                         bool
 	operation                      *OperationBudget
 	continuingApply                *state.MapCursor
-	previousCursor                 *state.MapCursor
-	previousDeadline               time.Duration
-	previousExpires                time.Time
+	prior                          map[state.MapCursor]pathDeadline
 	sourceEpoch                    uint64
 	sourceBlocked                  bool
 	sourceChanged                  chan struct{}
+	observed                       state.MapCursor
+	peerPaths                      map[string]peerPathLease
 }
 
 func (*Lease) String() string   { return "[private connectivity lease]" }
@@ -140,9 +140,19 @@ func (l *Lease) Confirm(m Map) error {
 		l.online = false
 		return ErrExpired
 	}
-	l.previousCursor = nil
+	l.observePeers(m)
 	if l.continuingApply != nil && *l.continuingApply == cursor && l.canContinue(m) {
-		l.previousCursor, l.previousDeadline, l.previousExpires = l.cursor, l.deadline, l.expires
+		if l.prior == nil {
+			l.prior = make(map[state.MapCursor]pathDeadline)
+		}
+		for prior, d := range l.prior {
+			if !d.current(now) {
+				delete(l.prior, prior)
+			}
+		}
+		l.prior[*l.cursor] = pathDeadline{l.deadline, l.expires}
+	} else {
+		clear(l.prior)
 	}
 	l.continuingApply = nil
 	l.cursor = &cursor
@@ -172,8 +182,7 @@ func (l *Lease) Revoke() {
 func (l *Lease) PausePackets(paused bool) {
 	l.mu.Lock()
 	if l.paused != paused {
-		close(l.sourceChanged)
-		l.sourceChanged = make(chan struct{})
+		l.signalSourceChange()
 	}
 	l.paused = paused
 	l.mu.Unlock()
@@ -194,6 +203,7 @@ func (l *Lease) canContinue(m Map) bool {
 func (l *Lease) MapEpoch(m Map) uint64 {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.observePeers(m)
 	if l.canContinue(m) {
 		return l.sourceEpoch
 	}
@@ -203,6 +213,7 @@ func (l *Lease) MapEpoch(m Map) uint64 {
 func (l *Lease) PauseForApply(m Map) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.observePeers(m)
 	if l.canContinue(m) {
 		cursor := m.Cursor()
 		l.continuingApply = &cursor
@@ -211,14 +222,13 @@ func (l *Lease) PauseForApply(m Map) {
 	l.continuingApply = nil
 	if !l.paused {
 		l.paused = true
-		close(l.sourceChanged)
-		l.sourceChanged = make(chan struct{})
+		l.signalSourceChange()
 	}
 }
 
 func (l *Lease) blockSource() uint64 {
 	l.continuingApply = nil
-	l.previousCursor = nil
+	clear(l.prior)
 	if l.sourceEpoch == ^uint64(0) {
 		l.fault = true
 		l.active = false
@@ -227,8 +237,7 @@ func (l *Lease) blockSource() uint64 {
 	}
 	l.sourceBlocked = true
 	l.online = false
-	close(l.sourceChanged)
-	l.sourceChanged = make(chan struct{})
+	l.signalSourceChange()
 	return l.sourceEpoch
 }
 func (l *Lease) SourceSignal() (uint64, <-chan struct{}) {
@@ -252,8 +261,7 @@ func (l *Lease) EndSourceTransition(epoch uint64) error {
 		return nil
 	}
 	l.sourceBlocked = false
-	close(l.sourceChanged)
-	l.sourceChanged = make(chan struct{})
+	l.signalSourceChange()
 	return nil
 }
 
@@ -311,8 +319,8 @@ func (l *Lease) MatchesMap(m Map) bool {
 	return l.cursor != nil && l.profileID == m.profileID && l.generation == m.generation && *l.cursor == m.Cursor()
 }
 
-// AllowsPathMap retains a previously established path only across an
-// equivalent renewal and only for its original wall and uptime bounds.
+// AllowsPathMap checks shared authority until the original receipt deadline.
+// A peer operation must also pass its individual grant fence.
 func (l *Lease) AllowsPathMap(m Map) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -327,11 +335,12 @@ func (l *Lease) matchesMap(m Map) bool {
 	if *l.cursor == cursor {
 		return true
 	}
-	if l.previousCursor == nil || *l.previousCursor != cursor {
+	d, ok := l.prior[cursor]
+	if !ok {
 		return false
 	}
 	now, err := l.sample()
-	return err == nil && now.UpperUptime < l.previousDeadline && now.Wall.Before(l.previousExpires)
+	return err == nil && d.current(now)
 }
 
 // WindowCurrent checks an interval carried by the current map. The opening

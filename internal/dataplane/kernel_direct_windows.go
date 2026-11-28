@@ -45,7 +45,7 @@ func prepareWindowsDirect(ctx context.Context, cfg directCipherConfig, channel *
 func (e *windowsDirectEngine) startProbe(a candidateAssignment) error {
 	channel, port, device := e.channel, e.port, e.device
 	ctx := channel.bind.ctx
-	_, changed := a.lease.SourceSignal()
+	changed := a.lease.PeerSignal(a.peer.ID)
 	if !a.sameChannel(device.assignment) || a.lease != device.assignment.lease ||
 		!canFinishPreparation(ctx, channel.clock, a, changed) {
 		return ErrNoAuthority

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net"
 	"net/netip"
-	"reflect"
 	"slices"
 	"sync"
 
@@ -152,7 +151,7 @@ func (m *relayMux) newBind(parent context.Context, value connectivity.Map, lease
 		return nil, ErrConfiguration
 	}
 	ctx, cancel := context.WithCancel(parent)
-	b := &relayPeerBind{mux: m, ctx: ctx, cancel: cancel, lease: lease, mapValue: value, revisionFloor: 1, scopeEpoch: 1, peer: selected, rules: rules, transit: transit, prefixes: prefixes, endpoint: endpoint, local: snapshot.Node, account: snapshot.Network.AccountID}
+	b := &relayPeerBind{mux: m, ctx: ctx, cancel: cancel, lease: lease, mapValue: value, revisionFloor: 1, controlRevision: value.Cursor().Revision.Network, scopeEpoch: 1, peer: selected, rules: rules, transit: transit, prefixes: prefixes, endpoint: endpoint, local: snapshot.Node, account: snapshot.Network.AccountID}
 	m.mu.Lock()
 	if m.closed || len(m.peers) >= m.maxPeers || m.peers[peerID] != nil {
 		m.mu.Unlock()
@@ -207,23 +206,24 @@ func (rules resourcePacketRules) forPeer(peerID string) []netip.Prefix {
 }
 
 type relayPeerBind struct {
-	transit       routerPacketRules
-	rules         resourcePacketRules
-	prefixes      []netip.Prefix
-	mu            sync.Mutex
-	mux           *relayMux
-	ctx           context.Context
-	cancel        context.CancelFunc
-	lease         *connectivity.Lease
-	mapValue      connectivity.Map
-	local         coordinator.Node
-	account       string
-	peer          coordinator.Peer
-	endpoint      netip.AddrPort
-	queue         *relayPeerQueue
-	closed        bool
-	revisionFloor uint64
-	scopeEpoch    uint64
+	transit         routerPacketRules
+	rules           resourcePacketRules
+	prefixes        []netip.Prefix
+	mu              sync.Mutex
+	mux             *relayMux
+	ctx             context.Context
+	cancel          context.CancelFunc
+	lease           *connectivity.Lease
+	mapValue        connectivity.Map
+	local           coordinator.Node
+	account         string
+	peer            coordinator.Peer
+	endpoint        netip.AddrPort
+	queue           *relayPeerQueue
+	closed          bool
+	revisionFloor   uint64
+	controlRevision uint64
+	scopeEpoch      uint64
 }
 
 func (*relayPeerBind) BatchSize() int { return 1 }
@@ -235,9 +235,9 @@ func (*relayPeerBind) SetMark(mark uint32) error {
 }
 func (b *relayPeerBind) permissions() connectivity.Permission {
 	b.mu.Lock()
-	lease, m, closed := b.lease, b.mapValue, b.closed
+	lease, m, peer, closed := b.lease, b.mapValue, b.peer.ID, b.closed
 	b.mu.Unlock()
-	if closed || b.ctx.Err() != nil || !lease.AllowsPathMap(m) {
+	if closed || b.ctx.Err() != nil || !lease.AllowsPeerPath(m, peer) {
 		return connectivity.Permission{}
 	}
 	return lease.Permissions()
@@ -263,7 +263,7 @@ func (b *relayPeerBind) update(value connectivity.Map) error {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.closed || snapshot.Network.AccountID != b.account || snapshot.Network.ID != b.mux.transport.network || snapshot.Node.ID != b.local.ID || snapshot.Node.PublicKey != b.local.PublicKey || snapshot.Node.AssignedIP != b.local.AssignedIP {
+	if b.closed || !b.lease.PeerBindingCurrent(b.mapValue.Cursor(), b.peer.ID) || snapshot.Network.AccountID != b.account || snapshot.Network.ID != b.mux.transport.network || snapshot.Node.ID != b.local.ID || snapshot.Node.PublicKey != b.local.PublicKey || snapshot.Node.AssignedIP != b.local.AssignedIP {
 		return ErrNoAuthority
 	}
 	prefixes := rules.forPeer(b.peer.ID)
@@ -281,8 +281,12 @@ func (b *relayPeerBind) update(value connectivity.Map) error {
 				return ErrConfiguration
 			}
 			// Primary Direct endpoint changes do not affect this virtual Relay channel.
-			if snapshot.Node.Status != b.local.Status || snapshot.Node.ApprovalState != b.local.ApprovalState || peer.Status != b.peer.Status || peer.ACLRestricted != b.peer.ACLRestricted || !reflect.DeepEqual(peer.ACLGrants, b.peer.ACLGrants) || !reflect.DeepEqual(peer.IngressACLGrants, b.peer.IngressACLGrants) {
+			if !b.lease.PeerScopeCurrent(b.mapValue, b.peer.ID) {
+				b.controlRevision = value.Cursor().Revision.Network
+			}
+			if !b.lease.PeerAccessCurrent(b.mapValue.Cursor(), b.peer.ID) || snapshot.Node.Status != b.local.Status || snapshot.Node.ApprovalState != b.local.ApprovalState {
 				b.revisionFloor = value.Cursor().Revision.Network
+				b.controlRevision = b.revisionFloor
 				b.scopeEpoch++
 			}
 			b.transit = transit

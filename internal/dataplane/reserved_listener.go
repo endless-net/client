@@ -54,7 +54,7 @@ func (p *supervisedRelay) hasCandidate(id string) bool {
 
 func (g *transportSupervisor) authorizedOffers(peer coordinator.Peer, now time.Time) []coordinator.TransportProfileOffer {
 	plan := peer.Transport
-	if plan == nil || !pairGranted(peer) || !g.lease.WindowCurrent(g.current, plan.IssuedAt, plan.ExpiresAt, now) {
+	if plan == nil || !pairGranted(peer) || !g.lease.AllowsPeerPath(g.current, peer.ID) || !g.lease.WindowCurrent(g.current, plan.IssuedAt, plan.ExpiresAt, now) {
 		return nil
 	}
 	return plan.Profiles

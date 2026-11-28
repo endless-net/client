@@ -199,8 +199,27 @@ func wiredSessionFixtureAt(t *testing.T, now time.Time) (*WindowsSession, *state
 	}
 	s.makeBind = func() conn.Bind { return &inertBind{} }
 	ip.afterCreate = func() {
-		if guards.commits == 0 || len(guards.live) == 0 || s.lease.Permissions().ExistingFlows {
-			t.Fatal("native IP reached Windows before guards or while packets enabled")
+		if guards.commits == 0 || len(guards.live) == 0 {
+			t.Fatal("native IP reached Windows before guards")
+		}
+		if s.lease.Permissions().ExistingFlows {
+			if s.current.Cursor().PayloadHash == "" {
+				t.Fatal("traffic enabled during initial native setup")
+			}
+			destination := ip.forward[len(ip.forward)-1].DestinationPrefix.Prefix()
+			if destination.Bits() == 32 {
+				for _, layer := range []wf.LayerID{wf.LayerInboundIPPacketV4, wf.LayerOutboundIPPacketV4} {
+					protected := false
+					for id, rule := range s.filters.guards.rules {
+						if guards.live[id] != 0 && rule.Layer == layer && rule.Action == wf.ActionBlock && len(rule.Conditions) == 1 && rule.Conditions[0].Field == wf.FieldIPRemoteAddress && rule.Conditions[0].Value == destination.Addr() {
+							protected = true
+						}
+					}
+					if !protected {
+						t.Fatal("new peer route reached Windows before its packet guard")
+					}
+				}
+			}
 		}
 	}
 	tunnel.afterClose = func() { tunAPI.rows = nil; ip.gone = true; ip.addrs = nil; ip.forward = nil }

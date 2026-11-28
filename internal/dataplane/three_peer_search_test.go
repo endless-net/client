@@ -98,7 +98,7 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 		} else {
 			f.withRelay(t)
 		}
-		config := supervisorConfig{probeInterval: 500 * time.Millisecond, retry: time.Second, mtu: 576, maxPeers: 2}
+		config := supervisorConfig{probeInterval: 500 * time.Millisecond, retry: time.Second, mtu: 576, maxPeers: 3}
 		if i == 0 && links.setupHub != nil {
 			hostRoute = links.setupHub(t, f, &config)
 		}
@@ -112,7 +112,7 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 		case 2:
 			backend = thirdBackend
 		}
-		budget, err := backend.makeBudget(2)
+		budget, err := backend.makeBudget(3)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -120,7 +120,7 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 		if err != nil {
 			t.Fatal(err)
 		}
-		primary, err := NewEngine(wireGuardPort{packets.primary}, &inertBind{}, 2, 51820, f.lease)
+		primary, err := NewEngine(wireGuardPort{packets.primary}, &inertBind{}, 3, 51820, f.lease)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -147,6 +147,7 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 		t.Cleanup(g.Close)
 		nodes[id] = &node{g, packets, native, frames, inject}
 	}
+	var relayHandshakes atomic.Uint64
 	for id, n := range nodes {
 		go func() {
 			for {
@@ -154,6 +155,9 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 				case <-t.Context().Done():
 					return
 				case frame := <-n.frames:
+					if ((id == "node" && frame.PeerID == "peer") || (id == "peer" && frame.PeerID == "node")) && wireGuardHandshakePacket(frame.Payload) {
+						relayHandshakes.Add(1)
+					}
 					if peer := nodes[frame.PeerID]; peer != nil {
 						peer.inject(id, frame.Payload)
 					}
@@ -211,11 +215,84 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 			}
 		}
 	}
+	// Exercise each observable phase of native apply. Leave the prior signed
+	// map installed while transferring packets, then let each owner adopt the
+	// new map independently, as the production worker and supervisor do.
+	checkChurn := func(path peerRouteKind) {
+		t.Helper()
+		f := fixtures[0]
+		key, err := ecdh.X25519().NewPrivateKey(bytes.Repeat([]byte{59}, 32))
+		if err != nil {
+			t.Fatal(err)
+		}
+		observer := f.snapshot.Peers[0]
+		observer.ID, observer.PublicKey, observer.Endpoint, observer.Transport = "observer", base64.StdEncoding.EncodeToString(key.PublicKey().Bytes()), "192.0.2.77:51820", nil
+		observer.AllowedIPs = []string{"100.70.0.4/32"}
+		observer.ACLGrants = []coordinator.ACLGrant{{DestinationCIDRs: observer.AllowedIPs, AllowedPorts: observer.ACLGrants[0].AllowedPorts}}
+		handshakes := relayHandshakes.Load
+		if path == peerRouteDirect {
+			handshakes = links.handshakes
+		}
+		before := handshakes()
+		marker := byte(90)
+		probe := func() {
+			t.Helper()
+			if a.supervisor.outputChoices()["peer"] != path {
+				t.Fatalf("packet %d: after revision %d expected path %v, observed %v", marker, f.verified.Cursor().Revision.Network, path, a.supervisor.outputChoices()["peer"])
+			}
+			exchange(b, "100.70.0.2", marker)
+			marker += 2
+		}
+		for step := 0; step < 3; step++ {
+			switch step {
+			case 0:
+				f.snapshot.Peers = append(f.snapshot.Peers, observer)
+			case 1:
+				f.snapshot.Peers[2].Endpoint = "192.0.2.78:51820"
+				f.snapshot.Peers[2].EndpointGeneration++
+			case 2:
+				f.snapshot.Peers = f.snapshot.Peers[:2]
+			}
+			old := f.verified.Cursor()
+			f.snapshot.Revision.Network++
+			f.snapshot.Network.Revision++
+			f.clock.advance(time.Millisecond, time.Millisecond)
+			f.verify(t, &old)
+			epoch := f.lease.MapEpoch(f.verified)
+			probe()
+			f.lease.PauseForApply(f.verified)
+			if err := f.lease.Confirm(f.verified); err != nil {
+				t.Fatal(err)
+			}
+			probe()
+			if err := a.packets.Update(f.verified); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.supervisor.primary.Apply(t.Context(), f.verified, f.profile.Keys.WireGuardPrivate); err != nil {
+				t.Fatal(err)
+			}
+			a.supervisor.Update(f.verified)
+			if err := f.lease.EndSourceTransition(epoch); err != nil {
+				t.Fatal(err)
+			}
+			f.lease.PausePackets(false)
+			wait(func() bool {
+				a.supervisor.mu.Lock()
+				defer a.supervisor.mu.Unlock()
+				return a.supervisor.statusCursor.Cursor() == f.verified.Cursor()
+			})
+			probe()
+		}
+		if after := handshakes(); after != before {
+			t.Fatalf("path %v exchanged %d handshake messages during map application", path, after-before)
+		}
+	}
 	var nativeApp *net.UDPConn
 	if links.setupHub != nil {
 		nativeApp = sendNativeRoutedUDP(t, b.tun)
 	} else {
 		exchange(b, "100.70.0.2", 10)
+		checkChurn(peerRouteDirect)
 	}
 	exchange(c, "100.70.0.3", 20)
 	links.disconnectFirst()
@@ -237,6 +314,9 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 		hostRoute.verifyFallback(nativeApp)
 	}
 	exchange(b, "100.70.0.2", 40)
+	if links.setupHub == nil {
+		checkChurn(peerRouteRelay)
+	}
 	recipients := fixtures[:2]
 	if links.setupHub != nil {
 		recipients = fixtures
@@ -250,7 +330,8 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 		f.snapshot.Revision.Network++
 		f.clock.advance(time.Millisecond, time.Millisecond)
 		f.verify(t, &previous)
-		f.lease.PausePackets(true)
+		epoch := f.lease.MapEpoch(f.verified)
+		f.lease.PauseForApply(f.verified)
 		if err := f.lease.Confirm(f.verified); err != nil {
 			t.Fatal(err)
 		}
@@ -262,6 +343,9 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 			hostRoute.refresh(f.verified)
 		}
 		n.supervisor.Update(f.verified)
+		if err := f.lease.EndSourceTransition(epoch); err != nil {
+			t.Fatal(err)
+		}
 		f.lease.PausePackets(false)
 	}
 	wait(func() bool {
@@ -280,17 +364,23 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 type threePeerLinks struct {
 	setupHub        func(*testing.T, *candidateFixture, *supervisorConfig) searchRouteFixture
 	listen          func(netip.AddrPort, string) (candidateSocket, error)
+	handshakes      func() uint64
 	disconnectFirst func()
 }
 
 func memoryThreePeerLinks() threePeerLinks {
 	var sockets sync.Map
 	var dropFirst atomic.Bool
+	var wgHandshakes atomic.Uint64
 	return threePeerLinks{
+		handshakes:      wgHandshakes.Load,
 		disconnectFirst: func() { dropFirst.Store(true) },
 		listen: func(addr netip.AddrPort, profile string) (candidateSocket, error) {
 			socket := &searchSocket{newCandidateSocketFixture(), addr}
 			socket.forward = func(p candidateDatagram) error {
+				if profile != "obfuscated" && wireGuardHandshakePacket(p.raw) {
+					wgHandshakes.Add(1)
+				}
 				if dropFirst.Load() && profile != "obfuscated" {
 					return nil
 				}
