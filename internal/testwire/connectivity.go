@@ -69,7 +69,7 @@ func EndpointRequest(raw []byte) (contract.UpdateNodeEndpointRequest, error) {
 	if m.Ttl.CheckValid() != nil {
 		return contract.UpdateNodeEndpointRequest{}, errors.New("missing endpoint TTL")
 	}
-	r := contract.UpdateNodeEndpointRequest{Endpoint: m.Endpoint, Generation: m.Generation, Candidates: m.Candidates,
+	r := contract.UpdateNodeEndpointRequest{Endpoint: m.Endpoint, Generation: m.Generation, Candidates: m.Candidates, AdvertisedCIDRs: m.AdvertisedCidrs,
 		TTL: m.Ttl.AsDuration().String(), Status: m.Status, ClientVersion: m.ClientVersion}
 	if a := m.Transport; a != nil {
 		r.Transport = &contract.TransportAdvertisement{IntentGeneration: a.IntentGeneration, Endpoints: []contract.TransportEndpoint{}}

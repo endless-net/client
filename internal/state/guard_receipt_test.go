@@ -100,3 +100,63 @@ func TestGuardWriteAheadRejectsForeignOrChangedReceipt(t *testing.T) {
 		t.Fatal("late receipt authorized disconnected intent", err)
 	}
 }
+
+func TestResourceGuardJournalAcceptsOnlyExactOutboundIPv4Prefix(t *testing.T) {
+	for _, tc := range []struct {
+		prefix                string
+		inbound, local, valid bool
+	}{
+		{"10.4.0.0/16", false, false, true}, {"10.4.0.1/32", false, false, true},
+		{"10.4.0.1/16", false, false, false}, {"0.0.0.0/0", false, false, false},
+		{"10.4.0.0/16", true, false, false}, {"10.4.0.0/16", false, true, false},
+		{"2001:db8::/64", false, false, false},
+	} {
+		s, b, r := guardReceiptFixture(t)
+		r.Key = "9b33d802-2846-471f-b7d7-9c451f516787"
+		r.GuardAddress, r.GuardInbound, r.GuardLocal, r.ID = tc.prefix, tc.inbound, tc.local, 0
+		err := connectionChange(s, func(c *ConnectionState) { c.Journal.Filters = append(c.Journal.Filters, r) })
+		if !tc.valid {
+			if !errors.Is(err, ErrCorrupt) {
+				t.Fatal(tc, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(tc, err)
+		}
+		r.ID = 89
+		if err = s.RecordPreparedGuardIDs(t.Context(), profileID, journalID, 1, []FilterRecord{r}); err != nil {
+			t.Fatal(err)
+		}
+		reopened, err := New(b, s.protector, installation, 1<<20, 2<<20)
+		if err != nil || storedConnection(t, reopened).Journal.Filters[1] != r {
+			t.Fatal("prefix or allocated ID changed after restart", tc, err)
+		}
+	}
+}
+
+func TestExitGuardJournalKeepsOverlayThroughRestart(t *testing.T) {
+	s, backend, record := guardReceiptFixture(t)
+	record.Key = "9b33d802-2846-471f-b7d7-9c451f516787"
+	record.GuardAddress, record.GuardInbound, record.ID = "8.0.0.0/7", false, 0
+	write := func(overlay string) error {
+		record.ExitOverlay = overlay
+		return connectionChange(s, func(c *ConnectionState) { c.Journal.Filters = append(c.Journal.Filters, record) })
+	}
+	for _, invalid := range []string{"8.0.0.0/8", "0.0.0.0/0", "100.64.0.1/24", "::1/128"} {
+		if err := write(invalid); !errors.Is(err, ErrCorrupt) {
+			t.Fatal(invalid, err)
+		}
+	}
+	if err := write("100.64.0.0/24"); err != nil {
+		t.Fatal(err)
+	}
+	record.ID = 89
+	if err := s.RecordPreparedGuardIDs(t.Context(), profileID, journalID, 1, []FilterRecord{record}); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := New(backend, s.protector, installation, 1<<20, 2<<20)
+	if err != nil || storedConnection(t, reopened).Journal.Filters[1] != record {
+		t.Fatal("lost exit descriptor", err)
+	}
+}

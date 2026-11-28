@@ -16,8 +16,12 @@ var linuxEffectsName = regexp.MustCompile(`^en[a-f0-9]{12}$`)
 // LinuxNetworkReceipt describes the one native effects owner of this
 // installation. It is written before creating an nftables table.
 type LinuxNetworkReceipt struct {
-	Table string
-	Owner string
+	Table      string
+	Owner      string
+	ExitRule   bool   `json:"exit_rule,omitempty"`
+	DNSIndex   int    `json:"dns_index,omitempty"`
+	DNSOldPort uint16 `json:"dns_old_port,omitempty"`
+	DNSNewPort uint16 `json:"dns_new_port,omitempty"`
 }
 
 type LinuxNetworkLedger struct{ backend LinuxBackend }
@@ -27,7 +31,13 @@ func NewLinuxNetworkLedger(directory string) LinuxNetworkLedger {
 }
 
 func (r LinuxNetworkReceipt) valid() bool {
-	return linuxEffectsName.MatchString(r.Table) && validID(r.Owner)
+	if !linuxEffectsName.MatchString(r.Table) || !validID(r.Owner) {
+		return false
+	}
+	if r.DNSIndex == 0 {
+		return r.DNSOldPort == 0 && r.DNSNewPort == 0
+	}
+	return r.DNSIndex > 0 && r.DNSNewPort != 0
 }
 
 func (l LinuxNetworkLedger) Read(ctx context.Context) (LinuxNetworkReceipt, error) {
@@ -42,7 +52,7 @@ func (l LinuxNetworkLedger) Read(ctx context.Context) (LinuxNetworkReceipt, erro
 
 func readLinuxNetworkReceipt(slot linuxSlot) (LinuxNetworkReceipt, error) {
 	var result LinuxNetworkReceipt
-	raw, err := slot.read(linuxNetworkFile, 128)
+	raw, err := slot.read(linuxNetworkFile, 256)
 	if err != nil {
 		return result, err
 	}
@@ -68,6 +78,31 @@ func (l LinuxNetworkLedger) Prepare(ctx context.Context, receipt LinuxNetworkRec
 			return err
 		}
 		raw, err := json.Marshal(receipt)
+		if err != nil {
+			return err
+		}
+		return root.replace(linuxNetworkFile, raw)
+	})
+}
+
+// Replace records a pending change to the current owner's native effects.
+func (l LinuxNetworkLedger) Replace(ctx context.Context, prior, next LinuxNetworkReceipt) error {
+	if !prior.valid() || !next.valid() || prior.Table != next.Table || prior.Owner != next.Owner {
+		return ErrCorrupt
+	}
+	return l.backend.Exclusive(ctx, func(slot Slot) error {
+		root := slot.(linuxSlot)
+		found, err := readLinuxNetworkReceipt(root)
+		if err != nil {
+			return err
+		}
+		if found == next {
+			return nil
+		}
+		if found != prior {
+			return ErrStale
+		}
+		raw, err := json.Marshal(next)
 		if err != nil {
 			return err
 		}

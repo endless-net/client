@@ -40,7 +40,7 @@ func (s *Store) RecordAdapterCreation(ctx context.Context, profileID string, gen
 			if old == record {
 				return nil
 			}
-			if old.Phase != EffectPrepared || old.ID != record.ID || old.Name != record.Name || old.LUID != 0 || old.Fingerprint != "" || record.LUID == 0 || !fingerprint(record.Fingerprint) || len(j.Addresses)+len(j.Routes)+len(j.Filters) != 0 {
+			if old.Phase != EffectPrepared || old.ID != record.ID || old.Name != record.Name || old.LUID != 0 || old.Fingerprint != "" || record.LUID == 0 || !fingerprint(record.Fingerprint) || len(j.Addresses)+len(j.Routes)+len(j.Filters)+len(j.DNSRules) != 0 {
 				return ErrCorrupt
 			}
 			j.Adapter = &record

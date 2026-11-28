@@ -55,7 +55,7 @@ type mapFixture struct {
 	value                   coordinator.NetworkMapSnapshot
 }
 
-func newMapFixture(t *testing.T) *mapFixture {
+func newMapFixture(t *testing.T, extraScopes ...string) *mapFixture {
 	t.Helper()
 	f := &mapFixture{now: time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)}
 	bundle := func(seed byte) (signing.BootstrapTrustBundle, ed25519.PrivateKey) {
@@ -96,11 +96,12 @@ func newMapFixture(t *testing.T) *mapFixture {
 	a.NetworkID = "network"
 	a.NodeID = "node"
 	a.CredentialEnds = f.now.Add(time.Hour)
-	payload, err := coordinator.NodeCredentialSigningPayload(nodeBundle.ActiveKeyID, a.NetworkID, a.NodeID, []string{"node:register", "node:map", "node:endpoint"}, a.CredentialEnds)
+	scopes := append([]string{"node:register", "node:map", "node:endpoint"}, extraScopes...)
+	payload, err := coordinator.NodeCredentialSigningPayload(nodeBundle.ActiveKeyID, a.NetworkID, a.NodeID, scopes, a.CredentialEnds)
 	if err != nil {
 		t.Fatal(err)
 	}
-	claims := coordinator.NodeCredentialClaims{Version: 3, Algorithm: "ed25519-node-credential-v3", KeyID: nodeBundle.ActiveKeyID, NetworkID: a.NetworkID, NodeID: a.NodeID, Scopes: []string{"node:register", "node:map", "node:endpoint"}, ExpiresAt: a.CredentialEnds, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(nodePrivate, payload))}
+	claims := coordinator.NodeCredentialClaims{Version: 3, Algorithm: "ed25519-node-credential-v3", KeyID: nodeBundle.ActiveKeyID, NetworkID: a.NetworkID, NodeID: a.NodeID, Scopes: scopes, ExpiresAt: a.CredentialEnds, Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(nodePrivate, payload))}
 	raw, err = json.Marshal(claims)
 	if err != nil {
 		t.Fatal(err)
@@ -487,4 +488,30 @@ func TestInvalidNodeCredentialIsNotReportedAsInvalidMap(t *testing.T) {
 	if _, err := v.currentTrust(t.Context(), "node:map"); !errors.Is(err, ErrCredentialInvalid) {
 		t.Fatalf("invalid credential was misclassified: %v", err)
 	}
+}
+
+func TestSignedDirectoryRequiresMatchingOutboundGrant(t *testing.T) {
+	f := newMapFixture(t)
+	f.config.ResolverDNS = true
+	v, err := NewVerifier(f.profile, f.config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := f.value.Peers[0]
+	f.value.Network.Services = []coordinator.AdvertisedService{{ID: "docs", Name: "Docs", DNSName: "docs.internal", Ports: []coordinator.ServicePort{{Protocol: "tcp", Port: 443}}, Hosts: []coordinator.ServiceHost{{NodeID: p.ID, PublicKey: p.PublicKey}}}}
+	check := func(valid bool) {
+		t.Helper()
+		raw := f.sign(t, nil, f.now, f.now.Add(time.Minute))
+		_, err := v.Verify(t.Context(), raw, nil)
+		if valid && err != nil || !valid && !errors.Is(err, ErrMap) {
+			t.Fatal("directory verification", valid, err)
+		}
+	}
+	check(true)
+	s := &f.value.Network.Services[0]
+	s.Ports[0] = coordinator.ServicePort{Protocol: "udp", Port: 53}
+	check(false)
+	s.Ports[0] = coordinator.ServicePort{Protocol: "tcp", Port: 443}
+	s.Hosts[0].PublicKey = f.value.Node.PublicKey
+	check(false)
 }

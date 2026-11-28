@@ -45,6 +45,12 @@ var (
 )
 
 type VerifierConfig struct {
+	IndependentGrantExpiry                           bool
+	UnavailableResourceGuards                        bool
+	IPv4ResourceRoutes                               bool
+	IPv4ResourceForwarding                           bool
+	IPv4ExitRouting                                  bool
+	ResolverDNS                                      bool
 	Announcements                                    control.Announcements
 	Now                                              func() time.Time
 	MaxBytes, MaxPeers, MaxRules, MaxCredentialBytes int
@@ -178,13 +184,14 @@ func (v *Verifier) currentTrust(parent context.Context, scope string) (mapTrust,
 // Map is immutable verified input. Its cursor may be durably recorded before
 // application, but it is never restored as authority after a daemon restart.
 type Map struct {
-	snapshot   coordinator.NetworkMapSnapshot
-	profileID  string
-	anchorID   string
-	generation uint64
-	denied     bool
-	verified   ClockSample
-	timeProof  mapTimeAuthority
+	servicePeers map[coordinator.ServiceHost]servicePeerAuthority
+	snapshot     coordinator.NetworkMapSnapshot
+	profileID    string
+	anchorID     string
+	generation   uint64
+	denied       bool
+	verified     ClockSample
+	timeProof    mapTimeAuthority
 }
 
 func (Map) String() string   { return "[verified connectivity map]" }
@@ -385,7 +392,19 @@ func (v *Verifier) verifyEvent(parent context.Context, event coordinator.MapStre
 	if parent.Err() != nil {
 		return empty, parent.Err()
 	}
-	return Map{snapshot: *value, profileID: v.profileID, anchorID: v.anchorID, generation: v.generation, denied: denied, verified: sample, timeProof: timeProof}, nil
+	if d := MapDNSConfig(*value); d != nil {
+		if _, err := CompileMapDNS(*value, nil); err != nil {
+			return empty, err
+		}
+		if !v.config.ResolverDNS || d.MagicDNSEnabled || d.HTTPSCertsEnabled || d.Suffix != "" {
+			return empty, ErrDNSUnsupported
+		}
+	}
+	var servicePeers map[coordinator.ServiceHost]servicePeerAuthority
+	if !denied && len(value.Network.Services) > 0 {
+		servicePeers = servicePeerAuthorities(*value)
+	}
+	return Map{servicePeers: servicePeers, snapshot: *value, profileID: v.profileID, anchorID: v.anchorID, generation: v.generation, denied: denied, verified: sample, timeProof: timeProof}, nil
 }
 
 func sameSignature(a, b *coordinator.MapSignature) bool {
@@ -413,8 +432,20 @@ func wireGuardKey(value string) bool {
 
 func (v *Verifier) profile(value coordinator.NetworkMapSnapshot, now time.Time, denied bool) error {
 	n := value.Network
-	if len(value.STUNEndpoints) != 0 || n.IPv6CIDR != "" || len(n.DNS) != 0 || n.DNSConfig != nil || n.ClientPolicy != nil || len(n.Applications)+len(n.Services)+len(n.SharePeerGrants) != 0 || value.Node.AssignedIPv6 != "" || len(value.Node.AdvertisedIPs) != 0 || len(value.Peers) > v.config.MaxPeers {
+	if len(value.STUNEndpoints) != 0 || n.IPv6CIDR != "" || len(n.DNS) != 0 || n.ClientPolicy != nil || len(n.SharePeerGrants) != 0 || value.Node.AssignedIPv6 != "" || len(value.Node.AdvertisedIPs) != 0 || len(value.Peers) > v.config.MaxPeers {
 		return ErrMap
+	}
+	if len(n.Applications) > 0 {
+		if denied || !v.config.UnavailableResourceGuards {
+			return ErrMap
+		}
+		if v.config.IPv4ResourceRoutes {
+			if err := validateIPv4ResourceRoutes(value, v.config.MaxRules, v.config.IPv4ResourceForwarding, v.config.IPv4ExitRouting); err != nil {
+				return err
+			}
+		} else if _, err := UnavailableResourcePrefixes(value, v.config.MaxRules); err != nil {
+			return err
+		}
 	}
 	prefix, err := netip.ParsePrefix(n.CIDR)
 	local, ok := address(value.Node.AssignedIP)
@@ -422,7 +453,7 @@ func (v *Verifier) profile(value coordinator.NetworkMapSnapshot, now time.Time, 
 		return ErrMap
 	}
 	if denied {
-		if len(value.Peers) != 0 {
+		if len(value.Peers) != 0 || len(n.Services) != 0 {
 			return ErrMap
 		}
 		return nil
@@ -453,6 +484,12 @@ func (v *Verifier) profile(value coordinator.NetworkMapSnapshot, now time.Time, 
 			destination string
 		}{{peer.ACLGrants, peerAddress.String() + "/32"}, {peer.IngressACLGrants, local.String() + "/32"}} {
 			for _, grant := range direction.grants {
+				if end := grant.ValidUntil; end != nil {
+					if value.MapSignature == nil || !end.After(value.MapSignature.IssuedAt) ||
+						!v.config.IndependentGrantExpiry && value.MapSignature.ExpiresAt.After(*end) {
+						return ErrMap
+					}
+				}
 				if len(grant.DestinationCIDRs) != 1 || grant.DestinationCIDRs[0] != direction.destination || len(grant.AllowedPorts) == 0 {
 					return ErrMap
 				}
@@ -472,6 +509,16 @@ func (v *Verifier) profile(value coordinator.NetworkMapSnapshot, now time.Time, 
 // PersistCursor fences a late verified response against the latest durable
 // intent before native apply. A failed/uncertain commit must not enable traffic.
 func PersistCursor(ctx context.Context, store *state.Store, generation uint64, m Map) error {
+	return persistMapCursor(ctx, store, generation, m, false)
+}
+
+// RecordAppliedMap records a local OS result for diagnostics only. The signed
+// map must still be the current target of this registration and user intent.
+func RecordAppliedMap(ctx context.Context, store *state.Store, generation uint64, m Map) error {
+	return persistMapCursor(ctx, store, generation, m, true)
+}
+
+func persistMapCursor(ctx context.Context, store *state.Store, generation uint64, m Map, applied bool) error {
 	if store == nil || m.snapshot.MapSignature == nil || m.profileID == "" || generation == 0 || generation != m.generation {
 		return ErrConfig
 	}
@@ -485,7 +532,16 @@ func PersistCursor(ctx context.Context, store *state.Store, generation uint64, m
 			return state.ErrStale
 		}
 		cursor := m.Cursor()
-		p.Connection.MapCursor = &cursor
+		if applied {
+			target := p.Connection.MapCursor
+			if value.ActiveProfileID != p.ID || p.Attempt == nil || p.Attempt.NodeID != m.snapshot.Node.ID || p.Attempt.NetworkID != m.snapshot.Network.ID || p.Attempt.AccountID != m.snapshot.Network.AccountID || m.Denied() ||
+				target == nil || target.Revision != cursor.Revision || target.PayloadHash != cursor.PayloadHash || !target.IssuedAt.Equal(cursor.IssuedAt) {
+				return state.ErrStale
+			}
+			p.Connection.LastAppliedMap = &cursor
+		} else {
+			p.Connection.MapCursor = &cursor
+		}
 		value.Profiles[m.profileID] = p
 		return nil
 	})

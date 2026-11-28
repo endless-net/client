@@ -221,13 +221,19 @@ func TestConnectionMutationRejectsRollbackAndUnscopedResources(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, route := range []RouteRecord{
-		{Destination: "0.0.0.0/0", NextHop: "0.0.0.0"}, {Destination: "100.70.0.0/24", NextHop: "0.0.0.0"}, {Destination: "fd00::1/128", NextHop: "0.0.0.0"}, {Destination: "100.70.0.2/32", NextHop: "192.0.2.1"},
+		{Destination: "0.0.0.0/0", NextHop: "0.0.0.0"}, {Destination: "100.70.0.0/24", NextHop: "0.0.0.0"}, {Destination: "100.70.0.7/24", Resource: true, NextHop: "0.0.0.0"}, {Destination: "fd00::1/128", NextHop: "0.0.0.0"}, {Destination: "100.70.0.2/32", NextHop: "192.0.2.1"},
 	} {
 		route.Phase = EffectPrepared
 		if err := connectionChange(s, func(c *ConnectionState) { c.Journal.Routes = []RouteRecord{route} }); !errors.Is(err, ErrCorrupt) {
-			t.Fatal("non-device routing effect accepted", err)
+			t.Fatal("invalid routing effect accepted", err)
 		}
 	}
+	if err := connectionChange(s, func(c *ConnectionState) {
+		c.Journal.Routes = []RouteRecord{{Destination: "10.35.0.0/24", Resource: true, NextHop: "0.0.0.0", EffectStamp: EffectStamp{Phase: EffectPrepared}}}
+	}); err != nil {
+		t.Fatal("canonical on-link resource route rejected", err)
+	}
+
 }
 
 func TestConnectionCountersKeepUint64PrecisionAndExhaustionFailsClosed(t *testing.T) {

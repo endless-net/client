@@ -55,6 +55,32 @@ func leaseFixture(t *testing.T, ttl time.Duration) (*mapFixture, Map, *leaseCloc
 	return f, m, clock, l, cancel
 }
 
+func TestNativeWallDeadlineAccountsForSkewAndElapsedUptime(t *testing.T) {
+	_, m, clock, _, cancel := leaseFixture(t, 30*time.Second)
+	defer cancel()
+	clock.advance(time.Second, 5*time.Second)
+	sample, _ := clock.Sample()
+	check := func(want time.Duration) {
+		t.Helper()
+		got, err := m.WallDeadlineAdvance(sample)
+		if err != nil || got != want {
+			t.Fatalf("deadline advance = %v, %v; want %v", got, err, want)
+		}
+	}
+	check(4 * time.Second)
+	sent := m.verified
+	sent.Uptime -= time.Second
+	sent.UpperUptime -= time.Second
+	m.timeProof = mapTimeAuthority{serverTime: m.verified.Wall.Add(3 * time.Second), sent: sent}
+	check(8 * time.Second)
+	sample.Wall = sample.Wall.Add(time.Minute)
+	check(0)
+	sample.Epoch = "restarted"
+	if _, err := m.WallDeadlineAdvance(sample); !errors.Is(err, ErrClock) {
+		t.Fatal("clock epoch change accepted", err)
+	}
+}
+
 func TestLeaseCurrentMapExposesOnlyAcceptedImmutableResultAndDoesNotGrantTraffic(t *testing.T) {
 	_, m, _, l, cancel := leaseFixture(t, 30*time.Second)
 	defer cancel()

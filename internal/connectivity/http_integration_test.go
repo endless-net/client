@@ -39,8 +39,7 @@ func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T)
 	issued := firstIssued.Add(time.Second)
 	f.value.Node.Status = "revoked"
 	f.value.Peers = []coordinator.Peer{}
-	f.value.Revision.Network++
-	f.value.Network.Revision = f.value.Revision.Network
+	// Billing can suspend membership while Coordinator's network revision stays fixed.
 	last := append(f.sign(t, &cursor, issued, issued.Add(time.Minute)), '\n')
 	firstReceived := make(chan struct{})
 	var keyCredentialLeak atomic.Bool
@@ -139,6 +138,10 @@ func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T)
 		t.Fatalf("bootstrap outage did not remain a retryable control failure: %v", err)
 	}
 	bootstrapUnavailable.Store(false)
+	lease, err := NewLease(ctx, f.config.Clock, f.profile.ID, f.profile.Connection.Generation)
+	if err != nil {
+		t.Fatal(err)
+	}
 	received := 0
 	err = transport.Stream(ctx, v, nil, func(_ context.Context, m Map) error {
 		received++
@@ -146,10 +149,15 @@ func TestPublicTLSMapTransportReceivesBeforeEOFAndThenSignedRevoke(t *testing.T)
 			if m.Denied() || !f.now.Before(firstIssued) {
 				t.Error("first map not delivered while stream open")
 			}
+			if err := lease.Confirm(m); err != nil || !lease.Permit(true) || !lease.Permit(false) {
+				t.Fatalf("opening map did not authorize traffic: %v", err)
+			}
 			f.now = issued
 			close(firstReceived)
 		} else if received != 2 || !m.Denied() {
 			t.Error("signed revoke lost")
+		} else if err := lease.Confirm(m); !errors.Is(err, ErrRevoked) || lease.Permit(true) || lease.Permit(false) {
+			t.Fatalf("membership revocation left traffic authorized: %v", err)
 		}
 		return nil
 	})

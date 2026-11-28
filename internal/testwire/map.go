@@ -104,9 +104,12 @@ func wireServiceHost(h contract.ServiceHost) *wire.MapServiceHost {
 func wireApplication(a contract.Application) *wire.MapApplication {
 	return &wire.MapApplication{
 		Id: a.ID, Name: a.Name, Target: a.Target, TargetType: a.TargetType, DnsEnabled: a.DNSEnabled, PolicyHash: a.PolicyHash,
+		AllowedPorts: mapWireSlice(a.AllowedPorts, func(p contract.ServicePort) *wire.MapServicePort {
+			return &wire.MapServicePort{Protocol: p.Protocol, Port: p.Port}
+		}),
 		Sources: mapWireSlice(a.Sources, wireServiceHost), Connectors: mapWireSlice(a.Connectors, wireServiceHost),
 		Routes: mapWireSlice(a.Routes, func(r contract.ApplicationRoute) *wire.MapApplicationRoute {
-			return &wire.MapApplicationRoute{Connector: wireServiceHost(r.Connector), Cidrs: r.CIDRs, ExpiresAt: timestamppb.New(r.ExpiresAt)}
+			return &wire.MapApplicationRoute{Metric: r.Metric, Masquerade: r.Masquerade, Connector: wireServiceHost(r.Connector), Cidrs: r.CIDRs, ExpiresAt: timestamppb.New(r.ExpiresAt)}
 		}),
 	}
 }
@@ -161,7 +164,7 @@ func wireACLPort(p contract.ACLPort) *wire.MapACLPort {
 }
 
 func wireACLGrant(g contract.ACLGrant) *wire.MapACLGrant {
-	return &wire.MapACLGrant{DestinationCidrs: g.DestinationCIDRs, AllowedPorts: mapWireSlice(g.AllowedPorts, wireACLPort)}
+	return &wire.MapACLGrant{DestinationCidrs: g.DestinationCIDRs, AllowedPorts: mapWireSlice(g.AllowedPorts, wireACLPort), ValidUntil: optionalWireTime(g.ValidUntil)}
 }
 
 func wireTransportProfile(p transport.Profile) *wire.TransportProfile {

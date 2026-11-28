@@ -302,6 +302,23 @@ func (l *Lease) windowCurrent(proof mapTimeAuthority, issued, expires, wall time
 	return err == nil && !proof.serverTime.Before(issued) && upper.Before(expires) && sample.Wall.Before(expires)
 }
 
+// GrantDeadlineCurrent keeps a queued packet bound to the time proof under
+// which it was classified, including across a renewal of the same policy.
+// Packet delivery also checks the current map, lease and route epoch.
+func (l *Lease) GrantDeadlineCurrent(m Map, end time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.active || l.revoked || l.ctx.Err() != nil || m.denied || m.profileID != l.profileID || m.generation != l.generation {
+		return false
+	}
+	sample, err := l.sample()
+	if err != nil {
+		return false
+	}
+	advance, err := m.WallDeadlineAdvance(sample)
+	return err == nil && sample.Wall.Add(advance).Before(end)
+}
+
 // CurrentMap returns only the last immutable verifier result accepted by this
 // intent. It grants no traffic: expiry, revocation and source/native fences
 // still require Permissions. Snapshot remains detached from the sealed result.

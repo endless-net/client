@@ -52,8 +52,17 @@ type AddressRecord struct {
 type RouteRecord struct {
 	Destination, NextHop string
 	Metric               uint32
+	Resource             bool `json:",omitempty"`
 	EffectStamp
 }
+
+// DNSRuleRecord identifies the exact local NRPT key and the expected contents
+// of the entire key. The fingerprint is durable before the registry commit.
+type DNSRuleRecord struct {
+	Key string
+	EffectStamp
+}
+
 type FilterRecord struct {
 	Key string
 	ID  uint64
@@ -61,6 +70,7 @@ type FilterRecord struct {
 	// Only deny effects carry recovery descriptors; no cached permit is
 	// reconstructed as authority after process loss.
 	GuardAddress string `json:",omitempty"`
+	ExitOverlay  string `json:",omitempty"`
 	GuardLocal   bool   `json:",omitempty"`
 	GuardInbound bool   `json:",omitempty"`
 }
@@ -75,6 +85,7 @@ type ResourceJournal struct {
 	Addresses  []AddressRecord
 	Routes     []RouteRecord
 	Filters    []FilterRecord
+	DNSRules   []DNSRuleRecord `json:",omitempty"`
 }
 
 type ConnectionState struct {
@@ -86,6 +97,7 @@ type ConnectionState struct {
 	EndpointGeneration uint64
 	Journal            *ResourceJournal
 	MapCursor          *MapCursor         `json:",omitempty"`
+	LastAppliedMap     *MapCursor         `json:",omitempty"`
 	EndpointRequest    *EndpointRequest   `json:",omitempty"`
 	Request            *ConnectionRequest `json:",omitempty"`
 }
@@ -327,7 +339,7 @@ func validateConnection(profile Profile) error {
 	if !c.Deadline.Equal(c.AcceptedAt.Add(budget)) {
 		return ErrCorrupt
 	}
-	if !validCursor(c.MapCursor) {
+	if !validCursor(c.LastAppliedMap) || !cursorUpdate(c.LastAppliedMap, c.MapCursor) {
 		return ErrCorrupt
 	}
 	if !validEndpointRequest(profile) {
@@ -341,7 +353,7 @@ func validateConnection(profile Profile) error {
 		return ErrCorrupt
 	}
 	if j.Adapter == nil {
-		if len(j.Addresses)+len(j.Routes)+len(j.Filters) != 0 {
+		if len(j.Addresses)+len(j.Routes)+len(j.Filters)+len(j.DNSRules) != 0 {
 			return ErrCorrupt
 		}
 		return nil
@@ -357,7 +369,7 @@ func validateConnection(profile Profile) error {
 		}
 		addresses[address.Prefix] = true
 		if r := address.AutomaticRoute; r != nil {
-			if r.Destination != address.Prefix || r.NextHop != "0.0.0.0" || r.Phase != address.Phase || address.Fingerprint == "" || r.Fingerprint == "" || !stampValid(r.EffectStamp) {
+			if r.Resource || r.Destination != address.Prefix || r.NextHop != "0.0.0.0" || r.Phase != address.Phase || address.Fingerprint == "" || r.Fingerprint == "" || !stampValid(r.EffectStamp) {
 				return ErrCorrupt
 			}
 		}
@@ -369,11 +381,19 @@ func validateConnection(profile Profile) error {
 		}
 	}
 	for _, route := range j.Routes {
-		// 005 is device-only: no default/subnet route or routed gateway.
-		if a.LUID == 0 || !hostPrefix(route.Destination) || route.NextHop != "0.0.0.0" || !stampValid(route.EffectStamp) || routes[route.Destination] {
+		// Managed peer and resource routes are canonical on-link IPv4 prefixes.
+		prefix, err := netip.ParsePrefix(route.Destination)
+		if a.LUID == 0 || err != nil || !route.Resource && prefix.Bits() != 32 || prefix.Bits() <= 0 || !usableIPv4(prefix.Addr()) || prefix.Masked().String() != route.Destination || route.NextHop != "0.0.0.0" || !stampValid(route.EffectStamp) || routes[route.Destination] {
 			return ErrCorrupt
 		}
 		routes[route.Destination] = true
+	}
+	dnsKeys := make(map[string]bool, len(j.DNSRules))
+	for _, rule := range j.DNSRules {
+		if a.LUID == 0 || !validID(rule.Key) || dnsKeys[rule.Key] || !stampValid(rule.EffectStamp) || !fingerprint(rule.Fingerprint) {
+			return ErrCorrupt
+		}
+		dnsKeys[rule.Key] = true
 	}
 	keys, ids := make(map[string]bool, len(j.Filters)), make(map[uint64]bool, len(j.Filters))
 	for _, filter := range j.Filters {
@@ -382,10 +402,19 @@ func validateConnection(profile Profile) error {
 		}
 		if filter.GuardAddress != "" {
 			address, err := netip.ParseAddr(filter.GuardAddress)
-			if err != nil || !usableIPv4(address) || address.String() != filter.GuardAddress || filter.Fingerprint == "" {
+			host := err == nil && usableIPv4(address) && address.String() == filter.GuardAddress
+			prefix, err := netip.ParsePrefix(filter.GuardAddress)
+			resource := err == nil && prefix.Addr().Is4() && prefix.Bits() > 0 && prefix.Masked().String() == filter.GuardAddress && !filter.GuardLocal && !filter.GuardInbound
+			if filter.ExitOverlay != "" {
+				overlay, err := netip.ParsePrefix(filter.ExitOverlay)
+				if !resource || err != nil || !overlay.Addr().Is4() || overlay.Bits() == 0 || overlay.Masked().String() != filter.ExitOverlay || overlay.Overlaps(prefix) {
+					return ErrCorrupt
+				}
+			}
+			if (!host && !resource) || filter.Fingerprint == "" {
 				return ErrCorrupt
 			}
-		} else if filter.GuardLocal || filter.GuardInbound {
+		} else if filter.GuardLocal || filter.GuardInbound || filter.ExitOverlay != "" {
 			return ErrCorrupt
 		}
 		keys[filter.Key] = true
@@ -408,7 +437,7 @@ func connectionUpdate(before, after *ConnectionState) error {
 		if after == nil {
 			return nil
 		}
-		if after.Generation != 1 || after.EndpointGeneration != 0 || after.Journal != nil || after.MapCursor != nil || after.EndpointRequest != nil {
+		if after.Generation != 1 || after.EndpointGeneration != 0 || after.Journal != nil || after.MapCursor != nil || after.LastAppliedMap != nil || after.EndpointRequest != nil {
 			return ErrCorrupt
 		}
 		return nil
@@ -416,7 +445,10 @@ func connectionUpdate(before, after *ConnectionState) error {
 	if after == nil || after.EndpointGeneration < before.EndpointGeneration || after.EndpointGeneration-before.EndpointGeneration > 1 {
 		return ErrCorrupt
 	}
-	if !cursorUpdate(before.MapCursor, after.MapCursor) {
+	if !cursorUpdate(before.LastAppliedMap, after.LastAppliedMap) || !cursorUpdate(before.MapCursor, after.MapCursor) {
+		return ErrCorrupt
+	}
+	if !sameCursor(before.LastAppliedMap, after.LastAppliedMap) && (after.Intent != IntentConnected || before.Generation != after.Generation || !sameCursor(before.MapCursor, after.LastAppliedMap) || !sameCursor(after.MapCursor, after.LastAppliedMap)) {
 		return ErrCorrupt
 	}
 	if !endpointRequestUpdate(before, after) {
@@ -465,13 +497,13 @@ func journalUpdate(before, after *ResourceJournal, connected bool, generation ui
 		if after == nil {
 			return nil
 		}
-		if !connected || after.Generation != generation || after.Adapter == nil || after.Adapter.Phase != EffectPrepared || after.Adapter.LUID != 0 || len(after.Addresses)+len(after.Routes)+len(after.Filters) != 0 {
+		if !connected || after.Generation != generation || after.Adapter == nil || after.Adapter.Phase != EffectPrepared || after.Adapter.LUID != 0 || len(after.Addresses)+len(after.Routes)+len(after.Filters)+len(after.DNSRules) != 0 {
 			return ErrCorrupt
 		}
 		return nil
 	}
 	if after == nil {
-		if before.Adapter != nil || len(before.Addresses)+len(before.Routes)+len(before.Filters) != 0 {
+		if before.Adapter != nil || len(before.Addresses)+len(before.Routes)+len(before.Filters)+len(before.DNSRules) != 0 {
 			return ErrCorrupt
 		}
 		return nil
@@ -486,7 +518,7 @@ func journalUpdate(before, after *ResourceJournal, connected bool, generation ui
 			return ErrCorrupt
 		}
 	} else if after.Adapter == nil {
-		if before.Adapter.Phase != EffectRemoving || len(after.Addresses)+len(after.Routes)+len(after.Filters) != 0 {
+		if before.Adapter.Phase != EffectRemoving || len(after.Addresses)+len(after.Routes)+len(after.Filters)+len(after.DNSRules) != 0 {
 			return ErrCorrupt
 		}
 	} else {
@@ -495,7 +527,7 @@ func journalUpdate(before, after *ResourceJournal, connected bool, generation ui
 			return ErrCorrupt
 		}
 	}
-	if !addressUpdates(before.Addresses, after.Addresses, adding) || !routeUpdates(before.Routes, after.Routes, adding) || !filterUpdates(before.Filters, after.Filters, adding) {
+	if !addressUpdates(before.Addresses, after.Addresses, adding) || !routeUpdates(before.Routes, after.Routes, adding) || !filterUpdates(before.Filters, after.Filters, adding) || !dnsRuleUpdates(before.DNSRules, after.DNSRules, adding && after.Adapter != nil && after.Adapter.Phase == EffectApplied) {
 		return ErrCorrupt
 	}
 	return nil
@@ -536,7 +568,7 @@ func routeUpdates(before, after []RouteRecord, adding bool) bool {
 	}
 	for _, value := range after {
 		if previous, exists := old[value.Destination]; exists {
-			if previous.NextHop != value.NextHop || previous.Metric != value.Metric || !stampUpdate(previous.EffectStamp, value.EffectStamp) {
+			if previous.Resource != value.Resource || previous.NextHop != value.NextHop || previous.Metric != value.Metric || !stampUpdate(previous.EffectStamp, value.EffectStamp) {
 				return false
 			}
 			delete(old, value.Destination)
@@ -558,7 +590,7 @@ func filterUpdates(before, after []FilterRecord, adding bool) bool {
 	}
 	for _, value := range after {
 		if previous, exists := old[value.Key]; exists {
-			if previous.ID != 0 && previous.ID != value.ID || !stampUpdate(previous.EffectStamp, value.EffectStamp) || previous.GuardAddress != value.GuardAddress || previous.GuardLocal != value.GuardLocal || previous.GuardInbound != value.GuardInbound {
+			if previous.ID != 0 && previous.ID != value.ID || !stampUpdate(previous.EffectStamp, value.EffectStamp) || previous.ExitOverlay != value.ExitOverlay || previous.GuardAddress != value.GuardAddress || previous.GuardLocal != value.GuardLocal || previous.GuardInbound != value.GuardInbound {
 				return false
 			}
 			delete(old, value.Key)
@@ -568,6 +600,29 @@ func filterUpdates(before, after []FilterRecord, adding bool) bool {
 	}
 	for _, value := range old {
 		if value.Phase != EffectRemoving {
+			return false
+		}
+	}
+	return true
+}
+
+func dnsRuleUpdates(before, after []DNSRuleRecord, adding bool) bool {
+	old := make(map[string]DNSRuleRecord, len(before))
+	for _, r := range before {
+		old[r.Key] = r
+	}
+	for _, r := range after {
+		if prev, found := old[r.Key]; found {
+			if !stampUpdate(prev.EffectStamp, r.EffectStamp) {
+				return false
+			}
+			delete(old, r.Key)
+		} else if !adding || r.Phase != EffectPrepared {
+			return false
+		}
+	}
+	for _, r := range old {
+		if r.Phase != EffectRemoving {
 			return false
 		}
 	}

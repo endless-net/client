@@ -30,6 +30,8 @@ const (
 	FailureMap
 	FailureConfiguration
 	FailureCredentialInvalid
+	FailureDNSAssignment
+	FailureDNSUnsupported
 )
 
 func (FailureKind) Error() string { return "connection failure" }
@@ -49,15 +51,18 @@ const (
 // grant, credential, key, native handle or journal contents. Unknown during a
 // native transition is intentional: status reads must not wait on an SDK call.
 type LocalObservation struct {
+	DNS                                *clientv0.DnsApplication
 	Known, Applied                     bool
 	SoleNodeReady                      bool
 	ControlUnavailable                 bool
 	EndpointRefreshUnconfirmed         bool
 	Permission                         Permission
 	MapRevision                        uint64
+	MapPayloadHash                     string
 	Address                            string
 	PeerCount, DirectPaths, RelayPaths uint32
 	GeneratedAt                        time.Time
+	Resources                          []*clientv0.Resource
 	Peers                              []*clientv0.Peer
 	PeerTransports                     []*clientv0.PeerTransportStatus
 }
