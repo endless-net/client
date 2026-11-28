@@ -325,6 +325,12 @@ func (s *Store) read(slot Slot) (State, error) {
 	return state, nil
 }
 
+// replaceNotStarted is issued by a backend only before it attempts to replace
+// the durable file. Other replacement failures require a reload.
+type replaceNotStarted struct{ error }
+
+func (e replaceNotStarted) Unwrap() error { return e.error }
+
 func (s *Store) save(ctx context.Context, slot Slot, state State) error {
 	if state.Validate(s.installation) != nil {
 		return ErrCorrupt
@@ -345,6 +351,10 @@ func (s *Store) save(ctx context.Context, slot Slot, state State) error {
 		return err
 	}
 	if err = slot.Replace(cipher); err != nil {
+		var skipped replaceNotStarted
+		if errors.As(err, &skipped) {
+			return skipped.error
+		}
 		return ErrUncertain
 	}
 	return nil

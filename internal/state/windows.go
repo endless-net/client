@@ -338,7 +338,7 @@ func (s windowsSlot) Replace(data []byte) (err error) {
 		return s.writeFailure("close_temp", err, ErrCorrupt)
 	}
 	if err = s.ctx.Err(); err != nil {
-		return s.writeFailure("before_replace", err, err)
+		return s.writeFailure("before_replace", err, replaceNotStarted{err})
 	}
 	if err = s.backend.root.Rename(name, "state.bin"); err != nil {
 		return s.writeFailure("replace_state", err, ErrUncertain)

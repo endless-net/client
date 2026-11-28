@@ -163,3 +163,35 @@ func TestWindowsStateWriteFailureReportsReplace(t *testing.T) {
 		t.Fatal("raw state or filename leaked into diagnostic")
 	}
 }
+
+func TestWindowsExpiredBeforeRenameKeepsPreviousState(t *testing.T) {
+	directory, sid := protectedDirectory(t)
+	backend, err := OpenWindows(directory, sid, time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	store, err := New(backend, codec(t), installation, 1<<20, 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Initialize(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	before, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer cancel()
+	attempted := before
+	attempted.Revision++
+	err = store.save(t.Context(), windowsSlot{backend: backend, ctx: expired}, attempted)
+	if !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrUncertain) {
+		t.Fatalf("expected a definite deadline before rename, got %v", err)
+	}
+	after, err := store.Load(t.Context())
+	if err != nil || after.Revision != before.Revision {
+		t.Fatal("old state changed", err)
+	}
+}
