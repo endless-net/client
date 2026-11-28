@@ -16,6 +16,33 @@ import (
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
 
+func TestEndpointPrepareCanCommitAlongsideUnrelatedRevision(t *testing.T) {
+	f := newMapFixture(t)
+	store, backend := cursorStore(t, f)
+	ctx := t.Context()
+	backend.afterExclusive = func() {
+		value, err := store.Load(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.Update(ctx, value.Revision, func(*state.State) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	request := coordinator.UpdateNodeEndpointRequest{Endpoint: "192.0.2.1:51820", Generation: 1, Status: "online", TTL: "30s"}
+	if err := PrepareEndpoint(ctx, store, f.profile.ID, 1, request); err != nil {
+		t.Fatal(err)
+	}
+	value, err := store.Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := endpointProfile(value, f.profile.ID, 1, 1)
+	if err != nil || p.Connection.EndpointRequest.Sent {
+		t.Fatal("pending endpoint not preserved", err)
+	}
+}
+
 func TestEndpointAdvertisementCannotChangeProtectedIntentGeneration(t *testing.T) {
 	f := newMapFixture(t)
 	store, _ := cursorStore(t, f)

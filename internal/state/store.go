@@ -383,6 +383,16 @@ func (s *Store) Owner(ctx context.Context) (string, error) {
 // The callback performs only local state changes. OS caller authorization and
 // initial owner claim must be checked inside this same callback by the handler.
 func (s *Store) Update(ctx context.Context, revision uint64, change func(*State) error) error {
+	return s.update(ctx, &revision, change)
+}
+
+// UpdateCurrent commits against the locked state. The caller checks its
+// operation-specific preconditions inside change, before modifying that state.
+func (s *Store) UpdateCurrent(ctx context.Context, change func(*State) error) error {
+	return s.update(ctx, nil, change)
+}
+
+func (s *Store) update(ctx context.Context, expected *uint64, change func(*State) error) error {
 	if change == nil {
 		return ErrCorrupt
 	}
@@ -393,7 +403,7 @@ func (s *Store) Update(ctx context.Context, revision uint64, change func(*State)
 		if err != nil {
 			return err
 		}
-		if before.Revision != revision || revision == ^uint64(0) {
+		if before.Revision == ^uint64(0) || expected != nil && before.Revision != *expected {
 			return ErrStale
 		}
 		// Decode independently so callbacks cannot mutate the validation baseline.

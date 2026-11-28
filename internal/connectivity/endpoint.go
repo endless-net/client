@@ -23,34 +23,16 @@ func endpointProfile(value state.State, profileID string, intentGeneration, endp
 
 // PrepareEndpoint is an explicit new announcement/renewal, not retry recovery.
 // Its caller chooses the next generation from a current snapshot. Counter and
-// exact producer request commit together; stale intent/revision prevents I/O.
+// exact producer request commit together under the intent and endpoint generations.
 func PrepareEndpoint(ctx context.Context, store *state.Store, profileID string, generation uint64, request coordinator.UpdateNodeEndpointRequest) error {
 	if store == nil || generation == 0 {
-		return ErrConfig
-	}
-	before, err := store.Load(ctx)
-	if err != nil {
-		return err
-	}
-	p, exists := before.Profiles[profileID]
-	if !exists || p.Connection == nil || p.Connection.Generation != generation {
-		return state.ErrStale
-	}
-	if p.Connection.EndpointGeneration == ^uint64(0) || request.Generation != p.Connection.EndpointGeneration+1 {
-		return state.ErrStale
-	}
-	// Validate against the prospective counter without changing durable data.
-	prospective := *p.Connection
-	prospective.EndpointGeneration = request.Generation
-	p.Connection = &prospective
-	if !validAnnouncement(p, request) {
 		return ErrConfig
 	}
 	raw, err := json.Marshal(request)
 	if err != nil {
 		return ErrConfig
 	}
-	return store.Update(ctx, before.Revision, func(value *state.State) error {
+	return store.UpdateCurrent(ctx, func(value *state.State) error {
 		p := value.Profiles[profileID]
 		if p.Connection == nil || p.Connection.Generation != generation {
 			return state.ErrStale
@@ -61,6 +43,9 @@ func PrepareEndpoint(ctx context.Context, store *state.Store, profileID string, 
 		}
 		if next != request.Generation {
 			return state.ErrStale
+		}
+		if !validAnnouncement(p, request) {
+			return ErrConfig
 		}
 		p.Connection.EndpointRequest = &state.EndpointRequest{IntentGeneration: generation, Request: raw}
 		value.Profiles[profileID] = p
@@ -88,7 +73,7 @@ func SendEndpoint(ctx context.Context, store *state.Store, transport *Transport,
 		return *p.Connection.EndpointRequest.Receipt, nil
 	}
 	if !p.Connection.EndpointRequest.Sent {
-		err = store.Update(ctx, before.Revision, func(value *state.State) error {
+		err = store.UpdateCurrent(ctx, func(value *state.State) error {
 			p, err := endpointProfile(*value, profileID, intentGeneration, endpointGeneration)
 			if err != nil {
 				return err
@@ -109,16 +94,15 @@ func SendEndpoint(ctx context.Context, store *state.Store, transport *Transport,
 	if err != nil {
 		return empty, err
 	}
+	if receipt := p.Connection.EndpointRequest.Receipt; receipt != nil {
+		return *receipt, nil
+	}
 	original := append([]byte(nil), p.Connection.EndpointRequest.Request...)
 	result, err := transport.UpdateEndpoint(ctx, p, config)
 	if err != nil {
 		return empty, err
 	}
-	current, err = store.Load(ctx)
-	if err != nil {
-		return empty, err
-	}
-	err = store.Update(ctx, current.Revision, func(value *state.State) error {
+	err = store.UpdateCurrent(ctx, func(value *state.State) error {
 		p, err := endpointProfile(*value, profileID, intentGeneration, endpointGeneration)
 		if err != nil {
 			return err
