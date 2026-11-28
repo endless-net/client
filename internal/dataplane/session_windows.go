@@ -53,7 +53,7 @@ type WindowsSession struct {
 	lanInterfaces    map[netip.Addr]uint32
 	weakSendOwned    bool
 	mu               sync.Mutex
-	observed         atomic.Pointer[windowsAppliedView]
+	observed         atomic.Pointer[appliedView]
 	store            *state.Store
 	profileID, id    string
 	generation       uint64

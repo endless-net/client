@@ -177,6 +177,38 @@ func TestSessionRefreshPreservesPeerObjectPermitIDsAndNativeAddress(t *testing.T
 	}
 }
 
+func TestEstablishedRouteRemainsUsableDuringEndpointRenewal(t *testing.T) {
+	s, _, _, m, _, _, _, _, clock := wiredSessionFixture(t)
+	if err := startSessionFixture(t, s, m); err != nil {
+		t.Fatal(err)
+	}
+	clock.advance(time.Second)
+	next := nextSessionMap(t, s, m, clock, func(snapshot *coordinator.NetworkMapSnapshot) {
+		snapshot.Peers[0].EndpointGeneration++
+	})
+	snapshot, err := m.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := snapshot.Peers[0].ID
+	s.packets.mu.Lock()
+	binding, route, epoch := s.packets.pairs[id], s.packets.routes[id], s.packets.routeEpoch[id]
+	s.packets.mu.Unlock()
+	plan := s.planFilters
+	s.planFilters = func(ctx context.Context, value connectivity.Map, owner string, luid uint64, index uint32, grants, protected int, offline bool) (FilterPlan, error) {
+		if !s.packets.routeCurrent(binding, route, epoch) {
+			return FilterPlan{}, errors.New("admitted packet lost its route during renewal")
+		}
+		return plan(ctx, value, owner, luid, index, grants, protected, offline)
+	}
+	if err := s.Refresh(WithSourceEpoch(t.Context(), s.MapEpoch(next)), next); err != nil {
+		t.Fatal(err)
+	}
+	if !s.packets.routeCurrent(binding, route, epoch) {
+		t.Fatal("route was invalidated by the new revision")
+	}
+}
+
 func TestSessionOfflineReauthorizationKeepsOriginalDeadlineAndPeer(t *testing.T) {
 	s, _, _, m, _, _, _, _, clock := wiredSessionFixture(t)
 	if err := startSessionFixture(t, s, m); err != nil {

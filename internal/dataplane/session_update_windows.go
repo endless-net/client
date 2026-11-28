@@ -239,7 +239,7 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 		return connectivity.ErrReplay
 	}
 	sourceEpoch := s.sourceEpoch(parent)
-	s.lease.PausePackets(true)
+	s.lease.PauseForApply(m)
 	defer func() {
 		if err != nil {
 			err = s.failUpdate(err)

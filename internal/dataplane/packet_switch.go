@@ -395,7 +395,7 @@ func (s *packetSwitch) updatePolicy(value connectivity.Map, paths []connectivity
 			removed = append(removed, route)
 		}
 	}
-	revised := value.Cursor().Revision != s.mapValue.Cursor().Revision
+	revised := value.Cursor().Revision != s.mapValue.Cursor().Revision && !s.lease.AllowsPathMap(s.mapValue)
 	revised = revised || !reflect.DeepEqual(s.resources, policy.resources) || !reflect.DeepEqual(s.transit, policy.transit)
 	epochs := make(map[string]uint64, len(policy.pairs))
 	for id, binding := range policy.pairs {
@@ -427,7 +427,7 @@ func (s *packetSwitch) updatePolicy(value connectivity.Map, paths []connectivity
 }
 
 func (s *packetSwitch) admittedLocked() bool {
-	return !s.closed && !s.switchingResources && s.ctx.Err() == nil && s.lease.MatchesMap(s.mapValue) && s.lease.Permissions().ExistingFlows
+	return !s.closed && !s.switchingResources && s.ctx.Err() == nil && s.lease.AllowsPathMap(s.mapValue) && s.lease.Permissions().ExistingFlows
 }
 
 // SetRoute transfers only output choice, never resource ownership. The peer

@@ -16,8 +16,9 @@ func (s *WindowsSession) sourceEpoch(ctx context.Context) uint64 {
 	epoch, _ := s.lease.SourceSignal()
 	return epoch
 }
-func (s *WindowsSession) BlockSource() uint64 { return s.lease.BlockSource() }
-func (s *WindowsSession) RevokeSource()       { s.lease.Revoke(); s.cancel() }
+func (s *WindowsSession) MapEpoch(m connectivity.Map) uint64 { return s.lease.MapEpoch(m) }
+func (s *WindowsSession) BlockSource() uint64                { return s.lease.BlockSource() }
+func (s *WindowsSession) RevokeSource()                      { s.lease.Revoke(); s.cancel() }
 
 // A superseded apply can retain its acknowledged local resources, but cannot
 // release the source gate. The serialized applier must apply the newer frame or

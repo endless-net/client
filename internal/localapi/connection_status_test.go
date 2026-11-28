@@ -122,11 +122,11 @@ func TestConnectionStatusRequiresCurrentGenerationAndAppliedTunnel(t *testing.T)
 		{"applied_relay", connectivity.PhaseConnected, relay, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
 		{"relay_with_unsupported_direct", connectivity.PhaseConnected, unsupported, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
 		{"unsupported_stale_generation", connectivity.PhaseConnected, unsupported, true, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
-		{"busy_unknown", connectivity.PhaseConnected, connectivity.LocalObservation{}, false, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
+		{"busy_unknown", connectivity.PhaseConnected, connectivity.LocalObservation{}, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
 		{"stale_generation", connectivity.PhaseConnected, online, true, clientv0.ServiceState_SERVICE_STATE_RECOVERING, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
-		{"listener_without_path", connectivity.PhaseConnected, connectivity.LocalObservation{Known: true, Applied: true, Permission: online.Permission}, false, clientv0.ServiceState_SERVICE_STATE_DEGRADED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
-		{"offline_existing", connectivity.PhaseConnected, connectivity.LocalObservation{Known: true, Applied: true, Permission: connectivity.Permission{ExistingFlows: true}}, false, clientv0.ServiceState_SERVICE_STATE_DEGRADED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
-		{"source_blocked", connectivity.PhaseConnected, connectivity.LocalObservation{Known: true, Applied: true}, false, clientv0.ServiceState_SERVICE_STATE_DEGRADED, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
+		{"listener_without_path", connectivity.PhaseConnected, connectivity.LocalObservation{Known: true, Applied: true, Permission: online.Permission}, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
+		{"offline_existing", connectivity.PhaseConnected, connectivity.LocalObservation{Known: true, Applied: true, Permission: connectivity.Permission{ExistingFlows: true}}, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
+		{"source_blocked", connectivity.PhaseConnected, connectivity.LocalObservation{Known: true, Applied: true}, false, clientv0.ServiceState_SERVICE_STATE_CONNECTED, clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED},
 		{"unsafe_clock", connectivity.PhaseConnected, connectivity.LocalObservation{Permission: connectivity.Permission{ClockUnsafe: true}}, false, clientv0.ServiceState_SERVICE_STATE_ERROR, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
 		{"revoked", connectivity.PhaseConnected, connectivity.LocalObservation{Permission: connectivity.Permission{Revoked: true}}, false, clientv0.ServiceState_SERVICE_STATE_POLICY_BLOCKED, clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED},
 	} {
@@ -289,7 +289,7 @@ func TestStatusAndPeersDistinguishAppliedMapFromTarget(t *testing.T) {
 				t.Fatal("status", meta)
 			}
 			current := tc.state == clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT
-			if (got.Status.ControlState == clientv0.ControlState_CONTROL_STATE_READY) != current {
+			if (got.Status.ControlState == clientv0.ControlState_CONTROL_STATE_READY) != (v.Phase == connectivity.PhaseConnected) {
 				t.Fatal("control status", got.Status.ControlState)
 			}
 			if tc.rev == 0 && (got.Status.ServiceState != clientv0.ServiceState_SERVICE_STATE_ERROR || len(got.Status.Failures) == 0) {

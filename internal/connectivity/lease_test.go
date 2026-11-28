@@ -120,6 +120,60 @@ func TestLeaseCurrentMapExposesOnlyAcceptedImmutableResultAndDoesNotGrantTraffic
 	}
 }
 
+func TestEndpointRenewalKeepsEstablishedPathUntilOriginalDeadline(t *testing.T) {
+	f, old, clock, lease, cancel := leaseFixture(t, 30*time.Second)
+	defer cancel()
+	if err := lease.Confirm(old); err != nil {
+		t.Fatal(err)
+	}
+	epoch, signal := lease.SourceSignal()
+	clock.advance(time.Second, time.Second)
+	f.value.Network.Revision++
+	f.value.Revision.Network++
+	f.value.Peers[0].EndpointGeneration++
+	end := f.now.Add(time.Minute)
+	f.value.Peers[0].EndpointExpiresAt = &end
+	v, err := NewVerifier(f.profile, f.config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor := old.Cursor()
+	next, err := v.Verify(t.Context(), f.sign(t, &cursor, f.now.Add(time.Second), end), &cursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lease.MapEpoch(next) != epoch {
+		t.Fatal("renewal interrupted the current source")
+	}
+	lease.PauseForApply(next)
+	if !lease.Permit(true) {
+		t.Fatal("established path paused before renewal")
+	}
+	if err := lease.Confirm(next); err != nil {
+		t.Fatal(err)
+	}
+	if err := lease.EndSourceTransition(epoch); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-signal:
+		t.Fatal("renewal canceled an active transport operation")
+	default:
+	}
+	if lease.MatchesMap(old) || !lease.AllowsPathMap(old) || !lease.MatchesMap(next) {
+		t.Fatal("path continuity lost or stale map became current")
+	}
+	clock.advance(30*time.Second, 30*time.Second)
+	if lease.AllowsPathMap(old) || !lease.Permit(true) {
+		t.Fatal("old and new path deadlines conflated")
+	}
+	restricted := next
+	restricted.snapshot.Peers = nil
+	if lease.MapEpoch(restricted) == epoch || lease.Permit(true) {
+		t.Fatal("peer withdrawal left traffic enabled")
+	}
+}
+
 func TestLeaseOfflinePreservesOnlyExistingFlowsUntilOriginalExpiry(t *testing.T) {
 	_, m, clock, l, cancel := leaseFixture(t, 300*time.Second)
 	defer cancel()

@@ -327,7 +327,13 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 		if ctx.Err() != nil {
 			return streamContextError(ctx)
 		}
-		if errors.Is(err, ErrNoMap) || errors.Is(err, ErrReplay) {
+		if errors.Is(err, ErrReplay) {
+			// A nonce-bound opening snapshot may match the durable cursor.
+			// Keep reading without granting or extending packet authority.
+			receivedMap = true
+			continue
+		}
+		if errors.Is(err, ErrNoMap) {
 			if count == 0 {
 				return err
 			}

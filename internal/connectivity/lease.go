@@ -36,6 +36,10 @@ type Lease struct {
 	active, online, revoked, fault bool
 	paused                         bool
 	operation                      *OperationBudget
+	continuingApply                *state.MapCursor
+	previousCursor                 *state.MapCursor
+	previousDeadline               time.Duration
+	previousExpires                time.Time
 	sourceEpoch                    uint64
 	sourceBlocked                  bool
 	sourceChanged                  chan struct{}
@@ -136,6 +140,11 @@ func (l *Lease) Confirm(m Map) error {
 		l.online = false
 		return ErrExpired
 	}
+	l.previousCursor = nil
+	if l.continuingApply != nil && *l.continuingApply == cursor && l.canContinue(m) {
+		l.previousCursor, l.previousDeadline, l.previousExpires = l.cursor, l.deadline, l.expires
+	}
+	l.continuingApply = nil
 	l.cursor = &cursor
 	l.current = m
 	l.deadline = deadline
@@ -175,6 +184,41 @@ func (l *Lease) PausePackets(paused bool) {
 func (l *Lease) BlockSource() uint64 {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.blockSource()
+}
+
+func (l *Lease) canContinue(m Map) bool {
+	return l.active && l.online && !l.paused && !l.sourceBlocked && l.current.continuesWith(m)
+}
+
+func (l *Lease) MapEpoch(m Map) uint64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.canContinue(m) {
+		return l.sourceEpoch
+	}
+	return l.blockSource()
+}
+
+func (l *Lease) PauseForApply(m Map) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.canContinue(m) {
+		cursor := m.Cursor()
+		l.continuingApply = &cursor
+		return
+	}
+	l.continuingApply = nil
+	if !l.paused {
+		l.paused = true
+		close(l.sourceChanged)
+		l.sourceChanged = make(chan struct{})
+	}
+}
+
+func (l *Lease) blockSource() uint64 {
+	l.continuingApply = nil
+	l.previousCursor = nil
 	if l.sourceEpoch == ^uint64(0) {
 		l.fault = true
 		l.active = false
@@ -203,6 +247,9 @@ func (l *Lease) EndSourceTransition(epoch uint64) error {
 	}
 	if l.sourceEpoch != epoch {
 		return ErrSourceChanged
+	}
+	if !l.sourceBlocked {
+		return nil
 	}
 	l.sourceBlocked = false
 	close(l.sourceChanged)
@@ -264,13 +311,39 @@ func (l *Lease) MatchesMap(m Map) bool {
 	return l.cursor != nil && l.profileID == m.profileID && l.generation == m.generation && *l.cursor == m.Cursor()
 }
 
+// AllowsPathMap retains a previously established path only across an
+// equivalent renewal and only for its original wall and uptime bounds.
+func (l *Lease) AllowsPathMap(m Map) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.matchesMap(m)
+}
+
+func (l *Lease) matchesMap(m Map) bool {
+	if l.cursor == nil || l.profileID != m.profileID || l.generation != m.generation {
+		return false
+	}
+	cursor := m.Cursor()
+	if *l.cursor == cursor {
+		return true
+	}
+	if l.previousCursor == nil || *l.previousCursor != cursor {
+		return false
+	}
+	now, err := l.sample()
+	return err == nil && now.UpperUptime < l.previousDeadline && now.Wall.Before(l.previousExpires)
+}
+
 // WindowCurrent checks an interval carried by the current map. The opening
 // proof can establish its start, while the monotonic upper bound and the wall
 // clock both limit its end. A zero issued time requests an expiry-only check.
 func (l *Lease) WindowCurrent(m Map, issued, expires, wall time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.cursor == nil || *l.cursor != m.Cursor() || l.profileID != m.profileID || l.generation != m.generation {
+	if !l.matchesMap(m) {
+		return false
+	}
+	if *l.cursor != m.Cursor() && !l.windowCurrent(m.timeProof, issued, expires, wall) {
 		return false
 	}
 	return l.windowCurrent(l.current.timeProof, issued, expires, wall)

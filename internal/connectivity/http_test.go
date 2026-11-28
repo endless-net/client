@@ -113,6 +113,37 @@ func TestTransportStreamsMapsWithoutPromotingReplayAndPreservesRevocation(t *tes
 	}
 }
 
+func TestFullStreamReplayWaitsForNewMapWithoutRenewing(t *testing.T) {
+	f := newMapFixture(t)
+	v, err := NewVerifier(f.profile, f.config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := f.sign(t, nil, f.now, f.now.Add(time.Minute))
+	first, err := v.Verify(t.Context(), raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor := first.Cursor()
+	f.value.Network.Revision++
+	f.value.Revision.Network++
+	next := f.sign(t, &cursor, f.now, f.now.Add(time.Minute))
+	tr := transportFixture(t, func(r *http.Request) (*http.Response, error) {
+		opening := f.openingRecord(t, raw, watchRequest(t, r).Nonce)
+		return testwire.StreamResponse(r, io.NopCloser(bytes.NewReader(fixtureFrames(t, opening, next)))), nil
+	})
+	stop := errors.New("received replacement")
+	err = tr.StreamSnapshot(t.Context(), v, &cursor, func(_ context.Context, m Map) error {
+		if m.Cursor().Revision.Network != cursor.Revision.Network+1 {
+			t.Fatal("replayed map reached native apply")
+		}
+		return stop
+	})
+	if !errors.Is(err, stop) {
+		t.Fatal(err)
+	}
+}
+
 func TestTransportResumesExactUint64CursorAndClosesOnCancellation(t *testing.T) {
 	f := newMapFixture(t)
 	v, err := NewVerifier(f.profile, f.config)

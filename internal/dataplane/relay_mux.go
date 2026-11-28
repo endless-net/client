@@ -237,7 +237,7 @@ func (b *relayPeerBind) permissions() connectivity.Permission {
 	b.mu.Lock()
 	lease, m, closed := b.lease, b.mapValue, b.closed
 	b.mu.Unlock()
-	if closed || b.ctx.Err() != nil || !lease.MatchesMap(m) {
+	if closed || b.ctx.Err() != nil || !lease.AllowsPathMap(m) {
 		return connectivity.Permission{}
 	}
 	return lease.Permissions()

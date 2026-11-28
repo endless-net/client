@@ -142,8 +142,9 @@ func (n *connectionNativeFixture) TransportAdvertisement(netip.Addr) (coordinato
 func (n *connectionNativeFixture) AdvertisementSignal() <-chan struct{} {
 	return n.advertisementChanged
 }
-func (n *connectionNativeFixture) BlockSource() uint64 { return n.epochs.Add(1) }
-func (n *connectionNativeFixture) RevokeSource()       { n.revoked.Store(true) }
+func (n *connectionNativeFixture) MapEpoch(connectivity.Map) uint64 { return n.epochs.Add(1) }
+func (n *connectionNativeFixture) BlockSource() uint64              { return n.epochs.Add(1) }
+func (n *connectionNativeFixture) RevokeSource()                    { n.revoked.Store(true) }
 
 func (n *connectionNativeFixture) ConnectionLocal() connectivity.LocalObservation {
 	return connectivity.LocalObservation{Known: n.started.Load() && !n.revoked.Load(), Applied: n.started.Load(), PeerCount: 1, Permission: connectivity.Permission{NewFlows: true}}
@@ -853,6 +854,15 @@ func TestWindowsConnectionDriverQueueOverflowRevokesWithoutBlocking(t *testing.T
 	}
 	d := owner.(*connectionDriver)
 	defer d.cancel()
+	renewal := connectionFrame{ctx: t.Context(), epoch: 1}
+	for range 3 {
+		if err := d.enqueue(f.native, renewal); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if pending := <-d.frames; pending.epoch != renewal.epoch || f.native.revoked.Load() {
+		t.Fatal("renewal burst revoked the active tunnel")
+	}
 	if err := d.enqueue(f.native, connectionFrame{}); err != nil {
 		t.Fatal(err)
 	}

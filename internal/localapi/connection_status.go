@@ -177,29 +177,20 @@ func projectConnection(r *clientv0.Status, p state.Profile, v connectivity.Obser
 				Retryable: true, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_SUPPORT,
 			})
 		}
-		if !local.Known || !local.Applied {
-			return
+		// The owner entered this phase after the tunnel started. Map
+		// installation and packet permissions are reported by Agent.
+		r.ServiceState = clientv0.ServiceState_SERVICE_STATE_CONNECTED
+		r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED
+		r.ControlState = clientv0.ControlState_CONTROL_STATE_READY
+		if local.ControlUnavailable {
+			r.ControlState = clientv0.ControlState_CONTROL_STATE_OFFLINE_CACHE
+			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_DEGRADED
+		} else if local.EndpointRefreshUnconfirmed {
+			r.ControlState = clientv0.ControlState_CONTROL_STATE_DEGRADED
 		}
-		r.ServiceState = clientv0.ServiceState_SERVICE_STATE_DEGRADED
-		r.ControlState = clientv0.ControlState_CONTROL_STATE_DEGRADED
-		if local.Permission.ExistingFlows {
-			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED
-			if !local.Permission.NewFlows {
-				r.ControlState = clientv0.ControlState_CONTROL_STATE_OFFLINE_CACHE
-			}
-		}
-		if matchesTarget && local.Permission.NewFlows && local.PeerCount > 0 && local.MapRevision > 0 && local.Address != "" {
-			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_CONNECTED
-			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED
-			r.ControlState = clientv0.ControlState_CONTROL_STATE_READY
-		}
-		if matchesTarget && local.Permission.NewFlows && local.SoleNodeReady && local.PeerCount == 0 && local.DirectPaths == 0 && local.RelayPaths == 0 && local.MapRevision > 0 && local.Address != "" {
+		if local.Known && local.Applied && local.PeerCount == 0 && local.Address != "" && !local.ControlUnavailable {
 			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_LOCAL_READY
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY
-			r.ControlState = clientv0.ControlState_CONTROL_STATE_READY
-		}
-		if local.EndpointRefreshUnconfirmed && r.ControlState == clientv0.ControlState_CONTROL_STATE_READY {
-			r.ControlState = clientv0.ControlState_CONTROL_STATE_DEGRADED
 		}
 	case connectivity.PhaseFailed:
 		if v.RetryScheduled {

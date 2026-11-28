@@ -43,6 +43,7 @@ type nativeConnectionSession interface {
 	BoundPort() (uint16, error)
 	TransportAdvertisement(netip.Addr) (coordinator.TransportAdvertisement, error)
 	AdvertisementSignal() <-chan struct{}
+	MapEpoch(connectivity.Map) uint64
 	BlockSource() uint64
 	RevokeSource()
 	ConnectionLocal() connectivity.LocalObservation
@@ -109,7 +110,7 @@ func (d *connectionDriver) ConnectionLocal() connectivity.LocalObservation {
 		return connectivity.LocalObservation{}
 	}
 	local := native.ConnectionLocal()
-	local.ControlUnavailable = d.mapOffline.Load() && !local.Permission.NewFlows
+	local.ControlUnavailable = d.mapOffline.Load()
 	local.EndpointRefreshUnconfirmed = d.endpointUnconfirmed.Load()
 	return local
 }
@@ -283,9 +284,20 @@ func (d *connectionDriver) enqueue(native nativeConnectionSession, frame connect
 	case d.frames <- frame:
 		return nil
 	default:
-		d.failSource(native, ErrConnectionWorker)
-		return ErrConnectionWorker
 	}
+	// The stream is the only producer. At capacity, a newer complete
+	// snapshot may replace a queued renewal within the same source epoch.
+	// Never discard an offline transition or cross an authority change.
+	select {
+	case pending := <-d.frames:
+		if frame.ctx == nil || pending.ctx == nil || pending.epoch != frame.epoch {
+			d.failSource(native, ErrConnectionWorker)
+			return ErrConnectionWorker
+		}
+	default: // The applier already drained the queue.
+	}
+	d.frames <- frame
+	return nil
 }
 
 func (d *connectionDriver) readMaps(native nativeConnectionSession) {
@@ -320,11 +332,12 @@ func (d *connectionDriver) readMaps(native nativeConnectionSession) {
 		discoveryMaps := make(chan connectivity.Map, 1)
 		if err == nil {
 			err = d.factory.stream(streamContext, verifier, cursor, func(ctx context.Context, m connectivity.Map) error {
-				epoch := native.BlockSource()
+				d.mapOffline.Store(false)
 				if m.Denied() {
 					d.failSource(native, connectivity.ErrRevoked)
 					return connectivity.ErrRevoked
 				}
+				epoch := native.MapEpoch(m)
 				if flows != nil && flowDone == nil {
 					flowDone = make(chan struct{})
 					go func() {
@@ -371,6 +384,7 @@ func (d *connectionDriver) readMaps(native nativeConnectionSession) {
 			// still takes the normal offline or terminal path below.
 			continue
 		}
+		d.mapOffline.Store(true)
 		d.reportNativeFailure("map_stream_ended", err)
 		epoch := native.BlockSource()
 		if !transientMapError(err) {
@@ -436,7 +450,6 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 					d.reportNativeFailure("apply_offline", err)
 					return nativeConnectionFailure(err, connectivity.FailureApply)
 				}
-				d.mapOffline.Store(true)
 				continue
 			}
 			var err error
@@ -465,9 +478,6 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 					d.reportNativeFailure("apply_refresh", err)
 				}
 				return nativeConnectionFailure(err, connectivity.FailureApply)
-			}
-			if err == nil {
-				d.mapOffline.Store(false)
 			}
 			if !started {
 				started = true

@@ -90,7 +90,7 @@ func (g *transportSupervisor) publishTransportStatus(now connectivity.ClockSampl
 func (g *transportSupervisor) transportStatuses(value connectivity.Map) []*clientv0.PeerTransportStatus {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.statusCursor.Cursor() != value.Cursor() || !g.lease.MatchesMap(value) {
+	if !g.lease.AllowsPathMap(value) || !g.lease.AllowsPathMap(g.statusCursor) {
 		return nil
 	}
 	result := make([]*clientv0.PeerTransportStatus, len(g.status))

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
@@ -34,6 +35,7 @@ type LinuxSessionConfig struct {
 }
 
 type LinuxSession struct {
+	observed atomic.Pointer[appliedView]
 	dnsObservation
 	dns               linuxSessionDNS
 	stopMu            sync.Mutex
@@ -131,7 +133,7 @@ func (s *LinuxSession) apply(ctx context.Context, value connectivity.Map, first 
 	if !first && s.current.Cursor() == value.Cursor() {
 		return connectivity.ErrReplay
 	}
-	s.lease.PausePackets(true)
+	s.lease.PauseForApply(value)
 	defer func() {
 		if retErr != nil {
 			s.lease.Revoke()
@@ -251,6 +253,7 @@ func (s *LinuxSession) apply(ctx context.Context, value connectivity.Map, first 
 	if first && s.config.FlowCapacity > 0 && s.config.FlowDumpBytes > 0 {
 		go s.observeFilter()
 	}
+	s.observed.Store(&appliedView{value, s.engine, s.packets, s.supervisor})
 	expected, ok := ctx.Value(sourceEpochKey{}).(uint64)
 	if !ok {
 		expected, _ = s.lease.SourceSignal()
@@ -534,6 +537,7 @@ func (s *LinuxSession) Stop(ctx context.Context) error {
 	defer s.stopMu.Unlock()
 	s.mu.Lock()
 	s.stopped = true
+	s.observed.Store(nil)
 	supervisor := s.supervisor
 	s.supervisor = nil
 	s.mu.Unlock()
@@ -686,12 +690,18 @@ func (s *LinuxSession) TransportAdvertisement(addr netip.Addr) (coordinator.Tran
 }
 
 func (s *LinuxSession) AdvertisementSignal() <-chan struct{} { return s.advertisements }
+func (s *LinuxSession) MapEpoch(m connectivity.Map) uint64   { return s.lease.MapEpoch(m) }
 func (s *LinuxSession) BlockSource() uint64                  { return s.lease.BlockSource() }
 func (s *LinuxSession) RevokeSource()                        { s.lease.Revoke(); s.cancel() }
 
 func (s *LinuxSession) ConnectionLocal() connectivity.LocalObservation {
 	if !s.mu.TryLock() {
-		return connectivity.LocalObservation{Permission: s.lease.Permissions(), DNS: proto.CloneOf(s.dnsResult.Load())}
+		local := connectivity.LocalObservation{Permission: s.lease.Permissions()}
+		if view := s.observed.Load(); view != nil {
+			local = transportObservation(view.value, s.lease, view.engine, view.packets, view.supervisor, false)
+		}
+		local.DNS = proto.CloneOf(s.dnsResult.Load())
+		return local
 	}
 	defer s.mu.Unlock()
 	local := transportObservation(s.current, s.lease, s.engine, s.packets, s.supervisor, s.lease.Permissions().NewFlows)

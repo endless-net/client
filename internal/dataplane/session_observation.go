@@ -7,6 +7,15 @@ import (
 	"github.com/endless-net/client/internal/connectivity"
 )
 
+// Only a completed native apply publishes these handles. Their observation
+// methods synchronize internally. Traffic permission is sampled on each read.
+type appliedView struct {
+	value      connectivity.Map
+	engine     *Engine
+	packets    *packetSwitch
+	supervisor *transportSupervisor
+}
+
 func transportObservation(value connectivity.Map, lease *connectivity.Lease, engine *Engine, packets *packetSwitch, supervisor *transportSupervisor, ready bool) connectivity.LocalObservation {
 	if engine == nil || packets == nil || packets.Err() != nil {
 		return connectivity.LocalObservation{Permission: lease.Permissions()}

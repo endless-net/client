@@ -7,17 +7,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Only a completed native apply publishes these handles. Their observation
-// methods synchronize internally. Traffic permission is sampled on each read.
-type windowsAppliedView struct {
-	value      connectivity.Map
-	engine     *Engine
-	packets    *packetSwitch
-	supervisor *transportSupervisor
-}
-
 func (s *WindowsSession) publishAppliedView() {
-	s.observed.Store(&windowsAppliedView{s.current, s.engine, s.packets, s.supervisor})
+	s.observed.Store(&appliedView{s.current, s.engine, s.packets, s.supervisor})
 }
 
 // ConnectionLocal never waits for an in-flight native SDK transaction and never
