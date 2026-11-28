@@ -123,7 +123,7 @@ func TestLinuxPerPeerPathKeepsSignedPortGrants(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		_, err = conn.Write([]byte{1})
 		if (allowed && err != nil) || (!allowed && !errors.Is(err, syscall.EPERM)) {
 			t.Fatalf("send to %s:%d, expected allowed=%t: %v", ip, port, allowed, err)

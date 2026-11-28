@@ -86,7 +86,7 @@ func TestLinuxSignedKernelPeerPreparation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	ep := netip.MustParseAddrPort("127.0.0.1:39102")
 	cfg := directCipherConfig{assignment: a, private: f.profile.Keys.WireGuardPrivate, mtu: 1420, clock: f.clock}
 	iface, err := prepareLinuxPeerLink(ctx, conn, cfg, ep, name, id.owner)
@@ -530,7 +530,7 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer proxy.Close()
+		defer func() { _ = proxy.Close() }()
 		kernelTarget = proxy.LocalAddr().(*net.UDPAddr).AddrPort()
 	}
 	iface, err := prepareLinuxPeerLink(ctx, conn, cfg, kernelTarget, candidate, id.owner)
@@ -556,7 +556,7 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer unmarked.Close()
+		defer func() { _ = unmarked.Close() }()
 		if unexpected, err := startLinuxKernelListener(ctx, conn, iface, id, unmarked); unexpected != nil || !errors.Is(err, ErrConfiguration) {
 			t.Fatalf("unmarked broker: guard=%v error=%v", unexpected, err)
 		}
@@ -622,7 +622,7 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 				}
 			}
 		}()
-		defer func() { proxy.Close(); <-done }()
+		defer func() { _ = proxy.Close(); <-done }()
 	}
 	config, err := cipherConfiguration(coordinator.Node{PublicKey: a.peer.PublicKey, AssignedIP: peer.String()}, reverse, bytes.Repeat([]byte{84}, 32), a.offer.Profile)
 	if err != nil {
@@ -840,7 +840,7 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sock.conn.Close()
+	defer func() { _ = sock.conn.Close() }()
 	b := sock.binding
 	plan, err := prepareLinuxFilter(f.snapshot, 100, 100)
 	if err != nil {
@@ -867,7 +867,7 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 			t.Fatal(err)
 		}
 		_, err = other.Write([]byte("fixture"))
-		other.Close()
+		_ = other.Close()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -879,7 +879,7 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.device.Close()
+	defer func() { _ = session.device.Close() }()
 	if err := session.configure(ctx, plan.address, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -889,13 +889,13 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	}
 	runtimeSession := &LinuxSession{link: session, clock: f.clock, lease: f.lease, identity: id, current: f.verified, policy: refreshed,
 		receipt: state.LinuxNetworkReceipt{Table: id.table, Owner: id.owner}}
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	openRelay := func() *RelayTransport {
-		relayConn, err := net.Dial("tcp4", listener.Addr().String())
+		relayConn, err := (&net.Dialer{}).DialContext(ctx, "tcp4", listener.Addr().String())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -956,7 +956,7 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ordinary.Close()
+	defer func() { _ = ordinary.Close() }()
 	if _, err := ordinary.WriteToUDPAddrPort(raw[28:], netip.AddrPortFrom(b.peer, b.port)); !errors.Is(err, unix.EPERM) {
 		t.Fatalf("ordinary process sent service traffic: %v", err)
 	}
@@ -1310,7 +1310,7 @@ func TestLinuxSupervisorPreparesHostCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.link.device.Close()
+	defer func() { _ = session.link.device.Close() }()
 	if err := session.link.configure(ctx, policy.address, policy.protected[1:]); err != nil {
 		t.Fatal(err)
 	}

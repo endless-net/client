@@ -171,7 +171,7 @@ func deleteLinuxPeerIndex(ctx context.Context, index int) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	data := make([]byte, unix.SizeofIfInfomsg)

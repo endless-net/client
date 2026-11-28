@@ -48,7 +48,7 @@ func (s *LinuxSession) prepareHostCandidate(ctx context.Context, cfg directCiphe
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	proxy, err := openLinuxBrokerSocket(ctx, s.identity.mark)
 	if err != nil {
 		return nil, err
@@ -56,12 +56,12 @@ func (s *LinuxSession) prepareHostCandidate(ctx context.Context, cfg directCiphe
 	prefix, _ := linuxPeerScope(s.identity.owner)
 	suffix, err := uuid.NewRandom()
 	if err != nil {
-		proxy.Close()
+		_ = proxy.Close()
 		return nil, err
 	}
 	iface, err := prepareLinuxPeerLink(ctx, conn, cfg, proxy.LocalAddr().(*net.UDPAddr).AddrPort(), prefix+suffix.String()[:5], s.identity.owner)
 	if err != nil {
-		proxy.Close()
+		_ = proxy.Close()
 		return nil, err
 	}
 	a.mapValue = connectivity.Map{}
@@ -70,7 +70,7 @@ func (s *LinuxSession) prepareHostCandidate(ctx context.Context, cfg directCiphe
 		_, _, err = channel.bind.Open(0)
 	}
 	if err != nil {
-		proxy.Close()
+		_ = proxy.Close()
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer cancel()
 		return nil, errors.Join(err, e.deleteDevice(cleanup))
@@ -97,7 +97,7 @@ func (e *linuxHostEngine) startProbe(a candidateAssignment) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	e.guard, err = startLinuxKernelListener(ctx, conn, e.iface, e.session.identity, e.proxy)
 	if err != nil {
 		e.channel.cancel()

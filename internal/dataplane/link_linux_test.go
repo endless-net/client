@@ -104,7 +104,7 @@ func TestLinuxKernelRouteExpiresWithSessionAddress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.device.Close()
+	defer func() { _ = session.device.Close() }()
 	if err := session.configure(ctx, plan.address, plan.protected[1:]); err != nil {
 		t.Fatal(err)
 	}
@@ -188,11 +188,11 @@ func TestLinuxKernelRouteExpiresWithSessionAddress(t *testing.T) {
 	runLinuxTestCommand(t, ctx, linuxIP, "address", "add", "192.0.2.5/24", "dev", "foreign")
 	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", "foreign", "up")
 	runLinuxTestCommand(t, ctx, linuxIP, "route", "add", peer+"/32", "dev", "foreign")
-	conn, err := net.Dial("udp4", net.JoinHostPort(peer, "5300"))
+	conn, err := (&net.Dialer{}).DialContext(ctx, "udp4", net.JoinHostPort(peer, "5300"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if _, err := conn.Write([]byte("fixture")); err == nil {
 		t.Fatal("overlay packet escaped through a foreign route")
 	}

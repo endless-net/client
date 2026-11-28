@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/endless-net/client/api/transport"
 	"net"
 	"net/netip"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/endless-net/client/api/transport"
 	"github.com/tailscale/wireguard-go/tun"
 	"golang.org/x/sys/unix"
 )

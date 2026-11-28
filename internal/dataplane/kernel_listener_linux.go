@@ -75,14 +75,14 @@ func startLinuxKernelListener(ctx context.Context, conn *genetlink.Conn, iface *
 	if err != nil {
 		return nil, err
 	}
-	defer reserve.Close()
+	defer func() { _ = reserve.Close() }()
 	port := reserve.LocalAddr().(*net.UDPAddr).AddrPort().Port()
 	v6, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6zero, Port: int(port)})
 	if err != nil && !errors.Is(err, unix.EAFNOSUPPORT) {
 		return nil, err
 	}
 	if v6 != nil {
-		defer v6.Close()
+		defer func() { _ = v6.Close() }()
 	}
 	installation, err := uuid.NewRandom()
 	if err != nil {
@@ -138,7 +138,7 @@ func activateLinuxPeerIndex(ctx context.Context, index int) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	msg := make([]byte, unix.SizeofIfInfomsg)
