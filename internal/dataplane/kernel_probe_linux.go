@@ -24,6 +24,8 @@ type linuxProbeBinding struct {
 type linuxProbeSocket struct {
 	conn    *net.UDPConn
 	binding linuxProbeBinding
+	index   int
+	engine  string
 }
 
 // Bind before installing the service address so the ephemeral port is already
@@ -34,6 +36,10 @@ func openLinuxProbeSocket(ctx context.Context, id linuxFilterIdentity, device st
 		return nil, ErrConfiguration
 	}
 	local, peer, err := a.controlAddresses()
+	if err != nil {
+		return nil, err
+	}
+	iface, err := net.InterfaceByName(device)
 	if err != nil {
 		return nil, err
 	}
@@ -61,13 +67,42 @@ func openLinuxProbeSocket(ctx context.Context, id linuxFilterIdentity, device st
 		return nil, err
 	}
 	conn := listener.(*net.UDPConn)
-	return &linuxProbeSocket{conn: conn, binding: linuxProbeBinding{device: device, local: local, peer: peer, port: conn.LocalAddr().(*net.UDPAddr).AddrPort().Port()}}, nil
+	return &linuxProbeSocket{conn: conn, index: iface.Index, engine: a.offer.Profile.Engine, binding: linuxProbeBinding{device: device, local: local, peer: peer, port: conn.LocalAddr().(*net.UDPAddr).AddrPort().Port()}}, nil
 }
 
-func (s *linuxProbeSocket) send(raw []byte) error {
+// The maintenance guard receives the size of the WireGuard UDP payload;
+// chargeService adds the outer IPv4 and UDP headers exactly once.
+func (s *linuxProbeSocket) sendWireGuard(raw []byte, channel *assignedCipher) error {
+	if s.engine != transport.WireGuard || channel == nil {
+		return ErrNoAuthority
+	}
+	reserve := channel.controlSendGuard(raw)
+	if reserve == nil {
+		return ErrNoAuthority
+	}
+	return s.send(raw, func() error {
+		iface, err := net.InterfaceByIndex(s.index)
+		if err != nil || iface.Name != s.binding.device {
+			return ErrAdapterOwnership
+		}
+		size, err := wireGuardProbeCiphertextSize(len(raw), iface.MTU)
+		if err != nil {
+			return err
+		}
+		return reserve(size)
+	})
+}
+
+func (s *linuxProbeSocket) send(raw []byte, admit func() error) error {
 	b := s.binding
 	if _, claimed, err := decodeControlPacket(raw, b.local, b.peer); err != nil || !claimed {
 		return ErrNoAuthority
+	}
+	if admit == nil {
+		return ErrNoAuthority
+	}
+	if err := admit(); err != nil {
+		return err
 	}
 	n, err := s.conn.WriteToUDPAddrPort(raw[28:], netip.AddrPortFrom(b.peer, b.port))
 	if err != nil {

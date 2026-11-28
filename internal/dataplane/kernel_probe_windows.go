@@ -7,7 +7,6 @@ import (
 	"unsafe"
 
 	"github.com/endless-net/client/api/transport"
-	wg "github.com/tailscale/wireguard-go/device"
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 )
@@ -48,16 +47,6 @@ func openWindowsProbeSocket(local, peer netip.Addr, index uint32, luid winipcfg.
 	return &windowsProbeSocket{handle: h, local: local, peer: peer, index: index, luid: luid}, nil
 }
 
-// WireGuardNT 1.1 CalculateNblPadding clamps the last padding block to
-// the IPv4 interface MTU. Control packets carry DF and must fit in one NBL.
-func windowsProbeCiphertextSize(length, mtu int) (int, error) {
-	if length < 28 || length > 28+transport.MaxDatagramBytes || length > mtu {
-		return 0, ErrPacketIO
-	}
-	padded := (length + wg.PaddingMultiple - 1) &^ (wg.PaddingMultiple - 1)
-	return min(padded, mtu) + wg.MessageTransportSize, nil
-}
-
 func (s *windowsProbeSocket) send(raw []byte, reserve func(int) error) error {
 	if _, claimed, err := decodeControlPacket(raw, s.local, s.peer); !claimed || err != nil {
 		return ErrNoAuthority
@@ -70,7 +59,7 @@ func (s *windowsProbeSocket) send(raw []byte, reserve func(int) error) error {
 		if row.InterfaceLUID != s.luid || row.InterfaceIndex != s.index {
 			return ErrAdapterOwnership
 		}
-		size, err := windowsProbeCiphertextSize(len(raw), int(row.NLMTU))
+		size, err := wireGuardProbeCiphertextSize(len(raw), int(row.NLMTU))
 		if err != nil {
 			return err
 		}

@@ -89,7 +89,7 @@ func TestWindowsProbeCiphertextSize(t *testing.T) {
 		{582, 581, 0},
 		{27, 1420, 0},
 	} {
-		got, err := windowsProbeCiphertextSize(test.inner, test.mtu)
+		got, err := wireGuardProbeCiphertextSize(test.inner, test.mtu)
 		if got != test.want || (err != nil) != (test.want == 0) {
 			t.Fatalf("inner=%d mtu=%d: size=%d err=%v", test.inner, test.mtu, got, err)
 		}

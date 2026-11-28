@@ -13,6 +13,12 @@ import (
 func qualifiedNegotiation(t *testing.T) (*candidateNegotiation, *candidateFixture) {
 	t.Helper()
 	n, f := negotiationFixture(t, false)
+	qualifyProbeTrials(t, n, f)
+	return n, f
+}
+
+func qualifyProbeTrials(t *testing.T, n *candidateNegotiation, f *candidateFixture) {
+	t.Helper()
 	if err := n.Tick(); err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +37,6 @@ func qualifiedNegotiation(t *testing.T) (*candidateNegotiation, *candidateFixtur
 	if n.commit == nil {
 		t.Fatal("fixture not locally qualified")
 	}
-	return n, f
 }
 
 func activatedNegotiation(t *testing.T) (*candidateNegotiation, *candidateFixture, *directActivation) {

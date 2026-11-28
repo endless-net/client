@@ -5,6 +5,7 @@ import (
 	"net/netip"
 
 	"github.com/endless-net/client/api/transport"
+	wg "github.com/tailscale/wireguard-go/device"
 )
 
 // Control uses the published strict Client DTO/codec inside authenticated IPv4
@@ -96,4 +97,14 @@ func decodeControlPacket(raw []byte, source, destination netip.Addr) (value tran
 	}
 	value, err = transport.DecodeControl(raw[28:])
 	return value, claimed, err
+}
+
+// WireGuard rounds the inner packet to a 16-byte boundary, capped by the
+// interface MTU, then adds its transport header and authentication tag.
+func wireGuardProbeCiphertextSize(length, mtu int) (int, error) {
+	if length < 28 || length > 28+transport.MaxDatagramBytes || length > mtu {
+		return 0, ErrPacketIO
+	}
+	padded := (length + wg.PaddingMultiple - 1) &^ (wg.PaddingMultiple - 1)
+	return min(padded, mtu) + wg.MessageTransportSize, nil
 }

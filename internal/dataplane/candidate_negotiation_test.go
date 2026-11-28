@@ -15,6 +15,11 @@ import (
 func negotiationFixture(t *testing.T, follower bool) (*candidateNegotiation, *candidateFixture) {
 	t.Helper()
 	mux, f, _, _ := relayMuxFixture(t)
+	return negotiationForFixture(t, mux, f, follower), f
+}
+
+func negotiationForFixture(t *testing.T, mux *relayMux, f *candidateFixture, follower bool) *candidateNegotiation {
+	t.Helper()
 	peerID := "peer"
 	if follower {
 		peerID = "aaa-peer"
@@ -47,7 +52,7 @@ func negotiationFixture(t *testing.T, follower bool) (*candidateNegotiation, *ca
 	if err != nil {
 		t.Fatal(err)
 	}
-	return negotiation, f
+	return negotiation
 }
 
 func completeNegotiatedProbe(t *testing.T, n *candidateNegotiation) {
