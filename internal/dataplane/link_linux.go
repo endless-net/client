@@ -295,16 +295,8 @@ func (l *linuxLink) switchPeer(ctx context.Context, peer netip.Addr, target *net
 		if err != nil || iface.Name != target.Name || !linuxPeerLinkName.MatchString(iface.Name) || iface.Flags&net.FlagUp == 0 {
 			return ErrAdapterOwnership
 		}
-		prefix, group := linuxPeerScope(owner)
-		details, err := linuxLinkDetails(ctx, "dev", iface.Name)
-		if err != nil || len(details) != 1 {
-			return ErrAdapterOwnership
-		}
-		link := details[0]
-		if link.Index != iface.Index || link.Alias != "endlessnet:peer:"+owner ||
-			!strings.HasPrefix(link.Name, prefix) || link.Group != strconv.FormatUint(uint64(group), 10) ||
-			(link.Info.Kind != transport.WireGuard && link.Info.Kind != transport.AmneziaWG) {
-			return ErrAdapterOwnership
+		if _, err := ownedLinuxPeer(ctx, iface, owner); err != nil {
+			return err
 		}
 		name = iface.Name
 	}
@@ -323,6 +315,22 @@ func (l *linuxLink) switchPeer(ctx context.Context, peer netip.Addr, target *net
 		l.direct[peer] = *target
 	}
 	return l.verify(ctx)
+}
+
+func ownedLinuxPeer(ctx context.Context, iface *net.Interface, owner string) (linuxPeerLinkInfo, error) {
+	prefix, group := linuxPeerScope(owner)
+	details, err := linuxLinkDetails(ctx, "dev", iface.Name)
+	if err != nil || len(details) != 1 {
+		return linuxPeerLinkInfo{}, ErrAdapterOwnership
+	}
+	link := details[0]
+	if !linuxPeerLinkName.MatchString(link.Name) || link.Index != iface.Index || link.Alias != "endlessnet:peer:"+owner ||
+		!strings.HasPrefix(link.Name, prefix) || link.Group != strconv.FormatUint(uint64(group), 10) ||
+		(link.Info.Kind != transport.WireGuard && link.Info.Kind != transport.AmneziaWG) {
+		return linuxPeerLinkInfo{}, ErrAdapterOwnership
+	}
+
+	return link, nil
 }
 
 // Stage the route while the old firewall policy still denies application

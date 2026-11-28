@@ -15,8 +15,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type linuxKernelPort struct{ driver, broker uint16 }
-
 func openLinuxBrokerSocket(ctx context.Context, mark uint32) (*net.UDPConn, error) {
 	if mark == 0 {
 		return nil, ErrConfiguration

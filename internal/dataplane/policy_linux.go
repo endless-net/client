@@ -28,12 +28,11 @@ type linuxFlowGrant struct {
 }
 
 type linuxFilterPlan struct {
-	kernelPorts []linuxKernelPort
-	probes      []linuxProbeBinding
-	address     netip.Addr
-	protected   []netip.Addr
-	grants      []linuxFlowGrant
-	direct      map[netip.Addr]string
+	probes    []linuxProbeBinding
+	address   netip.Addr
+	protected []netip.Addr
+	grants    []linuxFlowGrant
+	direct    map[netip.Addr]string
 }
 
 func prepareLinuxFilter(snapshot coordinator.NetworkMapSnapshot, maxGrants, maxProtected int) (linuxFilterPlan, error) {
@@ -128,17 +127,6 @@ func (p linuxFilterPlan) transaction(id linuxFilterIdentity, install bool, mode 
 			_, _ = fmt.Fprintf(&rules, "flush chain %s %s\n", table, name)
 		}
 		_, _ = fmt.Fprintf(&rules, "flush set %s protected\n", table)
-	}
-	ports := make(map[uint16]bool, len(p.kernelPorts)*2)
-	for _, pair := range p.kernelPorts {
-		if pair.driver == 0 || pair.broker == 0 || pair.driver == pair.broker || ports[pair.driver] || ports[pair.broker] {
-			return "", ErrConfiguration
-		}
-		ports[pair.driver], ports[pair.broker] = true, true
-		// WireGuard owns a wildcard UDP listener. Only admit datagrams already
-		// checked and forwarded by this session's marked loopback broker.
-		fmt.Fprintf(&rules, "add rule %s input iifname %q ip saddr 127.0.0.1 ip daddr 127.0.0.1 meta mark %d udp sport %d udp dport %d accept\n", table, "lo", id.mark, pair.broker, pair.driver)
-		fmt.Fprintf(&rules, "add rule %s input udp dport %d counter drop\n", table, pair.driver)
 	}
 	addresses := append(slices.Clone(p.protected), retained...)
 	occupied := make(map[netip.Addr]bool, len(p.protected)+2*len(p.probes))

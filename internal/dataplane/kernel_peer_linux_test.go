@@ -458,6 +458,7 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	f.snapshot.Network.Revision = f.snapshot.Revision.Network
 	f.snapshot.Peers[0].Transport.LocalProbeIPv4 = "172.20.4.10"
 	f.snapshot.Peers[0].Transport.PeerProbeIPv4 = "172.20.4.11"
+	f.snapshot.Peers[0].ACLGrants[0].AllowedPorts = append(f.snapshot.Peers[0].ACLGrants[0].AllowedPorts, coordinator.ACLPort{Protocol: "udp", Port: 443})
 	f.refresh(t, &cursor)
 	var confirmed *assignedCipher
 	var negotiation *candidateNegotiation
@@ -540,10 +541,42 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 		t.Fatal(err)
 	}
 
-	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", candidate, "up")
-	kernelPort, err := kernelListenPort(conn, engine, iface.Index)
-	if err != nil {
-		t.Fatal(err)
+	var guard *linuxKernelListener
+	var kernelPort uint16
+	if proxy != nil {
+		policy, err := prepareLinuxFilter(f.snapshot, 100, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rules, err := policy.transaction(id, true, linuxDeny, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := linuxNFTApply(ctx, rules); err != nil {
+			t.Fatal(err)
+		}
+		unmarked, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer unmarked.Close()
+		if unexpected, err := startLinuxKernelListener(ctx, conn, iface, id, unmarked); unexpected != nil || !errors.Is(err, ErrConfiguration) {
+			t.Fatalf("unmarked broker: guard=%v error=%v", unexpected, err)
+		}
+		guard, err = startLinuxKernelListener(ctx, conn, iface, id, proxy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		kernelPort = guard.port
+		if err := guard.retire(ctx); err != ErrAdapterOwnership {
+			t.Fatalf("retired guard before driver closed: %v", err)
+		}
+	} else {
+		runLinuxTestCommand(t, ctx, linuxIP, "link", "set", candidate, "up")
+		kernelPort, err = kernelListenPort(conn, engine, iface.Index)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	reverse.Endpoint = netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), kernelPort).String()
 	var broker *kernelCandidateBroker
@@ -649,6 +682,16 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	if err != nil || string(reply[:n]) != "Go to kernel" {
 		t.Fatalf("kernel did not deliver the Go peer's reply: %v", err)
 	}
+	if guard != nil {
+		runLinuxTestCommand(t, ctx, linuxIP, "link", "del", candidate)
+		if err := guard.retire(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err := guard.retire(ctx); err != nil {
+			t.Fatalf("repeated retirement: %v", err)
+		}
+	}
+
 }
 
 func TestLinuxKernelPeerWithoutNamespacePrivilege(t *testing.T) {
@@ -802,9 +845,6 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if broker != nil {
-		plan.kernelPorts = []linuxKernelPort{{driver: broker.link.driver.Port(), broker: broker.link.socket.LocalAddr().(*net.UDPAddr).AddrPort().Port()}}
-	}
 	plan.probes = []linuxProbeBinding{b}
 	apply := func(install bool, mode linuxFilterMode) {
 		t.Helper()
@@ -816,11 +856,11 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 			t.Fatal(err)
 		}
 	}
-	apply(true, linuxOnline)
+	apply(broker == nil, linuxOnline)
 	if broker != nil {
 		// A local UDP socket reaching the wildcard listener must be dropped
 		// before WireGuard. Verify the exact input-rule counter in this netns.
-		before := linuxFixtureInputDrops(t, id.table)
+		before := linuxFixtureInputDrops(t, id.table, device)
 		other, err := net.DialUDP("udp4", nil, net.UDPAddrFromAddrPort(broker.link.driver))
 		if err != nil {
 			t.Fatal(err)
@@ -830,7 +870,7 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := linuxFixtureInputDrops(t, id.table); got != before+1 {
+		if got := linuxFixtureInputDrops(t, id.table, device); got != before+1 {
 			t.Fatalf("unbrokered delivery did not hit listener guard: %d -> %d", before, got)
 		}
 	}
@@ -941,9 +981,16 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if err != nil || len(route) != 0 {
 		t.Fatalf("service route survived TUN: %v", err)
 	}
-	if err := linuxNFTApply(ctx, "delete table inet "+id.table+"\n"); err != nil {
+	// Return the application firewall to the pre-probe state, keeping the
+	// driver's independent input guard until its interface is destroyed.
+	plan.probes = nil
+	_, peerIP, err := a.addresses()
+	if err != nil {
 		t.Fatal(err)
 	}
+	plan.direct = map[netip.Addr]string{peerIP: device}
+	apply(false, linuxOnline)
+
 }
 
 func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assignedCipher, sock *linuxProbeSocket, received <-chan []byte, port *packetPort, broker *kernelCandidateBroker) {
@@ -1085,9 +1132,9 @@ func testLinuxProbeQuotaOnWire(t *testing.T, f *candidateFixture, channel *assig
 	}
 }
 
-func linuxFixtureInputDrops(t *testing.T, table string) uint64 {
+func linuxFixtureInputDrops(t *testing.T, table, chainName string) uint64 {
 	t.Helper()
-	data, err := exec.CommandContext(t.Context(), linuxNFT, "-j", "list", "chain", "inet", table, "input").Output()
+	data, err := exec.CommandContext(t.Context(), linuxNFT, "-j", "list", "chain", "inet", table, chainName).Output()
 	if err != nil {
 		t.Fatal(err)
 	}
