@@ -48,17 +48,62 @@ func TestKernelAWGRequiresExactReadbackOfEveryProfileField(t *testing.T) {
 	for i, field := range want {
 		rest := append([]netlink.Attribute{}, want[:i]...)
 		rest = append(rest, want[i+1:]...)
-		if check(rest) == nil {
-			t.Fatalf("accepted missing attribute %d", field.Type)
+		if err := check(rest); err != errKernelUnavailable {
+			t.Fatalf("missing attribute %d: %v", field.Type, err)
 		}
 		changed := netlink.Attribute{Type: field.Type, Data: bytes.Clone(field.Data)}
 		changed.Data[0] ^= 1
-		if check(append(rest, changed)) == nil {
-			t.Fatalf("accepted changed attribute %d", field.Type)
+		if err := check(append(rest, changed)); err != errKernelUnavailable {
+			t.Fatalf("unsupported value for attribute %d: %v", field.Type, err)
 		}
-		if check(append(rest, field, field)) == nil {
-			t.Fatalf("accepted duplicate attribute %d", field.Type)
+		if err := check(append(rest, field, field)); err != ErrConfiguration {
+			t.Fatalf("duplicate attribute %d: %v", field.Type, err)
 		}
+	}
+}
+
+// Run with the released AWG 3.0 module to exercise its real SET_DEVICE
+// rejection of a valid 3.1 profile and verify cleanup before Go fallback.
+func TestLinuxOlderAWGModuleKeepsSignedProfile(t *testing.T) {
+	version, err := os.ReadFile("/sys/module/amneziawg/version")
+	if err != nil || strings.TrimSpace(string(version)) != "3.0.20260805" {
+		t.Skip("requires the AWG 3.0.20260805 kernel module")
+	}
+	if !linuxNetworkTest(t) {
+		return
+	}
+	ctx := t.Context()
+	f := newCandidateFixture(t)
+	a := f.assignment(t)
+	conn, err := genetlink.Dial(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	if _, err := conn.GetFamily(transport.AmneziaWG); err != nil {
+		t.Fatal(err)
+	}
+	const name = "en-old-awg"
+	prepare := func(ctx context.Context, cfg directCipherConfig, _ *assignedCipher, _ *packetPort) (directPeerEngine, error) {
+		iface, err := prepareLinuxPeerLink(ctx, conn, cfg, netip.MustParseAddrPort("127.0.0.1:39101"), name, "")
+		if iface != nil || err != errKernelUnavailable {
+			t.Fatalf("expected unsupported profile, got interface %v, err %v", iface, err)
+		}
+		if _, err := net.InterfaceByName(name); err == nil {
+			t.Fatal("incompatible kernel candidate retained its interface")
+		}
+		return nil, err
+	}
+	channel, err := prepareAssignedCipher(ctx, f.verified, f.lease, a.peer.ID, a.offer.Profile.ID,
+		f.profile.Keys.WireGuardPrivate, 1420, f.clock, func([]byte) error { return nil },
+		func(uint16) (candidateSocket, error) { return newCandidateSocketFixture(), nil }, prepare)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer channel.Close()
+	engine, ok := channel.cipher.(*peerCipher)
+	if !ok || engine.profileDigest != a.offer.Digest {
+		t.Fatalf("fallback lost signed profile, engine %T", channel.cipher)
 	}
 }
 

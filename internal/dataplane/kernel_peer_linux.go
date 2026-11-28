@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"net/netip"
 	"slices"
 
@@ -83,6 +84,11 @@ func configureKernelWGPeer(ctx context.Context, conn *genetlink.Conn, index int,
 		return ErrNoAuthority
 	}
 	_, err = conn.Execute(genetlink.Message{Header: genetlink.Header{Command: unix.WG_CMD_SET_DEVICE, Version: 1}, Data: data}, family.ID, netlink.Request|netlink.Acknowledge)
+	// The signed profile was validated before encoding. Older AWG modules
+	// can reject newer device attributes even when their family exists.
+	if len(settings) != 0 && (errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EOPNOTSUPP)) {
+		return errKernelUnavailable
+	}
 	if err != nil {
 		return err
 	}

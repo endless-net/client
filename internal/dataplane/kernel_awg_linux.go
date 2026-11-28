@@ -83,7 +83,7 @@ func verifyKernelAWGSettings(messages []genetlink.Message, expected []netlink.At
 			seen[typ] = true
 			fields.Do(func(data []byte) error {
 				if !bytes.Equal(data, value) {
-					return ErrConfiguration
+					return errKernelUnavailable
 				}
 				return nil
 			})
@@ -93,7 +93,7 @@ func verifyKernelAWGSettings(messages []genetlink.Message, expected []netlink.At
 		}
 	}
 	if len(seen) != len(want) {
-		return ErrConfiguration
+		return errKernelUnavailable
 	}
 	return nil
 }
