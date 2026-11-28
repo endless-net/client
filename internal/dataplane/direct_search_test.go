@@ -13,7 +13,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tailscale/wireguard-go/device"
 	"time"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
@@ -23,6 +22,7 @@ import (
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 	relaywire "github.com/endless-net/relay/api/wire"
 	signing "github.com/endless-net/signing/api/contract"
+	"github.com/tailscale/wireguard-go/device"
 )
 
 func reverseSearchFixture(t *testing.T, a *candidateFixture) *candidateFixture {
