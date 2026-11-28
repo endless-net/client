@@ -2,14 +2,18 @@ package dataplane
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"net"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/endless-net/client/api/transport"
 	"github.com/endless-net/client/internal/state"
+	"github.com/mdlayher/netlink"
+	"golang.org/x/sys/unix"
 )
 
 const linuxNFT = "/usr/sbin/nft"
@@ -71,18 +75,27 @@ func CleanLinuxNetwork(ctx context.Context, ledger state.LinuxNetworkLedger) err
 	if err != nil {
 		return err
 	}
-	links, err := net.Interfaces()
-	if err != nil {
-		return ErrAdapterOwnership
-	}
-	for _, link := range links {
-		if link.Name == receipt.Table {
-			return ErrAdapterOwnership
-		}
-	}
 	handle, err := linuxNFTLookup(ctx, receipt)
 	if err != nil {
 		return err
+	}
+	links, err := remainingLinuxPeers(ctx, receipt)
+	if err != nil {
+		return err
+	}
+	for _, index := range links {
+		if err := deleteLinuxPeerIndex(ctx, index); err != nil {
+			return err
+		}
+	}
+	if len(links) > 0 {
+		remaining, err := remainingLinuxPeers(ctx, receipt)
+		if err != nil {
+			return err
+		}
+		if len(remaining) != 0 {
+			return ErrAdapterOwnership
+		}
 	}
 	if handle != 0 {
 		if err := linuxNFTApply(ctx, "delete table inet handle "+strconv.FormatUint(handle, 10)+"\n"); err != nil {
@@ -93,4 +106,68 @@ func CleanLinuxNetwork(ctx context.Context, ledger state.LinuxNetworkLedger) err
 		}
 	}
 	return ledger.Retire(ctx, receipt)
+}
+
+// Read all links in this network namespace. The owner group is installed in
+// the exclusive creation request, before the device can receive a private key.
+func remainingLinuxPeers(ctx context.Context, receipt state.LinuxNetworkReceipt) ([]int, error) {
+	data, err := exec.CommandContext(ctx, linuxIP, "-N", "-j", "-d", "link", "show").Output()
+	if err != nil {
+		return nil, ErrAdapterOwnership
+	}
+	var links []struct {
+		Name  string   `json:"ifname"`
+		Index int      `json:"ifindex"`
+		Group string   `json:"group"`
+		Alias string   `json:"ifalias"`
+		Flags []string `json:"flags"`
+		Info  struct {
+			Kind string `json:"info_kind"`
+		} `json:"linkinfo"`
+	}
+	if err := json.Unmarshal(data, &links); err != nil || len(links) == 0 {
+		return nil, ErrAdapterOwnership
+	}
+	prefix, group := linuxPeerScope(receipt.Owner)
+	groupID := strconv.FormatUint(uint64(group), 10)
+	var owned []int
+	for _, link := range links {
+		if link.Name == receipt.Table || link.Index <= 0 || link.Name == "" {
+			return nil, ErrAdapterOwnership
+		}
+		ownedAlias := link.Alias == "endlessnet:peer:"+receipt.Owner
+		if link.Group != groupID || !strings.HasPrefix(link.Name, prefix) {
+			if ownedAlias {
+				return nil, ErrAdapterOwnership
+			}
+			continue
+		}
+		if !ownedAlias && (link.Alias != "" || slices.Contains(link.Flags, "UP")) {
+			return nil, ErrAdapterOwnership
+		}
+		if !linuxPeerLinkName.MatchString(link.Name) || (link.Info.Kind != transport.WireGuard && link.Info.Kind != transport.AmneziaWG) {
+			return nil, ErrAdapterOwnership
+		}
+		owned = append(owned, link.Index)
+	}
+	return owned, nil
+}
+
+// Address the identified interface by its kernel index so reuse of its name
+// between inspection and deletion does not target the replacement.
+func deleteLinuxPeerIndex(ctx context.Context, index int) error {
+	conn, err := netlink.Dial(unix.NETLINK_ROUTE, nil)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	data := make([]byte, unix.SizeofIfInfomsg)
+	binary.NativeEndian.PutUint32(data[4:8], uint32(index))
+	_, err = conn.Execute(netlink.Message{Header: netlink.Header{Type: unix.RTM_DELLINK, Flags: netlink.Request | netlink.Acknowledge}, Data: data})
+	if errors.Is(err, unix.ENODEV) {
+		return nil
+	}
+	return err
 }

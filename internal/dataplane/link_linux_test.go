@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -71,6 +72,110 @@ func TestLinuxOwnedLinkAndFilterCleanup(t *testing.T) {
 	if _, err := ledger.Read(ctx); err != state.ErrMissing {
 		t.Fatalf("effects receipt survived cleanup: %v", err)
 	}
+}
+
+// An application route moved to a kernel peer must still depend on the
+// session-owned TUN address. The WG link outlives its configuring process.
+func TestLinuxKernelRouteExpiresWithSessionAddress(t *testing.T) {
+	if !linuxNetworkTest(t) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	id, plan := linuxPolicyFixture()
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	ledger := state.NewLinuxNetworkLedger(directory)
+	receipt := state.LinuxNetworkReceipt{Table: id.table, Owner: id.owner}
+	if err := ledger.Prepare(ctx, receipt); err != nil {
+		t.Fatal(err)
+	}
+	guards, err := plan.transaction(id, true, linuxOnline, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := linuxNFTApply(ctx, guards); err != nil {
+		t.Fatal(err)
+	}
+	session, err := openLinuxLink(ctx, id.tunnel, 1420)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.device.Close()
+	if err := session.configure(ctx, plan.address, plan.protected[1:]); err != nil {
+		t.Fatal(err)
+	}
+	prefix, group := linuxPeerScope(receipt.Owner)
+	candidate := prefix + "00001"
+	if err := createLinuxKernelLink(ctx, candidate, "wireguard", receipt.Owner); err != nil {
+		t.Fatal(err)
+	}
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", candidate, "up")
+	peer := plan.protected[1].String()
+	runLinuxTestCommand(t, ctx, linuxIP, "route", "change", peer+"/32", "dev", candidate,
+		"src", plan.address.String(), "proto", linuxRouteProtocol)
+	route, err := exec.CommandContext(ctx, linuxIP, "route", "get", peer).Output()
+	if err != nil || !strings.Contains(string(route), "dev "+candidate+" src "+plan.address.String()) {
+		t.Fatalf("kernel route did not acquire the session source: %s, %v", route, err)
+	}
+	if err := session.device.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := net.InterfaceByName(candidate); err != nil {
+		t.Fatal("kernel interface disappeared together with the session TUN", err)
+	}
+	route, err = exec.CommandContext(ctx, linuxIP, "-4", "route", "show", "exact", peer+"/32").Output()
+	if err != nil || len(route) != 0 {
+		t.Fatalf("peer route survived loss of the session address: %s, %v", route, err)
+	}
+	// Install a route with a different source. The session guards must cover
+	// it until the service has retired its remaining kernel effects.
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "add", "foreign", "type", "dummy")
+	runLinuxTestCommand(t, ctx, linuxIP, "address", "add", "192.0.2.5/24", "dev", "foreign")
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", "foreign", "up")
+	runLinuxTestCommand(t, ctx, linuxIP, "route", "add", peer+"/32", "dev", "foreign")
+	conn, err := net.Dial("udp4", net.JoinHostPort(peer, "5300"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.Write([]byte("fixture")); err == nil {
+		t.Fatal("overlay packet escaped through a foreign route")
+	}
+	const other = "en000000000002"
+	if err := createLinuxKernelLink(ctx, other, "wireguard", ""); err != nil {
+		t.Fatal(err)
+	}
+	suspect := prefix + "00002"
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "add", suspect, "group", strconv.FormatUint(uint64(group), 10), "type", "dummy")
+	if err := CleanLinuxNetwork(ctx, ledger); err != ErrAdapterOwnership {
+		t.Fatalf("unrecognized tagged interface: %v", err)
+	}
+	if h, err := linuxNFTLookup(ctx, receipt); err != nil || h == 0 {
+		t.Fatalf("lost policy before cleanup: %v", err)
+	}
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", suspect, "group", "0")
+	orphan := prefix + "00003"
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "add", orphan, "group", strconv.FormatUint(uint64(group), 10), "type", "wireguard")
+	if err := CleanLinuxNetwork(ctx, ledger); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := net.InterfaceByName(orphan); err == nil {
+		t.Fatal("unconfigured candidate survived cleanup")
+	}
+	if _, err := net.InterfaceByName(candidate); err == nil {
+		t.Fatal("owned peer survived cleanup")
+	}
+	if _, err := net.InterfaceByName(other); err != nil {
+		t.Fatal("unowned WireGuard interface lost", err)
+	}
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "show", "dev", "foreign")
+	if err := CleanLinuxNetwork(ctx, ledger); err != nil {
+		t.Fatal("retry", err)
+	}
+
 }
 
 func TestLinuxCrashRecoveryPreservesForeignEffects(t *testing.T) {

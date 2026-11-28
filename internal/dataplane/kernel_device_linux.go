@@ -2,14 +2,18 @@ package dataplane
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"net"
 	"net/netip"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/endless-net/client/api/transport"
@@ -81,7 +85,7 @@ func configureLinuxPeerDevice(ctx context.Context, cfg directCipherConfig) (_ *l
 	if err := exec.CommandContext(ctx, linuxIP, "link", "set", "lo", "up").Run(); err != nil {
 		return nil, err
 	}
-	if err := createLinuxKernelLink(ctx, name, engine); err != nil {
+	if err := createLinuxKernelLink(ctx, name, engine, ""); err != nil {
 		return nil, err
 	}
 	iface, err := net.InterfaceByName(name)
@@ -151,14 +155,30 @@ func configureLinuxPeerDevice(ctx context.Context, cfg directCipherConfig) (_ *l
 	return device, nil
 }
 
+var linuxPeerLinkName = regexp.MustCompile(`^ep[0-9a-f]{13}$`)
+
+// Both markers are set by the same exclusive RTM_NEWLINK. WireGuard ignores
+// IFLA_IFALIAS during creation on kernels which accept it on a later change.
+func linuxPeerScope(owner string) (prefix string, group uint32) {
+	digest := sha256.Sum256([]byte("endlessnet:peer:" + owner))
+	return "ep" + hex.EncodeToString(digest[:4]), binary.BigEndian.Uint32(digest[4:8])&0x3fffffff | 0x40000000
+}
+
 // RTM_NEWLINK reports an unsupported link kind as EOPNOTSUPP. Keep other
 // failures distinct so an invalid request or a name collision stops preparation.
-func createLinuxKernelLink(ctx context.Context, name, engine string) error {
+func createLinuxKernelLink(ctx context.Context, name, engine, owner string) error {
 	if engine != transport.WireGuard && engine != transport.AmneziaWG {
 		return ErrConfiguration
 	}
 	attrs := netlink.NewAttributeEncoder()
 	attrs.String(unix.IFLA_IFNAME, name)
+	if owner != "" {
+		prefix, group := linuxPeerScope(owner)
+		if !strings.HasPrefix(name, prefix) || !linuxPeerLinkName.MatchString(name) {
+			return ErrConfiguration
+		}
+		attrs.Uint32(unix.IFLA_GROUP, group)
+	}
 	attrs.Nested(unix.IFLA_LINKINFO, func(info *netlink.AttributeEncoder) error {
 		info.String(unix.IFLA_INFO_KIND, engine)
 		return nil
@@ -184,5 +204,10 @@ func createLinuxKernelLink(ctx context.Context, name, engine string) error {
 	if errors.Is(err, unix.EOPNOTSUPP) || errors.Is(err, unix.EPERM) {
 		return errKernelUnavailable
 	}
-	return err
+	if err != nil || owner == "" {
+		return err
+	}
+	// A crash before the alias is set leaves only an unconfigured, down
+	// interface. The atomic group and name identify that intermediate state.
+	return exec.CommandContext(ctx, linuxIP, "link", "set", "dev", name, "alias", "endlessnet:peer:"+owner).Run()
 }
