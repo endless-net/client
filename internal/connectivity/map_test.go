@@ -380,9 +380,15 @@ func TestVerifierRejectsRollbackAndDoesNotPromoteControlEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	cursor := first.Cursor()
+	if _, err := v.Verify(t.Context(), f.sign(t, &cursor, f.now.Add(-time.Second), f.now.Add(time.Minute)), &cursor); !errors.Is(err, ErrMapIssueRollback) {
+		t.Fatal("older signed issue time lost its reason", err)
+	}
+	if _, err := v.Verify(t.Context(), f.sign(t, &cursor, f.now, f.now.Add(2*time.Minute)), &cursor); !errors.Is(err, ErrMapContentConflict) {
+		t.Fatal("conflicting signed payload at identical revision and issue time lost its reason", err)
+	}
 	f.value.Revision.Network--
 	f.value.Network.Revision = f.value.Revision.Network
-	if _, err := v.Verify(context.Background(), f.sign(t, &cursor, f.now, f.now.Add(time.Minute)), &cursor); !errors.Is(err, ErrStale) {
+	if _, err := v.Verify(context.Background(), f.sign(t, &cursor, f.now, f.now.Add(time.Minute)), &cursor); !errors.Is(err, ErrMapRevisionRollback) {
 		t.Fatal("network rollback accepted", err)
 	}
 	for _, kind := range []string{"heartbeat", "checkpoint"} {

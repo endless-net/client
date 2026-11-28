@@ -25,23 +25,27 @@ import (
 )
 
 var (
-	ErrConfig             = errors.New("invalid connectivity configuration")
-	ErrMap                = errors.New("invalid current network map")
-	ErrMapEvent           = fmt.Errorf("%w: stream event", ErrMap)
-	ErrMapEnvelope        = fmt.Errorf("%w: signed envelope", ErrMap)
-	ErrMapNotYetValid     = fmt.Errorf("%w: future issue time", ErrMapEnvelope)
-	ErrMapAlreadyExpired  = fmt.Errorf("%w: expired at verification time", ErrMapEnvelope)
-	ErrMapCredentialBound = fmt.Errorf("%w: exceeds credential lifetime", ErrMapEnvelope)
-	ErrMapTTL             = fmt.Errorf("%w: exceeds maximum map lifetime", ErrMapEnvelope)
-	ErrMapRelay           = fmt.Errorf("%w: relay configuration", ErrMap)
-	ErrMapProfile         = fmt.Errorf("%w: network or peer configuration", ErrMap)
-	ErrTrust              = errors.New("current connectivity trust unavailable")
-	ErrReplay             = errors.New("network map replay")
-	ErrStale              = errors.New("network map rollback")
-	ErrNoMap              = errors.New("event is not a new authoritative map")
-	ErrResync             = errors.New("network map resynchronization required")
-	ErrCredentialExpired  = errors.New("node credential expired or unknown")
-	ErrCredentialInvalid  = errors.New("node credential verification failed")
+	ErrConfig              = errors.New("invalid connectivity configuration")
+	ErrMap                 = errors.New("invalid current network map")
+	ErrMapEvent            = fmt.Errorf("%w: stream event", ErrMap)
+	ErrMapEnvelope         = fmt.Errorf("%w: signed envelope", ErrMap)
+	ErrMapNotYetValid      = fmt.Errorf("%w: future issue time", ErrMapEnvelope)
+	ErrMapAlreadyExpired   = fmt.Errorf("%w: expired at verification time", ErrMapEnvelope)
+	ErrMapCredentialBound  = fmt.Errorf("%w: exceeds credential lifetime", ErrMapEnvelope)
+	ErrMapTTL              = fmt.Errorf("%w: exceeds maximum map lifetime", ErrMapEnvelope)
+	ErrMapRelay            = fmt.Errorf("%w: relay configuration", ErrMap)
+	ErrMapProfile          = fmt.Errorf("%w: network or peer configuration", ErrMap)
+	ErrTrust               = errors.New("current connectivity trust unavailable")
+	ErrMapRevisionRollback = fmt.Errorf("%w: map_revision_rollback", ErrStale)
+	ErrMapIssueRollback    = fmt.Errorf("%w: map_issue_time_rollback", ErrStale)
+	ErrMapContentConflict  = fmt.Errorf("%w: map_content_conflict", ErrStale)
+	ErrControlConflict     = fmt.Errorf("%w: control_conflict", ErrStale)
+	ErrReplay              = errors.New("network map replay")
+	ErrStale               = errors.New("network map rollback")
+	ErrNoMap               = errors.New("event is not a new authoritative map")
+	ErrResync              = errors.New("network map resynchronization required")
+	ErrCredentialExpired   = errors.New("node credential expired or unknown")
+	ErrCredentialInvalid   = errors.New("node credential verification failed")
 )
 
 type VerifierConfig struct {
@@ -113,11 +117,14 @@ func (v *Verifier) previous(cursor *state.MapCursor) (*state.MapCursor, error) {
 	if err != nil {
 		return nil, err
 	}
-	if v.floor != nil && (copyValue.Revision.Network < v.floor.Revision.Network || copyValue.IssuedAt.Before(v.floor.IssuedAt)) {
-		return nil, ErrStale
+	if v.floor != nil && copyValue.Revision.Network < v.floor.Revision.Network {
+		return nil, ErrMapRevisionRollback
+	}
+	if v.floor != nil && copyValue.IssuedAt.Before(v.floor.IssuedAt) {
+		return nil, ErrMapIssueRollback
 	}
 	if v.floor != nil && copyValue.Revision == v.floor.Revision && copyValue.IssuedAt.Equal(v.floor.IssuedAt) && copyValue.PayloadHash != v.floor.PayloadHash {
-		return nil, ErrStale
+		return nil, ErrMapContentConflict
 	}
 	return copyValue, nil
 }
@@ -348,14 +355,17 @@ func (v *Verifier) verifyEvent(parent context.Context, event coordinator.MapStre
 		if previous.Revision.Global != 0 || previous.Revision.Network == 0 || previous.IssuedAt.IsZero() || hashErr != nil || len(hash) != 32 || hex.EncodeToString(hash) != previous.PayloadHash {
 			return empty, ErrConfig
 		}
-		if value.Revision.Network < previous.Revision.Network || sig.IssuedAt.Before(previous.IssuedAt) {
-			return empty, ErrStale
+		if value.Revision.Network < previous.Revision.Network {
+			return empty, ErrMapRevisionRollback
+		}
+		if sig.IssuedAt.Before(previous.IssuedAt) {
+			return empty, ErrMapIssueRollback
 		}
 		if sig.PayloadHash == previous.PayloadHash {
 			return empty, ErrReplay
 		}
 		if value.Revision == previous.Revision && !sig.IssuedAt.After(previous.IssuedAt) {
-			return empty, ErrStale
+			return empty, ErrMapContentConflict
 		}
 		fullSnapshot := full && event.Type == "snapshot" && event.From == (coordinator.MapRevision{})
 		if event.From != previous.Revision && !fullSnapshot {

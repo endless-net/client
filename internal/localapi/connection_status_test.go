@@ -48,23 +48,35 @@ func TestRegistrationFailureInOwnerStatus(t *testing.T) {
 
 func TestRecoveryFailuresRemainDistinctAndSafe(t *testing.T) {
 	for kind, reason := range map[connectivity.FailureKind]string{
-		connectivity.FailureTrust:             "client.connection.trust_required",
-		connectivity.FailureCredential:        "client.connection.credential_expired",
-		connectivity.FailureNodeRenewal:       "client.connection.node_renewal_unresolved",
-		connectivity.FailureAccess:            "client.connection.access_denied",
-		connectivity.FailureRevoked:           "client.connection.registration_revoked",
-		connectivity.FailurePath:              "client.connection.path_unconfirmed",
-		connectivity.FailureCleanup:           "client.connection.cleanup_unconfirmed",
-		connectivity.FailureLogin:             "client.connection.login_required",
-		connectivity.FailureDNSAssignment:     "client.connection.dns_assignment_invalid",
-		connectivity.FailureDNSUnsupported:    "client.connection.dns_unsupported",
-		connectivity.FailureMap:               "client.connection.map_rejected",
-		connectivity.FailureConfiguration:     "client.connection.configuration_invalid",
-		connectivity.FailureCheckpoint:        "client.connection.checkpoint_unavailable",
-		connectivity.FailureProtocol:          "client.connection.protocol_rejected",
-		connectivity.FailureCredentialInvalid: "client.connection.credential_rejected",
+		connectivity.FailureMapRevisionRollback:  "client.connection.map_revision_rollback",
+		connectivity.FailureMapIssueRollback:     "client.connection.map_issue_time_rollback",
+		connectivity.FailureMapContentConflict:   "client.connection.map_content_conflict",
+		connectivity.FailureControlConflict:      "client.connection.control_conflict",
+		connectivity.FailureSessionCreate:        "client.connection.session_create_failed",
+		connectivity.FailureSessionConnect:       "client.connection.session_connect_failed",
+		connectivity.FailureSessionServe:         "client.connection.session_interrupted",
+		connectivity.FailureEndpointAnnouncement: "client.connection.endpoint_announcement_failed",
+		connectivity.FailureMapQueue:             "client.connection.map_queue_full",
+		connectivity.FailureStateCapacity:        "client.connection.state_capacity",
+		connectivity.FailureStateUnavailable:     "client.connection.state_unavailable",
+		connectivity.FailureStateWrite:           "client.connection.state_write_unconfirmed",
+		connectivity.FailureTrust:                "client.connection.trust_required",
+		connectivity.FailureCredential:           "client.connection.credential_expired",
+		connectivity.FailureNodeRenewal:          "client.connection.node_renewal_unresolved",
+		connectivity.FailureAccess:               "client.connection.access_denied",
+		connectivity.FailureRevoked:              "client.connection.registration_revoked",
+		connectivity.FailurePath:                 "client.connection.path_unconfirmed",
+		connectivity.FailureCleanup:              "client.connection.cleanup_unconfirmed",
+		connectivity.FailureLogin:                "client.connection.login_required",
+		connectivity.FailureDNSAssignment:        "client.connection.dns_assignment_invalid",
+		connectivity.FailureDNSUnsupported:       "client.connection.dns_unsupported",
+		connectivity.FailureMap:                  "client.connection.map_rejected",
+		connectivity.FailureConfiguration:        "client.connection.configuration_invalid",
+		connectivity.FailureCheckpoint:           "client.connection.checkpoint_unavailable",
+		connectivity.FailureProtocol:             "client.connection.protocol_rejected",
+		connectivity.FailureCredentialInvalid:    "client.connection.credential_rejected",
 	} {
-		f := observedConnectionFailure(kind)
+		f := ObservedConnectionFailure(kind)
 		if f == nil || f.ReasonKey != reason {
 			t.Fatal("unsafe or conflated recovery reason", kind, f)
 		}

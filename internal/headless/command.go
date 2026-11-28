@@ -113,6 +113,30 @@ func writeStatus(out io.Writer, s *clientv0.Status) error {
 
 func failureMessage(reason string) string {
 	switch reason {
+	case "client.connection.session_create_failed":
+		return "Служба не смогла создать локальный сеанс туннеля."
+	case "client.connection.session_connect_failed":
+		return "Сеанс создан, но служба не смогла завершить настройку туннеля."
+	case "client.connection.session_interrupted":
+		return "После подключения рабочий цикл туннеля завершился с ошибкой."
+	case "client.connection.endpoint_announcement_failed":
+		return "Не удалось завершить публикацию сетевого адреса устройства."
+	case "client.connection.map_revision_rollback":
+		return "Получена карта с ревизией ниже уже подтверждённой."
+	case "client.connection.map_issue_time_rollback":
+		return "Время выпуска полученной карты раньше времени выпуска уже подтверждённой карты."
+	case "client.connection.map_content_conflict":
+		return "Для одной ревизии и времени выпуска получены карты с разным содержимым."
+	case "client.connection.control_conflict":
+		return "Сервер управления отклонил запрос из-за конфликта состояния (ABORTED)."
+	case "client.connection.map_queue_full":
+		return "Очередь карт сети заполнена. Служба остановила туннель, чтобы не пропустить смену сетевого состояния."
+	case "client.connection.state_capacity":
+		return "Достигнут предел размера локального состояния клиента."
+	case "client.connection.state_unavailable":
+		return "Локальное состояние клиента отсутствует, повреждено или недоступно для чтения."
+	case "client.connection.state_write_unconfirmed":
+		return "Служба не смогла подтвердить запись локального состояния клиента."
 	case "client.connection.dns_unsupported":
 		return "Эта версия службы не поддерживает назначенные настройки DNS."
 

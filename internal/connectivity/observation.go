@@ -32,6 +32,18 @@ const (
 	FailureCredentialInvalid
 	FailureDNSAssignment
 	FailureDNSUnsupported
+	FailureSessionCreate
+	FailureSessionConnect
+	FailureSessionServe
+	FailureEndpointAnnouncement
+	FailureMapQueue
+	FailureMapRevisionRollback
+	FailureMapIssueRollback
+	FailureMapContentConflict
+	FailureControlConflict
+	FailureStateCapacity
+	FailureStateUnavailable
+	FailureStateWrite
 )
 
 func (FailureKind) Error() string { return "connection failure" }

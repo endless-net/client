@@ -97,7 +97,7 @@ func connectivityCallError(err error, mutation bool) error {
 	case connect.CodeUnauthenticated, connect.CodePermissionDenied:
 		return ErrDenied
 	case connect.CodeAborted:
-		return ErrStale
+		return ErrControlConflict
 	case connect.CodeInvalidArgument:
 		if connect.IsWireError(err) {
 			return ErrProtocol

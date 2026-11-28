@@ -37,7 +37,7 @@ func TestRequestedFullSnapshotKeepsDurableAntiRollbackFloor(t *testing.T) {
 	f.value.Revision.Network = 1
 	f.value.Network.Revision = 1
 	f.now = f.now.Add(time.Second)
-	if _, err := v.VerifySnapshot(context.Background(), f.sign(t, nil, f.now, f.now.Add(30*time.Second)), nil); !errors.Is(err, ErrStale) {
+	if _, err := v.VerifySnapshot(context.Background(), f.sign(t, nil, f.now, f.now.Add(30*time.Second)), nil); !errors.Is(err, ErrMapRevisionRollback) {
 		t.Fatal("full snapshot bypassed rollback floor", err)
 	}
 }

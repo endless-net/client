@@ -10,6 +10,7 @@ import (
 
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/control"
+	"github.com/endless-net/client/internal/localapi"
 	"github.com/endless-net/client/internal/state"
 	"github.com/google/uuid"
 )
@@ -312,6 +313,14 @@ func (w *ConnectionWorker) Reconcile(ctx context.Context, profile string, genera
 	}
 }
 
+// Keep the operation that failed when the backend has no public error class.
+func atConnectionStage(err error, stage connectivity.FailureKind) error {
+	if err != nil && connectionOperationError(err) == ErrConnectionOperation {
+		return stage
+	}
+	return err
+}
+
 func connectionOperationError(err error) error {
 	var kind connectivity.FailureKind
 	if errors.As(err, &kind) && kind != connectivity.FailureUnknown {
@@ -332,6 +341,12 @@ func connectionOperationError(err error) error {
 		return context.DeadlineExceeded
 	case errors.Is(err, context.Canceled):
 		return context.Canceled
+	case errors.Is(err, state.ErrCapacity):
+		return connectivity.FailureStateCapacity
+	case errors.Is(err, state.ErrMissing), errors.Is(err, state.ErrCorrupt):
+		return connectivity.FailureStateUnavailable
+	case errors.Is(err, state.ErrUncertain):
+		return connectivity.FailureStateWrite
 	case errors.Is(err, state.ErrStale):
 		return state.ErrStale
 	case errors.Is(err, connectivity.ErrClock):
@@ -439,7 +454,7 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 	if job.previous != nil {
 		err := connectivity.CheckOperation(op)
 		if err == nil {
-			err = job.previous.Disconnect(op)
+			err = atConnectionStage(job.previous.Disconnect(op), connectivity.FailureCleanup)
 		}
 		if err == nil {
 			err = connectivity.CheckOperation(op)
@@ -459,15 +474,16 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 	}
 	session, err := w.factory(job.lifetime, t.profile, t.generation)
 	if err == nil && session == nil {
-		err = ErrConnectionOperation
+		err = connectivity.FailureSessionCreate
 	}
+	err = atConnectionStage(err, connectivity.FailureSessionCreate)
 	if observer, ok := session.(connectivity.LocalObservationSource); ok {
 		results <- connectionResult{job: job, observer: observer}
 	}
 	if err == nil && t.intent == state.IntentConnected {
 		err = connectivity.CheckOperation(op)
 		if err == nil {
-			err = session.Connect(op, t.restore)
+			err = atConnectionStage(session.Connect(op, t.restore), connectivity.FailureSessionConnect)
 		}
 		if err == nil {
 			err = connectivity.CheckOperation(op)
@@ -475,16 +491,16 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 		if err == nil {
 			results <- connectionResult{job: job, ready: true}
 			cancelOperation()
-			err = session.Serve(job.lifetime)
+			err = atConnectionStage(session.Serve(job.lifetime), connectivity.FailureSessionServe)
 			if err == nil {
-				err = ErrConnectionOperation
+				err = connectivity.FailureSessionServe
 			}
 		}
 	}
 	if t.intent == state.IntentDisconnected && err == nil {
 		err = connectivity.CheckOperation(op)
 		if err == nil {
-			err = session.Disconnect(op)
+			err = atConnectionStage(session.Disconnect(op), connectivity.FailureCleanup)
 		}
 		if err == nil {
 			err = connectivity.CheckOperation(op)
@@ -499,10 +515,14 @@ func (w *ConnectionWorker) runJob(job *connectionJob, results chan<- connectionR
 	}
 	// Cancellation revokes packet authority before potentially slow cleanup.
 	job.cancel()
+	if w.config.Logger != nil && err != nil && !errors.Is(err, context.Canceled) {
+		failure := localapi.ObservedConnectionFailure(connectionOperationError(err))
+		w.config.Logger.Warn("client.connection.attempt_failed", "component", "connection", "generation", t.generation, "attempt", t.attempt, "reason_key", failure.ReasonKey)
+	}
 	results <- connectionResult{job: job, err: err, maintainSession: sessionMaintenanceAllowed(err)}
 	var primaryErr error
 	if session != nil {
-		cleanupErr := w.disconnectFailedSession(job.daemon, session)
+		cleanupErr := atConnectionStage(w.disconnectFailedSession(job.daemon, session), connectivity.FailureCleanup)
 		if cleanupErr != nil {
 			// A recovery can reset the observation while this owner cleans up.
 			// Carry its failure with the cleanup result unless it was just canceled.

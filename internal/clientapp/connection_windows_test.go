@@ -866,7 +866,7 @@ func TestWindowsConnectionDriverQueueOverflowRevokesWithoutBlocking(t *testing.T
 	if err := d.enqueue(f.native, connectionFrame{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.enqueue(f.native, connectionFrame{}); !errors.Is(err, ErrConnectionWorker) || !f.native.revoked.Load() {
+	if err := d.enqueue(f.native, connectionFrame{}); !errors.Is(err, connectivity.FailureMapQueue) || !f.native.revoked.Load() {
 		t.Fatal("bounded source queue dropped frame without revoke", err)
 	}
 }

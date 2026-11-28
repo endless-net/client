@@ -92,8 +92,11 @@ func (l *Lease) Confirm(m Map) error {
 	}
 	cursor := m.Cursor()
 	if l.cursor != nil {
-		if cursor.Revision.Network < l.cursor.Revision.Network || cursor.IssuedAt.Before(l.cursor.IssuedAt) {
-			return ErrStale
+		if cursor.Revision.Network < l.cursor.Revision.Network {
+			return ErrMapRevisionRollback
+		}
+		if cursor.IssuedAt.Before(l.cursor.IssuedAt) {
+			return ErrMapIssueRollback
 		}
 		if cursor.PayloadHash == l.cursor.PayloadHash {
 			if l.revoked {
@@ -102,7 +105,7 @@ func (l *Lease) Confirm(m Map) error {
 			return ErrReplay
 		}
 		if cursor.Revision == l.cursor.Revision && !cursor.IssuedAt.After(l.cursor.IssuedAt) {
-			return ErrStale
+			return ErrMapContentConflict
 		}
 	}
 	if m.Denied() {

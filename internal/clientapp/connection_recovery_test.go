@@ -163,7 +163,7 @@ func TestRecoveryPreservesPrimaryFailureWhenCleanupFails(t *testing.T) {
 	owner.cleanupFailures.Store(1)
 	loss <- connectivity.FailurePath
 	v := awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.CleanupFailure != nil })
-	if v.Phase != ConnectionFailed || v.Failure != connectivity.FailurePath || v.CleanupFailure != ErrConnectionOperation || !v.CleanupPending {
+	if v.Phase != ConnectionFailed || v.Failure != connectivity.FailurePath || v.CleanupFailure != connectivity.FailureCleanup || !v.CleanupPending {
 		t.Fatalf("primary or cleanup failure lost: %+v", v)
 	}
 	if err := w.Reconcile(workerCallContext(t), workerProfile, 1, true); !errors.Is(err, connectivity.FailurePath) {

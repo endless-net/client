@@ -23,6 +23,30 @@ func connectionDetails(err error) *clientv0.Failure {
 	}
 	f := &clientv0.Failure{Retryable: true, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_USER}
 	switch kind {
+	case connectivity.FailureSessionCreate:
+		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.session_create_failed"
+	case connectivity.FailureSessionConnect:
+		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.session_connect_failed"
+	case connectivity.FailureSessionServe:
+		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.session_interrupted"
+	case connectivity.FailureEndpointAnnouncement:
+		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.endpoint_announcement_failed"
+	case connectivity.FailureMapRevisionRollback:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.map_revision_rollback", clientv0.ActionOwner_ACTION_OWNER_SUPPORT, false
+	case connectivity.FailureMapIssueRollback:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.map_issue_time_rollback", clientv0.ActionOwner_ACTION_OWNER_SUPPORT, false
+	case connectivity.FailureMapContentConflict:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.map_content_conflict", clientv0.ActionOwner_ACTION_OWNER_SUPPORT, false
+	case connectivity.FailureControlConflict:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.control_conflict", clientv0.ActionOwner_ACTION_OWNER_SUPPORT, false
+	case connectivity.FailureMapQueue:
+		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.map_queue_full"
+	case connectivity.FailureStateCapacity:
+		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.state_capacity"
+	case connectivity.FailureStateUnavailable:
+		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.state_unavailable"
+	case connectivity.FailureStateWrite:
+		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.state_write_unconfirmed"
 	case connectivity.FailureAccess:
 		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, "client.connection.access_denied", clientv0.ActionOwner_ACTION_OWNER_ACCESS_ADMINISTRATOR, false
 	case connectivity.FailurePermission:
@@ -67,7 +91,8 @@ func connectionDetails(err error) *clientv0.Failure {
 	return f
 }
 
-func observedConnectionFailure(err error) *clientv0.Failure {
+// ObservedConnectionFailure projects an error into bounded public diagnostics for status and logs.
+func ObservedConnectionFailure(err error) *clientv0.Failure {
 	if err == nil {
 		return nil
 	}
@@ -106,10 +131,10 @@ func projectConnection(r *clientv0.Status, p state.Profile, v connectivity.Obser
 	if v.Profile == "" {
 		return
 	}
-	if f := observedConnectionFailure(v.Failure); f != nil {
+	if f := ObservedConnectionFailure(v.Failure); f != nil {
 		r.Failures = append(r.Failures, f)
 	}
-	if f := observedConnectionFailure(v.CleanupFailure); f != nil {
+	if f := ObservedConnectionFailure(v.CleanupFailure); f != nil {
 		r.Failures = append(r.Failures, f)
 	}
 	if v.Phase == connectivity.PhaseConnected && v.Local.Permission.ClockUnsafe {

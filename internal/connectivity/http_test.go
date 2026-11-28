@@ -418,7 +418,7 @@ func TestEndpointTransportUsesNodeClassExactACKAndNeverRetriesUncertainMutation(
 				want = ErrDenied
 			}
 			if name == "stale" {
-				want = ErrStale
+				want = ErrControlConflict
 			}
 			if name == "wrong-intent" || name == "wrong-generation" {
 				want = ErrConfig

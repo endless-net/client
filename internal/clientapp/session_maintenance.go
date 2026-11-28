@@ -42,7 +42,10 @@ func sessionMaintenanceAllowed(err error) bool {
 		return false
 	}
 	switch connectionOperationError(err) {
-	case ErrConnectionOperation, context.Canceled, context.DeadlineExceeded, state.ErrStale,
+	case connectivity.FailureSessionCreate, connectivity.FailureSessionConnect, connectivity.FailureSessionServe,
+		connectivity.FailureEndpointAnnouncement, connectivity.FailureMapQueue,
+		connectivity.FailureStateCapacity, connectivity.FailureStateUnavailable, connectivity.FailureStateWrite,
+		ErrConnectionOperation, context.Canceled, context.DeadlineExceeded, state.ErrStale,
 		connectivity.FailurePermission, connectivity.FailureConflict, connectivity.FailureApply, connectivity.FailurePath, connectivity.FailureCleanup,
 		connectivity.FailureControl, connectivity.FailureCredential, connectivity.FailureNodeRenewal:
 		return true

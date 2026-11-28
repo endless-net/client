@@ -506,7 +506,7 @@ func TestConnectionWorkerTerminalFailureNeedsNewRequestedGeneration(t *testing.T
 	startConnectionWorker(t, w)
 	awaitWorkerSession(t, h)
 	v := awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.Phase == ConnectionFailed && !v.CleanupPending })
-	if v.Failure != ErrConnectionOperation || !w.Retryable(workerProfile, 1) || w.Retryable(workerProfile, 2) {
+	if v.Failure != connectivity.FailureSessionConnect || !w.Retryable(workerProfile, 1) || w.Retryable(workerProfile, 2) {
 		t.Fatal("invalid failure/retry observation")
 	}
 	for range 20 {
@@ -514,7 +514,7 @@ func TestConnectionWorkerTerminalFailureNeedsNewRequestedGeneration(t *testing.T
 			t.Fatal(err)
 		}
 	}
-	if err := w.Reconcile(workerCallContext(t), workerProfile, 1, true); !errors.Is(err, ErrConnectionOperation) {
+	if err := w.Reconcile(workerCallContext(t), workerProfile, 1, true); !errors.Is(err, connectivity.FailureSessionConnect) {
 		t.Fatal(err)
 	}
 	if len(h.created) != 0 {
@@ -660,7 +660,7 @@ func TestConnectionWorkerFailedCleanupRetainsOriginalOwnerForExplicitRetry(t *te
 	if err := workerIntent(t, s, state.IntentDisconnected, time.Now().UTC(), workerRuntime); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Reconcile(workerCallContext(t), workerProfile, 2, true); !errors.Is(err, ErrConnectionOperation) {
+	if err := w.Reconcile(workerCallContext(t), workerProfile, 2, true); !errors.Is(err, connectivity.FailureCleanup) {
 		t.Fatal("uncertain cleanup claimed success", err)
 	}
 	view := awaitWorkerView(t, w, func(v ConnectionObservation) bool { return v.Generation == 2 && v.Phase == ConnectionFailed })
@@ -826,6 +826,14 @@ func TestPermanentConnectionFailuresSurviveWorkerWithoutRetry(t *testing.T) {
 		err  error
 		want connectivity.FailureKind
 	}{
+		{connectivity.ErrMapRevisionRollback, connectivity.FailureMapRevisionRollback},
+		{connectivity.ErrMapIssueRollback, connectivity.FailureMapIssueRollback},
+		{connectivity.ErrMapContentConflict, connectivity.FailureMapContentConflict},
+		{connectivity.ErrControlConflict, connectivity.FailureControlConflict},
+		{state.ErrCapacity, connectivity.FailureStateCapacity},
+		{state.ErrCorrupt, connectivity.FailureStateUnavailable},
+		{state.ErrMissing, connectivity.FailureStateUnavailable},
+		{state.ErrUncertain, connectivity.FailureStateWrite},
 		{connectivity.ErrDNSAssignment, connectivity.FailureDNSAssignment},
 		{connectivity.ErrDNSUnsupported, connectivity.FailureDNSUnsupported},
 		{connectivity.ErrMap, connectivity.FailureMap},

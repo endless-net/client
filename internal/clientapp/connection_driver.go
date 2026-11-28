@@ -291,8 +291,8 @@ func (d *connectionDriver) enqueue(native nativeConnectionSession, frame connect
 	select {
 	case pending := <-d.frames:
 		if frame.ctx == nil || pending.ctx == nil || pending.epoch != frame.epoch {
-			d.failSource(native, ErrConnectionWorker)
-			return ErrConnectionWorker
+			d.failSource(native, connectivity.FailureMapQueue)
+			return connectivity.FailureMapQueue
 		}
 	default: // The applier already drained the queue.
 	}
@@ -482,7 +482,7 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 			if !started {
 				started = true
 				if err := d.announce(initial, renewEndpoint, native); err != nil {
-					return err
+					return atConnectionStage(err, connectivity.FailureEndpointAnnouncement)
 				}
 			}
 			if waitingForReady != nil {
@@ -546,7 +546,7 @@ func (d *connectionDriver) refreshEndpoint(native nativeConnectionSession, mode 
 		d.endpointUnconfirmed.Store(true)
 		d.reportNativeFailure("endpoint_refresh", err)
 	default:
-		return err
+		return atConnectionStage(err, connectivity.FailureEndpointAnnouncement)
 	}
 	return nil
 }

@@ -31,6 +31,14 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 		return connectivity.FailureDNSAssignment
 	case errors.Is(err, connectivity.ErrDNSUnsupported):
 		return connectivity.FailureDNSUnsupported
+	case errors.Is(err, connectivity.ErrMapRevisionRollback):
+		return connectivity.FailureMapRevisionRollback
+	case errors.Is(err, connectivity.ErrMapIssueRollback):
+		return connectivity.FailureMapIssueRollback
+	case errors.Is(err, connectivity.ErrMapContentConflict):
+		return connectivity.FailureMapContentConflict
+	case errors.Is(err, connectivity.ErrControlConflict):
+		return connectivity.FailureControlConflict
 	case errors.Is(err, connectivity.ErrMap), errors.Is(err, connectivity.ErrStale):
 		return connectivity.FailureMap
 	case errors.Is(err, connectivity.ErrConfig):
@@ -70,6 +78,14 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 // connectionFailureCode returns an allowlisted diagnostic code shared by both runtimes.
 func connectionFailureCode(err error) string {
 	switch {
+	case errors.Is(err, connectivity.ErrMapRevisionRollback):
+		return "map_revision_rollback"
+	case errors.Is(err, connectivity.ErrMapIssueRollback):
+		return "map_issue_time_rollback"
+	case errors.Is(err, connectivity.ErrMapContentConflict):
+		return "map_content_conflict"
+	case errors.Is(err, connectivity.ErrControlConflict):
+		return "control_conflict"
 	case errors.Is(err, connectivity.ErrStale):
 		return "map_stale"
 	case errors.Is(err, connectivity.ErrMapEvent):
