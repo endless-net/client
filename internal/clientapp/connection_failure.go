@@ -66,6 +66,16 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 // connectionFailureCode returns an allowlisted diagnostic code shared by both runtimes.
 func connectionFailureCode(err error) string {
 	switch {
+	case errors.Is(err, connectivity.ErrStale):
+		return "map_stale"
+	case errors.Is(err, connectivity.ErrMapEvent):
+		return "map_event_invalid"
+	case errors.Is(err, connectivity.ErrMapEnvelope):
+		return "map_envelope_invalid"
+	case errors.Is(err, connectivity.ErrMapRelay):
+		return "map_relay_invalid"
+	case errors.Is(err, connectivity.ErrMapProfile):
+		return "map_profile_invalid"
 	case errors.Is(err, connectivity.ErrEndpointUncertain):
 		return "endpoint_outcome_unknown"
 	case errors.Is(err, context.DeadlineExceeded):

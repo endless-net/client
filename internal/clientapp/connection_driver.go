@@ -420,7 +420,7 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 			}
 			if !started {
 				started = true
-				if err := d.announce(initial, true, native); err != nil {
+				if err := d.announce(initial, renewEndpoint, native); err != nil {
 					return err
 				}
 			}
@@ -441,13 +441,13 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 			}
 		case <-renew.C:
 			if started && waitingForReady == nil {
-				if err := d.refreshEndpoint(native); err != nil {
+				if err := d.refreshEndpoint(native, renewEndpoint); err != nil {
 					return err
 				}
 			}
 		case <-advertisements:
 			if started && waitingForReady == nil {
-				if err := d.refreshEndpoint(native); err != nil {
+				if err := d.refreshEndpoint(native, publishChangedEndpoint); err != nil {
 					return err
 				}
 			}
@@ -470,10 +470,14 @@ func (d *connectionDriver) applyMaps(initial context.Context, restore bool, nati
 
 // Endpoint requests never race a credential-head transition. A parked renewal
 // must not stall native map apply/probe; the next timer uses the latest state.
-func (d *connectionDriver) refreshEndpoint(native nativeConnectionSession) error {
+func (d *connectionDriver) refreshEndpoint(native nativeConnectionSession, mode endpointAnnouncementMode) error {
+	if !d.credentialMu.TryRLock() {
+		return nil
+	}
+	defer d.credentialMu.RUnlock()
 	ctx, cancel := context.WithTimeout(d.lifetime, d.factory.config.WriteBudget)
 	defer cancel()
-	err := d.announceCurrent(ctx, native)
+	err := d.announce(ctx, mode, native)
 	switch {
 	case err == nil:
 		d.endpointUnconfirmed.Store(false)
@@ -486,15 +490,16 @@ func (d *connectionDriver) refreshEndpoint(native nativeConnectionSession) error
 	return nil
 }
 
-func (d *connectionDriver) announceCurrent(ctx context.Context, native nativeConnectionSession) error {
-	if !d.credentialMu.TryRLock() {
-		return nil
-	}
-	defer d.credentialMu.RUnlock()
-	return d.announce(ctx, true, native)
-}
+type endpointAnnouncementMode uint8
 
-func (d *connectionDriver) announce(ctx context.Context, online bool, native nativeConnectionSession) error {
+const (
+	renewEndpoint endpointAnnouncementMode = iota
+	publishChangedEndpoint
+	withdrawEndpoint
+)
+
+func (d *connectionDriver) announce(ctx context.Context, mode endpointAnnouncementMode, native nativeConnectionSession) error {
+	online := mode != withdrawEndpoint
 	want := state.IntentDisconnected
 	status := "offline"
 	if online {
@@ -544,13 +549,18 @@ func (d *connectionDriver) announce(ctx context.Context, online bool, native nat
 		}
 		request := p.Connection.EndpointRequest
 		endpointGeneration := p.Connection.EndpointGeneration
+		current := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint.String(), Generation: endpointGeneration, TTL: d.factory.config.EndpointTTL.String(), Status: status, Transport: desired}
+		if mode == publishChangedEndpoint && request != nil && request.IntentGeneration == d.generation && request.Receipt != nil &&
+			request.Receipt.ExpiresAt.After(d.factory.config.Verifier.Now()) && coordinator.ValidateEndpointReceipt(current, *request.Receipt, p.Attempt.NodeID, p.Attempt.NetworkID) == nil {
+			return nil
+		}
 		if request == nil || request.IntentGeneration != d.generation || request.Receipt != nil {
 			if endpointGeneration == ^uint64(0) {
 				return state.ErrStale
 			}
 			endpointGeneration++
-			r := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint.String(), Generation: endpointGeneration, TTL: d.factory.config.EndpointTTL.String(), Status: status, Transport: desired}
-			if err := connectivity.PrepareEndpoint(ctx, d.factory.store, d.profile, d.generation, r); err != nil {
+			current.Generation = endpointGeneration
+			if err := connectivity.PrepareEndpoint(ctx, d.factory.store, d.profile, d.generation, current); err != nil {
 				return err
 			}
 		}
@@ -568,7 +578,6 @@ func (d *connectionDriver) announce(ctx context.Context, online bool, native nat
 		if err := announcementContext(ctx); err != nil {
 			return err
 		}
-		current := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint.String(), Generation: receipt.Generation, TTL: d.factory.config.EndpointTTL.String(), Status: status, Transport: desired}
 		if !online || receipt.Online && receipt.Endpoint == endpoint.String() && receipt.ExpiresAt.After(d.factory.config.Verifier.Now()) && coordinator.ValidateEndpointReceipt(current, receipt, p.Attempt.NodeID, p.Attempt.NetworkID) == nil {
 			return nil
 		}
@@ -635,7 +644,7 @@ func (d *connectionDriver) Disconnect(ctx context.Context) error {
 		defer cancel()
 		// This ACK is discovery only. Local teardown success does not depend on
 		// control-plane availability; the frozen pending request remains visible.
-		_ = d.announce(call, false, native)
+		_ = d.announce(call, withdrawEndpoint, native)
 	}
 	return ctx.Err()
 }

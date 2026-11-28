@@ -839,3 +839,21 @@ func TestPermanentConnectionFailuresSurviveWorkerWithoutRetry(t *testing.T) {
 		}
 	}
 }
+
+func TestMapFailureDiagnosticsKeepTerminalDisposition(t *testing.T) {
+	for err, code := range map[error]string{
+		connectivity.ErrMap:         "map_rejected",
+		connectivity.ErrStale:       "map_stale",
+		connectivity.ErrMapEvent:    "map_event_invalid",
+		connectivity.ErrMapEnvelope: "map_envelope_invalid",
+		connectivity.ErrMapRelay:    "map_relay_invalid",
+		connectivity.ErrMapProfile:  "map_profile_invalid",
+	} {
+		if got := connectionFailureCode(err); got != code {
+			t.Errorf("diagnostic code for %v = %s, want %s", err, got, code)
+		}
+		if connectionOperationError(err) != connectivity.FailureMap || transientMapError(err) {
+			t.Errorf("map rejection lost its terminal disposition: %v", err)
+		}
+	}
+}

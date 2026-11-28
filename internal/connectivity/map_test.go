@@ -283,6 +283,16 @@ func TestVerifierRejectsSignedButUnsafeDeviceProfiles(t *testing.T) {
 			if err == nil || !m.ExpiresAt().IsZero() {
 				t.Fatal("signed unsafe map accepted")
 			}
+			switch name {
+			case "ttl", "credential-bound":
+				if !errors.Is(err, ErrMapEnvelope) {
+					t.Fatalf("expected envelope rejection, got %v", err)
+				}
+			case "endpoint-loopback", "endpoint-expired":
+				if !errors.Is(err, ErrMapProfile) {
+					t.Fatalf("expected peer configuration rejection, got %v", err)
+				}
+			}
 		})
 	}
 }

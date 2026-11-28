@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/netip"
 	"strings"
 	"time"
@@ -26,6 +27,10 @@ import (
 var (
 	ErrConfig            = errors.New("invalid connectivity configuration")
 	ErrMap               = errors.New("invalid current network map")
+	ErrMapEvent          = fmt.Errorf("%w: stream event", ErrMap)
+	ErrMapEnvelope       = fmt.Errorf("%w: signed envelope", ErrMap)
+	ErrMapRelay          = fmt.Errorf("%w: relay configuration", ErrMap)
+	ErrMapProfile        = fmt.Errorf("%w: network or peer configuration", ErrMap)
 	ErrTrust             = errors.New("current connectivity trust unavailable")
 	ErrReplay            = errors.New("network map replay")
 	ErrStale             = errors.New("network map rollback")
@@ -307,7 +312,7 @@ func (v *Verifier) verifyEvent(parent context.Context, event coordinator.MapStre
 		}
 	}
 	if coordinator.VerifyNetworkMap(*value, ed25519.PublicKey(public), v.account, v.network, v.node, v.public, start) != nil || sig.ExpiresAt.Sub(sig.IssuedAt) > 300*time.Second || sig.ExpiresAt.After(v.credentialEnds) {
-		return empty, ErrMap
+		return empty, ErrMapEnvelope
 	}
 	if !end.Before(sig.ExpiresAt) || !now.Before(sig.ExpiresAt) {
 		return empty, ErrExpired
@@ -335,10 +340,10 @@ func (v *Verifier) verifyEvent(parent context.Context, event coordinator.MapStre
 	}
 	denied := value.Node.Status == "revoked"
 	if relayMap(*value, trust.ServerKeyResponse, end) != nil {
-		return empty, ErrMap
+		return empty, ErrMapRelay
 	}
 	if v.profile(*value, end, denied) != nil {
-		return empty, ErrMap
+		return empty, ErrMapProfile
 	}
 	if challenge != nil {
 		if trust.announcement.Validate(end) != nil {

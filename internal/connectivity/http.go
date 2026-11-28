@@ -313,7 +313,7 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 		}
 		event, err := control.MapUpdate(stream.Msg())
 		if err != nil || !pathID(event.EventID) {
-			return ErrMap
+			return ErrMapEvent
 		}
 		var m Map
 		if count == 0 {

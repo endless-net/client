@@ -513,6 +513,15 @@ func TestPreparedListenerSignalPublishesBeforePeriodicRenewal(t *testing.T) {
 	if err := d.Connect(backendOperation(t, f), false); err != nil {
 		t.Fatal(err)
 	}
+	if err := d.refreshEndpoint(f.native, publishChangedEndpoint); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	announcements := len(f.requests)
+	f.mu.Unlock()
+	if announcements != 1 {
+		t.Fatalf("unchanged listener generated %d endpoint updates, want 1", announcements)
+	}
 	ad, err := f.native.TransportAdvertisement(f.config.Endpoint.Addr())
 	if err != nil {
 		t.Fatal(err)
@@ -914,7 +923,7 @@ func TestEndpointRefreshReportsLostACKUntilExactReplaySucceeds(t *testing.T) {
 	if err := d.Connect(backendOperation(t, f), false); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.refreshEndpoint(f.native); err != nil || !d.ConnectionLocal().EndpointRefreshUnconfirmed {
+	if err := d.refreshEndpoint(f.native, renewEndpoint); err != nil || !d.ConnectionLocal().EndpointRefreshUnconfirmed {
 		t.Fatal("lost endpoint ACK did not degrade discovery", err)
 	}
 	select {
@@ -925,7 +934,13 @@ func TestEndpointRefreshReportsLostACKUntilExactReplaySucceeds(t *testing.T) {
 	default:
 		t.Fatal("lost endpoint ACK produced no diagnostic")
 	}
-	if err := d.refreshEndpoint(f.native); err != nil || d.ConnectionLocal().EndpointRefreshUnconfirmed {
+	d.credentialMu.Lock()
+	err = d.refreshEndpoint(f.native, publishChangedEndpoint)
+	d.credentialMu.Unlock()
+	if err != nil || !d.ConnectionLocal().EndpointRefreshUnconfirmed {
+		t.Fatal("skipped refresh cleared an unresolved endpoint acknowledgement", err)
+	}
+	if err := d.refreshEndpoint(f.native, publishChangedEndpoint); err != nil || d.ConnectionLocal().EndpointRefreshUnconfirmed {
 		t.Fatal("successful exact replay did not clear the discovery failure", err)
 	}
 	f.mu.Lock()
