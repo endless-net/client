@@ -181,13 +181,8 @@ func (s *WindowsSession) profile(ctx context.Context, m connectivity.Map, cursor
 var errJournalUnchanged = errors.New("native resource journal unchanged")
 
 func (s *WindowsSession) change(ctx context.Context, m connectivity.Map, fn func(*state.ResourceJournal) error) (*state.ResourceJournal, error) {
-	value, err := s.store.Load(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer clearSessionKeys(value)
 	var journal state.ResourceJournal
-	err = s.store.Update(ctx, value.Revision, func(value *state.State) error {
+	err := s.store.UpdateCurrent(ctx, func(value *state.State) error {
 		p, ok := value.Profiles[s.profileID]
 		if !ok || value.ActiveProfileID != s.profileID {
 			return state.ErrStale

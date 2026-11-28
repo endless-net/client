@@ -535,13 +535,9 @@ func persistMapCursor(ctx context.Context, store *state.Store, generation uint64
 	if store == nil || m.snapshot.MapSignature == nil || m.profileID == "" || generation == 0 || generation != m.generation {
 		return ErrConfig
 	}
-	before, err := store.Load(ctx)
-	if err != nil {
-		return err
-	}
-	return store.Update(ctx, before.Revision, func(value *state.State) error {
+	return store.UpdateCurrent(ctx, func(value *state.State) error {
 		p, exists := value.Profiles[m.profileID]
-		if !exists || p.Connection == nil || p.Connection.Intent != state.IntentConnected || p.Connection.Generation != generation || p.Trust.AnnouncementID != m.anchorID {
+		if !exists || value.ActiveProfileID != m.profileID || p.Connection == nil || p.Connection.Intent != state.IntentConnected || p.Connection.Generation != generation || p.Trust.AnnouncementID != m.anchorID {
 			return state.ErrStale
 		}
 		cursor := m.Cursor()

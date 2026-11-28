@@ -172,7 +172,7 @@ func safeCodec(t *testing.T) cursorCodec {
 
 func TestMapPersistenceFencesDisconnectAndConcurrentIntent(t *testing.T) {
 	for _, concurrent := range []bool{false, true} {
-		t.Run(map[bool]string{false: "before-load", true: "between-load-and-CAS"}[concurrent], func(t *testing.T) {
+		t.Run(map[bool]string{false: "before-load", true: "immediately-after-cursor-commit"}[concurrent], func(t *testing.T) {
 			f := newMapFixture(t)
 			v, err := NewVerifier(f.profile, f.config)
 			if err != nil {
@@ -202,15 +202,16 @@ func TestMapPersistenceFencesDisconnectAndConcurrentIntent(t *testing.T) {
 			} else {
 				disconnect()
 			}
-			if err := PersistCursor(context.Background(), s, 1, m); !errors.Is(err, state.ErrStale) {
-				t.Fatal("late map persisted across Disconnect", err)
+			err = PersistCursor(context.Background(), s, 1, m)
+			if concurrent && err != nil || !concurrent && !errors.Is(err, state.ErrStale) {
+				t.Fatal("cursor result does not match commit order", err)
 			}
 			current, err := s.Load(context.Background())
 			if err != nil {
 				t.Fatal(err)
 			}
 			c := current.Profiles[f.profile.ID].Connection
-			if c.Intent != state.IntentDisconnected || c.Generation != 2 || c.MapCursor != nil {
+			if c.Intent != state.IntentDisconnected || c.Generation != 2 || concurrent && (c.MapCursor == nil || *c.MapCursor != m.Cursor()) || !concurrent && c.MapCursor != nil {
 				t.Fatal("late result changed latest intent/cursor")
 			}
 			if err := PersistCursor(context.Background(), s, 2, m); !errors.Is(err, ErrConfig) {

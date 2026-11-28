@@ -37,6 +37,7 @@ func (c cleanupCodec) Open(data []byte) ([]byte, error) {
 }
 
 type cleanupSlot struct {
+	codec             cleanupCodec
 	mu                sync.Mutex
 	data              []byte
 	writes, loseACKAt int
@@ -123,7 +124,7 @@ func protectedCleanupStoreAt(t *testing.T, journal *state.ResourceJournal, now t
 	if err != nil {
 		t.Fatal(err)
 	}
-	slot := &cleanupSlot{data: sealed}
+	slot := &cleanupSlot{data: sealed, codec: codec}
 	store, err := state.New(slot, codec, installation, 1<<20, 2<<20)
 	if err != nil {
 		t.Fatal(err)

@@ -148,6 +148,66 @@ func TestWindowsGrantTimeRejectsRollbackWithinConfirmedMap(t *testing.T) {
 	}
 }
 
+// Commit an independent local change between every two storage transactions
+// after the target cursor is recorded, as an endpoint worker can do.
+type concurrentRefreshWriter struct {
+	store  *state.Store
+	slot   *cleanupSlot
+	target state.MapCursor
+	writes int
+}
+
+func (w *concurrentRefreshWriter) Exclusive(ctx context.Context, f func(state.Slot) error) error {
+	value, err := w.store.Load(ctx)
+	if err != nil {
+		return err
+	}
+	p := value.Profiles[cleanupProfile]
+	clearSessionKeys(value)
+	if p.Connection.MapCursor != nil && *p.Connection.MapCursor == w.target {
+		err = w.store.UpdateCurrent(ctx, func(v *state.State) error {
+			v.HintObservedAt = v.HintObservedAt.Add(time.Second)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		w.writes++
+	}
+	return w.slot.Exclusive(ctx, f)
+}
+
+func TestWindowsRefreshWithConcurrentStateWriter(t *testing.T) {
+	s, store, slot, m, _, _, _, tunnel, clock := wiredSessionFixture(t)
+	if err := startSessionFixture(t, s, m); err != nil {
+		t.Fatal(err)
+	}
+	clock.advance(time.Second)
+	next := nextSessionMap(t, s, m, clock, func(snapshot *coordinator.NetworkMapSnapshot) { snapshot.Peers[0].EndpointGeneration++ })
+	v, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	clearSessionKeys(v)
+	w := &concurrentRefreshWriter{store: store, slot: slot, target: next.Cursor()}
+	s.store, err = state.New(w, slot.codec, v.InstallationID, 1<<20, 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Refresh(t.Context(), next); err != nil {
+		t.Fatalf("refresh after %d competing commits: %v", w.writes, err)
+	}
+	v, err = store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clearSessionKeys(v)
+	ack := v.Profiles[cleanupProfile].Connection.LastAppliedMap
+	if w.writes < 2 || ack == nil || *ack != next.Cursor() || tunnel.closes != 0 || !s.lease.Permissions().NewFlows {
+		t.Fatal("new map was not applied on the existing tunnel")
+	}
+}
+
 func TestSessionRefreshPreservesPeerObjectPermitIDsAndNativeAddress(t *testing.T) {
 	s, _, _, m, ip, dynamic, guards, tunnel, clock := wiredSessionFixture(t)
 	if err := startSessionFixture(t, s, m); err != nil {
