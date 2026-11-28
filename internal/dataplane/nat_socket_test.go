@@ -14,13 +14,21 @@ func TestBindingOnProfileSocket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer server.Close()
+	t.Cleanup(func() {
+		if err := server.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	remote := server.LocalAddr().(*net.UDPAddr).AddrPort()
 	sock, err := reserveNATSocket(remote, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sock.Close()
+	t.Cleanup(func() {
+		if err := sock.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	sock.discover(remote)
 	if err := server.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
 		t.Fatal(err)
