@@ -190,7 +190,7 @@ func TestSessionRefreshAddsPeerWithGuardsBeforeNewRoute(t *testing.T) {
 }
 
 func TestSessionRefreshLostACKNeverResumesOldGrant(t *testing.T) {
-	for failedAt := 1; failedAt <= 8; failedAt++ {
+	for failedAt := 1; ; failedAt++ {
 		s, store, slot, m, _, dynamic, _, _, clock := wiredSessionFixture(t)
 		if err := startSessionFixture(t, s, m); err != nil {
 			t.Fatal(err)
@@ -198,7 +198,18 @@ func TestSessionRefreshLostACKNeverResumesOldGrant(t *testing.T) {
 		clock.advance(time.Second)
 		next := nextSessionMap(t, s, m, clock, func(snapshot *coordinator.NetworkMapSnapshot) { addedPeerSnapshot(t, snapshot) })
 		slot.loseACKAt = slot.writes + failedAt
-		if err := s.Refresh(context.Background(), next); !errors.Is(err, state.ErrUncertain) || s.lease.Permissions().ExistingFlows || len(dynamic.live) != 0 {
+		err := s.Refresh(context.Background(), next)
+		if err == nil && slot.writes < slot.loseACKAt {
+			if failedAt == 1 {
+				t.Fatal("operation performed no durable writes")
+			}
+			slot.loseACKAt = 0
+			if err := s.Stop(cleanupContext(t)); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		if !errors.Is(err, state.ErrUncertain) || s.lease.Permissions().ExistingFlows || len(dynamic.live) != 0 {
 			t.Fatal("lost refresh ACK returned success/access", failedAt, err)
 		}
 		slot.loseACKAt = 0
@@ -267,13 +278,24 @@ func TestSessionVerifiedRevocationStopsBothFlowClassesAndCannotRefreshBack(t *te
 }
 
 func TestSessionOfflineLostACKNeverLeavesEitherFlowClassEnabled(t *testing.T) {
-	for failedAt := 1; failedAt <= 3; failedAt++ {
+	for failedAt := 1; ; failedAt++ {
 		s, _, slot, m, _, dynamic, _, _, _ := wiredSessionFixture(t)
 		if err := startSessionFixture(t, s, m); err != nil {
 			t.Fatal(err)
 		}
 		slot.loseACKAt = slot.writes + failedAt
-		if err := s.Offline(context.Background()); !errors.Is(err, state.ErrUncertain) || s.lease.Permissions().ExistingFlows || len(dynamic.live) != 0 {
+		err := s.Offline(context.Background())
+		if err == nil && slot.writes < slot.loseACKAt {
+			if failedAt == 1 {
+				t.Fatal("operation performed no durable writes")
+			}
+			slot.loseACKAt = 0
+			if err := s.Stop(cleanupContext(t)); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		if !errors.Is(err, state.ErrUncertain) || s.lease.Permissions().ExistingFlows || len(dynamic.live) != 0 {
 			t.Fatal("offline metadata uncertainty retained traffic", failedAt, err)
 		}
 		slot.loseACKAt = 0

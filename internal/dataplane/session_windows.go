@@ -5,10 +5,13 @@ package dataplane
 import (
 	"context"
 	"errors"
-	"github.com/endless-net/client/internal/underlay"
 	"net/netip"
+	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/endless-net/client/internal/underlay"
 
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/state"
@@ -47,6 +50,7 @@ type WindowsSession struct {
 	lanInterfaces    map[netip.Addr]uint32
 	weakSendOwned    bool
 	mu               sync.Mutex
+	observed         atomic.Pointer[windowsAppliedView]
 	store            *state.Store
 	profileID, id    string
 	generation       uint64
@@ -156,6 +160,8 @@ func (s *WindowsSession) profile(ctx context.Context, m connectivity.Map, cursor
 	return p, nil
 }
 
+var errJournalUnchanged = errors.New("native resource journal unchanged")
+
 func (s *WindowsSession) change(ctx context.Context, m connectivity.Map, fn func(*state.ResourceJournal) error) (*state.ResourceJournal, error) {
 	value, err := s.store.Load(ctx)
 	if err != nil {
@@ -175,14 +181,18 @@ func (s *WindowsSession) change(ctx context.Context, m connectivity.Map, fn func
 		if p.Connection.MapCursor == nil || *p.Connection.MapCursor != m.Cursor() || j == nil || j.ID != s.id || j.Generation != s.generation || j.Adapter == nil || j.Adapter.Phase != state.EffectApplied {
 			return state.ErrStale
 		}
+		before := copyJournal(*j)
 		if err := fn(j); err != nil {
 			return err
 		}
 		journal = copyJournal(*j)
+		if reflect.DeepEqual(before, journal) {
+			return errJournalUnchanged
+		}
 		value.Profiles[s.profileID] = p
 		return nil
 	})
-	if err != nil {
+	if err != nil && !errors.Is(err, errJournalUnchanged) {
 		return nil, err
 	}
 	return &journal, nil
@@ -511,6 +521,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if err != nil {
 		return err
 	}
+	s.publishAppliedView()
 	resumed, err := s.resumeSource(sourceEpoch)
 	if err != nil {
 		return err
@@ -563,6 +574,7 @@ func (s *WindowsSession) checkSessionAddress(ctx context.Context, j *state.Resou
 }
 
 func (s *WindowsSession) releaseHandles() error {
+	s.observed.Store(nil)
 	var err error
 	// With no engine constructed there are no workers to wait for, including
 	// when native cleanup itself fails. Engine owns the slot after transfer.

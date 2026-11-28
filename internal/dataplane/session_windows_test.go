@@ -56,10 +56,21 @@ func TestWindowsSessionVerifiedInitialApplyAndDisconnectUseActualStore(t *testin
 }
 
 func TestWindowsSessionInitialStoreACKLossAlwaysFailsClosed(t *testing.T) {
-	for failAt := 1; failAt <= 12; failAt++ {
+	for failAt := 1; ; failAt++ {
 		s, store, slot, m, _, dynamic, _, _, _ := wiredSessionFixture(t)
 		slot.loseACKAt = failAt
-		if err := startSessionFixture(t, s, m); !errors.Is(err, state.ErrUncertain) {
+		err := startSessionFixture(t, s, m)
+		if err == nil && slot.writes < slot.loseACKAt {
+			if failAt == 1 {
+				t.Fatal("operation performed no durable writes")
+			}
+			slot.loseACKAt = 0
+			if err := s.Stop(cleanupContext(t)); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		if !errors.Is(err, state.ErrUncertain) {
 			t.Fatal("lost durable ACK not surfaced", failAt, err)
 		}
 		if s.lease.Permissions().ExistingFlows || len(dynamic.live) != 0 {

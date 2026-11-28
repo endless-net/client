@@ -34,6 +34,28 @@ func TestWindowsSoleNodeRequiresVerifiedMapAppliedResourcesAndCurrentLease(t *te
 	if !local.SoleNodeReady || !local.Known || !local.Applied || local.PeerCount != 0 || local.DirectPaths != 0 || local.RelayPaths != 0 || !local.Permission.NewFlows {
 		t.Fatal("local readiness or path counts fabricated", local)
 	}
+	before, err := s.store.Load(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clearSessionKeys(before)
+	if _, err := s.change(operation, empty, func(*state.ResourceJournal) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	after, err := s.store.Load(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clearSessionKeys(after)
+	if after.Revision != before.Revision {
+		t.Fatalf("journal inspection committed revision %d -> %d", before.Revision, after.Revision)
+	}
+	s.mu.Lock()
+	busy := s.ConnectionLocal()
+	s.mu.Unlock()
+	if !busy.Known || !busy.Applied || busy.MapRevision != local.MapRevision || busy.DirectPaths != 0 || busy.RelayPaths != 0 {
+		t.Fatalf("busy native transaction lost applied observation: %+v", busy)
+	}
 	clock.advance(2 * time.Minute)
 	if s.ConnectionLocal().SoleNodeReady {
 		t.Fatal("expired map retained local readiness")

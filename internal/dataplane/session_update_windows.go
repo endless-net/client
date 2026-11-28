@@ -281,6 +281,7 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 		return err
 	}
 	s.current, s.policy = m, plan
+	s.publishAppliedView()
 	if s.supervisor != nil {
 		s.supervisor.Update(m)
 	}

@@ -16,8 +16,8 @@ func TestNativeObservationNeverWaitsForSDKOrConfusesListenerWithPath(t *testing.
 	s.mu.Lock()
 	busy := s.ConnectionLocal()
 	s.mu.Unlock()
-	if busy.Known || busy.Applied {
-		t.Fatal("busy native transition claimed current application")
+	if !busy.Known || !busy.Applied || busy.MapRevision != v.MapRevision || busy.DirectPaths != 0 {
+		t.Fatal("busy native transaction lost the acknowledged map or invented a path")
 	}
 	s.BlockSource()
 	v = s.ConnectionLocal()
