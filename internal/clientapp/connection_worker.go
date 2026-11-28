@@ -86,6 +86,7 @@ type connectionResult struct {
 	ready, finished bool
 	err             error
 	primaryErr      error
+	budgetErr       error
 	retained        ConnectionSession
 	observer        connectivity.LocalObservationSource
 	maintainSession bool
@@ -350,6 +351,7 @@ func (w *ConnectionWorker) setTarget(t *connectionTarget) {
 }
 
 func (w *ConnectionWorker) result(r connectionResult) {
+	w.logDeadline(&r.job.target, r.budgetErr)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.view.Profile != r.job.target.profile || w.view.Generation != r.job.target.generation {
@@ -378,20 +380,34 @@ func (w *ConnectionWorker) result(r connectionResult) {
 			w.view.CleanupFailure = connectionOperationError(r.err)
 		}
 	}
+	if r.budgetErr != nil {
+		w.setBudgetFailureLocked(&r.job.target, r.budgetErr)
+	}
 	w.announceLocked()
 }
 
 func (w *ConnectionWorker) budgetFailure(t *connectionTarget, err error) {
+	w.logDeadline(t, err)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.setBudgetFailureLocked(t, err) {
+		w.announceLocked()
+	}
+}
+
+func (w *ConnectionWorker) logDeadline(t *connectionTarget, err error) {
 	if w.config.Logger != nil && t.intent == state.IntentConnected && errors.Is(err, context.DeadlineExceeded) {
 		w.config.Logger.Warn("client.connection.deadline", "component", "connection", "generation", t.generation, "attempt", t.attempt)
 	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.view.Profile == t.profile && w.view.Generation == t.generation &&
-		(w.view.Phase != ConnectionFailed || reconnectAfterFailure(w.view.Failure)) {
-		w.view.Phase, w.view.Failure = ConnectionFailed, connectionOperationError(err)
-		w.announceLocked()
+}
+
+func (w *ConnectionWorker) setBudgetFailureLocked(t *connectionTarget, err error) bool {
+	if w.view.Profile != t.profile || w.view.Generation != t.generation ||
+		(w.view.Phase == ConnectionFailed && !reconnectAfterFailure(w.view.Failure)) {
+		return false
 	}
+	w.view.Phase, w.view.Failure = ConnectionFailed, connectionOperationError(err)
+	return true
 }
 
 func (w *ConnectionWorker) markRetryScheduled() {
@@ -851,6 +867,11 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 				}
 			}
 			if latestAttempt {
+				// Publish the original deadline and completed cleanup together.
+				// A waiter may return as soon as CleanupPending becomes false.
+				if r.finished && r.retained == nil && operationOpen {
+					r.budgetErr = desired.budget.Check()
+				}
 				w.result(r)
 			}
 			if r.finished {
@@ -869,9 +890,6 @@ func (w *ConnectionWorker) Run(ctx context.Context) (runErr error) {
 					}
 				}
 				if latestAttempt && operationOpen {
-					if err := desired.budget.Check(); err != nil {
-						w.budgetFailure(desired, err)
-					}
 					if deadlineTimer != nil {
 						deadlineTimer.Stop()
 						deadlineTimer = nil
