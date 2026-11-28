@@ -23,7 +23,6 @@ type linuxHostEngine struct {
 	channel *assignedCipher
 	port    *packetPort
 	initial candidateAssignment
-	epoch   uint64
 	iface   *net.Interface
 	proxy   *net.UDPConn
 	guard   *linuxKernelListener
@@ -42,7 +41,6 @@ func (s *LinuxSession) prepareHostCandidate(ctx context.Context, cfg directCiphe
 	if a.lease != s.lease {
 		return nil, ErrNoAuthority
 	}
-	epoch, _ := a.lease.SourceSignal()
 	conn, err := genetlink.Dial(nil)
 	if err != nil {
 		return nil, err
@@ -64,7 +62,7 @@ func (s *LinuxSession) prepareHostCandidate(ctx context.Context, cfg directCiphe
 		return nil, err
 	}
 	a.mapValue = connectivity.Map{}
-	e := &linuxHostEngine{session: s, relay: cfg.relay, channel: channel, port: port, initial: a, epoch: epoch, iface: iface, proxy: proxy}
+	e := &linuxHostEngine{session: s, relay: cfg.relay, channel: channel, port: port, initial: a, iface: iface, proxy: proxy}
 	if err = exec.CommandContext(ctx, linuxIP, "link", "set", "dev", iface.Name, "mtu", strconv.Itoa(cfg.mtu)).Run(); err == nil {
 		_, _, err = channel.bind.Open(0)
 	}
@@ -85,8 +83,8 @@ func (e *linuxHostEngine) deleteDevice(ctx context.Context) error {
 }
 func (e *linuxHostEngine) startProbe(a candidateAssignment) error {
 	ctx := e.channel.bind.ctx
-	epoch, changed := a.lease.SourceSignal()
-	if epoch != e.epoch || !e.initial.sameChannel(a) || !canFinishPreparation(ctx, e.channel.clock, a, changed) {
+	_, changed := a.lease.SourceSignal()
+	if e.initial.lease != a.lease || !e.initial.sameChannel(a) || !canFinishPreparation(ctx, e.channel.clock, a, changed) {
 		return ErrNoAuthority
 	}
 	if e.guard != nil {
@@ -173,16 +171,7 @@ func (e *linuxHostEngine) queueChecked(raw []byte, control bool, guard func() bo
 	return e.port.enqueueChecked(raw, true, guard)
 }
 func (e *linuxHostEngine) BoundPort() (uint16, error) {
-	b := e.channel.bind
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.closed || b.ctx.Err() != nil || b.port == 0 {
-		return 0, net.ErrClosed
-	}
-	if epoch, _ := b.assignment.lease.SourceSignal(); epoch != e.epoch {
-		return 0, ErrNoAuthority
-	}
-	return b.port, b.checkAdapterLocked()
+	return e.channel.bind.preparedPort()
 }
 func (e *linuxHostEngine) SetEndpoint(ctx context.Context, addr string) error {
 	if err := ctx.Err(); err != nil {

@@ -247,6 +247,18 @@ func (b *candidateBind) confirmedTrafficLocked() bool {
 	return !b.adapterProbeOnly && (b.receiveConfirmed || b.transmitConfirmed)
 }
 
+func (b *candidateBind) preparedPort() (uint16, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed || b.ctx.Err() != nil || b.socket == nil || b.port == 0 {
+		return 0, net.ErrClosed
+	}
+	// Before attachment, this port belongs to the reserved UDP socket. Its
+	// advertisement must survive the signed map that acknowledges that socket.
+	// An attached adapter is additionally fenced by its exact source signal.
+	return b.port, b.checkAdapterLocked()
+}
+
 func (b *candidateBind) checkAdapterLocked() error {
 	if b.adapterSocket != nil && b.adapterSocket != b.socket {
 		return net.ErrClosed

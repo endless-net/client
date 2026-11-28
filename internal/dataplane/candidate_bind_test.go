@@ -469,3 +469,27 @@ func TestCandidateBindOldNonceCannotReplaceNewerAttempt(t *testing.T) {
 		t.Fatal("old attempt replaced newer nonce", err)
 	}
 }
+
+func TestPreparedPortSurvivesAdvertisementUntilAdapterAttachment(t *testing.T) {
+	f := newCandidateEngineFixture(t, transport.WireGuard)
+	socket, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer socket.Close()
+	port := socket.LocalAddr().(*net.UDPAddr).AddrPort().Port()
+	b := &candidateBind{ctx: t.Context(), assignment: f.assignment(t), socket: socket, port: port}
+	epoch := f.lease.BlockSource()
+	if err := f.lease.EndSourceTransition(epoch); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := b.preparedPort(); err != nil || got != port {
+		t.Fatalf("reserved port after signed map handoff: %d, %v", got, err)
+	}
+	_, b.adapterSource = f.lease.SourceSignal()
+	b.adapterSocket = socket
+	f.lease.BlockSource()
+	if _, err := b.preparedPort(); !errors.Is(err, connectivity.ErrSourceChanged) {
+		t.Fatalf("attached adapter after source transition: %v", err)
+	}
+}

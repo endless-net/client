@@ -3,7 +3,6 @@ package dataplane
 import (
 	"context"
 	"errors"
-	"net"
 	"sync"
 	"time"
 
@@ -46,8 +45,8 @@ func prepareWindowsDirect(ctx context.Context, cfg directCipherConfig, channel *
 func (e *windowsDirectEngine) startProbe(a candidateAssignment) error {
 	channel, port, device := e.channel, e.port, e.device
 	ctx := channel.bind.ctx
-	epoch, changed := a.lease.SourceSignal()
-	if epoch != device.sourceEpoch || !a.sameChannel(device.assignment) || a.lease != device.assignment.lease ||
+	_, changed := a.lease.SourceSignal()
+	if !a.sameChannel(device.assignment) || a.lease != device.assignment.lease ||
 		!canFinishPreparation(ctx, channel.clock, a, changed) {
 		return ErrNoAuthority
 	}
@@ -140,19 +139,7 @@ func (e *windowsDirectEngine) queueChecked(raw []byte, control bool, guard func(
 }
 
 func (e *windowsDirectEngine) BoundPort() (uint16, error) {
-	b := e.channel.bind
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.closed || b.ctx.Err() != nil || b.port == 0 {
-		return 0, net.ErrClosed
-	}
-	if epoch, _ := b.assignment.lease.SourceSignal(); epoch != e.device.sourceEpoch {
-		return 0, ErrNoAuthority
-	}
-	if err := b.checkAdapterLocked(); err != nil {
-		return 0, err
-	}
-	return b.port, nil
+	return e.channel.bind.preparedPort()
 }
 
 func (e *windowsDirectEngine) SetEndpoint(ctx context.Context, addr string) error {

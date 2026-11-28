@@ -30,7 +30,7 @@ func openWindowsPeerDevice(ctx context.Context, cfg directCipherConfig) (_ *wind
 	if cfg.clock == nil || a.lease == nil {
 		return nil, ErrConfiguration
 	}
-	sourceEpoch, changed := a.lease.SourceSignal()
+	_, changed := a.lease.SourceSignal()
 	if !canFinishPreparation(ctx, cfg.clock, a, changed) {
 		return nil, ErrNoAuthority
 	}
@@ -80,7 +80,7 @@ func openWindowsPeerDevice(ctx context.Context, cfg directCipherConfig) (_ *wind
 	if err != nil {
 		return nil, errors.Join(err, adapter.Close())
 	}
-	peer := &windowsPeerDevice{Adapter: adapter, guard: guard, assignment: a, sourceChanged: changed, sourceEpoch: sourceEpoch}
+	peer := &windowsPeerDevice{Adapter: adapter, guard: guard, assignment: a, sourceChanged: changed}
 	if a.plan.LocalProbeIPv4 != "" {
 		if err := peer.installProbeRoute(); err != nil {
 			return nil, errors.Join(err, peer.Close())
@@ -104,7 +104,6 @@ type windowsPeerDevice struct {
 	driverPort    uint16
 	assignment    candidateAssignment
 	sourceChanged <-chan struct{}
-	sourceEpoch   uint64
 }
 
 // The application address stays on Wintun. The candidate receives packets
