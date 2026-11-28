@@ -1080,6 +1080,20 @@ func TestEndpointRefreshReportsLostACKUntilExactReplaySucceeds(t *testing.T) {
 func TestWatchAbortedResumesOnSameNativeSession(t *testing.T) {
 	f := newConnectionBackendFixture(t)
 	f.trailer = make(chan []byte, 1)
+	// End the replacement stream while its first map is inside native Refresh.
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var first sync.Once
+	f.native.refreshHook = func(ctx context.Context) error {
+		first.Do(func() {
+			close(entered)
+			select {
+			case <-ctx.Done():
+			case <-release:
+			}
+		})
+		return ctx.Err()
+	}
 	owner, err := f.factory.newOwner(t.Context(), workerProfile, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -1091,18 +1105,33 @@ func TestWatchAbortedResumesOnSameNativeSession(t *testing.T) {
 	}
 	// Connect EndStreamResponse after the first signed map has been applied.
 	payload := []byte(`{"error":{"code":"aborted","message":"concurrent update"}}`)
-	f.trailer <- append([]byte{2, 0, 0, 0, byte(len(payload))}, payload...)
+	end := append([]byte{2, 0, 0, 0, byte(len(payload))}, payload...)
+	f.trailer <- end
 	ctx := workerCallContext(t)
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("replacement refresh not started")
+	}
+	epoch := f.native.epochs.Load()
+	f.trailer <- end
+	for f.native.epochs.Load() == epoch && ctx.Err() == nil {
+		time.Sleep(time.Millisecond)
+	}
+	close(release)
+	if f.native.epochs.Load() == epoch {
+		t.Fatal("second interruption never blocked source")
+	}
 	tick := time.NewTicker(time.Millisecond)
 	defer tick.Stop()
-	for f.native.refreshes.Load() == 0 {
+	for f.native.refreshes.Load() < 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatal("replacement signed snapshot was never applied")
 		case <-tick.C:
 		}
 	}
-	if f.native.offlines.Load() != 1 || f.native.starts.Load() != 1 || f.native.stops.Load() != 0 || f.native.revoked.Load() {
+	if f.native.offlines.Load() != 2 || f.native.starts.Load() != 1 || f.native.stops.Load() != 0 || f.native.revoked.Load() {
 		t.Fatal("map conflict did not recover on existing native session")
 	}
 }

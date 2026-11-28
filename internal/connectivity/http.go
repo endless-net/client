@@ -24,6 +24,7 @@ import (
 var (
 	ErrUnavailable       = errors.New("connectivity control plane unavailable")
 	ErrStreamRotation    = errors.New("scheduled map stream rotation")
+	ErrStreamInterrupted = errors.New("recoverable interruption of an open map stream")
 	ErrProtocol          = errors.New("connectivity protocol or configuration rejected")
 	ErrDenied            = errors.New("connectivity access denied")
 	ErrRevoked           = errors.New("connectivity access explicitly revoked")
@@ -355,7 +356,13 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 			} else {
 				detail.RPCCode = "eof"
 			}
-			return connectivityCallError(stream.Err(), false)
+			err := connectivityCallError(stream.Err(), false)
+			// A transport interruption ends the reader. An authenticated map already
+			// admitted by the native applier retains its own deadline and source fence.
+			if receivedMap && (errors.Is(err, ErrControlConflict) || errors.Is(err, ErrUnavailable)) {
+				abort(ErrStreamInterrupted)
+			}
+			return err
 		}
 		detail.Records++
 		detail.Step = "decode_event"
