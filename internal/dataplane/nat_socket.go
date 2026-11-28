@@ -49,9 +49,13 @@ func listenNATSocket(addr netip.Addr, port uint16) (*natSocket, error) {
 	if err != nil {
 		return nil, err
 	}
+	return startNATSocket(addr, c), nil
+}
+
+func startNATSocket(addr netip.Addr, c *net.UDPConn) *natSocket {
 	s := &natSocket{UDPConn: c, local: netip.AddrPortFrom(addr, c.LocalAddr().(*net.UDPAddr).AddrPort().Port()), reads: make(chan natRead), stopped: make(chan struct{})}
 	go s.run()
-	return s, nil
+	return s
 }
 
 func (s *natSocket) run() {

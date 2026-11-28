@@ -3,8 +3,11 @@ package dataplane
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"net"
 	"net/netip"
+	"os"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -21,6 +24,15 @@ func TestBindingOnProfileSocket(t *testing.T) {
 	})
 	remote := server.LocalAddr().(*net.UDPAddr).AddrPort()
 	sock, err := reserveNATSocket(remote, 0)
+	// SO_MARK requires a capability on Linux. An unprivileged unit runner
+	// still exercises binding discovery and peer traffic on one real socket.
+	if runtime.GOOS == "linux" && errors.Is(err, os.ErrPermission) {
+		c, listenErr := net.ListenUDP("udp4", net.UDPAddrFromAddrPort(netip.AddrPortFrom(remote.Addr(), 0)))
+		if listenErr != nil {
+			t.Fatal(listenErr)
+		}
+		sock, err = startNATSocket(remote.Addr(), c), nil
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
