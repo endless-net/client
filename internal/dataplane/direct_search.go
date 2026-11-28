@@ -670,7 +670,9 @@ func (g *transportSupervisor) tickDirect(now connectivity.ClockSample) {
 			continue
 		}
 		g.healthDirect(p, now)
-		if p.search == nil && p.channel != nil && p.route.Current() == peerRouteRelay && p.fallback {
+		// A confirmed Relay can carry negotiation while the primary path still carries
+		// application traffic. Install the peer route only after Direct qualification.
+		if p.search == nil && p.channel != nil && p.route.Current() == peerRouteRelay {
 			_ = g.startSearch(p)
 		}
 		g.tickSearch(p)

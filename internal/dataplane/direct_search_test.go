@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/tailscale/wireguard-go/device"
 	"time"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
@@ -98,7 +100,7 @@ func TestTwoSupervisorsRecoverDirectWithActualAWGAfterFilteredWG(t *testing.T) {
 	testTwoSupervisorsRecoverDirect(t, true, false, 0)
 }
 
-func TestDirectOverSecondLANAddress(t *testing.T) {
+func TestDirectOverSecondLANAddressWithHealthyPrimary(t *testing.T) {
 	backend := searchTestBackend{newTransportBudget, (*peerCipher)(nil)}
 	testTwoSupervisorsThroughSelection(t, false, false, 0, backend, backend, false, nil, true)
 }
@@ -370,6 +372,18 @@ func testTwoSupervisorsThroughSelection(t *testing.T, filterWG, preferAWG bool, 
 		if err := primary.Apply(t.Context(), f.verified, f.profile.Keys.WireGuardPrivate); err != nil {
 			t.Fatal(err)
 		}
+		if multipleLAN {
+			// A usable primary route must keep serving while the pair qualifies
+			// the advertised profile on its other LAN address.
+			configured := primary.direct.config.Load()
+			if len(configured.peers) != 1 {
+				t.Fatal("expected a primary peer")
+			}
+			for key, peer := range configured.peers {
+				primary.direct.session(key, device.PeerSessionEstablished)
+				primary.direct.authenticated(key, peer.endpoint, configured, time.Now())
+			}
+		}
 		config := supervisorConfig{relay: connection.config, probeInterval: time.Millisecond, retry: time.Second, mtu: 576, maxPeers: 1, listenCandidate: listen(f.snapshot.Node.ID), hintStore: store, networkContext: func(context.Context, []byte) (string, error) { return contextDigest, nil }}
 		if setupRoute != nil && f == a {
 			config.selectDirect = routeConfig.selectDirect
@@ -479,39 +493,41 @@ func testTwoSupervisorsThroughSelection(t *testing.T, filterWG, preferAWG bool, 
 		defer g.budget.mu.Unlock()
 		return len(g.budget.engines), len(g.budget.probes)
 	}
-	for ga.outputChoices()["peer"] != peerRouteRelay || gb.outputChoices()["node"] != peerRouteRelay {
-		now := time.Now()
-		elapsed := now.Sub(lastAdvance)
-		lastAdvance = now
-		if setupRoute == nil {
-			a.clock.advance(elapsed, elapsed)
+	if !multipleLAN {
+		for ga.outputChoices()["peer"] != peerRouteRelay || gb.outputChoices()["node"] != peerRouteRelay {
+			now := time.Now()
+			elapsed := now.Sub(lastAdvance)
+			lastAdvance = now
+			if setupRoute == nil {
+				a.clock.advance(elapsed, elapsed)
+			}
+			update()
+			if time.Since(lastProgress) >= 5*time.Second {
+				ea, pra := resources(ga)
+				eb, prb := resources(gb)
+				t.Logf("engines/probes=%d/%d %d/%d", ea, pra, eb, prb)
+				t.Logf("waiting for initial Relay: connected=%v/%v status=%v/%v", first.connected(), second.connected(), ga.transportStatuses(a.verified), gb.transportStatuses(b.verified))
+				lastProgress = time.Now()
+			}
+			ga.notify()
+			gb.notify()
+			select {
+			case <-readyDeadline.C:
+				t.Fatalf("initial authenticated Relay paths did not become ready: A=%v B=%v connected=%v/%v permissions=%v/%v", ga.transportStatuses(a.verified), gb.transportStatuses(b.verified), first.connected(), second.connected(), a.lease.Permissions(), b.lease.Permissions())
+			case <-readyTick.C:
+			}
 		}
-		update()
-		if time.Since(lastProgress) >= 5*time.Second {
-			ea, pra := resources(ga)
-			eb, prb := resources(gb)
-			t.Logf("engines/probes=%d/%d %d/%d", ea, pra, eb, prb)
-			t.Logf("waiting for initial Relay: connected=%v/%v status=%v/%v", first.connected(), second.connected(), ga.transportStatuses(a.verified), gb.transportStatuses(b.verified))
-			lastProgress = time.Now()
-		}
-		ga.notify()
-		gb.notify()
+		t.Logf("own Relay proofs ready after %s", time.Since(stageStart))
+		relayPayload := cipherIPv4("100.70.0.1", "100.70.0.2", 6)
+		na.input <- relayPayload
 		select {
-		case <-readyDeadline.C:
-			t.Fatalf("initial authenticated Relay paths did not become ready: A=%v B=%v connected=%v/%v permissions=%v/%v", ga.transportStatuses(a.verified), gb.transportStatuses(b.verified), first.connected(), second.connected(), a.lease.Permissions(), b.lease.Permissions())
-		case <-readyTick.C:
+		case got := <-nb.output:
+			if !bytes.Equal(got, relayPayload) {
+				t.Fatal("Relay payload changed during candidate preparation")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("background candidates interrupted the selected Relay")
 		}
-	}
-	t.Logf("own Relay proofs ready after %s", time.Since(stageStart))
-	relayPayload := cipherIPv4("100.70.0.1", "100.70.0.2", 6)
-	na.input <- relayPayload
-	select {
-	case got := <-nb.output:
-		if !bytes.Equal(got, relayPayload) {
-			t.Fatal("Relay payload changed during candidate preparation")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("background candidates interrupted the selected Relay")
 	}
 	lastAdvance = time.Now()
 	selectionWait := time.Duration(25) * time.Second
