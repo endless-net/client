@@ -237,6 +237,10 @@ func (d *connectionDriver) Serve(ctx context.Context) error {
 }
 
 func transientMapError(err error) bool {
+	var stream *connectivity.MapStreamFailure
+	if errors.As(err, &stream) && stream.RPCCode == "aborted" && errors.Is(err, connectivity.ErrControlConflict) {
+		return true
+	}
 	return errors.Is(err, connectivity.ErrUnavailable) || errors.Is(err, connectivity.ErrResync) || errors.Is(err, context.DeadlineExceeded)
 }
 
@@ -301,6 +305,7 @@ func (d *connectionDriver) enqueue(native nativeConnectionSession, frame connect
 }
 
 func (d *connectionDriver) readMaps(native nativeConnectionSession) {
+	var retryBase time.Duration
 	var flows *connectivity.FlowMonitor
 	if owner, ok := native.(interface {
 		FlowMonitor() *connectivity.FlowMonitor
@@ -337,6 +342,7 @@ func (d *connectionDriver) readMaps(native nativeConnectionSession) {
 					d.failSource(native, connectivity.ErrRevoked)
 					return connectivity.ErrRevoked
 				}
+				retryBase = 0
 				epoch := native.MapEpoch(m)
 				if flows != nil && flowDone == nil {
 					flowDone = make(chan struct{})
@@ -394,7 +400,9 @@ func (d *connectionDriver) readMaps(native nativeConnectionSession) {
 		if err := d.enqueue(native, connectionFrame{epoch: epoch, err: connectivity.ErrUnavailable}); err != nil {
 			return
 		}
-		timer := time.NewTimer(d.factory.config.RetryInterval)
+		var delay time.Duration
+		retryBase, delay = retryBackoff(retryBase, d.factory.config.RetryInterval)
+		timer := time.NewTimer(delay)
 		select {
 		case <-d.lifetime.Done():
 			timer.Stop()

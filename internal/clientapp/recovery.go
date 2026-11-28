@@ -22,6 +22,10 @@ func reconnectAfterFailure(err error) bool {
 }
 
 func reconnectBackoff(previous time.Duration) (base, delay time.Duration) {
-	base = max(time.Second, min(15*time.Second, 2*previous))
-	return base, base - rand.N(base/5)
+	return retryBackoff(previous, time.Second)
+}
+
+func retryBackoff(previous, initial time.Duration) (base, delay time.Duration) {
+	base = max(initial, min(15*time.Second, 2*previous))
+	return base, base - rand.N(max(time.Nanosecond, base/5))
 }

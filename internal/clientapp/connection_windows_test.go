@@ -39,10 +39,11 @@ func (a connectionAnnouncement) Fetch(context.Context, string) (control.Announce
 }
 
 type connectionStreamBody struct {
-	data   *bytes.Reader
-	closed chan struct{}
-	once   sync.Once
-	ctx    context.Context
+	trailer <-chan []byte
+	data    *bytes.Reader
+	closed  chan struct{}
+	once    sync.Once
+	ctx     context.Context
 }
 
 func (b *connectionStreamBody) Read(p []byte) (int, error) {
@@ -50,6 +51,10 @@ func (b *connectionStreamBody) Read(p []byte) (int, error) {
 		return b.data.Read(p)
 	}
 	select {
+	case frame := <-b.trailer:
+		b.data.Reset(frame)
+		_ = b.Close()
+		return b.data.Read(p)
 	case <-b.ctx.Done():
 		return 0, b.ctx.Err()
 	case <-b.closed:
@@ -273,6 +278,7 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeReady(t *t
 }
 
 type connectionBackendFixture struct {
+	trailer      chan []byte
 	dnsConfig    *coordinator.DNSConfig
 	backend      *workerMemory
 	now          func() time.Time
@@ -435,7 +441,7 @@ func newConnectionBackendFixturePrepared(t *testing.T, prepare func(*state.Profi
 		if err != nil {
 			return nil, err
 		}
-		stream := &connectionStreamBody{data: bytes.NewReader(body), closed: make(chan struct{}), ctx: request.Context()}
+		stream := &connectionStreamBody{trailer: fixture.trailer, data: bytes.NewReader(body), closed: make(chan struct{}), ctx: request.Context()}
 		fixture.mu.Lock()
 		fixture.streamBody = stream
 		fixture.mu.Unlock()
@@ -1068,5 +1074,35 @@ func TestEndpointRefreshReportsLostACKUntilExactReplaySucceeds(t *testing.T) {
 	defer f.mu.Unlock()
 	if len(f.requests) != 3 || !reflect.DeepEqual(f.requests[1], f.requests[2]) {
 		t.Fatal("endpoint recovery changed the unresolved request")
+	}
+}
+
+func TestWatchAbortedResumesOnSameNativeSession(t *testing.T) {
+	f := newConnectionBackendFixture(t)
+	f.trailer = make(chan []byte, 1)
+	owner, err := f.factory.newOwner(t.Context(), workerProfile, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := owner.(*connectionDriver)
+	t.Cleanup(func() { _ = d.Disconnect(workerCallContext(t)) })
+	if err := d.Connect(backendOperation(t, f), false); err != nil {
+		t.Fatal(err)
+	}
+	// Connect EndStreamResponse after the first signed map has been applied.
+	payload := []byte(`{"error":{"code":"aborted","message":"concurrent update"}}`)
+	f.trailer <- append([]byte{2, 0, 0, 0, byte(len(payload))}, payload...)
+	ctx := workerCallContext(t)
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for f.native.refreshes.Load() == 0 {
+		select {
+		case <-ctx.Done():
+			t.Fatal("replacement signed snapshot was never applied")
+		case <-tick.C:
+		}
+	}
+	if f.native.offlines.Load() != 1 || f.native.starts.Load() != 1 || f.native.stops.Load() != 0 || f.native.revoked.Load() {
+		t.Fatal("map conflict did not recover on existing native session")
 	}
 }
