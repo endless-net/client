@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -74,10 +75,12 @@ func (d *DPAPI) Open(data []byte) ([]byte, error) {
 // permissions or initializes state at startup. All file operations are relative
 // to held directory handles, including atomic same-directory rename.
 type WindowsBackend struct {
-	root       *os.Root
-	directory  *os.File
-	serviceSID string
-	retry      time.Duration
+	// WriteLogger receives bounded failure diagnostics. Set it before using the backend.
+	WriteLogger *slog.Logger
+	root        *os.Root
+	directory   *os.File
+	serviceSID  string
+	retry       time.Duration
 }
 
 func OpenWindows(directory, serviceSID string, retry time.Duration) (*WindowsBackend, error) {
@@ -161,29 +164,44 @@ func (b *WindowsBackend) openLock() (*os.File, error) {
 
 func (b *WindowsBackend) check(file *os.File, directory bool) error {
 	var info windows.ByHandleFileInformation
-	if windows.GetFileInformationByHandle(windows.Handle(file.Fd()), &info) != nil || info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 || (info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory || (!directory && info.NumberOfLinks != 1) {
+	if err := windows.GetFileInformationByHandle(windows.Handle(file.Fd()), &info); err != nil {
+		return err
+	}
+	if info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 || (info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory || (!directory && info.NumberOfLinks != 1) {
 		return ErrCorrupt
 	}
 	sd, err := windows.GetSecurityInfo(windows.Handle(file.Fd()), windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
-		return ErrCorrupt
+		return err
 	}
 	owner, _, err := sd.Owner()
-	if err != nil || (owner.String() != b.serviceSID && owner.String() != "S-1-5-18") {
+	if err != nil {
+		return err
+	}
+	if owner.String() != b.serviceSID && owner.String() != "S-1-5-18" {
 		return ErrCorrupt
 	}
 	control, _, err := sd.Control()
-	if err != nil || (directory && control&windows.SE_DACL_PROTECTED == 0) {
+	if err != nil {
+		return err
+	}
+	if directory && control&windows.SE_DACL_PROTECTED == 0 {
 		return ErrCorrupt
 	}
 	acl, _, err := sd.DACL()
-	if err != nil || acl == nil || acl.AceCount == 0 || acl.AceCount > 2 {
+	if err != nil {
+		return err
+	}
+	if acl == nil || acl.AceCount == 0 || acl.AceCount > 2 {
 		return ErrCorrupt
 	}
 	seen := map[string]bool{}
 	for i := uint32(0); i < uint32(acl.AceCount); i++ {
 		var ace *windows.ACCESS_ALLOWED_ACE
-		if windows.GetAce(acl, i, &ace) != nil || ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE || ace.Header.AceFlags&windows.INHERIT_ONLY_ACE != 0 || ace.Mask != 0x1f01ff {
+		if err := windows.GetAce(acl, i, &ace); err != nil {
+			return err
+		}
+		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE || ace.Header.AceFlags&windows.INHERIT_ONLY_ACE != 0 || ace.Mask != 0x1f01ff {
 			return ErrCorrupt
 		}
 		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart)).String()
@@ -271,28 +289,59 @@ func (s windowsSlot) Read(limit int64) ([]byte, error) {
 	}
 	return data, nil
 }
+func (s windowsSlot) writeFailure(stage string, cause, result error) error {
+	if logger := s.backend.WriteLogger; logger != nil {
+		reason := "io_error"
+		fields := []any{"component", "state", "operation", stage}
+		var status windows.NTStatus
+		var errno windows.Errno
+		switch {
+		case errors.As(cause, &status):
+			fields = append(fields, "ntstatus", uint32(status), "win32_code", uint32(status.Errno()))
+		case errors.As(cause, &errno):
+			fields = append(fields, "win32_code", uint32(errno))
+		case errors.Is(cause, context.DeadlineExceeded):
+			reason = "deadline_exceeded"
+		case errors.Is(cause, context.Canceled):
+			reason = "canceled"
+		case errors.Is(cause, io.ErrShortWrite):
+			reason = "short_write"
+		case errors.Is(cause, ErrCorrupt):
+			reason = "security_check_failed"
+		}
+		logger.Error("client.state.write_failed", append(fields, "error_code", reason)...)
+	}
+	return result
+}
+
 func (s windowsSlot) Replace(data []byte) (err error) {
 	name := "state-" + rand.Text() + ".tmp"
 	f, err := s.backend.createPrivate(name)
 	if err != nil {
-		return ErrCorrupt
+		return s.writeFailure("create_temp", err, ErrCorrupt)
 	}
 	defer func() { _ = f.Close(); _ = s.backend.root.Remove(name) }()
-	if s.backend.check(f, false) != nil {
-		return ErrCorrupt
+	if err := s.backend.check(f, false); err != nil {
+		return s.writeFailure("check_temp", err, ErrCorrupt)
 	}
 	n, err := f.Write(data)
-	if err != nil || n != len(data) {
-		return ErrCorrupt
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
 	}
-	if f.Sync() != nil || f.Close() != nil {
-		return ErrCorrupt
+	if err != nil {
+		return s.writeFailure("write_temp", err, ErrCorrupt)
+	}
+	if err := f.Sync(); err != nil {
+		return s.writeFailure("flush_temp", err, ErrCorrupt)
+	}
+	if err := f.Close(); err != nil {
+		return s.writeFailure("close_temp", err, ErrCorrupt)
 	}
 	if err = s.ctx.Err(); err != nil {
-		return err
+		return s.writeFailure("before_replace", err, err)
 	}
 	if err = s.backend.root.Rename(name, "state.bin"); err != nil {
-		return ErrUncertain
+		return s.writeFailure("replace_state", err, ErrUncertain)
 	}
 	return nil
 }

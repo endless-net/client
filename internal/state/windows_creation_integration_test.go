@@ -3,9 +3,14 @@
 package state
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,5 +119,47 @@ func TestWindowsConcurrentFirstLock(t *testing.T) {
 		if err := <-results; err != nil {
 			t.Error("concurrent initial lock/write failed", err)
 		}
+	}
+}
+
+func TestWindowsStateWriteFailureReportsReplace(t *testing.T) {
+	directory, sid := protectedDirectory(t)
+	b, err := OpenWindows(directory, sid, time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	var logs bytes.Buffer
+	b.WriteLogger = slog.New(slog.NewJSONHandler(&logs, nil))
+	write := func(slot Slot) error { return slot.Replace([]byte("sensitive-fixture")) }
+	if err := b.Exclusive(t.Context(), write); err != nil {
+		t.Fatal(err)
+	}
+	name, err := windows.UTF16PtrFromString(filepath.Join(directory, "state.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Keep the old file open without FILE_SHARE_DELETE.
+	handle, err := windows.CreateFile(name, windows.GENERIC_READ, windows.FILE_SHARE_READ, nil, windows.OPEN_EXISTING, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer windows.CloseHandle(handle)
+	if err := b.Exclusive(t.Context(), write); !errors.Is(err, ErrUncertain) {
+		t.Fatalf("replace result: %v", err)
+	}
+	var event struct {
+		Msg         string
+		Operation   string
+		WindowsCode uint32 `json:"win32_code"`
+	}
+	if err := json.Unmarshal(logs.Bytes(), &event); err != nil {
+		t.Fatal(err)
+	}
+	if event.Msg != "client.state.write_failed" || event.Operation != "replace_state" || event.WindowsCode == 0 {
+		t.Fatalf("unexpected diagnostic: %+v", event)
+	}
+	if strings.Contains(logs.String(), "sensitive-fixture") || strings.Contains(logs.String(), "state.bin") {
+		t.Fatal("raw state or filename leaked into diagnostic")
 	}
 }

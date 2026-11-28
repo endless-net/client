@@ -5,6 +5,7 @@ package clientapp
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"sync"
 	"unicode"
@@ -20,6 +21,7 @@ var ErrProtectedState = errors.New("client protected state unavailable")
 // after shutdown begins. Startup performs the explicit format migration before
 // Load; it never calls Initialize, resets state or generates keys.
 type ProtectedState struct {
+	logger *slog.Logger
 	store  *state.Store
 	gate   *stateGate
 	config Config
@@ -43,7 +45,7 @@ func NewProtectedState(lifecycle fx.Lifecycle, signals *Signals, config Config) 
 	if err != nil {
 		return nil, ErrProtectedState
 	}
-	s := &ProtectedState{store: store, gate: gate, config: config}
+	s := &ProtectedState{store: store, gate: gate, config: config, logger: signals.logger}
 	lifecycle.Append(signals.hook("state", s.start, gate.stop))
 	return s, nil
 }
@@ -66,6 +68,7 @@ func (s *ProtectedState) start(ctx context.Context) error {
 	if err != nil {
 		return ErrProtectedState
 	}
+	backend.WriteLogger = s.logger
 	// Validate through a temporary store before publishing the backend. This
 	// prevents constructor consumers from observing unverified startup state.
 	protector, err := state.NewDPAPI(s.config.InstallationID)
