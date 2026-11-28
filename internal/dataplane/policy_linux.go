@@ -28,6 +28,7 @@ type linuxFlowGrant struct {
 }
 
 type linuxFilterPlan struct {
+	probes    []linuxProbeBinding
 	address   netip.Addr
 	protected []netip.Addr
 	grants    []linuxFlowGrant
@@ -128,6 +129,22 @@ func (p linuxFilterPlan) transaction(id linuxFilterIdentity, install bool, mode 
 		_, _ = fmt.Fprintf(&rules, "flush set %s protected\n", table)
 	}
 	addresses := append(slices.Clone(p.protected), retained...)
+	occupied := make(map[netip.Addr]bool, len(p.protected)+2*len(p.probes))
+	for _, address := range p.protected {
+		occupied[address] = true
+	}
+	for _, probe := range p.probes {
+		if !linuxPeerLinkName.MatchString(probe.device) || !strings.HasPrefix(probe.device, prefix) ||
+			probe.port == 0 || probe.local == probe.peer || !probe.local.Is4() || !probe.local.IsGlobalUnicast() ||
+			!probe.peer.Is4() || !probe.peer.IsGlobalUnicast() || occupied[probe.local] || occupied[probe.peer] {
+			return "", ErrConfiguration
+		}
+		occupied[probe.local], occupied[probe.peer] = true, true
+		addresses = append(addresses, probe.local, probe.peer)
+		if mode == linuxOnline {
+			rules.WriteString(probe.rules(table, group, id.mark))
+		}
+	}
 	slices.SortFunc(addresses, netip.Addr.Compare)
 	addresses = slices.Compact(addresses)
 	elements := make([]string, 0, len(addresses))

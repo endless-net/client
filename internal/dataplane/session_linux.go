@@ -275,7 +275,16 @@ func (s *LinuxSession) filters(ctx context.Context, policy linuxFilterPlan, inst
 			}
 		}
 	}
-	transaction, err := policy.transaction(s.identity, install, mode, s.retained)
+	retained := s.retained
+	// A refreshed map can retire a probe grant before its route and socket
+	// have been removed. Keep those addresses behind the session filter.
+	if s.link != nil && len(s.link.probes) > 0 {
+		retained = slices.Clone(retained)
+		for _, probe := range s.link.probes {
+			retained = append(retained, probe.local, probe.peer)
+		}
+	}
+	transaction, err := policy.transaction(s.identity, install, mode, retained)
 	if err != nil {
 		return err
 	}

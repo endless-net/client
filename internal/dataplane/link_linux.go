@@ -22,6 +22,7 @@ const linuxIP = "/usr/sbin/ip"
 const linuxRouteProtocol = "99"
 
 type linuxLink struct {
+	probes  map[netip.Addr]linuxProbeBinding
 	device  tun.Device
 	name    string
 	index   int
@@ -191,17 +192,20 @@ func (l *linuxLink) verify(ctx context.Context) error {
 	if err != nil {
 		return ErrIPOwnership
 	}
-	found := false
+	expected := map[netip.Addr]bool{l.address: true}
+	for _, probe := range l.probes {
+		expected[probe.local] = true
+	}
 	for _, value := range addrs {
 		prefix, err := netip.ParsePrefix(value.String())
 		if err == nil && prefix.Addr().Is4() {
-			if prefix != netip.PrefixFrom(l.address, 32) || found {
+			if prefix.Bits() != 32 || !expected[prefix.Addr()] {
 				return ErrIPOwnership
 			}
-			found = true
+			delete(expected, prefix.Addr())
 		}
 	}
-	if !found {
+	if len(expected) != 0 {
 		return ErrIPOwnership
 	}
 	devices := map[string]bool{l.name: true}

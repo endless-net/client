@@ -3,6 +3,7 @@ package dataplane
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ import (
 	"github.com/mdlayher/netlink"
 	"github.com/tailscale/wireguard-go/conn"
 	"github.com/tailscale/wireguard-go/device"
+	"golang.org/x/sys/unix"
 )
 
 func TestKernelAWGRequiresExactReadbackOfEveryProfileField(t *testing.T) {
@@ -439,14 +441,25 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	}
 	ctx := t.Context()
 	f := newCandidateEngineFixture(t, engine)
+	cursor := f.verified.Cursor()
+	f.snapshot.Revision.Network++
+	f.snapshot.Network.Revision = f.snapshot.Revision.Network
+	f.snapshot.Peers[0].Transport.LocalProbeIPv4 = "172.20.4.10"
+	f.snapshot.Peers[0].Transport.PeerProbeIPv4 = "172.20.4.11"
+	f.refresh(t, &cursor)
 	a := f.assignment(t)
 	local, peer, err := a.addresses()
 	if err != nil {
 		t.Fatal(err)
 	}
 	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", "lo", "up")
-	runLinuxTestCommand(t, ctx, linuxIP, "link", "add", "candidate", "type", engine)
-	iface, err := net.InterfaceByName("candidate")
+	id, _ := linuxPolicyFixture()
+	prefix, _ := linuxPeerScope(id.owner)
+	candidate := prefix + "00001"
+	if err := createLinuxKernelLink(ctx, candidate, engine, id.owner); err != nil {
+		t.Fatal(err)
+	}
+	iface, err := net.InterfaceByName(candidate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,6 +487,7 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	}
 	defer remote.Close()
 	reverse := coordinator.Peer{PublicKey: a.local.PublicKey, ACLRestricted: true, AllowedIPs: []string{local.String() + "/32"}}
+	reverse.Transport = &coordinator.PeerTransportPlan{LocalProbeIPv4: a.plan.PeerProbeIPv4, PeerProbeIPv4: a.plan.LocalProbeIPv4}
 	conn, err := genetlink.Dial(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -483,8 +497,8 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	if err := configureKernelWGPeer(ctx, conn, iface.Index, netip.MustParseAddrPort("127.0.0.1:39101"), cfg); err != nil {
 		t.Fatal(err)
 	}
-	runLinuxTestCommand(t, ctx, linuxIP, "address", "add", local.String()+"/32", "dev", "candidate")
-	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", "candidate", "up")
+
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", candidate, "up")
 	kernelPort, err := kernelListenPort(conn, engine, iface.Index)
 	if err != nil {
 		t.Fatal(err)
@@ -505,7 +519,9 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	if err := remote.Up(); err != nil {
 		t.Fatal(err)
 	}
-	runLinuxTestCommand(t, ctx, linuxIP, "route", "add", peer.String()+"/32", "dev", "candidate")
+	testLinuxServiceExchange(t, f, a, id, candidate, received, port)
+	runLinuxTestCommand(t, ctx, linuxIP, "address", "add", local.String()+"/32", "dev", candidate)
+	runLinuxTestCommand(t, ctx, linuxIP, "route", "add", peer.String()+"/32", "dev", candidate)
 	sender, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: peer.AsSlice(), Port: 443})
 	if err != nil {
 		t.Fatal(err)
@@ -680,5 +696,139 @@ add rule ip en007test out ip saddr 192.0.2.10 ip daddr 192.0.2.20 udp dport 5182
 				t.Fatalf("install A-B packet loss: %v: %s", err, out)
 			}
 		},
+	}
+}
+
+func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssignment, id linuxFilterIdentity, device string, received <-chan []byte, port *packetPort) {
+	t.Helper()
+	ctx := t.Context()
+	sock, err := openLinuxProbeSocket(ctx, id, device, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sock.conn.Close()
+	b := sock.binding
+	plan, err := prepareLinuxFilter(f.snapshot, 100, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.probes = []linuxProbeBinding{b}
+	apply := func(install bool, mode linuxFilterMode) {
+		t.Helper()
+		rules, err := plan.transaction(id, install, mode, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := linuxNFTApply(ctx, rules); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply(true, linuxOnline)
+	session, err := openLinuxLink(ctx, id.tunnel, 1420)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.device.Close()
+	if err := session.configure(ctx, plan.address, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.addProbeRoute(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.verify(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.addProbeRoute(ctx, b); err != ErrIPConflict {
+		t.Fatalf("claimed an existing probe address: %v", err)
+	}
+	req := challengeControl(t, f)
+	if _, err := rand.Read(req.Nonce); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := controlPacket(b.local, b.peer, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An ordinary process bound to the very same service IP cannot use the
+	// probe route. This socket lacks the private mark and reserved local port.
+	ordinary, err := net.ListenUDP("udp4", &net.UDPAddr{IP: b.local.AsSlice()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ordinary.Close()
+	if _, err := ordinary.WriteToUDPAddrPort(raw[28:], netip.AddrPortFrom(b.peer, b.port)); !errors.Is(err, unix.EPERM) {
+		t.Fatalf("ordinary process sent service traffic: %v", err)
+	}
+	if err := sock.send(raw); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case wire := <-received:
+		msg, claimed, err := decodeControlPacket(wire, b.local, b.peer)
+		if err != nil || !claimed || !bytes.Equal(msg.Nonce, req.Nonce) {
+			t.Fatalf("invalid wire challenge: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("missing probe at Go peer")
+	}
+	wire, err := controlPacket(b.peer, b.local, replyControl(req, transport.Echo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An authenticated peer still cannot address the local socket directly:
+	// only UDP/0 on the wire is admitted. Supply a valid checksum so the
+	// rejection is due to policy, not a malformed UDP packet.
+	wrong := bytes.Clone(wire)
+	binary.BigEndian.PutUint16(wrong[20:22], b.port)
+	binary.BigEndian.PutUint16(wrong[22:24], b.port)
+	clear(wrong[26:28])
+	sum := packetChecksum(wrong[20:], udpPseudoSum(wrong))
+	if sum == 0 {
+		sum = 0xffff
+	}
+	binary.BigEndian.PutUint16(wrong[26:28], sum)
+	if err := port.enqueue(wrong, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := sock.conn.SetReadDeadline(time.Now().Add(150 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	_, err = sock.receive()
+	var timeout net.Error
+	if !errors.As(err, &timeout) || !timeout.Timeout() {
+		t.Fatalf("wire ports admitted ordinary UDP: %v", err)
+	}
+	if err := port.enqueue(wire, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := sock.conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	response, err := sock.receive()
+	if err != nil || !transport.MatchesReply(req, response) {
+		t.Fatalf("kernel path echo: %v", err)
+	}
+	apply(false, linuxExisting)
+	if err := sock.send(raw); !errors.Is(err, unix.EPERM) {
+		t.Fatalf("new offline probe: %v", err)
+	}
+	if err := session.removeProbeRoute(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.verify(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.addProbeRoute(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.device.Close(); err != nil {
+		t.Fatal(err)
+	}
+	route, err := exec.CommandContext(ctx, linuxIP, "route", "show", "table", "all", "exact", b.peer.String()+"/32").Output()
+	if err != nil || len(route) != 0 {
+		t.Fatalf("service route survived TUN: %v", err)
+	}
+	if err := linuxNFTApply(ctx, "delete table inet "+id.table+"\n"); err != nil {
+		t.Fatal(err)
 	}
 }
