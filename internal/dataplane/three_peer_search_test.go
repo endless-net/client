@@ -213,7 +213,7 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 	}
 	var nativeApp *net.UDPConn
 	if links.setupHub != nil {
-		nativeApp = sendWindowsRoutedUDP(t, b.tun)
+		nativeApp = sendNativeRoutedUDP(t, b.tun)
 	} else {
 		exchange(b, "100.70.0.2", 10)
 	}

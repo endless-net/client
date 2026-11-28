@@ -29,6 +29,7 @@ import (
 	"github.com/mdlayher/netlink"
 	"github.com/tailscale/wireguard-go/conn"
 	"github.com/tailscale/wireguard-go/device"
+	"github.com/tailscale/wireguard-go/tun"
 	"golang.org/x/sys/unix"
 )
 
@@ -1391,4 +1392,104 @@ func TestLinuxSupervisorPreparesHostCandidate(t *testing.T) {
 	if _, err := net.InterfaceByIndex(engine.iface.Index); err == nil {
 		t.Fatal("orphaned candidate")
 	}
+}
+
+func TestLinuxSupervisorsSelectHostRoute(t *testing.T) {
+	if !linuxNetworkTest(t) {
+		return
+	}
+	native := searchTestBackend{productionSearchTestBudget, (*linuxHostEngine)(nil)}
+	software := searchTestBackend{newTransportBudget, (*peerCipher)(nil)}
+	testTwoSupervisorsThroughSelection(t, false, false, 0, native, software, false, linuxSearchRouteFixture, false)
+}
+func TestLinuxSupervisorsKeepIndependentProfiles(t *testing.T) {
+	if !linuxNetworkTest(t) {
+		return
+	}
+	native := searchTestBackend{productionSearchTestBudget, (*linuxHostEngine)(nil)}
+	software := searchTestBackend{newTransportBudget, (*peerCipher)(nil)}
+	links := memoryThreePeerLinks()
+	links.setupHub = linuxSearchRouteFixture
+	testThreeSearchPeers(t, native, (*peerCipher)(nil), software, links)
+}
+
+func linuxSearchRouteFixture(t *testing.T, f *candidateFixture, config *supervisorConfig) searchRouteFixture {
+	ctx := t.Context()
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", "lo", "up")
+	id, _ := linuxPolicyFixture()
+	s := &LinuxSession{identity: id, receipt: state.LinuxNetworkReceipt{Table: id.table, Owner: id.owner}, lease: f.lease, clock: f.clock, current: f.verified}
+	s.ctx, s.cancel = context.WithCancel(ctx)
+	t.Cleanup(s.cancel)
+	var err error
+	s.policy, err = prepareLinuxFilter(f.snapshot, 100, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.filters(ctx, s.current, s.policy, true, linuxDeny); err != nil {
+		t.Fatal(err)
+	}
+	s.link, err = openLinuxLink(ctx, id.tunnel, 1420)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.link.device.Close() })
+	if err := s.link.configure(ctx, s.policy.address, s.policy.protected[1:]); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.filters(ctx, s.current, s.policy, false, linuxOnline); err != nil {
+		t.Fatal(err)
+	}
+	config.hostKernel = s.prepareHostCandidate
+	config.selectDirect = s.selectHostDirect
+	return searchRouteFixture{refresh: func(m connectivity.Map) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		snapshot, err := m.Snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		updated, err := prepareLinuxFilter(snapshot, 100, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.retained = append(s.policy.protected[:0:0], s.policy.protected...)
+		if err := s.filters(ctx, m, updated, false, linuxOnline); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.link.configure(ctx, updated.address, updated.protected[1:]); err != nil {
+			t.Fatal(err)
+		}
+		s.current, s.policy = m, updated
+		if err := s.filters(ctx, m, s.policy, false, linuxOnline); err != nil {
+			t.Fatal(err)
+		}
+	}, verifyFallback: func(app *net.UDPConn) {
+		if _, err := app.Write([]byte("fallback-primary")); err != nil {
+			t.Fatal(err)
+		}
+		read := make(chan bool, 1)
+		go func() {
+			buf := make([]byte, 65535+2*tun.ReadPacketSpacing)
+			packets := make([]tun.ReadPacket, 1)
+			for {
+				n, err := s.link.device.Read(buf, packets)
+				if err != nil {
+					read <- false
+					return
+				}
+				if n == 1 && packets[0].Size >= 28 && bytes.Equal(buf[packets[0].Offset+28:packets[0].Offset+packets[0].Size], []byte("fallback-primary")) {
+					read <- true
+					return
+				}
+			}
+		}()
+		select {
+		case ok := <-read:
+			if !ok {
+				t.Fatal("primary interface closed")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("fallback payload missing from primary interface")
+		}
+	}}
 }

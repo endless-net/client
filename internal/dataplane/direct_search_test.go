@@ -144,7 +144,7 @@ func testTwoSupervisorsWithBudget(t *testing.T, filterWG, preferAWG bool, revisi
 	testTwoSupervisorsThroughSelection(t, filterWG, preferAWG, revisionInterval, firstBackend, secondBackend, false, nil, false)
 }
 
-func sendWindowsRoutedUDP(t *testing.T, remote *switchTUN) *net.UDPConn {
+func sendNativeRoutedUDP(t *testing.T, remote *switchTUN) *net.UDPConn {
 	t.Helper()
 	udp, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(100, 70, 0, 2), Port: 443})
 	if err != nil {
@@ -387,6 +387,7 @@ func testTwoSupervisorsThroughSelection(t *testing.T, filterWG, preferAWG bool, 
 		config := supervisorConfig{relay: connection.config, probeInterval: time.Millisecond, retry: time.Second, mtu: 576, maxPeers: 1, listenCandidate: listen(f.snapshot.Node.ID), hintStore: store, networkContext: func(context.Context, []byte) (string, error) { return contextDigest, nil }}
 		if setupRoute != nil && f == a {
 			config.selectDirect = routeConfig.selectDirect
+			config.hostKernel = routeConfig.hostKernel
 		}
 		if rejectRoute {
 			node := f.snapshot.Node.ID
@@ -643,7 +644,7 @@ func testTwoSupervisorsThroughSelection(t *testing.T, filterWG, preferAWG bool, 
 	}
 	var nativeApp *net.UDPConn
 	if setupRoute != nil {
-		nativeApp = sendWindowsRoutedUDP(t, nb)
+		nativeApp = sendNativeRoutedUDP(t, nb)
 	} else {
 		raw := cipherIPv4("100.70.0.1", "100.70.0.2", 9)
 		na.input <- raw
