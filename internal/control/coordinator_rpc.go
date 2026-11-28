@@ -36,6 +36,15 @@ func knownRPC(m protoreflect.Message) bool {
 	}
 	valid := true
 	m.Range(func(f protoreflect.FieldDescriptor, value protoreflect.Value) bool {
+		if f.IsMap() {
+			if f.MapValue().Message() != nil {
+				value.Map().Range(func(_ protoreflect.MapKey, entry protoreflect.Value) bool {
+					valid = knownRPC(entry.Message())
+					return valid
+				})
+			}
+			return valid
+		}
 		if f.Message() == nil {
 			return true
 		}

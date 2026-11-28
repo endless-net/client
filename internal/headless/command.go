@@ -113,6 +113,27 @@ func writeStatus(out io.Writer, s *clientv0.Status) error {
 
 func failureMessage(reason string) string {
 	switch reason {
+	case "client.connection.dns_unsupported":
+		return "Эта версия службы не поддерживает назначенные настройки DNS."
+
+	case "client.connection.dns_assignment_invalid":
+		return "В назначении DNS есть ошибка. Проверьте настройки DNS этой сети."
+
+	case "client.registration.access_denied":
+		return "Сервер отказал в доступе при регистрации устройства. Проверьте права у администратора пространства."
+
+	case "client.registration.request_rejected":
+		return "Сервер отклонил последний запрос регистрации устройства. Автоматические повторы остановлены."
+
+	case "client.enrollment.outcome_unknown":
+		return "Служба ожидает подтверждения исходной регистрации."
+
+	case "client.server_identity.confirmation_required", "client.server_identity.changed":
+		return "Для регистрации администратору устройства нужно подтвердить подлинность сервера."
+
+	case "client.server_identity.unavailable":
+		return "Служба пока не смогла проверить подлинность сервера."
+
 	case "client.connection.apply_failed":
 		return "Не удалось настроить сетевой туннель Windows. Вход уже подтверждён; повторная авторизация не требуется."
 	case "client.connection.cleanup_unconfirmed":

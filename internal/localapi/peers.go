@@ -79,13 +79,19 @@ func currentPeerObservation(profile state.Profile, source connectivity.Observati
 	v := source.ConnectionSnapshot()
 	local := v.Local
 	if v.Profile != profile.ID || v.Generation != connection.Generation || v.Intent != connection.Intent ||
-		v.Phase != connectivity.PhaseConnected || !local.Known || !local.Applied || local.MapRevision == 0 ||
 		local.Permission.Revoked || local.Permission.ClockUnsafe {
+		return false
+	}
+	if last := connection.LastAppliedMap; last != nil {
+		result.MapRevision = last.Revision.Network
+		result.SnapshotState = clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS
+	}
+	if v.Phase != connectivity.PhaseConnected || !local.Known || !local.Applied || local.MapRevision == 0 {
 		return false
 	}
 	result.MapRevision = local.MapRevision
 	result.SnapshotState = clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS
-	if !local.Permission.NewFlows || len(local.Peers) != int(local.PeerCount) {
+	if !local.Permission.NewFlows || !observedMapMatchesTarget(local, connection.MapCursor) || len(local.Peers) != int(local.PeerCount) {
 		return false
 	}
 	result.SnapshotState = clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT

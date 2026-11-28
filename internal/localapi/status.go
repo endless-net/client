@@ -5,6 +5,7 @@ import (
 	"time"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
+	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/localipc"
 	"github.com/endless-net/client/internal/state"
@@ -27,6 +28,11 @@ func (c *Controller) snapshot(ctx context.Context, caller localipc.Principal) (*
 		return nil, rpcError(err)
 	}
 	defer clearProfileKeys(s)
+	r, _ := c.statusAndObservation(s, caller)
+	return &clientv0.GetStatusResponse{Status: r}, nil
+}
+
+func (c *Controller) statusAndObservation(s state.State, caller localipc.Principal) (*clientv0.Status, connectivity.Observation) {
 	// A registration or durable intent alone never confirms native application.
 	r := &clientv0.Status{Metadata: &clientv0.SnapshotMetadata{InstanceId: c.config.RuntimeID, Revision: s.Revision, GeneratedAt: timestamppb.New(c.config.Now())}, ServiceState: clientv0.ServiceState_SERVICE_STATE_DISCONNECTED, ConnectionPhase: clientv0.ConnectionPhase_CONNECTION_PHASE_DISCONNECTED, Intent: &clientv0.ConnectionIntent{DesiredState: clientv0.DesiredState_DESIRED_STATE_DISCONNECTED}}
 	if s.OwnerSID == "" {
@@ -34,7 +40,7 @@ func (c *Controller) snapshot(ctx context.Context, caller localipc.Principal) (*
 		r.ControlState = clientv0.ControlState_CONTROL_STATE_NOT_REGISTERED
 	}
 	if s.OwnerSID == "" || s.OwnerSID != caller.SID {
-		return &clientv0.GetStatusResponse{Status: r}, nil
+		return r, connectivity.Observation{}
 	}
 	profile := s.Profiles[s.ActiveProfileID]
 	r.ActiveProfileId = profile.ID
@@ -95,7 +101,22 @@ func (c *Controller) snapshot(ctx context.Context, caller localipc.Principal) (*
 				r.ControlState = clientv0.ControlState_CONTROL_STATE_RECOVERY_BLOCKED
 			}
 		}
+		if a.Phase == enrollment.Registering {
+			switch profile.Registration.BlockedReason {
+			case "client.registration.request_rejected":
+				r.Failures = append(r.Failures, &clientv0.Failure{Code: clientv0.ErrorCode_ERROR_CODE_NEEDS_ENROLLMENT, ReasonKey: profile.Registration.BlockedReason, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_SUPPORT})
+			case "client.registration.access_denied":
+				r.Failures = append(r.Failures, &clientv0.Failure{Code: clientv0.ErrorCode_ERROR_CODE_POLICY_BLOCKED, ReasonKey: profile.Registration.BlockedReason, ActionOwner: clientv0.ActionOwner_ACTION_OWNER_ACCESS_ADMINISTRATOR})
+			}
+		}
 	}
-	c.projectConnection(r, profile)
-	return &clientv0.GetStatusResponse{Status: r}, nil
+	var observation connectivity.Observation
+	if c.config.ConnectionObservations != nil && profile.Connection != nil && profile.Attempt != nil && profile.Attempt.Phase == enrollment.Registered {
+		observation = c.config.ConnectionObservations.ConnectionSnapshot()
+		if observation.Profile != profile.ID || observation.Generation != profile.Connection.Generation || observation.Intent != profile.Connection.Intent {
+			observation = connectivity.Observation{}
+		}
+	}
+	projectConnection(r, profile, observation)
+	return r, observation
 }

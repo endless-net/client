@@ -6,7 +6,6 @@ import (
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/connectivity"
-	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/state"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -38,6 +37,10 @@ func connectionDetails(err error) *clientv0.Failure {
 		f.Code, f.ReasonKey, f.ActionOwner = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.cleanup_unconfirmed", clientv0.ActionOwner_ACTION_OWNER_DEVICE_ADMINISTRATOR
 	case connectivity.FailureControl:
 		f.Code, f.ReasonKey = clientv0.ErrorCode_ERROR_CODE_UNAVAILABLE, "client.connection.control_unavailable"
+	case connectivity.FailureDNSAssignment:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.dns_assignment_invalid", clientv0.ActionOwner_ACTION_OWNER_ACCESS_ADMINISTRATOR, false
+	case connectivity.FailureDNSUnsupported:
+		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.dns_unsupported", clientv0.ActionOwner_ACTION_OWNER_DEVICE_ADMINISTRATOR, false
 	case connectivity.FailureMap:
 		f.Code, f.ReasonKey, f.ActionOwner, f.Retryable = clientv0.ErrorCode_ERROR_CODE_APPLY_FAILED, "client.connection.map_rejected", clientv0.ActionOwner_ACTION_OWNER_SUPPORT, false
 	case connectivity.FailureConfiguration:
@@ -83,7 +86,11 @@ func observedConnectionFailure(err error) *clientv0.Failure {
 	return f
 }
 
-func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
+func observedMapMatchesTarget(local connectivity.LocalObservation, target *state.MapCursor) bool {
+	return target == nil || local.MapRevision == target.Revision.Network && local.MapPayloadHash == target.PayloadHash
+}
+
+func projectConnection(r *clientv0.Status, p state.Profile, v connectivity.Observation) {
 	connection := p.Connection
 	if connection == nil {
 		return
@@ -96,11 +103,7 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 	r.UserDisconnected = connection.Intent == state.IntentDisconnected
 	r.ServiceState = clientv0.ServiceState_SERVICE_STATE_RECOVERING
 	r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED
-	if c.config.ConnectionObservations == nil || p.Attempt == nil || p.Attempt.Phase != enrollment.Registered {
-		return
-	}
-	v := c.config.ConnectionObservations.ConnectionSnapshot()
-	if v.Profile != p.ID || v.Generation != connection.Generation || v.Intent != connection.Intent {
+	if v.Profile == "" {
 		return
 	}
 	if f := observedConnectionFailure(v.Failure); f != nil {
@@ -121,6 +124,14 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 		r.Failures = append(r.Failures, connectionDetails(connectivity.FailureAccess))
 		return
 	}
+	matchesTarget := observedMapMatchesTarget(v.Local, connection.MapCursor)
+	if (!v.Local.Known || !v.Local.Applied) && connection.MapCursor != nil && connection.Intent == state.IntentConnected && p.Attempt != nil {
+		r.Agent = &clientv0.AgentStatus{SnapshotState: clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_ABSENT, NodeId: r.NodeId, NetworkId: p.Attempt.NetworkID, TargetMapRevision: connection.MapCursor.Revision.Network}
+		if last := connection.LastAppliedMap; last != nil {
+			r.Agent.SnapshotState = clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS
+			r.Agent.MapRevision = last.Revision.Network
+		}
+	}
 	if v.Local.Known && v.Local.Applied {
 		local := v.Local
 		r.MapRevision, r.PeerCount = local.MapRevision, local.PeerCount
@@ -134,7 +145,7 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 				r.PeerTransports = append(r.PeerTransports, proto.Clone(transport).(*clientv0.PeerTransportStatus))
 			}
 		}
-		if local.Permission.NewFlows {
+		if local.Permission.NewFlows && matchesTarget {
 			r.Agent.SnapshotState = clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT
 		}
 		if connection.MapCursor != nil {
@@ -173,14 +184,16 @@ func (c *Controller) projectConnection(r *clientv0.Status, p state.Profile) {
 		r.ControlState = clientv0.ControlState_CONTROL_STATE_DEGRADED
 		if local.Permission.ExistingFlows {
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED
-			r.ControlState = clientv0.ControlState_CONTROL_STATE_OFFLINE_CACHE
+			if !local.Permission.NewFlows {
+				r.ControlState = clientv0.ControlState_CONTROL_STATE_OFFLINE_CACHE
+			}
 		}
-		if local.Permission.NewFlows && local.PeerCount > 0 && local.MapRevision > 0 && local.Address != "" {
+		if matchesTarget && local.Permission.NewFlows && local.PeerCount > 0 && local.MapRevision > 0 && local.Address != "" {
 			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_CONNECTED
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_CONNECTED
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_READY
 		}
-		if local.Permission.NewFlows && local.SoleNodeReady && local.PeerCount == 0 && local.DirectPaths == 0 && local.RelayPaths == 0 && local.MapRevision > 0 && local.Address != "" {
+		if matchesTarget && local.Permission.NewFlows && local.SoleNodeReady && local.PeerCount == 0 && local.DirectPaths == 0 && local.RelayPaths == 0 && local.MapRevision > 0 && local.Address != "" {
 			r.ServiceState = clientv0.ServiceState_SERVICE_STATE_LOCAL_READY
 			r.ConnectionPhase = clientv0.ConnectionPhase_CONNECTION_PHASE_LOCAL_READY
 			r.ControlState = clientv0.ControlState_CONTROL_STATE_READY

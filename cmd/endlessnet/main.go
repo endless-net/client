@@ -33,11 +33,12 @@ func run() error {
 		return err
 	}
 	if len(os.Args) == 2 && (os.Args[1] == "--help" || os.Args[1] == "help") {
-		_, err := fmt.Fprintln(os.Stdout, "endlessnet status — состояние службы и соединения\nendlessnet down — отключить туннель, сохранив регистрацию\nendlessnet up — войти в EndlessNet и подключиться"+platformHelp)
+		_, err := fmt.Fprintln(os.Stdout, "endlessnet status — состояние службы и соединения\nendlessnet down — отключить туннель, сохранив регистрацию\nendlessnet up — войти в EndlessNet и подключиться\nendlessnet enroll ACCOUNT NETWORK — подать заявку на регистрацию сервера; ключ читается из файла или канала через stdin"+platformHelp)
 		return err
 	}
-	if len(os.Args) != 2 || (os.Args[1] != "up" && os.Args[1] != "status" && os.Args[1] != "down") {
-		return fmt.Errorf("использование: endlessnet up|status|down; подробности: endlessnet --help")
+	enroll := len(os.Args) == 4 && os.Args[1] == "enroll"
+	if !enroll && (len(os.Args) != 2 || (os.Args[1] != "up" && os.Args[1] != "status" && os.Args[1] != "down")) {
+		return fmt.Errorf("использование команды описано в endlessnet --help")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -58,5 +59,15 @@ func run() error {
 		return err
 	}
 	defer func() { _ = channel.Close() }()
-	return headless.Run(ctx, clientv0.NewClientServiceClient(channel), os.Args[1], os.Stdout)
+	client := clientv0.NewClientServiceClient(channel)
+	if enroll {
+		info, err := os.Stdin.Stat()
+		if err != nil || info.Mode()&os.ModeCharDevice != 0 {
+			return fmt.Errorf("передайте ключ через перенаправленный стандартный ввод")
+		}
+		stopRead := context.AfterFunc(ctx, func() { _ = os.Stdin.Close() })
+		defer stopRead()
+		return headless.EnrollWithKey(ctx, client, os.Args[2], os.Args[3], os.Stdin, os.Stdout)
+	}
+	return headless.Run(ctx, client, os.Args[1], os.Stdout)
 }

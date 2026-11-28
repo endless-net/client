@@ -5,11 +5,14 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/connectivity"
+	"github.com/endless-net/client/internal/enrollment"
 	"github.com/endless-net/client/internal/localipc"
 	"github.com/endless-net/client/internal/state"
+	coordinator "github.com/endless-net/coordinator/api/enrollment"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -18,6 +21,29 @@ import (
 type observedConnection struct {
 	value connectivity.Observation
 	calls int
+}
+
+func TestRegistrationFailureInOwnerStatus(t *testing.T) {
+	c, _, _, now := fixture(t)
+	owner := localipc.Principal{SID: "owner"}
+	p := state.Profile{ID: defaultID, Attempt: &enrollment.Attempt{Phase: enrollment.Registering, Uncertain: true, RecoveryUntil: now.Add(time.Minute)}}
+	s := state.State{OwnerSID: owner.SID, ActiveProfileID: p.ID, Profiles: map[string]state.Profile{}}
+	for _, reason := range []string{"client.registration.request_rejected", "client.registration.access_denied", "private backend detail"} {
+		p.Registration.BlockedReason = reason
+		s.Profiles[p.ID] = p
+		view, _ := c.statusAndObservation(s, owner)
+		if reason == "private backend detail" {
+			if len(view.Failures) != 0 {
+				t.Fatal("arbitrary reason exposed")
+			}
+		} else if len(view.Failures) != 1 || view.Failures[0].ReasonKey != reason || view.Failures[0].Retryable || view.ControlState != clientv0.ControlState_CONTROL_STATE_RECOVERING {
+			t.Fatal("registration outcome and rejection must remain distinct", view.Failures)
+		}
+		foreign, _ := c.statusAndObservation(s, localipc.Principal{SID: "other"})
+		if len(foreign.Failures) != 0 {
+			t.Fatal("foreign caller received registration failure")
+		}
+	}
 }
 
 func TestRecoveryFailuresRemainDistinctAndSafe(t *testing.T) {
@@ -30,6 +56,8 @@ func TestRecoveryFailuresRemainDistinctAndSafe(t *testing.T) {
 		connectivity.FailurePath:              "client.connection.path_unconfirmed",
 		connectivity.FailureCleanup:           "client.connection.cleanup_unconfirmed",
 		connectivity.FailureLogin:             "client.connection.login_required",
+		connectivity.FailureDNSAssignment:     "client.connection.dns_assignment_invalid",
+		connectivity.FailureDNSUnsupported:    "client.connection.dns_unsupported",
 		connectivity.FailureMap:               "client.connection.map_rejected",
 		connectivity.FailureConfiguration:     "client.connection.configuration_invalid",
 		connectivity.FailureCheckpoint:        "client.connection.checkpoint_unavailable",
@@ -42,6 +70,7 @@ func TestRecoveryFailuresRemainDistinctAndSafe(t *testing.T) {
 		}
 		switch kind {
 		case connectivity.FailureTrust, connectivity.FailureCredential, connectivity.FailureMap,
+			connectivity.FailureDNSAssignment, connectivity.FailureDNSUnsupported,
 			connectivity.FailureConfiguration, connectivity.FailureCheckpoint, connectivity.FailureProtocol,
 			connectivity.FailureCredentialInvalid:
 			if f.Retryable {
@@ -214,5 +243,102 @@ func TestEndpointRefreshDegradesControlWhileTunnelRemainsApplied(t *testing.T) {
 	got, err = c.snapshot(t.Context(), caller)
 	if err != nil || got.Status.ControlState != clientv0.ControlState_CONTROL_STATE_READY || len(got.Status.Failures) != 0 {
 		t.Fatal("confirmed discovery did not restore the ready control status", err)
+	}
+}
+
+func TestStatusAndPeersDistinguishAppliedMapFromTarget(t *testing.T) {
+	c, _, _, now, caller := connectionFixture(t)
+	ctx := t.Context()
+	if _, err := c.connect(ctx, caller, &clientv0.ConnectRequest{Mutation: connectionMutation(3), Async: true}); err != nil {
+		t.Fatal(err)
+	}
+	c.config.LogPageKey = [32]byte{1}
+	c.config.LogResponseBytes = 65536
+	target := state.MapCursor{Revision: coordinator.MapRevision{Network: 9}, PayloadHash: strings.Repeat("a", 64), IssuedAt: *now}
+	value, err := c.store.Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.store.Update(ctx, value.Revision, func(s *state.State) error { s.Profiles[defaultID].Connection.MapCursor = &target; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		rev   uint64
+		hash  string
+		state clientv0.AgentSnapshotState
+	}{
+		{"first installation failed", 0, "", clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_ABSENT},
+		{"older revision", 8, strings.Repeat("b", 64), clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS},
+		{"different signed map at same revision", 9, strings.Repeat("b", 64), clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS},
+		{"applied target", 9, target.PayloadHash, clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := connectivity.Observation{Profile: defaultID, Generation: 1, Intent: state.IntentConnected, Phase: connectivity.PhaseFailed, Failure: connectivity.FailureApply}
+			if tc.rev != 0 {
+				v.Phase, v.Failure = connectivity.PhaseConnected, nil
+				v.Local = connectivity.LocalObservation{Known: true, Applied: true, MapRevision: tc.rev, MapPayloadHash: tc.hash, Address: "100.64.0.2", Permission: connectivity.Permission{NewFlows: true, ExistingFlows: true}, PeerCount: 1, Peers: []*clientv0.Peer{{Id: "peer"}}}
+			}
+			c.config.ConnectionObservations = &observedConnection{value: v}
+			got, err := c.snapshot(ctx, caller)
+			if err != nil {
+				t.Fatal(err)
+			}
+			meta := got.Status.Agent
+			if meta.GetTargetMapRevision() != 9 || meta.GetMapRevision() != tc.rev || meta.GetSnapshotState() != tc.state {
+				t.Fatal("status", meta)
+			}
+			current := tc.state == clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_CURRENT
+			if (got.Status.ControlState == clientv0.ControlState_CONTROL_STATE_READY) != current {
+				t.Fatal("control status", got.Status.ControlState)
+			}
+			if tc.rev == 0 && (got.Status.ServiceState != clientv0.ServiceState_SERVICE_STATE_ERROR || len(got.Status.Failures) == 0) {
+				t.Fatal("missing OS apply failure")
+			}
+			peers, err := c.listPeers(ctx, caller, &clientv0.ListPeersRequest{})
+			if err != nil || peers.GetTargetMapRevision() != 9 || peers.GetSnapshotState() != tc.state || peers.GetMapRevision() != tc.rev || (len(peers.GetPeers()) != 0) != current {
+				t.Fatal("peers", peers, err)
+			}
+		})
+	}
+	// A successful application was recorded, then a later target failed after
+	// the native session had already dropped its in-memory observation.
+	v, err := c.store.Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.store.Update(ctx, v.Revision, func(s *state.State) error {
+		applied := target
+		s.Profiles[defaultID].Connection.LastAppliedMap = &applied
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	v, err = c.store.Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.store.Update(ctx, v.Revision, func(s *state.State) error {
+		newer := target
+		newer.Revision.Network++
+		newer.PayloadHash = strings.Repeat("c", 64)
+		newer.IssuedAt = newer.IssuedAt.Add(time.Second)
+		s.Profiles[defaultID].Connection.MapCursor = &newer
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c.config.ConnectionObservations = &observedConnection{value: connectivity.Observation{Profile: defaultID, Generation: 1, Intent: state.IntentConnected, Phase: connectivity.PhaseFailed, Failure: connectivity.FailureApply}}
+	got, err := c.snapshot(ctx, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := got.Status.Agent
+	if agent.GetMapRevision() != 9 || agent.GetTargetMapRevision() != 10 || agent.GetSnapshotState() != clientv0.AgentSnapshotState_AGENT_SNAPSHOT_STATE_PREVIOUS || got.Status.MapRevision != 0 || len(got.Status.OverlayAddresses) != 0 {
+		t.Fatal("failure lost history or claimed live authority", got.Status)
+	}
+	rows, err := c.listPeers(ctx, caller, &clientv0.ListPeersRequest{})
+	if err != nil || rows.GetMapRevision() != 9 || rows.GetTargetMapRevision() != 10 || rows.GetSnapshotState() != agent.GetSnapshotState() || len(rows.GetPeers()) != 0 {
+		t.Fatal(rows, err)
 	}
 }

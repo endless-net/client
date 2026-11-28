@@ -134,9 +134,12 @@ func decodeServiceHost(h *wire.MapServiceHost) coordinator.ServiceHost {
 
 func (d *mapDecoder) application(a *wire.MapApplication) coordinator.Application {
 	return coordinator.Application{ID: a.Id, Name: a.Name, Target: a.Target, TargetType: a.TargetType, DNSEnabled: a.DnsEnabled, PolicyHash: a.PolicyHash,
+		AllowedPorts: decodeSlice(a.AllowedPorts, func(p *wire.MapServicePort) coordinator.ServicePort {
+			return coordinator.ServicePort{Port: p.Port, Protocol: p.Protocol}
+		}),
 		Sources: decodeSlice(a.Sources, decodeServiceHost), Connectors: decodeSlice(a.Connectors, decodeServiceHost),
 		Routes: decodeSlice(a.Routes, func(r *wire.MapApplicationRoute) coordinator.ApplicationRoute {
-			return coordinator.ApplicationRoute{Connector: decodeServiceHost(r.Connector), CIDRs: r.Cidrs, ExpiresAt: d.timestamp(r.ExpiresAt)}
+			return coordinator.ApplicationRoute{Metric: r.Metric, Masquerade: r.Masquerade, Connector: decodeServiceHost(r.Connector), CIDRs: r.Cidrs, ExpiresAt: d.timestamp(r.ExpiresAt)}
 		}),
 	}
 }
@@ -177,7 +180,7 @@ func (d *mapDecoder) peer(p *wire.MapPeer) coordinator.Peer {
 		ID: p.Id, NetworkID: p.NetworkId, Hostname: p.Hostname, PublicKey: p.PublicKey, Endpoint: p.Endpoint,
 		EndpointGeneration: p.EndpointGeneration, EndpointCandidates: p.EndpointCandidates, EndpointExpiresAt: d.optionalTime(p.EndpointExpiresAt),
 		Status: p.Status, AllowedIPs: p.AllowedIps, AllowedPorts: decodeSlice(p.AllowedPorts, decodeACLPort), ACLRestricted: p.AclRestricted,
-		ACLGrants: decodeSlice(p.AclGrants, decodeACLGrant), IngressACLGrants: decodeSlice(p.IngressAclGrants, decodeACLGrant),
+		ACLGrants: decodeSlice(p.AclGrants, d.aclGrant), IngressACLGrants: decodeSlice(p.IngressAclGrants, d.aclGrant),
 		Tags: p.Tags, Transport: d.peerTransport(p.Transport),
 	}
 }
@@ -186,8 +189,8 @@ func decodeACLPort(p *wire.MapACLPort) coordinator.ACLPort {
 	return coordinator.ACLPort{Protocol: p.Protocol, Port: int(p.Port)}
 }
 
-func decodeACLGrant(g *wire.MapACLGrant) coordinator.ACLGrant {
-	return coordinator.ACLGrant{DestinationCIDRs: g.DestinationCidrs, AllowedPorts: decodeSlice(g.AllowedPorts, decodeACLPort)}
+func (d *mapDecoder) aclGrant(g *wire.MapACLGrant) coordinator.ACLGrant {
+	return coordinator.ACLGrant{DestinationCIDRs: g.DestinationCidrs, AllowedPorts: decodeSlice(g.AllowedPorts, decodeACLPort), ValidUntil: d.optionalTime(g.ValidUntil)}
 }
 
 func (d *mapDecoder) advertisement(a *wire.TransportAdvertisement) *coordinator.TransportAdvertisement {
