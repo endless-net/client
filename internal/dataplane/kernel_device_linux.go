@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/endless-net/client/api/transport"
@@ -85,13 +86,6 @@ func configureLinuxPeerDevice(ctx context.Context, cfg directCipherConfig) (_ *l
 	if err := exec.CommandContext(ctx, linuxIP, "link", "set", "lo", "up").Run(); err != nil {
 		return nil, err
 	}
-	if err := createLinuxKernelLink(ctx, name, engine, ""); err != nil {
-		return nil, err
-	}
-	iface, err := net.InterfaceByName(name)
-	if err != nil {
-		return nil, err
-	}
 	device := &linuxPeerDevice{}
 	defer func() {
 		if err != nil {
@@ -109,7 +103,8 @@ func configureLinuxPeerDevice(ctx context.Context, cfg directCipherConfig) (_ *l
 	defer func() { _ = conn.Close() }()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
-	if err := configureKernelWGPeer(ctx, conn, iface.Index, device.wire.LocalAddr().(*net.UDPAddr).AddrPort(), cfg); err != nil {
+	iface, err := prepareLinuxPeerLink(ctx, conn, cfg, device.wire.LocalAddr().(*net.UDPAddr).AddrPort(), name, "")
+	if err != nil {
 		return nil, err
 	}
 	if err := exec.CommandContext(ctx, linuxIP, "link", "set", "dev", name, "mtu", strconv.Itoa(cfg.mtu), "up").Run(); err != nil {
@@ -153,6 +148,35 @@ func configureLinuxPeerDevice(ctx context.Context, cfg directCipherConfig) (_ *l
 		return nil, err
 	}
 	return device, nil
+}
+
+// Prepare the device while it is down. Interface activation, service routes
+// and application routes belong to the caller after policy installation.
+func prepareLinuxPeerLink(ctx context.Context, conn *genetlink.Conn, cfg directCipherConfig, endpoint netip.AddrPort, name, owner string) (*net.Interface, error) {
+	if conn == nil || cfg.clock == nil {
+		return nil, ErrConfiguration
+	}
+	sample, err := cfg.clock.Sample()
+	if err != nil || ctx.Err() != nil || cfg.assignment.permission(sample.Wall, true) != nil {
+		return nil, ErrNoAuthority
+	}
+	if err := createLinuxKernelLink(ctx, name, cfg.assignment.offer.Profile.Engine, owner); err != nil {
+		return nil, err
+	}
+	iface, err := net.InterfaceByName(name)
+	if err != nil {
+		return nil, err
+	}
+	if err := configureKernelWGPeer(ctx, conn, iface.Index, endpoint, cfg); err != nil {
+		// Even when preparation was cancelled, retire the newly allocated link.
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		defer cancel()
+		if removeErr := deleteLinuxPeerIndex(cleanup, iface.Index); removeErr != nil {
+			return nil, errors.Join(err, removeErr)
+		}
+		return nil, err
+	}
+	return iface, nil
 }
 
 var linuxPeerLinkName = regexp.MustCompile(`^ep[0-9a-f]{13}$`)

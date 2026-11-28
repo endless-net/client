@@ -60,6 +60,82 @@ func TestLinuxKernelPeerExchangesDataWithGo(t *testing.T) {
 	testKernelPeerExchangesData(t, transport.WireGuard)
 }
 
+func TestLinuxSignedKernelPeerPreparation(t *testing.T) {
+	if !linuxNetworkTest(t) {
+		return
+	}
+	ctx := t.Context()
+	f := newCandidateEngineFixture(t, transport.WireGuard)
+	cursor := f.verified.Cursor()
+	f.snapshot.Revision.Network++
+	f.snapshot.Network.Revision = f.snapshot.Revision.Network
+	f.snapshot.Peers[0].Transport.LocalProbeIPv4 = "172.20.4.10"
+	f.snapshot.Peers[0].Transport.PeerProbeIPv4 = "172.20.4.11"
+	f.refresh(t, &cursor)
+	a := f.assignment(t)
+	id, _ := linuxPolicyFixture()
+	prefix, _ := linuxPeerScope(id.owner)
+	name := prefix + "00001"
+	conn, err := genetlink.Dial(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	ep := netip.MustParseAddrPort("127.0.0.1:39102")
+	cfg := directCipherConfig{assignment: a, private: f.profile.Keys.WireGuardPrivate, mtu: 1420, clock: f.clock}
+	iface, err := prepareLinuxPeerLink(ctx, conn, cfg, ep, name, id.owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, err := peerPublicKey(a.local, a.peer, cfg.private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addresses, err := a.directPeerIPs()
+	if err != nil || len(addresses) != 2 {
+		t.Fatal("expected application and probe addresses", err)
+	}
+	family, err := conn.GetFamily(a.offer.Profile.Engine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = readKernelDevice(conn, family.ID, iface.Index, func(messages []genetlink.Message) error {
+		check := func(key []byte, endpoint netip.AddrPort, ips []netip.Addr) error {
+			return verifyLinuxPeer(messages, a.local.PublicKey, key, endpoint, ips)
+		}
+		if err := check(public, ep, []netip.Addr{addresses[1], addresses[0]}); err != nil {
+			return err
+		}
+		if check(public, ep, addresses[:1]) == nil || check(public, ep, []netip.Addr{addresses[0], addresses[0]}) == nil ||
+			check(make([]byte, 32), ep, addresses) == nil || check(public, netip.AddrPortFrom(ep.Addr(), 1), addresses) == nil {
+			t.Fatal("accepted a different cryptographic route, public key or endpoint")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ip := range addresses {
+		route, err := exec.CommandContext(ctx, linuxIP, "-4", "route", "show", "table", "all", "exact", ip.String()+"/32").Output()
+		if err != nil || len(route) != 0 {
+			t.Fatalf("preparation published host route for %s: %v", ip, err)
+		}
+	}
+	bad := cfg
+	bad.private = make([]byte, 32)
+	unused := prefix + "00002"
+	if _, err := prepareLinuxPeerLink(ctx, conn, bad, ep, unused, id.owner); err == nil {
+		t.Fatal("accepted unrelated private key")
+	}
+	if _, err := net.InterfaceByName(unused); err == nil {
+		t.Fatal("invalid configuration left a device behind")
+	}
+	f.lease.Revoke()
+	if err := configureKernelWGPeer(ctx, conn, iface.Index, ep, cfg); err != ErrNoAuthority {
+		t.Fatalf("configuration after revocation: %v", err)
+	}
+}
+
 func TestLinuxKernelAmneziaPeerExchangesDataWithGo(t *testing.T) {
 	testKernelPeerExchangesData(t, transport.AmneziaWG)
 }

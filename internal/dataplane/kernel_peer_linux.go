@@ -1,9 +1,12 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"net/netip"
+	"slices"
 
 	"github.com/endless-net/client/api/transport"
 	"github.com/mdlayher/genetlink"
@@ -80,12 +83,130 @@ func configureKernelWGPeer(ctx context.Context, conn *genetlink.Conn, index int,
 		return ErrNoAuthority
 	}
 	_, err = conn.Execute(genetlink.Message{Header: genetlink.Header{Command: unix.WG_CMD_SET_DEVICE, Version: 1}, Data: data}, family.ID, netlink.Request|netlink.Acknowledge)
-	if err != nil || len(settings) == 0 {
+	if err != nil {
 		return err
 	}
 	return readKernelDevice(conn, family.ID, index, func(messages []genetlink.Message) error {
-		return verifyKernelAWGSettings(messages, settings)
+		if err := verifyLinuxPeer(messages, a.local.PublicKey, public, localSocket, peerIPs); err != nil {
+			return err
+		}
+		if len(settings) != 0 {
+			return verifyKernelAWGSettings(messages, settings)
+		}
+		return nil
 	})
+}
+
+// Each candidate owns one peer with at most two IPv4 host prefixes. This fits
+// a single device dump record. Check its effective configuration before UP.
+func verifyLinuxPeer(messages []genetlink.Message, localKey string, public []byte, endpoint netip.AddrPort, addresses []netip.Addr) error {
+	if len(messages) != 1 {
+		return ErrConfiguration
+	}
+	fields, err := netlink.NewAttributeDecoder(messages[0].Data)
+	if err != nil {
+		return err
+	}
+	var local, peer bool
+	for fields.Next() {
+		switch fields.Type() {
+		case unix.WGDEVICE_A_PUBLIC_KEY:
+			if local || base64.StdEncoding.EncodeToString(fields.Bytes()) != localKey {
+				return ErrConfiguration
+			}
+			local = true
+		case unix.WGDEVICE_A_PEERS:
+			fields.Nested(func(peers *netlink.AttributeDecoder) error {
+				for peers.Next() {
+					if peer {
+						return ErrConfiguration
+					}
+					peer = true
+					peers.Nested(func(attrs *netlink.AttributeDecoder) error {
+						return verifyLinuxPeerAttrs(attrs, public, endpoint, addresses)
+					})
+				}
+				return peers.Err()
+			})
+		}
+	}
+	if err := fields.Err(); err != nil {
+		return err
+	}
+	if !local || !peer {
+		return ErrConfiguration
+	}
+	return nil
+}
+
+func verifyLinuxPeerAttrs(attrs *netlink.AttributeDecoder, public []byte, endpoint netip.AddrPort, addresses []netip.Addr) error {
+	var key, socket bool
+	remaining := slices.Clone(addresses)
+	for attrs.Next() {
+		switch attrs.Type() {
+		case unix.WGPEER_A_PUBLIC_KEY:
+			if key || !bytes.Equal(attrs.Bytes(), public) {
+				return ErrConfiguration
+			}
+			key = true
+		case unix.WGPEER_A_ENDPOINT:
+			raw := attrs.Bytes()
+			if socket || len(raw) != unix.SizeofSockaddrInet4 || binary.NativeEndian.Uint16(raw[:2]) != unix.AF_INET ||
+				binary.BigEndian.Uint16(raw[2:4]) != endpoint.Port() || !bytes.Equal(raw[4:8], endpoint.Addr().AsSlice()) {
+				return ErrConfiguration
+			}
+			socket = true
+		case unix.WGPEER_A_ALLOWEDIPS:
+			attrs.Nested(func(ips *netlink.AttributeDecoder) error {
+				for ips.Next() {
+					ips.Nested(func(ip *netlink.AttributeDecoder) error {
+						addr, err := kernelHostAddress(ip)
+						if err != nil {
+							return err
+						}
+						i := slices.Index(remaining, addr)
+						if i < 0 {
+							return ErrConfiguration
+						}
+						remaining = slices.Delete(remaining, i, i+1)
+						return nil
+					})
+				}
+				return ips.Err()
+			})
+		}
+	}
+	if err := attrs.Err(); err != nil {
+		return err
+	}
+	if !key || !socket || len(remaining) != 0 {
+		return ErrConfiguration
+	}
+	return nil
+}
+
+func kernelHostAddress(ip *netlink.AttributeDecoder) (netip.Addr, error) {
+	var family uint16
+	var mask uint8
+	var addr netip.Addr
+	for ip.Next() {
+		switch ip.Type() {
+		case unix.WGALLOWEDIP_A_FAMILY:
+			family = ip.Uint16()
+		case unix.WGALLOWEDIP_A_CIDR_MASK:
+			mask = ip.Uint8()
+		case unix.WGALLOWEDIP_A_IPADDR:
+			addr, _ = netip.AddrFromSlice(ip.Bytes())
+		}
+	}
+	if err := ip.Err(); err != nil {
+		return netip.Addr{}, err
+	}
+
+	if family != unix.AF_INET || mask != 32 || !addr.Is4() {
+		return netip.Addr{}, ErrConfiguration
+	}
+	return addr, nil
 }
 
 // kernelListenPort reads back the automatic UDP port after the owner brings
