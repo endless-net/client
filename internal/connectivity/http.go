@@ -127,7 +127,7 @@ func (t *Transport) client(httpClient connect.HTTPClient, origin string) publicq
 		connect.WithReadMaxBytes(t.config.MaxResponseBytes), connect.WithSendMaxBytes(t.config.MaxRequestBytes))
 }
 func validAnnouncement(p state.Profile, r coordinator.UpdateNodeEndpointRequest) bool {
-	if p.Connection == nil || r.Generation == 0 || r.Generation != p.Connection.EndpointGeneration || len(r.Candidates) != 0 {
+	if coordinator.ValidateNodePostureMetadata(r.Posture) != nil || (r.Posture != nil && r.Status != "online") || p.Connection == nil || r.Generation == 0 || r.Generation != p.Connection.EndpointGeneration || len(r.Candidates) != 0 {
 		return false
 	}
 	if r.Transport != nil && (r.Transport.IntentGeneration != p.Connection.Generation || coordinator.ValidateTransportAdvertisement(*r.Transport) != nil) {

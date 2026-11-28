@@ -180,7 +180,7 @@ func composeLinux(lc fx.Lifecycle, shutdown fx.Shutdowner, t *Telemetry, store *
 		return err
 	}
 	lc.Append(fx.Hook{OnStop: func(context.Context) error { transport.CloseIdleConnections(); return nil }})
-	connections, err := linuxConnections(store, ledger, clock, instance.String(), bootstrap, credentials, transport, signals)
+	connections, err := linuxConnections(store, ledger, clock, instance.String(), build.GetVersion(), bootstrap, credentials, transport, signals)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func composeLinux(lc fx.Lifecycle, shutdown fx.Shutdowner, t *Telemetry, store *
 	return err
 }
 
-func linuxConnections(store *state.Store, ledger state.LinuxNetworkLedger, clock connectivity.Clock, instance string, bootstrap *control.Bootstrap,
+func linuxConnections(store *state.Store, ledger state.LinuxNetworkLedger, clock connectivity.Clock, instance, clientVersion string, bootstrap *control.Bootstrap,
 	credentials *control.Credentials, transport *connectivity.Transport, signals *Signals) (*ConnectionWorker, error) {
 	resources, err := dataplane.NewTransportResources(linuxMaxPeers)
 	if err != nil {
@@ -244,7 +244,7 @@ func linuxConnections(store *state.Store, ledger state.LinuxNetworkLedger, clock
 		store: store, transport: transport, stream: transport.StreamSnapshot,
 		cleanup:  func(ctx context.Context, _ string) error { return dataplane.CleanLinuxNetwork(ctx, ledger) },
 		endpoint: linuxUnderlayEndpoint,
-		config: connectionConfig{
+		config: connectionConfig{ClientVersion: clientVersion,
 			Verifier:    connectivity.VerifierConfig{Announcements: bootstrap, Clock: clock, Now: time.Now, CallTimeout: linuxCallTimeout, MaxBytes: linuxMessageBytes, MaxPeers: linuxMaxPeers, MaxRules: linuxMaxGrants, MaxCredentialBytes: linuxCredentialBytes},
 			EndpointTTL: 120 * time.Second, RenewalInterval: 30 * time.Second, RetryInterval: time.Second,
 			ProbeInterval: time.Second, WriteBudget: linuxWriteBudget, MaxQueuedMaps: 8,

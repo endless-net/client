@@ -100,6 +100,7 @@ func newWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 				return err
 			}
 			driver := c.connectionDriver(clock, bootstrap)
+			driver.ClientVersion = build.GetVersion()
 			driver.Native.ReportFailure = t.Signals().windowsNetworkFailure
 			driver.PrepareCredentials = credentials.Ensure
 			driver.RefreshCredentials = credentials.Refresh

@@ -10,7 +10,7 @@ require (
 	github.com/cilium/ebpf v0.22.0
 	github.com/endless-net/billing/api v0.9.0
 	github.com/endless-net/client/api v0.10.0
-	github.com/endless-net/coordinator/api v0.34.0
+	github.com/endless-net/coordinator/api v0.47.1
 	github.com/endless-net/identity/api v0.9.0
 	github.com/endless-net/management/api v0.6.0
 	github.com/endless-net/relay/api v0.4.0

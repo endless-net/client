@@ -1,6 +1,7 @@
 package control
 
 import (
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 
 	clienttransport "github.com/endless-net/client/api/transport"
@@ -39,6 +40,12 @@ func EndpointRequest(node string, r coordinator.UpdateNodeEndpointRequest) *wire
 	ttl, _ := time.ParseDuration(r.TTL) // Validated against the durable request before dispatch.
 	value := &wire.UpdateNodeEndpointRequest{NodeId: node, Endpoint: r.Endpoint, Generation: r.Generation, Candidates: r.Candidates,
 		Ttl: durationpb.New(ttl), Status: r.Status, ClientVersion: r.ClientVersion}
+	if m := r.Posture; m != nil {
+		value.Posture = &wire.NodePostureMetadata{ObservedAt: timestamppb.New(m.ObservedAt), Platform: m.Platform, OsVersion: m.OSVersion, KernelVersion: m.KernelVersion, HardwareSerial: m.HardwareSerial, LocalAddresses: m.LocalAddresses, Processes: m.Processes}
+		if cert := m.Certificate; cert != nil {
+			value.Posture.Certificate = &wire.CertificatePossession{Challenge: cert.Challenge, ChainDer: cert.ChainDER, Signature: cert.Signature}
+		}
+	}
 	if a := r.Transport; a != nil {
 		value.Transport = &wire.TransportAdvertisement{IntentGeneration: a.IntentGeneration,
 			Capabilities: &wire.TransportCapabilities{Version: a.Capabilities.Version}}
@@ -65,6 +72,13 @@ func EndpointReceipt(m *wire.UpdateNodeEndpointResponse) (coordinator.UpdateNode
 	value := coordinator.UpdateNodeEndpointResponse{SchemaVersion: coordinator.SchemaVersion,
 		NodeID: m.NodeId, NetworkID: m.NetworkId, Endpoint: m.Endpoint, Generation: m.Generation, Online: m.Online,
 		UpdatedAt: d.timestamp(m.UpdatedAt), ExpiresAt: d.timestamp(m.ExpiresAt), Revision: MapRevision(m.Revision), Transport: d.advertisement(m.Transport),
+	}
+	value.CertificateChallenge = m.CertificateChallenge
+	if p := m.ProcessProbes; p != nil {
+		value.ProcessProbes = &coordinator.ProcessProbePlan{Platform: p.Platform, ExecutablePaths: p.ExecutablePaths}
+		if !value.ProcessProbes.Valid(m.Online) {
+			return coordinator.UpdateNodeEndpointResponse{}, errMapShape
+		}
 	}
 	return value, d.err
 }

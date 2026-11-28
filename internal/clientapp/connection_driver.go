@@ -16,6 +16,7 @@ import (
 )
 
 type connectionConfig struct {
+	ClientVersion                                                           string
 	Verifier                                                                connectivity.VerifierConfig
 	Endpoint                                                                netip.AddrPort
 	EndpointTTL, RenewalInterval, RetryInterval, ProbeInterval, WriteBudget time.Duration
@@ -567,6 +568,9 @@ func (d *connectionDriver) announce(ctx context.Context, mode endpointAnnounceme
 			}
 			endpointGeneration++
 			current.Generation = endpointGeneration
+			if online {
+				current.ClientVersion = d.factory.config.ClientVersion
+			}
 			if err := connectivity.PrepareEndpoint(ctx, d.factory.store, d.profile, d.generation, current); err != nil {
 				return err
 			}

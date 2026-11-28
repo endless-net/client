@@ -13,6 +13,7 @@ import (
 )
 
 type WindowsConnectionConfig struct {
+	ClientVersion                                                           string
 	Verifier                                                                connectivity.VerifierConfig
 	Native                                                                  dataplane.WindowsSessionConfig
 	Endpoint                                                                netip.AddrPort
@@ -72,7 +73,7 @@ func NewWindowsConnectionFactory(store *state.Store, transport *connectivity.Tra
 }
 
 func (c WindowsConnectionConfig) shared() connectionConfig {
-	return connectionConfig{
+	return connectionConfig{ClientVersion: c.ClientVersion,
 		Verifier: c.Verifier, Endpoint: c.Endpoint, EndpointTTL: c.EndpointTTL,
 		RenewalInterval: c.RenewalInterval, RetryInterval: c.RetryInterval,
 		ProbeInterval: c.ProbeInterval, WriteBudget: c.WriteBudget, MaxQueuedMaps: c.MaxQueuedMaps,
