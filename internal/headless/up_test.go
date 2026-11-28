@@ -239,3 +239,13 @@ func TestUpRegisteredDegradedDiscoveryUsesConnectWithoutReenrollment(t *testing.
 		})
 	}
 }
+
+func TestTerminalQuotaDenialInHeadlessAttempt(t *testing.T) {
+	attempt := upAttempt()
+	attempt.Phase = clientv0.EnrollmentPhase_ENROLLMENT_PHASE_DENIED
+	attempt.Restriction = &clientv0.Restriction{ReasonKey: "client.registration.quota_exhausted"}
+	err := checkAttempt(attempt, attempt.Metadata.InstanceId)
+	if err == nil || !strings.Contains(err.Error(), "Квота устройств исчерпана") {
+		t.Fatalf("unexpected quota outcome: %v", err)
+	}
+}

@@ -143,6 +143,8 @@ func failureMessage(reason string) string {
 		return "Не удалось проверить доверие к серверу."
 	case "client.connection.protocol_rejected":
 		return "Сервер управления сообщил об ошибке протокола или конфигурации."
+	case "client.registration.quota_exhausted":
+		return "Квота устройств исчерпана. После освобождения места начните новую регистрацию."
 	case "client.connection.map_rejected":
 		return "Карта сети отклонена при проверке."
 	case "client.connection.configuration_invalid":

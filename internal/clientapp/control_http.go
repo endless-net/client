@@ -2,16 +2,17 @@ package clientapp
 
 import (
 	"crypto/tls"
-	"net"
 	"net/http"
 	"time"
+
+	"github.com/endless-net/client/internal/underlay"
 )
 
 func (s *Signals) newControlHTTPClient(timeout time.Duration, maxConnections int) (*http.Client, error) {
 	if timeout <= 0 || maxConnections <= 0 {
 		return nil, ErrSignals
 	}
-	dialer := &net.Dialer{Timeout: timeout}
+	dialer := underlay.Dialer(timeout)
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment, DialContext: dialer.DialContext,
 		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13}, ForceAttemptHTTP2: true,

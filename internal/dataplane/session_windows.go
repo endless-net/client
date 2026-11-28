@@ -5,6 +5,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"github.com/endless-net/client/internal/underlay"
 	"net/netip"
 	"sync"
 	"time"
@@ -42,6 +43,7 @@ func (c WindowsSessionConfig) Validate() error {
 // application and an acknowledged listener, never a peer handshake/Connected UI.
 // Refresh/offline delivery and the daemon worker are separate lifecycle steps.
 type WindowsSession struct {
+	releaseUnderlay  func()
 	lanInterfaces    map[netip.Addr]uint32
 	weakSendOwned    bool
 	mu               sync.Mutex
@@ -370,6 +372,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if row.Index == 0 || adapterProof(row) != record.Fingerprint {
 		return ErrAdapterOwnership
 	}
+	s.releaseUnderlay = underlay.ExcludeTunnel(record.LUID, row.GUID)
 	stage = "apply_adapter_mtu"
 	if err := s.setMTU(apply, record, s.config.MTU); err != nil {
 		return err
@@ -624,7 +627,14 @@ func (s *WindowsSession) Stop(ctx context.Context) error {
 	if err := errors.Join(markErr, releaseErr); err != nil {
 		return err
 	}
-	return s.cleanup.Run(ctx, s.profileID, s.id, s.generation)
+	if err := s.cleanup.Run(ctx, s.profileID, s.id, s.generation); err != nil {
+		return err
+	}
+	if s.releaseUnderlay != nil {
+		s.releaseUnderlay()
+		s.releaseUnderlay = nil
+	}
+	return nil
 }
 
 func (s *WindowsSession) BoundPort() (uint16, error) {

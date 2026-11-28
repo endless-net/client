@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"github.com/endless-net/client/internal/underlay"
 	"io"
 	"net"
 	"net/netip"
@@ -274,7 +275,7 @@ func linuxConnections(store *state.Store, ledger state.LinuxNetworkLedger, clock
 func linuxUnderlayEndpoint() (netip.AddrPort, error) {
 	// UDP connect only asks the kernel to select a source address. No packet is
 	// sent to the documentation address.
-	socket, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(192, 0, 2, 1), Port: 9})
+	socket, err := underlay.Dialer(linuxCallTimeout).Dial("udp4", "192.0.2.1:9")
 	if err != nil {
 		return netip.AddrPort{}, connectivity.FailurePath
 	}

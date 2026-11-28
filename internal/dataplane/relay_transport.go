@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"github.com/endless-net/client/internal/underlay"
 	"net"
 	"net/netip"
 	"sync"
@@ -125,7 +126,7 @@ func newRelayTransport(parent context.Context, snapshot coordinator.NetworkMapSn
 	t := &RelayTransport{config: c, edge: edge, credential: *snapshot.RelayCredential, network: snapshot.Network.ID, node: snapshot.Node.ID,
 		peers: relayPeers(snapshot), permission: permissions, lifetime: lifetime, cancel: cancel, done: make(chan struct{}), writeGate: make(chan struct{}, 1), readGate: make(chan struct{}, 1)}
 	t.dial = func(ctx context.Context, address string, config *tls.Config) (relaySocket, error) {
-		dialer := tls.Dialer{NetDialer: &net.Dialer{Timeout: c.DialTimeout}, Config: config}
+		dialer := tls.Dialer{NetDialer: underlay.Dialer(c.DialTimeout), Config: config}
 		connection, err := dialer.DialContext(ctx, "tcp", address)
 		if err != nil {
 			return nil, ErrRelay

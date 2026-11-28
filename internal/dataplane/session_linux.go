@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"github.com/endless-net/client/internal/underlay"
 	"net"
 	"net/netip"
 	"slices"
@@ -214,7 +215,7 @@ func (s *LinuxSession) startTransport(ctx context.Context, value connectivity.Ma
 		reservation.release()
 		return err
 	}
-	s.engine, err = NewEngine(wireGuardPort{s.packets.primary}, conn.NewDefaultBind(), s.config.MaxPeers, s.config.ListenPort, s.lease)
+	s.engine, err = NewEngine(wireGuardPort{s.packets.primary}, linuxUnderlayBind{conn.NewDefaultBind()}, s.config.MaxPeers, s.config.ListenPort, s.lease)
 	if err != nil {
 		reservation.release()
 		return err
@@ -543,4 +544,19 @@ func (s *LinuxSession) ConnectionLocal() connectivity.LocalObservation {
 	}
 	defer s.mu.Unlock()
 	return transportObservation(s.current, s.lease, s.engine, s.packets, s.supervisor, s.lease.Permissions().NewFlows)
+}
+
+// WireGuard reopens its UDP sockets when the bind changes. Mark every new
+// socket before the engine can send a handshake or expose a receiver.
+type linuxUnderlayBind struct{ conn.Bind }
+
+func (b linuxUnderlayBind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
+	receivers, actual, err := b.Bind.Open(port)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := b.Bind.SetMark(underlay.Mark); err != nil {
+		return nil, 0, errors.Join(err, b.Bind.Close())
+	}
+	return receivers, actual, nil
 }

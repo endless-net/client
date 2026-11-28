@@ -146,6 +146,9 @@ func checkAttempt(a *clientv0.EnrollmentAttempt, runtime string) error {
 	if a == nil || a.GetMetadata().GetInstanceId() != runtime || a.Metadata.Revision == 0 || a.RequestId == "" || a.AttemptId == "" || a.ProfileId == "" || a.Mode < clientv0.EnrollmentMode_ENROLLMENT_MODE_WORKSTATION || a.Mode > clientv0.EnrollmentMode_ENROLLMENT_MODE_INTERACTIVE || a.Hostname == "" || a.Deadline == nil || !a.Deadline.IsValid() {
 		return errors.New("неполные исходные данные регистрации; автоматическое восстановление остановлено")
 	}
+	if a.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_DENIED && a.GetRestriction().GetReasonKey() == "client.registration.quota_exhausted" {
+		return errors.New(failureMessage(a.Restriction.ReasonKey))
+	}
 	if a.Phase != clientv0.EnrollmentPhase_ENROLLMENT_PHASE_REGISTERED && !time.Now().Before(a.Deadline.AsTime()) || a.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_EXPIRED || a.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_CANCELLED || a.Phase == clientv0.EnrollmentPhase_ENROLLMENT_PHASE_DENIED {
 		return errors.New("попытка регистрации завершена; новая попытка автоматически не создаётся")
 	}
