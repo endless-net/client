@@ -35,6 +35,14 @@ func (b *candidateBind) listenUDP(port uint16) (candidateSocket, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := enablePacketInfo(c); err != nil {
+		_ = c.Close()
+		return nil, err
+	}
+	return &windowsLANCandidate{UDPConn: c, bind: b}, nil
+}
+
+func enablePacketInfo(c *net.UDPConn) error {
 	raw, err := c.SyscallConn()
 	if err == nil {
 		var optErr error
@@ -46,12 +54,10 @@ func (b *candidateBind) listenUDP(port uint16) (candidateSocket, error) {
 		}
 	}
 	if err != nil {
-		c.Close()
-		return nil, err
+		return err
 	}
-	return &windowsLANCandidate{UDPConn: c, bind: b}, nil
+	return nil
 }
-
 func (s *windowsLANCandidate) source() (windows.IN_PKTINFO, bool) {
 	s.bind.mu.Lock()
 	ep := s.bind.assignment.localEndpoint
@@ -80,9 +86,13 @@ func (s *windowsLANCandidate) WriteToUDPAddrPort(buf []byte, peer netip.AddrPort
 	if !ok {
 		return 0, ErrNoAuthority
 	}
+	return writeCandidatePacket(s.UDPConn, buf, peer, packet)
+}
+
+func writeCandidatePacket(c *net.UDPConn, buf []byte, peer netip.AddrPort, packet windows.IN_PKTINFO) (int, error) {
 	info := candidatePacketInfo{packet: packet}
 	info.header = windows.WSACMSGHDR{Len: unsafe.Sizeof(info), Level: windows.IPPROTO_IP, Type: windows.IP_PKTINFO}
-	n, _, err := s.WriteMsgUDPAddrPort(buf, info.bytes(), peer)
+	n, _, err := c.WriteMsgUDPAddrPort(buf, info.bytes(), peer)
 	// A synchronously completed WSASendMsg can return zero bytes through
 	// Go's overlapped I/O path. A successful UDP send accepts one whole
 	// datagram. Reporting a short write here would abort a valid probe.
@@ -104,4 +114,32 @@ func (s *windowsLANCandidate) ReadFromUDPAddrPort(buf []byte) (int, netip.AddrPo
 			return n, peer, nil
 		}
 	}
+}
+
+const multiInterfaceNAT = true
+
+func openNATUDP(_ netip.Addr, port uint16) (*net.UDPConn, error) {
+	c, err := net.ListenUDP("udp4", &net.UDPAddr{Port: int(port)})
+	if err != nil {
+		return nil, err
+	}
+	if err = enablePacketInfo(c); err != nil {
+		_ = c.Close()
+		return nil, err
+	}
+	return c, nil
+}
+func (s *natSocket) readNAT(buf []byte) (int, netip.AddrPort, netip.Addr, error) {
+	var info candidatePacketInfo
+	n, ctrl, flags, peer, err := s.ReadMsgUDPAddrPort(buf, info.bytes())
+	if err != nil || flags != 0 || ctrl != len(info.bytes()) || info.header.Len != unsafe.Sizeof(info) || info.header.Level != windows.IPPROTO_IP || info.header.Type != windows.IP_PKTINFO {
+		return 0, peer, netip.Addr{}, err
+	}
+	return n, peer, netip.AddrFrom4(info.packet.Addr), nil
+}
+func (s *natSocket) writeNAT(buf []byte, peer netip.AddrPort, local netip.Addr) (int, error) {
+	if !local.Is4() {
+		return 0, ErrNoAuthority
+	}
+	return writeCandidatePacket(s.UDPConn, buf, peer, windows.IN_PKTINFO{Addr: local.As4()})
 }

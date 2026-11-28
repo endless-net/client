@@ -153,6 +153,9 @@ func (b *candidateBind) Open(port uint16) ([]awgconn.ReceiveFunc, uint16, error)
 		_ = socket.Close()
 		return nil, 0, ErrPacketIO
 	}
+	if ns, ok := socket.(*natSocket); ok {
+		ns.bind.Store(b)
+	}
 	b.socket = socket
 	b.port = uint16(address.Port)
 	return []awgconn.ReceiveFunc{func(packets [][]byte, sizes []int, endpoints []awgconn.Endpoint) (int, error) {
@@ -321,7 +324,13 @@ func (b *candidateBind) admit(p *probeAttempt, endpoint netip.AddrPort) (candida
 // local advertisement confirms its acknowledged port and the peer has an endpoint.
 func (b *candidateBind) endpointsReady() bool {
 	local, err := netip.ParseAddrPort(b.assignment.localEndpoint)
-	return err == nil && b.socket != nil && b.port != 0 && local.Port() == b.port && b.assignment.peerEndpoint != ""
+	if err != nil || b.socket == nil || b.assignment.peerEndpoint == "" {
+		return false
+	}
+	if socket, ok := b.socket.(*natSocket); ok {
+		return local == socket.mapping() || local == socket.local || multiInterfaceNAT && local.Port() == socket.local.Port()
+	}
+	return b.port != 0 && local.Port() == b.port
 }
 
 func minTime(a, b time.Time) time.Time {

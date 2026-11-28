@@ -360,7 +360,16 @@ func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordin
 				return g.config.listenCandidate(p.scope.peerID, offer.Profile.ID, port)
 			}
 		}
+		var handoff *natHandoff
+		if l := p.listeners[offer.Profile.ID]; l != nil && l.digest == offer.Digest && l.nat != nil {
+			handoff = newNATHandoff(l.nat)
+			l.nat, l.socket = nil, nil
+			factory = handoff.open
+		}
 		c, err = g.budget.newAssigned(g.ctx, g.current, g.lease, p.scope.peerID, offer.Profile.ID, g.private, g.config.mtu, g.clock, sink, factory, g.kernelForPeer(p), p.takeListener(offer), index)
+		if handoff != nil {
+			handoff.release()
+		}
 		if err != nil {
 			child.cancel()
 			return err

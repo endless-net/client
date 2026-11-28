@@ -10,7 +10,7 @@ import (
 )
 
 func TestLANAdvertisementBoundsAndWithdrawal(t *testing.T) {
-	listener := preparedListener{"profile", strings.Repeat("a", 64), 31546}
+	listener := preparedListener{id: "profile", digest: strings.Repeat("a", 64), port: 31546}
 	listeners := []preparedListener{listener}
 	addresses := []netip.Addr{netip.MustParseAddr("192.168.0.1"), netip.MustParseAddr("172.16.0.1")}
 	for i := len(addresses); i >= 0; i-- {

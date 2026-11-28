@@ -432,7 +432,7 @@ func wireGuardKey(value string) bool {
 
 func (v *Verifier) profile(value coordinator.NetworkMapSnapshot, now time.Time, denied bool) error {
 	n := value.Network
-	if len(value.STUNEndpoints) != 0 || n.IPv6CIDR != "" || len(n.DNS) != 0 || n.ClientPolicy != nil || len(n.SharePeerGrants) != 0 || value.Node.AssignedIPv6 != "" || len(value.Node.AdvertisedIPs) != 0 || len(value.Peers) > v.config.MaxPeers {
+	if !validSTUNEndpoints(value.STUNEndpoints) || n.IPv6CIDR != "" || len(n.DNS) != 0 || n.ClientPolicy != nil || len(n.SharePeerGrants) != 0 || value.Node.AssignedIPv6 != "" || len(value.Node.AdvertisedIPs) != 0 || len(value.Peers) > v.config.MaxPeers {
 		return ErrMap
 	}
 	if len(n.Applications) > 0 {
@@ -545,4 +545,16 @@ func persistMapCursor(ctx context.Context, store *state.Store, generation uint64
 		value.Profiles[m.profileID] = p
 		return nil
 	})
+}
+
+func validSTUNEndpoints(endpoints []coordinator.STUNEndpoint) bool {
+	ids, addresses := map[string]bool{}, map[string]bool{}
+	for _, e := range endpoints {
+		a, err := netip.ParseAddrPort(e.Addr)
+		if err != nil || !a.Addr().Is4() || !a.Addr().IsGlobalUnicast() || a.Port() == 0 || a.String() != e.Addr || e.ID == "" || strings.TrimSpace(e.ID) != e.ID || ids[e.ID] || addresses[e.Addr] {
+			return false
+		}
+		ids[e.ID], addresses[e.Addr] = true, true
+	}
+	return true
 }

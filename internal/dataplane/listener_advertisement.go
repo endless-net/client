@@ -12,6 +12,8 @@ import (
 type preparedListener struct {
 	id, digest string
 	port       uint16
+	local      netip.Addr
+	mapped     netip.AddrPort
 }
 
 func (g *transportSupervisor) preparedListeners() []preparedListener {
@@ -20,7 +22,12 @@ func (g *transportSupervisor) preparedListeners() []preparedListener {
 	for _, p := range g.peers {
 		for _, l := range p.listeners {
 			if l.socket != nil {
-				byID[l.id] = l.preparedListener
+				listener := l.preparedListener
+				if l.nat != nil {
+					listener.local = l.nat.local.Addr()
+					listener.mapped = l.nat.mapping()
+				}
+				byID[l.id] = listener
 			}
 		}
 		channels := []*assignedCipher{p.direct, p.spare}
@@ -38,8 +45,13 @@ func (g *transportSupervisor) preparedListeners() []preparedListener {
 			}
 			c.bind.mu.Lock()
 			a := c.bind.assignment
+			listener := preparedListener{id: a.offer.Profile.ID, digest: a.offer.Digest, port: port}
+			if ns, ok := c.bind.socket.(*natSocket); ok {
+				listener.local = ns.local.Addr()
+				listener.mapped = ns.mapping()
+			}
 			c.bind.mu.Unlock()
-			byID[a.offer.Profile.ID] = preparedListener{a.offer.Profile.ID, a.offer.Digest, port}
+			byID[listener.id] = listener
 		}
 	}
 	result := make([]preparedListener, 0, len(byID))
@@ -53,6 +65,15 @@ func (g *transportSupervisor) preparedListeners() []preparedListener {
 func listenerAdvertisement(generation uint64, listeners []preparedListener, addresses ...netip.Addr) coordinator.TransportAdvertisement {
 	ad := transportAdvertisement(generation)
 	for _, ep := range listeners {
+		if ep.local.IsValid() {
+			if ep.mapped.IsValid() && ep.mapped != netip.AddrPortFrom(ep.local, ep.port) {
+				ad.Endpoints = append(ad.Endpoints, coordinator.TransportEndpoint{ProfileID: ep.id, ProfileDigest: ep.digest, Endpoint: ep.mapped.String()})
+			}
+			if !multiInterfaceNAT {
+				ad.Endpoints = append(ad.Endpoints, coordinator.TransportEndpoint{ProfileID: ep.id, ProfileDigest: ep.digest, Endpoint: netip.AddrPortFrom(ep.local, ep.port).String()})
+				continue
+			}
+		}
 		for _, address := range addresses {
 			ad.Endpoints = append(ad.Endpoints, coordinator.TransportEndpoint{ProfileID: ep.id, ProfileDigest: ep.digest, Endpoint: netip.AddrPortFrom(address, ep.port).String()})
 		}

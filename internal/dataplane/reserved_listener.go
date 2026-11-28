@@ -9,11 +9,12 @@ import (
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 )
 
-// The supervisor owns these idle sockets. No reader or engine is attached.
-// Closing the idle socket discards queued datagrams before a candidate binds.
+// The supervisor owns each idle socket until the candidate opens it.
+// A NAT socket discards idle peer datagrams while processing Binding replies.
 type reservedListener struct {
 	preparedListener
 	socket *net.UDPConn
+	nat    *natSocket
 }
 
 func reserveUDPListener(port uint16) (*net.UDPConn, error) {
@@ -32,6 +33,7 @@ func (l *reservedListener) close() {
 	if l.socket != nil {
 		_ = l.socket.Close()
 		l.socket = nil
+		l.nat = nil
 	}
 }
 
@@ -89,6 +91,17 @@ func (g *transportSupervisor) reconcileReservedListeners() {
 	}
 	// Reserve in signed map order. Include existing active candidates and idle
 	// ports in the same node-wide advertisement size limit.
+	server := netip.AddrPort{}
+	if len(g.snapshot.STUNEndpoints) > 0 {
+		server, _ = netip.ParseAddrPort(g.snapshot.STUNEndpoints[0].Addr)
+	}
+	for _, p := range g.peers {
+		for _, l := range p.listeners {
+			if l.socket != nil && (l.nat != nil) != server.IsValid() {
+				l.close()
+			}
+		}
+	}
 	published := g.preparedListeners()
 	known := make(map[string]preparedListener, len(published))
 	for _, l := range published {
@@ -109,6 +122,19 @@ func (g *transportSupervisor) reconcileReservedListeners() {
 				}
 				p.listeners[id] = l
 			}
+			if l.nat != nil {
+				l.nat.discover(server)
+			}
+			for _, channel := range p.candidates() {
+				if channel != nil && channel.profileID == id {
+					channel.bind.mu.Lock()
+					ns, _ := channel.bind.socket.(*natSocket)
+					channel.bind.mu.Unlock()
+					if ns != nil {
+						ns.discover(server)
+					}
+				}
+			}
 			if active, ok := known[id]; ok {
 				if active.digest == l.digest {
 					l.port = active.port
@@ -117,8 +143,27 @@ func (g *transportSupervisor) reconcileReservedListeners() {
 			}
 			// Check capacity before opening a socket, using the widest possible port.
 			proposed := preparedListener{id: id, digest: o.Digest, port: 65535}
+			if server.IsValid() {
+				proposed.local = netip.MustParseAddr("255.255.255.254")
+				proposed.mapped = netip.MustParseAddrPort("255.255.255.253:65535")
+			}
 			if !announcementFits(listenerAdvertisement(g.generation, append(published, proposed), netip.MustParseAddr("255.255.255.254"))) {
 				return
+			}
+			if server.IsValid() {
+				ns, err := reserveNATSocket(server, l.port)
+				if err != nil && l.port != 0 {
+					ns, err = reserveNATSocket(server, 0)
+				}
+				if err == nil {
+					l.nat = ns
+					l.socket = ns.UDPConn
+					l.port = ns.local.Port()
+					ns.discover(server)
+					published = append(published, proposed)
+					known[id] = l.preparedListener
+					continue
+				}
 			}
 			conn, err := g.config.reserveListener(l.port)
 			if err != nil && l.port != 0 && !p.hasCandidate(id) {
@@ -160,4 +205,12 @@ func (g *transportSupervisor) admitPreparedListener() bool {
 		}
 	}
 	return false
+}
+
+func (p *supervisedRelay) candidates() [3]*assignedCipher {
+	channels := [3]*assignedCipher{p.direct, p.spare, nil}
+	if p.search != nil {
+		channels[2] = p.search.candidate
+	}
+	return channels
 }
