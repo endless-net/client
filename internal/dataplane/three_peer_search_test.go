@@ -233,7 +233,10 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 		if path == peerRouteDirect {
 			handshakes = links.handshakes
 		}
-		before := handshakes()
+		var before uint64
+		if handshakes != nil {
+			before = handshakes()
+		}
 		marker := byte(90)
 		probe := func() {
 			t.Helper()
@@ -283,8 +286,11 @@ func testThreeSearchPeers(t *testing.T, hubWG searchTestBackend, hubAWG directPe
 			})
 			probe()
 		}
-		if after := handshakes(); after != before {
-			t.Fatalf("path %v exchanged %d handshake messages during map application", path, after-before)
+		if handshakes != nil && handshakes() != before {
+			t.Fatalf("path %v exchanged handshake messages during map application", path)
+		}
+		if path == peerRouteDirect && ab != checkSelectedPeerEngine(t, a.packets, "node", "peer", offerB, hubWG.expected) {
+			t.Fatal("independent Direct engine replaced")
 		}
 	}
 	var nativeApp *net.UDPConn
