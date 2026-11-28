@@ -26,7 +26,7 @@ func attachCertificateProof(request *contract.UpdateNodeEndpointRequest, receipt
 	if err != nil {
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 || info.Size() <= 0 || info.Size() > 256<<10 {
 		return

@@ -16,7 +16,7 @@ func scanProcDirectory(root string, visit func(name, path string)) bool {
 	if err != nil {
 		return false
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 	for {
 		names, err := dir.Readdirnames(256)
 		for _, pid := range names {

@@ -1,13 +1,14 @@
 package clientapp
 
 import (
-	coord "github.com/endless-net/coordinator/api/enrollment"
 	"net"
 	"net/netip"
 	"runtime"
 	"slices"
 	"strings"
 	"time"
+
+	coord "github.com/endless-net/coordinator/api/enrollment"
 )
 
 func collectNodePosture(at time.Time) *coord.NodePostureMetadata {

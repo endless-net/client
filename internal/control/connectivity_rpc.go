@@ -1,8 +1,9 @@
 package control
 
 import (
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	clienttransport "github.com/endless-net/client/api/transport"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"

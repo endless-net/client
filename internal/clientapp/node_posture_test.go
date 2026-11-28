@@ -4,13 +4,14 @@ package clientapp
 
 import (
 	"errors"
-	"github.com/endless-net/client/internal/control"
-	coord "github.com/endless-net/coordinator/api/enrollment"
 	"net"
 	"runtime"
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/endless-net/client/internal/control"
+	coord "github.com/endless-net/coordinator/api/enrollment"
 )
 
 func TestLocalPostureRequiresCompleteInterfaceInventory(t *testing.T) {

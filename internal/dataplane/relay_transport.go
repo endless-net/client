@@ -5,11 +5,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"github.com/endless-net/client/internal/underlay"
 	"net"
 	"net/netip"
 	"sync"
 	"time"
+
+	"github.com/endless-net/client/internal/underlay"
 
 	"github.com/endless-net/client/internal/connectivity"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"

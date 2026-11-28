@@ -4,13 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"github.com/endless-net/client/internal/underlay"
 	"io"
 	"net"
 	"net/netip"
 	"os"
 	"runtime"
 	"time"
+
+	"github.com/endless-net/client/internal/underlay"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/connectivity"

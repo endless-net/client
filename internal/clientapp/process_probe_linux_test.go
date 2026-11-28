@@ -39,3 +39,18 @@ func TestProcessPostureReadsExecutableLinks(t *testing.T) {
 		t.Fatal("inconclusive scan", got)
 	}
 }
+
+func TestScanProcessesIncludesCurrentExecutable(t *testing.T) {
+	path, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	if !scanProcesses(func(_ string, candidate string) {
+		if path == candidate {
+			found = true
+		}
+	}) || !found {
+		t.Fatal("process scan omitted the running test executable")
+	}
+}

@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"github.com/endless-net/client/internal/underlay"
 	"net"
 	"net/netip"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/endless-net/client/internal/underlay"
 
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/state"
@@ -555,8 +556,8 @@ func (b linuxUnderlayBind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error)
 	if err != nil {
 		return nil, 0, err
 	}
-	if err := b.Bind.SetMark(underlay.Mark); err != nil {
-		return nil, 0, errors.Join(err, b.Bind.Close())
+	if err := b.SetMark(underlay.Mark); err != nil {
+		return nil, 0, errors.Join(err, b.Close())
 	}
 	return receivers, actual, nil
 }
