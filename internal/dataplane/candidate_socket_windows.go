@@ -83,6 +83,12 @@ func (s *windowsLANCandidate) WriteToUDPAddrPort(buf []byte, peer netip.AddrPort
 	info := candidatePacketInfo{packet: packet}
 	info.header = windows.WSACMSGHDR{Len: unsafe.Sizeof(info), Level: windows.IPPROTO_IP, Type: windows.IP_PKTINFO}
 	n, _, err := s.WriteMsgUDPAddrPort(buf, info.bytes(), peer)
+	// A synchronously completed WSASendMsg can return zero bytes through
+	// Go's overlapped I/O path. A successful UDP send accepts one whole
+	// datagram. Reporting a short write here would abort a valid probe.
+	if err == nil && n == 0 {
+		n = len(buf)
+	}
 	return n, err
 }
 
