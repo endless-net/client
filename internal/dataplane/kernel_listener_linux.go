@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -118,7 +119,7 @@ func startLinuxKernelListener(ctx context.Context, conn *genetlink.Conn, iface *
 	if err := reserve.Close(); err != nil {
 		return guard, err
 	}
-	if err := exec.CommandContext(ctx, linuxIP, "link", "set", "dev", iface.Name, "up").Run(); err != nil {
+	if err := activateLinuxPeerIndex(ctx, iface.Index); err != nil {
 		return guard, err
 	}
 	actual, err := kernelListenPort(conn, link.Info.Kind, iface.Index)
@@ -129,6 +130,26 @@ func startLinuxKernelListener(ctx context.Context, conn *genetlink.Conn, iface *
 		return guard, ErrAdapterOwnership
 	}
 	return guard, nil
+}
+
+// Activate the same kernel object that received the guarded listen port.
+func activateLinuxPeerIndex(ctx context.Context, index int) error {
+	conn, err := netlink.Dial(unix.NETLINK_ROUTE, nil)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	msg := make([]byte, unix.SizeofIfInfomsg)
+	binary.NativeEndian.PutUint32(msg[4:8], uint32(index))
+	binary.NativeEndian.PutUint32(msg[8:12], unix.IFF_UP)
+	binary.NativeEndian.PutUint32(msg[12:16], unix.IFF_UP)
+	_, err = conn.Execute(netlink.Message{
+		Header: netlink.Header{Type: unix.RTM_NEWLINK, Flags: netlink.Request | netlink.Acknowledge},
+		Data:   msg,
+	})
+	return err
 }
 
 func (g *linuxKernelListener) comment() string {
