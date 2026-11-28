@@ -267,11 +267,13 @@ func (s *LinuxSession) filters(ctx context.Context, value connectivity.Map, poli
 	if err != nil || (handle == 0) != install {
 		return ErrPolicyOwnership
 	}
+	var authorityErr error
 	retained := s.retained
 	if s.link != nil && len(s.link.probes) > 0 {
 		snapshot, snapshotErr := value.Snapshot()
 		sample, clockErr := s.clock.Sample()
-		if mode == linuxDeny || snapshotErr != nil || clockErr != nil {
+		authorityErr = errors.Join(snapshotErr, clockErr)
+		if mode == linuxDeny || authorityErr != nil {
 			retained = slices.Clone(retained)
 			for _, binding := range s.link.probes {
 				retained = append(retained, binding.local, binding.peer)
@@ -285,7 +287,7 @@ func (s *LinuxSession) filters(ctx context.Context, value connectivity.Map, poli
 	if err != nil {
 		return err
 	}
-	return linuxNFTApply(ctx, transaction)
+	return errors.Join(authorityErr, linuxNFTApply(ctx, transaction))
 }
 
 // Keep installed addresses protected until their routes are removed. Restore
