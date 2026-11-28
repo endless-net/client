@@ -488,13 +488,6 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 	id, _ := linuxPolicyFixture()
 	prefix, _ := linuxPeerScope(id.owner)
 	candidate := prefix + "00001"
-	if err := createLinuxKernelLink(ctx, candidate, engine, id.owner); err != nil {
-		t.Fatal(err)
-	}
-	iface, err := net.InterfaceByName(candidate)
-	if err != nil {
-		t.Fatal(err)
-	}
 	received := make(chan []byte, 1)
 	port, err := newPacketPort(ctx, 1420, func() connectivity.Permission {
 		return connectivity.Permission{ExistingFlows: true, NewFlows: true}
@@ -537,7 +530,8 @@ func testKernelPeerExchangesData(t *testing.T, engine string) {
 		defer proxy.Close()
 		kernelTarget = proxy.LocalAddr().(*net.UDPAddr).AddrPort()
 	}
-	if err := configureKernelWGPeer(ctx, conn, iface.Index, kernelTarget, cfg); err != nil {
+	iface, err := prepareLinuxPeerLink(ctx, conn, cfg, kernelTarget, candidate, id.owner)
+	if err != nil {
 		t.Fatal(err)
 	}
 
