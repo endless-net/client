@@ -61,7 +61,7 @@ func (s *Signals) windowsNetworkFailure(generation uint64, stage string, err err
 	if errors.As(err, &code) {
 		fields = append(fields, "win32_code", uint32(code))
 	}
-	s.logger.Warn("client.connection.native_failure", fields...)
+	s.logger.Warn("client.connection.native_failure", mapFailureFields(fields, err)...)
 }
 
 func windowsCleanupFailure(err error) error {

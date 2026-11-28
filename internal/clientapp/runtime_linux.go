@@ -270,8 +270,8 @@ func linuxConnections(store *state.Store, ledger state.LinuxNetworkLedger, clock
 					if code == "unavailable" {
 						code = "control_unavailable"
 					}
-					signals.logger.Warn("client.connection.native_failure", "component", "connection", "generation", generation,
-						"operation", stage, "error_code", code)
+					fields := []any{"component", "connection", "generation", generation, "operation", stage, "error_code", code}
+					signals.logger.Warn("client.connection.native_failure", mapFailureFields(fields, err)...)
 				}
 			},
 		},

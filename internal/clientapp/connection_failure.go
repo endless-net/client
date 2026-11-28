@@ -134,3 +134,15 @@ func connectionFailureCode(err error) string {
 		return "failed"
 	}
 }
+
+func mapFailureFields(fields []any, err error) []any {
+	var d *connectivity.MapStreamFailure
+	if !errors.As(err, &d) {
+		return fields
+	}
+	fields = append(fields, "rpc", "WatchMaps", "map_step", d.Step, "full_snapshot", d.FullSnapshot, "requested_revision", d.RequestRevision, "received_records", d.Records, "last_event_revision", d.EventRevision)
+	if d.RPCCode != "" {
+		fields = append(fields, "rpc_code", d.RPCCode)
+	}
+	return fields
+}

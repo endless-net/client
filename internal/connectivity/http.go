@@ -30,6 +30,18 @@ var (
 	ErrEndpointUncertain = errors.New("endpoint announcement outcome uncertain")
 )
 
+// MapStreamFailure contains only locally classified diagnostics and numeric revisions.
+type MapStreamFailure struct {
+	cause                          error
+	Step, RPCCode                  string
+	FullSnapshot                   bool
+	RequestRevision, EventRevision uint64
+	Records                        int
+}
+
+func (e *MapStreamFailure) Error() string { return e.cause.Error() }
+func (e *MapStreamFailure) Unwrap() error { return e.cause }
+
 type HTTPConfig struct {
 	CallTimeout, StreamDuration, ReadIdleTimeout                        time.Duration
 	MaxRequestBytes, MaxResponseBytes, MaxRecords, MaxCalls, MaxStreams int
@@ -224,7 +236,14 @@ func (t *Transport) StreamSnapshot(parent context.Context, v *Verifier, previous
 	return t.stream(parent, v, previous, receive, true)
 }
 
-func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.MapCursor, receive func(context.Context, Map) error, full bool) error {
+func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.MapCursor, receive func(context.Context, Map) error, full bool) (failure error) {
+	detail := MapStreamFailure{FullSnapshot: full, Step: "prepare"}
+	defer func() {
+		if failure != nil {
+			detail.cause = failure
+			failure = &detail
+		}
+	}()
 	if parent.Err() != nil {
 		return parent.Err()
 	}
@@ -241,6 +260,7 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 	default:
 		return ErrUnavailable
 	}
+	detail.Step = "credential_window"
 	duration := t.config.StreamDuration
 	deadlineCause := ErrStreamRotation
 	if remaining := v.credentialEnds.Sub(v.config.Now()); remaining <= duration {
@@ -254,6 +274,7 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 	defer stop()
 	ctx, abort := context.WithCancelCause(timed)
 	defer abort(nil)
+	detail.Step = "verify_trust"
 	if _, err := v.currentTrust(ctx, "node:map"); err != nil {
 		return err
 	}
@@ -267,6 +288,7 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 	challenge := mapTimeChallenge{nonce: base64.RawURLEncoding.EncodeToString(challengeBytes[:])}
 	message := &wire.WatchMapsRequest{NodeId: v.node, Timeout: durationpb.New(duration), Nonce: challenge.nonce}
 	if cursor != nil && !full {
+		detail.RequestRevision = cursor.Revision.Network
 		message.Cursor = &wire.MapCursor{Revision: &wire.MapRevision{Network: cursor.Revision.Network}, MapHash: cursor.PayloadHash}
 	}
 	request := connect.NewRequest(message)
@@ -278,11 +300,13 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 	headerTimer := time.AfterFunc(t.config.CallTimeout, func() { abort(ErrUnavailable) })
 	defer headerTimer.Stop()
 	meter := &streamReadMeter{client: t.streams}
+	detail.Step = "open_rpc"
 	stream, err := t.client(meter, v.origin).WatchMaps(ctx, request)
 	if err != nil {
 		if ctx.Err() != nil {
 			return streamContextError(ctx)
 		}
+		detail.RPCCode = connect.CodeOf(err).String()
 		return connectivityCallError(err, false)
 	}
 	defer func() { _ = stream.Close() }()
@@ -295,6 +319,7 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 		if deadline, _ := ctx.Deadline(); t.config.ReadIdleTimeout < time.Until(deadline) {
 			timer = time.AfterFunc(t.config.ReadIdleTimeout, func() { abort(ErrUnavailable) })
 		}
+		detail.Step = "receive_rpc"
 		before := meter.bytes
 		hasMessage := stream.Receive()
 		if timer != nil {
@@ -309,12 +334,21 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 			return streamContextError(ctx)
 		}
 		if !hasMessage {
+			if stream.Err() != nil {
+				detail.RPCCode = connect.CodeOf(stream.Err()).String()
+			} else {
+				detail.RPCCode = "eof"
+			}
 			return connectivityCallError(stream.Err(), false)
 		}
+		detail.Records++
+		detail.Step = "decode_event"
 		event, err := control.MapUpdate(stream.Msg())
 		if err != nil || !pathID(event.EventID) {
 			return ErrMapEvent
 		}
+		detail.Step = "verify_event"
+		detail.EventRevision = event.To.Network
 		var m Map
 		if count == 0 {
 			m, err = v.verifyEvent(ctx, event, cursor, full, &challenge)
@@ -345,6 +379,7 @@ func (t *Transport) stream(parent context.Context, v *Verifier, previous *state.
 		if ctx.Err() != nil {
 			return streamContextError(ctx)
 		}
+		detail.Step = "apply_event"
 		callbackErr := receive(ctx, m)
 		if m.Denied() {
 			if callbackErr != nil {
