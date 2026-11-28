@@ -62,10 +62,10 @@ func newAssignedCipher(parent context.Context, m connectivity.Map, lease *connec
 
 // socketFactory is a local unit I/O seam, never part of a delivered profile.
 func buildAssignedCipher(parent context.Context, m connectivity.Map, lease *connectivity.Lease, peerID, profileID string, private []byte, mtu int, clock connectivity.Clock, sink func([]byte) error, socketFactory func(uint16) (candidateSocket, error)) (*assignedCipher, error) {
-	return prepareAssignedCipher(parent, m, lease, peerID, profileID, private, mtu, clock, sink, socketFactory, nil, 0)
+	return prepareAssignedCipher(parent, m, lease, peerID, profileID, private, mtu, clock, sink, socketFactory, nil, 0, 0)
 }
 
-func prepareAssignedCipher(parent context.Context, m connectivity.Map, lease *connectivity.Lease, peerID, profileID string, private []byte, mtu int, clock connectivity.Clock, sink func([]byte) error, socketFactory func(uint16) (candidateSocket, error), kernel kernelPreparer, preferredPort uint16) (*assignedCipher, error) {
+func prepareAssignedCipher(parent context.Context, m connectivity.Map, lease *connectivity.Lease, peerID, profileID string, private []byte, mtu int, clock connectivity.Clock, sink func([]byte) error, socketFactory func(uint16) (candidateSocket, error), kernel kernelPreparer, preferredPort uint16, pairIndex uint32) (*assignedCipher, error) {
 	if parent == nil || parent.Err() != nil || clock == nil || lease == nil || sink == nil {
 		return nil, ErrConfiguration
 	}
@@ -78,6 +78,7 @@ func prepareAssignedCipher(parent context.Context, m connectivity.Map, lease *co
 	if err != nil {
 		return nil, err
 	}
+	assignment.selectPair(pairIndex)
 	cfg := directCipherConfig{preferredPort: preferredPort, assignment: assignment, private: private, mtu: mtu, clock: clock}
 	if kernel != nil {
 		channel, err := openAssignedEngine(parent, cfg, sink, socketFactory, kernel)

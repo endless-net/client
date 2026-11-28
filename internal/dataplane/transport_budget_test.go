@@ -28,13 +28,21 @@ func TestKernelPreparationFallbackUsesOneReservationAndCurrentAssignment(t *test
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newCandidateFixture(t)
+			plan := f.snapshot.Peers[0].Transport
+			second := plan.PeerAdvertisement.Endpoints[0]
+			second.Endpoint = "192.0.2.21:51820"
+			plan.PeerAdvertisement.Endpoints = append(plan.PeerAdvertisement.Endpoints, second)
+			plan.Profiles[0].PeerEndpoints = append(plan.Profiles[0].PeerEndpoints, second.Endpoint)
+			cursor := f.verified.Cursor()
+			f.clock.advance(time.Millisecond, time.Millisecond)
+			f.refresh(t, &cursor)
 			budget, err := newTransportBudget(1)
 			if err != nil {
 				t.Fatal(err)
 			}
 			var digest string
 			budget.kernel = func(ctx context.Context, cfg directCipherConfig, channel *assignedCipher, port *packetPort) (directPeerEngine, error) {
-				if len(budget.engines) != 1 || cfg.assignment.lease != f.lease || cfg.assignment.peer.ID != "peer" {
+				if len(budget.engines) != 1 || cfg.assignment.peerEndpoint != second.Endpoint || cfg.assignment.lease != f.lease || cfg.assignment.peer.ID != "peer" {
 					t.Fatal("incorrect reservation or signed assignment")
 				}
 				digest = cfg.assignment.offer.Digest
@@ -54,13 +62,13 @@ func TestKernelPreparationFallbackUsesOneReservationAndCurrentAssignment(t *test
 				opened++
 				return newCandidateSocketFixture(), nil
 			}
-			channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel, 0)
+			channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel, 0, 1)
 			if tc.wantError == nil {
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer channel.Close()
-				if digest == "" || channel.cipher.(*peerCipher).profileDigest != digest || opened != 1 || len(budget.engines) != 1 {
+				if channel.bind.assignment.peerEndpoint != second.Endpoint || digest == "" || channel.cipher.(*peerCipher).profileDigest != digest || opened != 1 || len(budget.engines) != 1 {
 					t.Fatal("fallback changed the profile or allocation")
 				}
 			} else if !errors.Is(err, tc.wantError) || channel != nil || opened != 0 || len(budget.engines) != 0 {
@@ -260,7 +268,7 @@ func TestBudgetedFactoriesReturnFailedReservationsAndCompleteProbePermits(t *tes
 	}
 	socket := newCandidateSocketFixture()
 	factory := func(uint16) (candidateSocket, error) { return socket, nil }
-	if _, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", make([]byte, 32), 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel, 0); err == nil {
+	if _, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", make([]byte, 32), 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel, 0, 0); err == nil {
 		t.Fatal("invalid key constructed engine")
 	}
 	budget.mu.Lock()
@@ -269,7 +277,7 @@ func TestBudgetedFactoriesReturnFailedReservationsAndCompleteProbePermits(t *tes
 	if count != 0 {
 		t.Fatal("failed factory retained reservation")
 	}
-	channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel, 0)
+	channel, err := budget.newAssigned(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, factory, budget.kernel, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +356,7 @@ func TestKernelPartialListenerCleanupBeforeGoFallback(t *testing.T) {
 			}
 			return newCandidateSocketFixture(), nil
 		}
-		channel, err := prepareAssignedCipher(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, listen, preparer, 0)
+		channel, err := prepareAssignedCipher(t.Context(), f.verified, f.lease, "peer", "fixture-profile", f.profile.Keys.WireGuardPrivate, 1280, f.clock, func([]byte) error { return nil }, listen, preparer, 0, 0)
 		if closeErr != nil {
 			if channel != nil || !errors.Is(err, closeErr) || opens != 1 {
 				t.Fatalf("retried after uncertain cleanup: opens %d, error %v", opens, err)

@@ -428,7 +428,7 @@ func testRetainedControlMeter(t *testing.T, kernel kernelPreparer) {
 			for i, f := range fixtures {
 				socket := sockets[i]
 				peer := f.snapshot.Peers[0].ID
-				channels[i], err = prepareAssignedCipher(t.Context(), f.verified, f.lease, peer, profile.ID, f.profile.Keys.WireGuardPrivate, 1420, f.clock, func(raw []byte) error { output <- bytes.Clone(raw); return nil }, func(uint16) (candidateSocket, error) { return socket, nil }, kernel, 0)
+				channels[i], err = prepareAssignedCipher(t.Context(), f.verified, f.lease, peer, profile.ID, f.profile.Keys.WireGuardPrivate, 1420, f.clock, func(raw []byte) error { output <- bytes.Clone(raw); return nil }, func(uint16) (candidateSocket, error) { return socket, nil }, kernel, 0, 0)
 				if err != nil {
 					t.Fatal(err)
 				}

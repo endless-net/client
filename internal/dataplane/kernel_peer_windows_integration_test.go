@@ -172,7 +172,7 @@ func testWindowsAssignedEcho(t *testing.T, local *candidateFixture, external, re
 		c, err := prepareAssignedCipher(t.Context(), f.verified, f.lease, f.snapshot.Peers[0].ID,
 			f.snapshot.Peers[0].Transport.Profiles[0].Profile.ID, f.profile.Keys.WireGuardPrivate,
 			1420, f.clock, func([]byte) error { return ErrNoAuthority },
-			func(uint16) (candidateSocket, error) { return socket, nil }, prepare, 0)
+			func(uint16) (candidateSocket, error) { return socket, nil }, prepare, 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -239,7 +239,7 @@ func testWindowsAssignedCandidateLifetime(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	c, err := prepareAssignedCipher(ctx, f.verified, f.lease, a.peer.ID, a.offer.Profile.ID,
-		f.profile.Keys.WireGuardPrivate, 1420, f.clock, func([]byte) error { return ErrNoAuthority }, nil, prepareWindowsDirect, 0)
+		f.profile.Keys.WireGuardPrivate, 1420, f.clock, func([]byte) error { return ErrNoAuthority }, nil, prepareWindowsDirect, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

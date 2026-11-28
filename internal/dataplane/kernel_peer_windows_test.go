@@ -173,7 +173,7 @@ func TestWindowsDirectWithoutBundledWireGuardNT(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	channel, err := r.budget.newAssigned(t.Context(), f.verified, f.lease, a.peer.ID, a.offer.Profile.ID, cfg.private, 1420, f.clock, func([]byte) error { return nil }, func(uint16) (candidateSocket, error) { return newCandidateSocketFixture(), nil }, r.budget.kernel, 0)
+	channel, err := r.budget.newAssigned(t.Context(), f.verified, f.lease, a.peer.ID, a.offer.Profile.ID, cfg.private, 1420, f.clock, func([]byte) error { return nil }, func(uint16) (candidateSocket, error) { return newCandidateSocketFixture(), nil }, r.budget.kernel, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

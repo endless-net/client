@@ -196,12 +196,12 @@ func (b *transportBudget) newCycle(parent context.Context, clock connectivity.Cl
 	return cycle, nil
 }
 
-func (b *transportBudget) newAssigned(parent context.Context, value connectivity.Map, lease *connectivity.Lease, peerID, profileID string, private []byte, mtu int, clock connectivity.Clock, sink func([]byte) error, socketFactory func(uint16) (candidateSocket, error), kernel kernelPreparer, preferredPort uint16) (*assignedCipher, error) {
+func (b *transportBudget) newAssigned(parent context.Context, value connectivity.Map, lease *connectivity.Lease, peerID, profileID string, private []byte, mtu int, clock connectivity.Clock, sink func([]byte) error, socketFactory func(uint16) (candidateSocket, error), kernel kernelPreparer, preferredPort uint16, pairIndex uint32) (*assignedCipher, error) {
 	slot, err := b.reserve(lease, peerID, engineTransient)
 	if err != nil {
 		return nil, err
 	}
-	channel, err := prepareAssignedCipher(parent, value, lease, peerID, profileID, private, mtu, clock, sink, socketFactory, kernel, preferredPort)
+	channel, err := prepareAssignedCipher(parent, value, lease, peerID, profileID, private, mtu, clock, sink, socketFactory, kernel, preferredPort, pairIndex)
 	if err != nil {
 		slot.release()
 		return nil, err

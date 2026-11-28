@@ -335,6 +335,12 @@ func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordin
 	} else {
 		s.traffic[offer.Profile.ID] = child.wire
 	}
+	rawID, err := hex.DecodeString(id)
+	if err != nil || len(rawID) != 16 {
+		child.cancel()
+		return ErrConfiguration
+	}
+	index := binary.BigEndian.Uint32(rawID[:4])
 	var c *assignedCipher
 	for _, existing := range []*assignedCipher{p.spare, p.direct} {
 		if existing != nil && existing.profileID == offer.Profile.ID {
@@ -354,7 +360,7 @@ func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordin
 				return g.config.listenCandidate(p.scope.peerID, offer.Profile.ID, port)
 			}
 		}
-		c, err = g.budget.newAssigned(g.ctx, g.current, g.lease, p.scope.peerID, offer.Profile.ID, g.private, g.config.mtu, g.clock, sink, factory, g.kernelForPeer(p), p.takeListener(offer))
+		c, err = g.budget.newAssigned(g.ctx, g.current, g.lease, p.scope.peerID, offer.Profile.ID, g.private, g.config.mtu, g.clock, sink, factory, g.kernelForPeer(p), p.takeListener(offer), index)
 		if err != nil {
 			child.cancel()
 			return err
@@ -362,13 +368,7 @@ func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordin
 	}
 	// The authenticated candidate ID carries the initiator's ordinal. The signed
 	// offers and ordered node identities define both ends without an address hint.
-	rawID, err := hex.DecodeString(id)
-	if err == nil && len(rawID) == 16 {
-		index := binary.BigEndian.Uint32(rawID[:4])
-		err = c.updatePair(g.ctx, g.current, &index)
-	} else {
-		err = ErrConfiguration
-	}
+	err = c.updatePair(g.ctx, g.current, &index)
 	if err != nil {
 		child.cancel()
 		if c != p.direct && c != p.spare {
@@ -635,6 +635,7 @@ func (g *transportSupervisor) tickSearch(p *supervisedRelay) {
 					if errors.Is(err, ErrTransportCapacity) {
 						return
 					}
+					p.nextPair[id]++
 					s.tried[id] = true
 					continue
 				}
