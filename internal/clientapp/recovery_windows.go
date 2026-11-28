@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	"github.com/endless-net/client/internal/connectivity"
+	"github.com/endless-net/client/internal/dataplane"
 	"github.com/endless-net/client/internal/state"
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
@@ -81,48 +82,54 @@ func underlayRoutes(routes []winipcfg.MibIPforwardRow2) ([]string, map[uint32]bo
 	return parts, indices
 }
 
-// The no-NAT recovery profile uses one active default IPv4 interface. This is
-// local address selection, not STUN/NAT discovery. Ambiguity has no fallback to
-// an old endpoint. Announcement keeps the explicitly configured UDP port.
+// Select the node's registration endpoint separately from the transport
+// advertisement, which contains all prepared LAN addresses.
 func underlayEndpoint(configured netip.AddrPort, maxRows, maxInterfaces int) (netip.AddrPort, error) {
 	routes, err := winipcfg.GetIPForwardTable2(windows.AF_INET)
 	if err != nil || len(routes) > maxRows {
 		return netip.AddrPort{}, ErrConnectionWorker
 	}
 	_, indices := underlayRoutes(routes)
-	if len(indices) == 0 || len(indices) > maxInterfaces {
+	if len(indices) > maxInterfaces {
 		return netip.AddrPort{}, ErrConnectionWorker
 	}
-	var candidates []netip.Addr
-	for index := range indices {
-		nic, err := net.InterfaceByIndex(int(index))
-		if err != nil || nic.Flags&net.FlagUp == 0 || nic.Flags&net.FlagLoopback != 0 {
-			continue
+	addresses, err := dataplane.LANIPv4Interfaces()
+	if err != nil || len(addresses) > maxRows {
+		return netip.AddrPort{}, ErrConnectionWorker
+	}
+	if _, ok := addresses[configured.Addr()]; ok {
+		return configured, nil
+	}
+	var candidates, connected []netip.Addr
+	for address, index := range addresses {
+		connected = append(connected, address)
+		if indices[index] {
+			candidates = append(candidates, address)
 		}
-		addresses, err := nic.Addrs()
-		if err != nil || len(addresses) > maxRows {
-			return netip.AddrPort{}, ErrConnectionWorker
-		}
-		for _, address := range addresses {
-			prefix, err := netip.ParsePrefix(address.String())
-			if err == nil && prefix.Addr().Is4() && prefix.Addr().IsGlobalUnicast() {
-				candidates = append(candidates, prefix.Addr())
-			}
-		}
+	}
+	if len(candidates) == 0 {
+		candidates = connected
 	}
 	return selectUnderlayEndpoint(configured, candidates)
 }
 
 func selectUnderlayEndpoint(configured netip.AddrPort, candidates []netip.Addr) (netip.AddrPort, error) {
+	var first netip.Addr
 	for _, address := range candidates {
+		if !address.Is4() || !address.IsGlobalUnicast() {
+			continue
+		}
 		if address == configured.Addr() {
 			return configured, nil
 		}
+		if !first.IsValid() || address.Less(first) {
+			first = address
+		}
 	}
-	if len(candidates) != 1 || !candidates[0].Is4() || !candidates[0].IsGlobalUnicast() {
+	if !first.IsValid() {
 		return netip.AddrPort{}, connectivity.FailurePath
 	}
-	return netip.AddrPortFrom(candidates[0], configured.Port()), nil
+	return netip.AddrPortFrom(first, configured.Port()), nil
 }
 
 // RunWindows owns read-only native event registration for the worker lifetime.

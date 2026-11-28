@@ -120,12 +120,16 @@ func newRelayTransport(parent context.Context, snapshot coordinator.NetworkMapSn
 	if edge.ID == "" || edge.Protocol != relay.EndpointProtocolTLS || err != nil || host == "" {
 		return nil, ErrConfiguration
 	}
+	peers, err := permittedTransportPeers(snapshot)
+	if err != nil {
+		return nil, err
+	}
 	lifetime, cancel := context.WithCancel(parent)
 	if c.Roots != nil {
 		c.Roots = c.Roots.Clone()
 	}
 	t := &RelayTransport{config: c, edge: edge, credential: *snapshot.RelayCredential, network: snapshot.Network.ID, node: snapshot.Node.ID,
-		peers: relayPeers(snapshot), permission: permissions, lifetime: lifetime, cancel: cancel, done: make(chan struct{}), writeGate: make(chan struct{}, 1), readGate: make(chan struct{}, 1)}
+		peers: peers, permission: permissions, lifetime: lifetime, cancel: cancel, done: make(chan struct{}), writeGate: make(chan struct{}, 1), readGate: make(chan struct{}, 1)}
 	t.dial = func(ctx context.Context, address string, config *tls.Config) (relaySocket, error) {
 		dialer := tls.Dialer{NetDialer: underlay.Dialer(c.DialTimeout), Config: config}
 		connection, err := dialer.DialContext(ctx, "tcp", address)
@@ -143,14 +147,22 @@ func newRelayTransport(parent context.Context, snapshot coordinator.NetworkMapSn
 	return t, nil
 }
 
-func relayPeers(snapshot coordinator.NetworkMapSnapshot) map[string]bool {
+func permittedTransportPeers(snapshot coordinator.NetworkMapSnapshot) (map[string]bool, error) {
+	_, routers, err := recipientPacketRules(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	_, sources, err := routerPacketPolicy(snapshot)
+	if err != nil {
+		return nil, err
+	}
 	peers := make(map[string]bool, len(snapshot.Peers))
 	for _, peer := range snapshot.Peers {
-		if peer.NetworkID == snapshot.Network.ID && peer.ID != snapshot.Node.ID && peer.Status != "revoked" && len(peer.ACLGrants)+len(peer.IngressACLGrants) > 0 {
+		if peer.NetworkID == snapshot.Network.ID && peer.ID != snapshot.Node.ID && peer.Status != "revoked" && (pairGranted(peer) || routers[peer.ID] || sources[peer.ID]) {
 			peers[peer.ID] = true
 		}
 	}
-	return peers
+	return peers, nil
 }
 
 func (t *RelayTransport) permitted(newFlow bool) bool {
@@ -472,8 +484,13 @@ func (t *RelayTransport) Update(m connectivity.Map) error {
 		t.Close()
 		return ErrRelay
 	}
+	peers, err := permittedTransportPeers(value)
+	if err != nil {
+		t.Close()
+		return err
+	}
 	t.mu.Lock()
-	t.peers = relayPeers(value)
+	t.peers = peers
 	t.mapValue = m
 	t.mu.Unlock()
 	// Updating a map never renews this socket's original bearer credential.

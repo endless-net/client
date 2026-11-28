@@ -215,7 +215,7 @@ func (s *LinuxSession) retireHostCandidate(ctx context.Context, e *linuxHostEngi
 			if err := s.link.removeProbeRoute(ctx, b); err != nil {
 				return err
 			}
-			if err := s.filters(ctx, s.current, s.policy, false, s.peerFilterMode()); err != nil {
+			if err := s.filters(ctx, s.current, &s.policy, false, s.peerFilterMode()); err != nil {
 				return err
 			}
 		}
@@ -262,7 +262,7 @@ func (s *LinuxSession) selectHostDirect(route *peerRoute, token *directActivatio
 			if err := b.checkAdapterLocked(); err != nil {
 				return err
 			}
-			if err := s.filters(b.ctx, s.current, s.policy, false, linuxOnline); err != nil {
+			if err := s.filters(b.ctx, s.current, &s.policy, false, linuxOnline); err != nil {
 				return err
 			}
 			if err := b.checkAdapterLocked(); err != nil {
@@ -276,7 +276,7 @@ func (s *LinuxSession) selectHostDirect(route *peerRoute, token *directActivatio
 	if err != nil {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(b.ctx), 3*time.Second)
 		defer cancel()
-		if restore := errors.Join(s.link.verify(ctx), s.filters(ctx, s.current, s.policy, false, s.peerFilterMode())); restore != nil {
+		if restore := errors.Join(s.link.verify(ctx), s.filters(ctx, s.current, &s.policy, false, s.peerFilterMode())); restore != nil {
 			s.lease.Revoke()
 			s.cancel()
 			return nil, errors.Join(err, restore)

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/endless-net/client/internal/state"
@@ -105,6 +106,47 @@ func TestWindowsPolicyDirectionPortContextAndOffline(t *testing.T) {
 		for _, r := range p.rules {
 			if r.Action == wf.ActionPermit && r.HardAction {
 				t.Fatal("permit bypasses other firewall blocks")
+			}
+		}
+	}
+}
+
+func TestWindowsTimedGrantsKeepIndependentPermitsOnPrimaryAndDirect(t *testing.T) {
+	m, _ := engineMap(t)
+	end := time.Unix(1800000000, 0)
+	later := end.Add(time.Second)
+	peer := &m.Peers[0]
+	permit := func(port int, until *time.Time) coordinator.ACLGrant {
+		return coordinator.ACLGrant{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []coordinator.ACLPort{{Protocol: "tcp", Port: port}}, ValidUntil: until}
+	}
+	peer.ACLGrants = []coordinator.ACLGrant{permit(443, &end), permit(443, &later), permit(22, nil), permit(22, &end)}
+	local, remote := netip.MustParseAddr(m.Node.AssignedIP), netip.MustParseAddr("100.64.0.2")
+	for _, offline := range []bool{false, true} {
+		base, err := filterPlan(m, policySession, 12345, 17, 8, 8, offline)
+		if err != nil {
+			t.Fatal(err)
+		}
+		installed, err := base.withDirectPeer(local, remote, 12346, 18)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, at := range []time.Time{end, later} {
+			plan, err := base.currentGrants(at).withDirectPeer(local, remote, 12346, 18)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, luid := range []uint64{12345, 12346} {
+				fields := map[wf.FieldID]any{wf.FieldIPLocalInterface: luid, wf.FieldIPLocalAddress: local, wf.FieldIPRemoteAddress: remote, wf.FieldIPProtocol: wf.IPProto(6), wf.FieldFlags: wf.ConditionFlagIsReauthorize}
+				for _, port := range []uint16{443, 22} {
+					fields[wf.FieldIPRemotePort] = port
+					want := port == 22 || at.Before(later)
+					for _, candidate := range []FilterPlan{plan, installed.currentGrants(at)} {
+						permitted := policyVerdict(candidate, wf.LayerALEAuthConnectV4, fields) == wf.ActionPermit
+						if permitted != want {
+							t.Fatalf("offline=%t interface=%d port=%d time=%v permit=%t", offline, luid, port, at, permitted)
+						}
+					}
+				}
 			}
 		}
 	}

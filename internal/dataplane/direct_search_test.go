@@ -587,6 +587,9 @@ func testTwoSupervisorsThroughSelection(t *testing.T, filterWG, preferAWG bool, 
 	if rejectRoute {
 		t.Fatal("Direct was selected despite route rejection")
 	}
+	if rejectRoute {
+		t.Fatal("Direct was selected despite route rejection")
+	}
 	if revisionInterval > 0 && globalChanges < 2 {
 		t.Fatal("scenario did not exercise frequent unrelated map updates")
 	}
@@ -1077,4 +1080,9 @@ func TestEndpointPairOrderAndRetention(t *testing.T) {
 	if a.keepPair(original[0], original[1]) {
 		t.Fatal("withdrawn endpoint retained")
 	}
+}
+
+func TestDirectOverSecondLANAddress(t *testing.T) {
+	backend := searchTestBackend{newTransportBudget, (*peerCipher)(nil)}
+	testTwoSupervisorsThroughSelection(t, false, false, 0, backend, backend, false, nil, true)
 }

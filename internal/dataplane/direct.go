@@ -62,7 +62,7 @@ func (t *directTracker) notify() { close(t.changed); t.changed = make(chan struc
 
 // configure runs before UAPI mutates peers. Callbacks never acquire Engine.mu or
 // call Device, including callbacks delivered synchronously by removal/Close.
-func (t *directTracker) configure(peers []coordinator.Peer) error {
+func (t *directTracker) configure(peers []coordinator.Peer, bindings map[string]primaryPeerBinding) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.closed {
@@ -82,7 +82,7 @@ func (t *directTracker) configure(peers []coordinator.Peer) error {
 		var key [32]byte
 		copy(key[:], raw)
 		old, exists := t.peers[key]
-		binding := directPeer{id: p.ID, public: p.PublicKey, endpoint: endpoint, binding: bindingForPrimaryPeer(p)}
+		binding := directPeer{id: p.ID, public: p.PublicKey, endpoint: endpoint, binding: bindings[p.PublicKey]}
 		state := directState{peer: binding}
 		if exists {
 			state.session = old.session

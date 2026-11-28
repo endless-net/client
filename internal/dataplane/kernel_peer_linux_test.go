@@ -969,7 +969,7 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if err := runtimeSession.installPeerProbe(ctx, sock, openRelay()); err != nil {
 		t.Fatal(err)
 	}
-	if err := runtimeSession.filters(ctx, f.verified, refreshed, false, linuxOnline); err != nil {
+	if err := runtimeSession.filters(ctx, f.verified, &refreshed, false, linuxOnline); err != nil {
 		t.Fatal(err)
 	}
 	if err := session.verify(ctx); err != nil {
@@ -1048,7 +1048,7 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	if linuxHostProbeSupported(a.offer.Profile) {
 		testLinuxProbeQuotaOnWire(t, f, confirmed, sock, received, port, broker)
 	}
-	if err := runtimeSession.filters(ctx, f.verified, refreshed, false, linuxExisting); err != nil {
+	if err := runtimeSession.filters(ctx, f.verified, &refreshed, false, linuxExisting); err != nil {
 		t.Fatal(err)
 	}
 	if err := sock.send(raw, func() error { return nil }); !errors.Is(err, unix.EPERM) {
@@ -1355,7 +1355,7 @@ func TestLinuxSupervisorPreparesHostCandidate(t *testing.T) {
 	session := &LinuxSession{lease: f.lease, clock: f.clock, identity: id, receipt: state.LinuxNetworkReceipt{Table: id.table, Owner: id.owner}, policy: policy, current: f.verified}
 	session.ctx, session.cancel = context.WithCancel(ctx)
 	defer session.cancel()
-	if err := session.filters(ctx, f.verified, policy, true, linuxDeny); err != nil {
+	if err := session.filters(ctx, f.verified, &policy, true, linuxDeny); err != nil {
 		t.Fatal(err)
 	}
 	session.link, err = openLinuxLink(ctx, id.tunnel, 1420)
@@ -1363,7 +1363,7 @@ func TestLinuxSupervisorPreparesHostCandidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = session.link.device.Close() }()
-	if err := session.link.configure(ctx, policy.address, policy.protected[1:]); err != nil {
+	if err := session.link.configure(ctx, policy.address, linuxRouteDestinations(policy.protected[1:], nil)); err != nil {
 		t.Fatal(err)
 	}
 	g := &transportSupervisor{budget: &transportBudget{kernel: platformDirectPreparer}, config: supervisorConfig{hostKernel: session.prepareHostCandidate}, snapshot: f.snapshot}
@@ -1477,7 +1477,7 @@ func linuxSearchRouteFixture(t *testing.T, f *candidateFixture, config *supervis
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.filters(ctx, s.current, s.policy, true, linuxDeny); err != nil {
+	if err := s.filters(ctx, s.current, &s.policy, true, linuxDeny); err != nil {
 		t.Fatal(err)
 	}
 	s.link, err = openLinuxLink(ctx, id.tunnel, 1420)
@@ -1485,10 +1485,10 @@ func linuxSearchRouteFixture(t *testing.T, f *candidateFixture, config *supervis
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.link.device.Close() })
-	if err := s.link.configure(ctx, s.policy.address, s.policy.protected[1:]); err != nil {
+	if err := s.link.configure(ctx, s.policy.address, linuxRouteDestinations(s.policy.protected[1:], nil)); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.filters(ctx, s.current, s.policy, false, linuxOnline); err != nil {
+	if err := s.filters(ctx, s.current, &s.policy, false, linuxOnline); err != nil {
 		t.Fatal(err)
 	}
 	config.hostKernel = s.prepareHostCandidate
@@ -1505,14 +1505,14 @@ func linuxSearchRouteFixture(t *testing.T, f *candidateFixture, config *supervis
 			t.Fatal(err)
 		}
 		s.retained = append(s.policy.protected[:0:0], s.policy.protected...)
-		if err := s.filters(ctx, m, updated, false, linuxOnline); err != nil {
+		if err := s.filters(ctx, m, &updated, false, linuxOnline); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.link.configure(ctx, updated.address, updated.protected[1:]); err != nil {
+		if err := s.link.configure(ctx, updated.address, linuxRouteDestinations(updated.protected[1:], nil)); err != nil {
 			t.Fatal(err)
 		}
 		s.current, s.policy = m, updated
-		if err := s.filters(ctx, m, s.policy, false, linuxOnline); err != nil {
+		if err := s.filters(ctx, m, &s.policy, false, linuxOnline); err != nil {
 			t.Fatal(err)
 		}
 	}, verifyFallback: func(app *net.UDPConn) {

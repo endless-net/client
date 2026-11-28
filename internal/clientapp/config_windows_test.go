@@ -43,6 +43,10 @@ func TestWindowsConfigUsesOnlyExplicitEnvironmentWithoutIO(t *testing.T) {
 	if config.CallTimeout != 30*time.Second || config.MaxTargets != 500 || config.ServiceSID != "S-1-5-18" {
 		t.Fatal("configuration changed")
 	}
+	v := config.connectionDriver(nil, nil).Verifier
+	if !v.IPv4ExitRouting || !v.IPv4ResourceRoutes || v.IPv4ResourceForwarding {
+		t.Fatal("unexpected Windows recipient capabilities")
+	}
 	if _, err := ParseWindows(nil); err != ErrConfig {
 		t.Fatal(err)
 	}

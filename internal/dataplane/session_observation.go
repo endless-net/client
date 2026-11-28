@@ -19,7 +19,7 @@ func transportObservation(value connectivity.Map, lease *connectivity.Lease, eng
 	if closed {
 		return connectivity.LocalObservation{}
 	}
-	v := connectivity.LocalObservation{Known: true, Applied: true, MapRevision: m.Revision.Network, Address: m.Node.AssignedIP, PeerCount: uint32(len(m.Peers)), GeneratedAt: m.MapSignature.IssuedAt}
+	v := connectivity.LocalObservation{Known: true, Applied: true, MapRevision: m.Revision.Network, MapPayloadHash: value.Cursor().PayloadHash, Address: m.Node.AssignedIP, PeerCount: uint32(len(m.Peers)), GeneratedAt: m.MapSignature.IssuedAt}
 	choices := packets.outputChoices()
 	for _, path := range paths {
 		if _, overridden := choices[path.PeerID]; path.Authenticated && !overridden {
@@ -36,6 +36,7 @@ func transportObservation(value connectivity.Map, lease *connectivity.Lease, eng
 	}
 	v.Permission = lease.Permissions()
 	if v.Permission.NewFlows && lease.MatchesMap(value) {
+		v.Resources = packets.observedResources(value, m)
 		v.Peers = make([]*clientv0.Peer, 0, len(m.Peers))
 		for _, peer := range m.Peers {
 			address, err := netip.ParsePrefix(peer.AllowedIPs[0])

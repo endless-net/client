@@ -109,9 +109,13 @@ func hintKeys(value connectivity.Map, profile, contextDigest string, now time.Ti
 	if err != nil {
 		return nil, err
 	}
+	peers, err := permittedTransportPeers(snapshot)
+	if err != nil {
+		return nil, err
+	}
 	var keys []state.TransportHintKey
 	for _, peer := range snapshot.Peers {
-		if peer.Transport == nil || !pairGranted(peer) || !coordinator.TransportPlanCurrent(*peer.Transport, now) {
+		if peer.Transport == nil || !peers[peer.ID] || !coordinator.TransportPlanCurrent(*peer.Transport, now) {
 			continue
 		}
 		for _, offer := range peer.Transport.Profiles {

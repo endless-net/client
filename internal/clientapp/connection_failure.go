@@ -27,6 +27,10 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 		return connectivity.FailureCheckpoint
 	case errors.Is(err, control.ErrBootstrapProtocol), errors.Is(err, connectivity.ErrProtocol):
 		return connectivity.FailureProtocol
+	case errors.Is(err, connectivity.ErrDNSAssignment):
+		return connectivity.FailureDNSAssignment
+	case errors.Is(err, connectivity.ErrDNSUnsupported):
+		return connectivity.FailureDNSUnsupported
 	case errors.Is(err, connectivity.ErrMap), errors.Is(err, connectivity.ErrStale):
 		return connectivity.FailureMap
 	case errors.Is(err, connectivity.ErrConfig):
@@ -47,7 +51,7 @@ func nativeConnectionFailure(err error, fallback connectivity.FailureKind) error
 		return connectivity.FailureCredential
 	case errors.Is(err, connectivity.ErrRevoked):
 		return connectivity.FailureRevoked
-	case errors.Is(err, connectivity.ErrDenied), errors.Is(err, connectivity.ErrExpired):
+	case errors.Is(err, control.ErrAccountNodeDenied), errors.Is(err, connectivity.ErrDenied), errors.Is(err, connectivity.ErrExpired):
 		return connectivity.FailureAccess
 	case errors.Is(err, state.ErrStale):
 		return state.ErrStale
@@ -86,6 +90,8 @@ func connectionFailureCode(err error) string {
 		return "map_profile_invalid"
 	case errors.Is(err, connectivity.ErrEndpointUncertain):
 		return "endpoint_outcome_unknown"
+	case errors.Is(err, dataplane.ErrTransportCapacity):
+		return "endpoint_capacity"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "deadline"
 	}
@@ -98,6 +104,10 @@ func connectionFailureCode(err error) string {
 		return "protocol_rejected"
 	case connectivity.FailureCredentialInvalid:
 		return "credential_rejected"
+	case connectivity.FailureDNSAssignment:
+		return "dns_assignment_invalid"
+	case connectivity.FailureDNSUnsupported:
+		return "dns_unsupported"
 	case connectivity.FailureMap:
 		return "map_rejected"
 	case connectivity.FailureTrust:

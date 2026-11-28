@@ -83,6 +83,13 @@ func TestWindowsConnectionIPCIntentACKLossAndRuntimeRestart(t *testing.T) {
 	if err != nil || observed.Status.Metadata.Revision != 4 || observed.Status.Intent.DesiredState != clientv0.DesiredState_DESIRED_STATE_CONNECTED || observed.Status.ConnectionPhase != clientv0.ConnectionPhase_CONNECTION_PHASE_UNSPECIFIED {
 		t.Fatal("real IPC lost durable intent or claimed OS state", err)
 	}
+	diagnostic, err := client.GetDiagnostics(ctx, &clientv0.GetDiagnosticsRequest{Profile: &clientv0.ProfileRef{ProfileId: defaultID}})
+	if err != nil || diagnostic.GetDiagnostics().GetMetadata().GetRevision() != observed.Status.Metadata.Revision || diagnostic.GetDiagnostics().GetStatus().GetNodeId() != "node" || diagnostic.GetDiagnostics().GetDns().GetApplication() != nil {
+		t.Fatal("authenticated diagnostics lost scope or claimed DNS application", err)
+	}
+	if _, err := client.GetDiagnostics(ctx, &clientv0.GetDiagnosticsRequest{Profile: &clientv0.ProfileRef{ProfileId: "foreign"}}); status.Code(err) != codes.NotFound {
+		t.Fatal("foreign profile diagnostics accessible through IPC", err)
+	}
 	accepted, err := s.Load(ctx)
 	if err != nil {
 		t.Fatal(err)

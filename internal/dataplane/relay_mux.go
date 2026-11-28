@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 	"reflect"
+	"slices"
 	"sync"
 
 	awgconn "github.com/amnezia-vpn/amneziawg-go/v3/conn"
@@ -125,9 +126,18 @@ func (m *relayMux) newBind(parent context.Context, value connectivity.Map, lease
 	if err != nil || snapshot.Network.ID != m.transport.network || snapshot.Node.ID != m.transport.node {
 		return nil, ErrNoAuthority
 	}
+	rules, _, err := recipientRulesWithHealth(snapshot, func(h coordinator.ServiceHost) bool { return h.NodeID == peerID })
+	if err != nil {
+		return nil, err
+	}
+	transit, subjects, err := routerPacketPolicy(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	prefixes := rules.forPeer(peerID)
 	var selected coordinator.Peer
 	for _, peer := range snapshot.Peers {
-		if peer.ID == peerID && pairGranted(peer) {
+		if peer.ID == peerID && (subjects[peerID] || pairGranted(peer) || len(prefixes) > 0) {
 			selected = peer
 			break
 		}
@@ -142,7 +152,7 @@ func (m *relayMux) newBind(parent context.Context, value connectivity.Map, lease
 		return nil, ErrConfiguration
 	}
 	ctx, cancel := context.WithCancel(parent)
-	b := &relayPeerBind{mux: m, ctx: ctx, cancel: cancel, lease: lease, mapValue: value, revisionFloor: 1, scopeEpoch: 1, peer: selected, endpoint: endpoint, local: snapshot.Node, account: snapshot.Network.AccountID}
+	b := &relayPeerBind{mux: m, ctx: ctx, cancel: cancel, lease: lease, mapValue: value, revisionFloor: 1, scopeEpoch: 1, peer: selected, rules: rules, transit: transit, prefixes: prefixes, endpoint: endpoint, local: snapshot.Node, account: snapshot.Network.AccountID}
 	m.mu.Lock()
 	if m.closed || len(m.peers) >= m.maxPeers || m.peers[peerID] != nil {
 		m.mu.Unlock()
@@ -185,7 +195,21 @@ func (q *relayPeerQueue) close() {
 	}
 }
 
+func (rules resourcePacketRules) forPeer(peerID string) []netip.Prefix {
+	var result []netip.Prefix
+	for p, r := range rules {
+		if peerID != "" && r.peer == peerID {
+			result = append(result, p)
+		}
+	}
+	slices.SortFunc(result, netip.Prefix.Compare)
+	return result
+}
+
 type relayPeerBind struct {
+	transit       routerPacketRules
+	rules         resourcePacketRules
+	prefixes      []netip.Prefix
 	mu            sync.Mutex
 	mux           *relayMux
 	ctx           context.Context
@@ -227,12 +251,29 @@ func (b *relayPeerBind) update(value connectivity.Map) error {
 		return err
 	}
 	b.mu.Lock()
+	host := coordinator.ServiceHost{NodeID: b.peer.ID, PublicKey: b.peer.PublicKey}
+	b.mu.Unlock()
+	rules, _, err := recipientRulesWithHealth(snapshot, func(h coordinator.ServiceHost) bool { return h == host })
+	if err != nil {
+		return err
+	}
+	transit, subjects, err := routerPacketPolicy(snapshot)
+	if err != nil {
+		return err
+	}
+	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed || snapshot.Network.AccountID != b.account || snapshot.Network.ID != b.mux.transport.network || snapshot.Node.ID != b.local.ID || snapshot.Node.PublicKey != b.local.PublicKey || snapshot.Node.AssignedIP != b.local.AssignedIP {
 		return ErrNoAuthority
 	}
+	prefixes := rules.forPeer(b.peer.ID)
+	// UAPI assignments are immutable for this cipher. The mux drains it
+	// before the supervisor constructs a channel with the new prefixes.
+	if !slices.Equal(prefixes, b.prefixes) {
+		return ErrNoAuthority
+	}
 	for _, peer := range snapshot.Peers {
-		if peer.ID == b.peer.ID && peer.PublicKey == b.peer.PublicKey && pairGranted(peer) {
+		if peer.ID == b.peer.ID && peer.PublicKey == b.peer.PublicKey && (subjects[peer.ID] || pairGranted(peer) || len(prefixes) > 0) {
 			if peer.Transport != nil && b.peer.Transport != nil && peer.Transport.PeerAdvertisement.IntentGeneration != b.peer.Transport.PeerAdvertisement.IntentGeneration {
 				return ErrNoAuthority
 			}
@@ -244,6 +285,8 @@ func (b *relayPeerBind) update(value connectivity.Map) error {
 				b.revisionFloor = value.Cursor().Revision.Network
 				b.scopeEpoch++
 			}
+			b.transit = transit
+			b.rules = rules
 			b.peer = peer
 			b.local = snapshot.Node
 			b.mapValue = value

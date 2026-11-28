@@ -2,10 +2,14 @@ package dataplane
 
 import (
 	"bytes"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"net/netip"
 	"testing"
 	"time"
+
+	coordinator "github.com/endless-net/coordinator/api/enrollment"
 
 	"github.com/endless-net/client/api/transport"
 )
@@ -226,5 +230,83 @@ func TestConfirmedDirectRechecksAfterBlockingDeadlineBoundary(t *testing.T) {
 	defer socket.mu.Unlock()
 	if len(socket.writes) != before {
 		t.Fatal("revoked ciphertext reached socket")
+	}
+}
+
+func TestConfirmedDirectSignedResourceScopeAndWithdrawal(t *testing.T) {
+	f := newCandidateFixture(t)
+	f.resourceRoutes = true
+	peer := &f.snapshot.Peers[0]
+	peer.ACLGrants = nil
+	router := coordinator.ServiceHost{NodeID: peer.ID, PublicKey: peer.PublicKey}
+	target := "10.31.0.0/24"
+	f.snapshot.Network.Applications = []coordinator.Application{{ID: "lan", TargetType: "cidr", Target: target, AllowedPorts: []coordinator.ServicePort{{Protocol: "udp", Port: 443}}, Connectors: []coordinator.ServiceHost{router}, Routes: []coordinator.ApplicationRoute{{Connector: router, CIDRs: []string{target}, ExpiresAt: *peer.EndpointExpiresAt, Metric: 1}}}}
+	refresh := func() {
+		prev := f.verified.Cursor()
+		f.snapshot.Revision.Network++
+		f.snapshot.Network.Revision = f.snapshot.Revision.Network
+		f.clock.advance(time.Millisecond, time.Millisecond)
+		f.refresh(t, &prev)
+	}
+	refresh()
+	f.withRelay(t)
+	relayChannel, err := NewRelayTransport(t.Context(), f.verified, f.lease, "edge", RelayConfig{Now: func() time.Time { sample, _ := f.clock.Sample(); return sample.Wall }, DialTimeout: time.Second, IOTimeout: 2 * time.Second, HeartbeatInterval: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer relayChannel.Close()
+	if !relayChannel.peers[peer.ID] {
+		t.Fatal("resource-only peer omitted from Relay frame authorization")
+	}
+	a := f.assignment(t)
+	if len(a.prefixes) != 1 || a.prefixes[0].String() != target {
+		t.Fatal("Direct peer lost its resource prefix")
+	}
+	port, err := newPacketPort(t.Context(), 1280, f.lease.Permissions, func([]byte) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = port.Close() }()
+	got := 0
+	bind := &candidateBind{ctx: t.Context(), clock: f.clock, assignment: a, port: netip.MustParseAddrPort(a.localEndpoint).Port(), socket: &candidateSocketFixture{}, receiveConfirmed: true, transmitConfirmed: true}
+	c := &assignedCipher{bind: bind, cipher: &peerCipher{port: port}, sink: func([]byte) error { got++; return nil }}
+	local, remote, err := a.addresses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := cipherIPv4(local.String(), "10.31.0.7", 1)
+	if err := c.QueueApplication(out); err != nil {
+		t.Fatal(err)
+	}
+	queued := <-port.queue
+	if !queued.guard() {
+		t.Fatal("fresh queue entry rejected")
+	}
+	if err := c.QueueApplication(cipherIPv4(local.String(), remote.String(), 1)); !errors.Is(err, ErrNoAuthority) {
+		t.Fatal("resource opened router host", err)
+	}
+	reply := cipherIPv4("10.31.0.7", local.String(), 2)
+	if err := c.receivePlaintext(reply); !errors.Is(err, ErrNoAuthority) {
+		t.Fatal("wrong service port", err)
+	}
+	binary.BigEndian.PutUint16(reply[20:22], 443)
+	if err := c.receivePlaintext(reply); err != nil || got != 1 {
+		t.Fatal("valid reply", err, got)
+	}
+	f.snapshot.Network.Applications[0].Routes = nil
+	f.snapshot.Network.Applications[0].Connectors = nil
+	refresh()
+	if err := relayChannel.Update(f.verified); err != nil || relayChannel.peers[peer.ID] {
+		t.Fatal("withdrawn peer retained on Relay", err)
+	}
+	if queued.guard() {
+		t.Fatal("queued packet survived signed withdrawal")
+	}
+	if err := c.receivePlaintext(reply); !errors.Is(err, ErrNoAuthority) || got != 1 {
+		t.Fatal("old cipher delivered reply after withdrawal", err, got)
+	}
+	sample, _ := f.clock.Sample()
+	if _, err := newCandidateAssignment(f.verified, f.lease, peer.ID, a.offer.Profile.ID, sample.Wall); !errors.Is(err, ErrNoAuthority) {
+		t.Fatal("new Direct assignment after withdrawal", err)
 	}
 }

@@ -39,7 +39,7 @@ func wireTransportRange(r clienttransport.Range) *wire.TransportRange {
 
 func EndpointRequest(node string, r coordinator.UpdateNodeEndpointRequest) *wire.UpdateNodeEndpointRequest {
 	ttl, _ := time.ParseDuration(r.TTL) // Validated against the durable request before dispatch.
-	value := &wire.UpdateNodeEndpointRequest{NodeId: node, Endpoint: r.Endpoint, Generation: r.Generation, Candidates: r.Candidates,
+	value := &wire.UpdateNodeEndpointRequest{NodeId: node, Endpoint: r.Endpoint, Generation: r.Generation, Candidates: r.Candidates, AdvertisedCidrs: r.AdvertisedCIDRs,
 		Ttl: durationpb.New(ttl), Status: r.Status, ClientVersion: r.ClientVersion}
 	if m := r.Posture; m != nil {
 		value.Posture = &wire.NodePostureMetadata{ObservedAt: timestamppb.New(m.ObservedAt), Platform: m.Platform, OsVersion: m.OSVersion, KernelVersion: m.KernelVersion, HardwareSerial: m.HardwareSerial, LocalAddresses: m.LocalAddresses, Processes: m.Processes}

@@ -65,8 +65,11 @@ func isolatedResolved(t *testing.T) *os.Process {
 			t.Fatal(err)
 		}
 	}
+	// The resolver must remain available during the session cleanup callbacks.
+	daemonCtx, stopDaemons := context.WithCancel(context.WithoutCancel(t.Context()))
+	t.Cleanup(stopDaemons)
 	var resolver *os.Process
-	for _, cmd := range []*exec.Cmd{exec.CommandContext(t.Context(), "dbus-daemon", "--system", "--nofork", "--nopidfile"), exec.CommandContext(t.Context(), "/usr/lib/systemd/systemd-resolved")} {
+	for _, cmd := range []*exec.Cmd{exec.CommandContext(daemonCtx, "dbus-daemon", "--system", "--nofork", "--nopidfile"), exec.CommandContext(daemonCtx, "/usr/lib/systemd/systemd-resolved")} {
 		if err := cmd.Start(); err != nil {
 			t.Fatal(err)
 		}

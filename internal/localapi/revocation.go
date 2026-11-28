@@ -40,7 +40,11 @@ func (c *Controller) revocationContext(ctx context.Context, caller localipc.Prin
 	if !ok || id != s.ActiveProfileID || p.Attempt == nil || p.Attempt.Phase != enrollment.Registered {
 		return s, p, status.Error(codes.FailedPrecondition, "registered active profile required")
 	}
-	if p.Secrets.Access == "" || p.Secrets.UserID == "" || !c.config.Now().Before(p.Secrets.SessionExpiresAt) {
+	session, err := p.CurrentSession()
+	if err != nil {
+		return s, p, rpcError(err)
+	}
+	if session.Access == "" || session.UserID == "" || !c.config.Now().Before(session.ExpiresAt) {
 		return s, p, targetError(control.ErrSessionDenied)
 	}
 	if c.config.Revocations == nil {
@@ -64,6 +68,7 @@ func (c *Controller) listRevocations(ctx context.Context, caller localipc.Princi
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	s, p, err := c.revocationContext(ctx, caller, req.Profile)
+	defer clearProfileKeys(s)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +88,7 @@ func (c *Controller) listRevocations(ctx context.Context, caller localipc.Princi
 		seen[r.NodeID] = true
 	}
 	latest, _, err := c.revocationContext(ctx, caller, req.Profile)
+	defer clearProfileKeys(latest)
 	if err != nil {
 		return nil, err
 	}

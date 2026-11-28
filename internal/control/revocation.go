@@ -41,11 +41,12 @@ func NewRevocations(client *http.Client, announcements Announcements, c Revocati
 	return &Revocations{http: b.client, announcements: announcements, config: c}, nil
 }
 
-func (r *Revocations) call(ctx context.Context, p state.Profile, send func(context.Context, publicqueryv1connect.NodeManagementServiceClient) error) error {
-	if p.Attempt == nil || p.Attempt.Phase != enrollment.Registered || p.Secrets.Access == "" || p.Secrets.UserID == "" || !r.config.Now().Before(p.Secrets.SessionExpiresAt) {
+func (r *Revocations) call(ctx context.Context, p state.Profile, send func(context.Context, publicqueryv1connect.NodeManagementServiceClient, string) error) error {
+	session, err := p.CurrentSession()
+	if err != nil || p.Attempt == nil || p.Attempt.Phase != enrollment.Registered || session.Access == "" || session.UserID == "" || !r.config.Now().Before(session.ExpiresAt) {
 		return ErrSessionDenied
 	}
-	ctx, cancel := context.WithTimeout(ctx, min(10*time.Second, p.Secrets.SessionExpiresAt.Sub(r.config.Now())))
+	ctx, cancel := context.WithTimeout(ctx, min(10*time.Second, session.ExpiresAt.Sub(r.config.Now())))
 	defer cancel()
 	a, err := r.announcements.Fetch(ctx, p.ControlOrigin)
 	if err != nil || !a.MatchesProfile(p, r.config.Now()) {
@@ -53,7 +54,7 @@ func (r *Revocations) call(ctx context.Context, p state.Profile, send func(conte
 	}
 	client := publicqueryv1connect.NewNodeManagementServiceClient(r.http, p.ControlOrigin,
 		connect.WithSendMaxBytes(r.config.MaxBytes), connect.WithReadMaxBytes(r.config.MaxBytes))
-	if err := send(ctx, client); err != nil {
+	if err := send(ctx, client, session.Access); err != nil {
 		switch connect.CodeOf(err) {
 		case connect.CodeUnauthenticated:
 			return ErrSessionDenied
@@ -64,7 +65,7 @@ func (r *Revocations) call(ctx context.Context, p state.Profile, send func(conte
 		}
 		return ErrRevocationUnknown
 	}
-	if ctx.Err() != nil || !r.config.Now().Before(p.Secrets.SessionExpiresAt) {
+	if ctx.Err() != nil || !r.config.Now().Before(session.ExpiresAt) {
 		return ErrRevocationUnknown
 	}
 	return nil
@@ -78,8 +79,8 @@ func (r *Revocations) List(ctx context.Context, p state.Profile) ([]*clientv0.No
 		return nil, ErrTargetProtocol
 	}
 	var result *wire.ListNodesResponse
-	err := r.call(ctx, p, func(ctx context.Context, client publicqueryv1connect.NodeManagementServiceClient) error {
-		response, err := client.ListNodes(ctx, bearer(&wire.ListNodesRequest{NetworkId: shape.NetworkID}, p.Secrets.Access))
+	err := r.call(ctx, p, func(ctx context.Context, client publicqueryv1connect.NodeManagementServiceClient, access string) error {
+		response, err := client.ListNodes(ctx, bearer(&wire.ListNodesRequest{NetworkId: shape.NetworkID}, access))
 		if err == nil {
 			result = response.Msg
 		}
@@ -114,11 +115,11 @@ func (r *Revocations) execute(ctx context.Context, p state.Profile, command stat
 	var receipt *wire.NodeRevocationReceipt
 	valid := false
 	request := command.Request
-	err := r.call(ctx, p, func(ctx context.Context, client publicqueryv1connect.NodeManagementServiceClient) error {
+	err := r.call(ctx, p, func(ctx context.Context, client publicqueryv1connect.NodeManagementServiceClient, access string) error {
 		if query {
 			response, err := client.GetNodeRevocation(ctx, bearer(&wire.GetNodeRevocationRequest{
 				NetworkId: request.NetworkID, NodeId: request.NodeID, CommandId: request.CommandID,
-			}, p.Secrets.Access))
+			}, access))
 			if err == nil {
 				valid, receipt = knownRPC(response.Msg.ProtoReflect()), response.Msg.GetReceipt()
 			}
@@ -127,7 +128,7 @@ func (r *Revocations) execute(ctx context.Context, p state.Profile, command stat
 		response, err := client.RevokeNode(ctx, bearer(&wire.RevokeNodeRequest{
 			AccountId: request.AccountID, NetworkId: request.NetworkID, NodeId: request.NodeID,
 			CommandId: request.CommandID, ExpectedRevision: request.ExpectedRevision,
-		}, p.Secrets.Access))
+		}, access))
 		if err == nil {
 			valid, receipt = knownRPC(response.Msg.ProtoReflect()), response.Msg.GetReceipt()
 		}

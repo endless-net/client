@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"slices"
 	"sync"
 
 	"github.com/endless-net/client/internal/state"
@@ -163,15 +164,15 @@ func (w *WindowsIP) preflight(ctx context.Context, p IPPlan, j state.ResourceJou
 	if err != nil {
 		return err
 	}
-	targets := map[netip.Addr]bool{p.address.Address.Addr(): true}
+	targets := []netip.Prefix{netip.PrefixFrom(p.address.Address.Addr(), 32)}
 	for _, r := range p.routes {
-		targets[r.DestinationPrefix.Prefix().Addr()] = true
+		targets = append(targets, r.DestinationPrefix.Prefix())
 	}
 	for _, r := range addresses {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if !targets[r.Address.Addr()] {
+		if !slices.ContainsFunc(targets, func(target netip.Prefix) bool { return target.Contains(r.Address.Addr()) }) {
 			continue
 		}
 		owned := false
@@ -214,8 +215,8 @@ func (w *WindowsIP) preflight(ctx context.Context, p IPPlan, j state.ResourceJou
 			continue
 		} // preserve the existing internet route
 		conflict := false
-		for target := range targets {
-			if prefix.Contains(target) {
+		for _, target := range targets {
+			if prefix.Overlaps(target) {
 				conflict = true
 				break
 			}
@@ -373,7 +374,7 @@ func (w *WindowsIP) CreateRoute(ctx context.Context, p IPPlan, prepared state.Ro
 	var desired *winipcfg.MibIPforwardRow2
 	for i := range p.routes {
 		r := &p.routes[i]
-		if r.DestinationPrefix.Prefix().String() == prepared.Destination && r.NextHop.Addr().String() == prepared.NextHop && r.Metric == prepared.Metric {
+		if p.resources[r.DestinationPrefix.Prefix()] == prepared.Resource && r.DestinationPrefix.Prefix().String() == prepared.Destination && r.NextHop.Addr().String() == prepared.NextHop && r.Metric == prepared.Metric {
 			desired = r
 			break
 		}
@@ -470,7 +471,7 @@ func (w *WindowsIP) RemoveRoute(ctx context.Context, p IPPlan, record state.Rout
 
 func (w *WindowsIP) removeRoute(ctx context.Context, p IPPlan, record state.RouteRecord) error {
 	prefix, err := netip.ParsePrefix(record.Destination)
-	if err != nil || prefix.Bits() != 32 || !hostIPv4(prefix.Addr()) || record.NextHop != "0.0.0.0" || record.Phase != state.EffectRemoving || ctx == nil || w.api == nil {
+	if err != nil || prefix.Bits() <= 0 || prefix.Masked().String() != record.Destination || !hostIPv4(prefix.Addr()) || record.NextHop != "0.0.0.0" || record.Phase != state.EffectRemoving || ctx == nil || w.api == nil {
 		return ErrConfiguration
 	}
 	if ctx.Err() != nil {

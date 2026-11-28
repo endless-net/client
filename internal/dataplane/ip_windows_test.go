@@ -7,8 +7,10 @@ import (
 	"errors"
 	"net/netip"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/endless-net/client/api/transport"
 	"github.com/endless-net/client/internal/state"
@@ -669,5 +671,143 @@ func TestWindowsIPDirectRouteOwnershipAcrossRefresh(t *testing.T) {
 	}
 	if len(api.forward) != 1 || !routeMatches(p, api.forward[0], primary) {
 		t.Fatal("lost the primary route")
+	}
+}
+
+func TestWindowsExitIPWithdrawalKeepsPhysicalDefaultAndAssignedSubnet(t *testing.T) {
+	ctx := t.Context()
+	w, native, _, journal := ipFixture(t)
+	m, _ := engineMap(t)
+	now := time.Unix(1800000000, 0).UTC()
+	end := now.Add(time.Minute)
+	m.MapSignature = &coordinator.MapSignature{IssuedAt: now, ExpiresAt: end}
+	m.Node.ID, m.Network.CIDR = "recipient", "100.64.0.0/24"
+	peer := &m.Peers[0]
+	peer.ID, peer.Endpoint, peer.EndpointExpiresAt = "router", "203.0.113.8:51820", &end
+	host := coordinator.ServiceHost{NodeID: peer.ID, PublicKey: peer.PublicKey}
+	app := func(id, prefix string) coordinator.Application {
+		return coordinator.Application{ID: id, TargetType: "cidr", Target: prefix, AllowedPorts: []coordinator.ServicePort{{Protocol: "tcp", Port: 443}}, Connectors: []coordinator.ServiceHost{host}, Routes: []coordinator.ApplicationRoute{{Connector: host, Metric: 1, CIDRs: []string{prefix}, ExpiresAt: end}}}
+	}
+	m.Network.Applications = []coordinator.Application{app("office", "10.72.0.0/24"), app("exit", "0.0.0.0/0")}
+	p, err := ipPlan(m, policySession, 12345, 7, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, journal.Routes = p.Prepared()
+	physical := testIPRoute(9, "0.0.0.0/0", 11)
+	native.forward = []winipcfg.MibIPforwardRow2{physical, testIPRoute(8, "8.8.8.8/32", 1)}
+	if err := w.Preflight(ctx, p, journal); !errors.Is(err, ErrIPConflict) || native.createdRoutes != 0 {
+		t.Fatal("public route conflict", err)
+	}
+	native.forward = native.forward[:1]
+	for i, record := range journal.Routes {
+		applied, err := w.CreateRoute(ctx, p, record, journal)
+		if err != nil || applied.Fingerprint == "" {
+			t.Fatal(record.Destination, err)
+		}
+		journal.Routes[i] = applied
+	}
+	for address, want := range map[string]bool{"8.8.8.8": true, "10.72.0.3": true, "172.20.0.7": false, "192.168.0.8": false} {
+		got := slices.ContainsFunc(native.forward, func(row winipcfg.MibIPforwardRow2) bool {
+			return row.InterfaceLUID == p.luid && row.DestinationPrefix.Prefix().Contains(netip.MustParseAddr(address))
+		})
+		if got != want {
+			t.Fatal(address, got)
+		}
+	}
+	m.Network.Applications = m.Network.Applications[:1]
+	next, err := ipPlan(m, policySession, 12345, 7, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, keep := next.Prepared()
+	for _, r := range journal.Routes {
+		if slices.ContainsFunc(keep, func(k state.RouteRecord) bool { return k.Destination == r.Destination }) {
+			continue
+		}
+		r.Phase = state.EffectRemoving
+		if err := w.RemoveRoute(ctx, next, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(native.forward) != len(keep)+1 || !reflect.DeepEqual(native.forward[0], physical) {
+		t.Fatal("withdrawal changed the physical default", native.forward)
+	}
+	for _, r := range keep {
+		if _, err := native.route(p.luid, netip.MustParsePrefix(r.Destination), netip.IPv4Unspecified()); err != nil {
+			t.Fatal(r.Destination, err)
+		}
+	}
+}
+
+func TestWindowsManagedSubnetRouteConflictReceiptAndCleanup(t *testing.T) {
+	m, _ := engineMap(t)
+	now := time.Unix(1800000000, 0)
+	end := now.Add(time.Minute)
+	m.MapSignature = &coordinator.MapSignature{IssuedAt: now, ExpiresAt: end}
+	m.Network.CIDR = "100.64.0.0/24"
+	m.Node.ID = "source"
+	m.Peers[0].ID = "router"
+	m.Peers[0].EndpointExpiresAt = &end
+	router := coordinator.ServiceHost{NodeID: "router", PublicKey: m.Peers[0].PublicKey}
+	const target = "10.27.4.0/24"
+	app := coordinator.Application{ID: "printer", TargetType: "cidr", Target: target, AllowedPorts: []coordinator.ServicePort{{Protocol: "tcp", Port: 443}}, Connectors: []coordinator.ServiceHost{router}, Routes: []coordinator.ApplicationRoute{{Connector: router, Metric: 1, ExpiresAt: end, CIDRs: []string{target}}}}
+	m.Network.Applications = []coordinator.Application{app}
+	w, api, _, j := ipFixture(t)
+	p, err := ipPlan(m, policySession, 12345, 7, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, routes := p.Prepared()
+	j.Addresses, j.Routes = []state.AddressRecord{a}, routes
+	if len(routes) != 2 || routes[0].Destination != target {
+		t.Fatal(routes)
+	}
+	for _, foreign := range []string{target, "10.27.4.128/25", "10.27.4.11/32", "10.27.0.0/16"} {
+		api.forward = []winipcfg.MibIPforwardRow2{testIPRoute(9, foreign, 1)}
+		if _, err := w.CreateRoute(t.Context(), p, routes[0], j); !errors.Is(err, ErrIPConflict) || api.createdRoutes != 0 {
+			t.Fatal(foreign, err)
+		}
+	}
+	foreignLocal := p.address
+	foreignLocal.InterfaceLUID = 9
+	if err := foreignLocal.Address.SetAddr(netip.MustParseAddr("10.27.4.61")); err != nil {
+		t.Fatal(err)
+	}
+	api.addrs = []winipcfg.MibUnicastIPAddressRow{foreignLocal}
+	api.forward = nil
+	if err := w.Preflight(t.Context(), p, j); !errors.Is(err, ErrIPConflict) {
+		t.Fatal("foreign address", err)
+	}
+	api.addrs = nil
+	base := testIPRoute(9, "0.0.0.0/0", 1)
+	api.forward = []winipcfg.MibIPforwardRow2{base}
+	record, err := w.CreateRoute(t.Context(), p, routes[0], j)
+	if err != nil || record.Destination != target || record.Fingerprint == "" {
+		t.Fatal(record, err)
+	}
+	j.Routes[0] = record
+	if err := w.inspectRoute(t.Context(), p, record); err != nil {
+		t.Fatal(err)
+	}
+	cleanup, err := PrepareIPCleanup(policySession, 12345, a.Prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Phase = state.EffectRemoving
+	api.forward[1].Metric++
+	if err := w.RemoveRoute(t.Context(), cleanup, record); !errors.Is(err, ErrIPOwnership) {
+		t.Fatal("replaced route", err)
+	}
+	api.forward[1].Metric--
+	if err := w.RemoveRoute(t.Context(), cleanup, record); err != nil {
+		t.Fatal(err)
+	}
+	if len(api.forward) != 1 || !reflect.DeepEqual(api.forward[0], base) {
+		t.Fatal("unrelated route changed")
+	}
+	m.Peers[0].Endpoint = "10.27.4.55:51820"
+	if _, err := ipPlan(m, policySession, 12345, 7, 8); !errors.Is(err, ErrIPConflict) {
+		t.Fatal("recursive endpoint", err)
 	}
 }

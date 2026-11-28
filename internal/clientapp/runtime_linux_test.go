@@ -32,7 +32,7 @@ func TestLinuxRuntimeBootstrapsAuthenticatedCLI(t *testing.T) {
 	}
 	digest := [32]byte{1}
 	build := &clientv0.BuildIdentity{Version: "fixture", Commit: "fixture", Platform: clientv0.Platform_PLATFORM_LINUX, Architecture: runtime.GOARCH}
-	app, err := newLinuxApp(build, digest, io.Discard, stateDir, runDir)
+	app, err := newLinuxApp(build, digest, io.Discard, stateDir, runDir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

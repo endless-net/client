@@ -80,7 +80,9 @@ func prepareAssignedCipher(parent context.Context, m connectivity.Map, lease *co
 	}
 	assignment.selectPair(pairIndex)
 	cfg := directCipherConfig{preferredPort: preferredPort, assignment: assignment, private: private, mtu: mtu, clock: clock}
-	if kernel != nil {
+	// The native peer route owns host addresses only. Resource prefixes use the
+	// signed Direct profile in the userspace engine so its packet guards apply.
+	if kernel != nil && len(assignment.prefixes) == 0 && !assignment.routerSource {
 		channel, err := openAssignedEngine(parent, cfg, sink, socketFactory, kernel)
 		if !canFinishPreparation(parent, clock, assignment, sourceChanged) {
 			if channel != nil {
@@ -151,7 +153,7 @@ func prepareGoDirect(ctx context.Context, cfg directCipherConfig, channel *assig
 	engine, err := buildPeerCipher(ctx, assignment.local, peer, cfg.private, assignment.offer.Profile, port, channel.bind, nil, func(cipher *peerCipher) {
 		channel.bind.handshake = cipher.handshakePacket
 		cipher.setPacketHooks(channel.controlSendGuard, channel.controlReceived)
-	})
+	}, assignment.prefixes...)
 	if err != nil {
 		return nil, err
 	}
@@ -200,8 +202,8 @@ func (c *assignedCipher) receivePlaintext(raw []byte) error {
 	if err != nil {
 		return err
 	}
-	source, target, err := a.addresses()
-	if err != nil || applicationForPair(raw, target, source) != nil {
+	end, err := peerPacketDeadline(a, a.resources, a.transit, raw, false)
+	if err != nil || !a.resourceCurrent(end) {
 		return ErrNoAuthority
 	}
 	return c.sink(raw)

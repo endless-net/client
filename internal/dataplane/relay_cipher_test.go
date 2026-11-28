@@ -2,7 +2,11 @@ package dataplane
 
 import (
 	"bytes"
+	"encoding/binary"
+	"errors"
 	"fmt"
+	"net/netip"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -212,5 +216,74 @@ func TestRelayCipherControlScopeQueueAndRevocation(t *testing.T) {
 	}
 	if err := channel.QueueApplication(cipherIPv4(localIP.String(), peerIP.String(), 1)); err == nil {
 		t.Fatal("revoked peer queued application data")
+	}
+}
+
+func TestResourceRelayQueueAndReturnUseSignedPeerScope(t *testing.T) {
+	f := newCandidateFixture(t)
+	m := f.snapshot
+	end := m.MapSignature.ExpiresAt
+	peer := m.Peers[0]
+	peer.ACLGrants = nil
+	peer.IngressACLGrants = nil
+	peer.EndpointExpiresAt = &end
+	m.Peers = []coordinator.Peer{peer}
+	router := coordinator.ServiceHost{NodeID: peer.ID, PublicKey: peer.PublicKey}
+	target := netip.MustParsePrefix("10.17.4.0/24")
+	app := coordinator.Application{ID: "service", TargetType: "cidr", Target: target.String(), AllowedPorts: []coordinator.ServicePort{{Protocol: "udp", Port: 443}},
+		Connectors: []coordinator.ServiceHost{router}, Routes: []coordinator.ApplicationRoute{{Connector: router, CIDRs: []string{target.String()}, ExpiresAt: end, Metric: 1}}}
+	m.Network.Applications = []coordinator.Application{app, {ID: "unavailable", TargetType: "ip", Target: "10.17.4.9"}}
+	rules, _, err := recipientPacketRules(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefixes := rules.forPeer(router.NodeID)
+	if !slices.Equal(prefixes, []netip.Prefix{target}) || len(rules.forPeer("other")) != 0 {
+		t.Fatal("misbound Relay prefixes", prefixes)
+	}
+	peer.Transport = nil
+	config, err := cipherConfiguration(m.Node, peer, f.profile.Keys.WireGuardPrivate, relayBaseline(), prefixes...)
+	if err != nil || bytes.Count(config, []byte("allowed_ip=")) != 2 || !bytes.Contains(config, []byte("allowed_ip="+target.String()+"\n")) {
+		t.Fatal("relay UAPI", err)
+	}
+	clear(config)
+	port, err := newPacketPort(t.Context(), 1280, f.lease.Permissions, func([]byte) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = port.Close() }()
+	delivered := 0
+	c := &relayCipher{bind: &relayPeerBind{ctx: t.Context(), local: m.Node, peer: peer, lease: f.lease, mapValue: f.verified, rules: rules}, cipher: &peerCipher{port: port}, sink: func([]byte) error { delivered++; return nil }}
+	appIP := "10.17.4.1"
+	out := cipherIPv4(m.Node.AssignedIP, appIP, 1)
+	if err := c.QueueApplication(out); err != nil {
+		t.Fatal(err)
+	}
+	queued := <-port.queue
+	if !queued.guard() || !bytes.Equal(queued.data, out) {
+		t.Fatal("authorized packet lost")
+	}
+	for _, dst := range []string{"10.17.4.9", netip.MustParsePrefix(peer.AllowedIPs[0]).Addr().String(), "10.17.5.1"} {
+		if err := c.QueueApplication(cipherIPv4(m.Node.AssignedIP, dst, 1)); !errors.Is(err, ErrNoAuthority) {
+			t.Fatal(dst, err)
+		}
+	}
+	reply := cipherIPv4(appIP, m.Node.AssignedIP, 1)
+	if err := c.receivePlaintext(reply); !errors.Is(err, ErrNoAuthority) {
+		t.Fatal("wrong source port", err)
+	}
+	binary.BigEndian.PutUint16(reply[20:22], 443)
+	binary.BigEndian.PutUint16(reply[22:24], 12000)
+	if err := c.receivePlaintext(reply); err != nil || delivered != 1 {
+		t.Fatal("valid reply", err, delivered)
+	}
+	sample, _ := f.clock.Sample()
+	f.lease.Unavailable()
+	f.clock.advance(0, end.Sub(sample.Wall))
+	if queued.guard() {
+		t.Fatal("expired packet escaped Relay queue")
+	}
+	if err := c.receivePlaintext(reply); !errors.Is(err, ErrNoAuthority) || delivered != 1 {
+		t.Fatal("expired reply delivered", err, delivered)
 	}
 }

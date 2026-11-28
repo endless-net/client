@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"net/netip"
 	"reflect"
 	"slices"
 	"time"
@@ -13,6 +14,10 @@ import (
 // candidateAssignment is built only from the verifier's immutable result. A
 // profile document or a peer's prepare message cannot construct this authority.
 type candidateAssignment struct {
+	resources                   resourcePacketRules
+	transit                     routerPacketRules
+	prefixes                    []netip.Prefix
+	routerSource                bool
 	index                       uint32
 	localEndpoint, peerEndpoint string
 	mapValue                    connectivity.Map
@@ -52,10 +57,24 @@ func signedPeerAssignment(m connectivity.Map, lease *connectivity.Lease, snapsho
 	}
 	// Bidirectional cryptographic transport is needed even for a one-way app
 	// grant. The native stateful ACL still controls application initiation.
-	if !pairGranted(peer) {
+	resources, _, err := recipientRulesWithHealth(snapshot, func(h coordinator.ServiceHost) bool { return h.NodeID == peer.ID && h.PublicKey == peer.PublicKey })
+	if err != nil {
+		return candidateAssignment{}, err
+	}
+	transit, subjects, err := routerPacketPolicy(snapshot)
+	if err != nil {
+		return candidateAssignment{}, err
+	}
+	prefixes := resources.forPeer(peer.ID)
+	if !pairGranted(peer) && len(prefixes) == 0 && !subjects[peer.ID] {
 		return candidateAssignment{}, ErrNoAuthority
 	}
-	return offeredAssignment(m, lease, snapshot.Node, peer, profileID)
+	a, err := offeredAssignment(m, lease, snapshot.Node, peer, profileID)
+	if err != nil {
+		return candidateAssignment{}, err
+	}
+	a.resources, a.transit, a.prefixes, a.routerSource = resources, transit, prefixes, subjects[peer.ID]
+	return a, nil
 }
 
 // Read the profile from an already verified snapshot. This lookup alone does
@@ -101,7 +120,7 @@ func (a candidateAssignment) permission(now time.Time, probe bool) error {
 // path. Semantic scope changes must invalidate those separately. A signature
 // refresh of the same assignment must not renew a probe's original receipt.
 func (a candidateAssignment) sameChannel(b candidateAssignment) bool {
-	if a.plan.LocalProbeIPv4 != b.plan.LocalProbeIPv4 || a.plan.PeerProbeIPv4 != b.plan.PeerProbeIPv4 {
+	if !slices.Equal(a.prefixes, b.prefixes) || a.routerSource != b.routerSource || a.plan.LocalProbeIPv4 != b.plan.LocalProbeIPv4 || a.plan.PeerProbeIPv4 != b.plan.PeerProbeIPv4 {
 		return false
 	}
 	if a.local.AssignedIP != b.local.AssignedIP || len(a.peer.AllowedIPs) != 1 || len(b.peer.AllowedIPs) != 1 || a.peer.AllowedIPs[0] != b.peer.AllowedIPs[0] {
@@ -141,4 +160,8 @@ func (a *candidateAssignment) keepPair(local, peer string) bool {
 	}
 	a.localEndpoint, a.peerEndpoint = local, peer
 	return true
+}
+
+func (a candidateAssignment) resourceCurrent(end time.Time) bool {
+	return end.IsZero() || a.lease != nil && a.lease.MatchesMap(a.mapValue) && a.lease.GrantDeadlineCurrent(a.mapValue, end)
 }

@@ -21,7 +21,7 @@ func TestDirectTrackerRequiresAuthenticatedTransportAtCurrentBinding(t *testing.
 	m, _ := engineMap(t)
 	m.Peers[0].ID = "peer"
 	tk := newDirectTracker()
-	if err := tk.configure(m.Peers); err != nil {
+	if err := tk.configure(m.Peers, primaryPeerBindings(m.Peers, nil)); err != nil {
 		t.Fatal(err)
 	}
 	key := peerKey(t, m.Peers[0].PublicKey)
@@ -44,7 +44,7 @@ func TestDirectTrackerRequiresAuthenticatedTransportAtCurrentBinding(t *testing.
 	if !paths[0].Authenticated || paths[0].PeerID != "peer" {
 		t.Fatal("valid transport not projected")
 	}
-	if err := tk.configure(m.Peers); err != nil {
+	if err := tk.configure(m.Peers, primaryPeerBindings(m.Peers, nil)); err != nil {
 		t.Fatal(err)
 	}
 	paths, _, _ = tk.snapshot()
@@ -52,7 +52,7 @@ func TestDirectTrackerRequiresAuthenticatedTransportAtCurrentBinding(t *testing.
 		t.Fatal("unchanged map destroyed established evidence")
 	}
 	m.Peers[0].Endpoint = "192.0.2.3:51820"
-	if err := tk.configure(m.Peers); err != nil {
+	if err := tk.configure(m.Peers, primaryPeerBindings(m.Peers, nil)); err != nil {
 		t.Fatal(err)
 	}
 	tk.authenticated([32]byte(key), endpoint, initial, now.Add(time.Second))
@@ -73,10 +73,10 @@ func TestDirectTrackerRequiresAuthenticatedTransportAtCurrentBinding(t *testing.
 	if paths[0].Authenticated {
 		t.Fatal("queued callback restored expired keys")
 	}
-	if err := tk.configure(nil); err != nil {
+	if err := tk.configure(nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := tk.configure(m.Peers); err != nil {
+	if err := tk.configure(m.Peers, primaryPeerBindings(m.Peers, nil)); err != nil {
 		t.Fatal(err)
 	}
 	tk.session(key, device.PeerSessionEstablished)

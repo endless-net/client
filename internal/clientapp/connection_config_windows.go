@@ -13,8 +13,7 @@ import (
 
 const windowsCleanupTimeout = 30 * time.Second
 
-// ConnectionConfig has no defaults: the announced address is explicit discovery
-// input, never inferred from a local NIC or an unverified NAT mapping.
+// Endpoint supplies the registration address preference and UDP port. Direct\n// listeners advertise their own eligible LAN addresses separately.
 type ConnectionConfig struct {
 	Endpoint               string        `env:"ENDPOINT,required"`
 	ListenPort             uint16        `env:"LISTEN_PORT,required"`
@@ -54,7 +53,7 @@ func (c Config) connectionDriver(clock connectivity.Clock, announcements control
 	d := c.ConnectionConfig
 	endpoint, _ := netip.ParseAddrPort(d.Endpoint) // Validate rejects invalid/noncanonical input.
 	return WindowsConnectionConfig{
-		Verifier: connectivity.VerifierConfig{Clock: clock, Announcements: announcements, Now: time.Now, CallTimeout: c.CallTimeout, MaxBytes: d.MaxMapBytes, MaxPeers: d.MaxPeers, MaxRules: d.MaxRules, MaxCredentialBytes: c.MaxCredentialBytes},
+		Verifier: connectivity.VerifierConfig{UnavailableResourceGuards: true, IPv4ResourceRoutes: true, IPv4ExitRouting: true, IndependentGrantExpiry: true, ResolverDNS: true, Clock: clock, Announcements: announcements, Now: time.Now, CallTimeout: c.CallTimeout, MaxBytes: d.MaxMapBytes, MaxPeers: d.MaxPeers, MaxRules: d.MaxRules, MaxCredentialBytes: c.MaxCredentialBytes},
 		Native:   dataplane.WindowsSessionConfig{MaxPeers: d.MaxPeers, MaxGrants: d.MaxRules, MaxProtected: d.MaxProtected, MaxInventoryRows: d.MaxInventoryRows, MaxInterfaces: d.MaxInterfaces, MTU: d.MTU, ListenPort: d.ListenPort, RouteMetric: d.RouteMetric, DADPollInterval: d.DADPollInterval, TransactionWait: d.TransactionWait, ApplyTimeout: d.ApplyTimeout, RelayDialTimeout: d.RelayDialTimeout, RelayIOTimeout: d.RelayIOTimeout, RelayHeartbeatInterval: d.RelayHeartbeatInterval, ProbeInterval: d.ProbeInterval, RelayRetryInterval: d.RetryInterval},
 		Endpoint: endpoint, EndpointTTL: d.EndpointTTL, RenewalInterval: d.RenewalInterval, RetryInterval: d.RetryInterval, ProbeInterval: d.ProbeInterval, WriteBudget: c.WriteBudget, MaxQueuedMaps: d.MaxQueuedMaps,
 	}

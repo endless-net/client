@@ -5,9 +5,11 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"time"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/clientapp"
+	"github.com/endless-net/client/internal/publicationproxy"
 )
 
 func runPlatform(logger *slog.Logger, mode string, digest [32]byte) bool {
@@ -26,7 +28,20 @@ func runPlatform(logger *slog.Logger, mode string, digest [32]byte) bool {
 		logger.Info("client state ready")
 	default:
 		build := &clientv0.BuildIdentity{Version: version, Commit: commit, BuildDate: buildDate, Platform: clientv0.Platform_PLATFORM_LINUX, Architecture: runtime.GOARCH}
-		if clientapp.RunLinux(build, digest, os.Stderr) != nil {
+		var proxy *publicationproxy.LinuxRuntime
+		if mode == "publication-proxy" {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			var closeProxy func()
+			var err error
+			proxy, closeProxy, err = publicationproxy.OpenLinuxRuntime(ctx)
+			cancel()
+			if err != nil {
+				logger.Error("publication proxy configuration unavailable")
+				return false
+			}
+			defer closeProxy()
+		}
+		if clientapp.RunLinuxWithPublications(build, digest, os.Stderr, proxy) != nil {
 			logger.Error("client application stopped", "outcome", "failed")
 			return false
 		}

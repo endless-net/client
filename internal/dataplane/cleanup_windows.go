@@ -43,6 +43,7 @@ type WindowsCleanup struct {
 	ip            *WindowsIP
 	adapter       adapterAbsence
 	guards        func(context.Context, state.ResourceJournal) (recoveredGuards, error)
+	dnsRules      windowsDNSRegistry
 	reportFailure func(uint64, string, error)
 }
 
@@ -61,7 +62,7 @@ func NewWindowsCleanup(store *state.Store, config WindowsCleanupConfig) (*Window
 	if err != nil {
 		return nil, err
 	}
-	return &WindowsCleanup{store: store, ip: ip, adapter: adapter, poll: config.PollInterval, reportFailure: config.ReportFailure, guards: func(ctx context.Context, journal state.ResourceJournal) (recoveredGuards, error) {
+	return &WindowsCleanup{dnsRules: localDNSRegistry(), store: store, ip: ip, adapter: adapter, poll: config.PollInterval, reportFailure: config.ReportFailure, guards: func(ctx context.Context, journal state.ResourceJournal) (recoveredGuards, error) {
 		return RecoverWindowsGuardCleanup(ctx, journal, config.TransactionWait, config.MaxProtected)
 	}}, nil
 }
@@ -80,6 +81,7 @@ func copyJournal(j state.ResourceJournal) state.ResourceJournal {
 		}
 	}
 	result.Routes = append([]state.RouteRecord(nil), j.Routes...)
+	result.DNSRules = append([]state.DNSRuleRecord(nil), j.DNSRules...)
 	result.Filters = append([]state.FilterRecord(nil), j.Filters...)
 	return result
 }
@@ -96,6 +98,9 @@ func markJournalRemoving(j *state.ResourceJournal) {
 		if j.Addresses[i].AutomaticRoute != nil {
 			j.Addresses[i].AutomaticRoute.Phase = state.EffectRemoving
 		}
+	}
+	for i := range j.DNSRules {
+		j.DNSRules[i].Phase = state.EffectRemoving
 	}
 	for i := range j.Filters {
 		j.Filters[i].Phase = state.EffectRemoving
@@ -159,7 +164,7 @@ func (c *WindowsCleanup) retire(ctx context.Context, profileID string, expected 
 		if current == nil {
 			return nil
 		}
-		if current.Adapter != nil || len(current.Addresses)+len(current.Routes)+len(current.Filters) != 0 || !reflect.DeepEqual(*current, expected) {
+		if current.Adapter != nil || len(current.Addresses)+len(current.Routes)+len(current.Filters)+len(current.DNSRules) != 0 || !reflect.DeepEqual(*current, expected) {
 			return state.ErrStale
 		}
 		p := value.Profiles[profileID]
@@ -213,10 +218,26 @@ func (c *WindowsCleanup) Run(ctx context.Context, profileID, sessionID string, g
 	if err != nil {
 		return err
 	}
+	for len(j.DNSRules) > 0 {
+		stage = "cleanup_dns_rule"
+		if err := c.dnsRules.remove(ctx, j.DNSRules[0]); err != nil {
+			return err
+		}
+		stage = "cleanup_journal"
+		j, err = c.change(ctx, profileID, *j, func(next *state.ResourceJournal) {
+			next.DNSRules = next.DNSRules[1:]
+			if len(next.DNSRules) == 0 {
+				next.DNSRules = nil
+			}
+		})
+		if err != nil {
+			return err
+		}
+	}
 	for len(j.Routes) > 0 {
 		stage = "cleanup_route"
 		r := j.Routes[0]
-		p, err := PrepareIPCleanup(j.ID, j.Adapter.LUID, r.Destination)
+		p, err := prepareAdapterCleanup(j.ID, j.Adapter.LUID)
 		if err != nil {
 			return err
 		}

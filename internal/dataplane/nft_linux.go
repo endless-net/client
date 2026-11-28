@@ -100,6 +100,9 @@ func CleanLinuxNetwork(ctx context.Context, ledger state.LinuxNetworkLedger) err
 	if err := waitResolvedRemoval(ctx, receipt); err != nil {
 		return err
 	}
+	if err := removeLinuxExitRule(ctx, linuxRouteIP, receipt); err != nil {
+		return err
+	}
 	if handle != 0 {
 		if err := linuxNFTApply(ctx, "delete table inet handle "+strconv.FormatUint(handle, 10)+"\n"); err != nil {
 			return err

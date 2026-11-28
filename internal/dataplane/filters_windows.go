@@ -41,6 +41,7 @@ type WindowsFilters struct {
 	plan                        *FilterPlan
 	attempted                   *FilterPlan
 	ids                         map[wf.RuleID]uint64
+	eventScope                  *wfpEventScope
 	failed, closed              bool
 }
 
@@ -94,6 +95,7 @@ func (f *WindowsFilters) Replace(ctx context.Context, p FilterPlan) ([]state.Fil
 		return nil, ctx.Err()
 	}
 	f.attempted = &p
+	f.endEventScope()
 	if err := f.guards.ensure(ctx, p, f.writeGuardIDs); err != nil {
 		f.failed = true
 		return nil, err
@@ -194,6 +196,7 @@ func (f *WindowsFilters) Replace(ctx context.Context, p FilterPlan) ([]state.Fil
 		return nil, ErrPolicyUncertain
 	}
 	records := full.Records()
+	scope := &wfpEventScope{rules: make(map[uint64]wfpDecision), done: make(chan struct{})}
 	for i, r := range full.rules {
 		id := ids[r.ID]
 		if r.Persistent {
@@ -201,7 +204,12 @@ func (f *WindowsFilters) Replace(ctx context.Context, p FilterPlan) ([]state.Fil
 		}
 		records[i].ID = id
 		records[i].Phase = state.EffectApplied
+		if r.Layer == wf.LayerALEAuthConnectV4 || r.Layer == wf.LayerALEAuthRecvAcceptV4 ||
+			r.Persistent && r.Action == wf.ActionBlock && (r.Layer == wf.LayerInboundIPPacketV4 || r.Layer == wf.LayerOutboundIPPacketV4) {
+			scope.rules[id] = wfpDecision{layer: r.Layer, ingress: r.Layer == wf.LayerALEAuthRecvAcceptV4 || r.Layer == wf.LayerInboundIPPacketV4, allow: r.Action == wf.ActionPermit}
+		}
 	}
+	f.eventScope = scope
 	return records, nil
 }
 
@@ -229,6 +237,7 @@ func (f *WindowsFilters) Close() error {
 func (f *WindowsFilters) ReleaseForRecovery() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.endEventScope()
 	f.failed = true
 	if !f.dynamicClosed && f.api != nil {
 		if f.api.close() != nil {
@@ -268,6 +277,7 @@ func (f *WindowsFilters) CloseAfterIPCleanup(ctx context.Context, ip *WindowsIP)
 }
 
 func (f *WindowsFilters) close(ctx context.Context) error {
+	f.endEventScope()
 	if !f.dynamicClosed {
 		if f.api == nil || f.api.close() != nil {
 			f.failed = true

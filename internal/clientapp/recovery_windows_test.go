@@ -44,8 +44,8 @@ func TestRecoveryAdvertisesChangedLocalAddressWithoutInventingNATMapping(t *test
 	if _, err := selectUnderlayEndpoint(configured, nil); err == nil {
 		t.Fatal("no-path selected stale endpoint")
 	}
-	if _, err := selectUnderlayEndpoint(configured, []netip.Addr{changed, netip.MustParseAddr("203.0.113.4")}); err == nil {
-		t.Fatal("ambiguous address silently selected")
+	if got, err := selectUnderlayEndpoint(configured, []netip.Addr{netip.MustParseAddr("203.0.113.4"), changed}); err != nil || got.Addr() != changed {
+		t.Fatal("registration endpoint depends on interface enumeration order")
 	}
 	got, err = selectUnderlayEndpoint(configured, []netip.Addr{configured.Addr(), changed})
 	if err != nil || got != configured {

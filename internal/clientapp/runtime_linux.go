@@ -11,15 +11,15 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/endless-net/client/internal/underlay"
-
 	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/dataplane"
 	"github.com/endless-net/client/internal/localapi"
 	"github.com/endless-net/client/internal/localipc"
+	"github.com/endless-net/client/internal/publicationproxy"
 	"github.com/endless-net/client/internal/state"
+	"github.com/endless-net/client/internal/underlay"
 	"github.com/google/uuid"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
@@ -69,6 +69,10 @@ func ValidateLinuxState(ctx context.Context) error {
 }
 
 func RunLinux(build *clientv0.BuildIdentity, digest [32]byte, output io.Writer) error {
+	return RunLinuxWithPublications(build, digest, output, nil)
+}
+
+func RunLinuxWithPublications(build *clientv0.BuildIdentity, digest [32]byte, output io.Writer, publications *publicationproxy.LinuxRuntime) error {
 	if build == nil || build.Platform != clientv0.Platform_PLATFORM_LINUX || build.Architecture != runtime.GOARCH ||
 		build.Version == "" || build.Commit == "" || output == nil || digest == [32]byte{} || os.Geteuid() != 0 {
 		return ErrLifecycle
@@ -78,7 +82,7 @@ func RunLinux(build *clientv0.BuildIdentity, digest [32]byte, output io.Writer) 
 		return err
 	}
 	defer func() { _ = lock.Close() }()
-	application, err := newLinuxApp(build, digest, output, linuxStateDirectory, localipc.LinuxRuntimeDirectory)
+	application, err := newLinuxApp(build, digest, output, linuxStateDirectory, localipc.LinuxRuntimeDirectory, publications)
 	if err != nil {
 		return err
 	}
@@ -87,6 +91,12 @@ func RunLinux(build *clientv0.BuildIdentity, digest [32]byte, output io.Writer) 
 	cancel()
 	if err != nil {
 		return err
+	}
+	if publications != nil {
+		reportCtx, stopReporting := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); publications.ReportIdleWithdrawals(reportCtx) }()
+		defer func() { stopReporting(); <-done }()
 	}
 	signal := <-application.Wait()
 	stop, cancel := context.WithTimeout(context.Background(), linuxStopTimeout)
@@ -98,7 +108,7 @@ func RunLinux(build *clientv0.BuildIdentity, digest [32]byte, output io.Writer) 
 	return err
 }
 
-func newLinuxApp(build *clientv0.BuildIdentity, digest [32]byte, output io.Writer, stateDir, runDir string) (*fx.App, error) {
+func newLinuxApp(build *clientv0.BuildIdentity, digest [32]byte, output io.Writer, stateDir, runDir string, publications *publicationproxy.LinuxRuntime) (*fx.App, error) {
 	instance, err := uuid.NewRandom()
 	if err != nil {
 		return nil, err
@@ -138,7 +148,7 @@ func newLinuxApp(build *clientv0.BuildIdentity, digest [32]byte, output io.Write
 		}),
 		fx.WithLogger(func(t *Telemetry) fxevent.Logger { return t.FXLogger() }),
 		fx.Invoke(func(lc fx.Lifecycle, shutdown fx.Shutdowner, t *Telemetry) error {
-			return composeLinux(lc, shutdown, t, store, ledger, clock, instance, installation, runDir, build, digest)
+			return composeLinux(lc, shutdown, t, store, ledger, clock, instance, installation, runDir, build, digest, publications)
 		}))
 	if err := app.Err(); err != nil {
 		if telemetry != nil {
@@ -152,7 +162,7 @@ func newLinuxApp(build *clientv0.BuildIdentity, digest [32]byte, output io.Write
 }
 
 func composeLinux(lc fx.Lifecycle, shutdown fx.Shutdowner, t *Telemetry, store *state.Store, ledger state.LinuxNetworkLedger,
-	clock connectivity.Clock, instance, installation uuid.UUID, runDir string, build *clientv0.BuildIdentity, digest [32]byte) error {
+	clock connectivity.Clock, instance, installation uuid.UUID, runDir string, build *clientv0.BuildIdentity, digest [32]byte, publications *publicationproxy.LinuxRuntime) error {
 	signals := t.Signals()
 	client, err := signals.newControlHTTPClient(linuxCallTimeout, linuxMaxConnections)
 	if err != nil {
@@ -182,7 +192,7 @@ func composeLinux(lc fx.Lifecycle, shutdown fx.Shutdowner, t *Telemetry, store *
 		return err
 	}
 	lc.Append(fx.Hook{OnStop: func(context.Context) error { transport.CloseIdleConnections(); return nil }})
-	connections, err := linuxConnections(store, ledger, clock, instance.String(), build.GetVersion(), bootstrap, credentials, transport, signals)
+	connections, err := linuxConnections(store, ledger, clock, instance.String(), build.GetVersion(), bootstrap, credentials, transport, signals, publications)
 	if err != nil {
 		return err
 	}
@@ -226,12 +236,14 @@ func composeLinux(lc fx.Lifecycle, shutdown fx.Shutdowner, t *Telemetry, store *
 }
 
 func linuxConnections(store *state.Store, ledger state.LinuxNetworkLedger, clock connectivity.Clock, instance, clientVersion string, bootstrap *control.Bootstrap,
-	credentials *control.Credentials, transport *connectivity.Transport, signals *Signals) (*ConnectionWorker, error) {
+	credentials *control.Credentials, transport *connectivity.Transport, signals *Signals, publications *publicationproxy.LinuxRuntime) (*ConnectionWorker, error) {
 	resources, err := dataplane.NewTransportResources(linuxMaxPeers)
 	if err != nil {
 		return nil, err
 	}
 	native := dataplane.LinuxSessionConfig{
+		Publication:  publications,
+		FlowCapacity: 128, FlowDumpBytes: linuxMessageBytes,
 		MTU: 1420, MaxPeers: linuxMaxPeers, MaxGrants: linuxMaxGrants, MaxProtected: 32, ListenPort: linuxListenPort,
 		ProbeInterval: time.Second, RetryInterval: time.Second,
 		Relay: dataplane.RelayConfig{DialTimeout: 3 * time.Second, IOTimeout: 5 * time.Second, HeartbeatInterval: time.Second, Now: func() time.Time {
@@ -247,7 +259,7 @@ func linuxConnections(store *state.Store, ledger state.LinuxNetworkLedger, clock
 		cleanup:  func(ctx context.Context, _ string) error { return dataplane.CleanLinuxNetwork(ctx, ledger) },
 		endpoint: linuxUnderlayEndpoint,
 		config: connectionConfig{ClientVersion: clientVersion,
-			Verifier:    connectivity.VerifierConfig{ResolverDNS: true, Announcements: bootstrap, Clock: clock, Now: time.Now, CallTimeout: linuxCallTimeout, MaxBytes: linuxMessageBytes, MaxPeers: linuxMaxPeers, MaxRules: linuxMaxGrants, MaxCredentialBytes: linuxCredentialBytes},
+			Verifier:    connectivity.VerifierConfig{IndependentGrantExpiry: true, UnavailableResourceGuards: true, IPv4ResourceRoutes: true, IPv4ResourceForwarding: true, IPv4ExitRouting: true, ResolverDNS: true, Announcements: bootstrap, Clock: clock, Now: time.Now, CallTimeout: linuxCallTimeout, MaxBytes: linuxMessageBytes, MaxPeers: linuxMaxPeers, MaxRules: linuxMaxGrants, MaxCredentialBytes: linuxCredentialBytes},
 			EndpointTTL: 120 * time.Second, RenewalInterval: 30 * time.Second, RetryInterval: time.Second,
 			ProbeInterval: time.Second, WriteBudget: linuxWriteBudget, MaxQueuedMaps: 8,
 			ApplyTimeout: 20 * time.Second, ListenPort: linuxListenPort,

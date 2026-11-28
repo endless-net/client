@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"runtime"
 	"time"
 )
 
@@ -15,6 +16,7 @@ const clientContractSHA256 = "ea9131e97cc16e629a4e88009a7ed51fc0f20229b5320f9d6f
 
 // Set only by the owner build helper from the selected clean commit/tag.
 var version, commit, buildDate string
+var defaultMode string
 
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "print-contract" {
@@ -22,11 +24,11 @@ func main() {
 		return
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With("service", "client", "component", "app", "client_api_revision", clientAPIRevision)
-	mode := ""
+	mode := defaultMode
 	if len(os.Args) == 2 {
 		mode = os.Args[1]
 	}
-	if len(os.Args) > 2 || (len(os.Args) == 2 && mode != "init-state" && mode != "installed-init" && mode != "installed-run" && mode != "validate-config") {
+	if len(os.Args) > 2 || (len(os.Args) == 2 && mode != "init-state" && mode != "installed-init" && mode != "installed-run" && mode != "validate-config" && (runtime.GOOS != "linux" || mode != "publication-proxy")) {
 		logger.Error("client command rejected")
 		os.Exit(1)
 	}

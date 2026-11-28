@@ -12,6 +12,7 @@ import (
 	"time"
 
 	clientv0 "github.com/endless-net/client/api/client/v0"
+	"github.com/endless-net/client/internal/publicationproxy"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/endless-net/client/internal/underlay"
@@ -24,6 +25,8 @@ import (
 )
 
 type LinuxSessionConfig struct {
+	Publication                            *publicationproxy.LinuxRuntime
+	FlowCapacity, FlowDumpBytes            int
 	MTU, MaxPeers, MaxGrants, MaxProtected int
 	ListenPort                             uint16
 	Relay                                  RelayConfig
@@ -57,6 +60,9 @@ type LinuxSession struct {
 	policy            linuxFilterPlan
 	retained          []netip.Addr
 	prepared, stopped bool
+	flows             connectivity.FlowMonitor
+	publication       *publicationproxy.LinuxWorker
+	resourcePathState
 }
 
 func NewLinuxSession(parent context.Context, store *state.Store, ledger state.LinuxNetworkLedger, clock connectivity.Clock, profile string, generation uint64, config LinuxSessionConfig, resources *TransportResources) (*LinuxSession, error) {
@@ -87,6 +93,8 @@ func NewLinuxSession(parent context.Context, store *state.Store, ledger state.Li
 		advertisements: make(chan struct{}, 1),
 	}, nil
 }
+
+func (s *LinuxSession) FlowMonitor() *connectivity.FlowMonitor { return &s.flows }
 
 func (*LinuxSession) String() string   { return "[Linux connectivity session]" }
 func (*LinuxSession) GoString() string { return "[Linux connectivity session]" }
@@ -132,6 +140,12 @@ func (s *LinuxSession) apply(ctx context.Context, value connectivity.Map, first 
 	if value.Denied() {
 		return connectivity.ErrDenied
 	}
+	if s.publication != nil && !s.publication.Matches(value) {
+		if err := s.publication.Stop(ctx); err != nil {
+			return err
+		}
+		s.publication = nil
+	}
 	profile, err := s.profileForMap(ctx, value, false)
 	if err != nil {
 		return err
@@ -153,35 +167,63 @@ func (s *LinuxSession) apply(ctx context.Context, value connectivity.Map, first 
 	}
 	// Keep old destination guards through route removal. There is no interval
 	// during which a protected address can fall through to a foreign route.
-	peers := policy.protected[1:]
+	paths, err := mapResourcePaths(snapshot)
+	if err != nil {
+		return err
+	}
+	destinations := linuxRouteDestinations(policy.protected[1:], paths)
+	sample, err := s.clock.Sample()
+	if err != nil {
+		return err
+	}
+	paths, err = observedResourcePaths(snapshot, s.resourceEvidence, sample)
+	if err != nil {
+		return err
+	}
 	s.retained = append(slices.Clone(s.policy.protected), policy.protected...)
 	if first {
 		if err := s.ledger.Prepare(ctx, s.receipt); err != nil {
 			return err
 		}
 		s.prepared = true
-		if err := s.filters(ctx, value, policy, true, linuxDeny); err != nil {
+		if err := s.filters(ctx, value, &policy, true, linuxDeny); err != nil {
 			return err
 		}
 		s.link, err = openLinuxLink(ctx, s.identity.tunnel, s.config.MTU)
 		if err != nil {
 			return err
 		}
-	} else if err := s.filters(ctx, value, policy, false, linuxOnline); err != nil {
+	} else {
+		transition := policy
+		transition.transit = nil // deny transit until routes and peer keys finish switching
+		transition.unavailable = append(slices.Clone(s.policy.unavailable), policy.unavailable...)
+		transition.unavailable = append(transition.unavailable, s.policy.activeResources...)
+		transition.unavailable = append(transition.unavailable, policy.activeResources...)
+		if err := s.filters(ctx, value, &transition, false, linuxOnline); err != nil {
+			return err
+		}
+		policy.deadlineAdvance = transition.deadlineAdvance
+	}
+	if err := s.link.configure(ctx, policy.address, destinations); err != nil {
 		return err
 	}
-	if err := s.link.configure(ctx, policy.address, peers); err != nil {
+	if err := s.configureExit(ctx, policy); err != nil {
 		return err
+	}
+	if policy.transitCount > 0 {
+		if err := s.link.routerForwarding(true); err != nil {
+			return err
+		}
 	}
 	if first {
-		if err := s.startTransport(ctx, value, profile.Keys.WireGuardPrivate); err != nil {
+		if err := s.startTransport(ctx, value, profile.Keys.WireGuardPrivate, paths); err != nil {
 			return err
 		}
 	} else {
-		if err := s.packets.Update(value); err != nil {
+		if err := s.packets.updatePaths(value, paths); err != nil {
 			return err
 		}
-		if err := s.engine.Apply(ctx, value, profile.Keys.WireGuardPrivate); err != nil {
+		if err := s.engine.applyPaths(ctx, snapshot, profile.Keys.WireGuardPrivate, paths); err != nil {
 			return err
 		}
 		s.supervisor.Update(value)
@@ -202,10 +244,13 @@ func (s *LinuxSession) apply(ctx context.Context, value connectivity.Map, first 
 	}
 	clear(fenced.Keys.WireGuardPrivate)
 	s.finishDNS(pending, !hasDNS, nil)
-	if err := s.filters(ctx, value, policy, false, linuxOnline); err != nil {
+	if err := s.filters(ctx, value, &policy, false, linuxOnline); err != nil {
 		return err
 	}
 	s.current, s.policy = value, policy
+	if first && s.config.FlowCapacity > 0 && s.config.FlowDumpBytes > 0 {
+		go s.observeFilter()
+	}
 	expected, ok := ctx.Value(sourceEpochKey{}).(uint64)
 	if !ok {
 		expected, _ = s.lease.SourceSignal()
@@ -219,10 +264,31 @@ func (s *LinuxSession) apply(ctx context.Context, value connectivity.Map, first 
 	if !s.lease.Permissions().NewFlows {
 		return connectivity.ErrExpired
 	}
-	return ctx.Err()
+	if s.config.Publication != nil && s.publication == nil {
+		s.publication, err = s.config.Publication.Start(s.ctx, s.lease, s.link.index, s.link.address)
+		if err != nil {
+			return err
+		}
+	}
+	return connectivity.RecordAppliedMap(ctx, s.store, s.generation, value)
 }
 
-func (s *LinuxSession) startTransport(ctx context.Context, value connectivity.Map, key []byte) error {
+// WireGuard reopens its UDP sockets when the bind changes. Mark every new
+// socket before the engine can send a handshake or expose a receiver.
+type linuxUnderlayBind struct{ conn.Bind }
+
+func (b linuxUnderlayBind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
+	receivers, actual, err := b.Bind.Open(port)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := b.SetMark(underlay.Mark); err != nil {
+		return nil, 0, errors.Join(err, b.Close())
+	}
+	return receivers, actual, nil
+}
+
+func (s *LinuxSession) startTransport(ctx context.Context, value connectivity.Map, key []byte, paths []connectivity.ResourcePath) error {
 	reservation, err := s.resources.budget.reserve(s.lease, "", enginePrimary)
 	if err != nil {
 		return err
@@ -238,7 +304,14 @@ func (s *LinuxSession) startTransport(ctx context.Context, value connectivity.Ma
 		return err
 	}
 	s.engine.reservation = reservation
-	if err := s.engine.Apply(ctx, value, key); err != nil {
+	snapshot, err := value.Snapshot()
+	if err != nil {
+		return err
+	}
+	if err := s.packets.updatePaths(value, paths); err != nil {
+		return err
+	}
+	if err := s.engine.applyPaths(ctx, snapshot, key, paths); err != nil {
 		return err
 	}
 	s.supervisor, err = newTransportSupervisor(s.ctx, value, s.lease, s.clock, s.profile, s.generation, key,
@@ -321,7 +394,7 @@ func (s *LinuxSession) installPeerProbe(ctx context.Context, socket *linuxProbeS
 	}
 	policy := s.policy
 	policy.probes = []linuxProbeBinding{b}
-	if err = s.filters(ctx, s.current, policy, false, linuxOnline); err == nil {
+	if err = s.filters(ctx, s.current, &policy, false, linuxOnline); err == nil {
 		err = s.link.addProbeRoute(ctx, b)
 	}
 	if err == nil && canFinishPreparation(ctx, s.clock, a, changed) && relay.permitsProbeRoute(b.local.String(), b.peer.String()) {
@@ -337,12 +410,12 @@ func (s *LinuxSession) installPeerProbe(ctx context.Context, socket *linuxProbeS
 	if current, ok := s.link.probes[b.peer]; ok && current == b {
 		if removeErr := s.link.removeProbeRoute(cleanup, b); removeErr != nil {
 			s.lease.Revoke()
-			return errors.Join(err, removeErr, s.filters(cleanup, s.current, s.policy, false, linuxDeny))
+			return errors.Join(err, removeErr, s.filters(cleanup, s.current, &s.policy, false, linuxDeny))
 		}
 	}
-	if restoreErr := s.filters(cleanup, s.current, s.policy, false, s.peerFilterMode()); restoreErr != nil {
+	if restoreErr := s.filters(cleanup, s.current, &s.policy, false, s.peerFilterMode()); restoreErr != nil {
 		s.lease.Revoke()
-		return errors.Join(err, restoreErr, s.filters(cleanup, s.current, s.policy, false, linuxDeny))
+		return errors.Join(err, restoreErr, s.filters(cleanup, s.current, &s.policy, false, linuxDeny))
 	}
 	return err
 }
@@ -358,11 +431,24 @@ func (s *LinuxSession) peerFilterMode() linuxFilterMode {
 	return linuxOnline
 }
 
-func (s *LinuxSession) filters(ctx context.Context, value connectivity.Map, policy linuxFilterPlan, install bool, mode linuxFilterMode) error {
+func (s *LinuxSession) filters(ctx context.Context, value connectivity.Map, policy *linuxFilterPlan, install bool, mode linuxFilterMode) error {
 	handle, err := linuxNFTLookup(ctx, s.receipt)
 	if err != nil || (handle == 0) != install {
 		return ErrPolicyOwnership
 	}
+	if mode != linuxDeny {
+		sample, err := s.clock.Sample()
+		if err != nil {
+			return err
+		}
+		advance, err := value.WallDeadlineAdvance(sample)
+		if err != nil {
+			return err
+		}
+		policy.deadlineAdvance = max(policy.deadlineAdvance, advance)
+	}
+	// Probe and route bindings describe this installation only.
+	effective := *policy
 	var authorityErr error
 	retained := s.retained
 	if s.link != nil && len(s.link.probes) > 0 {
@@ -376,10 +462,10 @@ func (s *LinuxSession) filters(ctx context.Context, value connectivity.Map, poli
 			}
 			mode = linuxDeny
 		} else {
-			retained = s.link.applyPeerBindings(&policy, retained, value, snapshot, s.lease, sample.Wall)
+			retained = s.link.applyPeerBindings(&effective, retained, value, snapshot, s.lease, sample.Wall)
 		}
 	}
-	transaction, err := policy.transaction(s.identity, install, mode, retained)
+	transaction, err := effective.transaction(s.identity, install, mode, retained)
 	if err != nil {
 		return err
 	}
@@ -428,7 +514,7 @@ func (s *LinuxSession) Offline(ctx context.Context) error {
 	if s.stopped || s.engine == nil {
 		return ErrClosed
 	}
-	if err := s.filters(ctx, s.current, s.policy, false, linuxExisting); err != nil {
+	if err := s.filters(ctx, s.current, &s.policy, false, linuxExisting); err != nil {
 		s.lease.Revoke()
 		return err
 	}
@@ -456,6 +542,10 @@ func (s *LinuxSession) Stop(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var publicationErr error
+	if s.publication != nil {
+		publicationErr = s.publication.Stop(ctx)
+	}
 	if s.engine != nil {
 		s.engine.Close()
 		s.engine = nil
@@ -492,7 +582,7 @@ func (s *LinuxSession) Stop(ctx context.Context) error {
 		}
 		s.prepared = false
 	}
-	return closeErr
+	return errors.Join(publicationErr, closeErr)
 }
 
 func (s *LinuxSession) CheckReady(ctx context.Context) error {
@@ -518,6 +608,11 @@ func (s *LinuxSession) CheckReady(ctx context.Context) error {
 	}
 	if err := s.packets.Err(); err != nil {
 		return err
+	}
+	if s.publication != nil {
+		if err := s.publication.Err(); err != nil {
+			return err
+		}
 	}
 	profile, err := s.profileForMap(ctx, s.current, true)
 	clear(profile.Keys.WireGuardPrivate)
@@ -556,11 +651,20 @@ func (s *LinuxSession) ProbePaths(ctx context.Context) error {
 		s.lease.Revoke()
 		return err
 	}
+	if s.policy.transitCount > 0 {
+		if err := s.link.routerForwarding(false); err != nil {
+			s.lease.Revoke()
+			return err
+		}
+	}
 	if handle, err := linuxNFTLookup(ctx, s.receipt); err != nil || handle == 0 {
 		s.lease.Revoke()
 		return ErrPolicyOwnership
 	}
-	return s.engine.ProbeDirect(ctx)
+	if err := s.engine.ProbeDirect(ctx); err != nil {
+		return err
+	}
+	return s.reconcileResourcePaths(ctx)
 }
 
 func (s *LinuxSession) BoundPort() (uint16, error) {
@@ -597,15 +701,39 @@ func (s *LinuxSession) ConnectionLocal() connectivity.LocalObservation {
 
 // WireGuard reopens its UDP sockets when the bind changes. Mark every new
 // socket before the engine can send a handshake or expose a receiver.
-type linuxUnderlayBind struct{ conn.Bind }
 
-func (b linuxUnderlayBind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
-	receivers, actual, err := b.Bind.Open(port)
+func linuxRouteDestinations(peers []netip.Addr, paths []connectivity.ResourcePath) []netip.Prefix {
+	destinations := make([]netip.Prefix, 0, len(peers)+len(paths))
+	for _, peer := range peers {
+		destinations = append(destinations, netip.PrefixFrom(peer, 32))
+	}
+	for _, path := range paths {
+		if path.Prefix.Bits() != 0 {
+			destinations = append(destinations, path.Prefix)
+		}
+	}
+	slices.SortFunc(destinations, func(a, b netip.Prefix) int { return a.Compare(b) })
+	return slices.Compact(destinations)
+}
+
+func (s *LinuxSession) reconcileResourcePaths(ctx context.Context) error {
+	if len(s.policy.activeResources) == 0 {
+		return nil
+	}
+	m, err := s.current.Snapshot()
 	if err != nil {
-		return nil, 0, err
+		return err
 	}
-	if err := b.SetMark(underlay.Mark); err != nil {
-		return nil, 0, errors.Join(err, b.Close())
+	sample, err := s.clock.Sample()
+	if err != nil {
+		return err
 	}
-	return receivers, actual, nil
+	return s.reconcile(m, sample, s.config.ProbeInterval, s.supervisor.transportStatuses(s.current), s.packets, s.current, func(paths []connectivity.ResourcePath) error {
+		profile, err := s.profileForMap(ctx, s.current, true)
+		if err != nil {
+			return err
+		}
+		defer clear(profile.Keys.WireGuardPrivate)
+		return s.engine.applyPaths(ctx, m, profile.Keys.WireGuardPrivate, paths)
+	})
 }

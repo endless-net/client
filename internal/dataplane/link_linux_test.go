@@ -44,7 +44,7 @@ func TestLinuxOwnedLinkAndFilterCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = link.device.Close() }()
-	if err := link.configure(ctx, plan.address, plan.protected[1:]); err != nil {
+	if err := link.configure(ctx, plan.address, linuxRouteDestinations(plan.protected[1:], nil)); err != nil {
 		t.Fatal(err)
 	}
 	if err := CleanLinuxNetwork(ctx, ledger); err != ErrAdapterOwnership {
@@ -105,7 +105,7 @@ func TestLinuxKernelRouteExpiresWithSessionAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = session.device.Close() }()
-	if err := session.configure(ctx, plan.address, plan.protected[1:]); err != nil {
+	if err := session.configure(ctx, plan.address, linuxRouteDestinations(plan.protected[1:], nil)); err != nil {
 		t.Fatal(err)
 	}
 	prefix, group := linuxPeerScope(receipt.Owner)
@@ -142,7 +142,7 @@ func TestLinuxKernelRouteExpiresWithSessionAddress(t *testing.T) {
 		if err := session.switchPeer(ctx, plan.protected[1], path, receipt.Owner); err != nil {
 			t.Fatal(err)
 		}
-		if err := session.configure(ctx, plan.address, plan.protected[1:]); err != nil {
+		if err := session.configure(ctx, plan.address, linuxRouteDestinations(plan.protected[1:], nil)); err != nil {
 			t.Fatalf("map refresh after path change: %v", err)
 		}
 	}
@@ -243,7 +243,7 @@ func TestLinuxCrashRecoveryPreservesForeignEffects(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = link.device.Close() }()
-		if err := link.configure(ctx, plan.address, plan.protected[1:]); err != nil {
+		if err := link.configure(ctx, plan.address, linuxRouteDestinations(plan.protected[1:], nil)); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(ready, nil, 0600); err != nil {
@@ -277,7 +277,7 @@ func TestLinuxCrashRecoveryPreservesForeignEffects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	configureErr := conflicting.configure(ctx, plan.address, plan.protected[1:])
+	configureErr := conflicting.configure(ctx, plan.address, linuxRouteDestinations(plan.protected[1:], nil))
 	if err := conflicting.device.Close(); err != nil {
 		t.Fatal(err)
 	}

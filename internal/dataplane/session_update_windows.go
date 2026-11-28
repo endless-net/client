@@ -5,6 +5,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/state"
@@ -32,6 +33,117 @@ func (s *WindowsSession) failUpdate(err error) error {
 	return errors.Join(err, s.releaseHandles())
 }
 
+// Freeze the installed rule set against signed time at the native boundary.
+// Preparing the journal and committing WFP can outlast a short-lived grant.
+func (s *WindowsSession) installCurrentFilters(ctx context.Context, m connectivity.Map, plan *FilterPlan) error {
+	if !plan.nextGrantEnd().IsZero() {
+		at, err := s.grantTime(m)
+		if err != nil {
+			return err
+		}
+		*plan = plan.currentGrants(at)
+	}
+	for {
+		if err := s.replaceFilters(ctx, m, *plan); err != nil {
+			return err
+		}
+		end := plan.nextGrantEnd()
+		if end.IsZero() {
+			return nil
+		}
+		at, err := s.grantTime(m)
+		if err != nil {
+			return err
+		}
+		if at.Before(end) {
+			return nil
+		}
+		*plan = plan.currentGrants(at)
+	}
+}
+
+func (s *WindowsSession) currentFilterPlan(ctx context.Context, m connectivity.Map, luid uint64, index uint32, offline bool) (FilterPlan, error) {
+	p, err := s.planFilters(ctx, m, s.id, luid, index, s.config.MaxGrants, s.config.MaxProtected, offline)
+	if err != nil {
+		return FilterPlan{}, err
+	}
+	at, err := s.grantTime(m)
+	if err != nil {
+		return FilterPlan{}, err
+	}
+	return p.currentGrants(at), nil
+}
+
+func (s *WindowsSession) grantTime(m connectivity.Map) (time.Time, error) {
+	sample, err := s.clock.Sample()
+	if err != nil {
+		return time.Time{}, connectivity.ErrClock
+	}
+	advance, err := m.WallDeadlineAdvance(sample)
+	if err != nil {
+		return time.Time{}, err
+	}
+	at := sample.Wall.Add(advance)
+	cursor := m.Cursor()
+	if cursor == s.grantClockCursor && at.Before(s.grantClockFloor) {
+		return time.Time{}, connectivity.ErrClock
+	}
+	s.grantClockCursor, s.grantClockFloor = cursor, at
+	return at, nil
+}
+
+// Called under the session lock. Timer callbacks from a replaced map or a
+// previous online/offline plan may already be waiting for this lock.
+func (s *WindowsSession) cancelGrantExpiry() {
+	s.grantTimerEpoch++
+	if s.grantTimer != nil {
+		s.grantTimer.Stop()
+		s.grantTimer = nil
+	}
+}
+
+// Apply cutoffs already reached before releasing the session lock. A native
+// commit can span a second cutoff, so sample again after each removal.
+func (s *WindowsSession) scheduleGrantExpiry(ctx context.Context) error {
+	s.cancelGrantExpiry()
+	for {
+		end := s.policy.nextGrantEnd()
+		if end.IsZero() {
+			return nil
+		}
+		now, err := s.grantTime(s.current)
+		if err != nil {
+			return err
+		}
+		if now.Before(end) {
+			epoch := s.grantTimerEpoch
+			s.grantTimer = time.AfterFunc(end.Sub(now), func() { s.onGrantTimer(epoch) })
+			return nil
+		}
+		next := s.policy.currentGrants(now)
+		if err := s.replaceFilters(ctx, s.current, next); err != nil {
+			return err
+		}
+		s.policy = next
+	}
+}
+
+func (s *WindowsSession) onGrantTimer(epoch uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if epoch != s.grantTimerEpoch || s.stopped || s.lifetime.Err() != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(s.lifetime, s.config.ApplyTimeout)
+	defer cancel()
+	if err := s.scheduleGrantExpiry(ctx); err != nil {
+		err = s.failUpdate(err)
+		if report := s.config.ReportFailure; report != nil {
+			report(s.generation, "apply_grant_expiry", err)
+		}
+	}
+}
+
 func (s *WindowsSession) retainedPlan(ctx context.Context, m connectivity.Map, j state.ResourceJournal, offline bool) (FilterPlan, error) {
 	row, err := s.identity(j.Adapter.LUID)
 	if err != nil {
@@ -40,7 +152,7 @@ func (s *WindowsSession) retainedPlan(ctx context.Context, m connectivity.Map, j
 	if row.Index == 0 || adapterProof(row) != j.Adapter.Fingerprint {
 		return FilterPlan{}, ErrAdapterOwnership
 	}
-	p, err := s.planFilters(ctx, m, s.id, j.Adapter.LUID, row.Index, s.config.MaxGrants, s.config.MaxProtected, offline)
+	p, err := s.currentFilterPlan(ctx, m, j.Adapter.LUID, row.Index, offline)
 	if err != nil {
 		return FilterPlan{}, err
 	}
@@ -96,10 +208,14 @@ func (s *WindowsSession) retainedPlan(ctx context.Context, m connectivity.Map, j
 		if err != nil || identity.GUID != previous.adapter || identity.LUID != luid || identity.Index != previous.index {
 			return FilterPlan{}, ErrAdapterOwnership
 		}
-		p, err = p.withConfirmedPeer(current, identity, offline)
+		next, err := p.withConfirmedPeer(current, identity, offline)
+		if errors.Is(err, ErrNoAuthority) {
+			continue
+		}
 		if err != nil {
 			return FilterPlan{}, err
 		}
+		p = next
 	}
 	return p, nil
 }
@@ -149,6 +265,14 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 	if err != nil {
 		return err
 	}
+	if ipPlan.exit {
+		if s.outer == nil {
+			return ErrConfiguration
+		}
+		if err := s.outer.pin(); err != nil {
+			return err
+		}
+	}
 	j, err := s.change(ctx, m, func(*state.ResourceJournal) error { return nil })
 	if err != nil {
 		return err
@@ -177,7 +301,7 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 	}
 	// Atomic replacement retains unchanged permit IDs. An intermediate deny-all
 	// would reauthorize/terminate unchanged TCP flows, so it is not used here.
-	if err := s.replaceFilters(ctx, m, plan); err != nil {
+	if err := s.installCurrentFilters(ctx, m, &plan); err != nil {
 		return err
 	}
 	if err := s.retireUnconfirmedDirectRoutes(ctx, plan, *j); err != nil {
@@ -187,6 +311,7 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 	for _, r := range desired {
 		wanted[r.Destination] = r
 	}
+	removedResource := false
 	for _, old := range j.Routes {
 		if _, keep := wanted[old.Destination]; keep {
 			if old.Phase != state.EffectApplied {
@@ -211,13 +336,10 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 		if err != nil {
 			return err
 		}
-		cleanup, err := PrepareIPCleanup(s.id, j.Adapter.LUID, old.Destination)
-		if err != nil {
+		if err := s.ip.RemoveRoute(ctx, ipPlan, removing); err != nil {
 			return err
 		}
-		if err := s.ip.RemoveRoute(ctx, cleanup, removing); err != nil {
-			return err
-		}
+		removedResource = removedResource || old.Resource
 		j, err = s.change(ctx, m, func(j *state.ResourceJournal) error {
 			for i, r := range j.Routes {
 				if r.Destination == old.Destination {
@@ -268,10 +390,21 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 		return err
 	}
 	defer clear(current.Keys.WireGuardPrivate)
-	if err := s.packets.Update(m); err != nil {
+	if err := s.applyObservedPaths(ctx, m, current.Keys.WireGuardPrivate); err != nil {
 		return err
 	}
-	if err := s.engine.Apply(ctx, m, current.Keys.WireGuardPrivate); err != nil {
+	// Keep withdrawn resource guards until the route deletion receipts and
+	// WireGuard replacement are complete. Then release them in this refresh.
+	if removedResource {
+		plan, err = s.retainedPlan(ctx, m, *j, false)
+		if err != nil {
+			return err
+		}
+		if err := s.installCurrentFilters(ctx, m, &plan); err != nil {
+			return err
+		}
+	}
+	if err := s.applyDNS(ctx, m); err != nil {
 		return err
 	}
 	if err := s.activationFence(ctx, m); err != nil {
@@ -281,6 +414,9 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 		return err
 	}
 	s.current, s.policy = m, plan
+	if err := s.scheduleGrantExpiry(ctx); err != nil {
+		return err
+	}
 	s.publishAppliedView()
 	if s.supervisor != nil {
 		s.supervisor.Update(m)
@@ -295,7 +431,7 @@ func (s *WindowsSession) Refresh(parent context.Context, m connectivity.Map) (er
 	if !s.lease.Permissions().NewFlows {
 		return connectivity.ErrExpired
 	}
-	return nil
+	return connectivity.RecordAppliedMap(ctx, s.store, s.generation, m)
 }
 
 func (s *WindowsSession) Offline(parent context.Context) (err error) {
@@ -346,7 +482,7 @@ func (s *WindowsSession) Offline(parent context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if err := s.replaceFilters(ctx, s.current, plan); err != nil {
+	if err := s.installCurrentFilters(ctx, s.current, &plan); err != nil {
 		return err
 	}
 	if err := s.retireUnconfirmedDirectRoutes(ctx, plan, *j); err != nil {
@@ -359,6 +495,9 @@ func (s *WindowsSession) Offline(parent context.Context) (err error) {
 		return err
 	}
 	s.policy = plan
+	if err := s.scheduleGrantExpiry(ctx); err != nil {
+		return err
+	}
 	resumed, err := s.resumeSource(sourceEpoch)
 	if err != nil {
 		return err
@@ -370,4 +509,23 @@ func (s *WindowsSession) Offline(parent context.Context) (err error) {
 		return connectivity.ErrExpired
 	}
 	return nil
+}
+
+func (s *WindowsSession) applyObservedPaths(ctx context.Context, m connectivity.Map, key []byte) error {
+	snapshot, err := m.Snapshot()
+	if err != nil {
+		return err
+	}
+	sample, err := s.clock.Sample()
+	if err != nil {
+		return err
+	}
+	paths, err := observedResourcePaths(snapshot, s.resourceEvidence, sample)
+	if err != nil {
+		return err
+	}
+	if err := s.packets.updatePaths(m, paths); err != nil {
+		return err
+	}
+	return s.engine.applyPaths(ctx, snapshot, key, paths)
 }

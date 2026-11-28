@@ -30,16 +30,18 @@ func (a candidateAnnouncements) Fetch(context.Context, string) (control.Announce
 // Unit-only keys and signed maps exercise the real producer canonicalizer and
 // Client verifier. This fixture grants no native or external-network authority.
 type candidateFixture struct {
-	resolverDNS bool
-	clock       *probeClock
-	profile     state.Profile
-	snapshot    coordinator.NetworkMapSnapshot
-	mapKey      ed25519.PrivateKey
-	trust       control.Announcement
-	lease       *connectivity.Lease
-	verified    connectivity.Map
-	mapTTL      time.Duration
-	planTTL     time.Duration
+	resourceRoutes         bool
+	resolverDNS            bool
+	independentGrantExpiry bool
+	clock                  *probeClock
+	profile                state.Profile
+	snapshot               coordinator.NetworkMapSnapshot
+	mapKey                 ed25519.PrivateKey
+	trust                  control.Announcement
+	lease                  *connectivity.Lease
+	verified               connectivity.Map
+	mapTTL                 time.Duration
+	planTTL                time.Duration
 }
 
 func newCandidateFixture(t *testing.T) *candidateFixture {
@@ -185,7 +187,7 @@ func (f *candidateFixture) verifyResult(t *testing.T, previous *state.MapCursor)
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier, err := connectivity.NewVerifier(f.profile, connectivity.VerifierConfig{ResolverDNS: f.resolverDNS, Now: func() time.Time { s, _ := f.clock.Sample(); return s.Wall }, Clock: f.clock, CallTimeout: time.Second, MaxBytes: 65536, MaxPeers: 8, MaxRules: 16, MaxCredentialBytes: 8192, Announcements: candidateAnnouncements{f.trust}})
+	verifier, err := connectivity.NewVerifier(f.profile, connectivity.VerifierConfig{UnavailableResourceGuards: f.resourceRoutes, IPv4ResourceRoutes: f.resourceRoutes, IPv4ResourceForwarding: f.resourceRoutes, IndependentGrantExpiry: f.independentGrantExpiry, ResolverDNS: f.resolverDNS, Now: func() time.Time { s, _ := f.clock.Sample(); return s.Wall }, Clock: f.clock, CallTimeout: time.Second, MaxBytes: 65536, MaxPeers: 8, MaxRules: 16, MaxCredentialBytes: 8192, Announcements: candidateAnnouncements{f.trust}})
 	if err != nil {
 		t.Fatal(err)
 	}

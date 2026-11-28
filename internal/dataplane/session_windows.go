@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	clientv0 "github.com/endless-net/client/api/client/v0"
+
 	"github.com/endless-net/client/internal/underlay"
 
 	"github.com/endless-net/client/internal/connectivity"
@@ -19,6 +21,7 @@ import (
 	"github.com/tailscale/wireguard-go/conn"
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
+	"google.golang.org/protobuf/proto"
 )
 
 type WindowsSessionConfig struct {
@@ -70,10 +73,17 @@ type WindowsSession struct {
 	engine           *Engine
 	packets          *packetSwitch
 	supervisor       *transportSupervisor
+	dns              *windowsDNSAssignment
+	dnsUncertain     *windowsDNSAssignment
 	adsChanged       chan struct{}
 	started, stopped bool
+	resourcePathState
 	current          connectivity.Map
 	policy           FilterPlan
+	grantTimer       *time.Timer
+	grantTimerEpoch  uint64
+	grantClockCursor state.MapCursor
+	grantClockFloor  time.Time
 	createTUN        func(context.Context, state.AdapterRecord, int, AdapterJournalWriter) (*WindowsTUN, error)
 	makeFilters      func(string, time.Duration, GuardJournalWriter) (*WindowsFilters, error)
 	planFilters      func(context.Context, connectivity.Map, string, uint64, uint32, int, int, bool) (FilterPlan, error)
@@ -81,7 +91,15 @@ type WindowsSession struct {
 	setMTU           func(context.Context, state.AdapterRecord, int) error
 	makeBind         func() conn.Bind
 	networkContext   func(context.Context, []byte) (string, error)
+	outer            *windowsOuterBind
+	readSearch       func(windows.GUID) ([]string, error)
+	writeSearch      func(windows.GUID, []string) error
+	dnsObservation
+	effectiveDNS func(context.Context, *windowsDNSAssignment, *windowsDNSAssignment) error
+	flows        connectivity.FlowMonitor
 }
+
+func (s *WindowsSession) FlowMonitor() *connectivity.FlowMonitor { return &s.flows }
 
 func (*WindowsSession) String() string   { return "[Windows connectivity session]" }
 func (*WindowsSession) GoString() string { return "[Windows connectivity session]" }
@@ -119,7 +137,7 @@ func NewWindowsSession(parent context.Context, store *state.Store, clock connect
 		cancel()
 		return nil, err
 	}
-	return &WindowsSession{store: store, profileID: profileID, id: id.String(), generation: generation, config: config, lease: lease, resources: resources, lifetime: lifetime, created: created, clock: clock, cancel: cancel, ip: ip, cleanup: cleanup, adsChanged: make(chan struct{}, 1), createTUN: factory.Create, makeFilters: NewWindowsFilters, planFilters: PrepareFilterPlan, identity: nativeTUNAPI{}.identity, setMTU: setOwnedMTU, makeBind: func() conn.Bind { return conn.NewStdNetBind() }, networkContext: func(ctx context.Context, key []byte) (string, error) {
+	return &WindowsSession{readSearch: readWindowsSearch, writeSearch: writeWindowsSearch, effectiveDNS: verifyWindowsDNSPolicy, store: store, profileID: profileID, id: id.String(), generation: generation, config: config, lease: lease, resources: resources, lifetime: lifetime, created: created, clock: clock, cancel: cancel, ip: ip, cleanup: cleanup, adsChanged: make(chan struct{}, 1), createTUN: factory.Create, makeFilters: NewWindowsFilters, planFilters: PrepareFilterPlan, identity: nativeTUNAPI{}.identity, setMTU: setOwnedMTU, makeBind: func() conn.Bind { return conn.NewStdNetBind() }, networkContext: func(ctx context.Context, key []byte) (string, error) {
 		return windowsTransportContext(ctx, key, config.MaxInventoryRows, config.MaxInterfaces)
 	}}, nil
 }
@@ -392,8 +410,17 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if err != nil {
 		return err
 	}
+	s.outer = &windowsOuterBind{Bind: s.makeBind(), index: underlay.InterfaceIndex}
+	if s.outer.Bind == nil {
+		return ErrConfiguration
+	}
+	if ipPlan.exit {
+		if err := s.outer.pin(); err != nil {
+			return err
+		}
+	}
 	stage = "apply_wfp_plan"
-	plan, err := s.planFilters(apply, m, s.id, record.LUID, row.Index, s.config.MaxGrants, s.config.MaxProtected, false)
+	plan, err := s.currentFilterPlan(apply, m, record.LUID, row.Index, false)
 	if err != nil {
 		return err
 	}
@@ -468,7 +495,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 		}
 	}
 	stage = "apply_wfp_policy"
-	if err := s.replaceFilters(apply, m, plan); err != nil {
+	if err := s.installCurrentFilters(apply, m, &plan); err != nil {
 		return err
 	}
 	current, err := s.profile(apply, m, true)
@@ -486,15 +513,20 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if err != nil {
 		return err
 	}
-	s.engine, err = NewEngine(wireGuardPort{s.packets.primary}, s.makeBind(), s.config.MaxPeers, s.config.ListenPort, s.lease)
+	s.packets.flows.Store(&s.flows)
+	s.engine, err = NewEngine(wireGuardPort{s.packets.primary}, s.outer, s.config.MaxPeers, s.config.ListenPort, s.lease)
 	if err != nil {
 		return err
 	}
 	s.engine.reservation, s.primary = s.primary, nil
-	if err := s.engine.Apply(apply, m, current.Keys.WireGuardPrivate); err != nil {
+	if err := s.applyObservedPaths(apply, m, current.Keys.WireGuardPrivate); err != nil {
 		return err
 	}
 	if _, err := s.engine.BoundPort(); err != nil {
+		return err
+	}
+	stage = "apply_dns"
+	if err := s.applyDNS(apply, m); err != nil {
 		return err
 	}
 	stage = "apply_activation"
@@ -505,6 +537,9 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 		return err
 	}
 	s.current, s.policy = m, plan
+	if _, native := s.filters.api.(*nativeFilterAPI); native {
+		go s.observeWFP()
+	}
 	stage = "apply_transport"
 	s.supervisor, err = newTransportSupervisor(s.lifetime, m, s.lease, s.clock, s.profileID, s.generation, current.Keys.WireGuardPrivate, s.resources.budget, s.packets, s.engine, supervisorConfig{reserveListener: reserveUDPListener, relay: RelayConfig{DialTimeout: s.config.RelayDialTimeout, IOTimeout: s.config.RelayIOTimeout, HeartbeatInterval: s.config.RelayHeartbeatInterval, Now: func() time.Time {
 		sample, err := s.clock.Sample()
@@ -521,6 +556,9 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if err != nil {
 		return err
 	}
+	if err := s.scheduleGrantExpiry(apply); err != nil {
+		return err
+	}
 	s.publishAppliedView()
 	resumed, err := s.resumeSource(sourceEpoch)
 	if err != nil {
@@ -532,7 +570,7 @@ func (s *WindowsSession) start(ctx context.Context, m connectivity.Map, restore 
 	if !s.lease.Permissions().NewFlows {
 		return connectivity.ErrExpired
 	}
-	return nil
+	return connectivity.RecordAppliedMap(apply, s.store, s.generation, m)
 }
 
 func (s *WindowsSession) activationFence(ctx context.Context, m connectivity.Map) error {
@@ -604,12 +642,19 @@ func (s *WindowsSession) releaseHandles() error {
 	return err
 }
 
-func (s *WindowsSession) Stop(ctx context.Context) error {
+func (s *WindowsSession) Stop(ctx context.Context) (err error) {
 	s.lease.Revoke() // before waiting for an in-flight Start's native call
 	s.cancel()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stopped = true
+	if prior := s.dnsResult.Load(); prior != nil && (s.dns != nil || s.dnsUncertain != nil) {
+		pending := proto.CloneOf(prior)
+		pending.State = clientv0.DnsApplyState_DNS_APPLY_STATE_PENDING
+		pending.Failure = clientv0.DnsApplyFailure_DNS_APPLY_FAILURE_UNSPECIFIED
+		s.dnsResult.Store(pending)
+		defer func() { s.finishDNS(pending, true, err) }()
+	}
 	var markErr error
 	if ctx == nil {
 		markErr = ErrConfiguration

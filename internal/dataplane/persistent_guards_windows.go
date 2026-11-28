@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"slices"
 	"time"
 
 	"github.com/endless-net/client/internal/state"
@@ -46,7 +47,7 @@ func guardRecords(p FilterPlan, ids map[wf.RuleID]uint64) []state.FilterRecord {
 }
 
 // ensure commits deny-only objects before any dynamic permit transaction. It
-// never removes an old scope; a larger plan may only add persistent denies.
+// retains host guards until teardown. Only a withdrawn resource block can be removed.
 func (g *persistentGuards) ensure(ctx context.Context, p FilterPlan, write GuardJournalWriter) error {
 	if g == nil || g.api == nil || write == nil || g.failed || g.removed || g.closed || p.session != g.key {
 		return ErrConfiguration
@@ -63,8 +64,8 @@ func (g *persistentGuards) ensure(ctx context.Context, p FilterPlan, write Guard
 	if len(next) == 0 {
 		return ErrConfiguration
 	}
-	for id := range g.rules {
-		if next[id] == nil {
+	for id, rule := range g.rules {
+		if _, resource := resourceGuardPrefix(rule); next[id] == nil && !resource {
 			return ErrPolicyCleanupRequired
 		}
 	}
@@ -94,6 +95,21 @@ func (g *persistentGuards) ensure(ctx context.Context, p FilterPlan, write Guard
 		return fail(classifyPolicyError(err))
 	}
 	ids := make(map[wf.RuleID]uint64, len(next))
+	for id, old := range g.rules {
+		if next[id] != nil {
+			continue
+		}
+		actual, err := g.api.check(old)
+		if err != nil {
+			return fail(classifyPolicyError(err))
+		}
+		if actual == 0 || actual != g.ids[id] {
+			return fail(ErrPolicyOwnership)
+		}
+		if err := g.api.remove(id); err != nil {
+			return fail(classifyPolicyError(err))
+		}
+	}
 	added := false
 	for _, r := range p.rules {
 		if !r.Persistent {
@@ -142,14 +158,20 @@ func (g *persistentGuards) ensure(ctx context.Context, p FilterPlan, write Guard
 	// Keep allocated identities even on a lost commit response. They were
 	// written ahead, so recovery can distinguish the original object from a
 	// same-key replacement without minting traffic authority.
-	g.rules, g.ids = next, ids
 	if g.api.commit() != nil {
+		// A lost ACK may leave either generation present. Cleanup needs the IDs of both.
+		for id, rule := range g.rules {
+			next[id] = rule
+			ids[id] = g.ids[id]
+		}
+		g.rules, g.ids = next, ids
 		_ = g.api.abort()
 		finished = true
 		g.failed = true
 		return ErrPolicyUncertain
 	}
 	finished = true
+	g.rules, g.ids = next, ids
 	g.started = true
 	if ctx.Err() != nil {
 		g.failed = true
@@ -258,6 +280,23 @@ func (g *persistentGuards) close() error {
 	return nil
 }
 
+func (p *FilterPlan) restoreExitBlock(record state.FilterRecord, prefix netip.Prefix) error {
+	overlay, err := netip.ParsePrefix(record.ExitOverlay)
+	if err != nil || overlay.String() != record.ExitOverlay {
+		return ErrPolicyOwnership
+	}
+	partition, err := exitPublicPrefixes(overlay)
+	if err != nil || !slices.Contains(partition, prefix) {
+		return ErrPolicyOwnership
+	}
+	p.blockExit(prefix, record.ExitOverlay)
+	expected := filterRecord(p.rules[len(p.rules)-1])
+	if expected.Key != record.Key || expected.Fingerprint != record.Fingerprint {
+		return ErrPolicyOwnership
+	}
+	return nil
+}
+
 func recoverGuardPlan(j state.ResourceJournal, maxProtected int) (FilterPlan, map[wf.RuleID]uint64, error) {
 	key, err := canonicalGUID(j.ID)
 	if err != nil || j.Adapter == nil || j.Adapter.ID != j.ID || j.Adapter.LUID == 0 || maxProtected <= 0 {
@@ -265,30 +304,65 @@ func recoverGuardPlan(j state.ResourceJournal, maxProtected int) (FilterPlan, ma
 	}
 	p := FilterPlan{session: key, luid: j.Adapter.LUID, maxProtected: maxProtected, scopes: make(map[ipGuardScope]bool)}
 	ids := make(map[wf.RuleID]uint64)
+	activeResources, removingResources := 0, 0
+	type exitGeneration struct {
+		overlay  string
+		removing bool
+	}
+	exits := make(map[exitGeneration]bool)
 	for _, record := range j.Filters {
 		if record.GuardAddress == "" {
 			continue
 		}
-		ip, err := netip.ParseAddr(record.GuardAddress)
-		if err != nil || !hostIPv4(ip) || ip.String() != record.GuardAddress {
-			return FilterPlan{}, nil, ErrPolicyOwnership
+		if prefix, err := netip.ParsePrefix(record.GuardAddress); err == nil {
+			if !prefix.Addr().Is4() || prefix.Bits() == 0 || prefix.Masked().String() != record.GuardAddress || record.GuardLocal || record.GuardInbound {
+				return FilterPlan{}, nil, ErrPolicyOwnership
+			}
+			removing := record.Phase == state.EffectRemoving
+			group := exitGeneration{record.ExitOverlay, removing}
+			if record.ExitOverlay != "" {
+				if err := p.restoreExitBlock(record, prefix); err != nil {
+					return FilterPlan{}, nil, err
+				}
+			} else {
+				p.blockResource(prefix)
+			}
+			if record.ExitOverlay == "" || !exits[group] {
+				if removing {
+					removingResources++
+				} else {
+					activeResources++
+				}
+				if record.ExitOverlay != "" {
+					exits[group] = true
+				}
+			}
+			if len(p.scopes)+max(activeResources, removingResources) > maxProtected {
+				return FilterPlan{}, nil, ErrPolicyLimit
+			}
+		} else {
+			ip, err := netip.ParseAddr(record.GuardAddress)
+			if err != nil || !hostIPv4(ip) || ip.String() != record.GuardAddress {
+				return FilterPlan{}, nil, ErrPolicyOwnership
+			}
+			field := wf.FieldIPRemoteAddress
+			if record.GuardLocal {
+				field = wf.FieldIPLocalAddress
+			}
+			layer := wf.LayerOutboundIPPacketV4
+			if record.GuardInbound {
+				layer = wf.LayerInboundIPPacketV4
+			}
+			scope := ipGuardScope{field: field, address: ip}
+			p.scopes[scope] = true
+			if len(p.scopes)+max(activeResources, removingResources) > maxProtected {
+				return FilterPlan{}, nil, ErrPolicyLimit
+			}
+			r := &wf.Rule{Layer: layer, Action: wf.ActionBlock, HardAction: true, Persistent: true, Weight: 1, Conditions: []*wf.Match{{Field: field, Op: wf.MatchTypeEqual, Value: ip}}}
+			p.addRule(r)
 		}
-		field := wf.FieldIPRemoteAddress
-		if record.GuardLocal {
-			field = wf.FieldIPLocalAddress
-		}
-		layer := wf.LayerOutboundIPPacketV4
-		if record.GuardInbound {
-			layer = wf.LayerInboundIPPacketV4
-		}
-		scope := ipGuardScope{field: field, address: ip}
-		p.scopes[scope] = true
-		if len(p.scopes) > maxProtected {
-			return FilterPlan{}, nil, ErrPolicyLimit
-		}
-		r := &wf.Rule{Layer: layer, Action: wf.ActionBlock, HardAction: true, Persistent: true, Weight: 1, Conditions: []*wf.Match{{Field: field, Op: wf.MatchTypeEqual, Value: ip}}}
-		p.addRule(r)
-		expected := p.Records()[len(p.rules)-1]
+		r := p.rules[len(p.rules)-1]
+		expected := filterRecord(r)
 		_, duplicate := ids[r.ID]
 		if expected.Key != record.Key || expected.Fingerprint != record.Fingerprint || duplicate {
 			return FilterPlan{}, nil, ErrPolicyOwnership

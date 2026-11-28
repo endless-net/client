@@ -329,7 +329,7 @@ func (g *transportSupervisor) ensurePeers() {
 		if created >= 2 {
 			break
 		}
-		if g.peers[peer.ID] != nil && g.peers[peer.ID].channel != nil || peer.Transport == nil || peer.Transport.LocalIntentGeneration != g.generation || !pairGranted(peer) {
+		if g.peers[peer.ID] != nil && g.peers[peer.ID].channel != nil || peer.Transport == nil || peer.Transport.LocalIntentGeneration != g.generation {
 			continue
 		}
 		sink, err := g.packets.Sink(g.current, peer.ID)

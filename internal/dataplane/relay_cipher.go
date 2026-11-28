@@ -57,7 +57,7 @@ func newRelayCipher(parent context.Context, mux *relayMux, value connectivity.Ma
 		return nil, err
 	}
 	bind.mu.Lock()
-	local, peer := bind.local, bind.peer
+	local, peer, prefixes := bind.local, bind.peer, bind.prefixes
 	peer.Endpoint = bind.endpoint.String()
 	peer.Transport = nil // Service address routes belong only to the Direct cipher.
 	bind.mu.Unlock()
@@ -68,7 +68,7 @@ func newRelayCipher(parent context.Context, mux *relayMux, value connectivity.Ma
 		} else if c.hadSession.Load() {
 			c.sessionLost.Store(true)
 		}
-	}, func(cipher *peerCipher) { c.cipher = cipher })
+	}, func(cipher *peerCipher) { c.cipher = cipher }, prefixes...)
 	if err != nil {
 		_ = port.Close()
 		bind.shutdown()
@@ -158,13 +158,20 @@ func (c *relayCipher) QueueApplication(raw []byte) error {
 func (c *relayCipher) queueApplication(raw []byte, routeGuard func() bool) error {
 	c.bind.mu.Lock()
 	a := candidateAssignment{local: c.bind.local, peer: c.bind.peer}
+	rules, transit, observed := c.bind.rules, c.bind.transit, c.bind.mapValue
 	c.bind.mu.Unlock()
-	source, destination, err := a.addresses()
+	end, err := peerPacketDeadline(a, rules, transit, raw, true)
 	if err != nil {
 		return err
 	}
-	if err := applicationForPair(raw, source, destination); err != nil {
-		return err
+	if !end.IsZero() {
+		outer := routeGuard
+		routeGuard = func() bool {
+			return (outer == nil || outer()) && c.bind.lease.MatchesMap(observed) && c.bind.lease.GrantDeadlineCurrent(observed, end)
+		}
+		if !routeGuard() {
+			return ErrNoAuthority
+		}
 	}
 	if err := c.cipher.queueChecked(raw, false, routeGuard); err != nil {
 		return err
@@ -178,6 +185,7 @@ func (c *relayCipher) queueApplication(raw []byte, routeGuard func() bool) error
 func (c *relayCipher) receivePlaintext(raw []byte) error {
 	c.bind.mu.Lock()
 	a := candidateAssignment{local: c.bind.local, peer: c.bind.peer}
+	rules, transit, observed := c.bind.rules, c.bind.transit, c.bind.mapValue
 	c.bind.mu.Unlock()
 	local, peer, err := a.addresses()
 	if err != nil {
@@ -209,6 +217,10 @@ func (c *relayCipher) receivePlaintext(raw []byte) error {
 	}
 	if err != nil {
 		return err
+	}
+	end, err := peerPacketDeadline(a, rules, transit, raw, false)
+	if err != nil || !end.IsZero() && (!c.bind.lease.MatchesMap(observed) || !c.bind.lease.GrantDeadlineCurrent(observed, end)) {
+		return ErrNoAuthority
 	}
 	return c.sink(raw)
 }

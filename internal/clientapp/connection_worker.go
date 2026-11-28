@@ -283,6 +283,18 @@ func (w *ConnectionWorker) Reconcile(ctx context.Context, profile string, genera
 				}
 				return nil
 			case ConnectionFailed:
+				// Cleanup and the worker's deadline notification can finish in
+				// either order. Check the caller's original durable receipt
+				// before returning a transient result from this generation.
+				if !t.restore && v.CleanupFailure == nil && recoveryFailure(v.Failure) {
+					if t.budget == nil {
+						if err := w.prepareBudget(t); err != nil {
+							return err
+						}
+					} else if err := t.budget.Check(); err != nil {
+						return err
+					}
+				}
 				// Retryable failure is provisional until the same owner has
 				// finished cleanup. The run loop keeps the original budget.
 				if !recoveryFailure(v.Failure) || !v.CleanupPending || v.CleanupFailure != nil {

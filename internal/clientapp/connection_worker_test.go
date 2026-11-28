@@ -826,6 +826,8 @@ func TestPermanentConnectionFailuresSurviveWorkerWithoutRetry(t *testing.T) {
 		err  error
 		want connectivity.FailureKind
 	}{
+		{connectivity.ErrDNSAssignment, connectivity.FailureDNSAssignment},
+		{connectivity.ErrDNSUnsupported, connectivity.FailureDNSUnsupported},
 		{connectivity.ErrMap, connectivity.FailureMap},
 		{connectivity.ErrStale, connectivity.FailureMap},
 		{connectivity.ErrCredentialInvalid, connectivity.FailureCredentialInvalid},

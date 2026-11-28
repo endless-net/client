@@ -114,6 +114,8 @@ func cleanupContext(t *testing.T) context.Context {
 
 func TestWindowsCleanupComposesNativeAbsenceAndPreservesNewerIntent(t *testing.T) {
 	c, store, ip, guards := cleanupFixture(t)
+	journal := store.value.Profiles[cleanupProfile].Connection.Journal
+	journal.Routes = append(journal.Routes, state.RouteRecord{Destination: "10.27.4.0/24", NextHop: "0.0.0.0", Resource: true, EffectStamp: state.EffectStamp{Phase: state.EffectPrepared}})
 	ctx := cleanupContext(t)
 	if err := c.Run(ctx, cleanupProfile, policySession, 1); err != nil {
 		t.Fatal(err)

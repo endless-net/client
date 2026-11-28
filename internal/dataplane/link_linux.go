@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,8 +28,9 @@ type linuxLink struct {
 	name    string
 	index   int
 	address netip.Addr
-	routes  []netip.Addr
+	routes  []netip.Prefix
 	direct  map[netip.Addr]net.Interface
+	exit    *linuxExitRoutes
 }
 
 type linuxPacketDevice struct{ tun.Device }
@@ -127,7 +129,55 @@ func (l *linuxLink) checkOwnership() (*net.Interface, error) {
 	return iface, nil
 }
 
-func (l *linuxLink) configure(ctx context.Context, address netip.Addr, peers []netip.Addr) error {
+// Linux decides IPv4 forwarding on the incoming interface. The TUN exists
+// only for this session. Keep host defaults and physical interfaces outside
+// the session's writes.
+func (l *linuxLink) routerForwarding(enable bool) error {
+	return linuxTunnelForwarding("/proc/sys/net/ipv4/conf", l.name, enable, func() error {
+		_, err := l.checkOwnership()
+		return err
+	})
+}
+
+func linuxTunnelForwarding(root, name string, enable bool, owned func() error) error {
+	if !linuxObjectName.MatchString(name) || owned == nil {
+		return ErrAdapterOwnership
+	}
+	path := filepath.Join(root, name, "forwarding")
+	if err := owned(); err != nil {
+		return err
+	}
+	value, err := os.ReadFile(path)
+	if err != nil {
+		return errors.Join(ErrConfiguration, err)
+	}
+	switch strings.TrimSpace(string(value)) {
+	case "1":
+		return owned()
+	case "0":
+		if !enable {
+			return ErrIPConflict
+		}
+	default:
+		return ErrConfiguration
+	}
+	// Verify the link again with the descriptor held. Name reuse cannot
+	// retarget a descriptor opened for the owned interface.
+	f, err := os.OpenFile(path, os.O_WRONLY|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return errors.Join(linuxLinkError(err), err)
+	}
+	err = owned()
+	if err == nil {
+		_, err = f.WriteString("1\n")
+	}
+	if err = errors.Join(err, f.Close()); err != nil {
+		return err
+	}
+	return linuxTunnelForwarding(root, name, false, owned)
+}
+
+func (l *linuxLink) configure(ctx context.Context, address netip.Addr, destinations []netip.Prefix) error {
 	if !address.Is4() || !address.IsGlobalUnicast() {
 		return ErrConfiguration
 	}
@@ -137,19 +187,18 @@ func (l *linuxLink) configure(ctx context.Context, address netip.Addr, peers []n
 	if l.address.IsValid() && l.address != address {
 		return ErrIPConflict
 	}
-	for _, peer := range peers {
-		if !peer.Is4() || !peer.IsGlobalUnicast() || peer == address {
+	if l.address.IsValid() {
+		if err := l.verify(ctx); err != nil {
+			return err
+		}
+	}
+	for _, destination := range destinations {
+		if !destination.Addr().Is4() || destination != destination.Masked() || destination.Bits() == 0 || destination.Contains(address) {
 			return ErrConfiguration
 		}
-		if !slices.Contains(l.routes, peer) {
-			existing, err := exec.CommandContext(ctx, linuxIP, "-4", "route", "show", "table", "all", "exact", peer.String()+"/32").Output()
-			if err != nil {
-				return ErrConfiguration
-			}
-			if len(existing) != 0 {
-				return ErrIPConflict
-			}
-		}
+	}
+	if err := l.checkRouteSpace(ctx, address, destinations); err != nil {
+		return err
 	}
 	if !l.address.IsValid() {
 		if err := linuxAddressAvailable(address); err != nil {
@@ -164,20 +213,20 @@ func (l *linuxLink) configure(ctx context.Context, address netip.Addr, peers []n
 		l.address = address
 	}
 	for _, old := range slices.Clone(l.routes) {
-		if !slices.Contains(peers, old) {
+		if !slices.Contains(destinations, old) {
 			if err := l.route(ctx, "del", old); err != nil {
 				return err
 			}
-			delete(l.direct, old)
-			l.routes = slices.DeleteFunc(l.routes, func(candidate netip.Addr) bool { return candidate == old })
+			delete(l.direct, old.Addr())
+			l.routes = slices.DeleteFunc(l.routes, func(candidate netip.Prefix) bool { return candidate == old })
 		}
 	}
-	for _, peer := range peers {
-		if !slices.Contains(l.routes, peer) {
-			if err := l.route(ctx, "add", peer); err != nil {
+	for _, destination := range destinations {
+		if !slices.Contains(l.routes, destination) {
+			if err := l.route(ctx, "add", destination); err != nil {
 				return err
 			}
-			l.routes = append(l.routes, peer)
+			l.routes = append(l.routes, destination)
 		}
 	}
 	return l.verify(ctx)
@@ -228,20 +277,16 @@ func (l *linuxLink) verify(ctx context.Context) error {
 	if err := json.Unmarshal(raw, &records); err != nil {
 		return ErrIPOwnership
 	}
-	seen := make(map[netip.Addr]bool, len(l.routes))
+	seen := make(map[netip.Prefix]bool, len(l.routes))
 	for _, record := range records {
 		if !devices[record.Device] {
 			continue
 		}
-		address, err := netip.ParseAddr(record.Destination)
+		address, err := linuxInventoryPrefix(record.Destination)
 		if err != nil {
-			prefix, prefixErr := netip.ParsePrefix(record.Destination)
-			if prefixErr != nil || prefix.Bits() != 32 {
-				return ErrIPOwnership
-			}
-			address = prefix.Addr()
+			return err
 		}
-		if record.Device != l.peerDevice(address) || record.Source != l.address.String() || seen[address] || !slices.Contains(l.routes, address) {
+		if record.Device != l.routeDevice(address) || record.Source != l.address.String() || seen[address] || !slices.Contains(l.routes, address) {
 			return ErrIPOwnership
 		}
 		seen[address] = true
@@ -249,7 +294,19 @@ func (l *linuxLink) verify(ctx context.Context) error {
 	if len(seen) != len(l.routes) {
 		return ErrIPOwnership
 	}
-	return ctx.Err()
+	if l.exit != nil {
+		found, err := linuxReadExitRule(ctx, linuxRouteIP, l.exit.table, true)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return ErrIPOwnership
+		}
+		if err := l.exit.check(ctx, l.name, l.address, true); err != nil {
+			return err
+		}
+	}
+	return l.checkRouteSpace(ctx, l.address, l.routes)
 }
 
 func (l *linuxLink) peerDevice(peer netip.Addr) string {
@@ -263,7 +320,7 @@ func (l *linuxLink) peerDevice(peer netip.Addr) string {
 // restores the route through the session TUN. Never create a missing route or
 // displace a conflicting route after losing ownership.
 func (l *linuxLink) switchPeer(ctx context.Context, peer netip.Addr, target *net.Interface, owner string) error {
-	if !slices.Contains(l.routes, peer) {
+	if !slices.Contains(l.routes, netip.PrefixFrom(peer, 32)) {
 		return ErrIPOwnership
 	}
 	if old, ok := l.direct[peer]; ok && target == nil {
@@ -367,9 +424,8 @@ func (l *linuxLink) restorePeerPath(ctx context.Context, peer netip.Addr, owner 
 	return l.switchPeer(cleanup, peer, nil, owner)
 }
 
-func (l *linuxLink) route(ctx context.Context, action string, peer netip.Addr) error {
-	return l.ip(ctx, "-4", "route", action, "table", "main", peer.String()+"/32",
-		"dev", l.peerDevice(peer), "src", l.address.String(), "proto", linuxRouteProtocol)
+func (l *linuxLink) route(ctx context.Context, action string, destination netip.Prefix) error {
+	return l.routeInTable(ctx, action, "main", destination)
 }
 
 func (l *linuxLink) ip(ctx context.Context, args ...string) error {
@@ -396,4 +452,147 @@ func linuxAddressAvailable(address netip.Addr) error {
 		}
 	}
 	return nil
+}
+
+type linuxInventoryRoute struct {
+	Destination string          `json:"dst"`
+	Device      string          `json:"dev"`
+	Source      string          `json:"prefsrc"`
+	Table       json.RawMessage `json:"table"`
+	Protocol    json.RawMessage `json:"protocol"`
+	Scope       json.RawMessage `json:"scope"`
+	Type        json.RawMessage `json:"type"`
+	Metric      uint32          `json:"metric"`
+	Flags       []string        `json:"flags"`
+	Gateway     json.RawMessage `json:"gateway"`
+	Via         json.RawMessage `json:"via"`
+	Nexthops    json.RawMessage `json:"nexthops"`
+	NexthopID   json.RawMessage `json:"nhid"`
+	Encap       json.RawMessage `json:"encap"`
+	Metrics     json.RawMessage `json:"metrics"`
+	MTU         json.RawMessage `json:"mtu"`
+	TOS         json.RawMessage `json:"tos"`
+}
+
+func (r linuxInventoryRoute) direct() bool {
+	scope, kind, tos := strings.Trim(string(r.Scope), "\""), strings.Trim(string(r.Type), "\""), strings.Trim(string(r.TOS), "\"")
+	return (scope == "" || scope == "link" || scope == "253") &&
+		(kind == "" || kind == "unicast" || kind == "1") &&
+		(tos == "" || tos == "0" || tos == "0x00") &&
+		r.Metric == 0 && len(r.Flags) == 0 &&
+		r.Gateway == nil && r.Via == nil && r.Nexthops == nil && r.NexthopID == nil &&
+		r.Encap == nil && r.Metrics == nil && r.MTU == nil
+}
+
+func (l *linuxLink) checkRouteSpace(ctx context.Context, address netip.Addr, destinations []netip.Prefix) error {
+	if len(destinations) == 0 {
+		return ctx.Err()
+	}
+	raw, err := exec.CommandContext(ctx, linuxIP, "-j", "-N", "-4", "route", "show", "table", "all").Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return ErrIPOwnership
+	}
+	return checkLinuxRouteDevices(raw, l.routeDevice, address, l.routes, destinations, l.exit)
+}
+
+func checkLinuxRouteSpace(raw []byte, device string, source netip.Addr, owned, destinations []netip.Prefix, exit *linuxExitRoutes) error {
+	return checkLinuxRouteDevices(raw, func(netip.Prefix) string { return device }, source, owned, destinations, exit)
+}
+
+func checkLinuxRouteDevices(raw []byte, device func(netip.Prefix) string, source netip.Addr, owned, destinations []netip.Prefix, exit *linuxExitRoutes) error {
+	var rows []linuxInventoryRoute
+	if err := json.Unmarshal(raw, &rows); err != nil || rows == nil {
+		return ErrIPOwnership
+	}
+	targets := make(map[netip.Prefix]bool, len(destinations))
+	for _, p := range destinations {
+		targets[p] = true
+	}
+	existing := make(map[netip.Prefix]bool, len(owned))
+	for _, p := range owned {
+		existing[p] = true
+	}
+	for _, r := range rows {
+		if exit != nil && strings.Trim(string(r.Table), "\"") == exit.table {
+			// The dedicated table has its own complete ownership check.
+			continue
+		}
+		dst := r.Destination
+		if dst == "default" {
+			dst = "0.0.0.0/0"
+		}
+		p, err := linuxInventoryPrefix(dst)
+		if err != nil {
+			return ErrIPOwnership
+		}
+		covered := false
+		for bits := p.Bits(); bits >= 0; bits-- {
+			if targets[netip.PrefixFrom(p.Addr(), bits).Masked()] {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			continue
+		}
+		table, protocol := strings.Trim(string(r.Table), "\""), strings.Trim(string(r.Protocol), "\"")
+		if !existing[p] || !r.direct() || r.Device != device(p) || r.Source != source.String() || (table != "" && table != "254" && table != "main") || protocol != linuxRouteProtocol {
+			return ErrIPConflict
+		}
+		delete(existing, p)
+	}
+	for _, p := range destinations {
+		if existing[p] {
+			return ErrIPOwnership
+		}
+	}
+	return nil
+}
+
+func linuxInventoryPrefix(dst string) (netip.Prefix, error) {
+	if addr, err := netip.ParseAddr(dst); err == nil && addr.Is4() {
+		return netip.PrefixFrom(addr, 32), nil
+	}
+	p, err := netip.ParsePrefix(dst)
+	if err != nil || !p.Addr().Is4() || p.Masked().String() != dst {
+		return netip.Prefix{}, ErrIPOwnership
+	}
+	return p, nil
+}
+
+func verifyLinuxRouteInventory(raw []byte, address netip.Addr, routes []netip.Prefix) error {
+	var records []linuxInventoryRoute
+	if err := json.Unmarshal(raw, &records); err != nil || records == nil || len(records) != len(routes) {
+		return ErrIPOwnership
+	}
+	expected := make(map[netip.Prefix]bool, len(routes))
+	for _, p := range routes {
+		expected[p] = true
+	}
+	for _, record := range records {
+		prefix, err := linuxInventoryPrefix(record.Destination)
+		if err != nil {
+			return ErrIPOwnership
+		}
+		if !record.direct() || record.Source != address.String() || !expected[prefix] {
+			return ErrIPOwnership
+		}
+		delete(expected, prefix)
+	}
+	return nil
+}
+
+func (l *linuxLink) routeDevice(p netip.Prefix) string {
+	if p.Bits() == 32 {
+		return l.peerDevice(p.Addr())
+	}
+	return l.name
+}
+
+func (l *linuxLink) routeInTable(ctx context.Context, action, table string, destination netip.Prefix) error {
+	return l.ip(ctx, "-4", "route", action, "table", table, destination.String(),
+		"dev", l.routeDevice(destination), "src", l.address.String(), "proto", linuxRouteProtocol, "scope", "link", "metric", "0")
 }

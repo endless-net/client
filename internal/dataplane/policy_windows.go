@@ -11,8 +11,13 @@ import (
 	"errors"
 	"maps"
 	"net/netip"
+	"os"
+	"slices"
 	"sort"
 	"strings"
+	"time"
+
+	"go4.org/netipx"
 
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/state"
@@ -43,13 +48,16 @@ func canonicalGUID(value string) (windows.GUID, error) {
 // FilterPlan contains only native effects, no key or credential. Prepare its
 // Records in the durable journal before calling WindowsFilters.Replace.
 type FilterPlan struct {
-	direct       map[uint64]directPeerFilters
-	session      windows.GUID
-	luid         uint64
-	index        uint32
-	maxProtected int
-	scopes       map[ipGuardScope]bool
-	rules        []*wf.Rule
+	direct        map[uint64]directPeerFilters
+	session       windows.GUID
+	luid          uint64
+	index         uint32
+	maxProtected  int
+	resourceCount int
+	exitGroups    map[string]bool
+	scopes        map[ipGuardScope]bool
+	rules         []*wf.Rule
+	grantEnds     map[wf.RuleID]time.Time
 }
 
 type directPeerFilters struct {
@@ -97,7 +105,19 @@ func PrepareFilterPlan(ctx context.Context, m connectivity.Map, sessionID string
 	if ctx.Err() != nil {
 		return FilterPlan{}, ctx.Err()
 	}
-	return filterPlan(snapshot, sessionID, luid, index, maxGrants, maxProtected, offline)
+	plan, err := filterPlan(snapshot, sessionID, luid, index, maxGrants, maxProtected, offline)
+	if err != nil || len(plan.exitGroups) == 0 {
+		return plan, err
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return FilterPlan{}, err
+	}
+	app, err := wf.AppID(executable)
+	if err != nil {
+		return FilterPlan{}, err
+	}
+	return plan.withExitTransport(app)
 }
 
 func filterPlan(m coordinator.NetworkMapSnapshot, sessionID string, luid uint64, index uint32, maxGrants, maxProtected int, offline bool) (FilterPlan, error) {
@@ -113,7 +133,7 @@ func filterPlan(m coordinator.NetworkMapSnapshot, sessionID string, luid uint64,
 	if err != nil || !local.Is4() || local.IsUnspecified() || local.IsLoopback() || local.IsMulticast() {
 		return FilterPlan{}, ErrConfiguration
 	}
-	plan := FilterPlan{session: guid, luid: luid, index: index, maxProtected: maxProtected, scopes: make(map[ipGuardScope]bool)}
+	plan := FilterPlan{session: guid, luid: luid, index: index, maxProtected: maxProtected, scopes: make(map[ipGuardScope]bool), grantEnds: make(map[wf.RuleID]time.Time)}
 	if err := plan.protect(wf.FieldIPLocalAddress, local); err != nil {
 		return FilterPlan{}, err
 	}
@@ -174,18 +194,146 @@ func filterPlan(m coordinator.NetworkMapSnapshot, sessionID string, luid uint64,
 						conditions = append(conditions, &wf.Match{Field: wf.FieldFlags, Op: wf.MatchTypeFlagsAllSet, Value: wf.ConditionFlagIsReauthorize})
 					}
 					add(direction.layer, wf.ActionPermit, conditions...)
+					id := plan.rules[len(plan.rules)-1].ID
+					var end time.Time
+					if grant.ValidUntil != nil {
+						end = *grant.ValidUntil
+						if end.IsZero() {
+							return FilterPlan{}, ErrConfiguration
+						}
+					}
+					previous, exists := plan.grantEnds[id]
+					if !exists || !previous.IsZero() && (end.IsZero() || end.After(previous)) {
+						plan.grantEnds[id] = end
+					}
 				}
 			}
 		}
 	}
 	// Duplicate identical grants produce one native effect. Ordering is stable
 	// across producer peer/grant ordering, so refresh doesn't churn all filters.
+	maps.DeleteFunc(plan.grantEnds, func(_ wf.RuleID, end time.Time) bool { return end.IsZero() })
+	rules, _, err := recipientPacketRules(m)
+	if err != nil {
+		return FilterPlan{}, err
+	}
+	// Transiting a Windows routing peer requires a distinct forwarding policy.
+	for _, app := range m.Network.Applications {
+		if len(app.Routes) > 0 && slices.Contains(app.Connectors, coordinator.ServiceHost{NodeID: m.Node.ID, PublicKey: m.Node.PublicKey}) {
+			return FilterPlan{}, ErrConfiguration
+		}
+	}
+	if len(plan.scopes)+len(rules) > maxProtected {
+		return FilterPlan{}, ErrPolicyLimit
+	}
+	for target, rule := range rules {
+		prefixes := []netip.Prefix{target}
+		if target.Bits() == 0 {
+			overlay, parseErr := netip.ParsePrefix(m.Network.CIDR)
+			if parseErr != nil || !overlay.Contains(local) {
+				return FilterPlan{}, ErrConfiguration
+			}
+			prefixes, err = exitPublicPrefixes(overlay)
+			if err != nil {
+				return FilterPlan{}, err
+			}
+		}
+		for _, prefix := range prefixes {
+			if target.Bits() == 0 {
+				plan.blockExit(prefix, m.Network.CIDR)
+			} else {
+				plan.blockResource(prefix)
+			}
+		}
+		if rule.peer == "" {
+			continue
+		}
+		// Emit disjoint permit prefixes. An unreachable nested resource and
+		// a nested resource with different ports both shadow the parent.
+		var destinations netipx.IPSetBuilder
+		for _, prefix := range prefixes {
+			destinations.AddPrefix(prefix)
+		}
+		for other := range rules {
+			if other.Bits() > target.Bits() && target.Contains(other.Addr()) {
+				destinations.RemovePrefix(other)
+			}
+		}
+		set, err := destinations.IPSet()
+		if err != nil {
+			return FilterPlan{}, ErrConfiguration
+		}
+		permitted := set.Prefixes()
+		if len(permitted) == 0 {
+			continue
+		}
+		// The fixed public IPv4 partition represents one exit grant. Charge
+		// additional fragmentation due to independently assigned subnets.
+		count += max(1, len(permitted)-len(prefixes)+1) * len(rule.ports)
+		if count > maxGrants {
+			return FilterPlan{}, ErrPolicyLimit
+		}
+		for _, prefix := range permitted {
+			plan.addRule(&wf.Rule{Layer: wf.LayerOutboundIPPacketV4, Action: wf.ActionPermit, Weight: 4, Conditions: []*wf.Match{equal(wf.FieldIPRemoteAddress, prefix), equal(wf.FieldIPLocalAddress, local), equal(wf.FieldIPLocalInterface, luid), equal(wf.FieldInterfaceIndex, index)}})
+			plan.grantEnds[plan.rules[len(plan.rules)-1].ID] = rule.end
+			for port := range rule.ports {
+				conditions := []*wf.Match{equal(wf.FieldIPLocalAddress, local), equal(wf.FieldIPRemoteAddress, prefix)}
+				if port.Protocol != coordinator.ProtocolAll {
+					protocol := wf.IPProto(6)
+					if port.Protocol == "udp" {
+						protocol = 17
+					}
+					conditions = append(conditions, equal(wf.FieldIPProtocol, protocol), equal(wf.FieldIPRemotePort, uint16(port.Port)))
+				}
+				if offline {
+					conditions = append(conditions, &wf.Match{Field: wf.FieldFlags, Op: wf.MatchTypeFlagsAllSet, Value: wf.ConditionFlagIsReauthorize})
+				}
+				add(wf.LayerALEAuthConnectV4, wf.ActionPermit, conditions...)
+				plan.grantEnds[plan.rules[len(plan.rules)-1].ID] = rule.end
+			}
+		}
+	}
 	plan.canonicalize()
 	return plan, nil
 }
 
+// Apply the cutoff before copying ALE permits to direct adapters. Duplicate
+// grants share one rule until the last independent authorization ends.
+func (p FilterPlan) currentGrants(at time.Time) FilterPlan {
+	if len(p.grantEnds) == 0 {
+		return p
+	}
+	rules := make([]*wf.Rule, 0, len(p.rules))
+	for _, r := range p.rules {
+		end := p.grantEnds[r.ID]
+		if end.IsZero() || at.Before(end) {
+			rules = append(rules, r)
+		}
+	}
+	p.rules = rules
+	return p
+}
+
+func (p FilterPlan) nextGrantEnd() time.Time {
+	var next time.Time
+	if len(p.grantEnds) == 0 {
+		return next
+	}
+	for _, r := range p.rules {
+		end := p.grantEnds[r.ID]
+		if !end.IsZero() && (next.IsZero() || end.Before(next)) {
+			next = end
+		}
+	}
+	return next
+}
+
 func (p *FilterPlan) addRule(r *wf.Rule) {
-	r.Name = "EndlessNet device policy"
+	p.addNamedRule(r, "EndlessNet device policy")
+}
+
+func (p *FilterPlan) addNamedRule(r *wf.Rule, name string) {
+	r.Name = name
 	r.Sublayer = wf.SublayerID(p.session)
 	session, _ := uuid.Parse(strings.Trim(p.session.String(), "{}"))
 	raw, _ := json.Marshal(r)
@@ -198,6 +346,55 @@ func (p *FilterPlan) addRule(r *wf.Rule) {
 	p.rules = append(p.rules, r)
 }
 
+func (p *FilterPlan) blockResource(prefix netip.Prefix) {
+	p.resourceCount++
+	p.addRule(resourceBlock(prefix))
+}
+
+const exitBlockName = "EndlessNet internet exit "
+
+func resourceBlock(prefix netip.Prefix) *wf.Rule {
+	return &wf.Rule{Layer: wf.LayerOutboundIPPacketV4, Action: wf.ActionBlock, HardAction: true, Persistent: true, Weight: 3, Conditions: []*wf.Match{{Field: wf.FieldIPRemoteAddress, Op: wf.MatchTypeEqual, Value: prefix}}}
+}
+
+func (p *FilterPlan) blockExit(prefix netip.Prefix, overlay string) {
+	if p.exitGroups == nil {
+		p.exitGroups = make(map[string]bool)
+	}
+	if !p.exitGroups[overlay] {
+		p.exitGroups[overlay] = true
+		p.resourceCount++
+	}
+	block := resourceBlock(prefix)
+	block.Layer, block.Weight = wf.LayerALEAuthConnectV4, 1
+	p.addNamedRule(block, exitBlockName+overlay)
+}
+
+func (p FilterPlan) withExitTransport(app string) (FilterPlan, error) {
+	if !validExitApp(app) {
+		return FilterPlan{}, ErrConfiguration
+	}
+	next := p
+	next.rules = slices.Clone(p.rules)
+	for _, r := range p.rules {
+		prefix, ok := resourceGuardPrefix(r)
+		if !ok || r.Layer != wf.LayerALEAuthConnectV4 {
+			continue
+		}
+		for _, proto := range []wf.IPProto{6, 17} {
+			next.addRule(&wf.Rule{Layer: wf.LayerALEAuthConnectV4, Weight: 2, Action: wf.ActionPermit, Conditions: []*wf.Match{
+				{Field: wf.FieldALEAppID, Op: wf.MatchTypeEqual, Value: app},
+				{Field: wf.FieldALEUserID, Op: wf.MatchTypeEqual, Value: exitServiceAccess},
+				{Field: wf.FieldIPLocalInterface, Op: wf.MatchTypeNotEqual, Value: p.luid},
+				{Field: wf.FieldIPRemoteAddress, Op: wf.MatchTypeEqual, Value: prefix},
+				{Field: wf.FieldIPProtocol, Op: wf.MatchTypeEqual, Value: proto},
+			}})
+		}
+	}
+	next.canonicalize()
+	return next, nil
+}
+
 func (p *FilterPlan) protect(field wf.FieldID, address netip.Addr) error {
 	scope := ipGuardScope{field: field, address: address}
 	if p.scopes[scope] {
@@ -206,7 +403,7 @@ func (p *FilterPlan) protect(field wf.FieldID, address netip.Addr) error {
 	if !hostIPv4(address) || field != wf.FieldIPLocalAddress && field != wf.FieldIPRemoteAddress {
 		return ErrConfiguration
 	}
-	if len(p.scopes) >= p.maxProtected {
+	if len(p.scopes)+p.resourceCount >= p.maxProtected {
 		return ErrPolicyLimit
 	}
 	p.scopes[scope] = true
@@ -233,6 +430,7 @@ func (p FilterPlan) withDirectPeer(local, remote netip.Addr, luid uint64, index 
 	}
 	next := p
 	next.rules = append([]*wf.Rule(nil), p.rules...)
+	next.grantEnds = maps.Clone(p.grantEnds)
 	for owner, filters := range p.direct {
 		if owner == luid || filters.peer == remote || filters.index == index {
 			return FilterPlan{}, ErrPolicyOwnership
@@ -253,6 +451,9 @@ func (p FilterPlan) withDirectPeer(local, remote netip.Addr, luid uint64, index 
 		copyRule.ID = wf.RuleID{}
 		copyRule.Conditions = append([]*wf.Match{equal(wf.FieldIPLocalInterface, luid)}, r.Conditions[1:]...)
 		next.addRule(&copyRule)
+		if end := p.grantEnds[r.ID]; !end.IsZero() {
+			next.grantEnds[copyRule.ID] = end
+		}
 		granted = true
 	}
 	if !granted {
@@ -335,6 +536,10 @@ func (p FilterPlan) withoutDirectPeer(peer netip.Addr, luid uint64) (FilterPlan,
 	next := p
 	next.direct = maps.Clone(p.direct)
 	delete(next.direct, luid)
+	next.grantEnds = maps.Clone(p.grantEnds)
+	for id := range owner.rules {
+		delete(next.grantEnds, id)
+	}
 	next.rules = make([]*wf.Rule, 0, len(p.rules))
 	for _, rule := range p.rules {
 		if !owner.rules[rule.ID] {
@@ -355,6 +560,13 @@ func (p FilterPlan) RetainIPGuards(j state.ResourceJournal) (FilterPlan, error) 
 	next := p
 	next.rules = append([]*wf.Rule(nil), p.rules...)
 	next.scopes = make(map[ipGuardScope]bool, len(p.scopes))
+	next.exitGroups = maps.Clone(p.exitGroups)
+	retainedExit := make(map[string]state.FilterRecord)
+	for _, r := range j.Filters {
+		if r.ExitOverlay != "" {
+			retainedExit[r.GuardAddress] = r
+		}
+	}
 	for scope := range p.scopes {
 		next.scopes[scope] = true
 	}
@@ -373,6 +585,32 @@ func (p FilterPlan) RetainIPGuards(j state.ResourceJournal) (FilterPlan, error) 
 	for _, r := range j.Routes {
 		if r.NextHop != "0.0.0.0" {
 			return FilterPlan{}, ErrConfiguration
+		}
+		prefix, err := netip.ParsePrefix(r.Destination)
+		if err != nil || prefix.Bits() <= 0 || !hostIPv4(prefix.Addr()) || prefix.Masked().String() != r.Destination {
+			return FilterPlan{}, ErrConfiguration
+		}
+		if r.Resource {
+			already := false
+			for _, rule := range next.rules {
+				if p, ok := resourceGuardPrefix(rule); ok && p == prefix {
+					already = true
+					break
+				}
+			}
+			if !already {
+				if record, ok := retainedExit[r.Destination]; ok {
+					if err := next.restoreExitBlock(record, prefix); err != nil {
+						return FilterPlan{}, err
+					}
+				} else {
+					next.blockResource(prefix)
+				}
+				if len(next.scopes)+next.resourceCount > next.maxProtected {
+					return FilterPlan{}, ErrPolicyLimit
+				}
+			}
+			continue
 		}
 		if err := add(wf.FieldIPRemoteAddress, r.Destination); err != nil {
 			return FilterPlan{}, err
@@ -407,18 +645,30 @@ func (p *FilterPlan) canonicalize() {
 	p.rules = unique
 }
 
+func filterRecord(rule *wf.Rule) state.FilterRecord {
+	raw, _ := json.Marshal(rule)
+	hash := sha256.Sum256(raw)
+	record := state.FilterRecord{Key: strings.ToLower(strings.Trim(rule.ID.String(), "{}")), EffectStamp: state.EffectStamp{Phase: state.EffectPrepared, Fingerprint: hex.EncodeToString(hash[:])}}
+	if rule.Persistent {
+		c := rule.Conditions[0]
+		if prefix, ok := resourceGuardPrefix(rule); ok {
+			record.GuardAddress = prefix.String()
+			if overlay, ok := strings.CutPrefix(rule.Name, exitBlockName); ok {
+				record.ExitOverlay = overlay
+			}
+		} else {
+			record.GuardAddress = c.Value.(netip.Addr).String()
+		}
+		record.GuardLocal = c.Field == wf.FieldIPLocalAddress
+		record.GuardInbound = rule.Layer == wf.LayerInboundIPPacketV4
+	}
+	return record
+}
+
 func (p FilterPlan) Records() []state.FilterRecord {
 	result := make([]state.FilterRecord, len(p.rules))
 	for i, rule := range p.rules {
-		raw, _ := json.Marshal(rule)
-		hash := sha256.Sum256(raw)
-		result[i] = state.FilterRecord{Key: strings.ToLower(strings.Trim(rule.ID.String(), "{}")), EffectStamp: state.EffectStamp{Phase: state.EffectPrepared, Fingerprint: hex.EncodeToString(hash[:])}}
-		if rule.Persistent {
-			c := rule.Conditions[0]
-			result[i].GuardAddress = c.Value.(netip.Addr).String()
-			result[i].GuardLocal = c.Field == wf.FieldIPLocalAddress
-			result[i].GuardInbound = rule.Layer == wf.LayerInboundIPPacketV4
-		}
+		result[i] = filterRecord(rule)
 	}
 	return result
 }

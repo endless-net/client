@@ -79,7 +79,7 @@ func relayTransportFixture(t *testing.T, frames ...relay.Message) (*RelayTranspo
 	snapshot := coordinator.NetworkMapSnapshot{Network: coordinator.Network{ID: "network"}, Node: coordinator.Node{ID: "node"},
 		Relays:          []relay.Endpoint{{ID: "edge", Addr: "relay.example:443", Protocol: relay.EndpointProtocolTLS}},
 		RelayCredential: &relay.Credential{Algorithm: relay.CredentialAlgorithm, KeyID: "ed25519:" + base64RelayKey(), NetworkID: "network", NodeID: "node", ExpiresAt: expires, Signature: base64RelaySignature()},
-		Peers:           []coordinator.Peer{{ID: "peer", NetworkID: "network", ACLGrants: []coordinator.ACLGrant{{DestinationCIDRs: []string{"100.64.0.2/32"}}}}}}
+		Peers:           []coordinator.Peer{{ID: "peer", NetworkID: "network", ACLGrants: []coordinator.ACLGrant{{DestinationCIDRs: []string{"100.64.0.2/32"}, AllowedPorts: []coordinator.ACLPort{{Protocol: "tcp", Port: 443}}}}}}}
 	p := &packetPermission{p: connectivity.Permission{NewFlows: true, ExistingFlows: true, ExpiresAt: expires}}
 	var input bytes.Buffer
 	ready, _ := relay.MarshalMessage(&relay.Ready{Type: relay.MessageReady, ProtocolVersion: relay.Version, Ready: true})

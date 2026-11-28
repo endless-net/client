@@ -3,9 +3,11 @@
 package dataplane
 
 import (
+	"bytes"
 	"errors"
 	"math"
 	"net/netip"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -26,6 +28,17 @@ type nativeBlob struct {
 	Size uint32
 	Data *byte
 }
+
+const fwpV4AddrMask = 256
+
+const exitServiceAccess = "D:(A;;0x1;;;SY)"
+
+func validExitApp(app string) bool {
+	return len(app) <= 32767 && strings.HasPrefix(app, `\device\`) && strings.HasSuffix(app, ".exe") && !strings.ContainsRune(app, 0)
+}
+
+type nativeV4AddrMask struct{ Address, Mask uint32 }
+
 type nativeValue struct {
 	Type  uint32
 	Value uintptr
@@ -275,6 +288,39 @@ func marshalNativeFilter(arena *filterArena, rule *wf.Rule) (*nativeFilter, erro
 		c := &unsafe.Slice(f.Conditions, len(rule.Conditions))[i]
 		c.Field, c.Match = windows.GUID(match.Field), uint32(match.Op)
 		switch value := match.Value.(type) {
+		case string:
+			b, allocErr := arena.allocate(unsafe.Sizeof(nativeBlob{}))
+			if allocErr != nil {
+				return nil, allocErr
+			}
+			blob := (*nativeBlob)(b)
+			if match.Field == wf.FieldALEAppID {
+				chars, err := windows.UTF16FromString(value)
+				if err != nil {
+					return nil, ErrConfiguration
+				}
+				blob.Size = uint32(2 * len(chars))
+				ptr, err := arena.allocate(uintptr(blob.Size))
+				if err != nil {
+					return nil, err
+				}
+				copy(unsafe.Slice((*uint16)(ptr), len(chars)), chars)
+				blob.Data = (*byte)(ptr)
+				c.Value = nativeValue{Type: 12, Value: uintptr(b)}
+			} else {
+				sd, err := windows.SecurityDescriptorFromString(exitServiceAccess)
+				if err != nil {
+					return nil, err
+				}
+				blob.Size = sd.Length()
+				ptr, err := arena.allocate(uintptr(blob.Size))
+				if err != nil {
+					return nil, err
+				}
+				blob.Data = (*byte)(ptr)
+				copy(unsafe.Slice(blob.Data, blob.Size), unsafe.Slice((*byte)(unsafe.Pointer(sd)), blob.Size))
+				c.Value = nativeValue{Type: 14, Value: uintptr(b)}
+			}
 		case uint64:
 			c.Value, err = arena.number(value)
 		case uint16:
@@ -285,6 +331,13 @@ func marshalNativeFilter(arena *filterArena, rule *wf.Rule) (*nativeFilter, erro
 			c.Value = nativeValue{Type: 1, Value: uintptr(value)}
 		case wf.ConditionFlag:
 			c.Value = nativeValue{Type: 3, Value: uintptr(value)}
+		case netip.Prefix:
+			ptr, allocErr := arena.allocate(unsafe.Sizeof(nativeV4AddrMask{}))
+			if allocErr != nil {
+				return nil, allocErr
+			}
+			*(*nativeV4AddrMask)(ptr) = nativeV4AddrMask{ipv4Number(value.Addr()), ^uint32(0) << (32 - value.Bits())}
+			c.Value = nativeValue{Type: fwpV4AddrMask, Value: uintptr(ptr)}
 		case netip.Addr:
 			if !value.Is4() {
 				return nil, ErrConfiguration
@@ -314,6 +367,14 @@ func supportedNativeRule(r *wf.Rule) bool {
 	}
 	if r.Layer == wf.LayerDatagramDataV4 || r.Layer == wf.LayerDatagramDataV6 {
 		return supportedDriverSocketBlock(r)
+	}
+	if r.Layer == wf.LayerALEAuthConnectV4 {
+		if _, ok := resourceGuardPrefix(r); ok {
+			return true
+		}
+		if exitTransportRule(r) {
+			return true
+		}
 	}
 	if r.Persistent || r.Layer != wf.LayerALEAuthConnectV4 && r.Layer != wf.LayerALEAuthRecvAcceptV4 {
 		return false
@@ -355,6 +416,12 @@ func supportedNativeRule(r *wf.Rule) bool {
 				return false
 			}
 		case wf.FieldIPLocalAddress, wf.FieldIPRemoteAddress:
+			if prefix, ok := c.Value.(netip.Prefix); ok {
+				if r.Layer != wf.LayerALEAuthConnectV4 || r.Action != wf.ActionPermit || c.Field != wf.FieldIPRemoteAddress || !validResourceMask(prefix) {
+					return false
+				}
+				continue
+			}
 			value, ok := c.Value.(netip.Addr)
 			if !ok || !value.Is4() {
 				return false
@@ -400,7 +467,72 @@ func supportedNativeRule(r *wf.Rule) bool {
 	return seen[wf.FieldIPRemotePort] && !seen[wf.FieldIPLocalPort]
 }
 
+func resourceGuardPrefix(r *wf.Rule) (netip.Prefix, bool) {
+	if r == nil || !r.Persistent || !r.HardAction || r.Action != wf.ActionBlock || len(r.Conditions) != 1 {
+		return netip.Prefix{}, false
+	}
+	packetGuard := r.Layer == wf.LayerOutboundIPPacketV4 && r.Weight == 3
+	exitGuard := r.Layer == wf.LayerALEAuthConnectV4 && r.Weight == 1 && strings.HasPrefix(r.Name, exitBlockName)
+	if !packetGuard && !exitGuard {
+		return netip.Prefix{}, false
+	}
+	c := r.Conditions[0]
+	if c == nil || c.Field != wf.FieldIPRemoteAddress || c.Op != wf.MatchTypeEqual {
+		return netip.Prefix{}, false
+	}
+	p, ok := c.Value.(netip.Prefix)
+	return p, ok && validResourceMask(p)
+}
+
+func validResourceMask(p netip.Prefix) bool { return p.Addr().Is4() && p.Bits() > 0 && p == p.Masked() }
+
+func exitTransportRule(r *wf.Rule) bool {
+	if r.Persistent || r.HardAction || r.Action != wf.ActionPermit || r.Weight != 2 || len(r.Conditions) != 5 {
+		return false
+	}
+	for i, field := range [...]wf.FieldID{wf.FieldALEAppID, wf.FieldALEUserID, wf.FieldIPLocalInterface, wf.FieldIPRemoteAddress, wf.FieldIPProtocol} {
+		c := r.Conditions[i]
+		if c == nil || c.Field != field {
+			return false
+		}
+		if field == wf.FieldIPLocalInterface {
+			luid, ok := c.Value.(uint64)
+			if !ok || luid == 0 || c.Op != wf.MatchTypeNotEqual {
+				return false
+			}
+			continue
+		}
+		if c.Op != wf.MatchTypeEqual {
+			return false
+		}
+		switch field {
+		case wf.FieldALEAppID:
+			app, ok := c.Value.(string)
+			if !ok || !validExitApp(app) {
+				return false
+			}
+		case wf.FieldALEUserID:
+			if c.Value != exitServiceAccess {
+				return false
+			}
+		case wf.FieldIPRemoteAddress:
+			p, ok := c.Value.(netip.Prefix)
+			if !ok || !validResourceMask(p) {
+				return false
+			}
+		case wf.FieldIPProtocol:
+			if c.Value != wf.IPProto(6) && c.Value != wf.IPProto(17) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func supportedPacketGuard(r *wf.Rule) bool {
+	if _, ok := resourceGuardPrefix(r); ok {
+		return true
+	}
 	if r.Action == wf.ActionBlock && !r.Persistent && r.HardAction && r.Weight == 1 && len(r.Conditions) == 1 {
 		c := r.Conditions[0]
 		if c == nil || c.Op != wf.MatchTypeEqual || c.Field != wf.FieldInterfaceIndex {
@@ -415,13 +547,14 @@ func supportedPacketGuard(r *wf.Rule) bool {
 			return false
 		}
 	case wf.ActionPermit:
-		if r.Persistent || r.HardAction || r.Weight != 2 || (len(r.Conditions) != 3 && len(r.Conditions) != 4) {
+		if r.Persistent || r.HardAction || (r.Weight != 2 && r.Weight != 4) || (len(r.Conditions) != 3 && len(r.Conditions) != 4) {
 			return false
 		}
 	default:
 		return false
 	}
 	seen := make(map[wf.FieldID]bool, len(r.Conditions))
+	resourcePermit := false
 	scopes := 0
 	for _, c := range r.Conditions {
 		if c == nil || c.Op != wf.MatchTypeEqual || seen[c.Field] {
@@ -430,6 +563,14 @@ func supportedPacketGuard(r *wf.Rule) bool {
 		seen[c.Field] = true
 		switch c.Field {
 		case wf.FieldIPLocalAddress, wf.FieldIPRemoteAddress:
+			if p, ok := c.Value.(netip.Prefix); ok {
+				if c.Field != wf.FieldIPRemoteAddress || r.Layer != wf.LayerOutboundIPPacketV4 || r.Action != wf.ActionPermit || r.Weight != 4 || !validResourceMask(p) {
+					return false
+				}
+				resourcePermit = true
+				scopes++
+				continue
+			}
 			value, ok := c.Value.(netip.Addr)
 			if !ok || !hostIPv4(value) {
 				return false
@@ -451,6 +592,9 @@ func supportedPacketGuard(r *wf.Rule) bool {
 	}
 	if r.Action == wf.ActionBlock {
 		return scopes == 1
+	}
+	if r.Weight == 4 && (!resourcePermit || scopes != 2) {
+		return false
 	}
 	return (scopes == 1 || scopes == 2) && seen[wf.FieldIPLocalInterface] && seen[wf.FieldInterfaceIndex]
 }
@@ -488,12 +632,20 @@ func equalNativeValue(a, b nativeValue) bool {
 		return false
 	}
 	switch a.Type {
+	case 12, 14:
+		if a.Value == 0 || b.Value == 0 {
+			return false
+		}
+		x, y := (*nativeBlob)(nativePointer(a.Value)), (*nativeBlob)(nativePointer(b.Value))
+		return x.Size == y.Size && x.Size > 0 && x.Size <= 131072 && x.Data != nil && y.Data != nil && bytes.Equal(unsafe.Slice(x.Data, x.Size), unsafe.Slice(y.Data, y.Size))
 	case 1:
 		return uint8(a.Value) == uint8(b.Value)
 	case 2:
 		return uint16(a.Value) == uint16(b.Value)
 	case 3:
 		return uint32(a.Value) == uint32(b.Value)
+	case fwpV4AddrMask:
+		return a.Value != 0 && b.Value != 0 && *(*nativeV4AddrMask)(nativePointer(a.Value)) == *(*nativeV4AddrMask)(nativePointer(b.Value))
 	case 4:
 		return a.Value != 0 && b.Value != 0 && *(*uint64)(nativePointer(a.Value)) == *(*uint64)(nativePointer(b.Value))
 	}

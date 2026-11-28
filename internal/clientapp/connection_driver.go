@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"os"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -286,6 +289,13 @@ func (d *connectionDriver) enqueue(native nativeConnectionSession, frame connect
 }
 
 func (d *connectionDriver) readMaps(native nativeConnectionSession) {
+	var flows *connectivity.FlowMonitor
+	if owner, ok := native.(interface {
+		FlowMonitor() *connectivity.FlowMonitor
+	}); ok {
+		flows = owner.FlowMonitor()
+		defer flows.Reset()
+	}
 	for {
 		if d.lifetime.Err() != nil {
 			return
@@ -305,12 +315,36 @@ func (d *connectionDriver) readMaps(native nativeConnectionSession) {
 			clearConnectionKeys(value)
 		}
 		cancel()
+		var flowDone chan struct{}
+		var discoveryDone chan struct{}
+		discoveryMaps := make(chan connectivity.Map, 1)
 		if err == nil {
 			err = d.factory.stream(streamContext, verifier, cursor, func(ctx context.Context, m connectivity.Map) error {
 				epoch := native.BlockSource()
 				if m.Denied() {
 					d.failSource(native, connectivity.ErrRevoked)
 					return connectivity.ErrRevoked
+				}
+				if flows != nil && flowDone == nil {
+					flowDone = make(chan struct{})
+					go func() {
+						defer close(flowDone)
+						flows.Run(streamContext, d.factory.transport, verifier, m, d.factory.config.RenewalInterval)
+					}()
+				}
+				if d.factory.transport != nil {
+					if discoveryDone == nil {
+						discoveryDone = make(chan struct{})
+						go func() {
+							defer close(discoveryDone)
+							d.factory.transport.RunDomainDiscovery(streamContext, verifier, discoveryMaps, d.factory.config.RenewalInterval)
+						}()
+					}
+					select {
+					case <-discoveryMaps:
+					default:
+					}
+					discoveryMaps <- m
 				}
 				return d.enqueue(native, connectionFrame{ctx: ctx, value: m, epoch: epoch})
 			})
@@ -320,6 +354,15 @@ func (d *connectionDriver) readMaps(native nativeConnectionSession) {
 		d.mapCancel = nil
 		d.mapMu.Unlock()
 		streamCancel(nil)
+		if discoveryDone != nil {
+			<-discoveryDone
+		}
+		if flowDone != nil {
+			<-flowDone
+		}
+		if flows != nil && (handoff || (!errors.Is(err, connectivity.ErrStreamRotation) && !transientMapError(err))) {
+			flows.Reset()
+		}
 		if d.lifetime.Err() != nil {
 			return
 		}
@@ -489,7 +532,7 @@ func (d *connectionDriver) refreshEndpoint(native nativeConnectionSession, mode 
 	switch {
 	case err == nil:
 		d.endpointUnconfirmed.Store(false)
-	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, connectivity.ErrEndpointUncertain), errors.Is(err, connectivity.ErrUnavailable):
+	case errors.Is(err, dataplane.ErrTransportCapacity), errors.Is(err, context.DeadlineExceeded), errors.Is(err, connectivity.ErrEndpointUncertain), errors.Is(err, connectivity.ErrUnavailable):
 		d.endpointUnconfirmed.Store(true)
 		d.reportNativeFailure("endpoint_refresh", err)
 	default:
@@ -525,6 +568,9 @@ func (d *connectionDriver) announce(ctx context.Context, mode endpointAnnounceme
 	var desired *coordinator.TransportAdvertisement
 	if online {
 		ad, err := native.TransportAdvertisement(endpoint.Addr())
+		if errors.Is(err, dataplane.ErrTransportCapacity) {
+			return err
+		}
 		if err != nil {
 			return nativeConnectionFailure(err, connectivity.FailurePath)
 		}
@@ -552,13 +598,28 @@ func (d *connectionDriver) announce(ctx context.Context, mode endpointAnnounceme
 			return err
 		}
 		clearConnectionKeys(value)
-		if p.Connection.Intent != want {
+		if p.Connection.Intent != want || p.Attempt == nil {
 			return state.ErrStale
 		}
 		request := p.Connection.EndpointRequest
+		var prefixes []string
+		if online {
+			prefixes, err = advertisedPrefixes(p.Attempt.AttemptID)
+			if err != nil {
+				return err
+			}
+		}
+		matchesPrefixes := true
+		if request != nil && request.IntentGeneration == d.generation {
+			frozen, err := coordinator.DecodeUpdateNodeEndpointRequest(request.Request, len(request.Request))
+			if err != nil {
+				return state.ErrStale
+			}
+			matchesPrefixes = slices.Equal(frozen.AdvertisedCIDRs, prefixes)
+		}
 		endpointGeneration := p.Connection.EndpointGeneration
-		current := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint.String(), Generation: endpointGeneration, TTL: d.factory.config.EndpointTTL.String(), Status: status, Transport: desired}
-		if mode == publishChangedEndpoint && request != nil && request.IntentGeneration == d.generation && request.Receipt != nil &&
+		current := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint.String(), Generation: endpointGeneration, TTL: d.factory.config.EndpointTTL.String(), Status: status, Transport: desired, AdvertisedCIDRs: prefixes}
+		if mode == publishChangedEndpoint && matchesPrefixes && request != nil && request.IntentGeneration == d.generation && request.Receipt != nil &&
 			request.Receipt.ExpiresAt.After(d.factory.config.Verifier.Now()) && coordinator.ValidateEndpointReceipt(current, *request.Receipt, p.Attempt.NodeID, p.Attempt.NetworkID) == nil {
 			return nil
 		}
@@ -567,9 +628,15 @@ func (d *connectionDriver) announce(ctx context.Context, mode endpointAnnounceme
 				return state.ErrStale
 			}
 			endpointGeneration++
+			matchesPrefixes = true
 			current.Generation = endpointGeneration
 			if online {
 				current.ClientVersion = d.factory.config.ClientVersion
+				current.Posture = collectNodePosture(d.factory.config.Verifier.Now().UTC())
+				if current.Posture != nil && request != nil && request.Receipt != nil && request.Receipt.NodeID == p.Attempt.NodeID && request.Receipt.NetworkID == p.Attempt.NetworkID {
+					current.Posture.Processes = measureProcesses(request.Receipt.ProcessProbes, scanProcesses)
+					attachCertificateProof(&current, request.Receipt, p.Attempt.AttemptID)
+				}
 			}
 			if err := connectivity.PrepareEndpoint(ctx, d.factory.store, d.profile, d.generation, current); err != nil {
 				return err
@@ -589,11 +656,29 @@ func (d *connectionDriver) announce(ctx context.Context, mode endpointAnnounceme
 		if err := announcementContext(ctx); err != nil {
 			return err
 		}
-		if !online || receipt.Online && receipt.Endpoint == endpoint.String() && receipt.ExpiresAt.After(d.factory.config.Verifier.Now()) && coordinator.ValidateEndpointReceipt(current, receipt, p.Attempt.NodeID, p.Attempt.NetworkID) == nil {
+		if !online || matchesPrefixes && receipt.Online && receipt.Endpoint == endpoint.String() && receipt.ExpiresAt.After(d.factory.config.Verifier.Now()) && coordinator.ValidateEndpointReceipt(current, receipt, p.Attempt.NodeID, p.Attempt.NetworkID) == nil {
 			return nil
 		}
 	}
 	return connectivity.ErrEndpointUncertain
+}
+
+// Declarations belong to one enrollment and expire with its endpoint lease.
+// Switching profiles or re-enrolling must not transfer a subnet declaration.
+func advertisedPrefixes(attempt string) ([]string, error) {
+	if attempt == "" {
+		return nil, nil
+	}
+	raw := os.Getenv("ENDLESSNET_CLIENT_ADVERTISED_CIDRS_" + strings.ToUpper(strings.ReplaceAll(attempt, "-", "")))
+	if raw == "" {
+		return nil, nil
+	}
+	prefixes := strings.Split(raw, ",")
+	if coordinator.ValidateAdvertisedCIDRs(prefixes, true) != nil {
+		return nil, connectivity.ErrConfig
+	}
+	slices.Sort(prefixes)
+	return prefixes, nil
 }
 
 func announcementContext(ctx context.Context) error {

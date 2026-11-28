@@ -206,7 +206,7 @@ func peerPublicKey(local coordinator.Node, peer coordinator.Peer, private []byte
 	return public, nil
 }
 
-func cipherConfiguration(local coordinator.Node, peer coordinator.Peer, private []byte, profile transport.Profile) ([]byte, error) {
+func cipherConfiguration(local coordinator.Node, peer coordinator.Peer, private []byte, profile transport.Profile, resources ...netip.Prefix) ([]byte, error) {
 	public, err := peerPublicKey(local, peer, private)
 	if err != nil {
 		return nil, err
@@ -216,10 +216,21 @@ func cipherConfiguration(local coordinator.Node, peer coordinator.Peer, private 
 		return nil, err
 	}
 	defer clear(parameters)
+	localIP := netip.MustParseAddr(local.AssignedIP)
+	peerIP := netip.MustParsePrefix(peer.AllowedIPs[0]).Addr()
+	for _, prefix := range resources {
+		if !prefix.Addr().Is4() || prefix.Bits() == 0 || prefix != prefix.Masked() ||
+			prefix.Contains(localIP) || prefix.Contains(peerIP) {
+			return nil, ErrConfiguration
+		}
+	}
 	var output bytes.Buffer
 	_, _ = fmt.Fprintf(&output, "private_key=%s\nlisten_port=0\n", hex.EncodeToString(private))
 	output.Write(parameters)
 	_, _ = fmt.Fprintf(&output, "public_key=%s\nreplace_allowed_ips=true\nallowed_ip=%s\npersistent_keepalive_interval=0\n", hex.EncodeToString(public), peer.AllowedIPs[0])
+	for _, prefix := range resources {
+		fmt.Fprintf(&output, "allowed_ip=%s\n", prefix)
+	}
 	if peer.Transport != nil {
 		a := candidateAssignment{local: local, peer: peer, plan: *peer.Transport}
 		_, probe, err := a.controlAddresses()
@@ -265,11 +276,11 @@ var compiledPeerEngines = [...]struct {
 	},
 }
 
-func buildPeerCipher(ctx context.Context, local coordinator.Node, peer coordinator.Peer, private []byte, profile transport.Profile, port *packetPort, bind awgconn.Bind, observe wgdevice.PeerSessionStateFunc, publish func(*peerCipher)) (*peerCipher, error) {
+func buildPeerCipher(ctx context.Context, local coordinator.Node, peer coordinator.Peer, private []byte, profile transport.Profile, port *packetPort, bind awgconn.Bind, observe wgdevice.PeerSessionStateFunc, publish func(*peerCipher), resources ...netip.Prefix) (*peerCipher, error) {
 	if ctx == nil || ctx.Err() != nil || port == nil || bind == nil {
 		return nil, ErrConfiguration
 	}
-	raw, err := cipherConfiguration(local, peer, private, profile)
+	raw, err := cipherConfiguration(local, peer, private, profile, resources...)
 	if err != nil {
 		return nil, err
 	}

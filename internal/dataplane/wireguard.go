@@ -12,9 +12,12 @@ import (
 	"errors"
 	"io"
 	"net/netip"
+	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/endless-net/client/internal/connectivity"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
@@ -52,14 +55,16 @@ type Engine struct {
 }
 
 type primaryPeerBinding struct {
-	node, prefix string
-	generation   uint64
+	node, prefix, resources string
+	generation              uint64
 }
 
-func primaryPeerBindings(peers []coordinator.Peer) map[string]primaryPeerBinding {
+func primaryPeerBindings(peers []coordinator.Peer, prefixes map[string][]string) map[string]primaryPeerBinding {
 	result := make(map[string]primaryPeerBinding, len(peers))
 	for _, p := range peers {
-		result[p.PublicKey] = bindingForPrimaryPeer(p)
+		binding := bindingForPrimaryPeer(p)
+		binding.resources = strings.Join(prefixes[p.PublicKey], ",")
+		result[p.PublicKey] = binding
 	}
 	return result
 }
@@ -132,6 +137,15 @@ func (e *Engine) Apply(ctx context.Context, m connectivity.Map, private []byte) 
 }
 
 func (e *Engine) apply(ctx context.Context, snapshot coordinator.NetworkMapSnapshot, private []byte) error {
+	paths, err := mapResourcePaths(snapshot)
+	if err != nil {
+		e.Close()
+		return err
+	}
+	return e.applyPaths(ctx, snapshot, private, paths)
+}
+
+func (e *Engine) applyPaths(ctx context.Context, snapshot coordinator.NetworkMapSnapshot, private []byte, paths []connectivity.ResourcePath) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.closed {
@@ -144,20 +158,21 @@ func (e *Engine) apply(ctx context.Context, snapshot coordinator.NetworkMapSnaps
 		}
 		return ErrConfiguration
 	}
-	nextBindings := primaryPeerBindings(snapshot.Peers)
+	prefixes := prefixesForResourcePaths(paths)
+	nextBindings := primaryPeerBindings(snapshot.Peers, prefixes)
 	reset := make(map[string]bool)
 	for key, previous := range e.bindings {
 		if next, exists := nextBindings[key]; exists && previous != next {
 			reset[key] = true
 		}
 	}
-	config, public, peers, err := configurationWithResets(snapshot, private, e.public, e.peers, e.maxPeers, e.listenPort, reset)
+	config, public, peers, err := configurationWithResets(snapshot, private, e.public, e.peers, e.maxPeers, e.listenPort, reset, prefixes)
 	if err != nil {
 		e.close()
 		return err
 	}
 	defer clear(config)
-	if err := e.direct.configure(snapshot.Peers); err != nil {
+	if err := e.direct.configure(snapshot.Peers, nextBindings); err != nil {
 		e.close()
 		return err
 	}
@@ -202,13 +217,17 @@ func (e *Engine) Close() { e.mu.Lock(); defer e.mu.Unlock(); e.close() }
 // prefixes to UAPI. ACLs stay at the packet boundary; AllowedIPs is never used
 // as a substitute for direction/protocol/port authorization.
 func configuration(m coordinator.NetworkMapSnapshot, private []byte, previousPublic string, previous map[string]bool, maxPeers int, listenPort uint16) ([]byte, string, map[string]bool, error) {
-	return configurationWithResets(m, private, previousPublic, previous, maxPeers, listenPort, nil)
+	prefixes, err := resourcePeerPrefixes(m)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return configurationWithResets(m, private, previousPublic, previous, maxPeers, listenPort, nil, prefixes)
 }
 
 // A changed identity/address/intent requires peer.Stop and drained crypto
 // workers before rebuilding the same public-key slot. Endpoint-only refreshes
 // retain the existing session. This uses the pinned engine's own remove/add UAPI.
-func configurationWithResets(m coordinator.NetworkMapSnapshot, private []byte, previousPublic string, previous map[string]bool, maxPeers int, listenPort uint16, reset map[string]bool) ([]byte, string, map[string]bool, error) {
+func configurationWithResets(m coordinator.NetworkMapSnapshot, private []byte, previousPublic string, previous map[string]bool, maxPeers int, listenPort uint16, reset map[string]bool, resourceIPs map[string][]string) ([]byte, string, map[string]bool, error) {
 	key, err := ecdh.X25519().NewPrivateKey(private)
 	if err != nil || len(private) != 32 || bytes.Equal(private, make([]byte, 32)) || maxPeers <= 0 || listenPort == 0 || len(m.Peers) > maxPeers || m.Node.Status == "revoked" {
 		return nil, "", nil, ErrConfiguration
@@ -263,8 +282,59 @@ func configurationWithResets(m coordinator.NetworkMapSnapshot, private []byte, p
 	}
 	for _, p := range m.Peers {
 		pub, _ := base64.StdEncoding.Strict().DecodeString(p.PublicKey)
-		output.WriteString("public_key=" + hex.EncodeToString(pub) + "\nreplace_allowed_ips=true\nallowed_ip=" + p.AllowedIPs[0] + "\nendpoint=" + p.Endpoint + "\n")
+		output.WriteString("public_key=" + hex.EncodeToString(pub) + "\nreplace_allowed_ips=true\nallowed_ip=" + p.AllowedIPs[0] + "\n")
+		prefixes := resourceIPs[p.PublicKey]
+		for _, prefix := range prefixes {
+			output.WriteString("allowed_ip=" + prefix + "\n")
+		}
+		output.WriteString("endpoint=" + p.Endpoint + "\n")
 	}
 	output.WriteByte('\n')
 	return output.Bytes(), public, peers, nil
+}
+
+// The native assignment lives for the map lease. Every installed path must
+// cover that interval even if application of the map is delayed.
+func mapResourcePaths(m coordinator.NetworkMapSnapshot) ([]connectivity.ResourcePath, error) {
+	return eligibleResourcePaths(m, nil)
+}
+
+func eligibleResourcePaths(m coordinator.NetworkMapSnapshot, reachable func(coordinator.ServiceHost) bool) ([]connectivity.ResourcePath, error) {
+	var issued time.Time
+	if m.MapSignature != nil {
+		issued = m.MapSignature.IssuedAt
+	}
+	paths, err := connectivity.SelectResourcePaths(m, issued, reachable)
+	if err != nil {
+		return nil, ErrConfiguration
+	}
+	for _, p := range paths {
+		if m.MapSignature == nil || m.MapSignature.ExpiresAt.After(p.Route.ExpiresAt) {
+			return nil, ErrConfiguration
+		}
+	}
+	return paths, nil
+}
+
+// Use the same canonical assignments for UAPI and for deciding when a peer
+// must drain its crypto queues before another peer receives its subnet.
+func resourcePeerPrefixes(m coordinator.NetworkMapSnapshot) (map[string][]string, error) {
+	paths, err := mapResourcePaths(m)
+	if err != nil {
+		return nil, err
+	}
+	return prefixesForResourcePaths(paths), nil
+}
+
+func prefixesForResourcePaths(paths []connectivity.ResourcePath) map[string][]string {
+	resourceIPs := make(map[string][]string)
+	for _, p := range paths {
+		key := p.Route.Connector.PublicKey
+		resourceIPs[key] = append(resourceIPs[key], p.Prefix.String())
+	}
+	for key, prefixes := range resourceIPs {
+		slices.Sort(prefixes)
+		resourceIPs[key] = slices.Compact(prefixes)
+	}
+	return resourceIPs
 }

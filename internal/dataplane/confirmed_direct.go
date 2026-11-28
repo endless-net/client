@@ -244,14 +244,13 @@ func (c *assignedCipher) queueApplication(raw []byte, routeGuard func() bool) er
 	c.bind.mu.Lock()
 	a := c.bind.assignment
 	c.bind.mu.Unlock()
-	source, destination, err := a.addresses()
+	end, err := peerPacketDeadline(a, a.resources, a.transit, raw, true)
 	if err != nil {
 		return err
 	}
-	if err := applicationForPair(raw, source, destination); err != nil {
-		return err
+	guard := func() bool {
+		return c.bind.transmitCurrent(epoch) && a.resourceCurrent(end) && (routeGuard == nil || routeGuard())
 	}
-	guard := func() bool { return c.bind.transmitCurrent(epoch) && (routeGuard == nil || routeGuard()) }
 	if err := c.cipher.queueChecked(raw, false, guard); err != nil {
 		return err
 	}

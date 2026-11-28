@@ -154,7 +154,7 @@ type endpointClockFunc func() (connectivity.ClockSample, error)
 func (f endpointClockFunc) Sample() (connectivity.ClockSample, error) { return f() }
 
 func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeReady(t *testing.T) {
-	for _, mode := range []string{"expired", "changed", "current", "capability_changed", "uncertain_next", "expired_next", "budget"} {
+	for _, mode := range []string{"expired", "changed", "current", "prefix_withdrawn", "capability_changed", "uncertain_next", "expired_next", "budget"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newConnectionBackendFixture(t)
 			f.config.EndpointTTL = 120 * time.Second
@@ -178,7 +178,10 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeReady(t *t
 				endpoint = "192.0.2.99:51821"
 			}
 			input := coordinator.UpdateNodeEndpointRequest{Endpoint: endpoint, Generation: 1, TTL: f.config.EndpointTTL.String(), Status: "online"}
-			if mode == "current" {
+			if mode == "prefix_withdrawn" {
+				input.AdvertisedCIDRs = []string{"10.20.0.0/24"}
+			}
+			if mode == "current" || mode == "prefix_withdrawn" {
 				ad, err := f.native.TransportAdvertisement(f.config.Endpoint.Addr())
 				if err != nil {
 					t.Fatal(err)
@@ -205,7 +208,7 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeReady(t *t
 			original := bytes.Clone(value.Profiles[workerProfile].Connection.EndpointRequest.Request)
 			f.originals[1] = original
 			updated := time.Now().UTC().Add(-time.Second)
-			if mode != "current" && mode != "changed" && mode != "capability_changed" {
+			if mode != "current" && mode != "changed" && mode != "capability_changed" && mode != "prefix_withdrawn" {
 				updated = updated.Add(-120 * time.Second)
 			}
 			f.acks[1] = coordinator.UpdateNodeEndpointResponse{SchemaVersion: 2, NodeID: "node", NetworkID: "network", Endpoint: endpoint, Generation: 1, Online: true, UpdatedAt: updated, ExpiresAt: updated.Add(f.config.EndpointTTL), Revision: coordinator.MapRevision{Network: 1}}
@@ -246,6 +249,12 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeReady(t *t
 			}
 			defer clearConnectionKeys(after)
 			p := after.Profiles[workerProfile]
+			if mode == "prefix_withdrawn" {
+				current, err := coordinator.DecodeUpdateNodeEndpointRequest(p.Connection.EndpointRequest.Request, len(p.Connection.EndpointRequest.Request))
+				if err != nil || len(current.AdvertisedCIDRs) != 0 {
+					t.Fatal("new generation retained withdrawn prefix", current, err)
+				}
+			}
 			want := uint64(2)
 			if mode == "current" || mode == "budget" {
 				want = 1
@@ -263,6 +272,7 @@ func TestWindowsConnectionRecoveryRefreshesHistoricalEndpointACKBeforeReady(t *t
 }
 
 type connectionBackendFixture struct {
+	dnsConfig    *coordinator.DNSConfig
 	backend      *workerMemory
 	now          func() time.Time
 	checkRequest func(*http.Request)
@@ -405,6 +415,7 @@ func newConnectionBackendFixturePrepared(t *testing.T, prepare func(*state.Profi
 		expires := issued.Add(time.Minute)
 		version := revision.Add(1)
 		m := coordinator.NetworkMapSnapshot{Revision: coordinator.MapRevision{Network: version}, Network: coordinator.Network{ID: "network", AccountID: "account", CIDR: "100.64.0.0/24", Revision: version}, Node: coordinator.Node{ID: "node", NetworkID: "network", PublicKey: base64.StdEncoding.EncodeToString(private.PublicKey().Bytes()), AssignedIP: "100.64.0.1", ApprovalState: "approved", Status: "online"}, Peers: []coordinator.Peer{{ID: "peer", NetworkID: "network", PublicKey: base64.StdEncoding.EncodeToString(peer.PublicKey().Bytes()), Endpoint: "192.0.2.2:51820", EndpointGeneration: 1, EndpointExpiresAt: &expires, AllowedIPs: []string{"100.64.0.2/32"}, ACLRestricted: true, ACLGrants: []coordinator.ACLGrant{{DestinationCIDRs: []string{"100.64.0.2/32"}, AllowedPorts: []coordinator.ACLPort{{Protocol: "tcp", Port: 443}}}}}}}
+		m.Network.DNSConfig = fixture.dnsConfig
 		payload, err := coordinator.NetworkMapSigningPayload(m, mapBundle.ActiveKeyID, issued, expires)
 		if err != nil {
 			return nil, err
@@ -455,6 +466,34 @@ func backendOperation(t *testing.T, f *connectionBackendFixture) context.Context
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	t.Cleanup(cancel)
 	return connectivity.WithOperationBudget(ctx, b)
+}
+
+func TestInstalledWindowsConnectionAcceptsManagedDNS(t *testing.T) {
+	f := newConnectionBackendFixture(t)
+	v := f.config.Verifier
+	var settings Config
+	settings.CallTimeout = v.CallTimeout
+	settings.MaxCredentialBytes = v.MaxCredentialBytes
+	settings.MaxMapBytes = v.MaxBytes
+	settings.MaxPeers = v.MaxPeers
+	settings.MaxRules = v.MaxRules
+	f.factory.config.Verifier = settings.connectionDriver(v.Clock, v.Announcements).shared().Verifier
+	f.dnsConfig = &coordinator.DNSConfig{Zones: []coordinator.DNSZone{{
+		Name: "zone.test.", Version: 1,
+		Records: []coordinator.DNSRecord{{Name: "db.zone.test.", Type: "A", Value: "192.0.2.41", TTL: 19}},
+	}}}
+	owner, err := f.factory.newOwner(context.Background(), workerProfile, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := owner.(*connectionDriver)
+	t.Cleanup(func() { _ = d.Disconnect(workerCallContext(t)) })
+	if err := d.Connect(backendOperation(t, f), false); err != nil {
+		t.Fatal(err)
+	}
+	if f.native.starts.Load() != 1 {
+		t.Fatal("signed map with a local zone did not reach the native session")
+	}
 }
 
 func TestWindowsConnectionDriverCompletesAfterACKWithNoPeerPaths(t *testing.T) {

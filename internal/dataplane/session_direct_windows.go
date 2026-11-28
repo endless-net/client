@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/netip"
 
+	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/api/transport"
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/state"
@@ -167,11 +168,15 @@ func (s *WindowsSession) stageDirectIP(parent context.Context, assignment candid
 	if j == nil || j.Generation != s.generation {
 		return nil, ErrIPOwnership
 	}
-	next, err := s.policy.withConfirmedPeer(assignment, candidate, false)
+	at, err := s.grantTime(m)
 	if err != nil {
 		return nil, err
 	}
-	err = s.replaceFilters(ctx, m, next)
+	next, err := s.policy.currentGrants(at).withConfirmedPeer(assignment, candidate, false)
+	if err != nil {
+		return nil, err
+	}
+	err = s.installCurrentFilters(ctx, m, &next)
 	var entry *windowsDirectRoute
 	if err == nil && !currentAuthority() {
 		err = ErrNoAuthority
@@ -204,10 +209,13 @@ func (s *WindowsSession) stageDirectIP(parent context.Context, assignment candid
 	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.config.ApplyTimeout)
 	defer cancel()
 	restore := s.policy
-	if !currentAuthority() {
+	at, clockErr := s.grantTime(m)
+	if clockErr != nil || !currentAuthority() {
 		restore = restore.DenyAllTraffic()
+	} else {
+		restore = restore.currentGrants(at)
 	}
-	restoreErr := s.replaceFilters(cleanup, m, restore)
+	restoreErr := s.installCurrentFilters(cleanup, m, &restore)
 	if restoreErr == nil {
 		s.policy = restore
 	}
@@ -257,7 +265,7 @@ func (s *WindowsSession) retireDirectIP(parent context.Context, peer netip.Addr,
 	if !s.lease.Permissions().ExistingFlows {
 		next = next.DenyAllTraffic()
 	}
-	if err := s.replaceFilters(ctx, s.current, next); err != nil {
+	if err := s.installCurrentFilters(ctx, s.current, &next); err != nil {
 		s.lease.Revoke()
 		s.cancel()
 		return err
@@ -376,7 +384,32 @@ func (s *WindowsSession) ProbePaths(parent context.Context) error {
 	if s.supervisor != nil {
 		s.checkLANChanges()
 	}
-	return s.engine.ProbeDirect(ctx)
+	if err := s.engine.ProbeDirect(ctx); err != nil {
+		return err
+	}
+	if s.supervisor == nil || s.policy.resourceCount == 0 {
+		return nil
+	}
+	return s.reconcileResourcePaths(ctx, s.supervisor.transportStatuses(s.current))
+}
+
+func (s *WindowsSession) reconcileResourcePaths(ctx context.Context, statuses []*clientv0.PeerTransportStatus) error {
+	m, err := s.current.Snapshot()
+	if err != nil {
+		return err
+	}
+	sample, err := s.clock.Sample()
+	if err != nil {
+		return err
+	}
+	return s.reconcile(m, sample, s.config.ProbeInterval, statuses, s.packets, s.current, func(paths []connectivity.ResourcePath) error {
+		p, err := s.profile(ctx, s.current, true)
+		if err != nil {
+			return err
+		}
+		defer clear(p.Keys.WireGuardPrivate)
+		return s.engine.applyPaths(ctx, m, p.Keys.WireGuardPrivate, paths)
+	})
 }
 
 func (s *WindowsSession) DirectPaths() ([]DirectPath, error) {

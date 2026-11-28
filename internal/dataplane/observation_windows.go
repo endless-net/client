@@ -4,6 +4,7 @@ package dataplane
 
 import (
 	"github.com/endless-net/client/internal/connectivity"
+	"google.golang.org/protobuf/proto"
 )
 
 // Only a completed native apply publishes these handles. Their observation
@@ -24,13 +25,17 @@ func (s *WindowsSession) publishAppliedView() {
 func (s *WindowsSession) ConnectionLocal() connectivity.LocalObservation {
 	if !s.mu.TryLock() {
 		if view := s.observed.Load(); view != nil {
-			return transportObservation(view.value, s.lease, view.engine, view.packets, view.supervisor, false)
+			local := transportObservation(view.value, s.lease, view.engine, view.packets, view.supervisor, false)
+			local.DNS = proto.CloneOf(s.dnsResult.Load())
+			return local
 		}
-		return connectivity.LocalObservation{Permission: s.lease.Permissions()}
+		return connectivity.LocalObservation{Permission: s.lease.Permissions(), DNS: proto.CloneOf(s.dnsResult.Load())}
 	}
 	defer s.mu.Unlock()
 	if !s.started || s.stopped || s.engine == nil || s.packets.Err() != nil {
-		return connectivity.LocalObservation{Permission: s.lease.Permissions()}
+		return connectivity.LocalObservation{Permission: s.lease.Permissions(), DNS: proto.CloneOf(s.dnsResult.Load())}
 	}
-	return transportObservation(s.current, s.lease, s.engine, s.packets, s.supervisor, s.tunnelReady())
+	local := transportObservation(s.current, s.lease, s.engine, s.packets, s.supervisor, s.tunnelReady())
+	local.DNS = proto.CloneOf(s.dnsResult.Load())
+	return local
 }

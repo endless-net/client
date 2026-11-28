@@ -17,12 +17,15 @@ import (
 	"testing"
 	"time"
 
+	clientv0 "github.com/endless-net/client/api/client/v0"
 	"github.com/endless-net/client/internal/connectivity"
 	"github.com/endless-net/client/internal/control"
 	"github.com/endless-net/client/internal/state"
 	coordinator "github.com/endless-net/coordinator/api/enrollment"
 	"github.com/tailscale/wf"
+	"github.com/tailscale/wireguard-go/conn"
 	"github.com/tailscale/wireguard-go/device"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func nextSessionMap(t *testing.T, s *WindowsSession, previous connectivity.Map, clock *sessionClock, change func(*coordinator.NetworkMapSnapshot)) connectivity.Map {
@@ -67,7 +70,7 @@ func nextSessionMap(t *testing.T, s *WindowsSession, previous connectivity.Map, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := connectivity.NewVerifier(p, connectivity.VerifierConfig{Now: func() time.Time { return sample.Wall }, Clock: clock, CallTimeout: time.Second, MaxBytes: 65536, MaxPeers: 8, MaxRules: 16, MaxCredentialBytes: 8192, Announcements: sessionAnnouncements{trust}})
+	v, err := connectivity.NewVerifier(p, connectivity.VerifierConfig{IPv4ResourceRoutes: true, IPv4ExitRouting: true, UnavailableResourceGuards: true, IndependentGrantExpiry: true, ResolverDNS: true, Now: func() time.Time { return sample.Wall }, Clock: clock, CallTimeout: time.Second, MaxBytes: 65536, MaxPeers: 8, MaxRules: 16, MaxCredentialBytes: 8192, Announcements: sessionAnnouncements{trust}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,6 +79,73 @@ func nextSessionMap(t *testing.T, s *WindowsSession, previous connectivity.Map, 
 		t.Fatal(err)
 	}
 	return m
+}
+
+func TestWindowsOfflineGrantExpiryUpdatesInstalledFilters(t *testing.T) {
+	s, _, _, first, _, dynamic, _, _, clock := wiredSessionFixture(t)
+	if err := startSessionFixture(t, s, first); err != nil {
+		t.Fatal(err)
+	}
+	clock.advance(time.Second)
+	sample, _ := clock.Sample()
+	end := sample.Wall.Add(10 * time.Second)
+	next := nextSessionMap(t, s, first, clock, func(m *coordinator.NetworkMapSnapshot) {
+		peer := &m.Peers[0]
+		peer.ACLGrants[0].ValidUntil = &end
+		peer.ACLGrants = append(peer.ACLGrants, coordinator.ACLGrant{DestinationCIDRs: peer.AllowedIPs, AllowedPorts: []coordinator.ACLPort{{Protocol: "tcp", Port: 22}}})
+	})
+	if err := s.Refresh(t.Context(), next); err != nil {
+		t.Fatal(err)
+	}
+	onlineEpoch := s.grantTimerEpoch
+	if err := s.Offline(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if s.grantTimer == nil || !s.policy.nextGrantEnd().Equal(end) {
+		t.Fatal("offline transition lost the signed deadline")
+	}
+	var timed, independent wf.RuleID
+	for _, r := range s.policy.rules {
+		if r.Layer == wf.LayerALEAuthConnectV4 && r.Action == wf.ActionPermit {
+			if s.policy.grantEnds[r.ID].IsZero() {
+				independent = r.ID
+			} else {
+				timed = r.ID
+			}
+		}
+	}
+	stableID := dynamic.live[independent]
+	if stableID == 0 || dynamic.live[timed] == 0 {
+		t.Fatal("missing installed permits before expiry")
+	}
+	clock.advance(10 * time.Second)
+	if !s.lease.Permissions().ExistingFlows {
+		t.Fatal("independent map lease expired with TCP/443")
+	}
+	s.onGrantTimer(onlineEpoch)
+	if dynamic.live[timed] == 0 {
+		t.Fatal("superseded online callback changed the offline plan")
+	}
+	s.onGrantTimer(s.grantTimerEpoch)
+	if dynamic.live[timed] != 0 || dynamic.live[independent] != stableID || s.grantTimer != nil {
+		t.Fatal("expiry retained a timed permit or replaced the independent filter")
+	}
+}
+
+func TestWindowsGrantTimeRejectsRollbackWithinConfirmedMap(t *testing.T) {
+	s, _, _, m, _, _, _, _, clock := wiredSessionFixture(t)
+	clock.mu.Lock()
+	clock.sample.Wall = clock.sample.Wall.Add(10 * time.Second)
+	clock.mu.Unlock()
+	if _, err := s.grantTime(m); err != nil {
+		t.Fatal(err)
+	}
+	clock.mu.Lock()
+	clock.sample.Wall = clock.sample.Wall.Add(-5 * time.Second)
+	clock.mu.Unlock()
+	if _, err := s.grantTime(m); !errors.Is(err, connectivity.ErrClock) {
+		t.Fatal("clock rollback could revive expired WFP permits", err)
+	}
 }
 
 func TestSessionRefreshPreservesPeerObjectPermitIDsAndNativeAddress(t *testing.T) {
@@ -157,6 +227,58 @@ func TestSessionFreshSignedMapCanResumeOfflineWithoutRecreatingPeer(t *testing.T
 	}
 }
 
+func TestOfflinePolicyReplacementCannotBeUndoneByOlderDelivery(t *testing.T) {
+	s, store, _, first, _, filters, _, _, clock := wiredSessionFixture(t)
+	if err := startSessionFixture(t, s, first); err != nil {
+		t.Fatal(err)
+	}
+	var revoked wf.RuleID
+	for _, r := range s.policy.rules {
+		if r.Layer == wf.LayerALEAuthConnectV4 && r.Action == wf.ActionPermit {
+			revoked = r.ID
+		}
+	}
+	if revoked.IsZero() || filters.live[revoked] == 0 {
+		t.Fatal("fixture needs an installed egress grant")
+	}
+	if err := s.Offline(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	clock.advance(time.Second)
+	replacement := nextSessionMap(t, s, first, clock, func(m *coordinator.NetworkMapSnapshot) {
+		m.Peers[0].ACLGrants[0].AllowedPorts = []coordinator.ACLPort{{Protocol: "tcp", Port: 22}}
+	})
+	if err := s.Refresh(t.Context(), replacement); err != nil {
+		t.Fatal(err)
+	}
+	if filters.live[revoked] != 0 || !s.lease.Permissions().NewFlows {
+		t.Fatal("fresh online policy retained withdrawn grant")
+	}
+	fields := map[wf.FieldID]any{
+		wf.FieldIPLocalInterface: uint64(12345), wf.FieldIPLocalAddress: netip.MustParseAddr("100.70.0.1"),
+		wf.FieldIPRemoteAddress: netip.MustParseAddr("100.70.0.2"), wf.FieldIPProtocol: wf.IPProto(6),
+		wf.FieldIPLocalPort: uint16(50000), wf.FieldIPRemotePort: uint16(22),
+	}
+	if policyVerdict(s.policy, wf.LayerALEAuthConnectV4, fields) != wf.ActionPermit {
+		t.Fatal("replacement did not permit TCP/22")
+	}
+	fields[wf.FieldIPRemotePort] = uint16(443)
+	if policyVerdict(s.policy, wf.LayerALEAuthConnectV4, fields) != wf.ActionBlock {
+		t.Fatal("replacement allowed TCP/443")
+	}
+	if err := s.Refresh(t.Context(), first); err == nil || filters.live[revoked] != 0 {
+		t.Fatal("stale delivery restored the original grant", err)
+	}
+	v, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := v.Profiles[s.profileID].Connection
+	if c.MapCursor == nil || c.LastAppliedMap == nil || c.MapCursor.PayloadHash != replacement.Cursor().PayloadHash || c.LastAppliedMap.PayloadHash != replacement.Cursor().PayloadHash {
+		t.Fatal("stale delivery replaced the target or application receipt")
+	}
+}
+
 func addedPeerSnapshot(t *testing.T, snapshot *coordinator.NetworkMapSnapshot) {
 	t.Helper()
 	key, err := ecdh.X25519().NewPrivateKey(bytes.Repeat([]byte{65}, 32))
@@ -186,6 +308,189 @@ func TestSessionRefreshAddsPeerWithGuardsBeforeNewRoute(t *testing.T) {
 	}
 	if len(value.Profiles[s.profileID].Connection.Journal.Routes) != 2 || ip.createdRoutes != 2 || ip.createdAddresses != 1 || tunnel.closes != 0 || len(guards.live) != 6 {
 		t.Fatal("added peer widened path without journal/guard or recreated adapter")
+	}
+}
+
+func TestSessionRefreshWithdrawsManagedSubnet(t *testing.T) {
+	s, store, _, first, ip, _, _, _, clock := wiredSessionFixture(t)
+	if err := startSessionFixture(t, s, first); err != nil {
+		t.Fatal(err)
+	}
+	const target = "10.27.4.0/24"
+	clock.advance(time.Second)
+	now, _ := clock.Sample()
+	active := nextSessionMap(t, s, first, clock, func(m *coordinator.NetworkMapSnapshot) {
+		addedPeerSnapshot(t, m)
+		app := coordinator.Application{ID: "printer", TargetType: "cidr", Target: target, AllowedPorts: []coordinator.ServicePort{{Protocol: "tcp", Port: 443}}}
+		for i, p := range m.Peers {
+			h := coordinator.ServiceHost{NodeID: p.ID, PublicKey: p.PublicKey}
+			app.Connectors = append(app.Connectors, h)
+			app.Routes = append(app.Routes, coordinator.ApplicationRoute{Connector: h, Metric: uint32(i + 1), CIDRs: []string{target}, ExpiresAt: now.Wall.Add(time.Minute)})
+		}
+		m.Network.Applications = []coordinator.Application{app}
+	})
+	if err := s.Refresh(t.Context(), active); err != nil {
+		t.Fatal("add resource", err)
+	}
+	check := func(want bool) {
+		t.Helper()
+		value, err := store.Load(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range value.Profiles[s.profileID].Connection.Journal.Routes {
+			if r.Destination == target {
+				if !want || !r.Resource || r.Phase != state.EffectApplied || r.Fingerprint == "" {
+					t.Fatal("unexpected receipt", r)
+				}
+				return
+			}
+		}
+		if want {
+			t.Fatal("missing resource route")
+		}
+	}
+	check(true)
+	dst := netip.MustParseAddr("10.27.4.9")
+	if peer := s.packets.resources.lookup(dst).peer; peer != "" {
+		t.Fatal("resource opened before path confirmation", peer)
+	}
+	snapshot, err := active.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ready := range [][]string{{"peer", "second-peer"}, {"second-peer"}, {}, {"peer"}} {
+		clock.advance(4 * s.config.ProbeInterval)
+		sample, _ := clock.Sample()
+		statuses := make([]*clientv0.PeerTransportStatus, 0, len(ready))
+		for _, id := range ready {
+			statuses = append(statuses, &clientv0.PeerTransportStatus{PeerId: id, SelectedPath: clientv0.PathKind_PATH_KIND_DIRECT, CheckedAt: timestamppb.New(sample.Wall)})
+		}
+		if err := s.reconcileResourcePaths(t.Context(), statuses); err != nil {
+			t.Fatal(err)
+		}
+		want := ""
+		if len(ready) > 0 {
+			want = ready[0]
+		}
+		if got := s.packets.resources.lookup(dst).peer; got != want {
+			t.Fatal("packet switch", got, want)
+		}
+		for _, p := range snapshot.Peers {
+			if (s.engine.bindings[p.PublicKey].resources == target) != (p.ID == want) {
+				t.Fatal("WireGuard route", p.ID, want)
+			}
+		}
+	}
+	clock.advance(time.Second)
+	withdrawn := nextSessionMap(t, s, active, clock, func(m *coordinator.NetworkMapSnapshot) { m.Network.Applications = nil })
+	if err := s.Refresh(t.Context(), withdrawn); err != nil {
+		t.Fatal("withdraw", err)
+	}
+	check(false)
+	if ip.deletedRoutes != 1 {
+		t.Fatal("wrong deletion count", ip.deletedRoutes)
+	}
+	clock.advance(time.Second)
+	next := nextSessionMap(t, s, withdrawn, clock, func(*coordinator.NetworkMapSnapshot) {})
+	if err := s.Refresh(t.Context(), next); err != nil {
+		t.Fatal("following map", err)
+	}
+}
+
+func TestWindowsSessionRefreshWithdrawsExitAndKeepsSubnet(t *testing.T) {
+	s, store, _, first, _, _, guards, _, clock := wiredSessionFixture(t)
+	s.config.ApplyTimeout = 20 * time.Second
+	s.makeBind = func() conn.Bind { return new(outerBindFixture) }
+	base := s.planFilters
+	s.planFilters = func(ctx context.Context, m connectivity.Map, id string, luid uint64, index uint32, grants, protected int, offline bool) (FilterPlan, error) {
+		p, err := base(ctx, m, id, luid, index, grants, protected, offline)
+		if err != nil || len(p.exitGroups) == 0 {
+			return p, err
+		}
+		return p.withExitTransport(`\device\harddiskvolume1\endlessnet\client.exe`)
+	}
+	if err := startSessionFixture(t, s, first); err != nil {
+		t.Fatal(err)
+	}
+	clock.advance(time.Second)
+	sample, _ := clock.Sample()
+	const subnet = "10.72.0.0/24"
+	active := nextSessionMap(t, s, first, clock, func(m *coordinator.NetworkMapSnapshot) {
+		peer := m.Peers[0]
+		router := coordinator.ServiceHost{NodeID: peer.ID, PublicKey: peer.PublicKey}
+		for _, target := range []string{subnet, "0.0.0.0/0"} {
+			id := "office"
+			if target != subnet {
+				id = "exit"
+			}
+			m.Network.Applications = append(m.Network.Applications, coordinator.Application{ID: id, TargetType: "cidr", Target: target, AllowedPorts: []coordinator.ServicePort{{Protocol: "tcp", Port: 443}}, Connectors: []coordinator.ServiceHost{router}, Routes: []coordinator.ApplicationRoute{{Connector: router, Metric: 1, CIDRs: []string{target}, ExpiresAt: sample.Wall.Add(time.Minute)}}})
+		}
+	})
+	if err := s.Refresh(t.Context(), active); err != nil {
+		t.Fatal("select exit", err)
+	}
+	value, err := store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) > 65536 {
+		t.Fatal("exit and subnet exceed installed plaintext state limit", len(encoded))
+	}
+	var exitIDs []wf.RuleID
+	var office wf.RuleID
+	for _, rule := range s.policy.rules {
+		if prefix, ok := resourceGuardPrefix(rule); ok {
+			if rule.Layer == wf.LayerALEAuthConnectV4 {
+				exitIDs = append(exitIDs, rule.ID)
+			}
+			if prefix.String() == subnet {
+				office = rule.ID
+			}
+		}
+	}
+	officeID := guards.live[office]
+	if len(exitIDs) == 0 || officeID == 0 {
+		t.Fatal("missing installed guards")
+	}
+	clock.advance(time.Second)
+	sample, _ = clock.Sample()
+	next := nextSessionMap(t, s, active, clock, func(m *coordinator.NetworkMapSnapshot) {
+		m.Network.Applications = m.Network.Applications[:1]
+		m.Network.Applications[0].Routes[0].ExpiresAt = sample.Wall.Add(time.Minute)
+	})
+	if err := s.Refresh(t.Context(), next); err != nil {
+		t.Fatal("withdraw exit", err)
+	}
+	for _, id := range exitIDs {
+		if guards.live[id] != 0 {
+			t.Fatal("exit block still installed after refresh", id)
+		}
+	}
+	if guards.live[office] != officeID {
+		t.Fatal("independent subnet guard changed")
+	}
+	value, err = store.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	j := value.Profiles[s.profileID].Connection.Journal
+	for _, f := range j.Filters {
+		if f.ExitOverlay != "" {
+			t.Fatal("stale exit receipt", f.Key)
+		}
+	}
+	if len(j.Routes) != 2 {
+		t.Fatal("unexpected remaining routes", len(j.Routes))
+	}
+	for _, r := range j.Routes {
+		if r.Resource && r.Destination != subnet {
+			t.Fatal(r)
+		}
 	}
 }
 
@@ -255,6 +560,18 @@ func TestSessionRefreshAndOfflineNativeUncertaintyRemainFailClosed(t *testing.T)
 		value, err := store.Load(context.Background())
 		if err != nil || value.Profiles[s.profileID].Connection.Journal != nil {
 			t.Fatal("failed native update lost cleanup", failure, err)
+		}
+		c := value.Profiles[s.profileID].Connection
+		if c.LastAppliedMap == nil || c.LastAppliedMap.PayloadHash != m.Cursor().PayloadHash {
+			t.Fatal("cleanup lost the last confirmed map", failure)
+		}
+		if failure != "offline-commit" {
+			if c.MapCursor.PayloadHash != next.Cursor().PayloadHash {
+				t.Fatal("failed target was lost", failure)
+			}
+			if err := connectivity.RecordAppliedMap(t.Context(), store, s.generation, m); !errors.Is(err, state.ErrStale) {
+				t.Fatal("late apply replaced the newer target", err)
+			}
 		}
 	}
 }
