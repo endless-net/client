@@ -268,22 +268,31 @@ func (g *transportSupervisor) releaseCandidate(p *supervisedRelay, failed bool) 
 	s.rx, s.finished = false, false
 }
 
-// Windows installs probe host routes in the same routing table as the TLS
-// connection. Use the established socket's IP even when the edge was named
-// by DNS. Linux kernel candidates use an isolated network namespace.
+// Capture the peer's connected Relay transport. Routed adapters recheck it
+// at activation since port advertisement can precede the probe by a map update.
 func (g *transportSupervisor) kernelForPeer(p *supervisedRelay) kernelPreparer {
-	if g.budget.kernel == nil || runtime.GOOS != "windows" {
-		return g.budget.kernel
-	}
-	addr := p.channel.bind.mux.transport.remoteIP()
-	plan := g.peerPlan(p)
-	if !addr.IsValid() || plan == nil {
+	prepare := g.budget.kernel
+	if prepare == nil {
 		return nil
 	}
-	if relayIP := addr.String(); relayIP == plan.LocalProbeIPv4 || relayIP == plan.PeerProbeIPv4 {
-		return nil
+	var relay *RelayTransport
+	if p.channel != nil && p.channel.bind != nil && p.channel.bind.mux != nil {
+		relay = p.channel.bind.mux.transport
 	}
-	return g.budget.kernel
+	if runtime.GOOS == "windows" {
+		plan := g.peerPlan(p)
+		if plan == nil || !relay.permitsProbeRoute(plan.LocalProbeIPv4, plan.PeerProbeIPv4) {
+			return nil
+		}
+	}
+	return relay.bindKernelPreparer(prepare)
+}
+
+func (relay *RelayTransport) bindKernelPreparer(prepare kernelPreparer) kernelPreparer {
+	return func(ctx context.Context, cfg directCipherConfig, channel *assignedCipher, port *packetPort) (directPeerEngine, error) {
+		cfg.relay = relay
+		return prepare(ctx, cfg, channel, port)
+	}
 }
 
 func (g *transportSupervisor) prepareCandidate(p *supervisedRelay, offer coordinator.TransportProfileOffer, id string) (result error) {

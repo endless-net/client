@@ -65,14 +65,22 @@ func (*RelayTransport) String() string   { return "[encrypted Relay transport]" 
 func (*RelayTransport) GoString() string { return "[encrypted Relay transport]" }
 
 func (t *RelayTransport) remoteIP() netip.Addr {
+	if t == nil {
+		return netip.Addr{}
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.socket != nil {
+	if t.ready && !t.closed && t.socket != nil {
 		if addr, ok := t.socket.RemoteAddr().(*net.TCPAddr); ok && addr != nil {
 			return addr.AddrPort().Addr().Unmap()
 		}
 	}
 	return netip.Addr{}
+}
+
+func (t *RelayTransport) permitsProbeRoute(local, peer string) bool {
+	addr := t.remoteIP()
+	return addr.IsValid() && addr.String() != local && addr.String() != peer
 }
 
 func NewRelayTransport(parent context.Context, m connectivity.Map, lease *connectivity.Lease, edgeID string, c RelayConfig) (*RelayTransport, error) {

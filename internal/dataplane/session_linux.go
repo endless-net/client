@@ -265,7 +265,7 @@ func (s *LinuxSession) profileForMap(ctx context.Context, value connectivity.Map
 
 // Stage the socket grant before its routes. Session locking serializes the
 // firewall transaction and route changes with signed map and offline updates.
-func (s *LinuxSession) installPeerProbe(ctx context.Context, socket *linuxProbeSocket, relayIP netip.Addr) error {
+func (s *LinuxSession) installPeerProbe(ctx context.Context, socket *linuxProbeSocket, relay *RelayTransport) error {
 	if !s.mu.TryLock() {
 		return connectivity.ErrSourceChanged
 	}
@@ -274,7 +274,7 @@ func (s *LinuxSession) installPeerProbe(ctx context.Context, socket *linuxProbeS
 		return ErrClosed
 	}
 	b := socket.binding
-	if !relayIP.IsValid() || b.local == relayIP.Unmap() || b.peer == relayIP.Unmap() {
+	if !relay.permitsProbeRoute(b.local.String(), b.peer.String()) {
 		return ErrIPConflict
 	}
 	if _, exists := s.link.probes[b.peer]; exists {
@@ -305,7 +305,7 @@ func (s *LinuxSession) installPeerProbe(ctx context.Context, socket *linuxProbeS
 	if err = s.filters(ctx, s.current, policy, false, linuxOnline); err == nil {
 		err = s.link.addProbeRoute(ctx, b)
 	}
-	if err == nil && canFinishPreparation(ctx, s.clock, a, changed) {
+	if err == nil && relay.permitsProbeRoute(b.local.String(), b.peer.String()) && canFinishPreparation(ctx, s.clock, a, changed) {
 		return nil
 	}
 	if err == nil {

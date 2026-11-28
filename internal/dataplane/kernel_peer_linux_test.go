@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -883,10 +884,34 @@ func testLinuxServiceExchange(t *testing.T, f *candidateFixture, a candidateAssi
 	}
 	runtimeSession := &LinuxSession{link: session, clock: f.clock, lease: f.lease, identity: id, current: f.verified, policy: refreshed,
 		receipt: state.LinuxNetworkReceipt{Table: id.table, Owner: id.owner}}
-	if err := runtimeSession.installPeerProbe(ctx, sock, b.peer); !errors.Is(err, ErrIPConflict) {
-		t.Fatalf("probe route over the connected Relay: %v", err)
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := runtimeSession.installPeerProbe(ctx, sock, netip.MustParseAddr("127.0.0.1")); err != nil {
+	defer listener.Close()
+	relayConn, err := net.Dial("tcp4", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer relayConn.Close()
+	accepted, err := listener.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer accepted.Close()
+	rt := &RelayTransport{socket: tls.Client(relayConn, &tls.Config{}), ready: true}
+	if err := runtimeSession.installPeerProbe(ctx, sock, nil); !errors.Is(err, ErrIPConflict) {
+		t.Fatalf("missing Relay: %v", err)
+	}
+	if rt.permitsProbeRoute(b.local.String(), "127.0.0.1") {
+		t.Fatal("allowed route over connected Relay")
+	}
+	rt.closed = true
+	if err := runtimeSession.installPeerProbe(ctx, sock, rt); !errors.Is(err, ErrIPConflict) {
+		t.Fatalf("closed Relay: %v", err)
+	}
+	rt.closed = false
+	if err := runtimeSession.installPeerProbe(ctx, sock, rt); err != nil {
 		t.Fatal(err)
 	}
 	if err := runtimeSession.filters(ctx, f.verified, refreshed, false, linuxOnline); err != nil {

@@ -13,6 +13,7 @@ import (
 var errKernelUnavailable = errors.New("kernel peer transport unavailable")
 
 type directCipherConfig struct {
+	relay      *RelayTransport
 	assignment candidateAssignment
 	private    []byte
 	mtu        int

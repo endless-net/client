@@ -166,7 +166,8 @@ func testWindowsAssignedEcho(t *testing.T, local *candidateFixture, external, re
 		var socket candidateSocket = remoteSocket
 		var prepare kernelPreparer
 		if i == 1 {
-			socket, prepare = observed, prepareWindowsDirect
+			rt, _, _, _ := relayPipeFixture(t)
+			socket, prepare = observed, rt.bindKernelPreparer(prepareWindowsDirect)
 		}
 		c, err := prepareAssignedCipher(t.Context(), f.verified, f.lease, f.snapshot.Peers[0].ID,
 			f.snapshot.Peers[0].Transport.Profiles[0].Profile.ID, f.profile.Keys.WireGuardPrivate,

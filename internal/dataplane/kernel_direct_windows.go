@@ -16,6 +16,7 @@ var platformDirectPreparer kernelPreparer = prepareWindowsDirect
 // The candidate owns the routed probe interface and both encrypted socket
 // directions. Installing an application route requires a separate grant.
 type windowsDirectEngine struct {
+	relay       *RelayTransport
 	channel     *assignedCipher
 	port        *packetPort
 	device      *windowsPeerDevice
@@ -36,7 +37,7 @@ func prepareWindowsDirect(ctx context.Context, cfg directCipherConfig, channel *
 	if _, _, err := channel.bind.Open(0); err != nil {
 		return fail(err)
 	}
-	return &windowsDirectEngine{channel: channel, port: port, device: device}, nil
+	return &windowsDirectEngine{relay: cfg.relay, channel: channel, port: port, device: device}, nil
 }
 
 // BeginProbe serializes this with map updates and Close, after the signed
@@ -58,6 +59,9 @@ func (e *windowsDirectEngine) startProbe(a candidateAssignment) error {
 	}
 	device.assignment, device.sourceChanged = a, changed
 	cfg := directCipherConfig{assignment: a, clock: channel.clock}
+	if !e.relay.permitsProbeRoute(a.plan.LocalProbeIPv4, a.plan.PeerProbeIPv4) {
+		return ErrNoAuthority
+	}
 	if err := device.activate(ctx, cfg); err != nil {
 		channel.cancel()
 		return err
@@ -65,6 +69,10 @@ func (e *windowsDirectEngine) startProbe(a candidateAssignment) error {
 	if err := device.beginRoutedProbe(ctx, cfg); err != nil {
 		channel.cancel()
 		return err
+	}
+	if !e.relay.permitsProbeRoute(a.plan.LocalProbeIPv4, a.plan.PeerProbeIPv4) {
+		channel.cancel()
+		return ErrNoAuthority
 	}
 	broker, err := device.attachCandidate(channel.bind)
 	if err != nil {
