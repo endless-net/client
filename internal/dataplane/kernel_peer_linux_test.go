@@ -1268,3 +1268,109 @@ func TestLinuxBindingFollowsSignedPairAcrossRefresh(t *testing.T) {
 	f.refresh(t, &cursor)
 	check(false)
 }
+
+func TestLinuxSupervisorPreparesHostCandidate(t *testing.T) {
+	if !linuxNetworkTest(t) {
+		return
+	}
+	ctx := t.Context()
+	runLinuxTestCommand(t, ctx, linuxIP, "link", "set", "lo", "up")
+	f := newCandidateEngineFixture(t, transport.WireGuard)
+	f.withRelay(t)
+	cursor := f.verified.Cursor()
+	f.snapshot.Revision.Network++
+	f.snapshot.Network.Revision = f.snapshot.Revision.Network
+	f.snapshot.Peers[0].Transport.LocalProbeIPv4 = "172.20.4.10"
+	f.snapshot.Peers[0].Transport.PeerProbeIPv4 = "172.20.4.11"
+	f.refresh(t, &cursor)
+	rt, _, _, _ := relayPipeFixtureFor(t, f)
+	mux, err := newRelayMux(ctx, rt, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mux.Close()
+	bind, err := mux.newBind(ctx, f.verified, f.lease, "peer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bind.shutdown()
+	id, _ := linuxPolicyFixture()
+	policy, err := prepareLinuxFilter(f.snapshot, 100, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := &LinuxSession{lease: f.lease, clock: f.clock, identity: id, receipt: state.LinuxNetworkReceipt{Table: id.table, Owner: id.owner}, policy: policy, current: f.verified}
+	session.ctx, session.cancel = context.WithCancel(ctx)
+	defer session.cancel()
+	if err := session.filters(ctx, f.verified, policy, true, linuxDeny); err != nil {
+		t.Fatal(err)
+	}
+	session.link, err = openLinuxLink(ctx, id.tunnel, 1420)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.link.device.Close()
+	if err := session.link.configure(ctx, policy.address, policy.protected[1:]); err != nil {
+		t.Fatal(err)
+	}
+	g := &transportSupervisor{budget: &transportBudget{kernel: platformDirectPreparer}, config: supervisorConfig{hostKernel: session.prepareHostCandidate}, snapshot: f.snapshot}
+	peer := &supervisedRelay{channel: &relayCipher{bind: bind}, scope: packetBinding{peerID: "peer"}}
+	a := f.assignment(t)
+	external := newCandidateSocketFixture()
+	channel, err := prepareAssignedCipher(ctx, f.verified, f.lease, a.peer.ID, a.offer.Profile.ID, f.profile.Keys.WireGuardPrivate, 1420, f.clock, func([]byte) error { return nil }, func(uint16) (candidateSocket, error) { return external, nil }, g.kernelForPeer(peer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer channel.Close()
+	engine, ok := channel.cipher.(*linuxHostEngine)
+	if !ok {
+		t.Fatalf("unexpected engine %T", channel.cipher)
+	}
+	device, err := net.InterfaceByIndex(engine.iface.Index)
+	if err != nil || device.Flags&net.FlagUp != 0 {
+		t.Fatal("prepared interface must be down", err)
+	}
+	if _, err := engine.BoundPort(); err != nil {
+		t.Fatal(err)
+	}
+	const candidate = "66778899001122334455667788990011"
+	cycle, err := newProbeCycle(ctx, f.clock, f.profile.ID, f.profile.Connection.Generation, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cycle.cancel()
+	probe, err := channel.BeginProbe(cycle, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(session.link.probes) != 1 || len(session.link.direct) != 0 {
+		t.Fatal("expected a service route only")
+	}
+	if err := probe.Send(); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(2 * time.Second)
+	found := false
+	for !found {
+		select {
+		case <-external.wrote:
+		case <-deadline:
+			t.Fatal("kernel did not send handshake through advertised socket")
+		}
+		external.mu.Lock()
+		for _, packet := range external.writes {
+			if packet.address.String() == a.peerEndpoint && wireGuardHandshakePacket(packet.raw) {
+				found = true
+				break
+			}
+		}
+		external.mu.Unlock()
+	}
+	channel.Close()
+	if len(session.link.probes) != 0 || f.lease.Permissions().Revoked {
+		t.Fatal("candidate retirement failed")
+	}
+	if _, err := net.InterfaceByIndex(engine.iface.Index); err == nil {
+		t.Fatal("orphaned candidate")
+	}
+}

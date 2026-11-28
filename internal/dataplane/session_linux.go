@@ -26,6 +26,7 @@ type LinuxSessionConfig struct {
 }
 
 type LinuxSession struct {
+	stopMu            sync.Mutex
 	mu                sync.Mutex
 	ctx               context.Context
 	cancel            context.CancelFunc
@@ -224,7 +225,7 @@ func (s *LinuxSession) startTransport(ctx context.Context, value connectivity.Ma
 	}
 	s.supervisor, err = newTransportSupervisor(s.ctx, value, s.lease, s.clock, s.profile, s.generation, key,
 		s.resources.budget, s.packets, s.engine, supervisorConfig{
-			hintStore: s.store, networkContext: linuxTransportContext,
+			hostKernel: s.prepareHostCandidate, selectDirect: s.selectHostDirect, hintStore: s.store, networkContext: linuxTransportContext,
 			relay: s.config.Relay, probeInterval: s.config.ProbeInterval, retry: s.config.RetryInterval,
 			mtu: s.config.MTU, maxPeers: s.config.MaxPeers, advertise: func() {
 				select {
@@ -321,18 +322,22 @@ func (s *LinuxSession) installPeerProbe(ctx context.Context, socket *linuxProbeS
 			return errors.Join(err, removeErr, s.filters(cleanup, s.current, s.policy, false, linuxDeny))
 		}
 	}
-	mode := linuxOnline
-	permissions := s.lease.Permissions()
-	if !permissions.ExistingFlows {
-		mode = linuxDeny
-	} else if !permissions.NewFlows {
-		mode = linuxExisting
-	}
-	if restoreErr := s.filters(cleanup, s.current, s.policy, false, mode); restoreErr != nil {
+	if restoreErr := s.filters(cleanup, s.current, s.policy, false, s.peerFilterMode()); restoreErr != nil {
 		s.lease.Revoke()
 		return errors.Join(err, restoreErr, s.filters(cleanup, s.current, s.policy, false, linuxDeny))
 	}
 	return err
+}
+
+func (s *LinuxSession) peerFilterMode() linuxFilterMode {
+	perm := s.lease.Permissions()
+	if !perm.ExistingFlows {
+		return linuxDeny
+	}
+	if !perm.NewFlows {
+		return linuxExisting
+	}
+	return linuxOnline
 }
 
 func (s *LinuxSession) filters(ctx context.Context, value connectivity.Map, policy linuxFilterPlan, install bool, mode linuxFilterMode) error {
@@ -421,13 +426,18 @@ func (s *LinuxSession) Offline(ctx context.Context) error {
 func (s *LinuxSession) Stop(ctx context.Context) error {
 	s.lease.Revoke()
 	s.cancel()
+	s.stopMu.Lock()
+	defer s.stopMu.Unlock()
+	s.mu.Lock()
+	s.stopped = true
+	supervisor := s.supervisor
+	s.supervisor = nil
+	s.mu.Unlock()
+	if supervisor != nil {
+		supervisor.Close()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.stopped = true
-	if s.supervisor != nil {
-		s.supervisor.Close()
-		s.supervisor = nil
-	}
 	if s.engine != nil {
 		s.engine.Close()
 		s.engine = nil

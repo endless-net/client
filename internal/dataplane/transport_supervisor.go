@@ -15,6 +15,7 @@ import (
 )
 
 type supervisorConfig struct {
+	hostKernel           kernelPreparer
 	relay                RelayConfig
 	probeInterval, retry time.Duration
 	mtu, maxPeers        int

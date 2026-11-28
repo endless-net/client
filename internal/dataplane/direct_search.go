@@ -285,6 +285,9 @@ func (g *transportSupervisor) kernelForPeer(p *supervisedRelay) kernelPreparer {
 			return nil
 		}
 	}
+	if g.config.hostKernel != nil {
+		prepare = g.config.hostKernel
+	}
 	return relay.bindKernelPreparer(prepare)
 }
 
