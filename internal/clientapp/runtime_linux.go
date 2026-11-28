@@ -247,7 +247,7 @@ func linuxConnections(store *state.Store, ledger state.LinuxNetworkLedger, clock
 		cleanup:  func(ctx context.Context, _ string) error { return dataplane.CleanLinuxNetwork(ctx, ledger) },
 		endpoint: linuxUnderlayEndpoint,
 		config: connectionConfig{ClientVersion: clientVersion,
-			Verifier:    connectivity.VerifierConfig{Announcements: bootstrap, Clock: clock, Now: time.Now, CallTimeout: linuxCallTimeout, MaxBytes: linuxMessageBytes, MaxPeers: linuxMaxPeers, MaxRules: linuxMaxGrants, MaxCredentialBytes: linuxCredentialBytes},
+			Verifier:    connectivity.VerifierConfig{ResolverDNS: true, Announcements: bootstrap, Clock: clock, Now: time.Now, CallTimeout: linuxCallTimeout, MaxBytes: linuxMessageBytes, MaxPeers: linuxMaxPeers, MaxRules: linuxMaxGrants, MaxCredentialBytes: linuxCredentialBytes},
 			EndpointTTL: 120 * time.Second, RenewalInterval: 30 * time.Second, RetryInterval: time.Second,
 			ProbeInterval: time.Second, WriteBudget: linuxWriteBudget, MaxQueuedMaps: 8,
 			ApplyTimeout: 20 * time.Second, ListenPort: linuxListenPort,

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	clientv0 "github.com/endless-net/client/api/client/v0"
+	"google.golang.org/protobuf/proto"
 	"net"
 	"net/netip"
 	"slices"
@@ -28,6 +30,8 @@ type LinuxSessionConfig struct {
 }
 
 type LinuxSession struct {
+	dnsObservation
+	dns               linuxSessionDNS
 	stopMu            sync.Mutex
 	mu                sync.Mutex
 	ctx               context.Context
@@ -181,11 +185,22 @@ func (s *LinuxSession) apply(ctx context.Context, value connectivity.Map, first 
 		}
 		s.supervisor.Update(value)
 	}
+	var pending *clientv0.DnsApplication
+	hasDNS := connectivity.MapDNSConfig(snapshot) != nil
+	if hasDNS || s.dns.proxy != nil {
+		pending = s.beginDNS(snapshot)
+	}
+	if err := s.applyDNS(ctx, value, snapshot); err != nil {
+		s.finishDNS(pending, !hasDNS, err)
+		return err
+	}
 	fenced, err := s.profileForMap(ctx, value, true)
 	if err != nil {
+		s.finishDNS(pending, !hasDNS, err)
 		return err
 	}
 	clear(fenced.Keys.WireGuardPrivate)
+	s.finishDNS(pending, !hasDNS, nil)
 	if err := s.filters(ctx, value, policy, false, linuxOnline); err != nil {
 		return err
 	}
@@ -452,6 +467,24 @@ func (s *LinuxSession) Stop(ctx context.Context) error {
 		closeErr = s.link.device.Close()
 		s.link = nil
 	}
+	if prior := s.dnsResult.Load(); prior != nil {
+		// Removing the owned TUN also removes its resolved link configuration.
+		interfaces, err := net.Interfaces()
+		for _, iface := range interfaces {
+			if iface.Name == s.identity.tunnel {
+				err = ErrAdapterOwnership
+				break
+			}
+		}
+		closeErr = errors.Join(closeErr, err)
+		if closeErr == nil {
+			closeErr = waitResolvedRemoval(ctx, s.receipt)
+			if closeErr == nil {
+				s.dns.stop()
+			}
+		}
+		s.finishDNS(prior, true, closeErr)
+	}
 	if s.prepared {
 		if err := CleanLinuxNetwork(ctx, s.ledger); err != nil {
 			return err
@@ -492,6 +525,18 @@ func (s *LinuxSession) CheckReady(ctx context.Context) error {
 	}
 	if err := s.link.verify(ctx); err != nil {
 		return err
+	}
+	if s.dns.proxy != nil {
+		if err := checkResolvedStub(); err != nil {
+			return err
+		}
+		if err := checkResolvedDomains(ctx, s.link.index, s.dns.domains); err != nil {
+			return err
+		}
+		current, err := readResolvedLink(ctx, s.link.index)
+		if err != nil || current != s.dns.installed {
+			return errors.Join(ErrIPConflict, err)
+		}
 	}
 	if handle, err := linuxNFTLookup(ctx, s.receipt); err != nil || handle == 0 {
 		return ErrPolicyOwnership
@@ -541,10 +586,12 @@ func (s *LinuxSession) RevokeSource()                        { s.lease.Revoke();
 
 func (s *LinuxSession) ConnectionLocal() connectivity.LocalObservation {
 	if !s.mu.TryLock() {
-		return connectivity.LocalObservation{Permission: s.lease.Permissions()}
+		return connectivity.LocalObservation{Permission: s.lease.Permissions(), DNS: proto.CloneOf(s.dnsResult.Load())}
 	}
 	defer s.mu.Unlock()
-	return transportObservation(s.current, s.lease, s.engine, s.packets, s.supervisor, s.lease.Permissions().NewFlows)
+	local := transportObservation(s.current, s.lease, s.engine, s.packets, s.supervisor, s.lease.Permissions().NewFlows)
+	local.DNS = proto.CloneOf(s.dnsResult.Load())
+	return local
 }
 
 // WireGuard reopens its UDP sockets when the bind changes. Mark every new

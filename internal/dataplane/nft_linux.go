@@ -97,6 +97,9 @@ func CleanLinuxNetwork(ctx context.Context, ledger state.LinuxNetworkLedger) err
 			return ErrAdapterOwnership
 		}
 	}
+	if err := waitResolvedRemoval(ctx, receipt); err != nil {
+		return err
+	}
 	if handle != 0 {
 		if err := linuxNFTApply(ctx, "delete table inet handle "+strconv.FormatUint(handle, 10)+"\n"); err != nil {
 			return err
