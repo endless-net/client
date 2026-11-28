@@ -245,3 +245,45 @@ func TestDirectServiceAddressesNeverDeliverApplicationPackets(t *testing.T) {
 		t.Fatal("application sink received the wrong packets", delivered, err)
 	}
 }
+
+type capturedHealthPackets struct {
+	directPeerEngine
+	packets [][]byte
+}
+
+func (c *capturedHealthPackets) Queue(packet []byte, priority bool) error {
+	c.packets = append(c.packets, bytes.Clone(packet))
+	return nil
+}
+
+func TestActiveDirectHealthRetriesLostChallengeWithinOriginalAttempt(t *testing.T) {
+	channel, f, _, probe, _ := pathChallengeFixture(t)
+	wire := &capturedHealthPackets{directPeerEngine: channel.cipher}
+	channel.cipher = wire
+	if err := probe.Send(); err != nil {
+		t.Fatal(err)
+	}
+	now, err := f.clock.Sample()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := &supervisedRelay{directHealth: probe, directCycle: probe.attempt.cycle, lastDirect: now}
+	g := &transportSupervisor{}
+	f.clock.advance(negotiationRetry, negotiationRetry)
+	now, err = f.clock.Sample()
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.healthDirect(peer, now)
+	g.healthDirect(peer, now)
+	if len(wire.packets) != 2 || !bytes.Equal(wire.packets[0], wire.packets[1]) || peer.directHealth != probe {
+		t.Fatalf("lost Direct challenge: %d sends for the original attempt", len(wire.packets))
+	}
+	if err := probe.receive(replyControl(probe.request, transport.Echo)); err != nil {
+		t.Fatal(err)
+	}
+	g.healthDirect(peer, now)
+	if peer.directHealth != nil || peer.checkedDirect != now {
+		t.Fatal("retry did not confirm the selected path")
+	}
+}

@@ -698,6 +698,10 @@ func (g *transportSupervisor) healthDirect(p *supervisedRelay, now connectivity.
 			p.directCycle.cancel()
 			p.directHealth, p.directCycle = nil, nil
 			p.cooldown, p.failures = nil, 0
+		} else if negotiationDue(now, p.lastDirect, negotiationRetry) {
+			// Retry the same nonce under the original deadline and byte budget.
+			p.lastDirect = now
+			_ = p.directHealth.Send()
 		}
 	}
 	// After activation the search retains its transcript for duplicate Commit
@@ -726,6 +730,7 @@ func (g *transportSupervisor) healthDirect(p *supervisedRelay, now connectivity.
 		return
 	}
 	p.directHealth, p.directCycle = probe, cycle
+	p.lastDirect = now
 	g.waiters.Add(1)
 	go func() {
 		defer g.waiters.Done()
