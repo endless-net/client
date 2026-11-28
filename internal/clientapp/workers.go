@@ -34,6 +34,7 @@ type Workers struct {
 	done                        chan struct{}
 	used, running, stopping     bool
 	failed                      bool
+	failedComponent             string
 }
 
 // NewWorkers starts nothing and copies no private application implementation.
@@ -52,6 +53,12 @@ func NewWorkers(lifecycle fx.Lifecycle, shutdown fx.Shutdowner, signals *Signals
 	}
 	lifecycle.Append(signals.hook("workers", w.start, w.stop))
 	return w, nil
+}
+
+func (w *Workers) firstFailedComponent() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.failedComponent
 }
 
 func (w *Workers) start(ctx context.Context) error {
@@ -92,6 +99,7 @@ func (w *Workers) start(ctx context.Context) error {
 					w.failed = true
 				}
 				if unexpected {
+					w.failedComponent = worker.component
 					w.failed = true
 					w.cancel(ErrWorkers)
 				}

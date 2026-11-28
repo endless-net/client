@@ -166,5 +166,5 @@ func newWindows(c Config, build *clientv0.BuildIdentity, digest [32]byte, output
 // RunSCM is an explicit service-host entry. It neither registers nor starts an
 // installed service and has no console fallback.
 func (r *WindowsRuntime) RunSCM() error {
-	return windowsservice.Run(r.App, windowsservice.Config{StartTimeout: r.config.StartTimeout, StopTimeout: r.config.StopTimeout, StatusTimeout: r.config.StatusTimeout, CheckpointInterval: r.config.CheckpointInterval})
+	return windowsservice.Run(r.App, windowsservice.Config{FailedComponent: r.workers.firstFailedComponent, StartTimeout: r.config.StartTimeout, StopTimeout: r.config.StopTimeout, StatusTimeout: r.config.StatusTimeout, CheckpointInterval: r.config.CheckpointInterval})
 }

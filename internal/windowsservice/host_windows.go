@@ -22,6 +22,10 @@ const (
 	exitStop
 	exitController
 	exitDependency
+	exitIPC
+	exitEnrollment
+	exitConnection
+	exitSessionLogin
 )
 
 var (
@@ -31,6 +35,7 @@ var (
 )
 
 type Config struct {
+	FailedComponent                   func() string
 	StartTimeout, StopTimeout         time.Duration
 	StatusTimeout, CheckpointInterval time.Duration
 }
@@ -182,7 +187,7 @@ func (h *Host) Execute(_ []string, commands <-chan svc.ChangeRequest, status cha
 			shutdown := h.app.Wait()
 			select {
 			case <-shutdown:
-				return result(h.stop(status, exitDependency))
+				return result(h.stop(status, h.dependencyExit()))
 			default:
 			}
 			current = svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
@@ -206,11 +211,28 @@ func (h *Host) Execute(_ []string, commands <-chan svc.ChangeRequest, status cha
 	}
 }
 
+// SCM records this service-specific code even after the local API closes.
+func (h *Host) dependencyExit() uint32 {
+	if h.config.FailedComponent != nil {
+		switch h.config.FailedComponent() {
+		case "ipc":
+			return exitIPC
+		case "enrollment":
+			return exitEnrollment
+		case "connection":
+			return exitConnection
+		case "session_login":
+			return exitSessionLogin
+		}
+	}
+	return exitDependency
+}
+
 func (h *Host) running(commands <-chan svc.ChangeRequest, status chan<- svc.Status, shutdown <-chan fx.ShutdownSignal, current svc.Status) uint32 {
 	for {
 		select {
 		case <-shutdown:
-			return h.stop(status, exitDependency)
+			return h.stop(status, h.dependencyExit())
 		case command, open := <-commands:
 			if !open {
 				return h.stop(status, exitController)

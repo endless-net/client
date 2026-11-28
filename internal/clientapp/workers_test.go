@@ -319,6 +319,9 @@ func TestActualFxWorkerFailureAndStartupRollback(t *testing.T) {
 			case <-budget(t).Done():
 				t.Fatal("no Fx shutdown")
 			}
+			if workers.firstFailedComponent() != "ipc" {
+				t.Fatal("first failed worker was lost")
+			}
 			if err := app.Stop(budget(t)); !errors.Is(err, ErrWorkers) {
 				t.Fatal(err)
 			}

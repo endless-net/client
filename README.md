@@ -378,6 +378,8 @@ daemon выполнено; фактическая WFP classification/process-los
 Общая точка входа `cmd/client/main.go` разбирает команды и проверяет метаданные
 сборки. На Windows платформенный запуск собирает protected state, enrollment,
 connectivity005, Windows IPC и lifecycle через `clientapp.NewWindows` и запускает SCM host.
+При неожиданном завершении службы Service Control Manager записывает в системный журнал код первого завершившегося обработчика. Код 5 обозначает локальный IPC, 6 — регистрацию узла, 7 — управление соединением, 8 — вход в сеанс. Код 4 означает, что приложение запросило остановку без указания обработчика.
+
 Обязательные ENV и build metadata проверяются до обращения к SCM; отсутствующее
 state при обычном запуске не инициализируется. Явная offline-команда `client init-state`
 создаёт только пустое protected state с теми же validated ENV и build metadata.

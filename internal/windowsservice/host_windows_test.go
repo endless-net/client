@@ -64,7 +64,12 @@ func application(c Config, opts ...fx.Option) *fx.App {
 
 func execute(t *testing.T, app *fx.App) (*Host, harness) {
 	t.Helper()
-	h, err := New(app, config())
+	return executeWithConfig(t, app, config())
+}
+
+func executeWithConfig(t *testing.T, app *fx.App, c Config) (*Host, harness) {
+	t.Helper()
+	h, err := New(app, c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,6 +278,24 @@ func TestSCMUnexpectedWorkerShutdownBeforeAndAfterReady(t *testing.T) {
 	}
 }
 
+func TestSCMReportsFirstFailedComponent(t *testing.T) {
+	for component, want := range map[string]uint32{
+		"ipc": 5, "enrollment": 6, "connection": 7, "session_login": 8, "unknown": 4,
+	} {
+		t.Run(component, func(t *testing.T) {
+			cfg := config()
+			cfg.FailedComponent = func() string { return component }
+			var shutdown fx.Shutdowner
+			app := application(cfg, fx.Populate(&shutdown))
+			_, f := executeWithConfig(t, app, cfg)
+			waitState(t, f, svc.Running)
+			if err := shutdown.Shutdown(fx.ExitCode(1)); err != nil {
+				t.Fatal(err)
+			}
+			waitExit(t, f, want)
+		})
+	}
+}
 func TestSCMClosedControllerAndDuplicateExecute(t *testing.T) {
 	var cleaned atomic.Int32
 	app := application(config(), fx.Invoke(func(lc fx.Lifecycle) {
